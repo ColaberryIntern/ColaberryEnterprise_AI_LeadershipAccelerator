@@ -87,6 +87,7 @@ import { ensureAiAgentDepartmentScopeSchema } from './db/ensureAiAgentDepartment
 import { ensureTicketCreatorIndexSchema } from './db/ensureTicketCreatorIndexSchema';
 import { ensureMetricReliabilityRecordSchema } from './db/ensureMetricReliabilityRecordSchema';
 import { ensureStudentAssessmentSchema } from './db/ensureStudentAssessmentSchema';
+import { ensureChecklistInstanceSchema } from './db/ensureChecklistInstanceSchema';
 import { ensureAgentManagerConversationReliabilitySchema } from './db/ensureAgentManagerConversationReliabilitySchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureCaseStudySchema, assertCaseStudySchema } from './db/ensureCaseStudySchema';
@@ -2741,6 +2742,7 @@ async function start(): Promise<void> {
   // no flag. No seeder writes to it; assessStudentHealth.ts writes the first
   // row on demand.
   await ensureStudentAssessmentSchema();
+  await ensureChecklistInstanceSchema();
   // Reese Agentic AI Employee mission, Checkpoint B — the manager
   // confirmation workflow's one new column (pending_reliability_confirmation)
   // on the existing agent_manager_conversations table. Additive, idempotent,

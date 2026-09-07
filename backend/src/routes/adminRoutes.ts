@@ -107,6 +107,7 @@ import communityMemberRoutes from './admin/communityMemberRoutes';
 import podcastRoutes from './admin/podcastRoutes';
 import studentStoryRoutes from './admin/studentStoryRoutes';
 import certPrepAdminRoutes from './admin/certPrepAdminRoutes';
+import checklistRoutes from './admin/checklistRoutes';
 
 const router = Router();
 
@@ -274,5 +275,6 @@ router.use(studentStoryRoutes);
 // PATH_SECTION under 'program' - without that row the gate is deny-by-default
 // and every scoped mgmt token 403s here while legacy admin passes.
 router.use(certPrepAdminRoutes);
+router.use(checklistRoutes);
 
 export default router;

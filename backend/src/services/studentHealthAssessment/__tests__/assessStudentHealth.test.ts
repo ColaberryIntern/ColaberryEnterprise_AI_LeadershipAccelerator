@@ -7,6 +7,9 @@ jest.mock('../../runtime/runtimeAi', () => ({ chatJson: (...a: any[]) => mockCha
 const mockCreate = jest.fn();
 jest.mock('../../../models/StudentAssessment', () => ({ __esModule: true, default: { create: (...a: any[]) => mockCreate(...a) } }));
 
+const mockCreateAssessmentChecklistInstance = jest.fn();
+jest.mock('../assessmentChecklist', () => ({ createAssessmentChecklistInstance: (...a: any[]) => mockCreateAssessmentChecklistInstance(...a) }));
+
 import { assessStudentHealth } from '../assessStudentHealth';
 
 function known<T>(value: T): any {
@@ -41,6 +44,7 @@ function fullSnapshot(overrides: any = {}) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockCreate.mockImplementation(async (attrs: any) => ({ id: 'assessment-1', createdAt: new Date('2026-09-05T00:00:00Z'), ...attrs }));
+  mockCreateAssessmentChecklistInstance.mockResolvedValue({ id: 'checklist-1' });
 });
 
 describe('assessStudentHealth', () => {
@@ -113,5 +117,41 @@ describe('assessStudentHealth', () => {
     expect(result.status).toBe('critical');
     expect(result.requiresHumanReview).toBe(true);
     expect(mockCreate.mock.calls[0][0].requires_human_review).toBe(true);
+  });
+
+  it('Capability 6: creates a real checklist instance keyed on the persisted assessment row\'s id', async () => {
+    mockGetStudentSuccessSnapshot.mockResolvedValue(fullSnapshot());
+    mockChatJson.mockResolvedValue({
+      parsed: {
+        status: 'watch', primaryRootCause: 'certification_readiness_gap', secondaryRootCause: null,
+        supportingCategories: ['certReadiness'], contradictingCategories: [], unansweredQuestions: [],
+        recommendedIntervention: 'Recommend a practice exam this week.', requiresHumanReview: false,
+      },
+      runtime_ms: 500, cost_usd: 0.002,
+    });
+
+    await assessStudentHealth('enrollment-1');
+
+    expect(mockCreateAssessmentChecklistInstance).toHaveBeenCalledWith(
+      'assessment-1', expect.any(Object), expect.any(Object), expect.any(Object), expect.any(Date),
+    );
+  });
+
+  it('fail-open: a checklist bookkeeping failure never breaks the assessment result being returned', async () => {
+    mockGetStudentSuccessSnapshot.mockResolvedValue(fullSnapshot());
+    mockChatJson.mockResolvedValue({
+      parsed: {
+        status: 'watch', primaryRootCause: 'certification_readiness_gap', secondaryRootCause: null,
+        supportingCategories: ['certReadiness'], contradictingCategories: [], unansweredQuestions: [],
+        recommendedIntervention: 'Recommend a practice exam this week.', requiresHumanReview: false,
+      },
+      runtime_ms: 500, cost_usd: 0.002,
+    });
+    mockCreateAssessmentChecklistInstance.mockRejectedValue(new Error('DB write failed'));
+
+    const result = await assessStudentHealth('enrollment-1');
+
+    expect(result.status).toBe('watch');
+    expect(result.id).toBe('assessment-1');
   });
 });

@@ -1,4 +1,6 @@
 import { getLatestStudentAssessment } from '../studentHealthAssessment';
+import { getChecklistForSubject } from '../checklist/checklistLookup';
+import { isChecklistSatisfied } from '../checklist/checklistGate';
 
 const NOTABLE_STATUSES = new Set(['watch', 'at_risk', 'critical']);
 
@@ -25,6 +27,14 @@ export async function getReeseHealthAssessmentHighlight(enrollmentId: string): P
   try {
     const assessment = await getLatestStudentAssessment(enrollmentId);
     if (!assessment || !NOTABLE_STATUSES.has(assessment.status)) return '';
+
+    // Capability 6 gate — Reese must not act on an assessment whose real
+    // checklist is incomplete and never bypassed. `checklist === null` means
+    // the bookkeeping write failed (fail-open per assessmentChecklist.ts's
+    // own posture) — treated as "no gate recorded", never as a block, same
+    // as every other fail-open path in this pipeline.
+    const checklist = await getChecklistForSubject('student_assessment', assessment.id);
+    if (checklist && !isChecklistSatisfied({ complete: checklist.complete, bypassedAt: checklist.bypassed_at })) return '';
 
     const cause = assessment.primaryRootCause ? ` (likely cause: ${assessment.primaryRootCause.replace(/_/g, ' ')})` : '';
     const lines = ['RECENT HEALTH ASSESSMENT (for your own awareness — do not recite this to the student):',
