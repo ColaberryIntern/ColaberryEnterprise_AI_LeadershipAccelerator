@@ -9,13 +9,18 @@
  *
  * ALL FOUR KEYS EXIST FROM DAY ONE. That is what makes "adding Training is a
  * publication row, not a schema change" a real property rather than an
- * aspiration. Only `enterprise` is `publishable` in Phase 1, and the publish gate
- * (T012) refuses the other three independently of this flag - a contract that
- * admits a surface is not the same as a system that will publish to it.
+ * aspiration - and it has now been collected on twice. AI Flotation went live in
+ * September 2026 and Training followed it, each by adding a key to
+ * `PUBLISHABLE_SURFACE_KEYS` and an address to its profile. No migration, no new
+ * table, no change to a single stored snapshot.
+ *
+ * `publishable` on the returned profile is DERIVED from that list rather than
+ * declared here, because a hand-written copy of it had already drifted.
  *
  * LEAF MODULE: type-only imports, no I/O, nothing that can fail.
  */
 
+import { PUBLISHABLE_SURFACE_KEYS } from '../../types/caseStudy';
 import type {
   CaseStudyBuiltByType,
   CaseStudySectionKey,
@@ -52,9 +57,11 @@ import type { PublicVerificationClass } from '../../types/caseStudyPublic';
  * DELIBERATELY UNCHANGED, and it is the one order in this file that is not new.
  * Two reasons, both recorded in STORY_STUDIO_PLAN §3 C-entry-2.
  *
- * 1. Enterprise is the only publishable surface, so its order is what the
- *    public `/stories/:slug` page renders TODAY. Reordering it is a production
- *    change wearing an admin-lab change's clothes.
+ * 1. Enterprise's order is what `enterprise.colaberry.ai/stories/:slug` renders
+ *    TODAY. Reordering it is a production change wearing an admin-lab change's
+ *    clothes. (It is no longer the ONLY publishable surface - AI Flotation and
+ *    Training publish too - but each of those reads its own order, so this one
+ *    is still Enterprise's alone to change.)
  * 2. SURFACE_LENS_MODEL §3.1 proposes leading with `measurement`, and on the
  *    pilot record `heroMetrics[0]` and `measurement.metrics[0]` are the same
  *    metric — a deliberate subset relationship pinned by
@@ -162,7 +169,6 @@ const PROVEN_ONLY: readonly PublicVerificationClass[] = ['verified', 'anonymized
 function profile(
   surfaceKey: CaseStudySurfaceKey,
   brandLabel: string,
-  publishable: boolean,
   sectionOrder: readonly CaseStudySectionKey[],
   hero: { eyebrow: string; title: string; description: string },
   cta: { eyebrow: string; heading: string; buttonLabel: string; href: string },
@@ -176,7 +182,13 @@ function profile(
   return {
     surfaceKey,
     brandLabel,
-    publishable,
+    /* DERIVED, not declared. This field used to be a hand-written literal
+       passed in at each call site, and it had already gone stale: AI Flotation
+       said `false` here while `PUBLISHABLE_SURFACE_KEYS` - the list the publish
+       gate actually consults - listed it as publishable, and it had been
+       publishing to a live customer page for a day. Nothing read this field, so
+       nothing caught the contradiction. One source of truth now. */
+    publishable: (PUBLISHABLE_SURFACE_KEYS as readonly string[]).includes(surfaceKey),
     hero,
     publicBaseUrl: address.publicBaseUrl,
     detailPathPrefix: address.detailPathPrefix,
@@ -197,7 +209,7 @@ export const CASE_STUDY_SURFACE_PROFILES: Readonly<
   Record<CaseStudySurfaceKey, CaseStudySurfaceProfile>
 > = Object.freeze({
   enterprise: profile(
-    'enterprise', 'Colaberry Enterprise', true, ENTERPRISE_ORDER,
+    'enterprise', 'Colaberry Enterprise', ENTERPRISE_ORDER,
     {
       eyebrow: 'Enterprise · shipped work',
       title: 'What we shipped, and who built it.',
@@ -219,7 +231,7 @@ export const CASE_STUDY_SURFACE_PROFILES: Readonly<
     { publicBaseUrl: 'https://enterprise.colaberry.ai', detailPathPrefix: '/stories' },
   ),
   training: profile(
-    'training', 'Colaberry Training', false, TRAINING_ORDER,
+    'training', 'Colaberry Training', TRAINING_ORDER,
     {
       eyebrow: 'Training · learner work',
       title: 'What our learners built.',
@@ -232,9 +244,18 @@ export const CASE_STUDY_SURFACE_PROFILES: Readonly<
       href: '/programs',
     },
     ['who built it', 'what they learned', 'skills', 'stack', 'artifacts', 'portfolio proof'],
+    /* training.colaberry.com, its own site on its own domain. A learner's
+       project published here is a page ON THE TRAINING SITE, so its canonical
+       says so - the whole point of the page is that a prospective student can
+       see what students actually build, and a canonical pointing at the
+       enterprise site would hand that signal to a different audience's brand. */
+    { publicBaseUrl: 'https://training.colaberry.com', detailPathPrefix: '/student-projects' },
+    /* No default builder. Training records are about WHO BUILT THEM - that is
+       the surface's entire emphasis - so a record that names nobody should read
+       as naming nobody rather than being quietly attributed to an institution. */
   ),
   'ai-flotation': profile(
-    'ai-flotation', 'AI Flotation', false, AI_FLOTATION_ORDER,
+    'ai-flotation', 'AI Flotation', AI_FLOTATION_ORDER,
     {
       eyebrow: 'AI Flotation · delivery',
       title: 'What we put into production.',
@@ -256,7 +277,7 @@ export const CASE_STUDY_SURFACE_PROFILES: Readonly<
     'ai_flotation_team',
   ),
   refactored: profile(
-    'refactored', 'Refactored', false, REFACTORED_ORDER,
+    'refactored', 'Refactored', REFACTORED_ORDER,
     {
       eyebrow: 'Refactored · project records',
       title: 'The work behind the platform.',
