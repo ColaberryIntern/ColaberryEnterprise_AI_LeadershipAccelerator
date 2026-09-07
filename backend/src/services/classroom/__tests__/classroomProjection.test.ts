@@ -5,6 +5,15 @@
  * broken. A card that shows a stale or invented next action is worse than one
  * that falls back to how it was authored, because the student acts on it.
  */
+/**
+ * NOTE ON THE STATUS STRINGS BELOW. These were 'todo' and 'done' — words the
+ * model has never produced. StudentTaskStatus is
+ * `not_started | in_progress | complete | blocked`, and the resolver's open-set
+ * was written from the same invented vocabulary, so the test and the code
+ * agreed with each other and both disagreed with the database. Every student
+ * with an untouched project was told "Nothing open right now". Use the real
+ * enum here; a fixture that cannot occur in production proves nothing.
+ */
 jest.mock('../../projects/projectReadService', () => ({ getActiveProjectTree: jest.fn() }));
 jest.mock('../../certPrep/certAvailabilityService', () => ({ getCertAvailability: jest.fn() }));
 jest.mock('../../certPrep/certReadinessService', () => ({ computeReadiness: jest.fn() }));
@@ -30,9 +39,9 @@ describe('resolveProjectNext', () => {
   it('offers the first OPEN task in the order the project itself presents', async () => {
     mTree.mockResolvedValue(tree([
       { title: 'Release 0', tasks: [
-        { title: 'Already done', status: 'done' },
-        { title: 'Add a specialist subagent', status: 'todo' },
-        { title: 'Later work', status: 'todo' },
+        { title: 'Already done', status: 'complete' },
+        { title: 'Add a specialist subagent', status: 'not_started' },
+        { title: 'Later work', status: 'not_started' },
       ] },
     ]));
     const next = await resolveProjectNext('e1');
@@ -50,7 +59,7 @@ describe('resolveProjectNext', () => {
   });
 
   it('says the project is finished rather than showing a blank next step', async () => {
-    mTree.mockResolvedValue(tree([{ title: 'Release 0', tasks: [{ title: 'Done', status: 'done' }] }]));
+    mTree.mockResolvedValue(tree([{ title: 'Release 0', tasks: [{ title: 'Done', status: 'complete' }] }]));
     const next = await resolveProjectNext('e1');
     expect(next.available).toBe(false);
     expect(next.reason).toBe('all_tasks_done');
@@ -133,7 +142,7 @@ describe('getClassroomProjection', () => {
   });
 
   it('reports nothing degraded when both surfaces answer', async () => {
-    mTree.mockResolvedValue(tree([{ title: 'R0', tasks: [{ title: 'Do it', status: 'todo' }] }]));
+    mTree.mockResolvedValue(tree([{ title: 'R0', tasks: [{ title: 'Do it', status: 'not_started' }] }]));
     mReadiness.mockResolvedValue({ answered_total: 0, domain_breakdown: [] });
     const projection = await getClassroomProjection('e1');
     expect(projection.degraded).toEqual([]);

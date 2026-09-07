@@ -1,5 +1,6 @@
 import { getActiveProjectTree } from '../../projects/projectReadService';
 import { Rail, RailContext, RailTile, omitIfEmpty } from './types';
+import { isTaskOpen } from '../taskStatus';
 
 /**
  * The student's own project, and the tasks still open on it.
@@ -23,10 +24,7 @@ import { Rail, RailContext, RailTile, omitIfEmpty } from './types';
  */
 
 /** A rail, not a backlog. Beyond this the student should be on the real page. */
-const TILE_LIMIT = 6;
-
-/** Statuses that mean "still to do", shared with the projection resolver. */
-const OPEN_TASK_STATUSES = new Set(['todo', 'pending', 'in_progress', 'blocked', 'open']);
+const TILE_LIMIT = 12;
 
 function projectHref(projectId: string, taskId?: string): string {
   const base = `/portal/projects?open=${encodeURIComponent(projectId)}`;
@@ -42,7 +40,7 @@ export async function resolveProjectRail(ctx: RailContext): Promise<Rail | null>
   for (const list of tree.lists ?? []) {
     for (const task of list.tasks ?? []) {
       if (tiles.length >= TILE_LIMIT) break;
-      if (!OPEN_TASK_STATUSES.has(String(task.status))) continue;
+      if (!isTaskOpen(task.status)) continue;
 
       const first = tiles.length === 0;
       tiles.push({

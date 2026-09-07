@@ -32,9 +32,31 @@ interface Props {
 
 const SCROLL_TILES = 2;
 
+/**
+ * A mark per surface, shown inside the header chip. The chip already carries the
+ * colour; the mark is what makes it legible to somebody who has not yet learned
+ * the palette, and to anybody who cannot rely on colour at all.
+ */
+const SURFACE_ICON: Record<string, string> = {
+  events: '\u{1F4C5}',
+  project: '\u{1F528}',
+  community: '\u{1F4AC}',
+  rooms: '\u{1F6AA}',
+  cert_prep: '\u{1F393}',
+  portfolio: '\u{1F4C1}',
+  timeline: '\u{1F5D3}',
+};
+
+/**
+ * Community tiles carry a person's profile picture, which must not be rendered
+ * as though it were an event banner. `cr-avatar` shows it as a round portrait.
+ */
+const isPortrait = (surface: string): boolean => surface === 'community';
+
 const Tile: React.FC<{ tile: RailTile; rail: Rail; onOpen?: Props['onOpen'] }> = ({ tile, rail, onOpen }) => (
   <article className={`cr-tile${tile.featured ? ' cr-featured' : ''}`}>
-    <div className="cr-pic" aria-hidden={tile.image_url ? undefined : true}>
+    <div className={`cr-pic${isPortrait(rail.surface) && tile.image_url ? ' cr-avatar' : ''}`}
+         aria-hidden={tile.image_url ? undefined : true}>
       {tile.image_url
         ? <img src={tile.image_url} alt="" loading="lazy" />
         : <span className="cr-glyph">{tile.glyph ?? '•'}</span>}
@@ -65,7 +87,7 @@ const ClassroomRails: React.FC<Props> = ({ rail, onOpen }) => {
     const el = scroller.current;
     if (!el) return;
     const tile = el.querySelector('.cr-tile') as HTMLElement | null;
-    const step = ((tile?.getBoundingClientRect().width ?? 232) + 10) * SCROLL_TILES;
+    const step = ((tile?.getBoundingClientRect().width ?? 318) + 10) * SCROLL_TILES;
     el.scrollBy({ left: step * direction, behavior: 'smooth' });
   }, []);
 
@@ -74,7 +96,10 @@ const ClassroomRails: React.FC<Props> = ({ rail, onOpen }) => {
   return (
     <section className={`cr-rail cr-${rail.surface}`} aria-label={rail.label}>
       <header className="cr-hd">
-        <span className="cr-name">{rail.label}</span>
+        <span className="cr-name">
+          <span className="cr-ic" aria-hidden="true">{SURFACE_ICON[rail.surface] ?? ''}</span>
+          {rail.label}
+        </span>
         {rail.count_label ? <span className="cr-count">{rail.count_label}</span> : null}
         <a className="cr-all" href={rail.href}>Open{' '}&rarr;</a>
       </header>

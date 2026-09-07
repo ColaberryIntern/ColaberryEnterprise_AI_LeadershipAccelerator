@@ -24,7 +24,24 @@ import { Rail, RailContext, RailTile, omitIfEmpty } from './types';
 
 export async function resolveCertPrepRail(ctx: RailContext): Promise<Rail | null> {
   const availability = await getCertAvailability(ctx.enrollmentId);
-  if (!availability?.available) return null;      // before the fence: no rail
+  if (!availability?.available) return null;      // student not past the fence
+
+  /**
+   * AND the week being LOOKED AT must be at or past the fence.
+   *
+   * The first version checked only the student's eligibility, so a Week 9
+   * student paging back to Week 1 saw the certification rail sitting in Week 1 —
+   * which reads as "certification starts in week one" to anybody who does not
+   * already know the programme. Availability answers "may this student practise
+   * at all"; it does not answer "does this belong on the page in front of me".
+   *
+   * Both conditions, and they are genuinely different: eligibility is about the
+   * person, the week gate is about the page. `startWeek` is the track's own
+   * `availability_start_week` rather than a 7 written here, so moving the fence
+   * moves both together.
+   */
+  const startWeek = availability.startWeek;
+  if (startWeek != null && ctx.week < startWeek) return null;
 
   const readiness = await computeReadiness(ctx.enrollmentId).catch(() => null);
   const measured = readiness && typeof (readiness as any).readiness_scaled === 'number'
