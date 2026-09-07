@@ -68,7 +68,7 @@ export async function buildUncertaintyReply(agent: AiAgent): Promise<string> {
 
   const since = new Date(Date.now() - RECENT_DAYS * 24 * 60 * 60 * 1000);
   const rows = (await StudentAssessment.findAll({
-    where: { created_at: { [Op.gte]: since } },
+    where: { createdAt: { [Op.gte]: since } },
     order: [['created_at', 'DESC']],
     attributes: ['enrollment_id', 'requires_human_review', 'unanswered_questions'],
   })) as unknown as UncertainRow[];
