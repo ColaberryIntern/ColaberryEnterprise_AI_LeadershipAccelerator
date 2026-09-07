@@ -74,6 +74,33 @@ export interface PrototypeLink {
 const isExpired = (set: PrototypeSet): boolean => new Date(set.expires_at).getTime() < Date.now();
 
 /**
+ * Prepare a design to be framed with `srcdoc`.
+ *
+ * A srcdoc document's own URL is `about:srcdoc`, but its BASE url is inherited from the page
+ * that framed it. Every `href="#section"` in the design therefore resolves against OUR url,
+ * which is not the document's url, so the browser treats the click as a navigation rather
+ * than a scroll: clicking the design's own nav loads the whole scope page inside the design
+ * frame. A prospect sees our page nested inside their page.
+ *
+ * Pointing the base back at the document the links already live in turns them back into
+ * scrolls, with no script - which matters, because the frame is sandboxed and executes none.
+ *
+ * This applies to the FRAMED copy only. The copy served at /api/flotation/app/... is a real
+ * page at a real URL, where this same tag would break the links it fixes here.
+ */
+export function forSrcdoc(html: string): string {
+  if (/<base\b/i.test(html)) return html;
+
+  const tag = '<base href="about:srcdoc">';
+  if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (open) => `${open}\n${tag}`);
+  if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, (open) => `${open}\n<head>${tag}</head>`);
+
+  // No document scaffolding at all: the parser hoists a leading <base> into the head it
+  // synthesises, so prepending is enough.
+  return `${tag}\n${html}`;
+}
+
+/**
  * Generate the concept set for an understanding, once.
  *
  * Returns whatever survived the gates. A partial set is worth showing - two good concepts
@@ -163,7 +190,18 @@ export async function prototypeLinks(token: string, set: PrototypeSet, baseUrl: 
       // The HTML travels with the link so the page can frame it via srcdoc at two widths.
       // Framing the served URL instead would be a cross-origin embed of a sandboxed
       // document, which is a fight not worth having for markup we already hold.
-      return { key: c.key, title: c.title, recommended: c.recommended, rationale: c.rationale, url, qr_svg, html: c.html };
+      //
+      // `forSrcdoc` is applied here rather than at generation time so every design already
+      // cached against an understanding is fixed on its next read, without a version bump.
+      return {
+        key: c.key,
+        title: c.title,
+        recommended: c.recommended,
+        rationale: c.rationale,
+        url,
+        qr_svg,
+        html: forSrcdoc(c.html),
+      };
     }),
   );
 }

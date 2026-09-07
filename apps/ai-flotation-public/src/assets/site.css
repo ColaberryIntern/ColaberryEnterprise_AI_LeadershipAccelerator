@@ -380,14 +380,27 @@ footer.site .fine { font-size: var(--fs-caption); color: var(--fg-muted); margin
    TEXT as well as colour, because colour alone fails for anyone who cannot see
    it (WCAG 1.4.1).
    ------------------------------------------------------------------ */
+/* Wider than a reading measure because the design frames inside it are the point of the
+   panel, and a desktop design shown at half scale is a thumbnail, not a design. The prose
+   keeps its old measure below, so the extra width goes only to the things that need it. */
 .preview {
   margin-top: 2.5rem;
   padding: 2rem;
   background: var(--bg-elevated);
   border: 1px solid var(--line);
   border-radius: 10px;
-  max-width: 46rem;
+  max-width: 60rem;
 }
+
+.preview-status,
+.preview-title,
+.scope-summary,
+.scope-lead,
+.preview-counts,
+.preview-items,
+.preview-surfaces,
+.preview-open,
+.preview-note { max-width: 42rem; }
 
 .preview-status {
   margin: 0;
@@ -636,10 +649,11 @@ footer.site .fine { font-size: var(--fs-caption); color: var(--fg-muted); margin
    ------------------------------------------------------------------ */
 .prototypes { margin: 2.25rem 0 2.5rem; }
 
+/* When this held a gallery of three concepts, auto-fit columns were right. It now holds
+   one design and the aside under it, and those columns were cutting the desktop frame to
+   a third of the width it needs to be a design at all. */
 .proto-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-  gap: 1rem;
+  display: block;
   margin-top: 1rem;
 }
 
@@ -906,14 +920,17 @@ a.record:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; 
    sandboxed iframes of the same document, so what you see at 390px is
    genuinely what a phone gets.
    ------------------------------------------------------------------ */
+/* Stacked, not side by side. Two frames sharing a row means neither gets a true
+   viewport width, and a "phone view" that is really a squeezed desktop is worse
+   than showing no phone view at all. */
 .design-views {
-  display: grid;
-  grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr);
-  gap: 1rem;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
 }
 
 .design-frame { min-width: 0; }
+.design-phone { width: 24.4rem; max-width: 100%; }
 
 .design-label {
   margin: 0 0 0.4rem;
@@ -923,20 +940,29 @@ a.record:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; 
   color: var(--fg-muted);
 }
 
-.design-iframe {
-  width: 100%;
+/* The box is the window frame; the iframe inside is rendered at a true viewport size
+   and scaled down by `fitDesignFrames`, so the layout on screen is the layout a real
+   browser at that width would produce. Height is set in script from that scale. */
+.design-box {
+  position: relative;
+  overflow: hidden;
+  min-height: 16rem;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
   background: #fff;
+  box-shadow: 0 1px 2px rgba(26, 25, 23, 0.05), 0 16px 36px -24px rgba(26, 25, 23, 0.4);
+}
+
+.design-iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 0;
   display: block;
+  transform-origin: top left;
 }
 
-.design-desktop .design-iframe { height: 30rem; }
-
-.design-phone .design-iframe {
-  height: 30rem;
-  border-radius: 14px;
-}
+.design-phone .design-box { border-radius: 14px; }
 
 .design-aside {
   display: flex;
@@ -953,8 +979,7 @@ a.record:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; 
 .design-aside .proto-open { margin: 0; }
 
 @media (max-width: 46rem) {
-  /* Stack rather than shrink: two frames side by side on a phone makes both
-     unreadable, which defeats the point of showing the phone view at all. */
-  .design-views { grid-template-columns: 1fr; }
-  .design-phone .design-iframe { max-width: 22rem; }
+  /* On a real phone the phone frame is already close to native width, so it only needs
+     to stop being wider than the screen. */
+  .design-phone { width: 100%; }
 }
