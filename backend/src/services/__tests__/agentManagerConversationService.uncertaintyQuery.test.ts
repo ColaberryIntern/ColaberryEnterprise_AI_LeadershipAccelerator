@@ -1,12 +1,10 @@
 /**
- * agentManagerConversationService — work-status query integration (Reese
- * Agentic AI Employee mission, Checkpoint F, first slice). Pins the real
- * wiring at the point it actually lives — inside sendManagerMessage() —
- * not just the pure detector/answer-builder in isolation
- * (agentWorkStatusIntentService.test.ts already covers those). The core
- * property under test: a real work-status question never reaches the LLM
- * and never collides with the reliability-confirmation flow's own
- * pre-check.
+ * agentManagerConversationService — uncertainty query integration (Reese
+ * Agentic AI Employee mission, Capability 7). Pins the real wiring inside
+ * sendManagerMessage() — not just the pure detector/answer-builder in
+ * isolation (agentUncertaintyIntentService.test.ts covers those). Core
+ * property: a real uncertainty question never reaches the LLM, and is
+ * checked after the reliability flow and after the work-status check.
  */
 const mockAiAgentFindByPk = jest.fn();
 jest.mock('../../models/AiAgent', () => ({ __esModule: true, default: { findByPk: (...a: any[]) => mockAiAgentFindByPk(...a) } }));
@@ -27,8 +25,6 @@ jest.mock('../../models/AgentManagerMessage', () => ({
 jest.mock('../openaiInstrumented', () => ({ getInstrumentedOpenAI: jest.fn() }));
 jest.mock('../agentBlueprint/agentManagerConversationPrompt', () => ({ buildAgentManagerConversationSystemPrompt: jest.fn() }));
 
-// Unrelated to this file's scenarios — mocked wholesale, same reasoning as
-// agentManagerConversationService.test.ts's own header comment.
 jest.mock('../managerReliabilityIntentService', () => ({
   detectReliabilityIntent: jest.fn(() => null),
   detectConfirmationReply: jest.fn(() => 'ambiguous'),
@@ -36,21 +32,21 @@ jest.mock('../managerReliabilityIntentService', () => ({
   toPendingConfirmation: jest.fn(),
   applyConfirmedReliabilityChange: jest.fn(),
 }));
-jest.mock('../agentUncertaintyIntentService', () => ({
-  detectUncertaintyQuery: jest.fn(() => false),
-  buildUncertaintyReply: jest.fn(),
+jest.mock('../agentWorkStatusIntentService', () => ({
+  detectWorkStatusQuery: jest.fn(() => null),
+  buildWorkStatusReply: jest.fn(),
 }));
 
-const mockAdminUserFindOne = jest.fn();
-jest.mock('../../models/AdminUser', () => ({
+const mockAssessmentFindAll = jest.fn();
+jest.mock('../../models/StudentAssessment', () => ({
   __esModule: true,
-  default: { findOne: (...a: any[]) => mockAdminUserFindOne(...a) },
+  default: { findAll: (...a: any[]) => mockAssessmentFindAll(...a) },
 }));
 
-const mockTicketFindAll = jest.fn();
-jest.mock('../../models/Ticket', () => ({
+const mockEnrollmentFindAll = jest.fn();
+jest.mock('../../models/Enrollment', () => ({
   __esModule: true,
-  default: { findAll: (...a: any[]) => mockTicketFindAll(...a) },
+  default: { findAll: (...a: any[]) => mockEnrollmentFindAll(...a) },
 }));
 
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
@@ -67,36 +63,36 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockCreateCompletion.mockResolvedValue({ choices: [{ message: { content: 'Normal reply.' } }] });
   mockGetInstrumentedOpenAI.mockReturnValue({ chat: { completions: { create: mockCreateCompletion } } });
-  mockAiAgentFindByPk.mockResolvedValue({ id: 'agent-1', agent_name: 'Reese', system_prompt: 'You are Reese.', config: null });
+  mockAiAgentFindByPk.mockResolvedValue({ id: 'agent-1', agent_name: 'Reese', system_prompt: 'You are Reese.', tools_granted: ['assess_student_health'] });
   mockMessageFindAll.mockResolvedValue([]);
-  mockAdminUserFindOne.mockResolvedValue({ id: 'admin-1' });
-  mockTicketFindAll.mockResolvedValue([]);
+  mockAssessmentFindAll.mockResolvedValue([]);
+  mockEnrollmentFindAll.mockResolvedValue([]);
 });
 
-describe('sendManagerMessage — work-status query', () => {
-  it('a "what are you working on" question is answered from real Ticket rows and never reaches the LLM', async () => {
+describe('sendManagerMessage — uncertainty query', () => {
+  it('a "what are you uncertain about" question is answered from real StudentAssessment rows and never reaches the LLM', async () => {
     const conversation = fakeConversation();
     mockConversationFindOrCreate.mockResolvedValue([conversation, false]);
-    mockTicketFindAll.mockResolvedValue([{ ticket_number: 7, title: 'Check in with a flagged student' }]);
+    mockAssessmentFindAll.mockResolvedValue([{ enrollment_id: 'e1', requires_human_review: true, unanswered_questions: [] }]);
+    mockEnrollmentFindAll.mockResolvedValue([{ id: 'e1', full_name: 'Victor Chukwukere' }]);
 
-    const result = await sendManagerMessage('agent-1', 'ali@colaberry.com', null, 'What are you working on?');
+    const result = await sendManagerMessage('agent-1', 'ali@colaberry.com', null, 'What are you uncertain about?');
 
     expect(mockCreateCompletion).not.toHaveBeenCalled();
     const agentTurn = mockMessageCreate.mock.calls.find((c) => c[0].role === 'agent');
-    expect(agentTurn[0].content).toContain('Check in with a flagged student');
+    expect(agentTurn[0].content).toContain('Victor Chukwukere');
     expect(result.conversationId).toBe('conv-1');
   });
 
-  it('a "what is overdue" question is answered honestly when nothing is overdue', async () => {
+  it('honestly answered when nothing is uncertain', async () => {
     const conversation = fakeConversation();
     mockConversationFindOrCreate.mockResolvedValue([conversation, false]);
-    mockTicketFindAll.mockResolvedValue([]);
 
-    await sendManagerMessage('agent-1', 'ali@colaberry.com', null, "What's overdue?");
+    await sendManagerMessage('agent-1', 'ali@colaberry.com', null, "What don't you know?");
 
     expect(mockCreateCompletion).not.toHaveBeenCalled();
     const agentTurn = mockMessageCreate.mock.calls.find((c) => c[0].role === 'agent');
-    expect(agentTurn[0].content).toBe('Nothing of mine is overdue right now.');
+    expect(agentTurn[0].content).toBe("Nothing I'm currently uncertain about — every recent assessment came back with a clear picture.");
   });
 
   it('never triggers while a reliability confirmation is pending — that flow owns the turn first', async () => {
@@ -104,23 +100,20 @@ describe('sendManagerMessage — work-status query', () => {
     const conversation = fakeConversation({ pending_reliability_confirmation: pending });
     mockConversationFindOrCreate.mockResolvedValue([conversation, false]);
 
-    // Even a message that would otherwise match a work-status trigger phrase
-    // is intercepted by the pending reliability turn's cancel/ambiguous path
-    // first — 'ambiguous' is this file's mocked detectConfirmationReply verdict.
-    await sendManagerMessage('agent-1', 'ali@colaberry.com', null, 'What are you working on?');
+    await sendManagerMessage('agent-1', 'ali@colaberry.com', null, 'What are you uncertain about?');
 
-    expect(mockTicketFindAll).not.toHaveBeenCalled();
+    expect(mockAssessmentFindAll).not.toHaveBeenCalled();
     expect(conversation.update).toHaveBeenCalledWith({ pending_reliability_confirmation: null });
   });
 
-  it('regression: a normal message with no work-status keywords goes through the unchanged LLM reply path', async () => {
+  it('regression: a normal message with no uncertainty keywords goes through the unchanged LLM reply path', async () => {
     const conversation = fakeConversation();
     mockConversationFindOrCreate.mockResolvedValue([conversation, false]);
 
     const result = await sendManagerMessage('agent-1', 'ali@colaberry.com', null, 'How is Victor doing this week?');
 
     expect(mockCreateCompletion).toHaveBeenCalledTimes(1);
-    expect(mockTicketFindAll).not.toHaveBeenCalled();
+    expect(mockAssessmentFindAll).not.toHaveBeenCalled();
     expect(result).toBeDefined();
   });
 });
