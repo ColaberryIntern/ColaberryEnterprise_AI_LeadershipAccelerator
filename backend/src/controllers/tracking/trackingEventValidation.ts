@@ -64,6 +64,12 @@ export const VALID_EVENT_TYPES = [
   // Case Study OS (T019, spec section 27). Names and the 30-character bound are
   // owned by constants/caseStudyEventTypes.ts and asserted by test.
   ...CASE_STUDY_EVENT_TYPES,
+  // AI Flotation /start. Fires when the scope panel finishes rendering - the moment a
+  // prospect actually receives the deliverable, and so the only event on that page that
+  // distinguishes "submitted a form" from "was shown what we would build". The site has
+  // been emitting it since the panel shipped and the ingest has been answering 400 to
+  // every one of them, because an unlisted type is rejected rather than stored.
+  'preview_ready',
 ] as const;
 
 export type ValidEventType = (typeof VALID_EVENT_TYPES)[number];
