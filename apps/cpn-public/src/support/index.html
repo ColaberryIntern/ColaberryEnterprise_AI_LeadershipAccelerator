@@ -14,6 +14,12 @@
   <body>
     <a class="skip" href="#main">Skip to content</a>
 
+    <!-- The prototype leads with an announcement strip. The one true thing worth putting
+         at the top of every page is that applications are not open yet. -->
+    <div class="announce">
+      Applications are not open yet. <a href="/scholarships/">Register your interest and we will tell you first</a>
+    </div>
+
     <header class="masthead">
       <div class="wrap bar">
         <a class="logo" href="/">
@@ -195,20 +201,51 @@
 
     <footer class="site-footer">
       <div class="wrap">
-        <nav aria-label="Footer">
-          <a href="/scholarships/">Scholarships</a>
-          <a href="/how-funds-work/">How funding works</a>
-          <a href="/partners/">Partners</a>
-          <a href="/support/">Support this work</a>
-          <a href="/about/">About</a>
-          <a href="/privacy/">Privacy</a>
-        </nav>
+        <div class="foot-grid">
+          <div>
+            <a class="logo" href="/">
+              <svg width="26" height="22" viewBox="0 0 26 22" aria-hidden="true" fill="currentColor">
+                <rect x="0" y="13" width="5" height="9" rx="2.5"></rect>
+                <rect x="7" y="8" width="5" height="14" rx="2.5"></rect>
+                <rect x="14" y="3" width="5" height="19" rx="2.5"></rect>
+                <circle cx="23" cy="3" r="3"></circle>
+              </svg>
+              OpportunityLift
+            </a>
+            <p class="blurb">
+              Raising money so that people in Dallas Fort Worth who cannot pay for career
+              training can start it, and finish it.
+            </p>
+          </div>
+          <div>
+            <h2>Scholars</h2>
+            <nav aria-label="For scholars">
+              <a href="/scholarships/">Scholarships</a>
+              <a href="/how-funds-work/">How funding works</a>
+            </nav>
+          </div>
+          <div>
+            <h2>Community</h2>
+            <nav aria-label="For the community">
+              <a href="/partners/">Partner with us</a>
+              <a href="/support/">Support this work</a>
+            </nav>
+          </div>
+          <div>
+            <h2>Organisation</h2>
+            <nav aria-label="About the organisation">
+              <a href="/about/">About</a>
+              <a href="/privacy/">Privacy</a>
+              <a href="mailto:{{brand.supportEmail}}">{{brand.supportEmail}}</a>
+            </nav>
+          </div>
+        </div>
+
         <div class="legal">
           <p>
             OpportunityLift is the scholarship program of <strong>Career Pathways
             Network</strong>, a Texas nonprofit corporation. 200 Chisholm Place, Suite 200,
-            Plano, Texas 75075. Contact
-            <a href="mailto:{{brand.supportEmail}}">{{brand.supportEmail}}</a>.
+            Plano, Texas 75075.
           </p>
           <p>
             Career Pathways Network does not yet have federal tax exempt status.

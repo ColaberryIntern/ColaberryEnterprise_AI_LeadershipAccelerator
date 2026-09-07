@@ -4,7 +4,7 @@
  * The palette, type, spacing, radius, shadow and motion here are NOT invented. They come
  * from the CPN design system, vendored verbatim into `design/` from the Multi-Brand
  * Tokens source. Variant A ("Grove") is the default and is what ships: a deep green
- * accent on warm ivory, Bitter headings over Atkinson Hyperlegible body, 12px radius.
+ * accent on warm ivory, Bitter headings over Atkinson Hyperlegible body.
  *
  * Read `design/DESIGN_SYSTEM.md` before changing anything here. Two rules from it are
  * load-bearing and easy to break by accident:
@@ -27,6 +27,20 @@
  * Dependency-free by design. No framework, no build step beyond token substitution. This
  * file is copied verbatim by packages/app-build (only .html is transformed), which is why
  * it carries no {{brand.*}} tokens.
+ *
+ * ---------------------------------------------------------------------------
+ * FORMAT: this file follows the approved prototype, not a layout I chose.
+ *
+ * Ali supplied an interactive prototype and, after the first version shipped, asked to get
+ * "closer to the design". The prototype's format is what this now implements: a two-column
+ * hero with a card in the right half, a proof strip, two-column section heads, a full-bleed
+ * accent band, tinted blocks, pill buttons and an inverted footer.
+ *
+ * What did NOT come across from it is the illustrative content - the invented scholar, the
+ * mock dashboards, the agent grid - because those publish people and numbers that do not
+ * exist. The distinction this file draws is between the prototype's FORMAT, which is
+ * adopted wholesale, and its PLACEHOLDER DATA, which is not.
+ * ---------------------------------------------------------------------------
  */
 
 @import url('design/colors.css');
@@ -75,10 +89,72 @@
   }
 }
 
+/*
+   TWO INVERTED SURFACES, DECLARED AS TOKENS RATHER THAN PAINTED INLINE.
+
+   The prototype uses two surfaces the Grove export does not define: a solid green band
+   behind the scholarship section, and a near-black footer. Both need a foreground set that
+   belongs to the surface rather than to the page, or text takes the page's ink onto a dark
+   ground and disappears.
+
+   Declared here, for BOTH themes, for the same reason `.nav a:not(.btn)` exists: a colour
+   that only resolves in one theme is the classic unreadable-page bug. In dark mode the
+   band deepens rather than brightening - inverting it to the light accent would put a
+   fluorescent green slab in the middle of a dark page.
+
+   Every pair below is measured by the verification harness on every build, so these are
+   checked rather than asserted. */
 :root {
+  --band-bg: #1D6A4C;
+  --band-fg: #FFFFFF;
+  --band-fg-muted: #D6E4DC;
+  --band-tint: rgba(255, 255, 255, 0.10);
+  --band-line: rgba(255, 255, 255, 0.20);
+
+  --foot-bg: #14251D;
+  --foot-fg: #E6EDE8;
+  --foot-muted: #A8BCB1;
+  --foot-head: #BFE3CF;
+  --foot-line: #2C4038;
+
   /* Layout measures, not brand tokens; the source takes no position on them. */
-  --wrap: 68rem;
-  --measure: 38rem;
+  --wrap: 75rem;
+  --measure: 36rem;
+
+  /* The prototype's hero type is far larger than the token scale's 54px ceiling and is
+     fluid rather than fixed. Added as its own token rather than by raising --fs-h1, so
+     the scale that governs every other heading on the site is untouched. */
+  --fs-display: clamp(3rem, 7vw, 5.4rem);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --band-bg: #154934;
+    --band-fg: #F1F7F3;
+    --band-fg-muted: #B7CDC1;
+    --band-tint: rgba(255, 255, 255, 0.07);
+    --band-line: rgba(255, 255, 255, 0.15);
+
+    --foot-bg: #0D1613;
+    --foot-fg: #E8EFEA;
+    --foot-muted: #A5B8AC;
+    --foot-head: #7FD4A5;
+    --foot-line: #24332B;
+  }
+}
+
+[data-theme="dark"] {
+  --band-bg: #154934;
+  --band-fg: #F1F7F3;
+  --band-fg-muted: #B7CDC1;
+  --band-tint: rgba(255, 255, 255, 0.07);
+  --band-line: rgba(255, 255, 255, 0.15);
+
+  --foot-bg: #0D1613;
+  --foot-fg: #E8EFEA;
+  --foot-muted: #A5B8AC;
+  --foot-head: #7FD4A5;
+  --foot-line: #24332B;
 }
 
 * { box-sizing: border-box; }
@@ -95,7 +171,7 @@
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  z-index: 10;
+  z-index: 60;
 }
 .skip:focus { left: var(--space-4); top: var(--space-4); }
 
@@ -107,27 +183,51 @@
   padding-right: var(--page-padding);
 }
 
-/* A column held to a comfortable reading measure. Body copy uses this; full-width
-   grids do not. */
 .measure { max-width: var(--measure); }
 
 /* ---------------------------------------------------------------------------
-   Masthead. The nav wraps rather than collapsing into a menu button: five links
-   and one action fit on a phone across two rows, and a disclosure widget is a
-   control someone has to discover before they can navigate.
+   Announcement strip. The prototype leads with one, and the copy here is the one
+   true thing worth saying at the top of every page: applications are not open.
+   --------------------------------------------------------------------------- */
+.announce {
+  background: var(--band-bg);
+  color: var(--band-fg);
+  text-align: center;
+  padding: var(--space-2) var(--page-padding);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+}
+.announce a { color: var(--band-fg); text-underline-offset: 3px; }
+.announce a:hover { color: var(--band-fg); }
+
+/* ---------------------------------------------------------------------------
+   Masthead. Sticky, like the prototype. The nav wraps rather than collapsing into
+   a menu button: six items fit on a phone across two rows, and a disclosure widget
+   is a control someone has to discover before they can navigate.
    --------------------------------------------------------------------------- */
 .masthead {
   border-bottom: 1px solid var(--line);
   background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+/* Progressive: browsers without backdrop-filter keep the solid background above. */
+@supports (backdrop-filter: blur(12px)) {
+  .masthead {
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
+    backdrop-filter: blur(12px);
+  }
 }
 
 .bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-3) var(--space-4);
-  padding-top: var(--space-4);
-  padding-bottom: var(--space-4);
+  gap: var(--space-2) var(--space-4);
+  padding-top: var(--space-3);
+  padding-bottom: var(--space-3);
 }
 
 .logo {
@@ -152,7 +252,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2) var(--space-4);
+  gap: var(--space-1) var(--space-4);
 }
 
 /*
@@ -165,7 +265,7 @@
    and was only caught by looking at a screenshot.
 
    Excluding `.btn` here keeps the cascade honest without raising specificity elsewhere.
-   `buttonContrast` in the verification harness now measures this rather than trusting it.
+   The verification harness now measures this rather than trusting it.
 */
 .nav a:not(.btn) {
   color: var(--fg-muted);
@@ -180,12 +280,17 @@
 .nav a:not(.btn):hover { color: var(--accent); }
 .nav a[aria-current="page"] { color: var(--fg); text-decoration: underline; text-underline-offset: 4px; }
 
-/* The nav's button keeps the caption size so it sits on the same baseline as the links,
-   without inheriting their colour. */
-.nav a.btn { font-size: var(--fs-caption); }
+.nav a.btn { font-size: var(--fs-caption); padding-left: var(--space-4); padding-right: var(--space-4); }
 
 /* ---------------------------------------------------------------------------
-   Buttons. One filled primary per view (DESIGN_SYSTEM.md rule 2).
+   Buttons. Pill radius and a hard offset shadow, from the prototype.
+
+   DESIGN_SYSTEM.md sets one 12px radius and reserves the pill for badges. The
+   prototype overrides that for actions specifically, and the prototype is the
+   approved direction - so the deviation is deliberate and limited to `.btn`.
+   Everything else on the site still uses `--radius`.
+
+   One filled primary action per view still holds.
    --------------------------------------------------------------------------- */
 .btn {
   display: inline-flex;
@@ -194,23 +299,29 @@
   min-height: var(--touch-target);
   padding: var(--space-3) var(--space-6);
   border: 1px solid transparent;
-  border-radius: var(--radius);
+  border-radius: 999px;
   font: inherit;
   font-weight: 700;
   text-decoration: none;
   cursor: pointer;
-  transition: background var(--motion-fast) var(--ease), transform var(--motion-fast) var(--ease);
+  transition: background var(--motion-fast) var(--ease),
+              transform var(--motion-fast) var(--ease),
+              box-shadow var(--motion-fast) var(--ease);
 }
-
-.btn:active { transform: scale(var(--press-scale)); }
 
 .btn-primary {
   background: var(--accent);
   color: var(--accent-contrast);
-  box-shadow: var(--shadow);
+  /* The prototype's chunky offset, expressed through the token set: a darker mix of
+     the accent rather than a second brand colour. */
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--accent) 70%, #000);
 }
 .btn-primary:hover { background: var(--accent-hover); color: var(--accent-contrast); }
-.btn-primary:active { background: var(--accent-press); }
+.btn-primary:active {
+  background: var(--accent-press);
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 70%, #000);
+}
 
 .btn-secondary {
   background: var(--bg-elevated);
@@ -218,26 +329,65 @@
   border-color: var(--line);
 }
 .btn-secondary:hover { background: var(--accent-soft); color: var(--fg); }
+.btn-secondary:active { transform: translateY(2px); }
+
+/* On the accent band the primary button would be accent-on-accent. It inverts. */
+.band .btn-primary {
+  background: var(--band-fg);
+  color: var(--band-bg);
+  box-shadow: 0 4px 0 var(--band-line);
+}
+.band .btn-primary:hover { background: var(--band-fg); color: var(--band-bg); }
+
+/*
+   ...but NOT inside the band's white card, where the inversion cancels itself out.
+
+   `.band-card` is `--bg-elevated`, and the inverted button is `--band-fg`. In light mode
+   both are white, so the button lost its fill entirely and rendered as bare green text on
+   white. Contrast was 6.5:1 and the checker passed it: the failure is not legibility, it
+   is that the page's one primary action stopped looking like a button. Caught by looking
+   at the section, the same way the nav button was.
+*/
+.band .band-card .btn-primary {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--accent) 70%, #000);
+}
+.band .band-card .btn-primary:hover { background: var(--accent-hover); color: var(--accent-contrast); }
 
 .btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 /* ---------------------------------------------------------------------------
-   Sections and headings.
+   Sections and the two-column section head from the prototype: heading left,
+   supporting sentence right, aligned along the bottom.
    --------------------------------------------------------------------------- */
-section { padding-top: var(--space-12); padding-bottom: var(--space-12); }
-section.tight { padding-top: var(--space-8); padding-bottom: var(--space-8); }
+section { padding-top: var(--space-16); padding-bottom: var(--space-16); }
+section.tight { padding-top: var(--space-12); padding-bottom: var(--space-12); }
 
-.hero { padding-top: var(--space-16); padding-bottom: var(--space-12); }
-.hero h1 { max-width: 18ch; margin-bottom: var(--space-4); }
-.hero .lede { font-size: var(--fs-h4); color: var(--fg-muted); max-width: var(--measure); margin: 0 0 var(--space-8); }
+.section-head {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+  margin-bottom: var(--space-8);
+}
+.section-head h2 { margin: var(--space-2) 0 0; }
+.section-head > p { color: var(--fg-muted); margin: 0; max-width: 34rem; }
+
+@media (min-width: 860px) {
+  .section-head {
+    grid-template-columns: 1.1fr 0.9fr;
+    align-items: end;
+    gap: var(--space-8);
+  }
+}
 
 .eyebrow {
   font-size: var(--fs-caption);
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--fg-muted);
-  margin: 0 0 var(--space-2);
+  color: var(--accent);
+  margin: 0;
 }
 
 .actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
@@ -248,6 +398,265 @@ li { margin-bottom: var(--space-2); }
 
 .lead { font-size: var(--fs-h4); color: var(--fg-muted); }
 .note { font-size: var(--fs-caption); color: var(--fg-muted); }
+
+/* ---------------------------------------------------------------------------
+   Hero. Two columns, with the card occupying the right half.
+
+   The first version left that half empty and put the status panel in a lonely box
+   below the fold. The prototype's hero is a pair - argument and card - and the
+   status panel is exactly the card this site has to show.
+   --------------------------------------------------------------------------- */
+.hero { padding-top: var(--space-16); padding-bottom: var(--space-12); }
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-12);
+  align-items: center;
+}
+
+@media (min-width: 940px) {
+  .hero-grid { grid-template-columns: 1.08fr 0.92fr; gap: var(--space-12); }
+}
+
+.hero h1 {
+  font-size: var(--fs-display);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  max-width: 13ch;
+  margin: var(--space-4) 0 var(--space-6);
+  text-wrap: balance;
+}
+.hero h1 em { font-style: normal; color: var(--accent); }
+
+.hero .lede {
+  font-size: var(--fs-h4);
+  color: var(--fg-muted);
+  max-width: 40ch;
+  margin: 0 0 var(--space-8);
+}
+
+/* The trust line: three short facts, each true today. */
+.trustline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-6);
+  margin-top: var(--space-6);
+  color: var(--fg-muted);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+}
+.trustline span::before { content: '\2713'; color: var(--accent); margin-right: var(--space-2); }
+
+/*
+   The offset tint block behind the hero card, from the prototype. Drawn with a
+   pseudo-element rather than a second box so it cannot be tabbed to or read out.
+*/
+.hero-card {
+  position: relative;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 8px);
+  padding: var(--space-8);
+  box-shadow: var(--shadow);
+}
+.hero-card::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: var(--space-6) calc(var(--space-6) * -1) calc(var(--space-6) * -1) var(--space-6);
+  background: var(--accent-soft);
+  border-radius: calc(var(--radius) + 8px);
+}
+.hero-card h2 { font-size: var(--fs-h3); margin: var(--space-4) 0 var(--space-3); }
+.hero-card p { font-size: var(--fs-caption); color: var(--fg-muted); margin: 0 0 var(--space-3); max-width: none; }
+.hero-card p:last-child { margin-bottom: 0; }
+
+/* The card's label row, echoing the prototype's Opportunity Guide header. */
+.card-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--accent);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+}
+.card-label .badge {
+  width: 34px; height: 34px; flex: none;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  display: grid; place-items: center;
+  font-weight: 700;
+}
+
+@media (max-width: 620px) {
+  .hero-card::before { display: none; }
+  .hero-card { padding: var(--space-6); }
+}
+
+/* ---------------------------------------------------------------------------
+   Proof strip. Four facts across, hairline-separated, from the prototype.
+   Every one is checkable; none is a metric that requires a scholar to exist.
+   --------------------------------------------------------------------------- */
+.proofbar {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-elevated);
+}
+.proof-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+}
+.proof {
+  padding: var(--space-6);
+  border-right: 1px solid var(--line);
+}
+.proof:last-child { border-right: 0; }
+.proof b {
+  display: block;
+  font-family: var(--font-heading);
+  font-weight: var(--fw-heading);
+  font-size: var(--fs-h4);
+  color: var(--accent);
+  margin-bottom: var(--space-1);
+}
+.proof span { font-size: var(--fs-caption); color: var(--fg-muted); }
+
+@media (max-width: 780px) {
+  .proof { border-right: 0; border-bottom: 1px solid var(--line); }
+  .proof:last-child { border-bottom: 0; }
+}
+
+/* ---------------------------------------------------------------------------
+   Cards.
+   --------------------------------------------------------------------------- */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+.card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 4px);
+  padding: var(--space-6);
+  box-shadow: var(--shadow);
+}
+.card h3 { font-size: var(--fs-h4); margin-bottom: var(--space-3); }
+.card p { margin: 0; color: var(--fg-muted); font-size: var(--fs-caption); max-width: none; }
+.card p + p { margin-top: var(--space-2); }
+.card ul { max-width: none; font-size: var(--fs-caption); color: var(--fg-muted); margin: 0; }
+
+/* Numbered steps. The prototype sets the numeral in the display face at card scale
+   and tints it back, so it reads as an ordinal rather than a heading. These cards
+   ARE a sequence, which is what earns the numbering. */
+.card .num {
+  display: block;
+  font-family: var(--font-heading);
+  font-weight: var(--fw-heading);
+  font-size: var(--fs-h2);
+  line-height: 1;
+  color: color-mix(in srgb, var(--accent) 38%, var(--bg-elevated));
+  margin-bottom: var(--space-4);
+}
+
+/* Cards that carry a link sit it at the bottom, so a row of cards aligns. */
+.card.linked {
+  display: flex;
+  flex-direction: column;
+  min-height: 15rem;
+}
+.card.linked .card-link {
+  margin-top: auto;
+  padding-top: var(--space-4);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-target);
+}
+
+/* ---------------------------------------------------------------------------
+   The accent band. A full-bleed colour block, from the prototype's scholarship
+   section. It is the only place on the site where the accent covers a surface
+   rather than marking an action.
+   --------------------------------------------------------------------------- */
+.band {
+  background: var(--band-bg);
+  color: var(--band-fg);
+}
+.band h2, .band h3 { color: var(--band-fg); }
+.band p { color: var(--band-fg-muted); }
+.band .eyebrow { color: var(--band-fg-muted); }
+.band .section-head > p { color: var(--band-fg-muted); }
+
+.band-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-12);
+  align-items: center;
+}
+@media (min-width: 940px) {
+  .band-grid { grid-template-columns: 1fr 1fr; gap: var(--space-16); }
+}
+
+.band h2 {
+  font-size: clamp(2.2rem, 4.4vw, 3.4rem);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  margin: var(--space-3) 0 var(--space-6);
+  text-wrap: balance;
+}
+
+/* Inclusion chips. */
+.chips { display: grid; grid-template-columns: 1fr; gap: var(--space-2); margin-top: var(--space-6); }
+@media (min-width: 520px) { .chips { grid-template-columns: 1fr 1fr; } }
+.chip {
+  background: var(--band-tint);
+  border: 1px solid var(--band-line);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  color: var(--band-fg);
+}
+.chip::before { content: '\2713'; margin-right: var(--space-2); color: var(--band-fg-muted); }
+
+/* The white card that sits inside the band. */
+.band-card {
+  background: var(--bg-elevated);
+  color: var(--fg);
+  border-radius: calc(var(--radius) + 8px);
+  padding: var(--space-8);
+  box-shadow: var(--shadow);
+}
+.band-card h3 { color: var(--fg); font-size: var(--fs-h3); margin-bottom: var(--space-3); }
+.band-card p { color: var(--fg-muted); }
+.band-card .btn { width: 100%; }
+
+/* The big-number block, from the prototype's "25+ hours" panel. */
+.figure-block {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  background: var(--accent-soft);
+  border-radius: var(--radius);
+  padding: var(--space-4) var(--space-6);
+  margin: var(--space-6) 0;
+}
+.figure-block b {
+  font-family: var(--font-heading);
+  font-weight: var(--fw-heading);
+  font-size: var(--fs-h2);
+  line-height: 1;
+  color: var(--accent);
+  flex: none;
+}
+.figure-block span { font-size: var(--fs-caption); color: var(--fg); max-width: none; }
 
 /* ---------------------------------------------------------------------------
    Status notice. Carries the things that are true today and would otherwise be
@@ -267,41 +676,10 @@ li { margin-bottom: var(--space-2); }
 .notice p { margin: 0 0 var(--space-2); font-size: var(--fs-caption); color: var(--fg-muted); }
 .notice p:last-child { margin-bottom: 0; }
 
-/* ---------------------------------------------------------------------------
-   Cards and grids.
-   --------------------------------------------------------------------------- */
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
-  gap: var(--space-4);
-  margin-top: var(--space-6);
-}
-
-.card {
-  background: var(--bg-elevated);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: var(--space-6);
-  box-shadow: var(--shadow);
-}
-.card h3 { font-size: var(--fs-h4); margin-bottom: var(--space-2); }
-.card p { margin: 0; color: var(--fg-muted); font-size: var(--fs-caption); max-width: none; }
-.card p + p { margin-top: var(--space-2); }
-.card ul { max-width: none; font-size: var(--fs-caption); color: var(--fg-muted); margin: 0; }
-
-/* Numbered steps. The number is decorative; the heading carries the meaning. */
-.step-number {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-family: var(--font-heading);
-  font-weight: var(--fw-heading);
-  margin-bottom: var(--space-3);
+/* Inside the hero card the notice is the card, so it drops its own chrome. */
+.hero-card .notice {
+  border: 0; border-left: 0; background: none;
+  padding: 0; margin: 0; max-width: none;
 }
 
 /* ---------------------------------------------------------------------------
@@ -366,14 +744,14 @@ tfoot td { font-weight: 700; border-bottom: 0; }
 .intake {
   background: var(--bg-elevated);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: var(--space-6);
+  border-radius: calc(var(--radius) + 8px);
+  padding: var(--space-8);
   box-shadow: var(--shadow);
   max-width: var(--measure);
   margin-top: var(--space-6);
 }
 
-.intake h2 { font-size: var(--fs-h4); margin-bottom: var(--space-2); }
+.intake h2 { font-size: var(--fs-h3); margin-bottom: var(--space-2); }
 .intake > p:first-of-type { margin-top: 0; }
 
 label {
@@ -418,19 +796,71 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
 .status[data-state="error"] { color: var(--danger); }
 
 /* ---------------------------------------------------------------------------
-   Footer.
+   Closing block. A tinted panel, from the prototype's final call to action.
+   --------------------------------------------------------------------------- */
+.closing {
+  background: var(--accent-soft);
+  border-radius: calc(var(--radius) + 12px);
+  padding: clamp(32px, 6vw, 64px);
+  text-align: center;
+}
+.closing h2 {
+  font-size: clamp(2rem, 4.2vw, 3.2rem);
+  line-height: 1.03;
+  letter-spacing: -0.03em;
+  max-width: 20ch;
+  margin: 0 auto var(--space-4);
+  text-wrap: balance;
+}
+.closing p { color: var(--fg-muted); max-width: 42rem; margin: 0 auto; }
+.closing .actions { justify-content: center; margin-top: var(--space-8); }
+
+/* ---------------------------------------------------------------------------
+   Footer. Inverted, four columns, from the prototype.
    --------------------------------------------------------------------------- */
 .site-footer {
-  border-top: 1px solid var(--line);
+  background: var(--foot-bg);
+  color: var(--foot-muted);
   margin-top: var(--space-16);
-  padding-top: var(--space-8);
+  padding-top: var(--space-12);
   padding-bottom: var(--space-12);
   font-size: var(--fs-caption);
-  color: var(--fg-muted);
 }
-.site-footer a { color: var(--fg-muted); }
-.site-footer a:hover { color: var(--accent); }
-.site-footer nav { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); margin-bottom: var(--space-6); }
-.site-footer nav a { min-height: var(--touch-target); display: inline-flex; align-items: center; font-weight: 700; }
-.site-footer .legal { max-width: 62rem; }
-.site-footer .legal p { max-width: none; margin: 0 0 var(--space-3); }
+.site-footer .logo { color: var(--foot-fg); }
+.site-footer .logo svg { color: var(--foot-head); }
+
+.foot-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-8);
+}
+@media (min-width: 720px) { .foot-grid { grid-template-columns: 1.6fr repeat(3, 1fr); } }
+
+.foot-grid h2 {
+  font-size: var(--fs-caption);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--foot-head);
+  margin: 0 0 var(--space-2);
+}
+.foot-grid a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-target);
+  color: var(--foot-muted);
+  text-decoration: none;
+}
+.foot-grid a:hover { color: var(--foot-fg); text-decoration: underline; }
+.foot-grid nav { display: flex; flex-direction: column; }
+.foot-grid .blurb { color: var(--foot-muted); max-width: 22rem; margin-top: var(--space-3); }
+
+.site-footer .legal {
+  border-top: 1px solid var(--foot-line);
+  margin-top: var(--space-8);
+  padding-top: var(--space-6);
+  max-width: none;
+}
+.site-footer .legal p { max-width: 62rem; margin: 0 0 var(--space-3); color: var(--foot-muted); }
+.site-footer .legal p:last-child { margin-bottom: 0; }
+.site-footer .legal strong { color: var(--foot-fg); }
+.site-footer .legal a { color: var(--foot-head); }
