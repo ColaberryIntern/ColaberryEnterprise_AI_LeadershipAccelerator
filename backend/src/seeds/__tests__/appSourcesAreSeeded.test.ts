@@ -175,6 +175,7 @@ describe('public app forms post to sources that actually exist', () => {
     expect([...new Set(cpn)]).toEqual([
       'champion_interest',
       'community_partner_interest',
+      'free_training_interest',
       'scholarship_interest',
     ]);
   });
