@@ -54,7 +54,8 @@ function formatTimeAgo(dateStr: string): string {
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
 }
-
+
+
 
 /**
  * Read one source, keeping its outcome.
