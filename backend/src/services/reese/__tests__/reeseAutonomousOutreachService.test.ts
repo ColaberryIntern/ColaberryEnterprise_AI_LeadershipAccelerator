@@ -237,6 +237,18 @@ describe('runReeseAutonomousOutreachSweep — the required boundaries', () => {
     expect(mockAuthorizeTicketDispatch).toHaveBeenCalledWith(expect.objectContaining({ riskTier: 'R3' }));
   });
 
+  it('ordering fix (2026-09-07): governance is evaluated BEFORE the real send, never after — the anti-pattern the mission text flags by name', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+
+    await runReeseAutonomousOutreachSweep(false);
+
+    expect(mockAuthorizeTicketDispatch).toHaveBeenCalled();
+    expect(mockInitiateDm).toHaveBeenCalled();
+    const authorizeCallOrder = mockAuthorizeTicketDispatch.mock.invocationCallOrder[0];
+    const sendCallOrder = mockInitiateDm.mock.invocationCallOrder[0];
+    expect(authorizeCallOrder).toBeLessThan(sendCallOrder);
+  });
+
   it('no signal fires for an eligible student -> skipped, no send, no error', async () => {
     const result = await runReeseAutonomousOutreachSweep(false);
     expect(result.sent).toBe(0);

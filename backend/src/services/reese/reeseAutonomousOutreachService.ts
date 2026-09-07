@@ -136,12 +136,19 @@ async function sendNewOutreach(
   // input type.
   await ticket.update({ risk_tier: RISK_TIER });
 
-  await initiateDm(enrollmentId, message);
-
-  // Governance (Milestone 4, shadow-mode only) — this call's verdict NEVER
-  // gates the send: the message has already been sent by the time this runs,
-  // matching ticketAgentDispatcher.ts's own established "evaluate but never
-  // block" contract for this exact chokepoint.
+  // Governance (Milestone 4, shadow-mode only) — evaluated BEFORE the real
+  // send, matching agentActionAuthorizationBridge.ts's own documented design
+  // intent ("authorization is evaluated BEFORE the real action runs — the
+  // conventional 'gate ahead of the action,' even in shadow/log-only mode")
+  // and the canonical caller pattern in ticketAgentDispatcher.ts. Ordering
+  // fix (2026-09-07): this call used to run AFTER initiateDm() below, a real,
+  // previously-flagged instance of the anti-pattern the mission text calls
+  // out by name ("do not preserve an unsafe pattern where the message is
+  // sent first and governance is logged afterward"). The verdict still never
+  // gates the send — that stays real, separate, deliberately out-of-scope
+  // work (the shadow-to-enforce migration) — this fix only corrects the
+  // ordering so that migration, whenever it happens, doesn't also require
+  // restructuring this call site.
   const eventId = crypto.randomUUID();
   await authorizeTicketDispatch({
     eventId,
@@ -150,6 +157,8 @@ async function sendNewOutreach(
     action: 'reese_autonomous_outreach',
     riskTier: RISK_TIER,
   });
+
+  await initiateDm(enrollmentId, message);
 
   await ReeseOutreach.create({
     enrollment_id: enrollmentId,
