@@ -201,6 +201,9 @@ describe('admin OS domains', () => {
   it('routes a legacy path to the domain that absorbed it', () => {
     expect(domainForLegacyPath('/admin/visitors')?.key).toBe('growth');
     expect(domainForLegacyPath('/admin/war-room')?.key).toBe('command_center');
+    // The Command Center PAGE was retired 2026-09-07; the domain key remains as a
+    // navigation grouping and now points at /admin/dashboard.
+    expect(DOMAINS.find((d) => d.key === 'command_center')!.path).toBe('/admin/dashboard');
     expect(domainForLegacyPath('/admin/refunds')?.key).toBe('revenue');
     // Nested paths follow their parent, so a deep link keeps working.
     expect(domainForLegacyPath('/admin/students/42')?.key).toBe('learning');

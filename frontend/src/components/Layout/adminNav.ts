@@ -28,7 +28,6 @@ export const PINNED_LINKS: NavLink[] = [
   // roles. Pinned rather than grouped because it is the destination the other
   // domains hang off.
   { path: '/admin/war-room', label: 'War Room', icon: 'radar-line', section: 'war_room' },
-  { path: '/admin/command-center', label: 'Command Center', icon: 'compass-3-line', section: 'dashboard' },
   { path: '/admin/trust', label: 'Trust Center', icon: 'shield-check-line', section: 'trust' },
   // Support role's sole surface (also visible to owner/admin who hold 'students').
   { path: '/admin/students', label: 'Student Story', icon: 'file-user-line', section: 'students' },

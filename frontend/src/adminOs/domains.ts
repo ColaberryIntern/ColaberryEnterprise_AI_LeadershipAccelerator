@@ -46,23 +46,30 @@ export interface DomainDef {
 }
 
 /**
- * `command_center` deliberately sits on the `dashboard` section.
+ * `command_center` points at /admin/dashboard, and there is no Command Center page.
  *
- * Every scoped role holds `dashboard` — mentor, community_organizer, curriculum,
- * revenue and admissions all do — while NONE of them holds `war_room`. Building
- * the executive home on the War Room route would strip the landing page from five
- * of eight roles and bounce them on login, because LANDING_PREFERENCE starts at
- * /admin/dashboard. The composition comes from War Room; the route and section do
- * not.
+ * One was built on 2026-09-06 and retired on 2026-09-07. It showed a fraction of
+ * what the War Room already showed, from three sources against the War Room's
+ * six, and Ali's verdict was direct: "I don't understand what we need command
+ * center for. It takes a long time to return subpar information."
+ *
+ * He was right, and the useful half of that page was never the page. Its one real
+ * improvement — refusing to render a failed source as 0 — belonged in the War
+ * Room from the start, and now lives there. Building a second dashboard to carry
+ * one good idea was the wrong shape.
+ *
+ * The domain KEY is kept because it still groups the executive surfaces for
+ * navigation, and it still sits on the `dashboard` section: every scoped role
+ * holds `dashboard` while none holds `war_room`, so grouping these under
+ * war_room would hide them from five of eight roles.
  */
 export const DOMAINS: readonly DomainDef[] = [
   {
     key: 'command_center',
-    label: 'Command Center',
+    label: 'Dashboard',
     icon: 'dashboard-line',
-    path: '/admin/command-center',
+    path: '/admin/dashboard',
     absorbs: [
-      '/admin/dashboard',
       '/admin/war-room',
       // Adopted 2026-09-05 — had no nav entry, so the gates disagreed about it.
       '/admin/executive-narrative',

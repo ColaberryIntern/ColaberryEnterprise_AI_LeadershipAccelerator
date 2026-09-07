@@ -54,6 +54,36 @@ function formatTimeAgo(dateStr: string): string {
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
 }
+
+
+/**
+ * Read one source, keeping its outcome.
+ *
+ * Deliberately NOT `.catch(() => ({ data: {} }))`. That turns a 500 into an
+ * empty object, which renders as 0 — so a broken backend and a genuinely quiet
+ * day look identical on screen, and the reader cannot tell which one they are
+ * seeing. Keeping `ok` lets a card show "—" and the page name what failed.
+ *
+ * `data` still falls back to an empty shape so every existing consumer below
+ * keeps working unchanged; the difference is that the page now KNOWS the value
+ * is absent rather than zero.
+ */
+async function read(
+  label: string,
+  get: () => Promise<{ data: any }>,
+): Promise<{ label: string; ok: boolean; data: any }> {
+  try {
+    const res = await get();
+    return { label, ok: true, data: res.data };
+  } catch {
+    return { label, ok: false, data: {} };
+  }
+}
+
+/** A number we could not read is "—", never 0. */
+function orDash(ok: boolean, value: React.ReactNode): React.ReactNode {
+  return ok ? value : <span style={{ opacity: 0.55 }}>—</span>;
+}
 
 export default function WarRoomPage() {
   const [, setStats] = useState<any>(null);
@@ -68,19 +98,37 @@ export default function WarRoomPage() {
   const [feed, setFeed] = useState<any[]>([]);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [error, setError] = useState('');
+  // Which sources did not answer on the last poll. Named, so the reader knows
+  // which cards to distrust rather than inferring it from a zero.
+  const [degraded, setDegraded] = useState<string[]>([]);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const activityRef = useRef<HTMLDivElement>(null);
 
   const fetchAll = useCallback(async () => {
     try {
+      // Each source is read WITH its outcome, not with `.catch(() => ({ data: {} }))`.
+      //
+      // That old shape turned a 500 into an empty object, which renders as 0 —
+      // so a broken backend and a genuinely quiet day looked identical and there
+      // was no way to tell which you were looking at. Every card below now knows
+      // whether its number is real or merely absent.
       const [statsRes, revenueRes, liveRes, alertsRes, feedRes, visitorRes] = await Promise.all([
-        api.get('/api/admin/stats').catch(() => ({ data: {} })),
-        api.get('/api/admin/revenue/dashboard').catch(() => ({ data: {} })),
-        api.get('/api/admin/war-room/live-metrics').catch(() => ({ data: {} })),
-        api.get('/api/admin/alerts?status=new&limit=20').catch(() => ({ data: [] })),
-        api.get('/api/admin/war-room/feed').catch(() => ({ data: [] })),
-        api.get('/api/admin/visitors/stats').catch(() => ({ data: {} })),
+        read('stats', () => api.get('/api/admin/stats')),
+        read('revenue', () => api.get('/api/admin/revenue/dashboard')),
+        read('live metrics', () => api.get('/api/admin/war-room/live-metrics')),
+        read('alerts', () => api.get('/api/admin/alerts?status=new&limit=20')),
+        read('activity feed', () => api.get('/api/admin/war-room/feed')),
+        read('visitor stats', () => api.get('/api/admin/visitors/stats')),
       ]);
+
+      // Named so the page can say which numbers not to trust, instead of leaving
+      // the reader to guess from a suspicious-looking zero.
+      setDegraded(
+        [statsRes, revenueRes, liveRes, alertsRes, feedRes, visitorRes]
+          .filter((r) => !r.ok)
+          .map((r) => r.label),
+      );
+
       setStats(statsRes.data);
       setRevenue(revenueRes.data);
       setLiveMetrics(liveRes.data);
@@ -150,6 +198,17 @@ export default function WarRoomPage() {
           </div>
         }
       >
+        {/* Which sources did not answer, named.
+            Without this the page could only show a zero, and a zero is
+            indistinguishable from a quiet day. A reader should never have to
+            guess whether a number is real. */}
+        {degraded.length > 0 && (
+          <div className="alert alert-warning py-2 px-3 mb-3 small">
+            <strong>Didn&apos;t respond just now:</strong> {degraded.join(', ')}. Those
+            cards show &quot;—&quot; rather than zero, and will fill in on the next refresh.
+          </div>
+        )}
+
         {/* Live Metrics KPI row (was the dark-panel MetricCard grid). */}
         <div className="row g-3">
           {/* Website visitors leads the row: it is the top of the funnel every
