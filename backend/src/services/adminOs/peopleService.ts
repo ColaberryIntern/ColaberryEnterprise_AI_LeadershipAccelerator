@@ -144,7 +144,16 @@ export async function getPeopleRoster(query: PeopleQuery): Promise<PeopleRoster>
     ) e ON e.email = l.email
   `;
 
-  const filters: string[] = [`(${STAGE_SQL}) = ANY(:stages)`];
+  // IN, not `= ANY`. Sequelize expands an array replacement into a bare comma
+  // list — 'lead','applicant' — so `= ANY(:stages)` renders as
+  // `= ANY('lead','applicant')`, which is a syntax error at the comma. IN takes
+  // exactly that comma list.
+  //
+  // This shipped broken because the unit tests mock sequelize.query and assert
+  // on the SQL TEXT, so the statement was never executed by anything until it
+  // reached production. Asserting the string is not the same as running the
+  // query, and only the second one proves it works.
+  const filters: string[] = [`(${STAGE_SQL}) IN (:stages)`];
   const replacements: Record<string, unknown> = { stages: visibleStages, limit, offset };
 
   if (query.stage) {
