@@ -183,4 +183,33 @@ function main() {
   }
 }
 
+/**
+ * RETIRED 2026-09-07. Running this would undo a decision, not repeat a build step.
+ *
+ * This script's whole job is to regenerate src/ from the captured legacy portal. On
+ * 2026-09-07 that portal was retired: refactored.ai now 301s every path to
+ * enterprise.colaberry.ai, and the eleven ported pages were deleted. Re-running this
+ * would recreate them — along with the dead sign-in modal, the stale Django CSRF tokens,
+ * the retired Universal Analytics tags and 421 references to a CloudFront distribution
+ * nobody has confirmed holding credentials for.
+ *
+ * It is kept rather than deleted because legacy-capture/ is still the archive of what the
+ * site was, and this is the documentation of how it was transformed. The guard is here so
+ * that reading it stays cheap and running it is a deliberate act.
+ *
+ * To genuinely restore the ported site: revert the commit that retired it, which brings
+ * back the pages, both nginx configs and the cutover doc as a coherent set. Setting the
+ * variable below gets you the pages without the configuration that served them.
+ */
+if (!process.env.REFACTORED_ALLOW_LEGACY_PORT) {
+  console.error(
+    'port-from-capture.js is retired.\n\n' +
+    'refactored.ai now redirects to enterprise.colaberry.ai and the ported pages were\n' +
+    'deleted deliberately. Re-running this would resurrect them without the nginx config\n' +
+    'that served them. See the note above this check in the source.\n\n' +
+    'Override with REFACTORED_ALLOW_LEGACY_PORT=1 if that is genuinely what you want.',
+  );
+  process.exit(1);
+}
+
 main();

@@ -152,8 +152,23 @@ export const BRAND_PAGE_CATEGORIES: Record<string, BrandPageCategoryMap> = {
    * Several h1s in the capture are navigation text ("LEARN") rather than page headings,
    * so these categories were read from each page's content and forms, not its heading.
    */
+  // RETIRED 2026-09-07, AND DELIBERATELY LEFT INTACT.
+  //
+  // refactored.ai now returns 301 to enterprise.colaberry.ai for every path, and the
+  // eleven ported pages below were deleted from apps/refactored-public/src. The map stays
+  // for two reasons. Historical visitor events still carry these paths, and a categoriser
+  // that stopped recognising them would silently reclassify years of recorded traffic as
+  // `other` — rewriting the past to match the present. And brandPageCategories.test.ts
+  // asserts several of these entries directly, as the canonical example of one brand's
+  // rules not leaking into another's.
+  //
+  // Do not add to this map. A new page on this brand means the retirement was reversed,
+  // which is a decision to make in docs/architecture/multi-tenancy/REFACTORED_CUTOVER.md
+  // before it is a line here.
   refactored: {
     exact: {
+      // The only path still on disk: a fallback page that should never render, because
+      // nginx redirects ahead of it. See apps/refactored-public/src/index.html.
       '/': 'homepage',
       // The three audience pages: what Refactored offers, and to whom.
       '/individuals': 'program',

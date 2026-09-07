@@ -1,66 +1,96 @@
-# Taking over refactored.ai without breaking it
+# Retiring refactored.ai
 
-Status: **rebuilt and reviewable, not deployed.** No DNS has moved.
+Status: **redirect committed, not in effect.** No DNS has moved.
 
-## What was rebuilt
+## The decision, and the one it replaced
 
-The 11 public marketing pages of refactored.ai, ported from
-`apps/refactored-public/legacy-capture/` into `apps/refactored-public/src/` by
-`port-from-capture.js`, with the v2 tracker injected into each.
+On 2026-09-07 the direction changed: **retire the old Refactored portal and send its
+traffic to the accelerator.** `refactored.ai` and `www.refactored.ai` return `301` to
+`https://enterprise.colaberry.ai/` for every path.
 
-The brief was to rebuild the current site in place and redesign later, so this is a
-**faithful port, not a redesign**. The pages look and read exactly as they do today. The
-one thing that changes is that visits now attribute to the `refactored` brand instead of
-being invisible — which is the entire point of taking over the front door.
+The previous plan, which the rest of this document used to describe, was the opposite:
+take over the front door with a proxy, keep the legacy platform reachable underneath, and
+move pages from *proxied* to *ours* one redesign at a time. That plan was correct for
+"keep the platform alive while we rebuild it" and is the wrong shape for retiring it, so
+the proxy is gone rather than left dormant.
 
-## Why a proxy, and not a clean takeover
+The eleven ported marketing pages were deleted with it. They were a faithful copy of the
+portal being retired, and keeping a copy of something you have decided to switch off only
+creates a second thing to maintain.
+
+## What this deliberately breaks
 
 refactored.ai is **not** a marketing site with the application hosted elsewhere. The whole
-learning platform is on that one hostname. All of these return 200 there today:
+learning platform is on that one hostname, and all of this answers `200` there today:
 
-| Path | Status |
-|---|---|
-| `/signin`, `/signup`, `/dashboard/` | 200 |
-| `/course/…` (193 pages) | 200 |
-| `/learn/…` (1,715 pages) | 200 |
+| Path | Status today | After the DNS move |
+|---|---|---|
+| `/signin`, `/signup`, `/dashboard/` | 200 | 301 to the accelerator |
+| `/course/…` (193 pages) | 200 | 301 to the accelerator |
+| `/learn/…` (1,715 pages) | 200 | 301 to the accelerator |
+| `login.refactored.ai` (Auth0) | live | untouched — different hostname |
 
-Pointing DNS at this server and serving only the rebuilt marketing pages would **404 every
-student login and all 1,908 content pages.**
+**Roughly 1,900 content pages and the student sign-in stop answering.** That is the point
+of retiring the portal, not a side effect, but it is the reason this is a decision with a
+date on it rather than a config tidy-up.
 
-So `nginx/refactored.conf` serves what we have rebuilt and passes everything else through
-to the existing origin untouched. Each page moves from *proxied* to *ours* as it is
-redesigned. That turns one irreversible decision into a series of reversible ones, and the
-worst case for a marketing page becomes a marketing page rather than a locked-out student.
+Note that `login.refactored.ai` is a separate record and is not touched. The Auth0 tenant
+keeps running; it simply stops being reachable through a link on this hostname.
 
-## Three traps encoded in the config
+## The blocker: nobody has confirmed AWS access
 
-**Proxy to the NLB's hostname, not to an IP.** An earlier revision of this file hardcoded
-`54.218.30.47` and called it "the old box". It is not a box — it is whatever the prod
-Network Load Balancer currently resolves to, and **NLB addresses rotate**. That version
-would have passed every test and then broken silently, weeks later, the first time AWS
-moved it. The config now targets
-`refactored-nlb-prod-2edb9df08b1ba450.elb.us-west-2.amazonaws.com`.
+The redirect cannot take effect until refactored.ai's DNS points at our nginx, and that
+DNS is not ours to move today.
 
-**Assign the upstream name to a variable.** nginx resolves a literal hostname in
-`proxy_pass` exactly once, at startup, which would reintroduce the same staleness a
-restart later. A variable forces per-request resolution against the configured `resolver`.
+The apex and `www` are Route 53 ALIAS records to
+`refactored-nlb-prod-2edb9df08b1ba450.elb.us-west-2.amazonaws.com`. Changing them needs
+credentials for the AWS account behind that load balancer. As of 2026-09-07 nobody has
+confirmed holding them. The account is almost certainly Colaberry's — it is serving
+refactored.ai right now, and the same zone carries the company's Jenkins, git, VPN and
+Auth0 records — but "almost certainly ours" is not an account you can log in to.
 
-Proxying by name is safe *here* only because the NLB hostname always means the load
-balancer. Proxying to `refactored.ai` itself would resolve to **us** after the cutover and
-loop until nginx ran out of workers.
+**This is the first thing to resolve.** Everything below is blocked on it.
 
-**`try_files` discards `add_header`.** The fallback into `@legacy` is an internal redirect,
-so headers set in the outer block are dropped. Any header that must survive belongs in the
-location that finally serves the response.
+## Where the redirect can be verified today
+
+`refactored-preview.colaberry.ai` runs the identical redirect and that hostname **is**
+ours: colaberry.ai sits behind Cloudflare, which terminates TLS and talks to this server
+over port 80. So the exact behaviour refactored.ai will have can be exercised before any
+DNS moves.
+
+Keeping the two blocks behaviourally identical is the whole point. A cutover verified on a
+hostname that behaves differently is not verified.
+
+## Why every path lands on the destination's root
+
+`enterprise.colaberry.ai` is a React single-page app with a catch-all route, so **every**
+path there returns `200` whether or not it is a real route. Checked on 2026-09-07:
+
+```
+200  /individuals
+200  /organizations
+200  /enterprise
+200  /definitely-not-a-real-page-xyz     <- the catch-all, proving the other three
+```
+
+None of the first three is a route in `frontend/src/routes/publicRoutes.tsx`. A
+path-preserving redirect map would therefore have looked correct in every test and
+delivered every visitor to a not-found component.
+
+Sending everyone to the root is the honest mapping. If per-audience destinations are
+wanted later, they need real routes on the destination first.
+
+The query string is preserved (`$is_args$args`), so a campaign's `?utm_source=…` survives
+the hop and the visit still attributes instead of arriving as direct traffic.
 
 ## TLS: use certbot with DNS-01. Do NOT move the zone to Cloudflare.
 
-An earlier revision of this document recommended moving `refactored.ai` to Cloudflare, on
-the same reasoning that every other Colaberry domain lives there. **That recommendation was
-wrong, and it was wrong because it was made before anyone read the zone.**
+This survives the change of plan unaltered, because it is about the zone rather than the
+site.
 
-Exporting the Route 53 zone showed 45 records. `refactored.ai` is not a website's domain —
-it is the DNS root of a live platform:
+An earlier revision recommended moving `refactored.ai` to Cloudflare on the reasoning that
+every other Colaberry domain lives there. That recommendation was wrong, and it was wrong
+because it was made before anyone read the zone. Exporting it showed 45 records:
 
 | What is on it | Records |
 |---|---|
@@ -74,45 +104,38 @@ it is the DNS root of a live platform:
 Moving the nameservers would migrate customer authentication, CI, VPN, staging and four
 email providers in a single cutover, under a DMARC policy where a missed DKIM record means
 mail is **rejected**, not degraded. There is also a hard technical blocker: Route 53 ALIAS
-records do not exist in Cloudflare, and the apex is an ALIAS to an NLB. Cloudflare can
-approximate it with CNAME flattening, but that is a behaviour change at the root of a live
-platform.
+records do not exist in Cloudflare, and the apex is an ALIAS to an NLB.
 
 **Certbot with a DNS-01 challenge is strictly better here.** It proves control by writing
 one TXT record through the Route 53 API and deleting it again. Nothing else in the zone is
 touched, the certificate exists *before* any traffic moves so there is no ordering problem,
-and renewal automates through the same API. The blast radius is one temporary TXT record
-rather than an entire platform's DNS.
+and renewal automates through the same API.
 
 ## Order of operations
 
-1. **No EC2 snapshot is needed.** An earlier revision suggested one; the origin is not a
-   single EC2 instance we could snapshot, it is a Network Load Balancer fronting a fleet.
-   Rollback is a DNS change back, and the old stack keeps running untouched throughout.
-2. **Issue the certificate with certbot DNS-01** against Route 53, for `refactored.ai`
-   and `www.refactored.ai`. Do this first: it needs no traffic to have moved.
-3. **Serve the rebuild on a subdomain first** and compare it against the live site
-   side by side. Nothing customer-facing changes at this step.
-4. **Run `seedEcosystem`** so the `www.refactored.ai` brand domain row reaches production.
-   It is merged in code but seeds do not run at boot, so it is not live yet — without it,
-   half the traffic attributes to no brand.
-5. **Point DNS** at this server. Last, and reversible.
+1. **Establish AWS access.** Everything else is blocked on this. Confirm who can log in to
+   the account behind the prod NLB and the `d2quzus90i2gii` CloudFront distribution.
+2. **Verify the redirect on the preview host.** `refactored-preview.colaberry.ai` should
+   return `301` to `https://enterprise.colaberry.ai/`, preserving the query string. This
+   needs no AWS access and nothing customer-facing changes.
+3. **Issue the certificate with certbot DNS-01** against Route 53, for `refactored.ai` and
+   `www.refactored.ai`. It needs no traffic to have moved.
+4. **Tell anyone still using the portal**, if there is anyone. This is the step that has no
+   technical component and the largest consequence: 1,900 pages and a sign-in disappear.
+5. **Point DNS** at this server. Last, and reversible — the old stack keeps running
+   untouched, so rollback is a DNS change back rather than a restore.
 
 ## What is deliberately not done
 
-- **The forms are untouched.** Their handlers live in an external CloudFront bundle with
-  no inline post target, so the submit path is not visible from the HTML. Under the proxy
-  they keep reaching the existing backend and working exactly as they do today. Rewiring
-  each to `/api/leads/ingest` belongs with that page's redesign, where the field mapping
-  can be verified rather than guessed from a minified bundle.
-- **The 1,908 catalogue pages are not rebuilt.** They are proxied. Migrating that content
-  is a separate project with a different shape.
-- **Assets still load from the legacy CloudFront distribution**
-  (`d2quzus90i2gii.cloudfront.net`). That is a *separate* AWS resource from the load
-  balancer and its targets — if the old stack is ever decommissioned, verify the
-  distribution independently or the pages lose their styling.
-- **Nothing else in the zone is touched.** Only `refactored.ai` and `www.refactored.ai`
-  change. `login` (Auth0), `accounts`, `survey`, `api`, `git`, `jenkins`, `vpn`, every
-  `stg*` host, all four email senders and all eleven certificate-validation records keep
-  pointing exactly where they point today. That is the whole argument for changing two
-  records rather than migrating a zone.
+- **The legacy platform is not decommissioned.** Only DNS moves. The NLB, its targets and
+  the Auth0 tenant keep running, which is what makes step 5 reversible.
+- **Nothing else in the zone is touched.** Only `refactored.ai` and `www.refactored.ai`.
+  `login`, `accounts`, `survey`, `api`, `git`, `jenkins`, `vpn`, every `stg*` host, all
+  four email senders and all eleven certificate-validation records keep pointing exactly
+  where they point today.
+- **The `refactored` brand map is kept** in `backend/src/services/pageCategoryMaps.ts`,
+  including entries for pages that no longer exist. Historical visitor events still
+  reference those paths, and `brandPageCategories.test.ts` asserts them directly.
+- **`legacy-capture/` is kept** as the archive of what the site was. It is not built and
+  not served. `port-from-capture.js`, which would regenerate the deleted pages from it, is
+  guarded so it cannot be run by accident.
