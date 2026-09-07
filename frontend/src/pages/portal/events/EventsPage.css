@@ -110,6 +110,13 @@
 .evt-root .evt-card.is-registered{border-color:rgba(91,166,60,.55);box-shadow:var(--shadow-md),inset 3px 0 0 var(--leaf-action)}
 .evt-root .evt-card.is-registered:hover{border-color:var(--leaf-action)}
 
+/* The card named by `?event=<id>`. Marked with the accent ring AND scrolled into
+   view AND shown in full, because a visitor who clicked one event out of a rail
+   needs to land on it, not near it. Colour alone would not be enough - the full
+   description is what makes it read as opened. */
+.evt-root .evt-card.is-focused{border-color:var(--berry-action,#7a4bd0);box-shadow:var(--shadow-md),0 0 0 3px rgba(122,75,208,.28)}
+.evt-root .evt-card.is-focused .evt-blurb{-webkit-line-clamp:unset;display:block;overflow:visible}
+
 .evt-root .evt-foot{padding:13px 17px 16px;margin-top:auto}
 .evt-root .evt-btn{
   display:inline-flex;align-items:center;gap:7px;
