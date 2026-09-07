@@ -2184,6 +2184,11 @@ async function ensureCommunityRoomsSchema() {
     `ALTER TABLE community_rooms ADD COLUMN IF NOT EXISTS is_video BOOLEAN NOT NULL DEFAULT false`,
     `ALTER TABLE community_rooms ADD COLUMN IF NOT EXISTS always_open BOOLEAN NOT NULL DEFAULT false`,
     `ALTER TABLE community_rooms ADD COLUMN IF NOT EXISTS meeting_link VARCHAR(600)`,
+    // A room's own logo. Nullable on purpose: most rooms will never have one and
+    // an emoji is a perfectly good mark. Additive and idempotent like its
+    // neighbours, so an existing deployment gains the column on the next boot
+    // with no migration step and no downtime.
+    `ALTER TABLE community_rooms ADD COLUMN IF NOT EXISTS icon_url VARCHAR(600)`,
 
     `CREATE TABLE IF NOT EXISTS room_memberships (
        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

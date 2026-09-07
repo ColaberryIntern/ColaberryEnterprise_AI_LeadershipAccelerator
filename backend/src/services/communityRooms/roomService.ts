@@ -202,6 +202,8 @@ export async function listRoomsForViewer(
 }
 
 export interface UpdateRoomInput {
+  /** Validated at the route boundary: https URL or site-relative path only. */
+  icon_url?: string | null;
   name?: string;
   description?: string | null;
   topic?: string | null;
@@ -229,6 +231,7 @@ export async function updateRoom(
     ...(patch.privacy !== undefined ? { privacy: patch.privacy } : {}),
     ...(patch.capacity !== undefined ? { capacity: patch.capacity } : {}),
     ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.icon_url !== undefined ? { icon_url: patch.icon_url } : {}),
   });
   if (patch.privacy !== undefined && patch.privacy !== prevPrivacy) {
     await emitRoomEvent({ eventType: ROOM_EVENTS.RoomAccessChanged, aggregateType: 'room', aggregateId: room.id });
