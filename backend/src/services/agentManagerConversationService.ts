@@ -7,6 +7,7 @@ import {
   applyConfirmedReliabilityChange, buildConfirmationCardText, detectConfirmationReply, detectReliabilityIntent, toPendingConfirmation,
 } from './managerReliabilityIntentService';
 import { detectWorkStatusQuery, buildWorkStatusReply } from './agentWorkStatusIntentService';
+import { detectUncertaintyQuery, buildUncertaintyReply } from './agentUncertaintyIntentService';
 
 // AI Workforce Management, Checkpoint C — Direct Agent Communication, first
 // slice. Generic by construction — works off AiAgent.id, not hardcoded to
@@ -135,6 +136,14 @@ async function handleWorkStatusQuery(agent: AiAgent, messageText: string): Promi
   return buildWorkStatusReply(agent, queryType);
 }
 
+/** Reese Agentic AI Employee mission, Capability 7 — "What are you
+ * uncertain about?" Checked alongside handleWorkStatusQuery, same
+ * deterministic-before-LLM posture. */
+async function handleUncertaintyQuery(agent: AiAgent, messageText: string): Promise<string | null> {
+  if (!detectUncertaintyQuery(messageText)) return null;
+  return buildUncertaintyReply(agent);
+}
+
 /** Persists the agent's turn and returns the refreshed conversation view —
  * the one shared tail every reply path (reliability card, work-status
  * answer, normal LLM reply) ends with. */
@@ -184,6 +193,11 @@ export async function sendManagerMessage(
   const workStatusReply = await handleWorkStatusQuery(agent, messageText);
   if (workStatusReply !== null) {
     return persistAgentReplyAndReturnView(conversation, agentId, workStatusReply);
+  }
+
+  const uncertaintyReply = await handleUncertaintyQuery(agent, messageText);
+  if (uncertaintyReply !== null) {
+    return persistAgentReplyAndReturnView(conversation, agentId, uncertaintyReply);
   }
 
   const recent = await AgentManagerMessage.findAll({

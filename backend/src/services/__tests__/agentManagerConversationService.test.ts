@@ -56,6 +56,10 @@ jest.mock('../agentWorkStatusIntentService', () => ({
   detectWorkStatusQuery: jest.fn(() => null),
   buildWorkStatusReply: jest.fn(),
 }));
+jest.mock('../agentUncertaintyIntentService', () => ({
+  detectUncertaintyQuery: jest.fn(() => false),
+  buildUncertaintyReply: jest.fn(),
+}));
 
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { buildAgentManagerConversationSystemPrompt } from '../agentBlueprint/agentManagerConversationPrompt';
