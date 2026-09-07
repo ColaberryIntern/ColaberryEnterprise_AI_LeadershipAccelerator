@@ -24,6 +24,8 @@ import {
   emptySvgViolation,
   generateWebsiteDesign,
   MIN_NAV_LINKS,
+  DESIGN_MODEL,
+  DESIGN_RETRIES,
 } from '../websiteDesignGenerator';
 import type { DesignBrief } from '../designBrief';
 
@@ -198,22 +200,16 @@ describe('buildWebsiteDesignPrompt', () => {
 
 describe('generateWebsiteDesign', () => {
   const reply = (html: string) => ({ parsed: { rationale: 'why', html }, runtime_ms: 10, cost_usd: 0.01 });
+  const bad = page('<a href="#">Menu</a>', goodIds);
+  const good = page(goodNav, goodIds);
 
   beforeEach(() => jest.clearAllMocks());
 
   it('returns a design that clears every gate', async () => {
-    mockChatJson.mockResolvedValue(reply(page(goodNav, goodIds)));
+    mockChatJson.mockResolvedValue(reply(good));
 
     const result = await generateWebsiteDesign({ brief });
     expect(result).toMatchObject({ ok: true });
-  });
-
-  it('refuses a design whose navigation does nothing', async () => {
-    mockChatJson.mockResolvedValue(reply(page('<a href="#">Menu</a>', goodIds)));
-
-    const result = await generateWebsiteDesign({ brief });
-    expect(result).toMatchObject({ ok: false, error_class: 'ContractViolation' });
-    expect((result as any).error).toMatch(/bare href/i);
   });
 
   it('reports an empty model response as its own class, not as a violation', async () => {
@@ -223,10 +219,71 @@ describe('generateWebsiteDesign', () => {
   });
 
   it('gives a whole page room rather than truncating it mid-markup', async () => {
-    mockChatJson.mockResolvedValue(reply(page(goodNav, goodIds)));
+    mockChatJson.mockResolvedValue(reply(good));
     await generateWebsiteDesign({ brief });
 
     // A truncated design reads as a broken one, not as a truncated one.
     expect(mockChatJson.mock.calls[0][4]).toBeGreaterThanOrEqual(8000);
+  });
+
+  it('draws it with the named design model, not the platform default', async () => {
+    mockChatJson.mockResolvedValue(reply(good));
+    await generateWebsiteDesign({ brief });
+
+    expect(mockChatJson.mock.calls[0][3]).toBe(DESIGN_MODEL);
+  });
+
+  it('still lets a caller name a different model', async () => {
+    mockChatJson.mockResolvedValue(reply(good));
+    await generateWebsiteDesign({ brief, model: 'gpt-4o-mini' });
+
+    expect(mockChatJson.mock.calls[0][3]).toBe('gpt-4o-mini');
+  });
+
+  it('retries once on a refusal, telling it exactly what was wrong', async () => {
+    // A refusal used to end the whole thing and the prospect saw no design at all, which is
+    // worse than anything the gates were protecting them from.
+    mockChatJson.mockResolvedValueOnce(reply(bad)).mockResolvedValueOnce(reply(good));
+
+    const result = await generateWebsiteDesign({ brief });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(mockChatJson).toHaveBeenCalledTimes(2);
+    expect(mockChatJson.mock.calls[1][2]).toContain('REFUSED');
+    expect(mockChatJson.mock.calls[1][2]).toMatch(/bare href/i);
+  });
+
+  it('does not retry the first attempt when it already passes', async () => {
+    mockChatJson.mockResolvedValue(reply(good));
+    await generateWebsiteDesign({ brief });
+
+    expect(mockChatJson).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives up after one retry rather than looping', async () => {
+    // Infinite retry is prohibited, and a second refusal means the brief is the problem.
+    mockChatJson.mockResolvedValue(reply(bad));
+
+    const result = await generateWebsiteDesign({ brief });
+
+    expect(mockChatJson).toHaveBeenCalledTimes(1 + DESIGN_RETRIES);
+    expect(result).toMatchObject({ ok: false, error_class: 'ContractViolation' });
+    expect((result as any).error).toMatch(/bare href/i);
+  });
+
+  it('reports what the whole attempt cost, not just the last call', async () => {
+    mockChatJson.mockResolvedValueOnce(reply(bad)).mockResolvedValueOnce(reply(good));
+
+    const result: any = await generateWebsiteDesign({ brief });
+
+    expect(result.cost_usd).toBeCloseTo(0.02);
+    expect(result.runtime_ms).toBe(20);
+  });
+
+  it('does not retry an empty response, which says nothing to act on', async () => {
+    mockChatJson.mockResolvedValue({ parsed: {}, runtime_ms: 10, cost_usd: 0 });
+    await generateWebsiteDesign({ brief });
+
+    expect(mockChatJson).toHaveBeenCalledTimes(1);
   });
 });

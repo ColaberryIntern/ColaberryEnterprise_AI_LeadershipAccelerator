@@ -413,6 +413,59 @@ export function buildWebsiteDesignPrompt(brief: DesignBrief): string {
 }
 
 /**
+ * The model that draws it, named here rather than inherited from the platform default.
+ *
+ * This is §20's FINAL FREE WOW: the last thing a prospect looks at before deciding whether
+ * this company can build software. It ran on `gpt-4o-mini` because that is DEFAULT_MODEL,
+ * and the difference was measured on the real City Tour Guide brief rather than argued
+ * about - four generations, same prompt, rendered at both widths. gpt-4o produced a real
+ * type scale, a drawn product, and a palette; mini produced a filled-in template.
+ *
+ * ~$0.04 a lead against ~$0.002. Approved by Ali on 2026-09-07 as a deliberate model-class
+ * change, which CLAUDE.md puts on the escalate list. It is pinned here, and only here, so
+ * the rest of the platform's calls keep the cheap default they are right to have.
+ */
+export const DESIGN_MODEL = 'gpt-4o';
+
+/** One retry, not a loop. Infinite retry is prohibited, and the second try rarely helps twice. */
+export const DESIGN_RETRIES = 1;
+
+/** Every gate, in one place, so the retry and the first attempt cannot drift apart. */
+export function designViolation(
+  html: string,
+  brief: DesignBrief,
+  contact: ConceptContactDetails,
+): string | null {
+  return (
+    executableViolation(html) ||
+    genericnessViolation(html, brief) ||
+    labelViolation(html) ||
+    craftViolation(html) ||
+    navigationViolation(html) ||
+    emptySvgViolation(html) ||
+    stockPaletteViolation(html) ||
+    emptyLinkViolation(html) ||
+    contactLeakViolation(html, contact)
+  );
+}
+
+/**
+ * What to say on the second attempt.
+ *
+ * A refusal used to end the whole thing: `ensurePrototypes` logged it and returned null, and
+ * the prospect saw no design at all - which is a worse outcome than any design the gates were
+ * protecting them from. The refusal reason is specific and mechanical, so it is worth handing
+ * straight back rather than throwing away.
+ */
+export function retryInstruction(violation: string): string {
+  return [
+    'YOUR PREVIOUS ATTEMPT WAS REFUSED AND NOT SHOWN TO ANYONE.',
+    `Reason: ${violation}`,
+    'Produce the whole page again, fixing exactly that. Keep everything that was already right.',
+  ].join('\n');
+}
+
+/**
  * Generate the design, checked before it is returned.
  *
  * Runs the same gates as the concept generator - a design is a concept with a bigger job,
@@ -422,50 +475,58 @@ export async function generateWebsiteDesign(params: {
   brief: DesignBrief;
   contact?: ConceptContactDetails;
   max_tokens?: number;
-  /**
-   * Which model draws it. Undefined means DEFAULT_MODEL, so nothing changes by adding this;
-   * it exists so the choice can be measured on a real brief instead of argued about.
-   */
+  /** Which model draws it. Defaults to DESIGN_MODEL rather than to the platform default. */
   model?: string;
 }): Promise<WebsiteDesignResult> {
   const system = buildWebsiteDesignPrompt(params.brief);
+  const model = params.model ?? DESIGN_MODEL;
+  const ask = `Design the one-page site for ${params.brief.project_title}.`;
 
-  const { parsed, runtime_ms, cost_usd } = await chatJson(
-    'website-design',
-    system,
-    `Design the one-page site for ${params.brief.project_title}.`,
-    params.model,
-    // A whole page needs room. Too small a budget truncates mid-markup, which reads as a
-    // broken design rather than a truncated one.
-    params.max_tokens ?? 8000,
-  );
+  let spent = 0;
+  let elapsed = 0;
+  let lastViolation = '';
 
-  const html = typeof (parsed as any)?.html === 'string' ? (parsed as any).html : '';
-  const rationale = typeof (parsed as any)?.rationale === 'string' ? (parsed as any).rationale.trim() : '';
+  // One retry, and only for a contract violation - the one failure the model can act on,
+  // because we can tell it exactly what was wrong. Everything else is retried by nobody.
+  for (let attempt = 0; attempt <= DESIGN_RETRIES; attempt += 1) {
+    const user = attempt === 0 ? ask : `${ask}\n\n${retryInstruction(lastViolation)}`;
 
-  if (!html.trim()) {
-    return { ok: false, error_class: 'EmptyModelResponse', error: 'model returned no html' };
+    const { parsed, runtime_ms, cost_usd } = await chatJson(
+      'website-design',
+      system,
+      user,
+      model,
+      // A whole page needs room. Too small a budget truncates mid-markup, which reads as a
+      // broken design rather than a truncated one.
+      params.max_tokens ?? 8000,
+    );
+
+    spent += cost_usd || 0;
+    elapsed += runtime_ms || 0;
+
+    const html = typeof (parsed as any)?.html === 'string' ? (parsed as any).html : '';
+    const rationale = typeof (parsed as any)?.rationale === 'string' ? (parsed as any).rationale.trim() : '';
+
+    if (!html.trim()) {
+      return { ok: false, error_class: 'EmptyModelResponse', error: 'model returned no html' };
+    }
+
+    const violation = designViolation(html, params.brief, params.contact || {});
+
+    if (!violation) {
+      return {
+        ok: true,
+        design: { rationale: rationale || `A one-page site for ${params.brief.project_title}.`, html },
+        runtime_ms: elapsed,
+        cost_usd: spent,
+      };
+    }
+
+    lastViolation = violation;
+    if (attempt < DESIGN_RETRIES) {
+      console.warn(`[WebsiteDesign] refused (attempt ${attempt + 1}), retrying: ${violation}`);
+    }
   }
 
-  const violation =
-    executableViolation(html) ||
-    genericnessViolation(html, params.brief) ||
-    labelViolation(html) ||
-    craftViolation(html) ||
-    navigationViolation(html) ||
-    emptySvgViolation(html) ||
-    stockPaletteViolation(html) ||
-    emptyLinkViolation(html) ||
-    contactLeakViolation(html, params.contact || {});
-
-  if (violation) {
-    return { ok: false, error_class: 'ContractViolation', error: violation };
-  }
-
-  return {
-    ok: true,
-    design: { rationale: rationale || `A one-page site for ${params.brief.project_title}.`, html },
-    runtime_ms,
-    cost_usd,
-  };
+  return { ok: false, error_class: 'ContractViolation', error: lastViolation };
 }
