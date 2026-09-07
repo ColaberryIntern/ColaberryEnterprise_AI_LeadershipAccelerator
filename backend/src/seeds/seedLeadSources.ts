@@ -189,6 +189,11 @@ const SEEDS: SeedSource[] = [
           // to prevent. A phone number nobody can dial is worse than not asking.
           phone: 'phone',
           city_state: 'metadata.city_state',
+          // The opening line of the interview, in their words. Mapped so it
+          // reaches the lead row rather than living only in the conversation -
+          // somebody who submits the form and closes the tab before the
+          // interview starts has still told us the most useful thing.
+          message: 'metadata.message',
           consent_contact: 'consent_contact',
           page_url: 'metadata.page_url',
         },

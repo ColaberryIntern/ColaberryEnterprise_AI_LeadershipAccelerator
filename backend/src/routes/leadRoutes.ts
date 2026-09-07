@@ -6,6 +6,7 @@ import { handleLeadIngest } from '../controllers/leadIngestionController';
 import { handleFlotationPreview } from '../controllers/flotationPreviewController';
 import { handleFlotationInterview } from '../controllers/flotationInterviewController';
 import { handleFlotationApp } from '../controllers/flotationAppController';
+import { handleScholarshipInterview } from '../controllers/scholarshipInterviewController';
 import { handleSalesHubCory } from '../controllers/salesHubCoryController';
 import {
   handleSponsorInquiry,
@@ -84,6 +85,12 @@ router.get('/api/flotation/preview/:token', previewRateLimiter, handleFlotationP
  * caps the exchanges within one conversation separately.
  */
 router.post('/api/flotation/interview', interviewRateLimiter, handleFlotationInterview);
+
+// The OpportunityLift written interview. Same shape and the same limiter as the
+// flotation one above: keyed on the `raw_payload_id` the ingest form returned, one
+// model call per turn, so the abuse profile is identical and there is no reason to
+// give it a looser budget.
+router.post('/api/cpn/scholarship-interview', interviewRateLimiter, handleScholarshipInterview);
 /**
  * A generated concept, rendered on its own for a phone. Shares the preview limiter: it is a
  * read of something already produced, and a prospect passing their phone round a table will

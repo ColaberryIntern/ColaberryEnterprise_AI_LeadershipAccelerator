@@ -200,7 +200,7 @@
             blocked at Mandrill pending domain verification, so a confirmation email is a
             promise this site cannot keep.
           -->
-          <form class="intake" id="scholarship-interest" data-form="scholarship_interest"
+          <form class="intake" id="scholarship-interest" data-form="scholarship_interest" data-interview
                 data-thanks="Thank you. Your details are with us and a person will read them. You will not get an automatic email.">
             <h2>Scholarship interest</h2>
             <p class="note">
@@ -221,6 +221,13 @@
             <input id="city_state" name="city_state" type="text" autocomplete="address-level2"
                    placeholder="Plano, Texas" />
 
+            <label for="message">What would you like to be able to build or do?</label>
+            <textarea id="message" name="message" rows="3"
+                      placeholder="An app that helps my mum keep track of her medication."></textarea>
+            <p class="note" style="margin-top: var(--space-2)">
+              It can be small and specific. This is what we will talk about next.
+            </p>
+
             <div class="consent">
               <input id="consent" name="consent_contact" type="checkbox" />
               <label for="consent">
@@ -233,6 +240,44 @@
             </button>
             <div class="status" role="status" aria-live="polite"></div>
           </form>
+
+          <!--
+            THE CONVERSATION, IN THE PAGE.
+
+            Hidden until the form is submitted, because an empty chat box beside a
+            form is a second thing to fill in. `forms.js` dispatches the token it
+            got back from ingest and `interview.js` takes it from there.
+
+            The caveats sit ABOVE the first question rather than under the box: a
+            person about to describe their life should know before they start that
+            this is not scored, that nobody is deciding anything yet, and that
+            leaving halfway costs them nothing.
+          -->
+          <section class="interview" id="interview" hidden aria-labelledby="iv-h">
+            <div class="card-label">
+              <span class="badge" aria-hidden="true">?</span> A short conversation
+            </div>
+            <h2 id="iv-h">Tell us what you want to build</h2>
+            <p class="note">
+              About four minutes. This is <strong>not a test and not an application</strong>
+              — applications are not open yet and nothing here is scored. A person reads it.
+              You can stop at any point and close the tab; your details are already with us
+              and nothing is lost.
+            </p>
+
+            <div class="iv-log" role="log" aria-live="polite" aria-label="Conversation"></div>
+
+            <form class="iv-form">
+              <label class="iv-label" for="iv-input">Your reply</label>
+              <textarea class="iv-input" id="iv-input" rows="2"
+                        placeholder="Type your reply..."></textarea>
+              <button class="btn btn-primary iv-send" type="submit" data-cta="Send interview reply">
+                Send
+              </button>
+            </form>
+
+            <p class="iv-note note"></p>
+          </section>
         </div>
       </section>
     </main>
@@ -302,5 +347,6 @@
 
     <script src="/assets/track-v2.js" data-site="{{brand.sourceSlug}}" data-api="{{brand.platformApiBase}}" defer></script>
     <script src="/assets/forms.js" data-api="{{brand.platformApiBase}}" data-source="{{brand.sourceSlug}}" defer></script>
+    <script src="/assets/interview.js" data-interview-api="{{brand.platformApiBase}}" defer></script>
   </body>
 </html>
