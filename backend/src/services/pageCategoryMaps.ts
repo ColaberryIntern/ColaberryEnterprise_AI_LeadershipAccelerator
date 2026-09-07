@@ -109,6 +109,14 @@ export const BRAND_PAGE_CATEGORIES: Record<string, BrandPageCategoryMap> = {
       // the same category - `enroll`, strength 45, the strongest single page-visit
       // signal. This is the one page on the site where somebody commits to anything.
       '/scholarships': 'enroll',
+      // The free-training push. Deliberately NOT `enroll`, even though its primary action
+      // is "create your free account": that account is created on refactored.ai, under
+      // refactored's own sign-in, so a visit here is not a commitment to CPN and scoring
+      // it at 45 would put the funnel's strongest signal behind someone else's signup.
+      // It explains an offering to an audience, which is what `program` means for the
+      // other brands. The page's own form carries the real intent through
+      // `form_started` (30) and `form_submitted` (50), which fire regardless of category.
+      '/learn-free': 'program',
       // Deliberately NOT `pricing`, even though it is literally a page of prices.
       // `pricing` (35) combines with `enroll` to fire `evaluation_pattern` (45), and the
       // person reading this page is usually a DONOR evaluating the charity while the

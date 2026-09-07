@@ -218,6 +218,29 @@ const SEEDS: SeedSource[] = [
         required_fields: ['email'],
       },
       {
+        // /learn-free/. NOT an application and NOT an account: the free training is
+        // delivered by refactored.ai on its own Auth0 sign-in, so this captures only
+        // "tell me when scholarships open" from somebody who is starting today.
+        //
+        // Deliberately separate from `scholarship_interest`. Someone who has begun the
+        // free training is a materially different person from someone who has only
+        // registered interest, and collapsing the two would lose exactly the signal that
+        // makes an application worth reading.
+        slug: 'free_training_interest',
+        name: 'Free Training Interest',
+        page: '/learn-free',
+        form_name: 'free-training-interest',
+        description: 'Keep-me-posted capture on the free training page',
+        field_map: {
+          name: 'name',
+          email: 'email',
+          city_state: 'metadata.city_state',
+          consent_contact: 'consent_contact',
+          page_url: 'metadata.page_url',
+        },
+        required_fields: ['email'],
+      },
+      {
         // /support/. Named `champion_interest` rather than `donor_interest`
         // because that is the slug EXTRACTION.md already declared, and renaming a
         // published identifier to read better is how attribution breaks.
