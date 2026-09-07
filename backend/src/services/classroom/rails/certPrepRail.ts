@@ -1,6 +1,7 @@
 import { getCertAvailability } from '../../certPrep/certAvailabilityService';
 import { computeReadiness } from '../../certPrep/certReadinessService';
 import { Rail, RailContext, RailTile, omitIfEmpty } from './types';
+import { ART } from './railArt';
 
 /**
  * The certification lane, from Week 7.
@@ -51,15 +52,24 @@ export async function resolveCertPrepRail(ctx: RailContext): Promise<Rail | null
 
   const tiles: RailTile[] = [];
 
-  // The first sitting leads until there is a measurement; after that, the
-  // student's own weakest answered domain does.
+  /**
+   * EVERY TAB CERT PREP HAS, not only the sittings.
+   *
+   * The first version offered a diagnostic, a drill and a mock -- the Practice
+   * and Mock Exams tabs. Cert Prep has four: Domain Map, Practice, Mock Exams
+   * and Build Evidence. A rail that shows half a surface teaches a student that
+   * the surface is half that size, and Build Evidence is the half that connects
+   * everything they have BUILT to the exam, which is the part they would never
+   * guess at from the name.
+   */
+
   if (answered === 0) {
     tiles.push({
       id: 'cert-diagnostic',
       title: 'Take the baseline diagnostic',
       detail: 'Sets your first readiness estimate. Free to repeat.',
       meta: '15 items · 25 minutes',
-      image_url: null,
+      image_url: ART.diagnostic,
       glyph: '\u{1F3AF}',
       stamp: 'START HERE',
       action: { label: 'Start diagnostic', href: '/portal/cert-prep?start=diagnostic', kind: 'primary' },
@@ -74,7 +84,7 @@ export async function resolveCertPrepRail(ctx: RailContext): Promise<Rail | null
       title: `${weakest.label ?? weakest.domain_id} drill`,
       detail: 'Untimed practice on your weakest answered domain.',
       meta: weakest.weight_pct ? `${weakest.weight_pct}% of the exam` : null,
-      image_url: null,
+      image_url: ART.drill,
       glyph: '\u{1F4CF}',
       stamp: '10 ITEMS',
       action: {
@@ -84,6 +94,17 @@ export async function resolveCertPrepRail(ctx: RailContext): Promise<Rail | null
       },
       featured: tiles.length === 0,
     });
+  } else if (answered > 0) {
+    tiles.push({
+      id: 'cert-practice',
+      title: 'Practice set',
+      detail: 'A short untimed set across the domains you have sampled.',
+      meta: '10 items · untimed',
+      image_url: ART.drill,
+      glyph: '\u{1F4CF}',
+      stamp: 'PRACTICE',
+      action: { label: 'Start practice', href: '/portal/cert-prep?tab=practice', kind: 'primary' },
+    });
   }
 
   tiles.push({
@@ -91,10 +112,32 @@ export async function resolveCertPrepRail(ctx: RailContext): Promise<Rail | null
     title: 'Full mock exam',
     detail: 'The real shape, end to end.',
     meta: '60 items · 120 minutes',
-    image_url: null,
+    image_url: ART.mock,
     glyph: '\u{23F3}',
     stamp: '60 ITEMS',
-    action: { label: 'Begin mock', href: '/portal/cert-prep?start=mock', kind: 'quiet' },
+    action: { label: 'Begin mock', href: '/portal/cert-prep?tab=mocks', kind: 'quiet' },
+  });
+
+  tiles.push({
+    id: 'cert-domains',
+    title: 'Domain map',
+    detail: 'Where you are strong and where you are thin, by exam domain.',
+    meta: '5 domains · 30 objectives',
+    image_url: ART.domainMap,
+    glyph: '\u{1F5FA}',
+    stamp: 'DOMAIN MAP',
+    action: { label: 'Open the map', href: '/portal/cert-prep?tab=domains', kind: 'quiet' },
+  });
+
+  tiles.push({
+    id: 'cert-evidence',
+    title: 'Build evidence',
+    detail: 'What you have built already, matched to the objectives it proves.',
+    meta: 'verified evidence counts toward readiness',
+    image_url: ART.evidence,
+    glyph: '\u{1F5C2}',
+    stamp: 'EVIDENCE',
+    action: { label: 'Review evidence', href: '/portal/cert-prep?tab=evidence', kind: 'quiet' },
   });
 
   return omitIfEmpty({
