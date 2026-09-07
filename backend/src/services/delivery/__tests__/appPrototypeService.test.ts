@@ -14,8 +14,8 @@ jest.mock('../../../models/ProjectUnderstandingRecord', () => ({
 
 jest.mock('../../../models/Lead', () => ({ __esModule: true, default: { findByPk: jest.fn() } }));
 
-jest.mock('../uiConceptGenerator', () => ({
-  generateConcepts: (...a: any[]) => mockGenerate(...a),
+jest.mock('../websiteDesignGenerator', () => ({
+  generateWebsiteDesign: (...a: any[]) => mockGenerate(...a),
 }));
 
 import {
@@ -58,8 +58,10 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockGenerate.mockResolvedValue({
     ok: true,
-    concepts: [concept('command_center', true)],
-    rejected: [],
+    design: {
+      rationale: 'A one-page site for the tour guide',
+      html: '<style>body{font-family:ui-sans-serif,system-ui,sans-serif}</style><p>Concept — Ralph</p>',
+    },
     runtime_ms: 100,
     cost_usd: 0.01,
   });
@@ -102,8 +104,8 @@ describe('ensurePrototypes', () => {
     expect(Math.round(days)).toBe(PROTOTYPE_TTL_DAYS);
   });
 
-  it('returns nothing when every concept was refused, rather than an empty gallery', async () => {
-    mockGenerate.mockResolvedValue({ ok: false, error_class: 'ContractViolation', error: 'all refused', rejected: [] });
+  it('returns nothing when the design was refused, rather than an empty gallery', async () => {
+    mockGenerate.mockResolvedValue({ ok: false, error_class: 'ContractViolation', error: 'refused' });
     mockFindByPk.mockResolvedValue(record());
 
     expect(await ensurePrototypes('rec-1')).toBeNull();

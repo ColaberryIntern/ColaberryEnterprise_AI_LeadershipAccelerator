@@ -248,10 +248,10 @@
               </section>
 
               <section id="prototypes" class="prototypes" hidden>
-                <h3 class="preview-h3">See it on your phone</h3>
+                <h3 class="preview-h3">Your site, designed</h3>
                 <p class="scope-lead">
-                  Point a camera at a code. These are concepts, generated from what you just
-                  told us &mdash; illustrative, not a working product.
+                  One page, built from what you just told us &mdash; on a desktop and on a phone.
+                  A concept, not a working product. Scan the code to open it on yours.
                 </p>
                 <div class="proto-grid" id="proto-grid"></div>
               </section>
@@ -593,44 +593,67 @@
           var protos = data.prototypes || [];
           grid.textContent = '';
 
-          protos.forEach(function (p) {
-            var card = document.createElement('div');
-            card.className = 'proto' + (p.recommended ? ' proto-recommended' : '');
+          /*
+           * Two views of ONE design, plus one code.
+           *
+           * The same document at two widths is what responsive means; generating a separate
+           * phone file would let the two drift, and a phone view that disagrees with the
+           * desktop view is worse than not showing one.
+           *
+           * srcdoc rather than pointing the frame at the served URL: we already hold the
+           * markup, and framing our own sandboxed cross-origin page is a fight with no
+           * benefit. `sandbox` on the iframe keeps it inert either way.
+           */
+          var design = protos[0];
+          if (design) {
+            var views = document.createElement('div');
+            views.className = 'design-views';
+
+            ['desktop', 'phone'].forEach(function (kind) {
+              var frame = document.createElement('div');
+              frame.className = 'design-frame design-' + kind;
+
+              var label = document.createElement('p');
+              label.className = 'design-label';
+              label.textContent = kind === 'desktop' ? 'Desktop' : 'Phone';
+
+              var iframe = document.createElement('iframe');
+              iframe.className = 'design-iframe';
+              iframe.setAttribute('sandbox', '');
+              iframe.setAttribute('loading', 'lazy');
+              iframe.setAttribute('title', design.title + ' - ' + kind + ' view');
+              iframe.srcdoc = design.html;
+
+              frame.appendChild(label);
+              frame.appendChild(iframe);
+              views.appendChild(frame);
+            });
+
+            grid.appendChild(views);
+
+            var aside = document.createElement('div');
+            aside.className = 'design-aside';
 
             var qr = document.createElement('div');
             qr.className = 'proto-qr';
-            // Server-generated SVG. Safe to inline: it is our own qrcode output, not model
-            // text, and the concept it points at is served under a sandbox CSP.
-            qr.innerHTML = p.qr_svg;
-
-            var name = document.createElement('p');
-            name.className = 'proto-name';
-            name.textContent = p.title;
-            if (p.recommended) {
-              var star = document.createElement('span');
-              star.className = 'proto-badge';
-              star.textContent = 'Recommended';
-              name.appendChild(document.createTextNode(' '));
-              name.appendChild(star);
-            }
+            qr.innerHTML = design.qr_svg;
 
             var why = document.createElement('p');
             why.className = 'proto-why';
-            why.textContent = p.rationale;
+            why.textContent = design.rationale;
 
             var open = document.createElement('a');
             open.className = 'proto-open';
-            open.href = p.url;
+            open.href = design.url;
             open.target = '_blank';
             open.rel = 'noopener';
-            open.textContent = 'Open on this screen';
+            open.textContent = 'Open it full size';
 
-            card.appendChild(qr);
-            card.appendChild(name);
-            card.appendChild(why);
-            card.appendChild(open);
-            grid.appendChild(card);
-          });
+            aside.appendChild(qr);
+            aside.appendChild(why);
+            aside.appendChild(open);
+            grid.appendChild(aside);
+          }
 
           protoWrap.hidden = protos.length === 0;
 
