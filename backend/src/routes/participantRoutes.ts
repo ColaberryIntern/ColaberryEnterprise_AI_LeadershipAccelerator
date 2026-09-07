@@ -132,6 +132,51 @@ router.get('/api/portal/classroom/projection', requireParticipant, async (req, r
     res.json({ project: null, cert_prep: null, degraded: ['project', 'cert_prep'], resolved_at: new Date().toISOString() });
   }
 });
+/**
+ * Classroom rails — the other surfaces of the platform, delivered into the week.
+ *
+ * Separate from both the feed and the projection, for the same reason those are
+ * separate from each other: the week's cards are cacheable curriculum, the
+ * projection is one live line per surface, and this is a live LIST per surface.
+ * Folding rails into the feed would make the whole week uncacheable to keep a
+ * room's occupancy current.
+ *
+ * NEVER 500s. Every rail already fails soft inside the service and names itself
+ * in `degraded`; reaching the catch means something outside them broke, and the
+ * week still has to render. An error answers with no rails rather than an error
+ * the page must handle, because a classroom without its rails is the product as
+ * it shipped last week, and a classroom that will not load is not.
+ */
+router.get('/api/portal/classroom/rails', requireParticipant, async (req, res) => {
+  const weekRaw = parseInt(String(req.query.week ?? ''), 10);
+  try {
+    const { getClassroomRails } = await import('../services/classroom/rails');
+    const { deriveProgramWeek } = await import('../services/certPrep/certAvailabilityService');
+    const { default: EnrollmentModel } = await import('../models/Enrollment');
+    const enrollment: any = await EnrollmentModel.findByPk(req.participant!.sub, {
+      include: [{ association: 'cohort', required: false }],
+    });
+    // The week the student is actually in, derived server-side from the cohort
+    // start date. A `week` query param may only narrow the view to a week the
+    // student can already reach; it can never move the fence, which is why the
+    // certification rail asks getCertAvailability rather than trusting this.
+    const derived = deriveProgramWeek(enrollment?.cohort?.start_date ?? null, new Date());
+    const week = Number.isFinite(weekRaw) && weekRaw > 0 ? weekRaw : (derived ?? 1);
+
+    const rails = await getClassroomRails({
+      enrollmentId: req.participant!.sub,
+      cohortId: req.participant!.cohort_id ?? null,
+      week,
+      isStaff: req.participant!.isStaff === true,
+    });
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(rails);
+  } catch (err: any) {
+    console.error('[classroom] rails failed', err?.message);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ week: Number.isFinite(weekRaw) ? weekRaw : 1, rails: [], degraded: [] });
+  }
+});
 router.post('/api/portal/classroom/cards/:cardId/complete', requireParticipant, handleCompleteCard);
 // Learning Runtime Intelligence (Phase 3) — consumes the published Timeline; never edits curriculum.
 router.get('/api/portal/runtime/readiness', requireParticipant, handleReadiness);

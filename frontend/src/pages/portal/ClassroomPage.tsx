@@ -4,6 +4,9 @@ import portalApi from '../../utils/portalApi';
 import TimelineFeed from '../../components/timeline/TimelineFeed';
 import BucketSections from '../../components/timeline/BucketSections';
 import { classroomSectionsEnabled } from './classroomBucketsFlag';
+import { classroomRailsEnabled } from './classroomRailsFlag';
+import ClassroomRails from '../../components/timeline/ClassroomRails';
+import { fetchClassroomRails, interleaveRails, ClassroomRailsResult } from './classroomRailsApi';
 import { fetchClassroomProjection, ClassroomProjection } from './classroomProjectionApi';
 import { TimelineFeedCard } from '../../components/timeline/TimelineCard';
 import CardDetailDrawer from '../../components/timeline/CardDetailDrawer';
@@ -199,6 +202,26 @@ const ClassroomPage: React.FC = () => {
     return () => { live = false; };
   }, []);
 
+  /* Rails: the platform's other surfaces, delivered into the week. Fetched per
+     week because a room's occupancy and a project's open tasks are live state,
+     and re-resolved when the student changes week. A failure returns null and
+     the week renders exactly as it does today. */
+  const [rails, setRails] = useState<ClassroomRailsResult | null>(null);
+  useEffect(() => {
+    if (!classroomRailsEnabled() || week == null) return;
+    let live = true;
+    fetchClassroomRails(week).then((r) => { if (live) setRails(r); });
+    return () => { live = false; };
+  }, [week]);
+
+  /* Rails are suppressed while searching, for the same reason sections are: a
+     result set is not a week, and interleaving six surfaces through six matches
+     buries them under furniture that has nothing to do with the search. */
+  const railsOn = useMemo(
+    () => classroomRailsEnabled() && tokenizeQuery(query).length === 0,
+    [query],
+  );
+
   const sectionsOn = useMemo(() => classroomSectionsEnabled() && tokenizeQuery(query).length === 0, [query]);
 
   const visibleCards = useMemo(() => filterCardsByQuery(weekCards, query), [weekCards, query]);
@@ -354,7 +377,27 @@ const ClassroomPage: React.FC = () => {
                     projection={projection}
                   />
                 )
-                : <TimelineFeed cards={visibleCards} compactCompleted onOpen={openCard} onComplete={completeCard} onComments={openCard} onWorkspace={openCard} />}
+                : railsOn && rails && rails.rails.length > 0
+                  ? (
+                    /* Same cards, same component, same handlers — the rails are
+                       inserted BETWEEN them and the curriculum is untouched. */
+                    <>
+                      {interleaveRails(visibleCards, rails.rails).map((entry, i) => (
+                        'rail' in entry
+                          ? <ClassroomRails key={`rail-${entry.rail.surface}`} rail={entry.rail} />
+                          : <TimelineFeed
+                              key={`card-${(entry.card as TimelineFeedCard).id ?? i}`}
+                              cards={[entry.card as TimelineFeedCard]}
+                              compactCompleted
+                              onOpen={openCard}
+                              onComplete={completeCard}
+                              onComments={openCard}
+                              onWorkspace={openCard}
+                            />
+                      ))}
+                    </>
+                  )
+                  : <TimelineFeed cards={visibleCards} compactCompleted onOpen={openCard} onComplete={completeCard} onComments={openCard} onWorkspace={openCard} />}
         </div>
 
         <aside className="tl-side">
