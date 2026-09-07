@@ -198,6 +198,24 @@ describe('forSrcdoc', () => {
     expect(out.startsWith('<base href="about:srcdoc">')).toBe(true);
   });
 
+  it('does not mistake <header> for <head>', () => {
+    // This is the shape EVERY real generated design has: a fragment with no <head> and a
+    // <header> in it. `<head[^>]*>` matches `<header>`, which put the tag in the body.
+    const out = forSrcdoc('<style>a{color:red}</style>\n<header><nav><a href="#how">How</a></nav></header>');
+    expect(out.startsWith('<base href="about:srcdoc">')).toBe(true);
+    expect(out).not.toContain('<header>\n<base');
+  });
+
+  it('does not mistake <html-ish> element names for <html> either', () => {
+    const out = forSrcdoc('<htmlfoo>x</htmlfoo>');
+    expect(out.startsWith('<base href="about:srcdoc">')).toBe(true);
+  });
+
+  it('still finds a real head that follows a header in the source', () => {
+    const out = forSrcdoc('<html><head><title>x</title></head><body><header>h</header></body></html>');
+    expect(out).toContain('<head>\n<base href="about:srcdoc">');
+  });
+
   it('leaves a design that already declares a base alone', () => {
     const out = forSrcdoc('<html><head><base href="/somewhere/"></head></html>');
     expect(out).toBe('<html><head><base href="/somewhere/"></head></html>');

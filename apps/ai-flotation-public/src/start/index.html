@@ -218,11 +218,28 @@
                 what we would build, in what order, what runs without them, and where they
                 still decide.
               -->
+              <!--
+                A RAIL, NOT AN ENDLESS SCROLL.
+
+                This is nine or ten sections of someone's project. Read as one column it is a
+                wall, and the part worth paying for - the design, the release plan - sits
+                below the fold with nothing announcing it. The rail is built from the sections
+                that actually have content, so it never advertises an empty one.
+              -->
+              <div class="scope-shell">
+                <aside class="scope-rail">
+                  <p class="scope-rail-title">Project scope</p>
+                  <nav id="scope-nav"></nav>
+                </aside>
+
+                <div class="scope-main">
               <p class="eyebrow">Your project, scoped</p>
               <h2 class="preview-title" id="preview-title"></h2>
-              <p class="scope-summary" id="scope-summary"></p>
 
-              <dl class="preview-counts" id="preview-counts"></dl>
+              <section id="sc-summary">
+                <p class="scope-summary" id="scope-summary"></p>
+                <dl class="preview-counts" id="preview-counts"></dl>
+              </section>
 
               <!--
                 THEIR APP, ON THEIR PHONE.
@@ -258,20 +275,47 @@
 
               <div id="scope-sections"></div>
 
-              <div id="preview-open-wrap" hidden>
-                <h3 class="preview-h3">Still open</h3>
+              <section id="sc-open" hidden>
+                <h3 class="preview-h3">Open questions</h3>
+                <p class="scope-lead">Asked rather than assumed. Each one changes what gets built.</p>
                 <ul class="preview-open" id="preview-open"></ul>
-              </div>
+              </section>
 
-              <details class="scope-heard">
-                <summary>What we heard from you</summary>
-                <ul class="preview-items" id="preview-items"></ul>
-              </details>
+              <!--
+                Their own words, promoted out of a collapsed <details>.
+
+                It was hidden behind a summary element, which is the wrong instinct: it is the
+                evidence that we listened, and it is what a person checks BEFORE they check the
+                plan. Nothing that earns trust should need a click to find.
+              -->
+              <section id="sc-heard" hidden>
+                <h3 class="preview-h3">What we heard</h3>
+                <p class="scope-lead">Your words, kept verbatim, so you can check we listened before you check the plan.</p>
+                <ul class="scope-quotes" id="preview-items"></ul>
+              </section>
+
+              <!--
+                §16 forbids merging assumptions into facts. A scope with no split shown is
+                quietly doing exactly that, however carefully the extractor kept them apart.
+              -->
+              <section id="sc-trust" hidden>
+                <h3 class="preview-h3">What we know, and what we guessed</h3>
+                <p class="scope-lead">
+                  Where the conversation did not go, this says so rather than filling the gap.
+                </p>
+                <dl class="trust-grid" id="trust-grid"></dl>
+                <div id="trust-missing-wrap" hidden>
+                  <p class="scope-lead trust-missing-lead">Never discussed, so nothing was invented for them:</p>
+                  <p id="trust-missing"></p>
+                </div>
+              </section>
 
               <p class="note preview-note">
                 A scope, not a quote. Anything marked <span class="tag tag-inferred">we inferred this</span>
                 is our reading rather than something you said &mdash; tell us and we will correct it.
               </p>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -590,6 +634,115 @@
           fitDesignFrame(frame);
         }
 
+        /*
+         * How much of this is theirs, and how much is ours.
+         *
+         * The scope reads as authoritative and should not, on its own. §16 forbids merging
+         * assumptions into facts; a page that never shows the split is quietly doing exactly
+         * that, however carefully the extractor kept them apart. Hidden entirely when the
+         * numbers are missing rather than rendered as zeros - a wall of noughts reads as
+         * broken software at the moment somebody is deciding whether we can build software.
+         */
+        function renderTrust(confidence, readiness) {
+          var wrap = document.getElementById('sc-trust');
+          var grid = document.getElementById('trust-grid');
+          if (!confidence) {
+            wrap.hidden = true;
+            return;
+          }
+
+          var cells = [
+            ['Things you told us', confidence.facts, 'facts, from your own words'],
+            ['Things we inferred', confidence.inferred, 'marked as assumptions'],
+            ['Topics covered', confidence.dimensions_covered + ' / 20', ''],
+          ];
+          if (readiness) {
+            cells.push([
+              'Ready to show',
+              readiness.presentable ? 'Yes' : 'Not yet',
+              readiness.sections_with_content + ' of 18 sections have content',
+            ]);
+          }
+
+          grid.textContent = '';
+          cells.forEach(function (cell) {
+            var box = document.createElement('div');
+            box.className = 'trust';
+
+            var dt = document.createElement('dt');
+            dt.textContent = cell[0];
+
+            var dd = document.createElement('dd');
+            dd.appendChild(document.createTextNode(String(cell[1])));
+            if (cell[2]) {
+              var small = document.createElement('small');
+              small.textContent = cell[2];
+              dd.appendChild(small);
+            }
+
+            box.appendChild(dt);
+            box.appendChild(dd);
+            grid.appendChild(box);
+          });
+
+          var missing = (confidence.dimensions_missing || []).slice();
+          var missingWrap = document.getElementById('trust-missing-wrap');
+          var missingEl = document.getElementById('trust-missing');
+          missingEl.textContent = '';
+          missing.forEach(function (name) {
+            var chip = document.createElement('span');
+            chip.className = 'chip chip-open';
+            chip.textContent = String(name).replace(/_/g, ' ');
+            missingEl.appendChild(chip);
+            missingEl.appendChild(document.createTextNode(' '));
+          });
+          missingWrap.hidden = missing.length === 0;
+
+          wrap.hidden = false;
+        }
+
+        /*
+         * The rail, built from the sections that actually rendered.
+         *
+         * Never from a fixed list: a scope assembled from a short conversation drops its
+         * empty sections, and a rail advertising a section that is not there is a link that
+         * does nothing - the exact defect the generated designs get refused for.
+         */
+        function buildScopeRail() {
+          var nav = document.getElementById('scope-nav');
+          if (!nav) return;
+          nav.textContent = '';
+
+          var sections = [].slice.call(document.querySelectorAll('.scope-main section[id]'));
+          var links = [];
+
+          sections.forEach(function (section) {
+            if (section.hidden) return;
+            var heading = section.querySelector('h3, .scope-rail-label');
+            var label = section.id === 'sc-summary' ? 'In one paragraph' : heading && heading.textContent;
+            if (!label) return;
+
+            var a = document.createElement('a');
+            a.href = '#' + section.id;
+            a.textContent = label;
+            nav.appendChild(a);
+            links.push({ a: a, id: section.id });
+          });
+
+          if (!window.IntersectionObserver || !links.length) return;
+
+          var seen = {};
+          var spy = new IntersectionObserver(
+            function (entries) {
+              entries.forEach(function (e) { seen[e.target.id] = e.isIntersecting; });
+              var current = links.filter(function (l) { return seen[l.id]; })[0];
+              links.forEach(function (l) { l.a.classList.toggle('on', current && l === current); });
+            },
+            { rootMargin: '-10% 0px -70% 0px' },
+          );
+          sections.forEach(function (s) { if (!s.hidden) spy.observe(s); });
+        }
+
         function renderPreview(data) {
           var section = document.getElementById('preview');
           var body = document.getElementById('preview-body');
@@ -618,12 +771,19 @@
           dl.textContent = '';
           var figures = (scope && scope.figures) || [];
           figures.forEach(function (f) {
+            // Label and number travel together in one cell. As bare dt/dd grid items they
+            // landed in separate columns and the strip read as a sparse list, not a count.
+            var cell = document.createElement('div');
+            cell.className = 'figure';
+
             var dt = document.createElement('dt');
             dt.textContent = f.label;
             var dd = document.createElement('dd');
             dd.textContent = String(f.value);
-            dl.appendChild(dt);
-            dl.appendChild(dd);
+
+            cell.appendChild(dt);
+            cell.appendChild(dd);
+            dl.appendChild(cell);
           });
           dl.hidden = figures.length === 0;
 
@@ -727,10 +887,14 @@
 
           protoWrap.hidden = protos.length === 0;
 
-          // The scope itself: what we would build, in what order, what runs itself.
+          // The scope itself: what we would build, in what order, what runs itself. Each one
+          // is a real <section> with an id, because the rail has to be able to reach it.
           var wrap = document.getElementById('scope-sections');
           wrap.textContent = '';
           ((scope && scope.sections) || []).forEach(function (sec) {
+            var section = document.createElement('section');
+            section.id = 'sc-' + String(sec.key).replace(/_/g, '-');
+
             var h = document.createElement('h3');
             h.className = 'preview-h3';
             h.textContent = sec.title;
@@ -747,14 +911,16 @@
               ul.appendChild(li);
             });
 
-            wrap.appendChild(h);
-            wrap.appendChild(lead);
-            wrap.appendChild(ul);
+            section.appendChild(h);
+            section.appendChild(lead);
+            section.appendChild(ul);
+            wrap.appendChild(section);
           });
 
-          fillList('preview-open', 'preview-open-wrap', (scope && scope.open_questions) || data.still_open || []);
+          fillList('preview-open', 'sc-open', (scope && scope.open_questions) || data.still_open || []);
 
-          // Their own words, kept and collapsed. Evidence that we listened, not the headline.
+          // Their own words, verbatim. Evidence that we listened, and the thing a person
+          // checks before they check the plan - so it is a section, not a disclosure widget.
           var items = document.getElementById('preview-items');
           items.textContent = '';
           (data.items || []).forEach(function (item) {
@@ -769,6 +935,10 @@
             }
             items.appendChild(li);
           });
+          document.getElementById('sc-heard').hidden = (data.items || []).length === 0;
+
+          renderTrust(data.confidence, data.readiness);
+          buildScopeRail();
 
           body.hidden = false;
           if (window.rfxTrack) {

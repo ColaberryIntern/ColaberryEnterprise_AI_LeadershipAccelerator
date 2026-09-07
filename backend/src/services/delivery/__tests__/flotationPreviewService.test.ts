@@ -88,6 +88,42 @@ describe('ready', () => {
     const preview = await getFlotationPreview(TOKEN);
     expect(preview.confirmed).toMatchObject({ total: 2, client_confirmed: 0 });
   });
+
+  /*
+   * The page renders the fact/assumption split from these two, and a field the page reads
+   * but the payload never sends is a section that silently never appears. That already
+   * happened once on this surface - the write-up panel read `rawPayloadId` while the wire
+   * carried `raw_payload_id`, and it was dead from the day it shipped without one test
+   * failing. So the wire is asserted here, not the type.
+   */
+  it('carries the confidence profile the trust section is built from', async () => {
+    const preview = await getFlotationPreview(TOKEN);
+
+    expect(preview.confidence).toMatchObject({
+      total: expect.any(Number),
+      facts: expect.any(Number),
+      inferred: expect.any(Number),
+      dimensions_covered: expect.any(Number),
+      dimensions_missing: expect.any(Array),
+    });
+  });
+
+  it('carries readiness, so the page can say how much of the blueprint has content', async () => {
+    const preview = await getFlotationPreview(TOKEN);
+
+    expect(preview.readiness).toMatchObject({
+      sections_with_content: expect.any(Number),
+      presentable: expect.any(Boolean),
+    });
+  });
+
+  it('keeps facts and inferences apart rather than reporting one total', async () => {
+    // §16's invariant, visible on the wire: never one number standing for both.
+    const preview = await getFlotationPreview(TOKEN);
+    const c = preview.confidence!;
+
+    expect(c.facts + c.inferred).toBe(c.total);
+  });
 });
 
 describe('pending', () => {
