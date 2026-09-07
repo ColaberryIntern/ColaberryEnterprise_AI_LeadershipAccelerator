@@ -1,12 +1,8 @@
 /**
  * checklistDefinitions — Reese Agentic AI Employee mission, Capability 6
  * ("Stateful work plans and mandatory checklists"). Pure data, verbatim from
- * the mission's own Assessment (13 items) and Outreach (10 items)
- * checklists. Closure is also named in the mission text but is a real,
- * separately scoped future slice — not defined here ahead of its own wiring
- * (this repo's own "don't build for hypothetical future requirements"
- * rule); it touches a distinct chokepoint (ticket closure) that needs its
- * own scoping pass.
+ * the mission's own Assessment (13 items), Outreach (10 items), and Closure
+ * (7 items) checklists.
  *
  * `required: false` items are tracked and displayed but never gate.
  * Assessment: the 5 "review X" items cover evidence categories that
@@ -16,7 +12,8 @@
  * sparsity, not an actual defect. Outreach: `validate_evidence_reliability`
  * is honestly, always incomplete today — see outreachChecklist.ts's own
  * header for the real, disclosed gap this documents rather than papers
- * over.
+ * over. Closure: `propose_lesson_learned_if_supported` is the same kind of
+ * honest gap — see closureChecklist.ts's own header.
  *
  * `required: true` items cover identity/eligibility and each engine's own
  * structural guarantees — these should never legitimately be false for a
@@ -25,7 +22,7 @@
  * this is what would catch and disclose it, not silently pass.
  */
 
-export type ChecklistType = 'assessment' | 'outreach';
+export type ChecklistType = 'assessment' | 'outreach' | 'closure';
 
 export interface ChecklistItemDefinition {
   key: string;
@@ -62,7 +59,18 @@ export const OUTREACH_CHECKLIST_ITEMS: ChecklistItemDefinition[] = [
   { key: 'link_to_work_ledger', label: 'Link the communication to the work ledger', required: true },
 ];
 
+export const CLOSURE_CHECKLIST_ITEMS: ChecklistItemDefinition[] = [
+  { key: 'verify_reply_or_signal_change', label: 'Verify reply or signal change', required: true },
+  { key: 'verify_agreed_next_step', label: 'Verify agreed next step', required: true },
+  { key: 'record_intervention_outcome', label: 'Record intervention and outcome', required: true },
+  { key: 'record_time_to_resolution', label: 'Record time to resolution', required: true },
+  { key: 'record_escalation_required', label: 'Record whether escalation was required', required: true },
+  { key: 'propose_lesson_learned_if_supported', label: 'Propose lesson learned if supported', required: false },
+  { key: 'close_on_success_criteria', label: 'Close only when explicit success criteria are met', required: true },
+];
+
 export const CHECKLIST_DEFINITIONS: Record<ChecklistType, ChecklistItemDefinition[]> = {
   assessment: ASSESSMENT_CHECKLIST_ITEMS,
   outreach: OUTREACH_CHECKLIST_ITEMS,
+  closure: CLOSURE_CHECKLIST_ITEMS,
 };
