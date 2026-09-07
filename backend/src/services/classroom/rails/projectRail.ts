@@ -1,6 +1,7 @@
 import { getActiveProjectTree } from '../../projects/projectReadService';
 import { Rail, RailContext, RailTile, omitIfEmpty } from './types';
 import { isTaskOpen } from '../taskStatus';
+import { ART } from './railArt';
 
 /**
  * The student's own project, and the tasks still open on it.
@@ -26,9 +27,25 @@ import { isTaskOpen } from '../taskStatus';
 /** A rail, not a backlog. Beyond this the student should be on the real page. */
 const TILE_LIMIT = 12;
 
-function projectHref(projectId: string, taskId?: string): string {
-  const base = `/portal/projects?open=${encodeURIComponent(projectId)}`;
-  return taskId ? `${base}&task=${encodeURIComponent(taskId)}` : base;
+/**
+ * THE WORKSTATION IS A ROUTE, NOT A QUERY PARAMETER.
+ *
+ * The first version linked to `/portal/projects?open=<id>&task=<id>`, which the
+ * Projects page ignores entirely: it landed the student on the project index
+ * and left them to find the story themselves. "Open workstation" that opens a
+ * list is a broken promise, and it is the promise this whole feature rests on.
+ *
+ * `ProjectsPage.openTaskWorkspace` navigates to
+ * `/portal/projects/workspace/:projectId/:key`, where the key is the STORY id
+ * when there is one and the task id otherwise. Mirrored exactly here so the
+ * rail and the page open the same thing.
+ */
+function workstationHref(projectId: string, storyOrTaskId: string): string {
+  return `/portal/projects/workspace/${encodeURIComponent(projectId)}/${encodeURIComponent(storyOrTaskId)}`;
+}
+
+function projectHref(projectId: string): string {
+  return `/portal/projects?open=${encodeURIComponent(projectId)}`;
 }
 
 export async function resolveProjectRail(ctx: RailContext): Promise<Rail | null> {
@@ -48,10 +65,14 @@ export async function resolveProjectRail(ctx: RailContext): Promise<Rail | null>
         title: task.title,
         detail: list.title ?? null,
         meta: first ? 'next task' : null,
-        image_url: null,
+        image_url: first ? ART.projectBuild : ART.projectTask,
         glyph: first ? '\u{1F4BB}' : '\u{1F4DD}',
         stamp: first ? 'NEXT TASK' : 'TASK',
-        action: { label: 'Open workstation', href: projectHref(tree.id, task.id), kind: 'primary' },
+        action: {
+          label: 'Open workstation',
+          href: workstationHref(tree.id, (task as any).story_id || task.id),
+          kind: 'primary',
+        },
         featured: first,
       });
     }
@@ -65,7 +86,7 @@ export async function resolveProjectRail(ctx: RailContext): Promise<Rail | null>
       title: 'Nothing open right now',
       detail: tree.name || 'your project',
       meta: 'every task on this project is closed',
-      image_url: null,
+      image_url: ART.projectDone,
       glyph: '\u{2705}',
       stamp: 'CLEAR',
       action: { label: 'Open project', href: projectHref(tree.id), kind: 'quiet' },

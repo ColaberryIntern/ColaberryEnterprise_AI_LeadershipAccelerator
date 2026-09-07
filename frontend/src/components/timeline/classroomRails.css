@@ -24,21 +24,26 @@
   overflow:hidden;
 }
 
-.cr-events   { --cr:#E01F2B; --cr-soft:#FDECEC }
-.cr-project  { --cr:#0E6B54; --cr-soft:#E7F2EE }
+/* Projects takes the Colaberry red. The Projects page reads as red end to end —
+   every Open button, the active nav item — and a green rail pointing at it made
+   the rail look like it belonged to something else. Events moves to blue, which
+   is where a calendar lives anyway, and portfolio takes the green Projects
+   vacated. Seven surfaces, seven hues, no collisions. */
+.cr-events   { --cr:#2B6CB0; --cr-soft:#E8F0F9 }
+.cr-project  { --cr:#E01F2B; --cr-soft:#FDECEC }
 .cr-community{ --cr:#7A2E68; --cr-soft:#F6ECF4 }
 .cr-rooms    { --cr:#1F5F73; --cr-soft:#E7F1F4 }
 .cr-cert_prep{ --cr:#8A5A0B; --cr-soft:#FBF2E2 }
-.cr-portfolio{ --cr:#2B4B8C; --cr-soft:#EAEFF8 }
+.cr-portfolio{ --cr:#0E6B54; --cr-soft:#E7F2EE }
 .cr-timeline { --cr:#43506B; --cr-soft:#EDEFF4 }
 
 @media (prefers-color-scheme: dark){
-  .cr-events   { --cr:#FF7A83; --cr-soft:#2A1416 }
-  .cr-project  { --cr:#4FBF9C; --cr-soft:#0E211C }
+  .cr-events   { --cr:#7FA2E0; --cr-soft:#131A26 }
+  .cr-project  { --cr:#FF7A83; --cr-soft:#2A1416 }
   .cr-community{ --cr:#D08BC0; --cr-soft:#231320 }
   .cr-rooms    { --cr:#5FAFC7; --cr-soft:#111F25 }
   .cr-cert_prep{ --cr:#D9A344; --cr-soft:#241E12 }
-  .cr-portfolio{ --cr:#7FA2E0; --cr-soft:#141B2B }
+  .cr-portfolio{ --cr:#4FBF9C; --cr-soft:#0E211C }
   .cr-timeline { --cr:#93A2C0; --cr-soft:#1A1E27 }
 }
 

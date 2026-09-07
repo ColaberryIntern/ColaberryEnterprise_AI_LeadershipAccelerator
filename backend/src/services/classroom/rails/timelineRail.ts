@@ -25,6 +25,26 @@ import { Rail, RailContext, RailTile, omitIfEmpty } from './types';
 /** A rail, not the whole Today screen. */
 const TILE_LIMIT = 8;
 
+/**
+ * PROJECT WORK IS NOT PART OF TODAY'S PLAN, in this rail.
+ *
+ * The composer can surface project stories, and on the Today screen that is
+ * right -- it is the one place a student sees everything at once. In the
+ * classroom it is wrong twice: the project rail is already on the same page
+ * showing the same stories with a better action on them (Open workstation, not
+ * Open), so the student sees the same work twice, and the second copy is the
+ * weaker one. Excluded here rather than in the composer, because the composer
+ * is shared and the Today screen should keep showing them.
+ */
+const EXCLUDED_TYPES = new Set([
+  'project_task',
+  'implementation_task',
+  'build_story',
+  'artifact_submission',
+]);
+
+const EXCLUDED_SURFACES = new Set(['project']);
+
 /** Per-kind marks, so a scan of the rail reads as a shape rather than a list. */
 const KIND_GLYPH: Record<string, string> = {
   video: '\u{25B6}',
@@ -55,7 +75,10 @@ export async function resolveTimelineRail(ctx: RailContext): Promise<Rail | null
   // screen owns that side effect; a classroom rail must not consume the plan
   // simply by being rendered next to a curriculum card.
   const page = await getTodayPage(ctx.enrollmentId, 0, TILE_LIMIT, { readOnly: true });
-  const items = (page?.items ?? []).slice(0, TILE_LIMIT);
+  const items = (page?.items ?? [])
+    .filter((it: any) => !EXCLUDED_TYPES.has(String(it.type ?? '')))
+    .filter((it: any) => !EXCLUDED_SURFACES.has(String(it.surface ?? '')))
+    .slice(0, TILE_LIMIT);
   if (items.length === 0) return null;
 
   const tiles: RailTile[] = items.map((item: any, i: number) => {
