@@ -134,7 +134,18 @@ export const CASE_STUDY_SURFACES: Readonly<Record<CaseStudySurfaceKey, CaseStudy
       emptyFiltered: 'No published projects match these filters.',
       emptyLibrary: "We're verifying the first project records for this proof library.",
     }),
-    training: unrouted('training', 'Training'),
+    /*
+     * TRAINING IS A SEPARATE SITE TOO, like AI Flotation below: a Next.js app
+     * on Cloud Run at training.colaberry.com, not a route in this app. So
+     * `routed: false` is correct and stays that way. What it needs from here is
+     * an ADDRESS, so an operator who publishes can click through to the thing
+     * they just published.
+     */
+    training: Object.freeze({
+      ...unrouted('training', 'Colaberry Training'),
+      liveUrl: 'https://training.colaberry.com/student-projects',
+      detailPathPrefix: '/student-projects',
+    }),
     /*
      * AI FLOTATION IS A SEPARATE SITE, NOT A ROUTE IN THIS APP.
      * `routed: false` and `indexPath: null` are therefore correct and stay
@@ -156,12 +167,20 @@ export const CASE_STUDY_SURFACES: Readonly<Record<CaseStudySurfaceKey, CaseStudy
  * publish gate re-checks server-side on every call, so the worst a stale copy
  * here can do is offer a button the server then refuses by name.
  *
- * `training` and `refactored` are absent because neither has a page to appear
- * on. A surface that is publishable but unreachable is a record marked live
- * that nobody can read.
+ * Only `refactored` is absent now, because it is the one surface with no page
+ * to appear on. A surface that is publishable but unreachable is a record
+ * marked live that nobody can read.
+ *
+ * THIS LIST HAS ALREADY DRIFTED ONCE, on 2026-09-07: the backend made
+ * `training` publishable and shipped a live /student-projects page, and this
+ * copy still said otherwise, so the admin offered no Training row and the
+ * record could not be published at all. Nothing failed loudly - the row was
+ * simply absent, which looks identical to a surface that was never meant to be
+ * there. `caseStudySurfaceMirror.test.ts` now reads the backend constant
+ * directly and fails when the two disagree.
  */
 export const PUBLISHABLE_CASE_STUDY_SURFACES: readonly CaseStudySurfaceKey[] =
-  Object.freeze(['enterprise', 'ai-flotation']);
+  Object.freeze(['enterprise', 'ai-flotation', 'training']);
 
 /** Unknown keys resolve to the default surface rather than crashing a render. */
 export function resolveCaseStudySurfaceProfile(

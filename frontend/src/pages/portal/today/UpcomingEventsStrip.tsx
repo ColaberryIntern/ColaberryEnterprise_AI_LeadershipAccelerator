@@ -50,7 +50,10 @@ const UpcomingEventsStrip: React.FC = () => {
       <ul className="te-events-list">
         {events.map((ev) => (
           <li key={ev.id} className={ev.is_registered ? 'is-registered' : undefined}>
-            <Link className="te-events-item" to="/portal/events">
+            {/* Carries the event id so the Events page opens THIS event rather
+                than a list the reader then has to search it out of. Same
+                contract as the classroom rails' `?event=` link. */}
+            <Link className="te-events-item" to={`/portal/events?event=${encodeURIComponent(ev.id)}`}>
               <span className="ev-when">{formatEventWhen(ev.starts_at, ev.ends_at)}</span>
               <span className="ev-title">{ev.title}</span>
               {ev.is_registered && <span className="ev-tag">Registered</span>}

@@ -63,15 +63,31 @@ function log(event: string, outcome: Outcome, context: Record<string, unknown>):
 /**
  * Rows affected by a write.
  *
- * Sequelize types the metadata half of a query result as `{}`, so it cannot be
- * read as a number without narrowing. Doing that here once, defensively, keeps
- * every call site honest: an unexpected shape reports 0 work rather than NaN,
- * and a NaN in a log line is worse than a wrong count because it reads as a bug
- * in the logger rather than in the query.
+ * SEQUELIZE RETURNS TWO DIFFERENT SHAPES HERE, and assuming one of them made
+ * this function report a false zero on production. Measured 2026-09-07 against
+ * accelerator_prod:
+ *
+ *   INSERT ... ON CONFLICT   result[1] is a NUMBER      -> 24,758 reported, correct
+ *   UPDATE ... FROM          result[1] is a pg RESULT   -> reported 0, actually 24,676
+ *
+ * So the first backfill run logged `{"leads":0,"enrollments":0,"visitors":0}`
+ * while linking every row. The data was right and the report was a lie — the
+ * exact defect class the rest of this work exists to remove, sitting in the
+ * observability of the tool built to be observable. It was caught only because
+ * the coverage figure in the same log (433 traced) was impossible if nothing
+ * had been linked.
+ *
+ * Both shapes are read now, and an unrecognised one returns null rather than 0:
+ * "I could not count this" and "nothing happened" must not print the same.
  */
-function affectedRows(result: unknown): number {
-  const meta = Array.isArray(result) ? result[1] : undefined;
-  return typeof meta === 'number' ? meta : 0;
+function affectedRows(result: unknown): number | null {
+  if (!Array.isArray(result)) return null;
+  const meta = result[1];
+  if (typeof meta === 'number') return meta;
+  if (meta && typeof meta === 'object' && typeof (meta as { rowCount?: unknown }).rowCount === 'number') {
+    return (meta as { rowCount: number }).rowCount;
+  }
+  return null;
 }
 
 /** The normalisation, expressed once, in SQL. Must mirror normalizeEmail(). */
@@ -143,7 +159,7 @@ async function run(apply: boolean): Promise<void> {
     // `WHERE person_id IS NULL` is what makes this resumable AND idempotent: an
     // already-linked row is never rewritten, so a second run finds nothing to do
     // and an interrupted run simply continues.
-    const linkCounts: Record<string, number> = {};
+    const linkCounts: Record<string, number | null> = {};
     for (const table of ['leads', 'enrollments']) {
       const count = affectedRows(await sequelize.query(
         `UPDATE ${table} t SET person_id = p.id

@@ -164,6 +164,23 @@ describe('backfill script — safety', () => {
     expect(BACKFILL).toContain('enrolment_acquisition_coverage');
   });
 
+  it('reads both result shapes Sequelize returns for a write', () => {
+    // Measured on production 2026-09-07: an INSERT returns a NUMBER in
+    // result[1], an UPDATE returns a pg RESULT OBJECT. Reading only the number
+    // made the first backfill log {"leads":0,"enrollments":0,"visitors":0} while
+    // it linked 24,676 rows. The data was right and the report was a lie — and
+    // it was caught only because the coverage figure in the same log was
+    // impossible if nothing had been linked.
+    expect(BACKFILL).toContain('rowCount');
+    expect(BACKFILL).toMatch(/typeof meta === 'number'/);
+  });
+
+  it('reports null, not zero, when it cannot count a write', () => {
+    // "I could not count this" and "nothing happened" must not print the same.
+    expect(BACKFILL).toMatch(/function affectedRows\(result: unknown\): number \| null/);
+    expect(BACKFILL).not.toMatch(/return typeof meta === 'number' \? meta : 0;/);
+  });
+
   it('does not queue the unresolvable', () => {
     // 86 rows a reviewer can do nothing about is a backlog, not a queue.
     expect(BACKFILL).not.toMatch(/'no_candidate'.*INSERT INTO person_resolution_queue/s);

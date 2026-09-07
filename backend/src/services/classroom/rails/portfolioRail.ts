@@ -1,5 +1,6 @@
 import PortfolioArtifact from '../../../models/PortfolioArtifact';
 import { Rail, RailContext, RailTile, omitIfEmpty } from './types';
+import { ART, PORTFOLIO_ART } from './railArt';
 
 /**
  * Portfolio pieces, newest first.
@@ -59,7 +60,7 @@ export async function resolvePortfolioRail(ctx: RailContext): Promise<Rail | nul
     title: a.title,
     detail: a.summary ?? null,
     meta: labelFor(String(a.kind)),
-    image_url: null,
+    image_url: PORTFOLIO_ART[String(a.kind)] ?? ART.portfolioDefault,
     glyph: KIND_GLYPH[String(a.kind)] ?? '\u{1F4C1}',
     stamp: labelFor(String(a.kind)).toUpperCase(),
     action: {

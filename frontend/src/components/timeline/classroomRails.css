@@ -24,28 +24,42 @@
   overflow:hidden;
 }
 
-.cr-events   { --cr:#E01F2B; --cr-soft:#FDECEC }
-.cr-project  { --cr:#0E6B54; --cr-soft:#E7F2EE }
+/* Projects takes the Colaberry red. The Projects page reads as red end to end —
+   every Open button, the active nav item — and a green rail pointing at it made
+   the rail look like it belonged to something else. Events moves to blue, which
+   is where a calendar lives anyway, and portfolio takes the green Projects
+   vacated. Seven surfaces, seven hues, no collisions. */
+.cr-events   { --cr:#2B6CB0; --cr-soft:#E8F0F9 }
+.cr-project  { --cr:#E01F2B; --cr-soft:#FDECEC }
 .cr-community{ --cr:#7A2E68; --cr-soft:#F6ECF4 }
 .cr-rooms    { --cr:#1F5F73; --cr-soft:#E7F1F4 }
 .cr-cert_prep{ --cr:#8A5A0B; --cr-soft:#FBF2E2 }
-.cr-portfolio{ --cr:#2B4B8C; --cr-soft:#EAEFF8 }
+.cr-portfolio{ --cr:#0E6B54; --cr-soft:#E7F2EE }
 .cr-timeline { --cr:#43506B; --cr-soft:#EDEFF4 }
 
 @media (prefers-color-scheme: dark){
-  .cr-events   { --cr:#FF7A83; --cr-soft:#2A1416 }
-  .cr-project  { --cr:#4FBF9C; --cr-soft:#0E211C }
+  .cr-events   { --cr:#7FA2E0; --cr-soft:#131A26 }
+  .cr-project  { --cr:#FF7A83; --cr-soft:#2A1416 }
   .cr-community{ --cr:#D08BC0; --cr-soft:#231320 }
   .cr-rooms    { --cr:#5FAFC7; --cr-soft:#111F25 }
   .cr-cert_prep{ --cr:#D9A344; --cr-soft:#241E12 }
-  .cr-portfolio{ --cr:#7FA2E0; --cr-soft:#141B2B }
+  .cr-portfolio{ --cr:#4FBF9C; --cr-soft:#0E211C }
   .cr-timeline { --cr:#93A2C0; --cr-soft:#1A1E27 }
 }
 
-.cr-hd{display:flex;align-items:center;gap:8px;padding:9px 12px 8px;flex-wrap:wrap}
-.cr-name{font-weight:700;font-size:.9rem;color:var(--cr);letter-spacing:.01em}
-.cr-count{font-size:.7rem;color:var(--te-muted,#6B7280);font-variant-numeric:tabular-nums}
-.cr-all{margin-left:auto;font-size:.7rem;font-weight:600;text-decoration:none;color:var(--cr);
+.cr-hd{display:flex;align-items:center;gap:9px;padding:11px 12px 9px;flex-wrap:wrap}
+/* A filled chip rather than coloured text: the ask was that people know at a
+   glance which surface they are looking at, and tinted text on a tinted ground
+   is the weakest possible signal for exactly that. */
+.cr-name{
+  display:inline-flex;align-items:center;gap:6px;
+  background:var(--cr);color:#fff;font-weight:700;font-size:.76rem;
+  letter-spacing:.04em;text-transform:uppercase;
+  padding:4px 11px;border-radius:999px;line-height:1.25;
+}
+.cr-name .cr-ic{font-size:.9rem;line-height:1}
+.cr-count{font-size:.75rem;color:var(--te-muted,#6B7280);font-variant-numeric:tabular-nums}
+.cr-all{margin-left:auto;font-size:.72rem;font-weight:600;text-decoration:none;color:var(--cr);
         background:var(--te-surface,#fff);border:1px solid var(--te-border,#E4E6EB);
         border-radius:999px;padding:3px 10px;white-space:nowrap}
 .cr-all:hover{border-color:var(--cr)}
@@ -60,22 +74,31 @@
 .cr-scroller:focus-visible{outline:2px solid var(--cr);outline-offset:-2px;border-radius:8px}
 
 .cr-tile{
-  flex:0 0 232px;scroll-snap-align:start;display:flex;flex-direction:column;min-width:0;
+  flex:0 0 318px;scroll-snap-align:start;display:flex;flex-direction:column;min-width:0;
   background:var(--te-surface,#fff);border:1px solid var(--te-border,#E4E6EB);
   border-radius:12px;overflow:hidden;
   box-shadow:0 1px 2px rgba(16,24,40,.05), 0 4px 12px rgba(16,24,40,.05);
 }
-.cr-tile.cr-featured{flex-basis:352px}
+.cr-tile.cr-featured{flex-basis:468px}
 
 .cr-pic{
-  height:78px;position:relative;display:flex;align-items:center;justify-content:center;
+  height:132px;position:relative;display:flex;align-items:center;justify-content:center;
   background:linear-gradient(135deg,#D9E2EC,#C7D3E0);
   border-bottom:1px solid var(--te-border-sub,#EDEFF3);overflow:hidden;
 }
-.cr-featured .cr-pic{height:118px}
+.cr-featured .cr-pic{height:168px}
 .cr-pic img{width:100%;height:100%;object-fit:cover;display:block}
-.cr-glyph{font-size:1.5rem;line-height:1}
-.cr-featured .cr-glyph{font-size:2rem}
+/* A person is not cover art. Community tiles show the poster's profile picture
+   as a round portrait on the tinted ground, the way every feed shows a person,
+   rather than stretched edge to edge as though it were an event banner. */
+.cr-pic.cr-avatar img{
+  width:72px;height:72px;border-radius:50%;object-fit:cover;
+  border:3px solid var(--te-surface,#fff);
+  box-shadow:0 2px 8px rgba(16,24,40,.14);
+}
+.cr-pic.cr-avatar{background:linear-gradient(135deg,var(--cr-soft),var(--te-surface,#fff))}
+.cr-glyph{font-size:2.4rem;line-height:1}
+.cr-featured .cr-glyph{font-size:3rem}
 @media (prefers-color-scheme: dark){
   .cr-pic{background:linear-gradient(135deg,#2A303C,#232936)}
 }
@@ -86,23 +109,23 @@
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 
-.cr-in{padding:9px 11px 9px;flex:1;display:flex;flex-direction:column;min-width:0}
+.cr-in{padding:12px 14px 12px;flex:1;display:flex;flex-direction:column;min-width:0}
 .cr-title{
-  font-size:.84rem;font-weight:700;color:var(--te-strong,#1A1A1A);margin:0 0 3px;line-height:1.3;
+  font-size:.95rem;font-weight:700;color:var(--te-strong,#1A1A1A);margin:0 0 4px;line-height:1.32;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
 }
 .cr-detail{
-  font-size:.75rem;color:var(--te-muted,#6B7280);margin:0;line-height:1.4;
+  font-size:.82rem;color:var(--te-muted,#6B7280);margin:0;line-height:1.45;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
 }
-.cr-meta{font-size:.65rem;color:var(--te-faint,#9AA0AA);margin:6px 0 0;
+.cr-meta{font-size:.7rem;color:var(--te-faint,#9AA0AA);margin:6px 0 0;
          font-variant-numeric:tabular-nums}
 .cr-spacer{flex:1;min-height:8px}
 
 .cr-act{
   display:block;text-align:center;text-decoration:none;
-  background:var(--cr);color:#fff;font-size:.73rem;font-weight:700;
-  border-radius:7px;padding:6px 8px;
+  background:var(--cr);color:#fff;font-size:.8rem;font-weight:700;
+  border-radius:8px;padding:8px 10px;
 }
 .cr-act:hover{filter:brightness(1.06)}
 .cr-act.cr-quiet{background:transparent;color:var(--te-muted,#6B7280);

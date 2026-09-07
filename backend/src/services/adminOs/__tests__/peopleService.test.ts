@@ -30,7 +30,12 @@ describe('people roster', () => {
     // control, so the scope has to be in the statement.
     return getPeopleRoster({ sections: sectionsFor('support') }).then(() => {
       const { sql, opts } = rowCall();
-      expect(sql).toContain('= ANY(:stages)');
+      // IN, not `= ANY`. Sequelize expands an array replacement into a bare
+      // comma list, so `= ANY(:stages)` renders as `= ANY('a','b')` and is a
+      // syntax error. That shipped to production because these tests mock
+      // sequelize.query and never execute the statement.
+      expect(sql).toContain('IN (:stages)');
+      expect(sql).not.toContain('= ANY(:stages)');
       expect(opts.replacements.stages).toEqual(
         expect.arrayContaining(['enrolled_student', 'active_learner', 'graduate']),
       );

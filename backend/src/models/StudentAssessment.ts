@@ -54,6 +54,14 @@ export interface StudentAssessmentAttributes {
   rules_version: string;
   model: string | null;
   llm_cost_usd: number | null;
+  /** Sequelize auto-manages these (timestamps:true, underscored:true maps
+   * the DB's created_at/updated_at columns to these camelCase JS
+   * attributes) — declared explicitly so WhereOptions<> accepts filtering
+   * by them (e.g. agentUncertaintyIntentService.ts's recency window),
+   * which TypeScript otherwise rejects for an attribute Sequelize injects
+   * only at runtime. */
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 class StudentAssessment extends Model<StudentAssessmentAttributes> implements StudentAssessmentAttributes {

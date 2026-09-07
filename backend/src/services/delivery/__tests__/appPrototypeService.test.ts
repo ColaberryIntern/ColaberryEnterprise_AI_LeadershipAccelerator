@@ -22,6 +22,7 @@ import {
   ensurePrototypes,
   prototypeLinks,
   prototypeHtml,
+  forSrcdoc,
   PROTOTYPE_TTL_DAYS,
   type PrototypeSet,
 } from '../appPrototypeService';
@@ -159,6 +160,55 @@ describe('prototypeLinks', () => {
   it('escapes a token rather than pasting it into a URL raw', async () => {
     const links = await prototypeLinks('a b/c', setOf(10), 'https://x.test');
     expect(links[0].url).toContain('a%20b%2Fc');
+  });
+
+  it('bases the framed copy on itself, so the design nav does not load our page inside it', async () => {
+    const links = await prototypeLinks('tok-1', setOf(10), 'https://x.test');
+    links.forEach((l) => expect(l.html).toContain('<base href="about:srcdoc">'));
+  });
+});
+
+/**
+ * The framed copy and the served copy are NOT interchangeable. The base tag makes fragment
+ * links work inside a srcdoc frame and breaks them on a real page, so each copy has to get
+ * the treatment that matches where it is rendered.
+ */
+describe('forSrcdoc', () => {
+  it('puts the base inside an existing head', () => {
+    const out = forSrcdoc('<!doctype html><html><head><title>x</title></head><body>hi</body></html>');
+    expect(out).toContain('<head>\n<base href="about:srcdoc">');
+    expect(out.indexOf('<base')).toBeLessThan(out.indexOf('<title>'));
+  });
+
+  it('keeps the attributes on a head it did not write', () => {
+    const out = forSrcdoc('<html><head data-x="1"><title>x</title></head></html>');
+    expect(out).toContain('<head data-x="1">');
+    expect(out).toContain('<base href="about:srcdoc">');
+  });
+
+  it('synthesises a head when the design only has an html element', () => {
+    const out = forSrcdoc('<html><body>hi</body></html>');
+    expect(out).toContain('<head><base href="about:srcdoc"></head>');
+  });
+
+  it('prepends the base when the model returned a bare fragment', () => {
+    // Generated designs are frequently a <style> block and some markup with no scaffolding
+    // at all. A leading <base> is hoisted into the head the parser synthesises.
+    const out = forSrcdoc('<style>p{color:red}</style><p>hi</p>');
+    expect(out.startsWith('<base href="about:srcdoc">')).toBe(true);
+  });
+
+  it('leaves a design that already declares a base alone', () => {
+    const out = forSrcdoc('<html><head><base href="/somewhere/"></head></html>');
+    expect(out).toBe('<html><head><base href="/somewhere/"></head></html>');
+  });
+
+  it('does not touch the copy served at its own URL', async () => {
+    mockFindByPk.mockResolvedValue(record({ scope: { prototypes: setOf(10) } }));
+
+    const served = await prototypeHtml('rec-1', 'operational');
+    expect(served).toMatchObject({ ok: true });
+    expect((served as any).html).not.toContain('about:srcdoc');
   });
 });
 

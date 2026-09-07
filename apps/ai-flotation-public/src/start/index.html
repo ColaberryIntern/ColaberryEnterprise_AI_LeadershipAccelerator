@@ -535,6 +535,61 @@
           }
         }
 
+        /*
+         * The two design frames are browser windows, not thumbnails.
+         *
+         * Each iframe is sized to a REAL viewport and the whole frame is scaled to fit the
+         * column it landed in. Letting the iframe simply be the column's width instead would
+         * reflow the design into a width no visitor will ever use, and then label the narrow
+         * one "phone" - which is not a phone view, it is a squeezed desktop.
+         *
+         * The iframe is viewport-tall rather than document-tall for a second reason: the
+         * design scrolls INSIDE it, so the design's own navigation has somewhere to go.
+         */
+        var DESIGN_VIEWS = [
+          { kind: 'desktop', w: 1280, h: 900, label: 'Desktop — 1280 × 900' },
+          { kind: 'phone', w: 390, h: 844, label: 'Phone — 390 × 844' },
+        ];
+
+        function fitDesignFrame(frame) {
+          var box = frame.querySelector('.design-box');
+          var iframe = box && box.querySelector('.design-iframe');
+
+          // Width zero means the panel around it is still hidden. Scaling by zero would
+          // collapse the frame permanently, so wait to be called again with a real width.
+          if (!iframe || !box.clientWidth) return;
+
+          var w = parseFloat(frame.getAttribute('data-w'));
+          var h = parseFloat(frame.getAttribute('data-h'));
+          var scale = Math.min(1, box.clientWidth / w);
+
+          iframe.style.width = w + 'px';
+          iframe.style.height = h + 'px';
+          iframe.style.transform = 'scale(' + scale + ')';
+          box.style.height = h * scale + 'px';
+
+          // The placeholder height only exists to stop the box flashing flat before the
+          // first fit. Once it has a real height, holding a floor under it leaves a strip
+          // of empty white below a small render.
+          box.style.minHeight = '0';
+        }
+
+        /*
+         * Observed rather than called at one chosen moment.
+         *
+         * The frames are built while the preview panel is still hidden, so a single call at
+         * build time measures a width of zero. An observer fires when the box actually gets
+         * a size - when the panel is revealed, when the window changes, whenever - which is
+         * the difference between a design frame and a 1px line.
+         */
+        function watchDesignFrame(frame) {
+          if (window.ResizeObserver) {
+            new ResizeObserver(function () { fitDesignFrame(frame); }).observe(frame.querySelector('.design-box'));
+          }
+          window.addEventListener('resize', function () { fitDesignFrame(frame); });
+          fitDesignFrame(frame);
+        }
+
         function renderPreview(data) {
           var section = document.getElementById('preview');
           var body = document.getElementById('preview-body');
@@ -603,33 +658,48 @@
            * srcdoc rather than pointing the frame at the served URL: we already hold the
            * markup, and framing our own sandboxed cross-origin page is a fight with no
            * benefit. `sandbox` on the iframe keeps it inert either way.
+           *
+           * The server hands us a copy carrying `<base href="about:srcdoc">` (see
+           * `forSrcdoc`). Without it, every `href="#section"` in the design resolves against
+           * OUR url and clicking the design's own nav loads this whole page inside the design
+           * frame.
            */
           var design = protos[0];
           if (design) {
             var views = document.createElement('div');
             views.className = 'design-views';
 
-            ['desktop', 'phone'].forEach(function (kind) {
+            DESIGN_VIEWS.forEach(function (view) {
               var frame = document.createElement('div');
-              frame.className = 'design-frame design-' + kind;
+              frame.className = 'design-frame design-' + view.kind;
+              frame.setAttribute('data-w', String(view.w));
+              frame.setAttribute('data-h', String(view.h));
 
               var label = document.createElement('p');
               label.className = 'design-label';
-              label.textContent = kind === 'desktop' ? 'Desktop' : 'Phone';
+              label.textContent = view.label;
+
+              // The box clips; the iframe inside it is the one that scrolls. If the box
+              // scrolled it would swallow the gesture the design needs.
+              var box = document.createElement('div');
+              box.className = 'design-box';
 
               var iframe = document.createElement('iframe');
               iframe.className = 'design-iframe';
               iframe.setAttribute('sandbox', '');
-              iframe.setAttribute('loading', 'lazy');
-              iframe.setAttribute('title', design.title + ' - ' + kind + ' view');
+              iframe.setAttribute('title', design.title + ' - ' + view.kind + ' view');
               iframe.srcdoc = design.html;
 
+              box.appendChild(iframe);
               frame.appendChild(label);
-              frame.appendChild(iframe);
+              frame.appendChild(box);
               views.appendChild(frame);
             });
 
             grid.appendChild(views);
+            DESIGN_VIEWS.forEach(function (view) {
+              watchDesignFrame(views.querySelector('.design-' + view.kind));
+            });
 
             var aside = document.createElement('div');
             aside.className = 'design-aside';

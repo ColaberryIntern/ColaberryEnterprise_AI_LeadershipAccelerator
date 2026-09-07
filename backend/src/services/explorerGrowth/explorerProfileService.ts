@@ -10,10 +10,23 @@ import { isStaffEnrollment } from '../access/staffAccess';
 import { Cohort, Enrollment } from '../../models';
 import { getSubscription, activeCompEnrollmentIds } from '../subscriptionService';
 import { redactForLogs } from '../../utils/piiRedaction';
+import { repairAllExplorerBridges } from './explorerIdentityBridge';
 import type {
   ExplorerAffinity,
   ExplorerContactability,
 } from '../../types/explorerGrowth';
+
+/**
+ * What the nightly discovery pass did, reported alongside the batch result.
+ *
+ * Carried on the return value rather than left in the log stream so a caller —
+ * and the cron's own instrumentation record — can tell "scored 152 of 152
+ * because that is everyone" apart from "scored 152 because discovery fell over
+ * and 60 learners were never created". Those look identical in a BatchResult.
+ */
+export type BridgeOutcome =
+  | { ran: true; scanned: number; resolved: number }
+  | { ran: false; error: string };
 
 /**
  * Explorer Growth OS — profile recompute. Plan §7, §8; EPIC 3 T005.
@@ -303,12 +316,55 @@ export async function recomputeAllExplorers(
  * with the master switch off, and a guard test scans backend source for exactly
  * that. The operator script calls `recomputeAllExplorers` directly instead,
  * because a human running it deliberately is its own authorisation.
+ *
+ * DISCOVERY RUNS FIRST, AND THAT ORDERING IS THE POINT.
+ * `recomputeAllExplorers` iterates `explorer_journey_profiles`, so it can only
+ * ever refresh learners who ALREADY have a profile row — and
+ * `recomputeExplorerProfile` throws rather than creating a missing one. Without
+ * a discovery step the scored population silently freezes at whoever happened
+ * to have a row when the bridge was last run by hand, and every subsequent
+ * signup is invisible to the engine forever. Measured on production
+ * 2026-09-07, before this fix: 212 active Explorers, 152 with a profile,
+ * **60 (28%) unreachable by the nightly job** and growing with every signup.
+ * The batch would still have reported `succeeded: 152, failed: 0` — a green
+ * result over a population missing more than a quarter of its members.
+ *
+ * `repairAllExplorerBridges` is the discovery step and already does exactly
+ * this job: it loads active Explorers, dedupes multiple enrollments per email
+ * through `pickBestEnrollment`, and upserts the profile row. It is idempotent,
+ * so running it nightly ahead of the recompute costs one pass and cannot
+ * duplicate anything.
+ *
+ * A BRIDGE FAILURE MUST NOT COST US THE RECOMPUTE. If discovery throws we log
+ * and score the population we already have: refreshing 152 known learners beats
+ * refreshing none because 1 new learner could not be resolved.
  */
 export async function runScheduledRecompute(
   options: RecomputeOptions = {},
-): Promise<BatchResult | { skipped: true }> {
+): Promise<(BatchResult & { bridge: BridgeOutcome }) | { skipped: true }> {
   if (!isExplorerFeatureEnabled('journeyIntelligence', env.explorerGrowth)) {
     return { skipped: true };
   }
-  return recomputeAllExplorers(options);
+
+  let bridge: BridgeOutcome;
+  try {
+    const report = await repairAllExplorerBridges();
+    bridge = { ran: true, scanned: report.scanned, resolved: report.resolved };
+  } catch (err: any) {
+    bridge = { ran: false, error: err?.message ?? 'unknown' };
+    console.error(
+      redactForLogs(
+        JSON.stringify({
+          event: 'explorer.recompute.discovery_failed',
+          service: 'explorer-growth',
+          error_class: 'BridgeRepairFailed',
+          outcome: 'partial',
+          message: bridge.error,
+        }),
+      ),
+    );
+  }
+
+  const result = await recomputeAllExplorers(options);
+  return { ...result, bridge };
 }

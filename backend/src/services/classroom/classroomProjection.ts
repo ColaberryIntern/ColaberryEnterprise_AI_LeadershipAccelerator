@@ -1,4 +1,5 @@
 import { getActiveProjectTree } from '../projects/projectReadService';
+import { isTaskOpen } from './taskStatus';
 import { getCertAvailability } from '../certPrep/certAvailabilityService';
 import { computeReadiness } from '../certPrep/certReadinessService';
 
@@ -52,8 +53,7 @@ export interface ClassroomProjection {
   resolved_at: string;
 }
 
-/** Task states that mean "still to do". Anything else is not the next thing. */
-const OPEN_TASK_STATUSES = new Set(['todo', 'pending', 'in_progress', 'blocked', 'open']);
+/** Task states that mean "still to do" — see taskStatus.ts for why this moved. */
 
 /**
  * The next thing to build: the first open task in list order, which is the
@@ -79,7 +79,7 @@ export async function resolveProjectNext(enrollmentId: string): Promise<SurfaceN
 
   for (const list of tree.lists ?? []) {
     for (const task of list.tasks ?? []) {
-      if (OPEN_TASK_STATUSES.has(String(task.status))) {
+      if (isTaskOpen(task.status)) {
         return {
           surface: 'project',
           available: true,

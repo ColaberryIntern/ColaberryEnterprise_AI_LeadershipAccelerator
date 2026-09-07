@@ -23,8 +23,44 @@ import { Rail, RailContext, RailTile, omitIfEmpty } from './types';
 
 const TILE_LIMIT = 6;
 
+/**
+ * THE ROOM'S OWN ICON, taken from where the Rooms page takes it.
+ *
+ * I previously reported that rooms had no icon and invented a category map for
+ * this rail. That was wrong twice over: `community_rooms.metadata.emoji` holds a
+ * per-room icon, and `RoomsPage`/`RoomPane` already share a category fallback.
+ * Five of my nine invented marks disagreed with theirs, so the same room showed
+ * one icon in the classroom and a different one in Rooms.
+ *
+ * The order below is the Rooms page's order exactly: the room's own emoji, then
+ * its category, then a generic. Duplicated from the frontend rather than
+ * imported because the backend cannot import from it -- the values are copied
+ * verbatim and this comment is the reason a reviewer should check both if either
+ * changes.
+ */
+const CAT_EMOJI: Record<string, string> = {
+  start_here: '\u{1F44B}',      // 👋
+  your_cohort: '\u{1F393}',     // 🎓
+  build_together: '\u{1F6E0}\uFE0F', // 🛠️
+  career_cert: '\u{1F4BC}',     // 💼
+  demos_events: '\u{1F3A4}',    // 🎤
+  social: '\u{1F389}',          // 🎉
+  live_now: '\u{1F534}',        // 🔴
+  private_rooms: '\u{1F512}',   // 🔒
+};
+
+const ROOM_FALLBACK = '\u{1F4AC}';   // 💬, as the Rooms page falls back
+
+function roomIcon(room: RoomLike): string {
+  const own = (room as any)?.metadata?.emoji;
+  if (typeof own === 'string' && own.trim()) return own;
+  return CAT_EMOJI[String(room.category ?? '')] ?? ROOM_FALLBACK;
+}
+
 interface RoomLike {
   id: string;
+  category?: string | null;
+  metadata?: { emoji?: string | null } | null;
   title?: string | null;
   name?: string | null;
   slug?: string | null;
@@ -61,7 +97,7 @@ export async function resolveRoomsRail(ctx: RailContext): Promise<Rail | null> {
     detail: room.purpose || room.description || null,
     meta: here > 0 ? `${here} in the room now` : 'nobody here yet',
     image_url: null,
-    glyph: here > 0 ? '\u{1F5E3}' : '\u{1F6AA}',
+    glyph: roomIcon(room),
     stamp: here > 0 ? `${here} IN THE ROOM` : null,
     action: {
       label: here > 0 ? 'Join room' : 'Open room',
