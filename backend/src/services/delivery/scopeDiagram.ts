@@ -207,7 +207,12 @@ export function renderWorkflowSvg(
   });
 
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${WIDTH} ${totalH}" width="100%" height="auto" role="img" aria-label="${escapeXml(title)}">`,
+    // `height` is a PRESENTATION ATTRIBUTE and takes a length, not the CSS keyword `auto`.
+    // As an attribute the browser rejected it - "Expected length, 'auto'" in the console on
+    // every page carrying a diagram - and fell back to the viewBox, so it looked correct and
+    // logged an error forever. As an inline style the same intent is valid, and it survives a
+    // consumer that has no stylesheet for this SVG.
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${WIDTH} ${totalH}" width="100%" style="height:auto" role="img" aria-label="${escapeXml(title)}">`,
     `<title>${escapeXml(title)}</title>`,
     ...parts,
     '</svg>',

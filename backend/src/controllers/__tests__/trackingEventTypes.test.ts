@@ -100,6 +100,13 @@ describe('validateTrackEvent - the /api/t/event contract is unchanged', () => {
     expect(validateTrackEvent(valid)).toBeNull();
   });
 
+  it('accepts preview_ready, which the AI Flotation scope panel emits', () => {
+    // The site had been sending it since the panel shipped and the ingest had been answering
+    // 400 to every one, because an unlisted type is rejected rather than stored. Found by
+    // reading the console on the live page, not by a failing test.
+    expect(validateTrackEvent({ ...valid, event_type: 'preview_ready' })).toBeNull();
+  });
+
   it('checks fingerprint before event_type, with the original message', () => {
     // Order matters: callers and the existing frontend assert on these strings.
     expect(validateTrackEvent({ ...valid, fingerprint: '', event_type: 'nope' })).toBe(
