@@ -575,4 +575,4 @@ export const CASE_STUDY_SURFACE_KEYS = [
  * per-surface publication row is the control for that judgement. It does not
  * make the judgement.
  */
-export const PUBLISHABLE_SURFACE_KEYS = ['enterprise', 'ai-flotation'] as const;
+export const PUBLISHABLE_SURFACE_KEYS = ['enterprise', 'ai-flotation', 'training'] as const;

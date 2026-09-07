@@ -407,11 +407,19 @@ describe('surfaces and sorts', () => {
    * record live and no reader can ever reach it.
    */
   it('publishes only to surfaces that have a page to appear on', () => {
-    expect([...PUBLISHABLE_SURFACE_KEYS]).toEqual(['enterprise', 'ai-flotation']);
-    for (const key of ['enterprise', 'ai-flotation']) {
+    // Enterprise, then AI Flotation (2026-09-05, aiflotation.com/results), then
+    // Training (2026-09-06, training.colaberry.com/student-projects). Each entry
+    // arrived WITH a page. This list is asserted literally on purpose: adding a
+    // key here is what makes a surface publishable, so it should never happen as
+    // a side effect of some other edit, and this line is the stop-and-look.
+    expect([...PUBLISHABLE_SURFACE_KEYS]).toEqual(['enterprise', 'ai-flotation', 'training']);
+    for (const key of ['enterprise', 'ai-flotation', 'training']) {
       expect(isPublishableSurfaceKey(key)).toBe(true);
     }
-    for (const key of ['training', 'refactored']) {
+    // `refactored` is the last surface with nowhere to appear. When it ships,
+    // move it up rather than deleting the case - something must keep asserting
+    // that the contract admits more surfaces than the gate will publish to.
+    for (const key of ['refactored']) {
       expect(isCaseStudySurfaceKey(key)).toBe(true);
       expect(isPublishableSurfaceKey(key)).toBe(false);
     }

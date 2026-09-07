@@ -409,3 +409,37 @@ describe('the surface builder default', () => {
     expect([summary.builtBy, detail.builtBy]).toEqual([enterprise.builtBy, enterprise.builtBy]);
   });
 });
+
+/* ------------------------------------------------- the training surface goes live --- */
+
+/**
+ * TRAINING IS A PUBLICATION ROW, NOT A MIGRATION - and this is the second time
+ * that claim has been cashed. The file has said since day one that adding a
+ * surface should cost a key and an address; AI Flotation proved it in September
+ * 2026 and Training follows it here.
+ *
+ * The canonical is the case worth pinning. A learner's project on the training
+ * site exists to show a PROSPECTIVE STUDENT what students build. A canonical
+ * pointing at enterprise.colaberry.ai would hand that signal to a page written
+ * for buyers, which is the same class of error as pointing AI Flotation's
+ * canonical at Colaberry.
+ */
+describe('the training surface', () => {
+  it('sends its canonical to the training site, not the enterprise one', () => {
+    const projected = projectPublicDetail({ ...input(), surfaceKey: 'training' });
+    expect(projected.seo.canonicalUrl)
+      .toBe('https://training.colaberry.com/student-projects/stockout-forecasting');
+  });
+
+  it('leaves an unstated builder null — training never attributes on a surface', () => {
+    // Training's whole emphasis is who built it. A record naming nobody must
+    // read as naming nobody rather than being credited to an institution.
+    const base = internalSnapshotContent();
+    const content = {
+      ...base,
+      taxonomy: { ...(base.taxonomy ?? {}), builtByType: undefined },
+      identity: { ...(base.identity ?? {}), builtByType: undefined },
+    } as CaseStudySnapshotContent;
+    expect(projectPublicSummary({ ...input(content), surfaceKey: 'training' }).builtBy).toBeNull();
+  });
+});

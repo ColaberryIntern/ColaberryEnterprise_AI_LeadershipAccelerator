@@ -24,6 +24,7 @@ import {
   sortCaseStudyCandidates,
 } from '../caseStudyFilterService';
 import { CASE_STUDY_SURFACE_KEYS } from '../../../types/caseStudy';
+import { isPublishableSurfaceKey } from '../../../types/caseStudyGuards';
 import type { CaseStudyFilterCandidate } from '../caseStudyFilterService';
 
 function candidate(over: Partial<CaseStudyFilterCandidate> = {}): CaseStudyFilterCandidate {
@@ -112,11 +113,27 @@ describe('surface isolation (AC4)', () => {
       .toEqual([...CASE_STUDY_SURFACE_KEYS].sort());
   });
 
-  it('only enterprise is publishable in Phase 1', () => {
-    expect(CASE_STUDY_SURFACE_PROFILES.enterprise.publishable).toBe(true);
-    expect(CASE_STUDY_SURFACE_PROFILES.training.publishable).toBe(false);
-    expect(CASE_STUDY_SURFACE_PROFILES['ai-flotation'].publishable).toBe(false);
-    expect(CASE_STUDY_SURFACE_PROFILES.refactored.publishable).toBe(false);
+  /**
+   * THIS TEST USED TO PASS WHILE BEING WRONG, and that is why it is written this
+   * way now. It asserted `profile.publishable === false` for AI Flotation on a
+   * day when AI Flotation was publishing to a live customer page - because the
+   * field was a hand-written literal nobody read, so the profile and the publish
+   * gate could disagree indefinitely and every test stayed green.
+   *
+   * Pinning a literal list here would only re-create that. The invariant is that
+   * the profile agrees with `PUBLISHABLE_SURFACE_KEYS`, which is the list the
+   * gate actually consults, so THAT is what is asserted - for every surface, and
+   * for any surface added later without anyone editing this file.
+   */
+  it('every profile agrees with the list the publish gate consults', () => {
+    for (const key of CASE_STUDY_SURFACE_KEYS) {
+      expect(`${key}:${getCaseStudySurfaceProfile(key).publishable}`)
+        .toBe(`${key}:${isPublishableSurfaceKey(key)}`);
+    }
+    // Non-vacuous: the set must genuinely contain both answers, or the loop
+    // above would pass against a constant.
+    const flags = CASE_STUDY_SURFACE_KEYS.map((k) => getCaseStudySurfaceProfile(k).publishable);
+    expect(new Set(flags)).toEqual(new Set([true, false]));
   });
 
   it('every surface hides illustrative records by default (spec §14)', () => {

@@ -188,7 +188,8 @@ describe('publication surface checks score over the whole set', () => {
     // Two separate questions: has a target been chosen, and is that target one we
     // can publish to. A contract-only surface answers yes to the first and no to
     // the second, so 2 of the 3 surface points are still earned.
-    const report = scoreCaseStudyReadiness(withPublications([{ surfaceKey: 'training' }]));
+    // `refactored` is the surface that has no page, now that Training ships one.
+    const report = scoreCaseStudyReadiness(withPublications([{ surfaceKey: 'refactored' }]));
     const gaps = report.gaps.map((g) => g.checkKey);
     expect(gaps).not.toContain('publication.surface_declared');
     expect(gaps).toContain('publication.surface_publishable');
@@ -196,7 +197,7 @@ describe('publication surface checks score over the whole set', () => {
 
   it('takes the publishable surface when the set MIXES publishable and not', () => {
     const report = scoreCaseStudyReadiness(
-      withPublications([{ surfaceKey: 'training' }, { surfaceKey: 'enterprise' }]),
+      withPublications([{ surfaceKey: 'refactored' }, { surfaceKey: 'enterprise' }]),
     );
     expect(categoryScore(report, 'publication')).toBe(5);
   });
