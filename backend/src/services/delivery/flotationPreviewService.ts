@@ -33,7 +33,8 @@
 
 import RawLeadPayload from '../../models/RawLeadPayload';
 import ProjectUnderstandingRecord from '../../models/ProjectUnderstandingRecord';
-import { summarizeForWow, openQuestions, type ProjectUnderstanding } from './projectUnderstanding';
+import { summarizeForWow, openQuestions, confidenceProfile, type ProjectUnderstanding } from './projectUnderstanding';
+import { projectBlueprint, type BlueprintReadiness } from './buildBlueprint';
 import { getOrCreateScope, type ProjectScope } from './projectScopeService';
 import { ensurePrototypes, prototypeLinks, type PrototypeLink } from './appPrototypeService';
 import { confirmationProfile } from './understandingConfirmation';
@@ -67,6 +68,17 @@ export interface FlotationPreview {
    * at their own product.
    */
   prototypes?: PrototypeLink[];
+  /**
+   * How much of this is theirs and how much is ours.
+   *
+   * The scope reads as authoritative, and it should not without this beside it: how many
+   * statements came from their own words, how many we inferred, and which of the twenty
+   * dimensions the conversation never reached. §16 forbids merging assumptions into facts,
+   * and a page that never shows the split is quietly doing exactly that.
+   */
+  confidence?: ReturnType<typeof confidenceProfile>;
+  /** How much of the 18-section blueprint has content behind it. */
+  readiness?: BlueprintReadiness;
   /** Why nothing is here yet, in words a person can read. */
   message?: string;
 }
@@ -162,5 +174,9 @@ export async function getFlotationPreview(token: string): Promise<FlotationPrevi
     })),
     still_open: openQuestions(understanding).map((q) => q.value),
     confirmed: confirmationProfile(understanding),
+    // Both are pure functions over what we already hold, so they cost a pass over the items
+    // rather than a model call or a query.
+    confidence: confidenceProfile(understanding),
+    readiness: projectBlueprint(understanding).readiness,
   };
 }
