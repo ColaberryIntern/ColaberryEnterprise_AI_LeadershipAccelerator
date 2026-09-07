@@ -34,6 +34,24 @@ export const CreateRoomSchema = z.object({
 });
 export type CreateRoomBody = z.infer<typeof CreateRoomSchema>;
 
+/**
+ * A room logo is a URL that the portal renders into an <img src>. That makes it
+ * an injection surface, so it is validated as a REFERENCE rather than accepted
+ * as a string: either an https URL or a site-relative path, and nothing else.
+ *
+ * `javascript:` and `data:` are the two that matter. A data URI is not obviously
+ * dangerous in an img, but it lets somebody store an arbitrary payload in a
+ * column sized for a link, and http:// would break the page's mixed-content
+ * rules. Rejecting at the boundary keeps every consumer from having to think
+ * about it.
+ */
+export const roomIconUrl = z.string().trim().max(600)
+  .refine(
+    (v) => v === '' || /^https:\/\//i.test(v) || /^\/[^/]/.test(v),
+    { message: 'icon_url must be an https URL or a site-relative path' },
+  )
+  .transform((v) => (v === '' ? null : v));
+
 export const UpdateRoomSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(5000).nullable().optional(),
@@ -42,6 +60,7 @@ export const UpdateRoomSchema = z.object({
   privacy: roomPrivacy.optional(),
   capacity: z.number().int().positive().nullable().optional(),
   status: z.enum(['active', 'archived', 'locked']).optional(),
+  icon_url: roomIconUrl.nullable().optional(),
 });
 export type UpdateRoomBody = z.infer<typeof UpdateRoomSchema>;
 
