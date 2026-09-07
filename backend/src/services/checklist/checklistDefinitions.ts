@@ -1,25 +1,31 @@
 /**
  * checklistDefinitions — Reese Agentic AI Employee mission, Capability 6
  * ("Stateful work plans and mandatory checklists"). Pure data, verbatim from
- * the mission's own Assessment checklist (13 items). Outreach and Closure
- * checklists are also named in the mission text but are real, separately
- * scoped future slices — not defined here ahead of their own wiring (this
- * repo's own "don't build for hypothetical future requirements" rule).
+ * the mission's own Assessment (13 items) and Outreach (10 items)
+ * checklists. Closure is also named in the mission text but is a real,
+ * separately scoped future slice — not defined here ahead of its own wiring
+ * (this repo's own "don't build for hypothetical future requirements"
+ * rule); it touches a distinct chokepoint (ticket closure) that needs its
+ * own scoping pass.
  *
- * `required: false` items are tracked and displayed but never gate — they
- * cover evidence categories that legitimately vary by real data
- * availability (e.g. a brand-new enrollment has no project activity yet),
- * so treating their absence as a process failure would block Reese's own
- * assessment awareness for ordinary data sparsity, not an actual defect.
- * `required: true` items cover identity and the assessment engine's own
- * structural guarantees (evidence-provenance, confidence assignment,
- * reassessment scheduling) — these should never legitimately be false for a
+ * `required: false` items are tracked and displayed but never gate.
+ * Assessment: the 5 "review X" items cover evidence categories that
+ * legitimately vary by real data availability (e.g. a brand-new enrollment
+ * has no project activity yet), so treating their absence as a process
+ * failure would block Reese's own assessment awareness for ordinary data
+ * sparsity, not an actual defect. Outreach: `validate_evidence_reliability`
+ * is honestly, always incomplete today — see outreachChecklist.ts's own
+ * header for the real, disclosed gap this documents rather than papers
+ * over.
+ *
+ * `required: true` items cover identity/eligibility and each engine's own
+ * structural guarantees — these should never legitimately be false for a
  * completed run today, so persisting them as real checked items is
  * defensive: if a future code change ever broke one of those guarantees,
  * this is what would catch and disclose it, not silently pass.
  */
 
-export type ChecklistType = 'assessment';
+export type ChecklistType = 'assessment' | 'outreach';
 
 export interface ChecklistItemDefinition {
   key: string;
@@ -43,6 +49,20 @@ export const ASSESSMENT_CHECKLIST_ITEMS: ChecklistItemDefinition[] = [
   { key: 'set_reassessment_date', label: 'Set reassessment date', required: true },
 ];
 
+export const OUTREACH_CHECKLIST_ITEMS: ChecklistItemDefinition[] = [
+  { key: 'confirm_eligible_population', label: 'Confirm eligible population', required: true },
+  { key: 'validate_evidence_reliability', label: 'Validate evidence reliability', required: false },
+  { key: 'check_cadence_and_cap', label: 'Check cadence and daily cap', required: true },
+  { key: 'check_duplicate_open_intervention', label: 'Check for duplicate/open intervention', required: true },
+  { key: 'confirm_authorization_before_send', label: 'Confirm authorization before send', required: true },
+  { key: 'state_only_supported_observations', label: 'State only supported observations', required: true },
+  { key: 'provide_one_clear_next_step', label: 'Provide one clear next step', required: true },
+  { key: 'define_success_criteria', label: 'Define success criteria', required: true },
+  { key: 'set_follow_up_date', label: 'Set follow-up date', required: true },
+  { key: 'link_to_work_ledger', label: 'Link the communication to the work ledger', required: true },
+];
+
 export const CHECKLIST_DEFINITIONS: Record<ChecklistType, ChecklistItemDefinition[]> = {
   assessment: ASSESSMENT_CHECKLIST_ITEMS,
+  outreach: OUTREACH_CHECKLIST_ITEMS,
 };
