@@ -14,6 +14,7 @@ import ScheduleAppointmentModal from '../../components/admin/ScheduleAppointment
 // drift — with the unwatched one still writing.
 import LeadPipelineBar from '../../components/admin/lead/LeadPipelineBar';
 import LeadStatusNotes from '../../components/admin/lead/LeadStatusNotes';
+import LeadStrategyPrep from '../../components/admin/lead/LeadStrategyPrep';
 
 /**
  * The canonical 360° person profile.
@@ -152,7 +153,7 @@ const fmtDate = (v: string | null | undefined) =>
   (v ? new Date(v).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : null);
 const fmtDateTime = (v: string | null | undefined) => (v ? new Date(v).toLocaleString() : null);
 
-type TabKey = 'timeline' | 'journey' | 'acquisition' | 'notes' | 'engagement' | 'learning' | 'billing' | 'activity';
+type TabKey = 'timeline' | 'journey' | 'acquisition' | 'notes' | 'strategy' | 'engagement' | 'learning' | 'billing' | 'activity';
 
 export default function PersonProfilePage() {
   const { email: rawEmail } = useParams<{ email: string }>();
@@ -226,6 +227,7 @@ export default function PersonProfilePage() {
     if (profile.acquisition?.leadId) t.push({ key: 'journey', label: 'Journey' });
     // The Lead page's Activity tab, moved across whole.
     if (profile.acquisition?.leadId) t.push({ key: 'notes', label: 'Notes & activity' });
+    if (profile.acquisition?.leadId) t.push({ key: 'strategy', label: 'Strategy prep' });
     if (profile.appointments !== undefined || profile.automation !== undefined) {
       t.push({
         key: 'engagement',
@@ -661,6 +663,9 @@ export default function PersonProfilePage() {
               </div>
             </div>
           )}
+
+          {/* ── Strategy prep ────────────────────────────────────────────── */}
+          {tab === 'strategy' && acq?.leadId && <LeadStrategyPrep leadId={acq.leadId} />}
 
           {/* ── Appointments & automation ────────────────────────────────── */}
           {tab === 'engagement' && (
