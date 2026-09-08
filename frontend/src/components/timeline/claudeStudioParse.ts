@@ -192,6 +192,94 @@ export function parseClaudeStudio(html: string): ParsedStudio | null {
   };
 }
 
+/* ────────────────────────── Guided prompt inputs ──────────────────────────
+ *
+ * Authored prompts carry bracketed placeholders — "[paste the complaint
+ * verbatim]", "[describe option A]". The first shipped version expected the
+ * student to copy the prompt and hand-edit those brackets inside Claude, which
+ * is fiddly and easy to skip: you end up pasting a prompt that still literally
+ * says "[describe your role]".
+ *
+ * Instead the card asks for those answers directly. Each placeholder becomes a
+ * labelled field; typing in it fills every prompt that uses it, live, and Copy
+ * hands over the finished text.
+ *
+ * These values are the student's own words about their own work. They live in
+ * the local draft only — they are never sent to the server and never appear in
+ * an analytics event.
+ */
+
+/** One fill-in derived from the authored prompt text. `key` is the placeholder verbatim. */
+export interface PromptField {
+  /** The placeholder's inner text, used both as the substitution key and the label. */
+  key: string;
+  /** Sentence-cased label for display. */
+  label: string;
+  /** Long answers get a textarea; short ones a single-line input. */
+  multiline: boolean;
+  /** Indexes of the prompts that use this field, so the UI can say where it lands. */
+  usedBy: number[];
+}
+
+// A placeholder is a single-line bracketed span. Bounded length so a stray "["
+// in prose cannot swallow half the prompt, and no newlines so a bracketed list
+// spanning lines is left alone.
+const PLACEHOLDER_RE = /\[([^\][\n]{2,160})\]/g;
+
+/** Words that signal a long answer, so the field gets a textarea rather than an input. */
+const LONG_HINTS = ['paste', 'describe', 'list', 'outcomes', 'requirements', 'sentences', 'verbatim', 'reasoning'];
+
+const sentenceCase = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+/**
+ * PURE — collect the unique placeholders across a studio's prompts, in the order
+ * a student meets them. Deduped by exact placeholder text, so a value typed once
+ * fills every prompt that asks for the same thing.
+ */
+export function extractPromptFields(prompts: ParsedPrompt[]): PromptField[] {
+  const byKey = new Map<string, PromptField>();
+  prompts.forEach((p, i) => {
+    // matchAll needs a fresh lastIndex each pass; the literal is global.
+    const matches = Array.from(p.text.matchAll(PLACEHOLDER_RE));
+    matches.forEach((m) => {
+      const key = m[1].trim();
+      if (!key) return;
+      const existing = byKey.get(key);
+      if (existing) {
+        if (!existing.usedBy.includes(i)) existing.usedBy.push(i);
+        return;
+      }
+      const lower = key.toLowerCase();
+      byKey.set(key, {
+        key,
+        label: sentenceCase(key),
+        multiline: key.length > 44 || LONG_HINTS.some((h) => lower.includes(h)),
+        usedBy: [i],
+      });
+    });
+  });
+  return Array.from(byKey.values());
+}
+
+/**
+ * PURE — substitute the student's answers into one prompt.
+ *
+ * An unfilled placeholder is LEFT AS-IS rather than blanked: a prompt that still
+ * shows "[describe option A]" is honest about what is missing, whereas one with
+ * an empty gap reads as finished and silently asks Claude to work from nothing.
+ */
+export function fillPrompt(text: string, values: Record<string, string>): string {
+  return text.replace(PLACEHOLDER_RE, (whole, inner) => {
+    const v = values[String(inner).trim()];
+    return v && v.trim() ? v.trim() : whole;
+  });
+}
+
+/** PURE — how many of a studio's fields the student has answered. */
+export function filledCount(fields: PromptField[], values: Record<string, string>): number {
+  return fields.filter((f) => (values[f.key] || '').trim().length > 0).length;
+}
+
 /** Draft storage key for a card's in-progress studio work. */
 export const draftKey = (cardId: string) => `claude-studio:draft:${cardId}`;
 
@@ -202,10 +290,12 @@ export interface StudioDraft {
   projectProofUrl: string;
   reflection: string;
   aiDisclosure: string;
+  /** Answers to the prompt fill-ins, keyed by placeholder text. Local only. */
+  inputs: Record<string, string>;
 }
 
 export const EMPTY_DRAFT: StudioDraft = {
-  stages: [], checks: [], artifactUrl: '', projectProofUrl: '', reflection: '', aiDisclosure: '',
+  stages: [], checks: [], artifactUrl: '', projectProofUrl: '', reflection: '', aiDisclosure: '', inputs: {},
 };
 
 /** Read a saved draft. Never throws — a corrupt or blocked store yields an empty draft. */
@@ -221,6 +311,11 @@ export function loadDraft(cardId: string): StudioDraft {
       projectProofUrl: typeof parsed.projectProofUrl === 'string' ? parsed.projectProofUrl : '',
       reflection: typeof parsed.reflection === 'string' ? parsed.reflection : '',
       aiDisclosure: typeof parsed.aiDisclosure === 'string' ? parsed.aiDisclosure : '',
+      // Coerce defensively: a hand-edited store must not put non-strings into
+      // the prompt substitution.
+      inputs: parsed.inputs && typeof parsed.inputs === 'object' && !Array.isArray(parsed.inputs)
+        ? Object.fromEntries(Object.entries(parsed.inputs).filter(([, v]) => typeof v === 'string')) as Record<string, string>
+        : {},
     };
   } catch {
     return { ...EMPTY_DRAFT };
