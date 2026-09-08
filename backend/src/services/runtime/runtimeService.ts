@@ -153,6 +153,12 @@ export async function openCard(enrollmentId: string, cardId: string, opts: { rea
       id: card.id, type: card.type, title, subtitle: card.subtitle, description,
       student_label: ritualStudentLabel(card.type, card.week ?? null, def?.student_label || card.type), render_band: def?.render_band || 'overview',
       estimated_time: card.estimated_time, competencies: card.competencies,
+      // Additive: the feed already sends difficulty, the runtime did not, so any
+      // workspace panel wanting a "Level" chip silently rendered nothing. Adding
+      // it here rather than dropping the chip — a field the feed sends and the
+      // runtime omits is the usual reason "the workspace doesn't bring the info
+      // over". Existing consumers ignore the extra key.
+      difficulty: card.difficulty,
       evidence_required: !!def?.evidence_required, video,
       blog,
       course: courseFromMetadata(card.metadata),   // Skills Course link — the workspace needs it to render SkillsJarPanel

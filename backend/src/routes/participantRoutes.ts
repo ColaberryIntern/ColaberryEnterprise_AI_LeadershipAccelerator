@@ -68,6 +68,7 @@ import {
   handleGetPeerWins, handleSubmitWin, handleCheerWin,
   handleGetAssessment, handleSubmitAssessment,
   handleUploadFieldGuide, handleGetFieldGuide, handleBuildArtifactUpload,
+  handleClaudeStudioSubmit, handleClaudeStudioStatus,
   handleArchitectState, handleArchitectAdvance, handleArchitectInterview,
   handleArchitectEvaluate, handleArchitectComplete, handleArchitectLedger,
 } from '../controllers/runtimeController';
@@ -208,6 +209,14 @@ router.get('/api/portal/runtime/cards/:cardId/field-guide', requireParticipant, 
 // as a PortfolioArtifact (portfolio + instructor review); the card is then marked
 // complete via the normal /complete endpoint (points on the first build).
 router.post('/api/portal/runtime/cards/:cardId/build-artifact', requireParticipant, buildArtifactUpload.single('file'), handleBuildArtifactUpload);
+// Claude Studio — the student worked in their OWN Claude.ai account and submits
+// the Artifact link, stage acknowledgement, self-checks and reflection. The
+// submit handler validates, stores a PortfolioArtifact, AND completes the card
+// in one call (unlike build-artifact, which completes separately) so a student
+// who closes the tab mid-flow is never left with stored evidence and no credit.
+// Points come from the idempotent progression path, so revisions add none.
+router.get('/api/portal/runtime/cards/:cardId/claude-studio', requireParticipant, handleClaudeStudioStatus);
+router.post('/api/portal/runtime/cards/:cardId/claude-studio', requireParticipant, handleClaudeStudioSubmit);
 router.post('/api/portal/runtime/cards/:cardId/prompt-lab', requireParticipant, handlePromptLab);
 router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, handleComplete);
 // Weekly feedback Survey — read the questions + saved answers, and store answers.

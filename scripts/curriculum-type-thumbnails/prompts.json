@@ -275,6 +275,11 @@
       "slug": "community_live_session",
       "label": "Community Live Session",
       "scene": "A warm inviting virtual meeting room with a ring of softly glowing floating seats around a central holographic round table, gentle light beams and a small live indicator dot, a sense of people gathering."
+    },
+    {
+      "slug": "claude_studio",
+      "label": "Claude Studio",
+      "scene": "A calm architect's studio desk seen from above: an open notebook, a violet-glowing translucent panel floating above it showing four linked stages as connected nodes, and a single crafted object taking shape at the end of the chain, warm focused light."
     }
   ]
 }
