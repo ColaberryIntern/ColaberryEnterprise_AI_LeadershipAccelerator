@@ -58,18 +58,27 @@ interface SynthflowResponse {
  * The agent carries its own knowledge base server-side, so this choice decides what the
  * person on the phone is told about — and by whom.
  *
- * ## AI Flotation never falls back
+ * ## The other brands never fall back
  *
- * Every other route here degrades to a neighbouring agent when its slot is unset, which is
- * reasonable while the agents all speak for the same business. AI Flotation does not: its
- * prospect answering the phone to a Colaberry bootcamp agent is worse than no call at all,
- * and it is the exact outcome the decision to give it its own agent was meant to prevent.
+ * Every Colaberry route here degrades to a neighbouring agent when its slot is unset, which
+ * is reasonable while those agents all speak for the same business. AI Flotation and
+ * OpportunityLift do not: their caller answering the phone to a Colaberry bootcamp agent is
+ * worse than no call at all, and it is the exact outcome giving them their own agents was
+ * meant to prevent.
  *
- * So an unconfigured AI Flotation agent returns empty, and the caller skips deterministically
- * rather than dialling with somebody else's voice.
+ * OpportunityLift is the sharper case. A scholarship applicant reaching the generic callback
+ * agent would be answered by the bootcamp's saved training-site script - a person asking a
+ * charity for help, spoken to as a sales lead. So an unconfigured slot returns empty and the
+ * caller skips deterministically rather than dialling with somebody else's voice.
  */
 export function resolveAgentId(params: { callType: 'welcome' | 'interest' | 'callback'; brandSlug?: string }): string {
   if (params.brandSlug === 'ai-flotation') return env.synthflowAiFlotationAgentId;
+
+  // OpportunityLift. Its OWN agent, and no fallback: the generic callback agent below
+  // carries Colaberry's saved training-site script, so falling through to it would have
+  // answered a scholarship applicant as the bootcamp's callback line. An unset slot
+  // returns '' here, which `triggerVoiceCall` turns into a `no_agent_id` skip.
+  if (params.brandSlug === 'cpn') return env.synthflowCpnAgentId;
 
   // 'callback' (inbound "call me now") uses its own dedicated agent so it never
   // conflates with Maya's proactive interest calls. Falls back to the interest

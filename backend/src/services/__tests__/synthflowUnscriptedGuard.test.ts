@@ -8,6 +8,7 @@ jest.mock('../../config/env', () => ({
     synthflowApiKey: 'test-key',
     synthflowCallbackAgentId: 'agent-callback',
     synthflowAiFlotationAgentId: 'agent-flotation',
+    synthflowCpnAgentId: 'agent-cpn',
     synthflowWelcomeAgentId: 'agent-welcome',
     synthflowInterestAgentId: 'agent-interest',
   },
@@ -89,6 +90,29 @@ describe('refusing to dial an unscripted agent', () => {
       } as any);
 
       expect([brand, res.data?.reason]).toEqual([brand, 'no_prompt']);
+    }
+  });
+
+  it('an unconfigured CPN agent skips rather than borrowing the Colaberry one', async () => {
+    // The other half of the safety story. `resolveAgentId` sends cpn to its OWN slot
+    // with no fallback: the generic callback agent carries Colaberry's saved
+    // training-site script, so falling through would answer a scholarship applicant
+    // as the bootcamp's callback line. Unset must mean silence, not substitution.
+    const envAny = jest.requireMock('../../config/env').env as any;
+    const saved = envAny.synthflowCpnAgentId;
+    envAny.synthflowCpnAgentId = '';
+    try {
+      const res = await triggerVoiceCall({
+        name: 'Sam',
+        phone: '+15550100',
+        callType: 'callback',
+        brandSlug: 'cpn',
+        prompt: 'a real scholarship script',
+      } as any);
+
+      expect(res).toMatchObject({ success: true, data: { skipped: true, reason: 'no_agent_id' } });
+    } finally {
+      envAny.synthflowCpnAgentId = saved;
     }
   });
 

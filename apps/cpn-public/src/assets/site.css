@@ -797,6 +797,31 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
 .status[data-state="error"] { color: var(--danger); }
 
 /* ---------------------------------------------------------------------------
+   The voice door. Same weight as the written interview beside it, because the
+   decision was that voice is an equal option rather than a fallback - so it is
+   not a smaller, greyer box under the "real" one.
+   --------------------------------------------------------------------------- */
+.voice-door {
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 8px);
+  padding: var(--space-8);
+  box-shadow: var(--shadow);
+  max-width: var(--measure);
+  margin-top: var(--space-8);
+}
+.voice-door h2 { font-size: var(--fs-h3); margin: var(--space-4) 0 var(--space-3); }
+/* The form inside is already a card; nested chrome would read as a box in a box. */
+.voice-door .intake {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  margin-top: var(--space-6);
+  max-width: none;
+}
+
+/* ---------------------------------------------------------------------------
    The scholarship interview.
 
    Deliberately NOT styled as a messaging app. No avatars, no bubbles with tails,

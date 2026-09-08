@@ -17475,3 +17475,20 @@ The script and the safety fix are in. **No call can be placed for CPN yet, and t
 3. **A `RoutingRule` row mapping (source `cpn`, entry `scholarship_interview_call`) to the `request_callback` action.** Routing rules are not seeded in code - they are created through the admin API - so this is a production step a deploy cannot carry. It is the fourth instance this session of data that does not ship itself.
 
 Until (3) exists nothing routes CPN to voice, so this change is inert for CPN and purely protective for everyone else.
+
+- [x] **Activate CPN voice, and stop it answering in Colaberry's voice**
+  - Date: 2026-09-08
+  - Session: CC-20260906-q4h7
+  - What changed: Ali: "yes activate CPN voice." The voice door now sits on `/scholarships/` beside the written interview at equal weight, with consent that names the AI, the recording and the call. `scholarship_interview_call` is seeded with phone AND email required, because `request_callback` refuses without either and an optional phone would produce a form that submits happily and never rings. New `seedRoutingRules.ts` makes the rule shippable rather than an admin-API step.
+  - Verification: 36 tests across 4 suites; `tsc --noEmit` 0 errors, 0 error lines, unpiped; site harness green across 8 routes x 4 viewports; boundary validator OK, 16 files.
+  - Notes: **Activation surfaced a second, sharper version of the guard defect, and this one would have fired on the first call.** `resolveAgentId` routes by brand, and `cpn` fell through to `env.synthflowCallbackAgentId` - Colaberry's dedicated callback agent, which carries its own saved training-site script rather than a `{prompt}` shell. A scholarship applicant would have been answered by the bootcamp's callback line: a person asking a charity for help, spoken to as a sales lead, in a voice that is not ours. CPN now has its own slot with NO fallback, so unset means silence rather than substitution, and a test pins that it skips with `no_agent_id` instead of borrowing. **One manual step removed, one that cannot be.** Routing rules were admin-API-only, so `seedRoutingRules.ts` now ships the CPN rule - narrow by design: seeded by name, never deletes or deactivates, and operator-tuned rules including AI Flotation's are untouched, because a seeder asserting the full set would silently undo somebody's 3am tuning. What remains external is `SYNTHFLOW_CPN_AGENT_ID`: somebody must create a shell agent in the Synthflow dashboard and set it on prod. Until then every CPN call skips with `no_agent_id` and none is placed. **The voice door is beside the written interview, not beneath it** - the decision was that voice is an equal path, so it is not a smaller, greyer box under the real one.
+
+## Deploy sequence for this change
+
+1. backend rebuild (prompt selection, agent slot, seeds)
+2. nginx rebuild (`/scholarships/` voice door)
+3. `node dist/seeds/seedLeadSources.js` - the `scholarship_interview_call` entry point
+4. `node dist/seeds/seedRoutingRules.js` - the rule that fires the call
+5. **External, and not ours:** create the Synthflow shell agent, set `SYNTHFLOW_CPN_AGENT_ID`, restart backend
+
+Steps 1-4 are safe without 5: the form accepts, the lead is captured and attributed, and the call skips with a visible reason rather than dialling in the wrong voice.
