@@ -152,23 +152,24 @@ export const BRAND_PAGE_CATEGORIES: Record<string, BrandPageCategoryMap> = {
    * Several h1s in the capture are navigation text ("LEARN") rather than page headings,
    * so these categories were read from each page's content and forms, not its heading.
    */
-  // RETIRED 2026-09-07, AND DELIBERATELY LEFT INTACT.
+  // RETIRED, AND DELIBERATELY LEFT INTACT. THIS BRAND HAS NO PAGES.
   //
-  // refactored.ai now returns 301 to enterprise.colaberry.ai for every path, and the
-  // eleven ported pages below were deleted from apps/refactored-public/src. The map stays
-  // for two reasons. Historical visitor events still carry these paths, and a categoriser
-  // that stopped recognising them would silently reclassify years of recorded traffic as
-  // `other` — rewriting the past to match the present. And brandPageCategories.test.ts
-  // asserts several of these entries directly, as the canonical example of one brand's
-  // rules not leaking into another's.
+  // refactored.ai was retired on 2026-09-07 and its app deleted on 2026-09-08. Every path
+  // now 301s to enterprise.colaberry.ai, served from AWS — CloudFront in front of an S3
+  // redirect — so no page of this brand exists in this repository any more.
   //
-  // Do not add to this map. A new page on this brand means the retirement was reversed,
-  // which is a decision to make in docs/architecture/multi-tenancy/REFACTORED_CUTOVER.md
-  // before it is a line here.
+  // The map stays anyway, for two reasons. Historical visitor events still carry these
+  // paths, and a categoriser that stopped recognising them would silently reclassify years
+  // of recorded traffic as `other` — rewriting the past to match the present. And
+  // brandPageCategories.test.ts asserts several of these entries directly, as the
+  // canonical example of one brand's rules not leaking into another's.
+  //
+  // This is the one map here with no app behind it, so the on-disk guard cannot check it.
+  // Do not add to it: a new page on this brand means the retirement was reversed, which is
+  // a decision to make in docs/architecture/multi-tenancy/REFACTORED_CUTOVER.md before it
+  // is a line here.
   refactored: {
     exact: {
-      // The only path still on disk: a fallback page that should never render, because
-      // nginx redirects ahead of it. See apps/refactored-public/src/index.html.
       '/': 'homepage',
       // The three audience pages: what Refactored offers, and to whom.
       '/individuals': 'program',

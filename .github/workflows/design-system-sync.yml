@@ -81,7 +81,7 @@ jobs:
           # A design system can publish a stylesheet that fails to resolve, and a sync that
           # only checked bytes would ship it. Building proves the import graph still closes
           # before anyone is asked to review a colour change.
-          for app in cpn-public ai-flotation-public refactored-public; do
+          for app in cpn-public ai-flotation-public; do
             (cd "apps/$app" && node build.js) || exit 1
           done
           node scripts/validate-app-boundaries.js
