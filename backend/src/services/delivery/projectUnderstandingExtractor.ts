@@ -205,6 +205,109 @@ export function quoteViolation(quote: string, index: QuoteIndex): string | null 
 }
 
 /**
+ * Words that carry no evidence, so counting them would flatter every claim.
+ *
+ * Deliberately small. A longer list would start removing domain words, and the whole test
+ * rests on domain words being the ones that have to appear.
+ */
+const EVIDENCE_STOPWORDS = new Set([
+  'the', 'a', 'an', 'and', 'or', 'but', 'if', 'of', 'to', 'in', 'on', 'at', 'by', 'for', 'with',
+  'from', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'it', 'its', 'this', 'that', 'these',
+  'those', 'they', 'them', 'their', 'we', 'our', 'you', 'your', 'i', 'me', 'my', 'he', 'she', 'his',
+  'her', 'as', 'so', 'than', 'then', 'there', 'here', 'when', 'where', 'which', 'who', 'what', 'how',
+  'not', 'no', 'yes', 'do', 'does', 'did', 'done', 'have', 'has', 'had', 'will', 'would', 'should',
+  'could', 'can', 'may', 'might', 'must', 'about', 'into', 'over', 'under', 'up', 'down', 'out',
+  'all', 'any', 'some', 'each', 'every', 'other', 'more', 'most', 'much', 'many', 'very', 'just',
+]);
+
+/**
+ * Crude stemming, on purpose.
+ *
+ * "messages" against "message" and "members" against "member" have to match or a faithful
+ * paraphrase fails the test. A real stemmer would be better and is not worth a dependency
+ * for this: chopping a few English suffixes is enough, and being slightly too generous is
+ * the right way to be wrong here - a missed match would demote an honest item.
+ */
+function stem(word: string): string {
+  return word
+    .replace(/(ies)$/, 'y')
+    .replace(/(sses|shes|ches|xes)$/, '')
+    .replace(/(ing|ed|es|s)$/, '')
+    .slice(0, 8);
+}
+
+const evidenceWords = (text: string): string[] =>
+  normalizeQuote(text)
+    .replace(/[^a-z0-9\s'-]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !EVIDENCE_STOPWORDS.has(w))
+    .map(stem);
+
+/**
+ * Below this, a statement is our language rather than theirs.
+ *
+ * Chosen against the real extractions rather than by feel - see the dry run in the session
+ * log. A paraphrase of one thing somebody said scores well above it; a synthesis stitched
+ * across several turns scores far below.
+ */
+export const MIN_GROUNDED_RATIO = 0.5;
+
+/**
+ * How much of a statement's vocabulary the customer actually used.
+ *
+ * 1 means every content word appears in their own turns; 0 means none do. Returns 1 for a
+ * statement with no content words at all, because there is nothing to hold against them and
+ * refusing on emptiness would be a different check wearing this one's name.
+ */
+export function groundednessRatio(value: string, index: QuoteIndex): number {
+  const words = evidenceWords(value);
+  if (words.length === 0) return 1;
+
+  const haystack = new Set(evidenceWords(index.customer_text || index.all_text));
+  const hits = words.filter((w) => haystack.has(w)).length;
+
+  return hits / words.length;
+}
+
+/**
+ * Demote a statement that claims to be sourced but is our synthesis.
+ *
+ * §16 forbids merging assumptions into facts, and until now nothing enforced it for the
+ * commonest case: an item claiming `source_message` with NO quote. `source_message` does not
+ * require one, so the model could file its own summary as something the customer said and
+ * every check passed. On a real interview it filed ALL ELEVEN items that way - the trust
+ * panel told the prospect "0 things we inferred" while several statements were plainly the
+ * interviewer's synthesis.
+ *
+ * An item carrying a verified quote is left alone: `quoteViolation` has already proved those
+ * words are the customer's. Everything else is measured, and what fails is DEMOTED rather
+ * than rejected - the statement is still true and still worth showing, it just stops being
+ * presented as something they said.
+ */
+export function groundItem<T extends { value: string; provenance: Provenance; classification: string; source_quote?: string | null }>(
+  item: T,
+  index: QuoteIndex,
+): { item: T; demoted: boolean; ratio: number } {
+  if (item.provenance === 'ai_inferred') return { item, demoted: false, ratio: 1 };
+  if (item.source_quote) return { item, demoted: false, ratio: 1 };
+
+  const ratio = groundednessRatio(item.value, index);
+  if (ratio >= MIN_GROUNDED_RATIO) return { item, demoted: false, ratio };
+
+  return {
+    item: {
+      ...item,
+      provenance: 'ai_inferred' as Provenance,
+      // FACT cannot sit on `ai_inferred`; the demotion has to carry through the
+      // classification or it would produce an item the contract refuses.
+      classification: item.classification === 'FACT' ? 'ASSUMPTION' : item.classification,
+    },
+    demoted: true,
+    ratio,
+  };
+}
+
+/**
  * The extraction instructions. Deterministic and pure, so the prompt a given run used can
  * be reconstructed rather than guessed at, and so it can be asserted on in a test without
  * a model in the loop.
@@ -349,7 +452,16 @@ export async function extractUnderstanding(params: {
       return;
     }
 
-    items.push(checked.item);
+    // And when there is no quote, the claim to be sourced is measured instead of taken.
+    const grounded = groundItem(checked.item, quotes);
+    if (grounded.demoted) {
+      console.warn(
+        `[Understanding] demoted item ${index} (${checked.item.dimension}) to ai_inferred: ` +
+          `${(grounded.ratio * 100).toFixed(0)}% of its words appear in what the customer said`,
+      );
+    }
+
+    items.push(grounded.item);
   });
 
   // Document-level failures, which per-item salvage cannot rescue: no name for the project,

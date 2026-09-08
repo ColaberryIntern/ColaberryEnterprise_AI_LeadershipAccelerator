@@ -18,6 +18,9 @@ import {
   PROVENANCE_BY_SOURCE,
   buildQuoteIndex,
   quoteViolation,
+  groundednessRatio,
+  groundItem,
+  MIN_GROUNDED_RATIO,
 } from '../projectUnderstandingExtractor';
 
 const validPayload = {
@@ -330,5 +333,81 @@ describe('buildQuoteIndex', () => {
   it('still catches a fabricated quote when there are no speakers', () => {
     const index = buildQuoteIndex('A requirements document with no turns.', 'document');
     expect(quoteViolation('a budget of two million', index)).toContain('does not appear');
+  });
+});
+
+/**
+ * The hole this closes, stated precisely so the test does not overclaim.
+ *
+ * `source_message` does not require a `source_quote` — only `voice_transcript` and
+ * `source_document` do. So a model can file its own synthesis as something the customer
+ * said and every existing check passes: the provenance is allowed for the source, and
+ * `quoteViolation` never runs because there is no quote to run it against.
+ *
+ * Measured on the real extractions before this shipped: the model volunteered a genuine,
+ * verified quote for ALL of them, so this demotes nothing today. It is a guard against a
+ * run that does not, not a fix for a fire.
+ */
+describe('groundedness — a sourced claim with no quote is measured, not taken', () => {
+  const CUSTOMER = [
+    'agent: what happens now?',
+    'customer: Marta writes every loan on a paper sign-out sheet and I chase overdue tools on WhatsApp.',
+  ].join('\n');
+
+  const index = buildQuoteIndex(CUSTOMER, 'chat');
+
+  const item = (over: any) => ({
+    dimension: 'current_workflow',
+    value: 'Marta writes loans on a paper sign-out sheet and overdue tools are chased on WhatsApp.',
+    classification: 'FACT',
+    provenance: 'source_message',
+    ...over,
+  });
+
+  it('scores a close paraphrase of what they said as grounded', () => {
+    expect(groundednessRatio(item({}).value, index)).toBeGreaterThanOrEqual(MIN_GROUNDED_RATIO);
+    expect(groundItem(item({}), index).demoted).toBe(false);
+  });
+
+  it('scores our own vocabulary as ungrounded', () => {
+    const synthesis = 'Success is defined by real-time visibility and automated notification workflows.';
+    expect(groundednessRatio(synthesis, index)).toBeLessThan(MIN_GROUNDED_RATIO);
+  });
+
+  it('demotes an ungrounded claim rather than rejecting it', () => {
+    // The statement may well be true and worth showing. It just stops being presented as
+    // something they said.
+    const out = groundItem(item({ value: 'Success is defined by real-time visibility and automated notification workflows.' }), index);
+
+    expect(out.demoted).toBe(true);
+    expect(out.item.provenance).toBe('ai_inferred');
+    // FACT cannot sit on ai_inferred, so the demotion has to carry through the
+    // classification or it would produce an item findIntegrityViolations refuses.
+    expect(out.item.classification).toBe('ASSUMPTION');
+  });
+
+  it('leaves an item with a verified quote alone', () => {
+    // quoteViolation has already proved those words are the customer's; measuring the
+    // paraphrase again would demote honest items for rewording.
+    const out = groundItem(
+      item({ value: 'Anything at all, in our words.', source_quote: 'Marta writes every loan on a paper sign-out sheet' }),
+      index,
+    );
+    expect(out.demoted).toBe(false);
+  });
+
+  it('leaves an inference alone, because it is already labelled one', () => {
+    expect(groundItem(item({ provenance: 'ai_inferred', classification: 'ASSUMPTION' }), index).demoted).toBe(false);
+  });
+
+  it('stems, so a faithful paraphrase is not punished for plurals', () => {
+    // "messages"/"message" and "members"/"member" have to match or honest items demote.
+    expect(groundednessRatio('Marta messages members about overdue loans on WhatsApp', index)).toBeGreaterThanOrEqual(
+      MIN_GROUNDED_RATIO,
+    );
+  });
+
+  it('does not demote a statement with no content words to weigh', () => {
+    expect(groundItem(item({ value: 'It is what it is.' }), index).demoted).toBe(false);
   });
 });
