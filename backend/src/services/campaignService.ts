@@ -19,10 +19,22 @@ interface CreateCampaignParams {
   budget_total?: number;
   ai_system_prompt?: string;
   created_by: string;
+  /** Owning brand. Optional; validated by the caller, NULL means Unattributed. */
+  brand_id?: string | null;
+  /** Carried from the resolved brand so the two columns cannot disagree. */
+  tenant_id?: string | null;
+  sender_profile_id?: string | null;
 }
 
 export async function createCampaign(params: CreateCampaignParams) {
   const campaign = await Campaign.create({
+    // Written on create rather than left for a later backfill. Every campaign made
+    // before this shipped is either the August backfill's colaberry-enterprise or
+    // NULL, which is why brand filtering on the campaign graph could not separate
+    // anything: nothing had ever set the column.
+    brand_id: params.brand_id ?? null,
+    tenant_id: params.tenant_id ?? null,
+    sender_profile_id: params.sender_profile_id ?? null,
     name: params.name,
     description: params.description || '',
     type: params.type,
@@ -127,6 +139,10 @@ export async function updateCampaign(id: string, updates: Record<string, any>) {
     'settings', 'goals', 'gtm_notes', 'evolution_config',
     'channel', 'destination_path', 'objective', 'budget_cap',
     'cost_per_lead_target', 'expected_roi', 'status',
+    // Ownership. Reachable only through the controller, which resolves and
+    // validates the brand first — the allowlist is what stops a raw PATCH body
+    // writing an arbitrary brand_id straight to the column.
+    'brand_id', 'tenant_id', 'sender_profile_id',
   ];
   const filtered: Record<string, any> = {};
   for (const key of allowedFields) {
