@@ -849,21 +849,37 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[], totalAnonymousVi
     });
   }
 
-  // Visitor nodes — include both linked leads AND anonymous (unlinked) visitors
+  /**
+   * Site Visitors counts LEADS who visited — not everyone who visited.
+   *
+   * It previously counted `visitorLeadCount + anonymousOnlyCount`, mixing people
+   * who never became leads into a funnel whose every other node counts leads. In
+   * production that read "12 total leads" beside "Site Visitors 382", which is not
+   * a flow anyone can follow: 382 cannot come out of 12. It also took 96.7% of the
+   * Response column, flattening every other share on the chart to noise.
+   *
+   * Reported twice from the live page before it was fixed properly — the first pass
+   * only scoped the count to the time window, which took it from 2,180 to 382 and
+   * left the real problem, that this is a different population, untouched.
+   *
+   * The anonymous figure is NOT discarded. It stays in `visits_generated`, where it
+   * is the honest and genuinely useful fact it always was: how many people browsed
+   * without ever becoming a lead. The UI surfaces it as context rather than as
+   * funnel volume.
+   */
   const visitorEngagedCount = leadPaths.filter(l => l.has_visitor_record && l.first_touch.type !== null).length;
   const anonymousOnlyCount = Math.max(0, totalAnonymousVisitors - visitorLeadCount);
-  const totalSiteVisitors = visitorLeadCount + anonymousOnlyCount;
   nodes.push({
     id: 'visitor_site',
     type: 'visitor',
     label: 'Site Visitors',
-    count: totalSiteVisitors,
+    count: visitorLeadCount,
     metrics: {
-      active_users: totalSiteVisitors,
+      active_users: visitorLeadCount,
       engaged_count: visitorEngagedCount,
-      unengaged_count: totalSiteVisitors - visitorEngagedCount,
-      conversion_rate: totalLeads > 0 ? Math.round((totalSiteVisitors / totalLeads) * 100) : 0,
-      visits_generated: anonymousOnlyCount,  // anonymous (unlinked) visitors
+      unengaged_count: Math.max(0, visitorLeadCount - visitorEngagedCount),
+      conversion_rate: totalLeads > 0 ? Math.round((visitorLeadCount / totalLeads) * 100) : 0,
+      visits_generated: anonymousOnlyCount,  // browsed, never became a lead
     },
   });
 
