@@ -6,6 +6,14 @@ import { PageHeader, SectionCard, StatCard, StatusBadge } from '../../components
 // it is 504 lines of stage analysis, velocity, stall detection and an engagement
 // chart, and a second implementation would drift from it within a release.
 import JourneyTimeline from '../../components/admin/JourneyTimeline';
+import ActivityTimeline from '../../components/admin/ActivityTimeline';
+import AddNoteForm from '../../components/admin/AddNoteForm';
+import ScheduleAppointmentModal from '../../components/admin/ScheduleAppointmentModal';
+// Extracted from AdminLeadDetailPage so both pages share ONE write path. This
+// profile is meant to replace that page, and two implementations of a write
+// drift — with the unwatched one still writing.
+import LeadPipelineBar from '../../components/admin/lead/LeadPipelineBar';
+import LeadStatusNotes from '../../components/admin/lead/LeadStatusNotes';
 
 /**
  * The canonical 360° person profile.
@@ -144,7 +152,7 @@ const fmtDate = (v: string | null | undefined) =>
   (v ? new Date(v).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : null);
 const fmtDateTime = (v: string | null | undefined) => (v ? new Date(v).toLocaleString() : null);
 
-type TabKey = 'timeline' | 'journey' | 'acquisition' | 'engagement' | 'learning' | 'billing' | 'activity';
+type TabKey = 'timeline' | 'journey' | 'acquisition' | 'notes' | 'engagement' | 'learning' | 'billing' | 'activity';
 
 export default function PersonProfilePage() {
   const { email: rawEmail } = useParams<{ email: string }>();
@@ -161,6 +169,9 @@ export default function PersonProfilePage() {
   // requireSalesOrAdmin, so a scoped identity simply does not get the panels.
   const [visitor, setVisitor] = useState<VisitorData | null>(null);
   const [tempHistory, setTempHistory] = useState<TempEntry[] | null>(null);
+  const [showAppointment, setShowAppointment] = useState(false);
+  // Bumped after any write so the activity timeline reflects it immediately.
+  const [activityKey, setActivityKey] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -213,6 +224,8 @@ export default function PersonProfilePage() {
     if (profile.acquisition !== undefined) t.push({ key: 'acquisition', label: 'Acquisition' });
     // Journey needs a lead: the analysis is built from lead touchpoints.
     if (profile.acquisition?.leadId) t.push({ key: 'journey', label: 'Journey' });
+    // The Lead page's Activity tab, moved across whole.
+    if (profile.acquisition?.leadId) t.push({ key: 'notes', label: 'Notes & activity' });
     if (profile.appointments !== undefined || profile.automation !== undefined) {
       t.push({
         key: 'engagement',
@@ -264,6 +277,12 @@ export default function PersonProfilePage() {
             )}
             {profile && !profile.tracedToLead && (
               <span className="badge text-bg-warning">No acquisition record</span>
+            )}
+            {acq?.leadId && (
+              <button type="button" className="btn btn-sm btn-outline-primary"
+                onClick={() => setShowAppointment(true)}>
+                Schedule appointment
+              </button>
             )}
             {acq?.leadId && (
               <Link className="btn btn-sm btn-outline-secondary" to={`/admin/leads/${acq.leadId}`}>
@@ -333,6 +352,17 @@ export default function PersonProfilePage() {
               Your role does not include <strong>{profile.withheldPanels.join(', ')}</strong>.
               Those sections were not loaded.
             </div>
+          )}
+
+          {/* The lead page's pipeline bar — same component, one write path. */}
+          {acq?.leadId && (
+            <SectionCard className="mb-3">
+              <LeadPipelineBar
+                leadId={acq.leadId}
+                stage={acq.pipelineStage}
+                onChanged={() => setActivityKey((k) => k + 1)}
+              />
+            </SectionCard>
           )}
 
           <ul className="nav nav-tabs mb-4">
@@ -606,6 +636,32 @@ export default function PersonProfilePage() {
             </SectionCard>
           ))}
 
+          {/* ── Notes & activity ─────────────────────────────────────────── */}
+          {tab === 'notes' && acq?.leadId && (
+            <div className="row g-3">
+              <div className="col-lg-5">
+                <SectionCard title="Status & notes">
+                  <LeadStatusNotes
+                    leadId={acq.leadId}
+                    initialStatus={acq.status}
+                    initialNotes={acq.notes}
+                    onSaved={() => setActivityKey((k) => k + 1)}
+                  />
+                </SectionCard>
+                <div className="mt-3">
+                  <SectionCard title="Add activity">
+                    <AddNoteForm leadId={acq.leadId} onNoteAdded={() => setActivityKey((k) => k + 1)} />
+                  </SectionCard>
+                </div>
+              </div>
+              <div className="col-lg-7">
+                <SectionCard title="Activity timeline">
+                  <ActivityTimeline leadId={acq.leadId} refreshKey={activityKey} />
+                </SectionCard>
+              </div>
+            </div>
+          )}
+
           {/* ── Appointments & automation ────────────────────────────────── */}
           {tab === 'engagement' && (
             <div className="row g-3">
@@ -750,6 +806,15 @@ export default function PersonProfilePage() {
                 <p className="text-muted small mb-0">No site activity linked to this person.</p>
               )}
             </SectionCard>
+          )}
+          {acq?.leadId && (
+            <ScheduleAppointmentModal
+              leadId={acq.leadId}
+              leadName={profile.name || profile.email}
+              show={showAppointment}
+              onClose={() => setShowAppointment(false)}
+              onCreated={() => { setShowAppointment(false); setActivityKey((k) => k + 1); void load(); }}
+            />
           )}
         </>
       )}
