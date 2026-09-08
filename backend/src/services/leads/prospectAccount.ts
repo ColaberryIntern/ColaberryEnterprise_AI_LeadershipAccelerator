@@ -32,6 +32,8 @@
  * person stays in the nurture segments they belong in.
  */
 
+import { Op } from 'sequelize';
+import { Cohort, Enrollment } from '../../models';
 import { createFreeAccount } from '../freeSignupService';
 
 /**
@@ -46,9 +48,64 @@ export function wantsProspectAccount(sourceSlug: string): boolean {
   return PROSPECT_ACCOUNT_SOURCES.includes((sourceSlug || '').toLowerCase().trim());
 }
 
+/**
+ * The cohort a new enquiry lands in.
+ *
+ *     "All new accounts from AI Flotation get assigned to Explore - Prospects course."
+ *     (Ali, 2026-09-08)
+ *
+ * Resolved BY NAME, not by id. The id is a production UUID; hardcoding it would leave every
+ * dev box and preview stack silently assigning nobody, which is the kind of environment
+ * difference that only shows up when somebody is demonstrating.
+ *
+ * `PROSPECT_COHORT_ID` overrides it where an operator wants a specific one.
+ */
+export const PROSPECT_COHORT_NAME = 'Explorer — Prospects';
+
+/** Em dash, en dash and hyphen all read the same to a person typing the name. */
+const COHORT_NAME_VARIANTS = [
+  PROSPECT_COHORT_NAME,
+  PROSPECT_COHORT_NAME.replace('—', '–'),
+  PROSPECT_COHORT_NAME.replace('—', '-'),
+];
+
 export interface ProspectAccountResult {
   created: boolean;
+  cohort_assigned?: boolean;
   reason?: 'source_not_eligible' | 'no_email' | 'failed';
+}
+
+/**
+ * Put a brand-new prospect in the prospects cohort, and nobody else.
+ *
+ * Two guards, both load-bearing:
+ *
+ *   - Only when the enrolment has NO cohort. `createFreeAccount` is idempotent by email and
+ *     returns an existing enrolment, so without this a paying student in a real cohort who
+ *     later sends an enquiry would be quietly moved out of the programme they are paying for.
+ *   - Only guest tier, for the same reason from the other direction.
+ *
+ * Best-effort. A missing cohort is logged and the account still stands: an account in no
+ * cohort is worth far more than no account.
+ */
+async function assignToProspectCohort(enrollmentId: string): Promise<boolean> {
+  const enrollment: any = await Enrollment.findByPk(enrollmentId);
+  if (!enrollment) return false;
+  if (enrollment.cohort_id) return false;
+  if (enrollment.tier !== 'guest') return false;
+
+  const configured = (process.env.PROSPECT_COHORT_ID || '').trim();
+  const cohort: any = configured
+    ? await Cohort.findByPk(configured)
+    : await Cohort.findOne({ where: { name: { [Op.in]: COHORT_NAME_VARIANTS } } });
+
+  if (!cohort) {
+    console.warn(`[prospectAccount] no cohort named "${PROSPECT_COHORT_NAME}" — the account stands without one`);
+    return false;
+  }
+
+  await enrollment.update({ cohort_id: cohort.id });
+  return true;
 }
 
 /**
@@ -74,7 +131,19 @@ export async function ensureProspectAccount(params: {
       full_name: (params.name || '').trim() || email.split('@')[0],
       email,
     });
-    return { created: result.created };
+
+    // Separate try: a cohort problem must not lose the account that already exists.
+    let cohort_assigned = false;
+    try {
+      cohort_assigned = await assignToProspectCohort(result.enrollment.id);
+    } catch (error) {
+      console.error('[prospectAccount] could not assign the prospects cohort', {
+        error_class: error instanceof Error ? error.constructor.name : 'Unknown',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    return { created: result.created, cohort_assigned };
   } catch (error) {
     console.error('[prospectAccount] could not create the free account', {
       error_class: error instanceof Error ? error.constructor.name : 'Unknown',
