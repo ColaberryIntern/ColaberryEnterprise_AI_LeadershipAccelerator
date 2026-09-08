@@ -156,6 +156,15 @@
     });
   }
 
-  var forms = document.querySelectorAll('form[data-form]');
+  /*
+    `[data-signup]` forms are skipped here and driven by `signup.js` instead.
+
+    They still carry `data-form`, deliberately: that attribute is what
+    `appSourcesAreSeeded.test.ts` reads to prove a form's entry point is seeded,
+    and dropping it to keep this file's selector tidy would take the free-account
+    form out from under the guard entirely. Binding both scripts to it would post
+    the lead twice.
+  */
+  var forms = document.querySelectorAll('form[data-form]:not([data-signup])');
   for (var i = 0; i < forms.length; i += 1) bind(forms[i]);
 })();
