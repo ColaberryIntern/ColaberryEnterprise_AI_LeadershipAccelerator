@@ -273,6 +273,14 @@ const AUTHORED: Record<string, Entry> = {
     emptyBehaviour: 'band hides entirely — no empty frame',
     test: 'caseStudyPublicSections.test.ts',
   }),
+  'CaseStudyArchitectureSection.diagramImageUrl': D({
+    disposition: 'human_approved', aiMayInfer: false,
+    authoring: 'admin narrative panel; rendered from diagramSource by scripts/renderCaseStudyDiagram.js',
+    detailHome: 'architecture band — the picture Training and AI Flotation show instead of a live chart',
+    publicBehaviour: 'through safeHttpUrl, and carried ONLY beside a diagramSource',
+    emptyBehaviour: 'no picture — Enterprise still draws the live chart from the source',
+    test: 'caseStudyPhotoAndDiagram.test.ts',
+  }),
   'CaseStudyArchitectureSection.diagram': D({
     disposition: 'verified_evidence', aiMayInfer: false,
     authoring: 'repo analyzer nodes/edges',

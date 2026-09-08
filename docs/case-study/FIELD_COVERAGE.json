@@ -127,6 +127,20 @@
       "disposition": "verified_evidence",
       "rule": "authored"
     },
+    "CaseStudyArchitectureSection.diagramImageUrl": {
+      "authoring": "admin narrative panel; rendered from diagramSource by scripts/renderCaseStudyDiagram.js",
+      "sourcePriority": "human override > repo sync",
+      "aiMayInfer": false,
+      "approvalRequired": true,
+      "indexHome": "—",
+      "detailHome": "architecture band — the picture Training and AI Flotation show instead of a live chart",
+      "publicBehaviour": "through safeHttpUrl, and carried ONLY beside a diagramSource",
+      "emptyBehaviour": "no picture — Enterprise still draws the live chart from the source",
+      "privacy": "public",
+      "test": "caseStudyPhotoAndDiagram.test.ts",
+      "disposition": "human_approved",
+      "rule": "authored"
+    },
     "CaseStudyArchitectureSection.diagramSource": {
       "authoring": "admin narrative panel; mermaid",
       "sourcePriority": "human override > repo sync",
@@ -1486,6 +1500,20 @@
       "rule": "public-projection-mirror"
     },
     "PublicCaseStudyArchitecture.diagram": {
+      "authoring": "not authored — computed by caseStudyPublicProjection.ts",
+      "sourcePriority": "projection of the approved snapshot",
+      "aiMayInfer": false,
+      "approvalRequired": false,
+      "indexHome": "—",
+      "detailHome": "nested in detail",
+      "publicBehaviour": "always present",
+      "emptyBehaviour": "empty array or empty string",
+      "privacy": "public",
+      "test": "caseStudyPublicProjection.test.ts",
+      "disposition": "deterministic",
+      "rule": "public-projection-mirror"
+    },
+    "PublicCaseStudyArchitecture.diagramImageUrl": {
       "authoring": "not authored — computed by caseStudyPublicProjection.ts",
       "sourcePriority": "projection of the approved snapshot",
       "aiMayInfer": false,
