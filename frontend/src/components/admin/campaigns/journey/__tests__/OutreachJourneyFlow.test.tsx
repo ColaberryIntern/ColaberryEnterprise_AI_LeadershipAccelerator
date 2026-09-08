@@ -13,22 +13,11 @@ import * as api from '../../../../../services/intelligenceApi';
 jest.mock('../../../../../services/intelligenceApi');
 
 /**
- * Recharts measures its container and jsdom reports every element as 0×0, so a
- * ResponsiveContainer renders nothing at all. Handing it a fixed size lets the REAL
- * Sankey lay out; stubbing the chart instead would leave the component that
- * actually draws the bands untested.
+ * jsdom reports every element as 0×0 and has no ResizeObserver, so the chart falls
+ * back to its FALLBACK_WIDTH and the REAL recharts Sankey lays out against that.
+ * Nothing about recharts is stubbed — the component that actually draws the bands
+ * is the one under test.
  */
-jest.mock('recharts', () => {
-  // Required inside the factory: jest hoists mock factories above the imports, so
-  // a module-scope React binding does not exist yet when this runs.
-  const ReactInFactory = require('react');
-  const actual = jest.requireActual('recharts');
-  return {
-    ...actual,
-    ResponsiveContainer: ({ children }: any) =>
-      ReactInFactory.cloneElement(children, { width: 900, height: 520 }),
-  };
-});
 
 const mockedApi = api as jest.Mocked<typeof api>;
 

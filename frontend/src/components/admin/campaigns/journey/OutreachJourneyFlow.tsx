@@ -271,7 +271,18 @@ export default function OutreachJourneyFlow({ height = 520 }: Props): React.Reac
 
       {!loading && !error && hasChart && (
         <div className="row g-3">
-          <div className="col-12 col-xl-8">
+          {/*
+            The diagram gets the FULL card width, and the intelligence rail sits
+            beneath it rather than beside it.
+
+            A seven-column Sankey needs roughly 1,180px before its labels stop
+            colliding. Sharing the row with a 4-column rail left it about 880px, so
+            the chart met its own minimum by scrolling — and what scrolled out of
+            view first was the Outcome column, the answer to "what converted". A
+            rail that pushes the conclusion off screen is the wrong side of that
+            trade.
+          */}
+          <div className="col-12">
             <div className="d-flex gap-3 flex-wrap mb-2 small text-muted align-items-center">
               {STAGE_ORDER.map((s, i) => (
                 <React.Fragment key={s.key}>
@@ -322,11 +333,11 @@ export default function OutreachJourneyFlow({ height = 520 }: Props): React.Reac
             )}
           </div>
 
-          <div className="col-12 col-xl-4">
+          <div className="col-12">
             {selection && (selectedNode || selectedLink) ? (
               <div
                 className="border rounded"
-                style={{ height: height + 40, background: 'var(--surface-raised, #fff)' }}
+                style={{ maxHeight: 520, background: 'var(--surface-raised, #fff)' }}
               >
                 {selectedNode ? (
                   <CampaignNodeDetailsPanel

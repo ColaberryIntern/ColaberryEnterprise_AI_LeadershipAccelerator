@@ -7,8 +7,8 @@
  * The alternative, extending `react-force-graph-2d`, is the thing being replaced.
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
-import { Layer, Rectangle, ResponsiveContainer, Sankey } from 'recharts';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Layer, Rectangle, Sankey } from 'recharts';
 import type { SankeyViewModel, SankeyViewNode } from './campaignSankeyAdapter';
 import { deadEndColor, stageColor } from './journeyPalette';
 
@@ -37,6 +37,76 @@ interface TipState {
 
 const NODE_WIDTH = 13;
 
+/**
+ * Width used before the container has been measured, and in jsdom, which has no
+ * ResizeObserver. Chosen to match the column this chart sits in at desktop width
+ * so the first paint is not visibly re-laid-out a frame later.
+ */
+const FALLBACK_WIDTH = 900;
+
+/**
+ * Vertical room per node.
+ *
+ * The chart is NOT a fixed height. With 23 nodes in a 520px box the outcome column
+ * collapses to sub-pixel slivers and its labels land on top of the campaign labels
+ * above them — which is the exact crowding this whole screen exists to fix, moved
+ * from the horizontal axis to the vertical one. Height therefore grows with the
+ * node count and the page scrolls.
+ */
+const MIN_PX_PER_NODE = 34;
+
+/** Right-hand fraction of the plot whose labels must render inward. */
+const LABEL_FLIP_AT = 0.82;
+
+/**
+ * Floor on the plot's own width, independent of the container's.
+ *
+ * Seven columns of labelled nodes do not fit in a sidebar-flanked column. Squeezed
+ * to ~880px the labels collide whichever way they point: anchored outward they run
+ * into the next column, flipped inward they run into the previous one. Narrowing
+ * the labels instead turns "Executive AI Briefing Q3" into "Exec…", which is not a
+ * readable chart either.
+ *
+ * So the plot keeps the width it needs and the WRAPPER scrolls horizontally when
+ * the container is smaller — the standard treatment for wide diagrams, and the one
+ * that keeps the page itself from scrolling sideways.
+ */
+const MIN_CHART_WIDTH = 1180;
+
+/** Minimum clickable thickness for a ribbon, independent of its drawn width. */
+const MIN_HIT_WIDTH = 14;
+
+/**
+ * Measure the available width.
+ *
+ * Replaces recharts' ResponsiveContainer because the label-side decision needs the
+ * plot width as a NUMBER: without it, "is this node in the last column" has to be
+ * guessed from the stage, and a campaign label then renders rightward straight into
+ * the outcome column. Measuring also lets the height scale with the node count,
+ * which ResponsiveContainer cannot do since it derives height from its parent.
+ */
+function useMeasuredWidth(): [React.RefObject<HTMLDivElement>, number] {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(FALLBACK_WIDTH);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const read = () => {
+      const w = el.clientWidth;
+      if (w > 0) setWidth(w);
+    };
+    read();
+    // jsdom and older browsers have no ResizeObserver; the fallback width stands.
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return [ref, width];
+}
+
 export default function JourneySankeyChart({
   view,
   isDark,
@@ -46,6 +116,12 @@ export default function JourneySankeyChart({
   height,
 }: Props): React.ReactElement {
   const [tip, setTip] = useState<TipState | null>(null);
+  const [wrapRef, width] = useMeasuredWidth();
+
+  // Grows with the node count so the outcome column keeps a readable band.
+  const chartHeight = Math.max(height, view.nodes.length * MIN_PX_PER_NODE);
+  const chartWidth = Math.max(width, MIN_CHART_WIDTH);
+  const flipX = chartWidth * LABEL_FLIP_AT;
 
   /**
    * Nodes that receive leads but pass none on. Derived, not listed: a layer added
@@ -107,9 +183,15 @@ export default function JourneySankeyChart({
 
       const dimmed = emphasised ? !emphasised.has(node.id) : false;
       const isSelected = selection?.kind === 'node' && selection.nodeId === node.id;
-      // Outcome labels sit to the LEFT of their node, because they are the last
-      // column and a right-hand label would be clipped by the plot edge.
-      const labelLeft = node.stage === 'outcome';
+      /**
+       * Labels flip inward on the right-hand side of the plot, decided by POSITION
+       * rather than by stage. Keying it to `stage === 'outcome'` was wrong: campaign
+       * nodes also sit near the right edge, so their labels rendered outward and
+       * landed on top of the outcome column's labels. Position is what actually
+       * determines whether there is room, and it stays correct when a future layer
+       * changes which stage happens to be last.
+       */
+      const labelLeft = x > flipX;
       const fill = colorForNode(node);
 
       return (
@@ -174,7 +256,12 @@ export default function JourneySankeyChart({
         </Layer>
       );
     },
-    [view.nodes, emphasised, selection, colorForNode, onSelect],
+    // flipX MUST be here. Without it the renderer keeps the closure it was built
+    // with at the fallback width, so after the container is measured recharts
+    // re-lays the chart out at the real width while the label-side decision still
+    // uses the old one — and every right-hand label flips inward over the column
+    // beside it. The chart looked mis-designed; it was one stale dependency.
+    [view.nodes, emphasised, selection, colorForNode, onSelect, flipX],
   );
 
   const renderLink = useCallback(
@@ -199,49 +286,63 @@ export default function JourneySankeyChart({
 
       const pct = from && from.value > 0 ? (link.value / from.value) * 100 : null;
 
+      const d = `M${sourceX},${sourceY}C${sourceControlX},${sourceY} ${targetControlX},${targetY} ${targetX},${targetY}`;
+      const label = `${link.fromName} to ${link.toName}: ${link.value.toLocaleString()} leads${
+        pct === null ? '' : `, ${pct.toFixed(1)} percent of ${link.fromName}`
+      }. ${link.aggregate ? 'Grouped path.' : 'Activate to list these leads.'}`;
+      const select = () => onSelect({ kind: 'link', from: link.fromId, to: link.toId });
+      const hover = (e: React.MouseEvent) =>
+        showTip(e, `${link.fromName} → ${link.toName}`, [
+          `${link.value.toLocaleString()} leads`,
+          ...(pct === null ? [] : [`${pct.toFixed(1)}% of ${link.fromName}`]),
+          ...(link.medianHours === null
+            ? []
+            : [`Median ${formatHours(link.medianHours)} to make this move`]),
+          link.aggregate ? 'Grouped path — expand to inspect' : 'Click to list these leads',
+        ]);
+
       return (
-        <path
-          key={`link-${index}`}
-          // Stable hook. Recharts draws NODES as <path class="recharts-rectangle">
-          // too, so "every path with role=button" selects nodes as well as ribbons —
-          // which is how a selector meant for 6 bands quietly matched 13 elements.
-          className="journey-ribbon"
-          d={`M${sourceX},${sourceY}C${sourceControlX},${sourceY} ${targetControlX},${targetY} ${targetX},${targetY}`}
-          stroke={stroke}
-          strokeWidth={linkWidth}
-          // A minimum hit area is applied by the invisible companion path below,
-          // never by inflating strokeWidth — widening the ribbon itself would make
-          // a 4-lead path look as heavy as a 400-lead one.
-          strokeOpacity={selected ? 0.85 : dimmed ? 0.08 : 0.42}
-          fill="none"
-          style={{
-            cursor: 'pointer',
-            transition: reducedMotion ? 'none' : 'stroke-opacity 140ms ease',
-          }}
-          role="button"
-          tabIndex={0}
-          aria-label={`${link.fromName} to ${link.toName}: ${link.value.toLocaleString()} leads${
-            pct === null ? '' : `, ${pct.toFixed(1)} percent of ${link.fromName}`
-          }. ${link.aggregate ? 'Grouped path.' : 'Activate to list these leads.'}`}
-          onClick={() => onSelect({ kind: 'link', from: link.fromId, to: link.toId })}
-          onKeyDown={(e: React.KeyboardEvent) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              onSelect({ kind: 'link', from: link.fromId, to: link.toId });
-            }
-          }}
-          onMouseMove={(e: React.MouseEvent) =>
-            showTip(e, `${link.fromName} → ${link.toName}`, [
-              `${link.value.toLocaleString()} leads`,
-              ...(pct === null ? [] : [`${pct.toFixed(1)}% of ${link.fromName}`]),
-              ...(link.medianHours === null
-                ? []
-                : [`Median ${formatHours(link.medianHours)} to make this move`]),
-              link.aggregate ? 'Grouped path — expand to inspect' : 'Click to list these leads',
-            ])
-          }
-          onMouseLeave={() => setTip(null)}
-        />
+        <Layer key={`link-${index}`}>
+          {/*
+            INVISIBLE HIT AREA. 59 paid leads out of 44,619 movements is a band under
+            one pixel thick — honest as a picture, impossible as a target. This path
+            carries the interaction at a usable thickness while the visible ribbon
+            below keeps its true width, so a small outcome stays clickable WITHOUT
+            being drawn heavier than it is. Widening the visible stroke instead would
+            make a 59-lead path look like a 400-lead one, which is the one thing a
+            Sankey must never do.
+          */}
+          <path
+            className="journey-ribbon"
+            d={d}
+            stroke="transparent"
+            strokeWidth={Math.max(MIN_HIT_WIDTH, linkWidth)}
+            fill="none"
+            style={{ cursor: 'pointer' }}
+            role="button"
+            tabIndex={0}
+            aria-label={label}
+            onClick={select}
+            onKeyDown={(e: React.KeyboardEvent) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                select();
+              }
+            }}
+            onMouseMove={hover}
+            onMouseLeave={() => setTip(null)}
+          />
+          <path
+            className="journey-ribbon-fill"
+            d={d}
+            stroke={stroke}
+            strokeWidth={linkWidth}
+            strokeOpacity={selected ? 0.85 : dimmed ? 0.08 : 0.42}
+            fill="none"
+            pointerEvents="none"
+            style={{ transition: reducedMotion ? 'none' : 'stroke-opacity 140ms ease' }}
+          />
+        </Layer>
       );
     },
     [view, emphasised, linkIsSelected, colorForNode, isDark, onSelect, reducedMotion],
@@ -259,17 +360,23 @@ export default function JourneySankeyChart({
 
   return (
     <>
-      <div style={{ width: '100%', height }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <Sankey
-            data={chartData}
-            nodePadding={22}
-            nodeWidth={NODE_WIDTH}
-            margin={{ top: 8, right: 132, bottom: 8, left: 108 }}
-            node={renderNode}
-            link={renderLink}
-          />
-        </ResponsiveContainer>
+      <div
+        ref={wrapRef}
+        // The diagram scrolls inside its own box; the page never scrolls sideways.
+        style={{ width: '100%', overflowX: 'auto' }}
+      >
+        <Sankey
+          width={chartWidth}
+          height={chartHeight}
+          data={chartData}
+          nodePadding={22}
+          nodeWidth={NODE_WIDTH}
+          // Symmetric margins: labels flip inward past LABEL_FLIP_AT, so the right
+          // side no longer needs the extra gutter an outward label required.
+          margin={{ top: 8, right: 150, bottom: 8, left: 16 }}
+          node={renderNode}
+          link={renderLink}
+        />
       </div>
       {tip && (
         <div

@@ -43,13 +43,17 @@ export default function JourneyInsightRail({
         </div>
       )}
 
+      {/* Cards sit side by side beneath the diagram and stack on narrow screens.
+          They read as a row of findings rather than a column of alerts, which is
+          what they are: three different questions about the same picture. */}
+      <div className="row g-2">
       {!loading &&
         insights.map((insight) => {
           const tone = TONE[insight.kind];
           return (
+            <div className="col-12 col-md-6 col-xl-4" key={`${insight.kind}-${insight.title}`}>
             <div
-              key={`${insight.kind}-${insight.title}`}
-              className="border rounded p-3 mb-2"
+              className="border rounded p-3 h-100"
               style={{
                 background: 'var(--surface-raised, #fff)',
                 borderLeft: `3px solid ${insight.sufficient ? tone.color : '#8C8C8C'}`,
@@ -88,8 +92,10 @@ export default function JourneyInsightRail({
                 </button>
               )}
             </div>
+            </div>
           );
         })}
+      </div>
     </div>
   );
 }
