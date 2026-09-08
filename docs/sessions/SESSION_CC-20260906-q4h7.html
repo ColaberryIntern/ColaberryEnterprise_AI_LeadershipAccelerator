@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Tuesday, September 8, 2026 at 11:17 AM</div>
-    <div><span class="sid">CC-20260906-q4h7</span><span class="count">10 changes</span></div>
+    <div class="meta">Generated Tuesday, September 8, 2026 at 2:20 PM</div>
+    <div><span class="sid">CC-20260906-q4h7</span><span class="count">11 changes</span></div>
   </header>
   <main>
     
@@ -207,6 +207,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">41 tests across 4 suites - 17 new on the prompt, 5 new on the guard, plus the existing `synthflowAgentResolution` and `requestCallbackAction` suites unchanged and green. `tsc --noEmit` clean. The guard suite spies on `fetch` and throws if anything reaches the network, so a test that gets past the guard fails loudly rather than dialling.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">**It had never fired, which is why it survived.** Nothing but AI Flotation was routed to voice, so the gap was invisible - a trap armed for whoever came second, and the brand that came second is a nonprofit phoning people who are asking it for help. **Checked the capability before building on it**, the same way the free-account move checked email: voice is configured in prod (`SYNTHFLOW_API_KEY`, `ENABLE_VOICE_CALLS`, four agent ids) and works, though the lifetime record is 1,148 failed against 234 sent. Those failures are historical - April 2026 alone is 537 - and September is 3 sent, 1 failed. **Separate finding, not fixed here:** `error_message` is NULL on all 1,148 voice failures, so no failure reason has ever been recorded. CLAUDE.md&#39;s observability rules require an `error_class` on a caught failure, and voice does not have one. **The CPN prompt is not the Flotation prompt with nouns swapped.** It repeats the written interview&#39;s three refusals and adds two that only exist on a phone: it says it is an AI before anything else, and it takes no for an answer after a single offer. A voice agent that pushes past a brush-off is harassment, and these are the people least able to afford it.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">11</span>
+          <h2>**Activate CPN voice, and stop it answering in Colaberry&#39;s voice**</h2>
+          <span class="badge">2026-09-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali: &quot;yes activate CPN voice.&quot; The voice door now sits on `/scholarships/` beside the written interview at equal weight, with consent that names the AI, the recording and the call. `scholarship_interview_call` is seeded with phone AND email required, because `request_callback` refuses without either and an optional phone would produce a form that submits happily and never rings. New `seedRoutingRules.ts` makes the rule shippable rather than an admin-API step.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">36 tests across 4 suites; `tsc --noEmit` 0 errors, 0 error lines, unpiped; site harness green across 8 routes x 4 viewports; boundary validator OK, 16 files.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Activation surfaced a second, sharper version of the guard defect, and this one would have fired on the first call.** `resolveAgentId` routes by brand, and `cpn` fell through to `env.synthflowCallbackAgentId` - Colaberry&#39;s dedicated callback agent, which carries its own saved training-site script rather than a `{prompt}` shell. A scholarship applicant would have been answered by the bootcamp&#39;s callback line: a person asking a charity for help, spoken to as a sales lead, in a voice that is not ours. CPN now has its own slot with NO fallback, so unset means silence rather than substitution, and a test pins that it skips with `no_agent_id` instead of borrowing. **One manual step removed, one that cannot be.** Routing rules were admin-API-only, so `seedRoutingRules.ts` now ships the CPN rule - narrow by design: seeded by name, never deletes or deactivates, and operator-tuned rules including AI Flotation&#39;s are untouched, because a seeder asserting the full set would silently undo somebody&#39;s 3am tuning. What remains external is `SYNTHFLOW_CPN_AGENT_ID`: somebody must create a shell agent in the Synthflow dashboard and set it on prod. Until then every CPN call skips with `no_agent_id` and none is placed. **The voice door is beside the written interview, not beneath it** - the decision was that voice is an equal path, so it is not a smaller, greyer box under the real one.</span></div>
           
         </div>
       </article>

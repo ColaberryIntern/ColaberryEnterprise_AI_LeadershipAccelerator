@@ -177,6 +177,7 @@ describe('public app forms post to sources that actually exist', () => {
       'community_partner_interest',
       'free_training_interest',
       'scholarship_interest',
+      'scholarship_interview_call',
     ]);
   });
 });
