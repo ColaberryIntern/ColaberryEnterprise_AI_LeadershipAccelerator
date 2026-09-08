@@ -7,6 +7,14 @@ import { Lead, Campaign, CampaignLead, CommunicationLog, Enrollment, StrategyCal
 import Visitor from '../../models/Visitor';
 import AlumniReferralProfile from '../../models/AlumniReferralProfile';
 import { Op, fn, col, literal } from 'sequelize';
+import {
+  loadCampaignBrandMap,
+  summarizeBrands,
+  UNATTRIBUTED,
+  UNATTRIBUTED_BRAND_ID,
+  type BrandSummary,
+  type CampaignBrandMap,
+} from './campaignBrandAttribution';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -36,6 +44,13 @@ export interface CampaignGraphNode {
     velocity?: NodeVelocityMetrics;
   };
   source_breakdown?: Record<string, number>;
+  /**
+   * Owning brand. Populated on `campaign` nodes only — every other layer is
+   * lead-side and has no brand of its own, and inventing one for them would
+   * imply an attribution the data does not contain.
+   */
+  brand_id?: string;
+  brand_name?: string;
 }
 
 export interface EdgeVelocityMetrics {
@@ -89,6 +104,15 @@ export interface CampaignGraphData {
   validation: CampaignGraphValidation;
   time_window?: string;
   timeline_buckets?: TimelineBucket[];
+  /**
+   * Every brand present in the UNFILTERED graph for this time window, so the
+   * brand selector keeps all of its options after a brand is chosen. Deriving
+   * the options from the filtered response instead would collapse the dropdown
+   * to the single selected brand and strand the user there.
+   */
+  brands?: BrandSummary[];
+  /** Echo of the applied brand filter, so the UI can never mislabel its own state. */
+  brand_filter?: string | null;
 }
 
 export interface LeadPathRecord {
@@ -868,14 +892,24 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[], totalAnonymousVi
   }
 
   // Campaign nodes
+  //
+  // Brand is resolved once for the whole set rather than per node: one round of
+  // three queries instead of 3N, and every node in a render shares a single
+  // consistent answer.
+  const brandLoad = await loadCampaignBrandMap(Array.from(campaignLeadSets.keys()));
+  const campaignBrands = brandLoad.map;
+
   for (const [campaignId, leadSet] of campaignLeadSets) {
     const name = campaignNames.get(campaignId) || 'Unknown';
     const metrics = campaignMetrics.get(campaignId) || { activeCount: 0, messagesSent: 0 };
+    const brand = campaignBrands.get(campaignId) || UNATTRIBUTED;
     const count = leadSet.size;
     nodes.push({
       id: `campaign_${campaignId}`,
       type: 'campaign',
       label: shortenCampaignName(name),
+      brand_id: brand.brand_id,
+      brand_name: brand.brand_name,
       count,
       metrics: {
         active_users: metrics.activeCount,
@@ -1168,7 +1202,31 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[], totalAnonymousVi
     }
   }
 
-  return { nodes, edges: validEdges, validation };
+  // Brand attribution failures are data-quality facts, so they ride the same
+  // warnings channel the rest of the validation uses rather than a private one.
+  for (const w of brandLoad.warnings) validation.warnings.push(w);
+
+  const brands = summarizeBrands(
+    nodes.filter((n) => n.type === 'campaign').map((n) => ({ id: n.id, count: n.count })),
+    campaignBrands,
+  );
+
+  // Say it plainly when the brand dimension cannot separate anything. A selector
+  // offering one option looks broken; a selector offering one option next to a
+  // sentence explaining why does not.
+  const attributedBrands = brands.filter((b) => b.attributed);
+  if (brands.length > 0 && attributedBrands.length === 0) {
+    validation.warnings.push(
+      'No campaign carries a brand. Brand filtering cannot separate these campaigns.',
+    );
+  } else if (attributedBrands.length === 1 && brands.length === 1) {
+    validation.warnings.push(
+      `All ${brands[0].campaign_count} campaigns belong to ${brands[0].brand_name}. ` +
+        'Brand filtering will not narrow this view until campaigns exist under another brand.',
+    );
+  }
+
+  return { nodes, edges: validEdges, validation, brands };
 }
 
 // ─── Node membership test (shared by drilldown + slice) ─────────────────────
@@ -1239,7 +1297,58 @@ export function buildTimelineBuckets(leadPaths: LeadPathRecord[], bucketCount = 
 
 // ─── Main entry point ───────────────────────────────────────────────────────
 
-export async function getCampaignGraphData(timeWindow?: string): Promise<CampaignGraphData> {
+/**
+ * Restrict lead paths to those touching at least one campaign of `brandId`.
+ *
+ * ANY-of, not all-of. This is the one place brand filtering could not reuse
+ * `getSlicedGraphData`: that function chains its node filters with AND, which is
+ * right for progressive drill-down ("engaged AND enrolled") and wrong for a brand,
+ * where a lead qualifies by touching ANY one of the brand's campaigns. Passing a
+ * brand's campaign ids to the slice endpoint would return only the leads enrolled
+ * in every campaign that brand runs, which is close to always zero.
+ */
+function filterPathsByBrand(
+  paths: LeadPathRecord[],
+  brandId: string,
+  brandMap: CampaignBrandMap,
+): LeadPathRecord[] {
+  return paths.filter((lead) =>
+    lead.campaign_enrollments.some((e) => {
+      const brand = brandMap.get(e.campaign_id) || UNATTRIBUTED;
+      return brand.brand_id === brandId;
+    }),
+  );
+}
+
+export async function getCampaignGraphData(
+  timeWindow?: string,
+  brandId?: string | null,
+): Promise<CampaignGraphData> {
+  // A brand-filtered graph is derived from the unfiltered one for this window and
+  // deliberately does NOT overwrite the cache. `graphCache.leadPaths` is the
+  // population that node-users, edge-users and slice all measure themselves
+  // against; letting a filtered view replace it would silently rescope every
+  // drill-down and every "of N leads" denominator on the page.
+  if (brandId) {
+    const base = await getCampaignGraphData(timeWindow);
+    const allPaths = graphCache?.leadPaths ?? [];
+    const campaignIds = Array.from(
+      new Set(allPaths.flatMap((p) => p.campaign_enrollments.map((e) => e.campaign_id))),
+    );
+    const { map } = await loadCampaignBrandMap(campaignIds);
+    const cohort = filterPathsByBrand(allPaths, brandId, map);
+
+    // An empty cohort is a legitimate answer, not an error: it means this brand
+    // ran campaigns that no lead in this window ever entered. Returning an empty
+    // graph lets the UI say that; throwing would render it as a failure.
+    const data = await buildGraphFromPaths(cohort);
+    data.time_window = timeWindow || 'all';
+    // Options come from the unfiltered graph so the selector keeps every brand.
+    data.brands = base.brands;
+    data.brand_filter = brandId;
+    return data;
+  }
+
   const cacheKey = timeWindow || 'all';
   if (graphCache && graphCache.cacheKey === cacheKey && Date.now() - graphCache.ts < CACHE_TTL) {
     return graphCache.data;
@@ -1259,6 +1368,7 @@ export async function getCampaignGraphData(timeWindow?: string): Promise<Campaig
 
   const data = await buildGraphFromPaths(leadPaths, totalAnonymousVisitors);
   data.time_window = cacheKey;
+  data.brand_filter = null;
 
   graphCache = { data, leadPaths, ts: Date.now(), cacheKey };
   return data;
