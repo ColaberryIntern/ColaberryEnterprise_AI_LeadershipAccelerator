@@ -41,9 +41,17 @@ export interface ParsedPrompt {
 export interface ParsedBlock {
   /** The `data-block` name: project | artifact | trust | deliverables | reflection | rubric */
   name: string;
+  /**
+   * The block's `<h4>` text, for a caller that wants the heading on its own.
+   *
+   * NOTE: this is EXTRACTED from `html`, not removed from it. Rendering both
+   * `heading` and `html` prints the heading twice — which is exactly what
+   * shipped on the Project and Artifact blocks and was caught in production on
+   * 2026-09-08. Render one or the other, never both.
+   */
   heading: string | null;
   items: string[];
-  /** Inner HTML, for blocks (rubric) whose shape is richer than a list. */
+  /** The block's full inner HTML, INCLUDING its `<h4>` heading. */
   html: string;
 }
 
