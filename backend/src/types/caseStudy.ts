@@ -544,6 +544,44 @@ export interface CaseStudySnapshotContent {
   readonly artifacts?: readonly CaseStudyArtifactRef[];
   readonly repositories?: readonly CaseStudyRepositoryRef[];
   readonly taxonomy: CaseStudyTaxonomy;
+  readonly walkthroughVideo?: CaseStudyWalkthroughVideo;
+}
+
+/**
+ * A narrated walkthrough of the delivered system, shown at the TOP of the record.
+ *
+ * IT IS A DEMONSTRATION, NOT EVIDENCE, and the distinction is the whole reason this is its
+ * own field rather than an artifact. `demo` already exists in `CaseStudyArtifactType`, but
+ * putting a video there would have put it in the artifacts carousel, at a screenshot's
+ * aspect ratio, competing for the hero image through `HERO_IMAGE_PRIORITY`. A video that
+ * can win the cover is a video that can stand in for a screenshot of the running system,
+ * which is exactly the substitution the publish rules exist to prevent. Here it cannot:
+ * nothing reads this field when resolving the hero, and it carries no verification class
+ * because it asserts nothing on its own — every claim it narrates is already a metric, a
+ * roadmap line or an evidence row on the same record, and is checked there.
+ *
+ * SELF-HOSTED, NOT EMBEDDED. The platform serves the file, so no third party is handed a
+ * record of who watched a client's delivery. That choice has a CSP consequence worth
+ * knowing: `media-src` must allow the platform origin on every surface that renders this.
+ * Enterprise already sends `media-src 'self' data: blob: https:`; the training site sent no
+ * `media-src` at all and therefore fell back to `default-src 'self'`, so it needed the
+ * platform origin adding before a self-hosted file would play there.
+ */
+export interface CaseStudyWalkthroughVideo {
+  /** The video file itself, served from the platform. */
+  readonly url: string;
+  readonly title: string;
+  /**
+   * WebVTT captions. Separate from the burned-in captions the picture already carries,
+   * because burned-in text cannot be read by a screen reader, resized, translated or
+   * turned off.
+   */
+  readonly captionsUrl?: string;
+  /** Still frame shown before playback, so the slot is never a black rectangle. */
+  readonly posterUrl?: string;
+  readonly durationSeconds?: number;
+  /** How the narration was produced. Stated on the page rather than left to be assumed. */
+  readonly narrationSource?: 'synthetic' | 'human';
 }
 
 /* ─────────────────────────────────────────────────────────── surfaces ────── */

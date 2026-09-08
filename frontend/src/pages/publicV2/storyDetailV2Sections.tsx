@@ -115,6 +115,57 @@ export function StoryHeroMetrics({
  * crediting people honestly never costs anybody their privacy, and the count
  * keeps the credit list from implying a smaller team than the one that worked.
  */
+/**
+ * The narrated walkthrough, at the top of the record.
+ *
+ * A NATIVE `video`, NOT AN EMBED. The platform serves the file, so no third party is
+ * handed a record of who watched a client's delivery. It also keeps the CSP story simple:
+ * `media-src` already allows the platform origin here, where a YouTube embed would need
+ * `frame-src` and hand playback to someone else's player.
+ *
+ * NOT AUTOPLAYED. It carries narration, and a page that starts talking at a reader who
+ * came to read is a page they leave. `preload="none"` for the same reason - a 2.6MB file
+ * should not be fetched by every visitor who never presses play.
+ *
+ * THE CAPTION TRACK IS SEPARATE FROM THE BURNED-IN CAPTIONS the picture already carries.
+ * Burned-in text cannot be resized, translated, turned off, or read by a screen reader.
+ */
+export function StoryWalkthrough({
+  video,
+}: {
+  video: PublicCaseStudyDetail['walkthroughVideo'];
+}): React.ReactElement | null {
+  if (!video) return null;
+  return (
+    <section className="cbv2-rv cbv2-section" data-section="walkthrough">
+      <div className="cbv2-wrap cbv2-story__walkthrough" data-story-zone="walkthrough">
+        <h2 className="cbv2-story__walkthrough-title">{video.title}</h2>
+        <video
+          className="cbv2-story__walkthrough-player"
+          controls
+          preload="none"
+          playsInline
+          poster={video.posterUrl ?? undefined}
+        >
+          <source src={video.url} type="video/mp4" />
+          {video.captionsUrl ? (
+            <track kind="captions" srcLang="en" label="English" src={video.captionsUrl} default />
+          ) : null}
+        </video>
+        {/* Said on the page rather than left to be assumed. A synthetic voice that is not
+            labelled is a small deception, and this system's whole claim is that it does
+            not make those. */}
+        {video.narrationSource === 'synthetic' ? (
+          <p className="cbv2-story__walkthrough-note">
+            A walkthrough of the delivered system. The narration is a synthetic voice; the
+            figures it states are the verified metrics recorded further down this page.
+          </p>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 export function StoryContributors({
   contributors,
   anonymousCount,

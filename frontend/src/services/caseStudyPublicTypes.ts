@@ -346,6 +346,24 @@ export interface PublicCaseStudyDetail {
   readonly engagementDuration: string | null;
   readonly productionStatus: CaseStudyRoadmapStatus | null;
   readonly heroMetrics: readonly PublicCaseStudyMetric[];
+  /**
+   * The narrated walkthrough, shown at the top of the record, or null.
+   *
+   * A DEMONSTRATION, NOT EVIDENCE. It is deliberately not an artifact - an artifact of
+   * type `demo` would join the artifacts carousel and could win the cover through the
+   * hero-image priority list, and a video that can stand in for a screenshot of the
+   * running system is what the publish rules exist to prevent. It carries no verification
+   * class of its own because it asserts nothing on its own: every claim it narrates is a
+   * metric, a roadmap line or an evidence row on the same record.
+   */
+  readonly walkthroughVideo: {
+    readonly url: string;
+    readonly title: string;
+    readonly captionsUrl: string | null;
+    readonly posterUrl: string | null;
+    readonly durationSeconds: number | null;
+    readonly narrationSource: string | null;
+  } | null;
   readonly situation: PublicCaseStudySituation | null;
   readonly timeline: readonly PublicCaseStudyTimelineEntry[];
   readonly architecture: PublicCaseStudyArchitecture | null;
