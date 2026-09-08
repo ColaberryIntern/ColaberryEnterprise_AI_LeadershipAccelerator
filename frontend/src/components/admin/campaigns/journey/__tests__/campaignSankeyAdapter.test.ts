@@ -329,6 +329,73 @@ describe('buildSankeyView — hostile and edge-case input', () => {
   });
 });
 
+describe('stageShare — the percentage shown under each node', () => {
+  it('gives each node its share of its own column', () => {
+    const data = graph({
+      nodes: [
+        node('src_a', 'source', 'A', 75),
+        node('src_b', 'source', 'B', 25),
+        node('outreach_email', 'outreach', 'Email', 100),
+      ],
+      edges: [edge('src_a', 'outreach_email', 75), edge('src_b', 'outreach_email', 25)],
+    });
+    const view = buildSankeyView(data);
+    const by = Object.fromEntries(view.nodes.map((n) => [n.id, n.stageShare]));
+    expect(by.src_a).toBeCloseTo(75, 5);
+    expect(by.src_b).toBeCloseTo(25, 5);
+    expect(by.outreach_email).toBeCloseTo(100, 5);
+  });
+
+  it('sums to 100 within every column', () => {
+    const view = buildSankeyView(realisticGraph(4), { maxCampaigns: 99, minCampaignShare: 0 });
+    const totals = new Map<string, number>();
+    for (const n of view.nodes) {
+      totals.set(n.stage, (totals.get(n.stage) ?? 0) + (n.stageShare ?? 0));
+    }
+    for (const [, sum] of totals) expect(sum).toBeCloseTo(100, 4);
+  });
+
+  it('never exceeds 100 even when a node dwarfs the whole lead population', () => {
+    // Site Visitors counts anonymous visitors who never became leads, so against a
+    // total-leads denominator it would read in the hundreds of percent. Against its
+    // own column it cannot.
+    const data = graph({
+      nodes: [
+        node('src_anonymous', 'source', 'Anonymous / Direct', 55),
+        node('visitor_site', 'visitor', 'Site Visitors', 2180),
+        node('visitor_never', 'visitor', 'Never Visited', 44),
+      ],
+      edges: [
+        edge('src_anonymous', 'visitor_site', 20),
+        edge('src_anonymous', 'visitor_never', 35),
+      ],
+    });
+    const view = buildSankeyView(data);
+    for (const n of view.nodes) {
+      if (n.stageShare !== null) expect(n.stageShare).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it('reports null rather than 0% for a column with no population', () => {
+    const data = graph({
+      nodes: [
+        node('src_a', 'source', 'A', 0),
+        node('outreach_email', 'outreach', 'Email', 5),
+      ],
+      edges: [edge('src_a', 'outreach_email', 5)],
+    });
+    const view = buildSankeyView(data);
+    expect(view.nodes.find((n) => n.id === 'src_a')!.stageShare).toBeNull();
+  });
+
+  it('counts an aggregate as one member of its column', () => {
+    const view = buildSankeyView(realisticGraph(10), { maxCampaigns: 2, minCampaignShare: 0 });
+    const journey = view.nodes.filter((n) => n.stage === 'journey');
+    const sum = journey.reduce((s, n) => s + (n.stageShare ?? 0), 0);
+    expect(sum).toBeCloseTo(100, 4);
+  });
+});
+
 describe('buildPathRows — the table is the diagram', () => {
   it('emits one row per drawn band with the same totals', () => {
     const view = buildSankeyView(realisticGraph(3));

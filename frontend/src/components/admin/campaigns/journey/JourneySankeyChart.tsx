@@ -209,9 +209,11 @@ export default function JourneySankeyChart({
             style={{ cursor: 'pointer' }}
             role="button"
             tabIndex={0}
-            aria-label={`${node.stageLabel}: ${node.fullName}, ${node.value.toLocaleString()} leads. ${
-              node.drillable ? 'Activate to inspect these leads.' : 'Grouped — expand to inspect.'
-            }`}
+            aria-label={`${node.stageLabel}: ${node.fullName}, ${node.value.toLocaleString()} leads${
+              node.stageShare === null
+                ? ''
+                : `, ${node.stageShare.toFixed(1)} percent of ${node.stageLabel}`
+            }. ${node.drillable ? 'Activate to inspect these leads.' : 'Grouped — expand to inspect.'}`}
             onClick={() => onSelect({ kind: 'node', nodeId: node.id })}
             onKeyDown={(e: React.KeyboardEvent) => {
               if (e.key === 'Enter' || e.key === ' ') {
@@ -221,8 +223,15 @@ export default function JourneySankeyChart({
             }}
             onMouseMove={(e: React.MouseEvent) =>
               showTip(e, node.fullName, [
-                `${node.stageLabel} · ${node.value.toLocaleString()} leads`,
+                `${node.value.toLocaleString()} leads${
+                  node.stageShare === null ? '' : ` · ${node.stageShare.toFixed(1)}% of ${node.stageLabel}`
+                }`,
                 ...(node.brandName ? [`Brand: ${node.brandName}`] : []),
+                ...(node.anonymousCount
+                  ? [
+                      `Includes ${node.anonymousCount.toLocaleString()} anonymous visitors who never became leads`,
+                    ]
+                  : []),
                 node.drillable ? 'Click to inspect these leads' : 'Grouped — switch view to expand',
               ])
             }
@@ -251,7 +260,9 @@ export default function JourneySankeyChart({
             opacity={dimmed ? 0.35 : 1}
             pointerEvents="none"
           >
-            {node.value.toLocaleString()}
+            {node.stageShare === null
+              ? node.value.toLocaleString()
+              : `${node.value.toLocaleString()} · ${node.stageShare.toFixed(1)}%`}
           </text>
         </Layer>
       );

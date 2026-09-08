@@ -214,7 +214,10 @@ export function findFlowMismatch(view: SankeyViewModel): Insight | null {
   if (!worst) return null;
   return {
     kind: 'quality',
-    title: `${affected} node${affected === 1 ? '' : 's'} carry more journeys than distinct leads`,
+    title:
+      affected === 1
+        ? '1 node carries more journeys than distinct leads'
+        : `${affected} nodes carry more journeys than distinct leads`,
     detail:
       'Band thickness counts journeys along a path; the figure under each node counts ' +
       'distinct people. A lead reached on two channels appears in two bands, so the two ' +
