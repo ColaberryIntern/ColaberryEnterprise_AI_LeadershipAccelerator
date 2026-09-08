@@ -169,3 +169,154 @@ export async function sendCertReviewEmail(
 
   return { subject: r.subject, messageId: info?.messageId };
 }
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * THE TRIAGE REPORT
+ *
+ * A SEPARATE BUILDER FROM buildReviewHtml, deliberately. That one ships the five
+ * per-domain review emails and its input has no counts in it; widening it would
+ * make an ordinary domain email carry a triage denominator that is false for it.
+ *
+ * THE HEADER IS THE DELIVERABLE, not the list underneath it.
+ *
+ * An earlier draft of this feature put the sentence "no_concerns is not
+ * clearance" in a handoff document. Nobody reads a handoff document. The only
+ * artifact a human opens is this email, and an email that says "nothing was
+ * approved" above a list of twelve items is read as "the other hundred and
+ * thirty-eight passed review" — which is the precise outcome this whole process
+ * exists to prevent, and which ends with somebody approving 138 unread
+ * questions in good faith.
+ *
+ * So the denominator leads, it names the reviewer, and it forecloses the
+ * inference in the same breath. The counts are COMPUTED. A hard-coded number in
+ * a sentence whose entire job is honesty would be the joke writing itself.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export interface TriageReportConcern {
+  kind: string;
+  option: string | null;
+  detail: string;
+}
+
+export interface TriageReportItem {
+  question_key: string;
+  domain_id: string;
+  objective_id: string;
+  stem: string;
+  severity: string | null;
+  verdict: string;
+  concerns: TriageReportConcern[];
+}
+
+export interface TriageReportInput {
+  to: string;
+  /** Every question the reviewer scored. The denominator. */
+  scoredCount: number;
+  /** Those the reviewer objected to, or could not read. */
+  flagged: TriageReportItem[];
+  reviewerModel: string;
+  runId: string;
+}
+
+const SEVERITY_COLOR: Record<string, string> = {
+  high: '#C4102E', medium: '#8A5A0B', low: '#6B7280',
+};
+
+const KIND_LABEL: Record<string, string> = {
+  defensible_distractor: 'A wrong option may also be right',
+  ambiguous_stem: 'The question can be read two ways',
+  factual_error: 'Something asserted is not true',
+  answer_disputed: 'The marked answer is disputed',
+  outdated: 'True once, not now',
+  other: 'Other',
+};
+
+export function buildTriageReportHtml(input: TriageReportInput): string {
+  const flaggedCount = input.flagged.length;
+  const quiet = Math.max(0, input.scoredCount - flaggedCount);
+
+  const items = input.flagged.map((item, i) => {
+    const colour = SEVERITY_COLOR[String(item.severity)] ?? '#6B7280';
+    const concerns = item.concerns.map((c) => `
+      <div style="margin-top:7px;padding-left:11px;border-left:2px solid ${colour}">
+        <div style="font-size:12px;font-weight:700;color:${colour}">
+          ${esc(KIND_LABEL[c.kind] ?? c.kind)}${c.option ? ` &middot; option ${esc(c.option)}` : ''}
+        </div>
+        <div style="font-size:13px;color:#2E3138;line-height:1.5">${esc(c.detail)}</div>
+      </div>`).join('');
+
+    return `
+      <div style="border:1px solid #E4E6EB;border-left:4px solid ${colour};border-radius:10px;
+                  padding:13px 15px;margin:0 0 11px;background:#FFFFFF">
+        <div style="font-family:Consolas,monospace;font-size:12px;color:#6B7280;margin-bottom:5px">
+          <b style="color:#1A1A1A">${esc(item.question_key)}</b>
+          &nbsp;&middot;&nbsp; ${esc(item.objective_id)}
+          &nbsp;&middot;&nbsp; <span style="color:${colour};font-weight:700">${esc(item.severity ?? item.verdict)}</span>
+        </div>
+        <div style="font-size:14px;color:#1A1A1A;line-height:1.45">${i + 1}. ${esc(item.stem)}</div>
+        ${concerns}
+      </div>`;
+  }).join('');
+
+  return `
+  <div style="background:#F5F6F8;padding:24px 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif">
+    <div style="max-width:720px;margin:0 auto;padding:0 16px">
+
+      <div style="background:#FFFFFF;border:1px solid #E4E6EB;border-radius:12px;padding:20px 22px;margin-bottom:16px">
+        <div style="font-family:Consolas,monospace;font-size:11px;letter-spacing:.12em;
+                    text-transform:uppercase;color:#C4102E;margin-bottom:8px">
+          CCAR-F question triage
+        </div>
+        <h1 style="margin:0 0 10px;font-size:21px;color:#1A1A1A;line-height:1.25">
+          ${flaggedCount} question${flaggedCount === 1 ? '' : 's'} need your judgement
+        </h1>
+        <p style="margin:0;font-size:15px;color:#2E3138;line-height:1.65">
+          <b>${input.scoredCount} scored by ${esc(input.reviewerModel)}.
+          ${quiet} drew no objection, which is not the same as checked by a person.
+          ${flaggedCount} need your judgement. Nothing was approved and nothing became servable.</b>
+        </p>
+        <p style="margin:12px 0 0;font-size:13px;color:#6B7280;line-height:1.6">
+          The reviewer is a language model asked to argue against each marked answer. It is a
+          different model from the one that wrote these questions, which makes it a second
+          opinion rather than a check. Start with the list below; it is where the reading is
+          most likely to pay off, not the only place a problem could be.
+        </p>
+      </div>
+
+      ${items || `<div style="background:#FFFFFF;border:1px solid #E4E6EB;border-radius:10px;
+                              padding:16px 18px;font-size:14px;color:#2E3138">
+          The reviewer raised no objection to any question. That is not clearance &mdash; it
+          means one model failed to break them, and the bank still has not been read by a
+          person.</div>`}
+
+      <div style="font-size:12px;color:#9AA0AA;line-height:1.6;padding:8px 4px 0">
+        Run <span style="font-family:Consolas,monospace">${esc(input.runId)}</span>.
+        Approval remains a separate act by a named reviewer in the admin queue; replying to
+        this email changes nothing.
+      </div>
+    </div>
+  </div>`;
+}
+
+export async function sendTriageReportEmail(
+  input: TriageReportInput,
+): Promise<{ subject: string; messageId?: string }> {
+  const stamp = new Date().toISOString().slice(0, 10);
+  const subject = `CCAR-F triage: ${input.flagged.length} of ${input.scoredCount} need your judgement (${stamp})`;
+
+  const html = buildTriageReportHtml(input);
+  const r = await resolveEmailRecipient(input.to, subject);
+
+  const info = await guardedSendMail({
+    from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('cert-question-triage'),
+  });
+
+  return { subject: r.subject, messageId: info?.messageId };
+}

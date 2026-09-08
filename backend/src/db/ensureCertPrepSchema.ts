@@ -8,7 +8,7 @@ import { sequelize } from '../config/database';
  * for the full rationale). Every statement is CREATE ... IF NOT EXISTS and wrapped in
  * its own try/catch so a partial DB self-heals and re-running boot is a no-op.
  *
- * Additive only: creates 8 new tables, never alters or drops any existing column,
+ * Additive only: creates 9 new tables, never alters or drops any existing column,
  * table, or constraint. It does NOT touch assessment_attempts, diagnostic_attempts,
  * week_item_visibility, timeline_card_progress, student_points_events,
  * evidence_records or any other progression table — Cert Prep is a parallel,
@@ -267,6 +267,41 @@ export async function ensureCertPrepSchema(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_cert_evmap_unique_obj ON cert_evidence_mappings (enrollment_id, objective_id, source_type, source_id)`,
     `DROP INDEX IF EXISTS idx_cert_evmap_unique`,
     `CREATE INDEX IF NOT EXISTS idx_cert_evmap_state ON cert_evidence_mappings (enrollment_id, mapping_state)`,
+
+    /**
+     * Triage results: a machine's opinion of a question, kept strictly separate
+     * from the approval gate.
+     *
+     * THIS TABLE CANNOT MAKE A QUESTION SERVABLE, and that is its whole design.
+     * `review_status` on cert_question_revisions is the gate; nothing here is
+     * read by any serving path. A verdict of `no_concerns` is a model declining
+     * to object, which is not a person having checked, and giving that opinion
+     * its own table rather than a column on the revision keeps the two from ever
+     * being mistaken for each other.
+     *
+     * UNIQUENESS IS PER (question, revision, model, PROMPT VERSION). The first
+     * three are obvious. The fourth is not, and it matters: the adversarial
+     * prompt is the load-bearing part of this process, so the same model over
+     * the same revision with a better prompt is a genuinely new opinion, not a
+     * duplicate to suppress. Leaving prompt_version out of the key would have
+     * silently discarded every re-run after a prompt improvement.
+     */
+    `CREATE TABLE IF NOT EXISTS cert_question_triage (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       run_id VARCHAR(60) NOT NULL,
+       question_key VARCHAR(60) NOT NULL,
+       revision INTEGER NOT NULL,
+       verdict VARCHAR(20) NOT NULL,
+       severity VARCHAR(10),
+       concerns JSONB NOT NULL DEFAULT '[]'::jsonb,
+       reviewer_model VARCHAR(60) NOT NULL,
+       prompt_version VARCHAR(20) NOT NULL,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_cert_triage_unique ON cert_question_triage (question_key, revision, reviewer_model, prompt_version)`,
+    `CREATE INDEX IF NOT EXISTS idx_cert_triage_run ON cert_question_triage (run_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_cert_triage_verdict ON cert_question_triage (verdict, severity)`,
   ];
 
   for (const sql of statements) {
@@ -313,6 +348,11 @@ export const CERT_TABLES = [
   'cert_responses',
   'cert_readiness_snapshots',
   'cert_evidence_mappings',
+  // Added 2026-09-07. MUST be listed here: this array drives the post-condition
+  // below, and a table created but not listed means a failed CREATE still logs
+  // "all tables present" -- the silent partial schema this file's header records
+  // as having already happened once.
+  'cert_question_triage',
 ] as const;
 
 /**
