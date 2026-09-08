@@ -4,6 +4,7 @@ import {
   grantsTrainingEnrollment,
   accountTypeLabel,
   isOrgAccountType,
+  lookupEntrySite,
   ORG_ACCOUNT_TYPES,
   DEFAULT_ACCOUNT_TYPE,
 } from '../orgAccountType';
@@ -42,6 +43,50 @@ describe('the entry site decides', () => {
 
   it('matches www and bare separately, because the table lists both', () => {
     expect(resolveAccountType({ entrySite: 'www.aiflotation.com' }).accountType).toBe('client');
+  });
+
+  it('does NOT map the retired dataflotation domain', () => {
+    // aiflotation replaced it. A retired domain must not quietly keep minting
+    // consulting accounts.
+    expect(resolveAccountType({ entrySite: 'dataflotation.com' }).matched).toBe(false);
+  });
+
+  it('still maps a consulting site when a path is present', () => {
+    expect(resolveAccountType({ entrySite: 'https://aiflotation.com/start' }).accountType).toBe(
+      'client',
+    );
+  });
+});
+
+describe('one domain can mean two things', () => {
+  // Colaberry Enterprise is the Business entrance today and will later offer
+  // consulting too. A hostname-only table could never express that, so these
+  // tests pin the mechanism before the page exists.
+  const TABLE = {
+    'ent.example': 'enterprise_customer',
+    'ent.example/consulting': 'client',
+  } as const;
+
+  it('prefers the longest matching key', () => {
+    expect(lookupEntrySite('ent.example/consulting', TABLE)).toBe('client');
+    expect(lookupEntrySite('ent.example/consulting/start', TABLE)).toBe('client');
+  });
+
+  it('falls back to the bare host when no path matches', () => {
+    expect(lookupEntrySite('ent.example/pricing', TABLE)).toBe('enterprise_customer');
+    expect(lookupEntrySite('ent.example', TABLE)).toBe('enterprise_customer');
+  });
+
+  it('a general domain never shadows a specific page', () => {
+    // The property that makes the future change one line: adding a consulting
+    // page to an already-mapped Business domain must win for that path only.
+    expect(lookupEntrySite('ent.example/consulting', TABLE)).not.toBe(
+      lookupEntrySite('ent.example', TABLE),
+    );
+  });
+
+  it('returns nothing for an unmapped host', () => {
+    expect(lookupEntrySite('other.example/consulting', TABLE)).toBeUndefined();
   });
 });
 
@@ -126,13 +171,20 @@ describe('labels', () => {
 
 describe('normalizeEntrySite', () => {
   it.each([
-    ['https://a.com/x?y=1#z', 'a.com'],
+    ['https://a.com/x?y=1#z', 'a.com/x'],
     ['HTTP://A.COM', 'a.com'],
     ['a.com:8080', 'a.com'],
     ['  a.com  ', 'a.com'],
+    ['https://a.com/consulting/', 'a.com/consulting'],
     ['', ''],
   ])('%j -> %j', (input, expected) => {
     expect(normalizeEntrySite(input)).toBe(expected);
+  });
+
+  it('keeps the path, because one domain will soon mean two things', () => {
+    expect(normalizeEntrySite('https://enterprise.colaberry.ai/consulting')).toBe(
+      'enterprise.colaberry.ai/consulting',
+    );
   });
 
   it('does not strip www, so a missing table entry stays visible', () => {
