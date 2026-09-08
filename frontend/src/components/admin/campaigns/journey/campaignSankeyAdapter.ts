@@ -86,6 +86,27 @@ export interface SankeyViewNode {
    * label promising twelve. Expand the bucket instead.
    */
   drillable: boolean;
+  /**
+   * This node's share of its OWN COLUMN, 0-100, or null when the column is empty.
+   *
+   * Share of the column rather than of total leads, and the reason is Site
+   * Visitors. That node counts anonymous visitors who never became leads, so it is
+   * routinely larger than the entire lead population — against a total-leads
+   * denominator it would read "545%", which is worse than showing nothing. Every
+   * column, by contrast, is a set of alternatives that genuinely partition their
+   * stage, so a share of it is always between 0 and 100 and always answers the
+   * question a reader is actually asking: how much of this stage is this?
+   */
+  stageShare: number | null;
+  /**
+   * Visitors counted at this node who never became leads.
+   *
+   * Only Site Visitors has one. It is the answer to "how can 20 people produce
+   * 2,180 site visitors": most of them were never leads at all. The number exists
+   * in the payload as `metrics.visits_generated` and was previously invisible, so
+   * the node looked like it was inventing people.
+   */
+  anonymousCount?: number;
 }
 
 export interface SankeyViewLink {
@@ -333,6 +354,10 @@ export function buildSankeyView(
       memberIds: [n.id],
       aggregate: false,
       drillable: true,
+      stageShare: null,
+      ...(n.type === 'visitor' && typeof n.metrics?.visits_generated === 'number'
+        ? { anonymousCount: n.metrics.visits_generated }
+        : {}),
     });
   }
 
@@ -356,6 +381,7 @@ export function buildSankeyView(
       memberIds: [...memberIds],
       aggregate: true,
       drillable: false,
+      stageShare: null,
     });
   }
 
@@ -387,11 +413,24 @@ export function buildSankeyView(
       memberIds: [id],
       aggregate: false,
       drillable: false,
+      stageShare: null,
     });
   }
 
   const droppedOrphanNodes =
     graphNodes.filter((n) => !remap.has(n.id) && !touched.has(n.id)).length;
+
+  // ── 4b. Each node's share of its own column ──────────────────────────────
+  // Computed after every node exists, including aggregates and placeholders, so
+  // the shares within a column always sum to 100 rather than to whatever survived.
+  const stageTotals = new Map<JourneyStage, number>();
+  for (const n of viewNodes) {
+    stageTotals.set(n.stage, (stageTotals.get(n.stage) ?? 0) + n.value);
+  }
+  for (const n of viewNodes) {
+    const total = stageTotals.get(n.stage) ?? 0;
+    n.stageShare = total > 0 ? (n.value / total) * 100 : null;
+  }
 
   // ── 5. Index for recharts ────────────────────────────────────────────────
   const links: SankeyViewLink[] = [];

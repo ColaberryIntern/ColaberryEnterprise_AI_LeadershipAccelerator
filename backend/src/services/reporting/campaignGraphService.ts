@@ -203,7 +203,19 @@ function sortedPercentile(sorted: number[], p: number): number {
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
 }
 
-function getTimeWindowCutoff(window: string): Date | null {
+/**
+ * Scope the anonymous-visitor count to the same window as the lead paths.
+ *
+ * Exported so the rule can be tested without a database. The bug it guards against
+ * shipped for months: an unscoped `Visitor.count()` beside a filtered lead set
+ * reported 2,180 Site Visitors inside a 7-day view holding 55 leads.
+ */
+export function visitorCountOptions(cutoff: Date | null): { where: any } | undefined {
+  if (!cutoff) return undefined;
+  return { where: { first_seen_at: { [Op.gte]: cutoff } } };
+}
+
+export function getTimeWindowCutoff(window: string): Date | null {
   const now = new Date();
   switch (window) {
     case '24h': return new Date(now.getTime() - 24 * 3600_000);
@@ -1354,17 +1366,31 @@ export async function getCampaignGraphData(
     return graphCache.data;
   }
 
-  // Fetch lead paths and total anonymous visitor count in parallel
+  /**
+   * The cutoff is resolved BEFORE the queries, because the visitor count has to
+   * honour it too.
+   *
+   * It previously did not. `Visitor.count()` counted every visitor ever recorded
+   * while `leadPaths` was filtered to the window, so a 7-day view reported 55 leads
+   * beside 2,180 Site Visitors — the all-time total, sitting inside a one-week
+   * funnel. Reported from production on 2026-09-08: "how can you have 2180 site
+   * visitors coming from 20 people". The force graph had the same defect; drawing
+   * the two numbers next to each other is what made it visible.
+   */
+  const cutoff = timeWindow && timeWindow !== 'all' ? getTimeWindowCutoff(timeWindow) : null;
+
   const [leadPaths_raw, totalAnonymousVisitors] = await Promise.all([
     buildLeadPaths(),
-    Visitor.count().catch(() => 0),
+    // Narrowed explicitly: passing options widens Sequelize's return type to
+    // `number | GroupedCountResultItem[]`, and only a grouped count yields the
+    // array form. This call never groups, so anything but a number is a zero.
+    Visitor.count(visitorCountOptions(cutoff) as any)
+      .then((n: unknown) => (typeof n === 'number' ? n : 0))
+      .catch(() => 0),
   ]);
 
   let leadPaths = leadPaths_raw;
-  if (timeWindow && timeWindow !== 'all') {
-    const cutoff = getTimeWindowCutoff(timeWindow);
-    if (cutoff) leadPaths = leadPaths.filter(lp => lp.created_at >= cutoff);
-  }
+  if (cutoff) leadPaths = leadPaths.filter(lp => lp.created_at >= cutoff);
 
   const data = await buildGraphFromPaths(leadPaths, totalAnonymousVisitors);
   data.time_window = cacheKey;
