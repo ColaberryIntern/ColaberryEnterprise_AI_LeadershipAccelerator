@@ -102,6 +102,17 @@ export const CARD_TYPES: CardTypeDef[] = [
   D({ slug: 'prompt_challenge', label: 'Prompt Challenge', student_label: 'Prompt Challenge', bucket: 'practice', render_band: 'promptlab', est_minutes: 45, learning_xp: 5, builder_xp: 50, difficulty: 'stretch', competencies: ['prompt_engineering'], evidence_required: true, ai_evaluation: true, portfolio_eligible: true, prompt_pairs: ['concept', 'build', 'mentor'] }),
   D({ slug: 'implementation_task', label: 'Implementation Task', student_label: 'Build Artifact(s) Lab', bucket: 'build', render_band: 'build_artifacts', est_minutes: 90, builder_xp: 80, difficulty: 'core', competencies: ['architecture', 'testing', 'deployment'], evidence_required: true, github_required: true, ai_evaluation: true, instructor_review: true, portfolio_eligible: true, prompt_pairs: ['build', 'mentor'], home_surface: 'project' }),
   D({ slug: 'setup_lab', label: 'Setup Lab', student_label: 'Setup Lab', bucket: 'build', render_band: 'setup_lab', est_minutes: 30, learning_xp: 20, builder_xp: 100, difficulty: 'intro', competencies: ['claude_code'], evidence_required: true, portfolio_eligible: true, prompt_pairs: [] }),   // Claude Code "get unblocked" enablement lab (dark bespoke renderer)
+  // Claude STUDIO — the Claude.ai counterpart to the Claude Code spine above.
+  // Claude Code types teach students to BUILD; this one teaches them to think,
+  // research, decide, communicate, and produce an interactive business Artifact
+  // in Claude.ai conversations / Projects / Artifacts. Bespoke renderer
+  // (`claude_studio` band) drives the four-stage loop; content is authored
+  // per-week in data/claudeStudios and seeded by seeds/seedClaudeStudioCards.
+  // `competencies` is a CONTROLLED vocabulary — the keys of
+  // constants/competencySkillCrosswalk.ts. CAPE's type→skill seed throws on an
+  // unknown id, so descriptive-but-invented ids ("problem_framing",
+  // "executive_communication") break the build rather than being ignored.
+  D({ slug: 'claude_studio', label: 'Claude Studio', student_label: 'Claude Studio', bucket: 'practice', render_band: 'claude_studio', est_minutes: 85, learning_xp: 30, builder_xp: 45, difficulty: 'core', competencies: ['systems_thinking', 'decision_making', 'communication', 'ai_governance', 'context_engineering'], evidence_required: true, ai_evaluation: true, instructor_review: true, portfolio_eligible: true, prompt_pairs: ['concept', 'reflection'] }),
   D({ slug: 'artifact_submission', label: 'Artifact Submission', student_label: 'Build Artifact(s) Lab', bucket: 'build', render_band: 'build_artifacts', est_minutes: 60, builder_xp: 60, difficulty: 'core', competencies: ['documentation', 'architecture'], evidence_required: true, github_required: true, instructor_review: true, portfolio_eligible: true, prompt_pairs: ['mentor'], home_surface: 'project' }),
   D({ slug: 'ai_video_feedback', label: 'AI Video Feedback', student_label: 'AI Video Feedback', bucket: 'reflect', render_band: 'video_feedback', est_minutes: 15, learning_xp: 5, builder_xp: 30, difficulty: 'core', competencies: ['communication'], evidence_required: true, ai_evaluation: true, portfolio_eligible: true, prompt_pairs: ['reflection'] }),
   D({ slug: 'mock_interview', label: 'Mock Interview', student_label: 'Mock Interview', bucket: 'advance', render_band: 'interview', est_minutes: 45, builder_xp: 60, difficulty: 'stretch', competencies: ['communication', 'leadership'], evidence_required: true, ai_evaluation: true, instructor_review: true, portfolio_eligible: true, prompt_pairs: ['mentor'] }),

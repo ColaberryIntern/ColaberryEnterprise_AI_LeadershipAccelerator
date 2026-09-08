@@ -15,6 +15,7 @@ import { useBlogReadGate } from '../../../components/timeline/useBlogReadGate';
 import { useDeepDiveHost } from '../../../components/timeline/useDeepDiveHost';
 import SetupLabRender from '../../../components/timeline/SetupLabRender';
 import PromptCatalogRender from '../../../components/timeline/PromptCatalogRender';
+import ClaudeStudioRender from '../../../components/timeline/ClaudeStudioRender';
 import ArchitectTimeMachine from '../../../components/timeline/ArchitectTimeMachine';
 import BuildArtifactsRender from '../../../components/timeline/BuildArtifactsRender';
 import ReflectionReview from '../../../components/timeline/ReflectionReview';
@@ -152,6 +153,10 @@ const RuntimeWorkspace: React.FC = () => {
   // center as a single scroll (its own renderer, not the generic lessonDoc iframe).
   const isSetupLab = band === 'setup_lab' && !!card?.content?.body_html;
   const isPromptCatalog = band === 'prompt_catalog' && !!card?.content?.body_html;   // Prompt Lab: practice-prompt catalog
+  // Claude Studio: the four-stage Claude.ai loop. Owns its own submission and
+  // completion inline (link + reflection), so like the Build Artifact(s) Lab it
+  // fills the center and never routes through the generic complete button.
+  const isClaudeStudio = band === 'claude_studio' && !!card?.content?.body_html;
   const isArchitectMindset = band === 'architect_mindset';   // The Architect Time Machine: full cinematic experience (self-contained, completes internally)
   const isBuildArtifacts = band === 'build_artifacts' && !!card?.content?.body_html;   // Build Artifact(s) Lab: build station
   const isPeerWins = band === 'peer_wins';   // Community Discussion → Cohort Wins grid (post a win + cheer classmates)
@@ -161,7 +166,7 @@ const RuntimeWorkspace: React.FC = () => {
   // generic lesson — FILLS the center as the single scroll (no dueling scrollbars). Video/
   // lab/reflect/survey/assessment keep the normal scrolling center. Comments always go to
   // the right rail. This is the single-scroll workstation layout applied to every type.
-  const isLesson = !isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isReader && !isDeepDive && !isSetupLab && !isPromptCatalog && !isBuildArtifacts && !isPeerWins && !!card?.content?.body_html;
+  const isLesson = !isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isReader && !isDeepDive && !isSetupLab && !isPromptCatalog && !isClaudeStudio && !isBuildArtifacts && !isPeerWins && !!card?.content?.body_html;
   const fill = isReader || isLesson || isDeepDive;
 
   // Load the post's article for the in-workspace reader (fail-soft: ok:false → link).
@@ -294,10 +299,10 @@ const RuntimeWorkspace: React.FC = () => {
 
       <div className="rt-body">
         {/* CENTER — activity */}
-        <main className={`rt-mid${fill || isBlog || isSetupLab || isPromptCatalog || isArchitectMindset || isBuildArtifacts ? ' rt-mid--reader' : ''}`}>
+        <main className={`rt-mid${fill || isBlog || isSetupLab || isPromptCatalog || isClaudeStudio || isArchitectMindset || isBuildArtifacts ? ' rt-mid--reader' : ''}`}>
           {/* Hero — the type's picture with the lesson title ON the image. Video bands keep
               their player; fill (reader/lesson) content fills the panel, so skip the hero. */}
-          {!isVideo && !isSkillsJar && !fill && !isBlog && !isSetupLab && !isPromptCatalog && !isArchitectMindset && !isBuildArtifacts && card.type_thumbnail && (
+          {!isVideo && !isSkillsJar && !fill && !isBlog && !isSetupLab && !isPromptCatalog && !isClaudeStudio && !isArchitectMindset && !isBuildArtifacts && card.type_thumbnail && (
             <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
               <img src={card.type_thumbnail} alt="" style={{ width: '100%', display: 'block', maxHeight: 240, objectFit: 'cover' }} />
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(4,25,29,0) 42%, rgba(4,25,29,.74) 100%)' }} />
@@ -471,6 +476,14 @@ const RuntimeWorkspace: React.FC = () => {
           )}
           {/* Build Artifact(s) Lab — the build station (pick artifact + project); fills
               the center; completion (points on first build) reveals on the right after a copy. */}
+          {/* Claude Studio — the four-stage Claude.ai loop (explore → Project → Artifact
+              → prove). Fills the center; it owns its own submission form and completes
+              server-side on submit, so no generic complete button is offered for it. */}
+          {isClaudeStudio && (
+            <div className="rt-readerwrap">
+              <ClaudeStudioRender bodyHtml={card.content?.body_html || ''} title={displayTitle} summary={card.content?.summary} estMin={card.estimated_time} difficulty={card.difficulty} variant="workspace" cardId={cardId} completed={completed} onSubmitted={complete} />
+            </div>
+          )}
           {isBuildArtifacts && (
             <div className="rt-readerwrap">
               <BuildArtifactsRender bodyHtml={card.content?.body_html || ''} title={displayTitle} summary={card.content?.summary} variant="workspace" cardId={cardId} completed={completed} onComplete={complete} />
@@ -491,7 +504,7 @@ const RuntimeWorkspace: React.FC = () => {
             </div>
           )}
           {/* Fallback for a non-media card with no body yet — just its description. */}
-          {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isArchitectMindset && !isBuildArtifacts && !isPeerWins && (
+          {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isClaudeStudio && !isArchitectMindset && !isBuildArtifacts && !isPeerWins && (
             <div className="rt-card">
               {card.content?.summary && <p>{card.content.summary}</p>}
               {card.description ? <p>{card.description}</p> : <p className="rt-muted">Work through this activity, then complete it below.</p>}
@@ -502,7 +515,7 @@ const RuntimeWorkspace: React.FC = () => {
 
           {/* Surveys + assessments complete via their own flow; fill cards host the gate in
               their foot. Everything else gets the completion bar here in the center. */}
-          {!isSurvey && !isAssessment && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isArchitectMindset && !isBuildArtifacts && !isReflection && (
+          {!isSurvey && !isAssessment && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isClaudeStudio && !isArchitectMindset && !isBuildArtifacts && !isReflection && (
             <div className="rt-complete">{completeGate}</div>
           )}
         </main>

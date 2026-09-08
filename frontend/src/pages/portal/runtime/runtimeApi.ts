@@ -9,6 +9,7 @@ import type { AttachmentRef } from '../../../services/agentAttachmentApi';
 export interface RtCard {
   id: string; type: string; title: string; subtitle?: string | null; description?: string | null;
   student_label: string; render_band: string; estimated_time?: number | null; competencies?: any;
+  difficulty?: string | null;   // intro | core | stretch — returned by runtimeService.openCard so a panel can show a Level chip
   evidence_required?: boolean; video?: { url: string; presenter: string | null; poster: string | null; title?: string | null; duration_seconds?: number | null } | null;
   blog?: { url: string; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;
   content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;   // the saved lesson — the workspace opens with it
