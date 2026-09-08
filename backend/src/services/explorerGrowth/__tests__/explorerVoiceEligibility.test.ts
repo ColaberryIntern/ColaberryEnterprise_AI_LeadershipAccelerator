@@ -28,7 +28,7 @@ import {
 const TUE_2PM_CT = new Date('2026-09-08T19:00:00Z');
 
 const ctx = (over: Partial<VoiceEligibilityContext> = {}): VoiceEligibilityContext => ({
-  autoDialEnabled: true,
+  autoDialFlagOn: true,
   voiceCallsEnabled: true,
   killSwitchEngaged: false,
   overlays: ['HIGH_INTENT'],
@@ -58,7 +58,7 @@ describe('the fully-satisfied gate', () => {
 
 describe('fail-closed, one condition at a time (§16.2)', () => {
   it.each([
-    ['auto-dial flag off', { autoDialEnabled: false }],
+    ['auto-dial flag off', { autoDialFlagOn: false }],
     ['platform voice off', { voiceCallsEnabled: false }],
     ['kill switch engaged', { killSwitchEngaged: true }],
     ['no HIGH_INTENT', { overlays: [] }],
@@ -140,7 +140,7 @@ describe('it reports every failing gate, not the first', () => {
     // "Why did this learner get a call" needs the complete set of reasons.
     const v = evaluateVoiceEligibility(
       ctx({
-        autoDialEnabled: false,
+        autoDialFlagOn: false,
         overlays: [],
         phoneE164: null,
         voiceConsent: null,
@@ -155,7 +155,7 @@ describe('it reports every failing gate, not the first', () => {
 describe('no combination of missing data ever produces a pass', () => {
   it('refuses an entirely empty context', () => {
     const empty = {
-      autoDialEnabled: false, voiceCallsEnabled: false, killSwitchEngaged: true,
+      autoDialFlagOn: false, voiceCallsEnabled: false, killSwitchEngaged: true,
       overlays: [], highestSignalTier: 0, fScore: NaN, isConverted: false,
       phoneE164: null, voiceConsent: null, isUnsubscribedOrDnc: false,
       timezone: {}, now: TUE_2PM_CT,

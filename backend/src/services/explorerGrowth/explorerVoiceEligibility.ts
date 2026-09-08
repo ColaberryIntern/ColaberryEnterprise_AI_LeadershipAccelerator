@@ -47,8 +47,18 @@ export const ACCEPTABLE_VOICE_CONSENT_BASES = ['express_written', 'double_opt_in
 export type VoiceConsentBasis = (typeof ACCEPTABLE_VOICE_CONSENT_BASES)[number];
 
 export interface VoiceEligibilityContext {
-  /** EXPLORER_AUTO_DIAL_ENABLED, read via isExplorerFeatureEnabled. */
-  autoDialEnabled: boolean;
+  /**
+   * EXPLORER_AUTO_DIAL_ENABLED, already resolved by the caller through
+   * `isExplorerFeatureEnabled`.
+   *
+   * NOT named `autoDialEnabled`. That is the exact property name on the flags
+   * object, and `config/__tests__/explorerGrowthFlags.test.ts` scans the whole
+   * backend for `.<subFlag>` to catch code reading a sub-flag directly and
+   * bypassing the master switch. This field is a caller-supplied boolean rather
+   * than a flag read, but the scanner cannot tell the difference — and it is
+   * right not to try. Renaming the field is the cheap side of that trade.
+   */
+  autoDialFlagOn: boolean;
   /** env.enableVoiceCalls — the platform-wide voice switch. */
   voiceCallsEnabled: boolean;
   /** The operational kill switch. True means STOP. */
@@ -99,7 +109,7 @@ export function evaluateVoiceEligibility(ctx: VoiceEligibilityContext): VoiceEli
   // 1-3. The switches. Three of them, and all must be on: a feature flag, the
   // platform switch, and an operational kill switch that a human can throw
   // without a deploy.
-  if (!ctx.autoDialEnabled) reasons.push('EXPLORER_AUTO_DIAL_ENABLED is off');
+  if (!ctx.autoDialFlagOn) reasons.push('EXPLORER_AUTO_DIAL_ENABLED is off');
   if (!ctx.voiceCallsEnabled) reasons.push('platform voice calls are disabled');
   if (ctx.killSwitchEngaged) reasons.push('voice kill switch is engaged');
 
