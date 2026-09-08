@@ -417,6 +417,17 @@ export interface CaseStudyArchitectureSection {
    * Sanitised at the public boundary, not here: see `projectDiagramSource()`.
    */
   readonly diagramSource?: string;
+  /**
+   * An image of `diagramSource`, rendered ahead of time and served from the
+   * platform, for the surfaces that cannot draw mermaid themselves.
+   *
+   * Set by a human override alongside the source it depicts. See
+   * `PublicCaseStudyArchitecture.diagramImageUrl` for why a picture is carried
+   * as well as the source — briefly, the training site's CSP has no CDN in its
+   * `script-src` and the AI Flotation shell ships no dependencies, so the live
+   * chart Enterprise draws is unavailable on both.
+   */
+  readonly diagramImageUrl?: string;
 }
 
 export interface CaseStudyMeasurementSection {
