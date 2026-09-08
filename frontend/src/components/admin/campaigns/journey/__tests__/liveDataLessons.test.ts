@@ -11,7 +11,12 @@ import {
   AGGREGATE_OTHER_CAMPAIGNS,
   buildSankeyView,
 } from '../campaignSankeyAdapter';
-import { findBestOpportunity, findFlowMismatch, findLargestLeak } from '../journeyMetrics';
+import {
+  findAnonymousTraffic,
+  findBestOpportunity,
+  findFlowMismatch,
+  findLargestLeak,
+} from '../journeyMetrics';
 import type { CampaignGraphData } from '../../../../../services/intelligenceApi';
 
 const node = (id: string, type: string, label: string, count: number) =>
@@ -197,6 +202,65 @@ describe('lesson 3 — a count cap alone does not make a chart readable', () => 
     } as CampaignGraphData;
     const view = buildSankeyView(few, { maxCampaigns: 8, minCampaignShare: 0.01 });
     expect(view.collapsedCampaigns).toBe(0);
+  });
+});
+
+describe('lesson 3b — a funnel node must not count people who are not in the funnel', () => {
+  /**
+   * Live, twice: "how can you have 2180 site visitors coming from 20 people", then
+   * "if there are 12 people, how can you have 382 visitors". The first was the time
+   * window. The second was the real cause — Site Visitors counted anonymous
+   * visitors who never became leads, in a chart where every other node counts
+   * leads. The backend now reports leads there and keeps the anonymous figure in
+   * `metrics.visits_generated`, which reaches the view model as `anonymousCount`.
+   */
+  const data = {
+    nodes: [
+      node('src_anonymous', 'source', 'Anonymous / Direct', 12),
+      {
+        ...node('visitor_site', 'visitor', 'Site Visitors', 12),
+        metrics: { visits_generated: 370 },
+      },
+      node('visitor_never', 'visitor', 'Never Visited', 5),
+    ],
+    edges: [
+      edge('src_anonymous', 'visitor_site', 7),
+      edge('src_anonymous', 'visitor_never', 5),
+    ],
+  } as CampaignGraphData;
+
+  it('carries the anonymous count as context, not as funnel volume', () => {
+    const view = buildSankeyView(data);
+    const site = view.nodes.find((n) => n.id === 'visitor_site')!;
+    expect(site.value).toBe(12);
+    expect(site.anonymousCount).toBe(370);
+  });
+
+  it('keeps the node from swallowing its column', () => {
+    // With 382 it took 96.7% of the Response column and flattened everything else.
+    const view = buildSankeyView(data);
+    const site = view.nodes.find((n) => n.id === 'visitor_site')!;
+    expect(site.stageShare).not.toBeNull();
+    expect(site.stageShare!).toBeLessThan(90);
+  });
+
+  it('reports the browsing audience as its own finding', () => {
+    const insight = findAnonymousTraffic(buildSankeyView(data))!;
+    expect(insight).toBeDefined();
+    expect(insight.title).toContain('370');
+    // 12 of 382 became leads.
+    expect(insight.evidence).toMatch(/12 .* 382 .* 3\.1%/);
+  });
+
+  it('says nothing when every visitor was a lead', () => {
+    const clean = {
+      nodes: [
+        node('src_anonymous', 'source', 'Anonymous / Direct', 12),
+        node('visitor_site', 'visitor', 'Site Visitors', 12),
+      ],
+      edges: [edge('src_anonymous', 'visitor_site', 12)],
+    } as CampaignGraphData;
+    expect(findAnonymousTraffic(buildSankeyView(clean))).toBeNull();
   });
 });
 
