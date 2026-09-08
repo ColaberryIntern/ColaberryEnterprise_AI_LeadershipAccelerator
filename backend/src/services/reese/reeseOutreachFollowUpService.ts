@@ -10,6 +10,7 @@ import { generateOutreachMessage } from './reeseOutreachMessageService';
 import { initiateDm } from './reeseInitiateDmService';
 import { getReeseAdminUserId, getReeseEnrollmentId } from './reeseIdentitySeed';
 import { countAutonomousSendsToday, DAILY_SEND_CAP, FOLLOW_UP_DAYS } from './reeseAutonomousOutreachService';
+import { createClosureChecklistInstance } from './closureChecklist';
 
 // Reese Phase 2 (Autonomous Outreach) — the follow-up + closure loop. Mirrors
 // M5's outcomeMeasurementService.ts structurally (a `status`/due-timestamp
@@ -96,6 +97,21 @@ async function closeWithEvidence(
 
   await updateTicketStatus(row.ticket_id, 'done', 'ai_staff', actorId);
   await row.update({ status, next_follow_up_due_at: null } as any);
+
+  // Reese Agentic AI Employee mission, Capability 6 — a real, persisted
+  // Closure checklist per resolution, linked to this outreach's real
+  // ticket. Observational only (same posture as outreachChecklist.ts):
+  // computed AFTER the real closure already happened, never gating it.
+  // Fail-open: a checklist bookkeeping failure must never surface as a
+  // closure defect.
+  try {
+    await createClosureChecklistInstance(row.ticket_id, row.goal, row.created_at, new Date());
+  } catch (e: any) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'reeseOutreachFollowUpService', event: 'closure_checklist_instance_failed',
+      ticket_id: row.ticket_id, error_class: e?.name || 'Error', message: String(e?.message || e),
+    }));
+  }
 }
 
 async function escalate(row: ReeseOutreach): Promise<void> {

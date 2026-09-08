@@ -32,8 +32,8 @@ const TILE_LIMIT = 6;
  * Five of my nine invented marks disagreed with theirs, so the same room showed
  * one icon in the classroom and a different one in Rooms.
  *
- * The order below is the Rooms page's order exactly: the room's own emoji, then
- * its category, then a generic. Duplicated from the frontend rather than
+ * The order below is the Rooms page's order exactly: the room's own LOGO if it
+ * has one, then its own emoji, then its category, then a generic. Duplicated from the frontend rather than
  * imported because the backend cannot import from it -- the values are copied
  * verbatim and this comment is the reason a reviewer should check both if either
  * changes.
@@ -60,6 +60,7 @@ function roomIcon(room: RoomLike): string {
 interface RoomLike {
   id: string;
   category?: string | null;
+  icon_url?: string | null;
   metadata?: { emoji?: string | null } | null;
   title?: string | null;
   name?: string | null;
@@ -96,7 +97,8 @@ export async function resolveRoomsRail(ctx: RailContext): Promise<Rail | null> {
     title: nameOf(room),
     detail: room.purpose || room.description || null,
     meta: here > 0 ? `${here} in the room now` : 'nobody here yet',
-    image_url: null,
+    // A real logo when the room has one; the emoji carries it otherwise.
+    image_url: (room.icon_url && room.icon_url.trim()) ? room.icon_url : null,
     glyph: roomIcon(room),
     stamp: here > 0 ? `${here} IN THE ROOM` : null,
     action: {

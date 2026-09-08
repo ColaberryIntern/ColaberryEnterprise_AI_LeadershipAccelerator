@@ -22,6 +22,7 @@ jest.mock('../reeseAutonomousOutreachService', () => ({
   DAILY_SEND_CAP: 12,
   FOLLOW_UP_DAYS: 7,
 }));
+jest.mock('../closureChecklist', () => ({ createClosureChecklistInstance: jest.fn() }));
 
 import ReeseOutreach from '../../../models/ReeseOutreach';
 import RoomMessage from '../../../models/RoomMessage';
@@ -33,6 +34,7 @@ import { generateOutreachMessage } from '../reeseOutreachMessageService';
 import { initiateDm } from '../reeseInitiateDmService';
 import { getReeseAdminUserId, getReeseEnrollmentId } from '../reeseIdentitySeed';
 import { countAutonomousSendsToday } from '../reeseAutonomousOutreachService';
+import { createClosureChecklistInstance } from '../closureChecklist';
 import { processDueReeseOutreachFollowUps } from '../reeseOutreachFollowUpService';
 
 const mockReeseOutreachFindAll = ReeseOutreach.findAll as unknown as jest.Mock;
@@ -48,6 +50,7 @@ const mockInitiateDm = initiateDm as unknown as jest.Mock;
 const mockGetReeseAdminUserId = getReeseAdminUserId as unknown as jest.Mock;
 const mockGetReeseEnrollmentId = getReeseEnrollmentId as unknown as jest.Mock;
 const mockCountAutonomousSendsToday = countAutonomousSendsToday as unknown as jest.Mock;
+const mockCreateClosureChecklistInstance = createClosureChecklistInstance as unknown as jest.Mock;
 
 function makeRow(overrides: Record<string, any> = {}) {
   return {
@@ -59,6 +62,7 @@ function makeRow(overrides: Record<string, any> = {}) {
     goal: 'Confirm re-engagement within 7 days.',
     status: 'active',
     attempt_count: 1,
+    created_at: new Date('2026-08-01T00:00:00Z'),
     last_contacted_at: new Date('2026-08-01T00:00:00Z'),
     next_follow_up_due_at: new Date('2026-08-08T00:00:00Z'),
     update: jest.fn().mockResolvedValue(undefined),
@@ -76,6 +80,7 @@ beforeEach(() => {
   mockGenerateMessage.mockResolvedValue('A real unique follow-up message.');
   mockInitiateDm.mockResolvedValue({ roomId: 'room-1', messageId: 'msg-2' });
   mockRecordEvidence.mockResolvedValue({ id: 'evidence-1' });
+  mockCreateClosureChecklistInstance.mockResolvedValue({ id: 'checklist-1' });
 });
 
 describe('processDueReeseOutreachFollowUps — branch: signal cleared', () => {
@@ -91,6 +96,30 @@ describe('processDueReeseOutreachFollowUps — branch: signal cleared', () => {
     expect(mockUpdateTicketStatus).toHaveBeenCalledWith('ticket-1', 'done', 'ai_staff', 'reese-admin-1');
     expect(row.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'signal_cleared' }));
     expect(mockInitiateDm).not.toHaveBeenCalled();
+  });
+
+  it('Capability 6: creates a real, observational Closure checklist instance keyed on the real ticket id', async () => {
+    const row = makeRow();
+    mockReeseOutreachFindAll.mockResolvedValue([row]);
+    mockEvaluateInactivity.mockResolvedValue(null);
+
+    await processDueReeseOutreachFollowUps(false);
+
+    expect(mockCreateClosureChecklistInstance).toHaveBeenCalledWith(
+      'ticket-1', 'Confirm re-engagement within 7 days.', row.created_at, expect.any(Date),
+    );
+  });
+
+  it('fail-open: a Closure checklist bookkeeping failure never breaks a real closure that already succeeded', async () => {
+    const row = makeRow();
+    mockReeseOutreachFindAll.mockResolvedValue([row]);
+    mockEvaluateInactivity.mockResolvedValue(null);
+    mockCreateClosureChecklistInstance.mockRejectedValue(new Error('DB write failed'));
+
+    const result = await processDueReeseOutreachFollowUps(false);
+
+    expect(result.signalCleared).toBe(1);
+    expect(mockUpdateTicketStatus).toHaveBeenCalled();
   });
 });
 
@@ -125,6 +154,19 @@ describe('processDueReeseOutreachFollowUps — branch: reply detected (goal met)
     );
     expect(mockRoomMessageFindOne).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ room_id: 'room-1', enrollment_id: 'student-1' }) }),
+    );
+  });
+
+  it('the goal_met branch also creates a real Closure checklist instance — both real closure paths go through the same checklist', async () => {
+    const row = makeRow();
+    mockReeseOutreachFindAll.mockResolvedValue([row]);
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 8, completionPct: 5 });
+    mockRoomMessageFindOne.mockResolvedValue({ id: 'reply-msg-1', created_at: new Date('2026-08-09T00:00:00Z') });
+
+    await processDueReeseOutreachFollowUps(false);
+
+    expect(mockCreateClosureChecklistInstance).toHaveBeenCalledWith(
+      'ticket-1', 'Confirm re-engagement within 7 days.', row.created_at, expect.any(Date),
     );
   });
 });
@@ -228,5 +270,6 @@ describe('processDueReeseOutreachFollowUps — dryRun', () => {
     expect(mockRecordEvidence).not.toHaveBeenCalled();
     expect(rowCleared.update).not.toHaveBeenCalled();
     expect(rowFollowUp.update).not.toHaveBeenCalled();
+    expect(mockCreateClosureChecklistInstance).not.toHaveBeenCalled();
   });
 });

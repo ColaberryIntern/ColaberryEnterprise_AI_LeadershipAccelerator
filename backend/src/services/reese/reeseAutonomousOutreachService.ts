@@ -14,6 +14,7 @@ import {
 import { generateOutreachMessage } from './reeseOutreachMessageService';
 import { initiateDm } from './reeseInitiateDmService';
 import { resolveStudentDisplayName } from './resolveStudentDisplayName';
+import { createOutreachChecklistInstance } from './outreachChecklist';
 
 // Reese Phase 2 (Autonomous Outreach) — the decision + orchestration sweep.
 // Named, non-negotiable constants (see execution-contract.md — logged there as
@@ -160,6 +161,7 @@ async function sendNewOutreach(
 
   await initiateDm(enrollmentId, message);
 
+  const nextFollowUpDueAt = new Date(Date.now() + FOLLOW_UP_DAYS * 24 * 60 * 60 * 1000);
   await ReeseOutreach.create({
     enrollment_id: enrollmentId,
     ticket_id: ticket.id,
@@ -169,9 +171,24 @@ async function sendNewOutreach(
     status: 'active',
     attempt_count: 1,
     last_contacted_at: new Date(),
-    next_follow_up_due_at: new Date(Date.now() + FOLLOW_UP_DAYS * 24 * 60 * 60 * 1000),
+    next_follow_up_due_at: nextFollowUpDueAt,
     risk_tier: RISK_TIER,
   });
+
+  // Reese Agentic AI Employee mission, Capability 6 — a real, persisted
+  // Outreach checklist per send, linked to this send's real ticket.
+  // Observational only (Ali's explicit choice, 2026-09-07): computed and
+  // persisted after the real send already happened, never gating it — see
+  // outreachChecklist.ts's own header for why. Fail-open: a checklist
+  // bookkeeping failure must never surface as an autonomous-outreach defect.
+  try {
+    await createOutreachChecklistInstance(ticket.id, signalType, goal, message, nextFollowUpDueAt);
+  } catch (e: any) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'reeseAutonomousOutreachService', event: 'outreach_checklist_instance_failed',
+      ticket_id: ticket.id, error_class: e?.name || 'Error', message: String(e?.message || e),
+    }));
+  }
 
   return { enrollmentId, signalType, action: 'sent', reason: `${signalType}_signal_fired` };
 }

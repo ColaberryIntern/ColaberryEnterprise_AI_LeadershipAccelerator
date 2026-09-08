@@ -102,6 +102,14 @@ describe('renderWorkflowSvg', () => {
     expect(svg).toContain('width="100%"');
   });
 
+  it('keeps its height in a style, because the attribute takes a length and not "auto"', () => {
+    // As `height="auto"` the browser rejected it - "Expected length, 'auto'" on the console
+    // of every page carrying a diagram - and fell back to the viewBox, so it rendered
+    // correctly and logged an error forever. Caught by reading the live page, not by a test.
+    expect(svg).not.toMatch(/height\s*=\s*"auto"/);
+    expect(svg).toContain('style="height:auto"');
+  });
+
   it('states each step’s status in TEXT, not only in colour', () => {
     // Colour alone fails anyone who cannot see it, and this diagram's whole argument is
     // carried by which steps are marked.

@@ -36,6 +36,10 @@ jest.mock('../agentWorkStatusIntentService', () => ({
   detectWorkStatusQuery: jest.fn(() => null),
   buildWorkStatusReply: jest.fn(),
 }));
+jest.mock('../agentInterventionIntentService', () => ({
+  detectInterventionIntentQuery: jest.fn(() => null),
+  buildInterventionIntentReply: jest.fn(),
+}));
 
 const mockAssessmentFindAll = jest.fn();
 jest.mock('../../models/StudentAssessment', () => ({

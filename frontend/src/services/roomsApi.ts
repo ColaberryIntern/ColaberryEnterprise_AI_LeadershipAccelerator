@@ -53,6 +53,8 @@ export interface Room {
   owner_enrollment_id?: string | null;
   is_system?: boolean;
   is_video?: boolean;
+  /** The room's own logo. Null/absent means fall back to the emoji. */
+  icon_url?: string | null;
   always_open?: boolean;
   created_at: string;
   locked?: boolean;

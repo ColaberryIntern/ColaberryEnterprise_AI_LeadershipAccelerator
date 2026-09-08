@@ -54,6 +54,10 @@ jest.mock('../agentUncertaintyIntentService', () => ({
   detectUncertaintyQuery: jest.fn(() => false),
   buildUncertaintyReply: jest.fn(),
 }));
+jest.mock('../agentInterventionIntentService', () => ({
+  detectInterventionIntentQuery: jest.fn(() => null),
+  buildInterventionIntentReply: jest.fn(),
+}));
 
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { sendManagerMessage } from '../agentManagerConversationService';

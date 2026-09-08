@@ -15,6 +15,8 @@ export type RoomStatus = 'active' | 'archived' | 'locked' | 'removed';
 
 export interface CommunityRoomAttributes {
   id?: string;
+  /** The room's own logo. Null means fall back to the emoji, then the category. */
+  icon_url?: string | null;
   slug: string;
   name: string;
   category?: RoomCategory;
@@ -58,6 +60,8 @@ class CommunityRoom extends Model<CommunityRoomAttributes> implements CommunityR
   declare is_system: boolean;
   declare created_by: string;
   declare is_video: boolean;
+  /** The room's own logo. Null means fall back to metadata.emoji, then category. */
+  declare icon_url: string | null;
   declare always_open: boolean;
   declare meeting_link: string | null;
   declare metadata: Record<string, unknown>;
@@ -85,6 +89,7 @@ CommunityRoom.init(
     is_system: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     created_by: { type: DataTypes.STRING(60), allowNull: false, defaultValue: 'system' },
     is_video: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    icon_url: { type: DataTypes.STRING(600), allowNull: true },
     always_open: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     meeting_link: { type: DataTypes.STRING(600), allowNull: true },
     metadata: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },

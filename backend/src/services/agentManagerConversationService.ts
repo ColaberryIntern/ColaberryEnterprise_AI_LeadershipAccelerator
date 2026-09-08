@@ -8,6 +8,7 @@ import {
 } from './managerReliabilityIntentService';
 import { detectWorkStatusQuery, buildWorkStatusReply } from './agentWorkStatusIntentService';
 import { detectUncertaintyQuery, buildUncertaintyReply } from './agentUncertaintyIntentService';
+import { detectInterventionIntentQuery, buildInterventionIntentReply } from './agentInterventionIntentService';
 
 // AI Workforce Management, Checkpoint C — Direct Agent Communication, first
 // slice. Generic by construction — works off AiAgent.id, not hardcoded to
@@ -144,6 +145,15 @@ async function handleUncertaintyQuery(agent: AiAgent, messageText: string): Prom
   return buildUncertaintyReply(agent);
 }
 
+/** Reese Agentic AI Employee mission, Capability 7 — "Which students need
+ * me?" / "What did you promise to follow up on?" / "Which interventions
+ * are working?" Same deterministic-before-LLM posture as the other checks. */
+async function handleInterventionIntentQuery(agent: AiAgent, messageText: string): Promise<string | null> {
+  const queryType = detectInterventionIntentQuery(messageText);
+  if (!queryType) return null;
+  return buildInterventionIntentReply(agent, queryType);
+}
+
 /** Persists the agent's turn and returns the refreshed conversation view —
  * the one shared tail every reply path (reliability card, work-status
  * answer, normal LLM reply) ends with. */
@@ -198,6 +208,11 @@ export async function sendManagerMessage(
   const uncertaintyReply = await handleUncertaintyQuery(agent, messageText);
   if (uncertaintyReply !== null) {
     return persistAgentReplyAndReturnView(conversation, agentId, uncertaintyReply);
+  }
+
+  const interventionIntentReply = await handleInterventionIntentQuery(agent, messageText);
+  if (interventionIntentReply !== null) {
+    return persistAgentReplyAndReturnView(conversation, agentId, interventionIntentReply);
   }
 
   const recent = await AgentManagerMessage.findAll({

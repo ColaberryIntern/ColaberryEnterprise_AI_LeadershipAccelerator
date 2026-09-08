@@ -75,10 +75,18 @@ const RailRow: React.FC<{ item: RoomListItem; active: boolean; onOpen: (id: stri
   const { room } = item;
   const shell = item.visibility === 'shell';
   const em = shell ? '' : (room.metadata?.emoji || CAT_EMOJI[room.category] || '');
-  const label = shell ? 'Private room' : (em ? `${em} ` : '') + room.name;
+  // A room's own logo wins over its emoji, in the same order the classroom rail
+  // uses. When a logo is shown the emoji is dropped from the label, so the row
+  // does not carry two marks for one room.
+  const logo = shell ? '' : (room.icon_url || '').trim();
+  const label = shell ? 'Private room' : (!logo && em ? `${em} ` : '') + room.name;
   return (
     <button type="button" className={`rm-railrow${active ? ' active' : ''}`} onClick={() => onOpen(room.id)}>
-      <span className="rm-railicon">{shell ? '🔒' : room.is_video ? '📹' : '#'}</span>
+      <span className="rm-railicon">
+        {logo
+          ? <img src={logo} alt="" className="rm-raillogo" />
+          : shell ? '🔒' : room.is_video ? '📹' : '#'}
+      </span>
       <span className="rm-railname">{label}</span>
       {(item.here_count ?? 0) > 0 && <span className="rm-railcount"><span className="rm-raildot" />{item.here_count}</span>}
     </button>

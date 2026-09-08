@@ -320,6 +320,11 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
   const isOwner = !!room.owner_enrollment_id && room.owner_enrollment_id === myId;
   const canManage = isOwner || ['owner', 'host', 'cohost', 'moderator'].includes(membership?.role || '');
   const emoji = room.metadata?.emoji || CAT_EMOJI[room.category] || '💬';
+  // A room's own logo wins over its emoji. Rendered here as well as in the
+  // classroom rail on purpose: the last time these two disagreed about a room's
+  // icon, the classroom showed one mark and Rooms showed another, and the only
+  // way that stays fixed is if both read the same field in the same order.
+  const logo = (room.icon_url || '').trim();
 
   // Verified-help view model: which messages are verified answers, and whether
   // the viewer has an open question they could resolve by verifying a reply.
@@ -345,7 +350,11 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
   return (
     <div className="rm-pane">
       <div className={`rm-pane-head cat-${room.category}`}>
-        <div className="rm-detail-emoji">{emoji}</div>
+        <div className="rm-detail-emoji">
+          {logo
+            ? <img src={logo} alt="" className="rm-detail-logo" />
+            : emoji}
+        </div>
         <div className="rm-pane-title">{room.is_video ? '' : '# '}{room.name}</div>
         {room.is_video && <span className="rm-vbadge">▶ Video</span>}
         {room.privacy !== 'public' && <span className={`rm-privacy ${room.privacy}`}>{room.privacy.replace('_', ' ')}</span>}
