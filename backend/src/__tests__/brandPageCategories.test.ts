@@ -82,13 +82,13 @@ describe('brand page categories', () => {
   const mapped = apps.filter((a) => BRAND_PAGE_CATEGORIES[a.brandSlug]);
 
   it('finds apps, pages and maps at all — a green run over nothing proves nothing', () => {
-    // Two, not three, since 2026-09-08: refactored.ai was retired and its app deleted. The
-    // redirect to the accelerator is served from AWS and never touches this repository.
+    // Back to three: refactored-public returned on 2026-09-08 as a real product site,
+    // having briefly been deleted when the old portal was retired earlier the same day.
     //
     // These floors are a canary against the walker silently finding nothing — a broken
-    // path, a renamed directory — not a target to grow. Lower them only when an app is
-    // genuinely retired, never to make a red run go green.
-    expect(apps.length).toBeGreaterThanOrEqual(2);
+    // path, a renamed directory — not a target to grow. Move them only when an app is
+    // genuinely added or retired, never to make a red run go green.
+    expect(apps.length).toBeGreaterThanOrEqual(3);
     expect(apps.reduce((n, a) => n + a.paths.length, 0)).toBeGreaterThanOrEqual(15);
     expect(mapped.length).toBeGreaterThanOrEqual(1);
   });
