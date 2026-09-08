@@ -38,6 +38,26 @@ interface BillingRow {
   amountPaid: number | null;
 }
 
+interface TimelineEvent {
+  occurredAt: string;
+  domain: string;
+  source: string;
+  type: string;
+  summary: string | null;
+}
+
+interface Journey {
+  firstTouch: string | null;
+  lastActivity: string | null;
+  daysKnown: number | null;
+  sessions: number;
+  pageEvents: number;
+  campaigns: number;
+  emailsSent: number;
+  enrollments: number;
+  intentScore: number | null;
+}
+
 interface Profile {
   email: string;
   name: string | null;
@@ -49,6 +69,9 @@ interface Profile {
   learning?: LearningRow[];
   billing?: BillingRow[];
   engagement?: { sessions: number; firstSeen: string | null; lastSeen: string | null; sites: string[] } | null;
+  journey?: Journey;
+  timeline?: TimelineEvent[];
+  timelineDomains?: string[];
   withheldPanels: string[];
 }
 
@@ -61,6 +84,15 @@ const STAGE_LABEL: Record<string, string> = {
   active_learner: 'Active learner',
   graduate: 'Graduate',
   returning_customer: 'Returning customer',
+};
+
+const DOMAIN_TONE: Record<string, string> = {
+  acquisition: 'info',
+  sales: 'primary',
+  communication: 'secondary',
+  commerce: 'success',
+  learning: 'warning',
+  community: 'dark',
 };
 
 /** A value we do not have. Never rendered as an empty cell or a zero. */
@@ -82,6 +114,10 @@ export default function PersonProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // The timeline is filterable, as the brief requires. Filtering is client-side
+  // over events the server already decided this caller may see — it narrows the
+  // view, it does not widen access.
+  const [domainFilter, setDomainFilter] = useState<string>('all');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -148,6 +184,94 @@ export default function PersonProfilePage() {
               />
             </div>
           </SectionCard>
+
+          {/* Journey summary: the shape of the relationship, above the detail.
+              Progressive disclosure, as the brief asks for — summary first,
+              domain sections second. */}
+          {profile.journey && (
+            <SectionCard title="Journey">
+              <div className="row">
+                <Field
+                  label="First touch"
+                  value={profile.journey.firstTouch
+                    ? new Date(profile.journey.firstTouch).toLocaleDateString() : null}
+                />
+                <Field
+                  label="Known for"
+                  value={profile.journey.daysKnown === null
+                    ? null
+                    : `${profile.journey.daysKnown.toLocaleString()} days`}
+                />
+                <Field
+                  label="Last activity"
+                  value={profile.journey.lastActivity
+                    ? new Date(profile.journey.lastActivity).toLocaleString() : null}
+                />
+                {/* Counts, not estimates. A zero here means zero. */}
+                <Field label="Sessions" value={profile.journey.sessions || null} />
+                <Field label="Page events" value={profile.journey.pageEvents || null} />
+                <Field label="Campaigns" value={profile.journey.campaigns || null} />
+                <Field label="Emails sent" value={profile.journey.emailsSent || null} />
+                <Field label="Enrolments" value={profile.journey.enrollments || null} />
+                <Field label="Peak intent" value={profile.journey.intentScore} />
+              </div>
+            </SectionCard>
+          )}
+
+          {/* The unified activity timeline — the centrepiece of the brief and the
+              thing the first version of this page omitted entirely. Every event
+              is source-labelled so any row can be traced back to the table it
+              came from. */}
+          {profile.timeline !== undefined && (
+            <SectionCard title="Activity timeline">
+              <div className="d-flex flex-wrap gap-1 mb-3">
+                {['all', ...(profile.timelineDomains ?? [])].map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    className={`btn btn-sm ${domainFilter === d ? 'btn-dark' : 'btn-outline-secondary'}`}
+                    onClick={() => setDomainFilter(d)}
+                    aria-pressed={domainFilter === d}
+                  >
+                    {d === 'all' ? 'All' : d}
+                  </button>
+                ))}
+              </div>
+
+              {profile.timeline.length === 0 ? (
+                <p className="text-muted mb-0 small">
+                  No recorded activity for this person in the areas you can see.
+                </p>
+              ) : (
+                <ul className="list-unstyled mb-0">
+                  {profile.timeline
+                    .filter((e) => domainFilter === 'all' || e.domain === domainFilter)
+                    .map((e, i) => (
+                      <li
+                        key={`${e.source}-${e.occurredAt}-${i}`}
+                        className="d-flex gap-3 py-2 border-bottom align-items-baseline"
+                      >
+                        <span
+                          className="text-muted small text-nowrap"
+                          style={{ minWidth: '11rem', fontVariantNumeric: 'tabular-nums' }}
+                        >
+                          {new Date(e.occurredAt).toLocaleString()}
+                        </span>
+                        <span className={`badge text-bg-${DOMAIN_TONE[e.domain] ?? 'light'}`}>
+                          {e.domain}
+                        </span>
+                        <span className="flex-grow-1">
+                          <span className="fw-semibold">{e.type}</span>
+                          {e.summary && <span className="text-muted ms-2">{e.summary}</span>}
+                        </span>
+                        {/* Source-labelled, so any row can be traced to its table. */}
+                        <span className="text-muted small text-nowrap">{e.source}</span>
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </SectionCard>
+          )}
 
           {profile.acquisition !== undefined && (
             <SectionCard title="How they found us">

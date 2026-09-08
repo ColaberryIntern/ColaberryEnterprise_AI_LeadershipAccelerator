@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, September 7, 2026 at 4:28 PM</div>
-    <div><span class="sid">CC-20260906-q4h7</span><span class="count">8 changes</span></div>
+    <div class="meta">Generated Monday, September 7, 2026 at 6:21 PM</div>
+    <div><span class="sid">CC-20260906-q4h7</span><span class="count">9 changes</span></div>
   </header>
   <main>
     
@@ -177,6 +177,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">20 service tests, 62 across the three affected suites, `tsc --noEmit` exit 0 on TypeScript 5.9.3, boundary validator OK (15 files), full site harness green across 8 routes x 4 viewports. Separately, a browser harness drives the whole flow against a stubbed API - 14 checks including that the token from ingest is what the interview is keyed on, that the opening turn is the applicant&#39;s own words, that the reply box disappears on the closing turn, and that every revealed element meets AA. **The site harness could not have caught any of that**: the panel is `hidden` until submit, so every check it runs skipped the feature entirely.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">**This is not the Flotation prompt with the nouns swapped.** Flotation interviews a business about a workflow; this interviews somebody asking for money, which changes what is safe to ask. Three rules are in the prompt rather than in a comment hoping to be honoured: never ask about money, debt, benefits, immigration status, health or household; never make somebody argue for their own worth; never imply a decision, because eligibility and the selection process do not exist and `/scholarships/` says so in public. **Most of the test file tests the prompt, which is deliberate** - those guarantees live in instructions to a model, so an edit that tightens the wording and drops one line would change nothing observable and quietly start asking a person who needs help what they have overcome. **The record carries no score, rank or eligibility column**, and the summary prompt forbids even &quot;strong candidate&quot;: a reviewer reading six sentences forms a picture, a reviewer reading six scored attributes starts ranking people against criteria nobody has agreed. **The 25 hours is asked as a question about their week, not their commitment** - &quot;can you commit?&quot; invites everyone to say yes. **Deploy note:** `scholarship_interest` gained `message` in its field map, so `seedLeadSources` must run again or the opening line never reaches the lead row.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">09</span>
+          <h2>**Free account moves off refactored.ai and onto the platform that actually sends email**</h2>
+          <span class="badge">2026-09-07</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali: &quot;The login goes to refactored.ai but not sending any login emails. Can you take over that page and make sure the login goes into a free account on enterprise.colaberry.com. It should show up as a lead from opportunity lift.&quot; `/learn-free/` no longer hands off; it now creates the account itself through a new `assets/signup.js`, which posts the CPN lead and then calls `/api/create-free-account`. Copy on `/scholarships/` and `/about/` follows, and the page states plainly that the sign-in email arrives from Colaberry with the subject &quot;Welcome to Colaberry&quot;.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">A browser harness drives the real flow against a stubbed API - 13 checks over the happy path and both failure paths. Site harness green across 8 routes x 4 viewports; `appSourcesAreSeeded` + `brandPageCategories` 42/42; boundary validator OK, 16 files.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The host Ali named is not our platform.** `enterprise.colaberry.com` redirects to `login.refactored.ai` Auth0 with `redirect_uri=app.colaberry.com/callback`, and `/enroll` on it fails outright - it is the same Auth0 tenant that is already not sending his login emails. Ours is `enterprise.colaberry.ai`, whose `/enroll` serves fine. **Our email demonstrably works**, which is what made the move worth doing rather than moving a broken experience onto our own domain: `communication_logs` holds 277 &quot;Welcome to Colaberry&quot; magic links with status `sent`, most recent the same day. **The call order is the whole feature.** `createExplorerEnrollment` hardcodes `source: &#39;open_house&#39;` on the lead it captures, so the account call alone would file every CPN signup under Colaberry&#39;s open house. Its capture is a `findOrCreate` keyed on email, so ingesting the CPN lead FIRST means the canonical lead already exists with its OpportunityLift source and `LeadTenantContext`, and the account call finds it. Reversing two lines misattributes every signup and breaks nothing visible, so it is asserted in the harness. **Failure favours the person:** a failed ingest still creates the account, and a failed account never claims the details were lost, because the lead survives. **The site harness caught a real violation** - two filled primary buttons on the page - which the closing block lost.</span></div>
           
         </div>
       </article>

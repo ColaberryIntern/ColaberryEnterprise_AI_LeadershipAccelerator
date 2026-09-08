@@ -3,6 +3,7 @@ import { sequelize } from '../../config/database';
 import { LifecycleStage } from './lifecycle';
 import { normalizeEmail } from './identityResolution';
 import { visibleStagesForSections } from './personScope';
+import { EventDomain, TimelineEvent, domainsForSections, getPersonTimeline } from './personTimelineService';
 
 /**
  * The 360° person profile.
@@ -64,6 +65,26 @@ export interface EngagementPanel {
   sites: string[];
 }
 
+/**
+ * The journey summary the brief asks for: first touch, time in stage, and the
+ * shape of the relationship, above the detail.
+ *
+ * Every figure is counted, not estimated. A count we cannot compute is null
+ * rather than 0 — the same rule the metric registry enforces everywhere else.
+ */
+export interface JourneySummary {
+  firstTouch: string | null;
+  lastActivity: string | null;
+  daysKnown: number | null;
+  sessions: number;
+  pageEvents: number;
+  campaigns: number;
+  emailsSent: number;
+  enrollments: number;
+  /** Highest recorded intent score, when the caller may see sales data. */
+  intentScore: number | null;
+}
+
 export interface PersonProfile {
   email: string;
   name: string | null;
@@ -76,6 +97,12 @@ export interface PersonProfile {
   learning?: LearningPanel[];
   billing?: BillingPanel[];
   engagement?: EngagementPanel | null;
+  /** The summary above the detail. Progressive disclosure, as the brief asks. */
+  journey?: JourneySummary;
+  /** One ordered history across every domain the caller may see. */
+  timeline?: TimelineEvent[];
+  /** Domains excluded from the timeline by this caller's permissions. */
+  timelineDomains?: EventDomain[];
   /** Named so the UI can say what it is NOT showing, rather than silently omitting. */
   withheldPanels: string[];
 }
@@ -242,5 +269,103 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
     profile.withheldPanels.push('engagement');
   }
 
+  // ── Journey summary and the unified timeline ──────────────────────────────
+  //
+  // Both need the person's source-record ids. Resolved once, here, rather than
+  // per branch: the same email keys both, and re-deriving it in every query
+  // would let them drift apart about who this person is.
+  const leadRows = await sequelize.query<{ id: number }>(
+    `SELECT id FROM leads WHERE lower(btrim(email)) = :email`,
+    { type: QueryTypes.SELECT, replacements: { email } },
+  );
+  const leadIds = leadRows.map((r) => r.id);
+
+  // Enrolment ids respect the mentor narrowing, so a mentor's timeline cannot
+  // carry learning events from a learner outside their scope.
+  const scoped = query.visibleEnrollmentIds;
+  const enrollmentIds =
+    scoped !== null && scoped.length === 0
+      ? []
+      : (profile.learning ?? []).map((l) => l.enrollmentId).length > 0
+        ? (profile.learning ?? []).map((l) => l.enrollmentId)
+        : (
+            await sequelize.query<{ id: string }>(
+              `SELECT id FROM enrollments WHERE lower(btrim(email)) = :email
+               ${scoped === null ? '' : 'AND id IN (:ids)'}`,
+              {
+                type: QueryTypes.SELECT,
+                replacements: scoped === null ? { email } : { email, ids: scoped },
+              },
+            )
+          ).map((r) => r.id);
+
+  const domains = domainsForSections(query.sections);
+  profile.timelineDomains = domains;
+  profile.timeline = await getPersonTimeline({
+    leadIds,
+    enrollmentIds,
+    domains,
+    limit: 150,
+  });
+
+  profile.journey = await buildJourney(email, leadIds, enrollmentIds, query.sections, profile.timeline);
+
   return profile;
+}
+
+/**
+ * The counts above the detail.
+ *
+ * Counted from the source tables rather than inferred from the timeline page,
+ * because the timeline is capped at 150 events and a count taken from it would
+ * silently understate anyone busier than that.
+ */
+async function buildJourney(
+  email: string,
+  leadIds: number[],
+  enrollmentIds: string[],
+  sections: readonly string[],
+  timeline: TimelineEvent[],
+): Promise<JourneySummary> {
+  const hasLeads = leadIds.length > 0;
+
+  const counts = hasLeads
+    ? (
+        await sequelize.query<{
+          sessions: string; page_events: string; campaigns: string;
+          emails: string; first_touch: string | null; intent: string | null;
+        }>(
+          `SELECT
+             (SELECT COUNT(*) FROM visitor_sessions WHERE lead_id IN (:leadIds))::text AS sessions,
+             (SELECT COUNT(*) FROM page_events WHERE lead_id IN (:leadIds) AND event_type <> 'heartbeat')::text AS page_events,
+             (SELECT COUNT(*) FROM campaign_leads WHERE lead_id IN (:leadIds))::text AS campaigns,
+             (SELECT COUNT(*) FROM scheduled_emails WHERE lead_id IN (:leadIds) AND sent_at IS NOT NULL)::text AS emails,
+             (SELECT MIN(created_at) FROM leads WHERE id IN (:leadIds)) AS first_touch,
+             (SELECT MAX(score)::text FROM intent_scores WHERE lead_id IN (:leadIds)) AS intent`,
+          { type: QueryTypes.SELECT, replacements: { leadIds } },
+        )
+      )[0]
+    : null;
+
+  const firstTouch = counts?.first_touch ?? null;
+  const lastActivity = timeline.length > 0 ? timeline[0].occurredAt : null;
+
+  return {
+    firstTouch,
+    lastActivity,
+    // null, not 0, when there is no first touch to measure from.
+    daysKnown: firstTouch
+      ? Math.max(0, Math.round((Date.now() - new Date(firstTouch).getTime()) / 86400000))
+      : null,
+    sessions: Number(counts?.sessions ?? 0),
+    pageEvents: Number(counts?.page_events ?? 0),
+    campaigns: Number(counts?.campaigns ?? 0),
+    emailsSent: Number(counts?.emails ?? 0),
+    enrollments: enrollmentIds.length,
+    // Sales data. Withheld rather than shown as 0 when the caller lacks it.
+    intentScore:
+      sections.includes('leads') || sections.includes('revenue') || sections.includes('lead_ingestion')
+        ? (counts?.intent != null ? Number(counts.intent) : null)
+        : null,
+  };
 }

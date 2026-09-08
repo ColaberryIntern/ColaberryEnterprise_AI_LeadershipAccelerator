@@ -1,10 +1,10 @@
 /**
- * agentManagerConversationService — uncertainty query integration (Reese
- * Agentic AI Employee mission, Capability 7). Pins the real wiring inside
- * sendManagerMessage() — not just the pure detector/answer-builder in
- * isolation (agentUncertaintyIntentService.test.ts covers those). Core
- * property: a real uncertainty question never reaches the LLM, and is
- * checked after the reliability flow and after the work-status check.
+ * agentManagerConversationService — intervention-intent query integration
+ * (Reese Agentic AI Employee mission, Capability 7). Pins the real wiring
+ * inside sendManagerMessage() — not just the pure detector/answer-builder
+ * in isolation (agentInterventionIntentService.test.ts covers those). Core
+ * property: these questions never reach the LLM, and are checked after the
+ * reliability/work-status/uncertainty pre-checks.
  */
 const mockAiAgentFindByPk = jest.fn();
 jest.mock('../../models/AiAgent', () => ({ __esModule: true, default: { findByPk: (...a: any[]) => mockAiAgentFindByPk(...a) } }));
@@ -36,15 +36,27 @@ jest.mock('../agentWorkStatusIntentService', () => ({
   detectWorkStatusQuery: jest.fn(() => null),
   buildWorkStatusReply: jest.fn(),
 }));
-jest.mock('../agentInterventionIntentService', () => ({
-  detectInterventionIntentQuery: jest.fn(() => null),
-  buildInterventionIntentReply: jest.fn(),
+jest.mock('../agentUncertaintyIntentService', () => ({
+  detectUncertaintyQuery: jest.fn(() => false),
+  buildUncertaintyReply: jest.fn(),
 }));
 
-const mockAssessmentFindAll = jest.fn();
-jest.mock('../../models/StudentAssessment', () => ({
+const mockAdminUserFindOne = jest.fn();
+jest.mock('../../models/AdminUser', () => ({
   __esModule: true,
-  default: { findAll: (...a: any[]) => mockAssessmentFindAll(...a) },
+  default: { findOne: (...a: any[]) => mockAdminUserFindOne(...a) },
+}));
+
+const mockTicketFindAll = jest.fn();
+jest.mock('../../models/Ticket', () => ({
+  __esModule: true,
+  default: { findAll: (...a: any[]) => mockTicketFindAll(...a) },
+}));
+
+const mockReeseOutreachFindAll = jest.fn();
+jest.mock('../../models/ReeseOutreach', () => ({
+  __esModule: true,
+  default: { findAll: (...a: any[]) => mockReeseOutreachFindAll(...a) },
 }));
 
 const mockEnrollmentFindAll = jest.fn();
@@ -67,20 +79,23 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockCreateCompletion.mockResolvedValue({ choices: [{ message: { content: 'Normal reply.' } }] });
   mockGetInstrumentedOpenAI.mockReturnValue({ chat: { completions: { create: mockCreateCompletion } } });
-  mockAiAgentFindByPk.mockResolvedValue({ id: 'agent-1', agent_name: 'Reese', system_prompt: 'You are Reese.', tools_granted: ['assess_student_health'] });
+  mockAiAgentFindByPk.mockResolvedValue({ id: 'agent-1', agent_name: 'Reese', system_prompt: 'You are Reese.' });
   mockMessageFindAll.mockResolvedValue([]);
-  mockAssessmentFindAll.mockResolvedValue([]);
+  mockAdminUserFindOne.mockResolvedValue({ id: 'admin-1' });
+  mockTicketFindAll.mockResolvedValue([]);
+  mockReeseOutreachFindAll.mockResolvedValue([]);
   mockEnrollmentFindAll.mockResolvedValue([]);
 });
 
-describe('sendManagerMessage — uncertainty query', () => {
-  it('a "what are you uncertain about" question is answered from real StudentAssessment rows and never reaches the LLM', async () => {
+describe('sendManagerMessage — intervention intent queries', () => {
+  it('a "which students need me" question is answered from real ReeseOutreach rows and never reaches the LLM', async () => {
     const conversation = fakeConversation();
     mockConversationFindOrCreate.mockResolvedValue([conversation, false]);
-    mockAssessmentFindAll.mockResolvedValue([{ enrollment_id: 'e1', requires_human_review: true, unanswered_questions: [] }]);
+    mockTicketFindAll.mockResolvedValue([{ id: 'ticket-1' }]);
+    mockReeseOutreachFindAll.mockResolvedValue([{ enrollment_id: 'e1', signal_type: 'inactivity', status: 'active' }]);
     mockEnrollmentFindAll.mockResolvedValue([{ id: 'e1', full_name: 'Victor Chukwukere' }]);
 
-    const result = await sendManagerMessage('agent-1', 'ali@colaberry.com', null, 'What are you uncertain about?');
+    const result = await sendManagerMessage('agent-1', 'ali@colaberry.com', null, 'Which students need me?');
 
     expect(mockCreateCompletion).not.toHaveBeenCalled();
     const agentTurn = mockMessageCreate.mock.calls.find((c) => c[0].role === 'agent');
@@ -88,15 +103,28 @@ describe('sendManagerMessage — uncertainty query', () => {
     expect(result.conversationId).toBe('conv-1');
   });
 
-  it('honestly answered when nothing is uncertain', async () => {
+  it('a "what did you promise to follow up on" question is answered honestly when there are none', async () => {
     const conversation = fakeConversation();
     mockConversationFindOrCreate.mockResolvedValue([conversation, false]);
 
-    await sendManagerMessage('agent-1', 'ali@colaberry.com', null, "What don't you know?");
+    await sendManagerMessage('agent-1', 'ali@colaberry.com', null, 'What did you promise to follow up on?');
 
     expect(mockCreateCompletion).not.toHaveBeenCalled();
     const agentTurn = mockMessageCreate.mock.calls.find((c) => c[0].role === 'agent');
-    expect(agentTurn[0].content).toBe("Nothing I'm currently uncertain about — every recent assessment came back with a clear picture.");
+    expect(agentTurn[0].content).toBe("I don't have any open follow-up commitments right now.");
+  });
+
+  it('a "which interventions are working" question is answered from real outcome counts', async () => {
+    const conversation = fakeConversation();
+    mockConversationFindOrCreate.mockResolvedValue([conversation, false]);
+    mockTicketFindAll.mockResolvedValue([{ id: 'ticket-1' }]);
+    mockReeseOutreachFindAll.mockResolvedValue([{ status: 'goal_met' }, { status: 'signal_cleared' }]);
+
+    await sendManagerMessage('agent-1', 'ali@colaberry.com', null, 'Which interventions are working?');
+
+    expect(mockCreateCompletion).not.toHaveBeenCalled();
+    const agentTurn = mockMessageCreate.mock.calls.find((c) => c[0].role === 'agent');
+    expect(agentTurn[0].content).toContain('Of 2 resolved interventions');
   });
 
   it('never triggers while a reliability confirmation is pending — that flow owns the turn first', async () => {
@@ -104,20 +132,20 @@ describe('sendManagerMessage — uncertainty query', () => {
     const conversation = fakeConversation({ pending_reliability_confirmation: pending });
     mockConversationFindOrCreate.mockResolvedValue([conversation, false]);
 
-    await sendManagerMessage('agent-1', 'ali@colaberry.com', null, 'What are you uncertain about?');
+    await sendManagerMessage('agent-1', 'ali@colaberry.com', null, 'Which students need me?');
 
-    expect(mockAssessmentFindAll).not.toHaveBeenCalled();
+    expect(mockReeseOutreachFindAll).not.toHaveBeenCalled();
     expect(conversation.update).toHaveBeenCalledWith({ pending_reliability_confirmation: null });
   });
 
-  it('regression: a normal message with no uncertainty keywords goes through the unchanged LLM reply path', async () => {
+  it('regression: a normal message with no intervention keywords goes through the unchanged LLM reply path', async () => {
     const conversation = fakeConversation();
     mockConversationFindOrCreate.mockResolvedValue([conversation, false]);
 
     const result = await sendManagerMessage('agent-1', 'ali@colaberry.com', null, 'How is Victor doing this week?');
 
     expect(mockCreateCompletion).toHaveBeenCalledTimes(1);
-    expect(mockAssessmentFindAll).not.toHaveBeenCalled();
+    expect(mockReeseOutreachFindAll).not.toHaveBeenCalled();
     expect(result).toBeDefined();
   });
 });
