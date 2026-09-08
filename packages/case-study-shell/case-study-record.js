@@ -189,12 +189,49 @@
         wrap.appendChild(ul);
         return wrap;
       }
+      /*
+       * THE CHART, AS A PICTURE, BECAUSE THIS SHELL CANNOT DRAW ONE.
+       *
+       * `architecture.diagramSource` is mermaid text. The Colaberry Enterprise
+       * app renders it live by importing mermaid from a CDN at runtime; this
+       * shell is dependency-free vanilla JavaScript on purpose, so it has
+       * nothing to render mermaid WITH. For a long time it simply dropped the
+       * field: the source arrived in the payload on every record that had one,
+       * and the band printed prose and chips with no chart at all.
+       *
+       * `diagramImageUrl` is that same chart, rendered ahead of time from this
+       * record's own source by `scripts/renderCaseStudyDiagram.js` and served
+       * from the platform. An `img` needs no library, so it is the one form
+       * this shell can show.
+       *
+       * The URL has already been through `safeHttpUrl` server-side. It is set
+       * here with `setAttribute` on an element that is only ever an `img`, so
+       * there is no path from this value to script execution even if that gate
+       * were to change.
+       */
+      function diagram(url, source) {
+        if (!url || !source) return null;
+        var fig = el('figure', 'cs-diagram');
+        var img = el('img', 'cs-diagram-img');
+        img.setAttribute('src', url);
+        img.setAttribute('loading', 'lazy');
+        img.setAttribute('decoding', 'async');
+        // A diagram with no description is unreadable to a screen reader, and
+        // "diagram" alone tells nobody anything.
+        img.setAttribute('alt', 'Architecture diagram for ' + (c.title || 'this record'));
+        fig.appendChild(img);
+        fig.appendChild(el('figcaption', 'cs-diagram-caption',
+          'A diagram the delivery team drew.'));
+        return fig;
+      }
+
       return section('architecture', 'What was built', [
         prose(a.narrative),
         chips('Stack', a.stack),
         chips('Capabilities', a.capabilities),
         chips('Integrations', a.integrations),
         chips('Data stores', a.dataStores),
+        diagram(a.diagramImageUrl, a.diagramSource),
       ]);
     },
 

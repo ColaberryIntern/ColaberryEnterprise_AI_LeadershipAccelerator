@@ -99,6 +99,9 @@ export const DETAIL_FIXTURE: PublicCaseStudyDetail = {
       edges: [{ from: 'api', to: 'db', label: null }],
     },
     diagramSource: 'flowchart TD\n  api[API] --> db[(Store)]',
+    // The ordinary case: a record carries the mermaid source and no rendered
+    // picture of it, so the surfaces that cannot draw one show no chart.
+    diagramImageUrl: null,
   },
   measurement: {
     narrative: ['Measured against matched store cohorts.'],

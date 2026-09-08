@@ -255,6 +255,12 @@ export function projectArchitecture(
     .map((e) => ({ from: text(e.from), to: text(e.to), label: text(e.label) || null }));
   const diagram = nodes.length > 0 ? { nodes, edges } : null;
   const diagramSource = projectDiagramSource(a.diagramSource);
+  // Through the same gate every other public URL passes, because this one is
+  // set by a human override and would otherwise be an admin-editable `src`.
+  // Only carried when there is a source for it to depict: an image with no
+  // source behind it is a picture nothing in the record can be checked against,
+  // and `renderCaseStudyDiagram.js` cannot have produced one.
+  const diagramImageUrl = diagramSource ? safeHttpUrl(a.diagramImageUrl) : null;
   // `dataStores` joins the emptiness test, which makes this agree with the
   // snapshot builder: `caseStudySnapshotSections.ts:168` already counts data
   // stores when deciding whether an architecture section exists at all. Before
@@ -268,7 +274,9 @@ export function projectArchitecture(
     && !dataStores.length && !diagram && !diagramSource) {
     return null;
   }
-  return { narrative, stack, capabilities, integrations, dataStores, diagram, diagramSource };
+  return {
+    narrative, stack, capabilities, integrations, dataStores, diagram, diagramSource, diagramImageUrl,
+  };
 }
 
 /**
