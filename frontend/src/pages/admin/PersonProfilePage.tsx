@@ -31,7 +31,18 @@ interface AcquisitionPanel {
   temperatureUpdatedAt: string | null; qualificationLevel: string | null;
   interestLevel: string | null; maturityScore: number | null;
   status: string | null; assignedAdmin: string | null; lastContactedAt: string | null;
-  notes: string | null; consentContact: boolean | null; leadId: number | null;
+  notes: string | null; consentContact: boolean | null;
+  evaluating90Days: boolean | null; createdAt: string | null;
+  leadId: number | null; leadScoreMax: number;
+}
+
+interface AppointmentRow {
+  kind: string; title: string | null; scheduledAt: string | null;
+  status: string | null; notes: string | null; meetLink: string | null;
+}
+
+interface AutomationRow {
+  type: string; status: string | null; detail: string | null; createdAt: string | null;
 }
 
 interface LearningRow {
@@ -61,6 +72,9 @@ interface Profile {
   learning?: LearningRow[];
   billing?: BillingRow[];
   engagement?: { sessions: number; firstSeen: string | null; lastSeen: string | null; sites: string[] } | null;
+  appointments?: AppointmentRow[];
+  automation?: AutomationRow[];
+  intentSuppressedReason?: string;
   journey?: Journey;
   timeline?: TimelineEvent[];
   timelineDomains?: string[];
@@ -105,7 +119,7 @@ const fmtDate = (v: string | null | undefined) =>
   (v ? new Date(v).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : null);
 const fmtDateTime = (v: string | null | undefined) => (v ? new Date(v).toLocaleString() : null);
 
-type TabKey = 'timeline' | 'acquisition' | 'learning' | 'billing' | 'activity';
+type TabKey = 'timeline' | 'acquisition' | 'engagement' | 'learning' | 'billing' | 'activity';
 
 export default function PersonProfilePage() {
   const { email: rawEmail } = useParams<{ email: string }>();
@@ -144,6 +158,13 @@ export default function PersonProfilePage() {
     const t: Array<{ key: TabKey; label: string; count?: number }> = [];
     if (profile.timeline !== undefined) t.push({ key: 'timeline', label: 'Timeline', count: profile.timeline.length });
     if (profile.acquisition !== undefined) t.push({ key: 'acquisition', label: 'Acquisition' });
+    if (profile.appointments !== undefined || profile.automation !== undefined) {
+      t.push({
+        key: 'engagement',
+        label: 'Appointments & automation',
+        count: (profile.appointments?.length ?? 0) + (profile.automation?.length ?? 0),
+      });
+    }
     if (profile.learning !== undefined) t.push({ key: 'learning', label: 'Programme', count: profile.learning.length });
     if (profile.billing !== undefined) t.push({ key: 'billing', label: 'Billing', count: profile.billing.length });
     if (profile.engagement !== undefined) t.push({ key: 'activity', label: 'Site activity' });
@@ -180,6 +201,7 @@ export default function PersonProfilePage() {
                 icon="user-follow-line"
               />
             )}
+            {/* Absent for enrolled people by design — see intentSuppressedReason. */}
             {acq?.temperature && (
               <span className={`badge text-bg-${TEMPERATURE_TONE[acq.temperature] ?? 'secondary'}`}>
                 {acq.temperature}
@@ -220,15 +242,25 @@ export default function PersonProfilePage() {
             <div className="col-6 col-md-4 col-xl-2">
               <StatCard label="Campaigns" value={profile.journey.campaigns} icon="megaphone-line" tone="neutral" />
             </div>
-            <div className="col-6 col-md-4 col-xl-2">
-              {/* Sales data. "—" when withheld or never scored — not zero. */}
-              <StatCard
-                label="Peak intent"
-                value={profile.journey.intentScore ?? '—'}
-                icon="fire-line"
-                tone={(profile.journey.intentScore ?? 0) >= 50 ? 'danger' : 'neutral'}
-              />
-            </div>
+            {/* No intent tile once someone has converted. A dash would still
+                invite the question; the tile simply does not belong on an
+                enrolled person's header. */}
+            {!profile.intentSuppressedReason && (
+              <div className="col-6 col-md-4 col-xl-2">
+                <StatCard
+                  label="Peak intent"
+                  value={profile.journey.intentScore ?? '—'}
+                  icon="fire-line"
+                  tone={(profile.journey.intentScore ?? 0) >= 50 ? 'danger' : 'neutral'}
+                />
+              </div>
+            )}
+            {profile.intentSuppressedReason && (
+              <div className="col-6 col-md-4 col-xl-2">
+                <StatCard label="Enrolments" value={profile.journey.enrollments}
+                  icon="graduation-cap-line" tone="success" />
+              </div>
+            )}
           </div>
         )}
       </PageHeader>
@@ -339,6 +371,9 @@ export default function PersonProfilePage() {
                         ? <a href={acq.linkedinUrl} target="_blank" rel="noreferrer">Profile</a>
                         : null}
                     />
+                    <Field label="Evaluating in 90 days" value={
+                      acq.evaluating90Days === null ? null : (acq.evaluating90Days ? 'Yes' : 'No')} />
+                    <Field label="Lead created" value={fmtDate(acq.createdAt)} />
                     <Field
                       label="Consent to contact"
                       value={acq.consentContact === null ? null : (
@@ -353,10 +388,19 @@ export default function PersonProfilePage() {
 
               <div className="col-lg-6">
                 <SectionCard title="Qualification">
+                  {/* Said out loud. A missing score with no explanation reads as
+                      a data gap; this is a deliberate omission. */}
+                  {profile.intentSuppressedReason && (
+                    <div className="alert alert-light border py-2 px-3 small mb-3">
+                      <i className="ri-information-line me-1" />
+                      {profile.intentSuppressedReason}
+                    </div>
+                  )}
                   <div className="row">
                     <Field label="Pipeline stage" value={acq.pipelineStage} />
                     <Field label="Status" value={acq.status} />
-                    <Field label="Lead score" value={acq.leadScore} />
+                    <Field label="Lead score" value={acq.leadScore === null ? null
+                      : `${acq.leadScore} of ${acq.leadScoreMax}`} />
                     <Field
                       label="Temperature"
                       value={acq.temperature ? (
@@ -406,6 +450,69 @@ export default function PersonProfilePage() {
               </p>
             </SectionCard>
           ))}
+
+          {/* ── Appointments & automation ────────────────────────────────── */}
+          {tab === 'engagement' && (
+            <div className="row g-3">
+              <div className="col-lg-6">
+                <SectionCard title="Appointments" padded={false}>
+                  {(profile.appointments?.length ?? 0) === 0 ? (
+                    <p className="text-muted small p-4 mb-0 text-center">Nothing booked.</p>
+                  ) : (
+                    <div className="table-responsive">
+                      <table className="table table-sm mb-0 align-middle">
+                        <thead className="table-light">
+                          <tr><th>When</th><th>What</th><th>Status</th></tr>
+                        </thead>
+                        <tbody>
+                          {profile.appointments!.map((a, i) => (
+                            <tr key={`${a.kind}-${i}`}>
+                              <td className="text-nowrap small">{fmtDateTime(a.scheduledAt) || <Unknown />}</td>
+                              <td>
+                                <div className="fw-medium">{a.title || a.kind}</div>
+                                {a.notes && <div className="text-muted small">{a.notes}</div>}
+                                {a.meetLink && (
+                                  <a className="small" href={a.meetLink} target="_blank" rel="noreferrer">Meet link</a>
+                                )}
+                              </td>
+                              <td><span className="badge text-bg-light">{a.status || 'unknown'}</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </SectionCard>
+              </div>
+              <div className="col-lg-6">
+                <SectionCard title="Automation history" padded={false}>
+                  {(profile.automation?.length ?? 0) === 0 ? (
+                    <p className="text-muted small p-4 mb-0 text-center">No automation events yet.</p>
+                  ) : (
+                    <div className="table-responsive" style={{ maxHeight: '24rem', overflowY: 'auto' }}>
+                      <table className="table table-sm mb-0 align-middle">
+                        <thead className="table-light" style={{ position: 'sticky', top: 0 }}>
+                          <tr><th>When</th><th>Type</th><th>Status</th></tr>
+                        </thead>
+                        <tbody>
+                          {profile.automation!.map((a, i) => (
+                            <tr key={`${a.type}-${i}`}>
+                              <td className="text-nowrap small text-muted">{fmtDateTime(a.createdAt)}</td>
+                              <td>
+                                <div className="fw-medium">{a.type}</div>
+                                {a.detail && <div className="text-muted small">{a.detail}</div>}
+                              </td>
+                              <td><span className="badge text-bg-light">{a.status || '—'}</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </SectionCard>
+              </div>
+            </div>
+          )}
 
           {/* ── Programme ────────────────────────────────────────────────── */}
           {tab === 'learning' && profile.learning && (
