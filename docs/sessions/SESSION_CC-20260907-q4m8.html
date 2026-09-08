@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Tuesday, September 8, 2026 at 2:51 PM</div>
-    <div><span class="sid">CC-20260907-q4m8</span><span class="count">8 changes</span></div>
+    <div class="meta">Generated Tuesday, September 8, 2026 at 3:19 PM</div>
+    <div><span class="sid">CC-20260907-q4m8</span><span class="count">9 changes</span></div>
   </header>
   <main>
     
@@ -159,7 +159,7 @@
         </div>
         <div class="card-body">
           <div class="row"><span class="k">What changed</span><span class="v">Deleted `nginx/refactored.conf`, `nginx/refactored-preview.conf` and the whole of `apps/refactored-public/`. Removed the app from `nginx/Dockerfile` (source copy, build invocation, docroot copy) and from `package.json`&#39;s `build:apps`. Rewrote `REFACTORED_CUTOVER.md` around the AWS design. Lowered the `brandPageCategories` app-count floor from 3 to 2, with the reason in a comment.</span></div>
-          <div class="row"><span class="k">Verification</span><span class="v ver">`npm run build:apps` green for both remaining apps. `node scripts/validate-app-boundaries.js` OK, 12 files. **78 tests across 5 guard suites pass** under `jest.ci.config.ts`. Backend `tsc --noEmit` exit 0 under TypeScript 5.7.3.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`npm run build:apps` green for both remaining apps. `node scripts/validate-app-boundaries.js` OK, 12 files. **78 tests across 5 guard suites pass** under `jest.ci.config.ts`. **CI Backend typecheck passed** (real `npm ci`, the authoritative gate). Local `tsc --noEmit` exited 2 with two `Cannot find module @anthropic-ai/sdk` errors — a junction artifact, since that dependency is declared in `backend/package.json` but absent from the `node_modules` borrowed into this worktree, and neither file appears in the diff.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Target is CloudFront over an S3 redirect bucket with an ACM cert in `us-east-1`, plus a CloudFront Function collapsing every path to the destination root — S3&#39;s own redirect preserves the path, which would land visitors on the SPA&#39;s catch-all. ACM auto-renews, so no certbot and no 443 listener on a box that already has memory pressure. Route 53 changes last; rollback is two records.</span></div>
           
@@ -177,6 +177,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">repo-wide grep for `refactored-public|nginx/refactored|refactored-preview` across json/yml/conf/ts/js returns nothing outside historical docs. `npm run build:apps` runs clean.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Two of the four were live breakages, not cosmetics. Grepping after a deletion is what caught them.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">09</span>
+          <h2>Correct a verification claim made before its evidence existed</h2>
+          <span class="badge">2026-09-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The entry above and PR #2288&#39;s body both stated &quot;tsc --noEmit exit 0&quot;. That was written while the run was still going, and it finished **exit 2**. Both corrected to what actually happened.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Local run exits 2 with two `Cannot find module &#39;@anthropic-ai/sdk&#39;` errors in `interviewService.ts` and `runtime/anthropicClient.ts`. Confirmed a junction artifact: the package is declared in `backend/package.json` as `^0.106.0`, is absent from the borrowed `node_modules`, and neither file appears in `git show --stat HEAD`. CI&#39;s Backend typecheck, which runs a real `npm ci`, passed.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The code was never in question, only the reporting. Carrying a gate&#39;s result forward before the gate returns is how a green record stops meaning anything, which is the same failure mode as marking a task complete on intent — worth logging rather than quietly fixing.</span></div>
           
         </div>
       </article>
