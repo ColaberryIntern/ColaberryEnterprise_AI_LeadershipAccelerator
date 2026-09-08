@@ -167,6 +167,32 @@ retarget them without a deploy.
 
 ---
 
+## Guided prompt inputs
+
+Authored prompts carry bracketed fill-ins — `[paste the complaint verbatim]`,
+`[describe option A]`. The card turns each one into a labelled field in a **Your answers**
+panel above the prompts. Typing an answer fills **every** prompt that uses that placeholder,
+live, and Copy hands over the finished text.
+
+- Placeholders are deduped by exact text, so one answer feeds several prompts; the label says
+  *"used in N prompts"* when it does.
+- Long or paste-style fill-ins get a textarea, short ones a single-line input
+  (`extractPromptFields` decides, from length and words like *paste*, *describe*, *list*).
+- An **unanswered placeholder is left visible** rather than blanked. A silent gap reads as
+  finished and quietly asks Claude to work from nothing; `[describe option A]` is honest about
+  what is missing. A note above the prompt says so.
+- A one-character bracket (`[1]`, `[a]`) is treated as a footnote marker, not a fill-in.
+- **These answers never leave the browser.** They live in the local draft alongside the rest of
+  the student's in-progress work, are not part of the submission payload, and never appear in an
+  analytics event. The panel says this on the card.
+- Instructor preview shows the authored prompt with its placeholders intact and no input panel.
+
+Why it works this way: the first version expected the student to copy the prompt and hand-edit
+the brackets inside Claude. That is easy to skip, and the failure is silent — you end up sending
+a prompt that still literally says `[describe your role]`.
+
+---
+
 ## Analytics
 
 The renderer emits events through the existing `frontend/src/utils/tracker.ts` layer, which
