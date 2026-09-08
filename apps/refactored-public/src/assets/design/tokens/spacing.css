@@ -1,0 +1,17 @@
+/* Spacing — 4px base scale. Touch targets ≥ 44px. Fluid page padding; grids use minmax(min(Npx,100%),1fr). */
+:root{
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-6:24px; --space-8:32px; --space-12:48px; --space-16:64px;
+  --touch-target:44px;
+  --page-padding:clamp(16px, 4vw, 32px);
+  --bp-sm:640px; --bp-md:768px; --bp-lg:1024px; --bp-xl:1280px;
+}
+
+/* Shape — exactly one radius and one shadow per variant. Cards round at calc(var(--radius) + 4px); badges are full pills. */
+:root{
+  --radius:4px;
+  --shadow:0 1px 2px rgba(8,12,16,0.24);
+}
+[data-variant="geometric"]{
+  --radius:8px;
+  --shadow:0 2px 6px rgba(12,16,20,0.10);
+}

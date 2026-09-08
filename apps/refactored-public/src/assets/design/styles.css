@@ -1,0 +1,11 @@
+/* Refactored.ai design system — global entry. Link this one file.
+   Option A — Terminal is the default (:root). Option B — Geometric: data-variant="geometric" on <html>.
+   Dark mode: data-theme="dark" on <html>. Both work together. Fonts are self-hosted via tokens/fonts.css. */
+@import "tokens/fonts.css";
+@import "tokens/colors.css";
+@import "tokens/typography.css";
+@import "tokens/spacing.css";
+@import "tokens/motion.css";
+@import "css/base.css";
+@import "css/components.css";
+@import "css/motion.css";
