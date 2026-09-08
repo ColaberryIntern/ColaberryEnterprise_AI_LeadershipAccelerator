@@ -2,6 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '../../utils/api';
 import { PageHeader, SectionCard, StatCard, StatusBadge } from '../../components/admin/shell';
+// The SAME component the Lead detail page renders. Reused rather than rebuilt:
+// it is 504 lines of stage analysis, velocity, stall detection and an engagement
+// chart, and a second implementation would drift from it within a release.
+import JourneyTimeline from '../../components/admin/JourneyTimeline';
 
 /**
  * The canonical 360° person profile.
@@ -34,6 +38,27 @@ interface AcquisitionPanel {
   notes: string | null; consentContact: boolean | null;
   evaluating90Days: boolean | null; createdAt: string | null;
   leadId: number | null; leadScoreMax: number;
+}
+
+interface VisitorData {
+  id?: string;
+  intent_score?: number;
+  intent_level?: string;
+  total_sessions?: number;
+  total_pageviews?: number;
+  first_seen_at?: string;
+  last_seen_at?: string;
+  device_type?: string;
+  behavioral_signals?: Array<{ signal_type?: string } | string>;
+  sessions?: Array<{
+    started_at?: string; duration_seconds?: number; pageview_count?: number;
+    entry_page?: string; exit_page?: string;
+  }>;
+}
+
+interface TempEntry {
+  from_temperature?: string; to_temperature?: string;
+  changed_by?: string; lead_score?: number; created_at?: string;
 }
 
 interface AppointmentRow {
@@ -119,7 +144,7 @@ const fmtDate = (v: string | null | undefined) =>
   (v ? new Date(v).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : null);
 const fmtDateTime = (v: string | null | undefined) => (v ? new Date(v).toLocaleString() : null);
 
-type TabKey = 'timeline' | 'acquisition' | 'engagement' | 'learning' | 'billing' | 'activity';
+type TabKey = 'timeline' | 'journey' | 'acquisition' | 'engagement' | 'learning' | 'billing' | 'activity';
 
 export default function PersonProfilePage() {
   const { email: rawEmail } = useParams<{ email: string }>();
@@ -130,6 +155,12 @@ export default function PersonProfilePage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<TabKey>('timeline');
   const [domainFilter, setDomainFilter] = useState('all');
+  // Website activity and temperature history come from the lead endpoints the
+  // Lead page already uses, so the two surfaces cannot disagree. Fetched only
+  // when this person HAS a lead, and failing soft: these endpoints are
+  // requireSalesOrAdmin, so a scoped identity simply does not get the panels.
+  const [visitor, setVisitor] = useState<VisitorData | null>(null);
+  const [tempHistory, setTempHistory] = useState<TempEntry[] | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -152,12 +183,36 @@ export default function PersonProfilePage() {
 
   useEffect(() => { void load(); }, [load]);
 
+  // Second pass: the lead-sourced panels. Deliberately separate from the profile
+  // request — these are the Lead page's own endpoints, so reusing them keeps the
+  // two surfaces identical, and a 403 here simply means this identity does not
+  // get those panels rather than breaking the profile.
+  const leadId = profile?.acquisition?.leadId ?? null;
+  useEffect(() => {
+    if (leadId === null) { setVisitor(null); setTempHistory(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get(`/api/admin/leads/${leadId}`);
+        if (!cancelled) setVisitor(res.data?.visitor ?? null);
+      } catch { if (!cancelled) setVisitor(null); }
+      try {
+        const res = await api.get(`/api/admin/leads/${leadId}/temperature-history`);
+        const rows = Array.isArray(res.data) ? res.data : res.data?.history;
+        if (!cancelled) setTempHistory(Array.isArray(rows) ? rows : null);
+      } catch { if (!cancelled) setTempHistory(null); }
+    })();
+    return () => { cancelled = true; };
+  }, [leadId]);
+
   // Only tabs whose panel the API actually sent.
   const tabs = useMemo(() => {
     if (!profile) return [] as Array<{ key: TabKey; label: string; count?: number }>;
     const t: Array<{ key: TabKey; label: string; count?: number }> = [];
     if (profile.timeline !== undefined) t.push({ key: 'timeline', label: 'Timeline', count: profile.timeline.length });
     if (profile.acquisition !== undefined) t.push({ key: 'acquisition', label: 'Acquisition' });
+    // Journey needs a lead: the analysis is built from lead touchpoints.
+    if (profile.acquisition?.leadId) t.push({ key: 'journey', label: 'Journey' });
     if (profile.appointments !== undefined || profile.automation !== undefined) {
       t.push({
         key: 'engagement',
@@ -353,6 +408,11 @@ export default function PersonProfilePage() {
             </SectionCard>
           )}
 
+          {/* ── Journey ──────────────────────────────────────────────────── */}
+          {tab === 'journey' && acq?.leadId && (
+            <JourneyTimeline leadId={acq.leadId} />
+          )}
+
           {/* ── Acquisition ──────────────────────────────────────────────── */}
           {tab === 'acquisition' && (acq ? (
             <div className="row g-3">
@@ -432,6 +492,101 @@ export default function PersonProfilePage() {
                   </div>
                 </SectionCard>
               </div>
+
+              {/* Website activity, from the same endpoint the Lead page reads. */}
+              {visitor && (
+                <div className="col-12">
+                  <SectionCard
+                    title="Website activity"
+                    actions={visitor.intent_score !== undefined && !profile.intentSuppressedReason ? (
+                      <span className="badge text-bg-danger">
+                        Intent {visitor.intent_score}/100{visitor.intent_level ? ` (${visitor.intent_level})` : ''}
+                      </span>
+                    ) : undefined}
+                  >
+                    <div className="row">
+                      <Field label="Total sessions" value={visitor.total_sessions ?? null} />
+                      <Field label="Total pageviews" value={visitor.total_pageviews ?? null} />
+                      <Field label="First seen" value={fmtDateTime(visitor.first_seen_at)} />
+                      <Field label="Last seen" value={fmtDateTime(visitor.last_seen_at)} />
+                      <Field label="Device" value={visitor.device_type} />
+                    </div>
+
+                    {Array.isArray(visitor.behavioral_signals) && visitor.behavioral_signals.length > 0 && (
+                      <>
+                        <div className="text-muted small fw-medium mb-2">Behavioural signals</div>
+                        <div className="d-flex flex-wrap gap-1 mb-3">
+                          {visitor.behavioral_signals.map((sig, i) => (
+                            <span key={i} className="badge text-bg-light">
+                              {typeof sig === 'string' ? sig : (sig.signal_type ?? 'signal')}
+                            </span>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {Array.isArray(visitor.sessions) && visitor.sessions.length > 0 && (
+                      <div className="table-responsive">
+                        <table className="table table-sm mb-0 align-middle">
+                          <thead className="table-light">
+                            <tr><th>Date</th><th>Duration</th><th>Pages</th><th>Entry</th><th>Exit</th></tr>
+                          </thead>
+                          <tbody>
+                            {visitor.sessions.map((sess, i) => (
+                              <tr key={i}>
+                                <td className="text-nowrap small">{fmtDateTime(sess.started_at) || <Unknown />}</td>
+                                <td className="small">{sess.duration_seconds
+                                  ? `${Math.round(sess.duration_seconds / 60)}m` : <Unknown />}</td>
+                                <td className="small">{sess.pageview_count ?? <Unknown />}</td>
+                                <td className="small text-truncate" style={{ maxWidth: 220 }}>
+                                  {sess.entry_page || <Unknown />}</td>
+                                <td className="small text-truncate" style={{ maxWidth: 220 }}>
+                                  {sess.exit_page || <Unknown />}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {visitor.id && (
+                      <Link className="small" to={`/admin/visitors/${visitor.id}`}>View full visitor profile →</Link>
+                    )}
+                  </SectionCard>
+                </div>
+              )}
+
+              {/* Temperature history — hidden for enrolled people, same rule as
+                  the score itself: it is a record of conversion likelihood. */}
+              {tempHistory && tempHistory.length > 0 && !profile.intentSuppressedReason && (
+                <div className="col-lg-6">
+                  <SectionCard title="Temperature history" padded={false}>
+                    <div className="table-responsive" style={{ maxHeight: '18rem', overflowY: 'auto' }}>
+                      <table className="table table-sm mb-0 align-middle">
+                        <tbody>
+                          {tempHistory.map((h, i) => (
+                            <tr key={i}>
+                              <td>
+                                <span className={`badge text-bg-${TEMPERATURE_TONE[h.from_temperature ?? ''] ?? 'light'}`}>
+                                  {h.from_temperature ?? '—'}
+                                </span>
+                                <span className="mx-2 text-muted">→</span>
+                                <span className={`badge text-bg-${TEMPERATURE_TONE[h.to_temperature ?? ''] ?? 'light'}`}>
+                                  {h.to_temperature ?? '—'}
+                                </span>
+                                {h.lead_score !== undefined && h.lead_score !== null && (
+                                  <div className="text-muted small mt-1">Score: {h.lead_score}</div>
+                                )}
+                              </td>
+                              <td className="text-end text-muted small">{h.changed_by || ''}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </SectionCard>
+                </div>
+              )}
 
               <div className="col-lg-6">
                 <SectionCard title="What they told us">
