@@ -31,6 +31,7 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import CertQuestionTriage from '../models/CertQuestionTriage';
 import { LATEST_REVISION_SQL, ReviewRow } from './sendCertQuestionReview';
+import { sendTriageReportEmail, TriageReportItem } from '../services/certPrep/certReviewEmail';
 import { triageQuestion } from '../services/certPrep/certQuestionTriage';
 import {
   needsHuman,
@@ -43,6 +44,21 @@ const args = process.argv.slice(2);
 const write = args.includes('--write');
 const limitIdx = args.indexOf('--limit');
 const limit = limitIdx >= 0 ? Math.max(1, parseInt(args[limitIdx + 1] ?? '', 10) || 0) : null;
+
+/**
+ * `--send` emails the flagged list. Separate from `--write` and never implied by
+ * it, because an email cannot be unsent: persisting a verdict is reversible with
+ * a DELETE, telling somebody about it is not.
+ *
+ * The flag lives in the script rather than the mail module because a service has
+ * no argv, and putting it there was a mistake the plan audit caught.
+ */
+const send = args.includes('--send');
+const toIdx = args.indexOf('--to');
+const recipient = toIdx >= 0 ? args[toIdx + 1] : 'ali@colaberry.com';
+
+/** Report on what is stored, not on what this process happened to score. */
+const reportOnly = args.includes('--report-only');
 
 /**
  * A run id a human can read and a DELETE can target. Not random: if you are
@@ -97,7 +113,7 @@ async function main(): Promise<void> {
 
   const done = await alreadyTriaged();
   const pending = all.filter((r) => !done.has(`${r.question_key}@${r.revision}`));
-  const queue = limit ? pending.slice(0, limit) : pending;
+  const queue = reportOnly ? [] : (limit ? pending.slice(0, limit) : pending);
 
   console.log(`bank      : ${all.length} question(s)`);
   console.log(`already   : ${all.length - pending.length} triaged at this revision by this model and prompt`);
@@ -160,6 +176,61 @@ async function main(): Promise<void> {
   console.log('');
   console.log('Nothing was approved and nothing became servable — approval is a');
   console.log('separate act by a named human in the admin queue.');
+
+  if (!send) {
+    console.log('');
+    console.log('No report was emailed. Re-run with --send to email the flagged list.');
+    return;
+  }
+
+  /**
+   * REPORT FROM THE TABLE, NOT FROM THIS RUN'S MEMORY.
+   *
+   * A run that skipped already-triaged questions holds only the ones it scored,
+   * and a report built from that would silently understate the denominator —
+   * "12 scored" when 150 have been. The whole point of the header is the
+   * denominator, so it is read back from what is stored.
+   */
+  const stored = await sequelize.query<{
+    question_key: string; verdict: string; severity: string | null;
+    concerns: any; domain_id: string; objective_id: string; stem: string;
+  }>(
+    `SELECT t.question_key, t.verdict, t.severity, t.concerns,
+            r.domain_id, r.objective_id, r.stem
+       FROM cert_question_triage t
+       JOIN LATERAL (
+         SELECT domain_id, objective_id, stem
+           FROM cert_question_revisions
+          WHERE question_key = t.question_key AND revision = t.revision
+          LIMIT 1
+       ) r ON TRUE
+      WHERE t.reviewer_model = :model AND t.prompt_version = :pv
+      ORDER BY t.question_key`,
+    { replacements: { model: TRIAGE_MODEL, pv: TRIAGE_PROMPT_VERSION }, type: QueryTypes.SELECT },
+  );
+
+  const flaggedRows: TriageReportItem[] = stored
+    .filter((r) => needsHuman(r.verdict as any))
+    .map((r) => ({
+      question_key: r.question_key,
+      domain_id: r.domain_id,
+      objective_id: r.objective_id,
+      stem: r.stem,
+      severity: r.severity,
+      verdict: r.verdict,
+      concerns: Array.isArray(r.concerns) ? r.concerns : [],
+    }));
+
+  const sent = await sendTriageReportEmail({
+    to: recipient,
+    scoredCount: stored.length,
+    flagged: flaggedRows,
+    reviewerModel: TRIAGE_MODEL,
+    runId,
+  });
+  console.log('');
+  console.log(`report    : sent to ${recipient}`);
+  console.log(`            ${sent.subject}`);
 }
 
 if (require.main === module) {
