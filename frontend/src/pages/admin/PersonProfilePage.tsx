@@ -1,70 +1,62 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '../../utils/api';
-import { PageHeader, SectionCard } from '../../components/admin/shell';
+import { PageHeader, SectionCard, StatCard, StatusBadge } from '../../components/admin/shell';
 
 /**
- * One person, everything we can honestly say about them.
+ * The canonical 360° person profile.
  *
- * The panels this page renders are the panels the API SENT. It does not hide
- * anything — a panel the caller may not see was never fetched and is not in the
- * payload. So this component cannot widen access, and the "withheld" note below
- * is a statement about permissions rather than a filter.
+ * ── LAYOUT ──────────────────────────────────────────────────────────────────
+ *
+ * Progressive disclosure, as the brief asks: a KPI row you can read at a glance,
+ * then TABS per domain, then detail inside each. The first version stacked every
+ * section vertically, so the page was a long scroll of half-empty cards and the
+ * timeline — the thing actually worth reading — sat below three panels of single
+ * facts.
+ *
+ * ── PERMISSIONS ─────────────────────────────────────────────────────────────
+ *
+ * A tab exists only if the API sent its panel. Nothing is hidden here: a panel
+ * the caller may not see was never fetched and is not in the payload, so this
+ * component cannot widen access.
  */
 
 interface AcquisitionPanel {
-  source: string | null;
-  formType: string | null;
-  utmSource: string | null;
-  utmCampaign: string | null;
-  pipelineStage: string | null;
-  leadScore: number | null;
-  firstSeen: string | null;
+  phone: string | null; role: string | null; companySize: string | null;
+  industry: string | null; linkedinUrl: string | null;
+  source: string | null; formType: string | null; utmSource: string | null;
+  utmCampaign: string | null; pageUrl: string | null; interestArea: string | null;
+  message: string | null; firstSeen: string | null;
+  pipelineStage: string | null; leadScore: number | null; temperature: string | null;
+  temperatureUpdatedAt: string | null; qualificationLevel: string | null;
+  interestLevel: string | null; maturityScore: number | null;
+  status: string | null; assignedAdmin: string | null; lastContactedAt: string | null;
+  notes: string | null; consentContact: boolean | null; leadId: number | null;
 }
 
 interface LearningRow {
-  enrollmentId: string;
-  cohortId: string | null;
-  status: string | null;
-  tier: string | null;
-  enrollmentType: string | null;
-  enrolledAt: string | null;
+  enrollmentId: string; cohortId: string | null; status: string | null;
+  tier: string | null; enrollmentType: string | null; enrolledAt: string | null;
 }
 
 interface BillingRow {
-  enrollmentId: string;
-  paymentStatus: string | null;
-  paymentMethod: string | null;
-  amountPaid: number | null;
+  enrollmentId: string; paymentStatus: string | null;
+  paymentMethod: string | null; amountPaid: number | null;
 }
 
 interface TimelineEvent {
-  occurredAt: string;
-  domain: string;
-  source: string;
-  type: string;
-  summary: string | null;
+  occurredAt: string; domain: string; source: string; type: string; summary: string | null;
 }
 
 interface Journey {
-  firstTouch: string | null;
-  lastActivity: string | null;
-  daysKnown: number | null;
-  sessions: number;
-  pageEvents: number;
-  campaigns: number;
-  emailsSent: number;
-  enrollments: number;
-  intentScore: number | null;
+  firstTouch: string | null; lastActivity: string | null; daysKnown: number | null;
+  sessions: number; pageEvents: number; campaigns: number; emailsSent: number;
+  enrollments: number; intentScore: number | null;
 }
 
 interface Profile {
-  email: string;
-  name: string | null;
-  stage: string;
-  tracedToLead: boolean;
-  company: string | null;
-  title: string | null;
+  email: string; name: string | null; stage: string; tracedToLead: boolean;
+  company: string | null; title: string | null;
   acquisition?: AcquisitionPanel | null;
   learning?: LearningRow[];
   billing?: BillingRow[];
@@ -76,48 +68,54 @@ interface Profile {
 }
 
 const STAGE_LABEL: Record<string, string> = {
-  anonymous_visitor: 'Anonymous visitor',
-  identified_visitor: 'Identified visitor',
-  lead: 'Lead',
-  applicant: 'Applicant',
-  enrolled_student: 'Enrolled',
-  active_learner: 'Active learner',
-  graduate: 'Graduate',
-  returning_customer: 'Returning customer',
+  anonymous_visitor: 'Anonymous visitor', identified_visitor: 'Identified visitor',
+  lead: 'Lead', applicant: 'Applicant', enrolled_student: 'Enrolled',
+  active_learner: 'Active learner', graduate: 'Graduate', returning_customer: 'Returning customer',
 };
+
+const STAGE_TONE: Record<string, 'info' | 'warning' | 'success' | 'neutral'> = {
+  anonymous_visitor: 'neutral', identified_visitor: 'neutral', lead: 'info',
+  applicant: 'warning', enrolled_student: 'success', active_learner: 'success',
+  graduate: 'success', returning_customer: 'success',
+};
+
+const TEMPERATURE_TONE: Record<string, string> = { hot: 'danger', warm: 'warning', cold: 'secondary' };
 
 const DOMAIN_TONE: Record<string, string> = {
-  acquisition: 'info',
-  sales: 'primary',
-  communication: 'secondary',
-  commerce: 'success',
-  learning: 'warning',
-  community: 'dark',
+  acquisition: 'info', sales: 'primary', communication: 'secondary',
+  commerce: 'success', learning: 'warning', community: 'dark',
 };
 
-/** A value we do not have. Never rendered as an empty cell or a zero. */
-const Unknown = () => <span className="text-muted">Not recorded</span>;
+/** Absent, stated. Never an empty cell, and never a zero standing in for unknown. */
+const Unknown = () => <span className="text-muted small">Not recorded</span>;
 
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
+function Field({ label, value, wide }: { label: string; value: React.ReactNode; wide?: boolean }) {
   const empty = value === null || value === undefined || value === '';
   return (
-    <div className="col-6 col-md-4 mb-3">
-      <div className="text-muted small text-uppercase" style={{ letterSpacing: '.04em' }}>{label}</div>
-      <div>{empty ? <Unknown /> : value}</div>
+    <div className={wide ? 'col-12 mb-3' : 'col-6 col-lg-4 mb-3'}>
+      <div className="text-muted text-uppercase mb-1" style={{ letterSpacing: '.05em', fontSize: '.7rem' }}>
+        {label}
+      </div>
+      <div className={empty ? '' : 'fw-medium'}>{empty ? <Unknown /> : value}</div>
     </div>
   );
 }
 
+const fmtDate = (v: string | null | undefined) =>
+  (v ? new Date(v).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : null);
+const fmtDateTime = (v: string | null | undefined) => (v ? new Date(v).toLocaleString() : null);
+
+type TabKey = 'timeline' | 'acquisition' | 'learning' | 'billing' | 'activity';
+
 export default function PersonProfilePage() {
   const { email: rawEmail } = useParams<{ email: string }>();
   const email = rawEmail ? decodeURIComponent(rawEmail) : '';
+
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  // The timeline is filterable, as the brief requires. Filtering is client-side
-  // over events the server already decided this caller may see — it narrows the
-  // view, it does not widen access.
-  const [domainFilter, setDomainFilter] = useState<string>('all');
+  const [tab, setTab] = useState<TabKey>('timeline');
+  const [domainFilter, setDomainFilter] = useState('all');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -129,10 +127,8 @@ export default function PersonProfilePage() {
       setProfile(null);
       const status = (err as { response?: { status?: number } })?.response?.status;
       setError(
-        status === 404
-          ? 'No such person, or not visible to your role.'
-          : status === 403
-            ? 'Your role does not include access to person records.'
+        status === 404 ? 'No such person, or not visible to your role.'
+          : status === 403 ? 'Your role does not include access to person records.'
             : 'Could not load this profile.',
       );
     } finally {
@@ -142,89 +138,135 @@ export default function PersonProfilePage() {
 
   useEffect(() => { void load(); }, [load]);
 
+  // Only tabs whose panel the API actually sent.
+  const tabs = useMemo(() => {
+    if (!profile) return [] as Array<{ key: TabKey; label: string; count?: number }>;
+    const t: Array<{ key: TabKey; label: string; count?: number }> = [];
+    if (profile.timeline !== undefined) t.push({ key: 'timeline', label: 'Timeline', count: profile.timeline.length });
+    if (profile.acquisition !== undefined) t.push({ key: 'acquisition', label: 'Acquisition' });
+    if (profile.learning !== undefined) t.push({ key: 'learning', label: 'Programme', count: profile.learning.length });
+    if (profile.billing !== undefined) t.push({ key: 'billing', label: 'Billing', count: profile.billing.length });
+    if (profile.engagement !== undefined) t.push({ key: 'activity', label: 'Site activity' });
+    return t;
+  }, [profile]);
+
+  useEffect(() => {
+    if (tabs.length && !tabs.some((t) => t.key === tab)) setTab(tabs[0].key);
+  }, [tabs, tab]);
+
+  const acq = profile?.acquisition;
+
   return (
     <div className="container-fluid py-4">
       <PageHeader
         title={profile?.name || email}
-        subtitle={profile ? `${STAGE_LABEL[profile.stage] ?? profile.stage} · ${profile.email}` : email}
-        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'People', to: '/admin/people' }, { label: 'Profile' }]}
-      />
+        subtitle={
+          profile && (profile.title || profile.company)
+            ? [profile.title, profile.company].filter(Boolean).join(' · ')
+            : profile?.email || email
+        }
+        icon="user-3-line"
+        breadcrumb={[
+          { label: 'Admin', to: '/admin/dashboard' },
+          { label: 'People', to: '/admin/people' },
+          { label: profile?.name || 'Profile' },
+        ]}
+        actions={
+          <div className="d-flex align-items-center gap-2">
+            {profile && (
+              <StatusBadge
+                label={STAGE_LABEL[profile.stage] ?? profile.stage}
+                tone={STAGE_TONE[profile.stage] ?? 'neutral'}
+                icon="user-follow-line"
+              />
+            )}
+            {acq?.temperature && (
+              <span className={`badge text-bg-${TEMPERATURE_TONE[acq.temperature] ?? 'secondary'}`}>
+                {acq.temperature}
+              </span>
+            )}
+            {profile && !profile.tracedToLead && (
+              <span className="badge text-bg-warning">No acquisition record</span>
+            )}
+            {acq?.leadId && (
+              <Link className="btn btn-sm btn-outline-secondary" to={`/admin/leads/${acq.leadId}`}>
+                Lead record
+              </Link>
+            )}
+          </div>
+        }
+      >
+        {/* The relationship at a glance, before any detail. */}
+        {profile?.journey && (
+          <div className="row g-3">
+            <div className="col-6 col-md-4 col-xl-2">
+              <StatCard
+                label="Known for"
+                value={profile.journey.daysKnown === null ? '—' : profile.journey.daysKnown}
+                unit={profile.journey.daysKnown === null ? undefined : 'days'}
+                icon="calendar-line" tone="info"
+                hint={fmtDate(profile.journey.firstTouch) ? `since ${fmtDate(profile.journey.firstTouch)}` : undefined}
+              />
+            </div>
+            <div className="col-6 col-md-4 col-xl-2">
+              <StatCard label="Page events" value={profile.journey.pageEvents} icon="cursor-line" tone="primary" />
+            </div>
+            <div className="col-6 col-md-4 col-xl-2">
+              <StatCard label="Sessions" value={profile.journey.sessions} icon="global-line" tone="primary" />
+            </div>
+            <div className="col-6 col-md-4 col-xl-2">
+              <StatCard label="Emails sent" value={profile.journey.emailsSent} icon="mail-send-line" tone="neutral" />
+            </div>
+            <div className="col-6 col-md-4 col-xl-2">
+              <StatCard label="Campaigns" value={profile.journey.campaigns} icon="megaphone-line" tone="neutral" />
+            </div>
+            <div className="col-6 col-md-4 col-xl-2">
+              {/* Sales data. "—" when withheld or never scored — not zero. */}
+              <StatCard
+                label="Peak intent"
+                value={profile.journey.intentScore ?? '—'}
+                icon="fire-line"
+                tone={(profile.journey.intentScore ?? 0) >= 50 ? 'danger' : 'neutral'}
+              />
+            </div>
+          </div>
+        )}
+      </PageHeader>
 
-      {loading && !profile && <div className="text-muted py-5 text-center">Loading…</div>}
+      {loading && !profile && (
+        <div className="text-center py-5"><div className="spinner-border text-primary" /></div>
+      )}
       {error && <div className="alert alert-danger">{error}</div>}
 
       {profile && (
         <>
-          {/* Stated plainly. Somebody who cannot see the billing panel should
-              know it exists and that they lack access, rather than concluding
-              this person has no billing history. */}
           {profile.withheldPanels.length > 0 && (
-            <div className="alert alert-secondary py-2 px-3 small">
-              Your role does not include: {profile.withheldPanels.join(', ')}. Those sections
-              are not shown here and were not loaded.
+            <div className="alert alert-secondary py-2 px-3 small mb-3">
+              <i className="ri-lock-line me-1" />
+              Your role does not include <strong>{profile.withheldPanels.join(', ')}</strong>.
+              Those sections were not loaded.
             </div>
           )}
 
-          <SectionCard title="Identity">
-            <div className="row">
-              <Field label="Name" value={profile.name} />
-              <Field label="Email" value={profile.email} />
-              <Field label="Stage" value={STAGE_LABEL[profile.stage] ?? profile.stage} />
-              <Field label="Company" value={profile.company} />
-              <Field label="Title" value={profile.title} />
-              <Field
-                label="Acquisition"
-                value={
-                  profile.tracedToLead
-                    ? 'Traced to a lead'
-                    : // The 86. Said on the profile, because it changes how you
-                      // read everything else about where this person came from.
-                      <span className="text-warning">No acquisition record</span>
-                }
-              />
-            </div>
-          </SectionCard>
+          <ul className="nav nav-tabs mb-4">
+            {tabs.map((t) => (
+              <li className="nav-item" key={t.key}>
+                <button
+                  type="button"
+                  className={`nav-link ${tab === t.key ? 'active' : ''}`}
+                  onClick={() => setTab(t.key)}
+                >
+                  {t.label}
+                  {t.count !== undefined && <span className="badge text-bg-light ms-2">{t.count}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
 
-          {/* Journey summary: the shape of the relationship, above the detail.
-              Progressive disclosure, as the brief asks for — summary first,
-              domain sections second. */}
-          {profile.journey && (
-            <SectionCard title="Journey">
-              <div className="row">
-                <Field
-                  label="First touch"
-                  value={profile.journey.firstTouch
-                    ? new Date(profile.journey.firstTouch).toLocaleDateString() : null}
-                />
-                <Field
-                  label="Known for"
-                  value={profile.journey.daysKnown === null
-                    ? null
-                    : `${profile.journey.daysKnown.toLocaleString()} days`}
-                />
-                <Field
-                  label="Last activity"
-                  value={profile.journey.lastActivity
-                    ? new Date(profile.journey.lastActivity).toLocaleString() : null}
-                />
-                {/* Counts, not estimates. A zero here means zero. */}
-                <Field label="Sessions" value={profile.journey.sessions || null} />
-                <Field label="Page events" value={profile.journey.pageEvents || null} />
-                <Field label="Campaigns" value={profile.journey.campaigns || null} />
-                <Field label="Emails sent" value={profile.journey.emailsSent || null} />
-                <Field label="Enrolments" value={profile.journey.enrollments || null} />
-                <Field label="Peak intent" value={profile.journey.intentScore} />
-              </div>
-            </SectionCard>
-          )}
-
-          {/* The unified activity timeline — the centrepiece of the brief and the
-              thing the first version of this page omitted entirely. Every event
-              is source-labelled so any row can be traced back to the table it
-              came from. */}
-          {profile.timeline !== undefined && (
-            <SectionCard title="Activity timeline">
-              <div className="d-flex flex-wrap gap-1 mb-3">
+          {/* ── Timeline ─────────────────────────────────────────────────── */}
+          {tab === 'timeline' && profile.timeline && (
+            <SectionCard title="Activity timeline" padded={false}>
+              <div className="d-flex flex-wrap gap-1 p-3 border-bottom">
                 {['all', ...(profile.timelineDomains ?? [])].map((d) => (
                   <button
                     key={d}
@@ -239,74 +281,142 @@ export default function PersonProfilePage() {
               </div>
 
               {profile.timeline.length === 0 ? (
-                <p className="text-muted mb-0 small">
-                  No recorded activity for this person in the areas you can see.
+                <p className="text-muted small p-4 mb-0 text-center">
+                  No recorded activity in the areas you can see.
                 </p>
               ) : (
-                <ul className="list-unstyled mb-0">
-                  {profile.timeline
-                    .filter((e) => domainFilter === 'all' || e.domain === domainFilter)
-                    .map((e, i) => (
-                      <li
-                        key={`${e.source}-${e.occurredAt}-${i}`}
-                        className="d-flex gap-3 py-2 border-bottom align-items-baseline"
-                      >
-                        <span
-                          className="text-muted small text-nowrap"
-                          style={{ minWidth: '11rem', fontVariantNumeric: 'tabular-nums' }}
-                        >
-                          {new Date(e.occurredAt).toLocaleString()}
-                        </span>
-                        <span className={`badge text-bg-${DOMAIN_TONE[e.domain] ?? 'light'}`}>
-                          {e.domain}
-                        </span>
-                        <span className="flex-grow-1">
-                          <span className="fw-semibold">{e.type}</span>
-                          {e.summary && <span className="text-muted ms-2">{e.summary}</span>}
-                        </span>
-                        {/* Source-labelled, so any row can be traced to its table. */}
-                        <span className="text-muted small text-nowrap">{e.source}</span>
-                      </li>
-                    ))}
-                </ul>
-              )}
-            </SectionCard>
-          )}
-
-          {profile.acquisition !== undefined && (
-            <SectionCard title="How they found us">
-              {profile.acquisition ? (
-                <div className="row">
-                  <Field label="Source" value={profile.acquisition.source} />
-                  <Field label="Form" value={profile.acquisition.formType} />
-                  <Field label="UTM source" value={profile.acquisition.utmSource} />
-                  <Field label="UTM campaign" value={profile.acquisition.utmCampaign} />
-                  <Field label="Pipeline stage" value={profile.acquisition.pipelineStage} />
-                  <Field
-                    label="First seen"
-                    value={profile.acquisition.firstSeen
-                      ? new Date(profile.acquisition.firstSeen).toLocaleDateString()
-                      : null}
-                  />
+                <div className="table-responsive" style={{ maxHeight: '32rem', overflowY: 'auto' }}>
+                  <table className="table table-sm table-hover mb-0 align-middle">
+                    <thead className="table-light" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                      <tr>
+                        <th style={{ width: '13rem' }}>When</th>
+                        <th style={{ width: '8rem' }}>Domain</th>
+                        <th>Event</th>
+                        <th style={{ width: '11rem' }} className="text-end">Source</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {profile.timeline
+                        .filter((e) => domainFilter === 'all' || e.domain === domainFilter)
+                        .map((e, i) => (
+                          <tr key={`${e.source}-${e.occurredAt}-${i}`}>
+                            <td className="text-muted small text-nowrap" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                              {fmtDateTime(e.occurredAt)}
+                            </td>
+                            <td>
+                              <span className={`badge text-bg-${DOMAIN_TONE[e.domain] ?? 'light'}`}>{e.domain}</span>
+                            </td>
+                            <td>
+                              <span className="fw-medium">{e.type}</span>
+                              {e.summary && <div className="text-muted small">{e.summary}</div>}
+                            </td>
+                            {/* Source-labelled, so any row traces back to its table. */}
+                            <td className="text-muted small text-end text-nowrap">{e.source}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
                 </div>
-              ) : (
-                <p className="text-muted mb-0 small">
-                  No lead record for this person, so there is nothing recorded about how they
-                  arrived.
-                </p>
               )}
             </SectionCard>
           )}
 
-          {profile.learning !== undefined && (
-            <SectionCard title="Programme">
+          {/* ── Acquisition ──────────────────────────────────────────────── */}
+          {tab === 'acquisition' && (acq ? (
+            <div className="row g-3">
+              <div className="col-lg-6">
+                <SectionCard title="Contact">
+                  <div className="row">
+                    <Field label="Email" value={profile.email} />
+                    <Field label="Phone" value={acq.phone} />
+                    <Field label="Role" value={acq.role} />
+                    <Field label="Company" value={profile.company} />
+                    <Field label="Company size" value={acq.companySize} />
+                    <Field label="Industry" value={acq.industry} />
+                    <Field
+                      label="LinkedIn"
+                      value={acq.linkedinUrl
+                        ? <a href={acq.linkedinUrl} target="_blank" rel="noreferrer">Profile</a>
+                        : null}
+                    />
+                    <Field
+                      label="Consent to contact"
+                      value={acq.consentContact === null ? null : (
+                        <span className={`badge text-bg-${acq.consentContact ? 'success' : 'danger'}`}>
+                          {acq.consentContact ? 'Given' : 'Not given'}
+                        </span>
+                      )}
+                    />
+                  </div>
+                </SectionCard>
+              </div>
+
+              <div className="col-lg-6">
+                <SectionCard title="Qualification">
+                  <div className="row">
+                    <Field label="Pipeline stage" value={acq.pipelineStage} />
+                    <Field label="Status" value={acq.status} />
+                    <Field label="Lead score" value={acq.leadScore} />
+                    <Field
+                      label="Temperature"
+                      value={acq.temperature ? (
+                        <span className={`badge text-bg-${TEMPERATURE_TONE[acq.temperature] ?? 'secondary'}`}>
+                          {acq.temperature}
+                        </span>
+                      ) : null}
+                    />
+                    <Field label="Temperature set" value={fmtDate(acq.temperatureUpdatedAt)} />
+                    <Field label="Qualification" value={acq.qualificationLevel} />
+                    <Field label="Interest level" value={acq.interestLevel} />
+                    <Field label="Maturity score" value={acq.maturityScore} />
+                    <Field label="Owner" value={acq.assignedAdmin} />
+                    <Field label="Last contacted" value={fmtDate(acq.lastContactedAt)} />
+                  </div>
+                </SectionCard>
+              </div>
+
+              <div className="col-lg-6">
+                <SectionCard title="How they found us">
+                  <div className="row">
+                    <Field label="Source" value={acq.source} />
+                    <Field label="Form" value={acq.formType} />
+                    <Field label="UTM source" value={acq.utmSource} />
+                    <Field label="UTM campaign" value={acq.utmCampaign} />
+                    <Field label="Interest area" value={acq.interestArea} />
+                    <Field label="First seen" value={fmtDate(acq.firstSeen)} />
+                    <Field label="Landing page" wide value={acq.pageUrl} />
+                  </div>
+                </SectionCard>
+              </div>
+
+              <div className="col-lg-6">
+                <SectionCard title="What they told us">
+                  <div className="row">
+                    <Field label="Message" wide value={acq.message} />
+                    <Field label="Notes" wide value={acq.notes} />
+                  </div>
+                </SectionCard>
+              </div>
+            </div>
+          ) : (
+            <SectionCard title="How they found us">
+              <p className="text-muted small mb-0">
+                No lead record for this person, so nothing is recorded about how they arrived.
+                They enrolled without ever being captured as a lead.
+              </p>
+            </SectionCard>
+          ))}
+
+          {/* ── Programme ────────────────────────────────────────────────── */}
+          {tab === 'learning' && profile.learning && (
+            <SectionCard title="Programme" padded={false}>
               {profile.learning.length === 0 ? (
-                <p className="text-muted mb-0 small">No enrolments visible to you.</p>
+                <p className="text-muted small p-4 mb-0 text-center">No enrolments visible to you.</p>
               ) : (
                 <div className="table-responsive">
-                  <table className="table table-sm mb-0">
-                    <thead>
-                      <tr><th>Status</th><th>Tier</th><th>Type</th><th>Enrolled</th></tr>
+                  <table className="table table-sm mb-0 align-middle">
+                    <thead className="table-light">
+                      <tr><th>Status</th><th>Tier</th><th>Type</th><th>Enrolled</th><th>Cohort</th></tr>
                     </thead>
                     <tbody>
                       {profile.learning.map((e) => (
@@ -318,7 +428,12 @@ export default function PersonProfilePage() {
                           </td>
                           <td>{e.tier || <Unknown />}</td>
                           <td>{e.enrollmentType || <Unknown />}</td>
-                          <td>{e.enrolledAt ? new Date(e.enrolledAt).toLocaleDateString() : <Unknown />}</td>
+                          <td>{fmtDate(e.enrolledAt) || <Unknown />}</td>
+                          <td className="text-muted small">
+                            {e.cohortId
+                              ? <Link to={`/admin/cohorts/${e.cohortId}`}>{e.cohortId.slice(0, 8)}…</Link>
+                              : <Unknown />}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -328,26 +443,28 @@ export default function PersonProfilePage() {
             </SectionCard>
           )}
 
-          {profile.billing !== undefined && (
-            <SectionCard title="Billing">
+          {/* ── Billing ──────────────────────────────────────────────────── */}
+          {tab === 'billing' && profile.billing && (
+            <SectionCard title="Billing" padded={false}>
               {profile.billing.length === 0 ? (
-                <p className="text-muted mb-0 small">No enrolment records, so nothing to bill.</p>
+                <p className="text-muted small p-4 mb-0 text-center">No enrolment records, so nothing to bill.</p>
               ) : (
                 <div className="table-responsive">
-                  <table className="table table-sm mb-0">
-                    <thead>
-                      <tr><th>Payment status</th><th>Method</th><th>Amount paid</th></tr>
+                  <table className="table table-sm mb-0 align-middle">
+                    <thead className="table-light">
+                      <tr><th>Payment status</th><th>Method</th><th className="text-end">Amount paid</th></tr>
                     </thead>
                     <tbody>
                       {profile.billing.map((b) => (
                         <tr key={b.enrollmentId}>
                           <td>{b.paymentStatus || <Unknown />}</td>
                           <td>{b.paymentMethod || <Unknown />}</td>
-                          {/* Not £0. An unrecorded amount and a zero payment are
-                              different facts. */}
-                          <td>{b.amountPaid === null || b.amountPaid === undefined
-                            ? <Unknown />
-                            : `$${Number(b.amountPaid).toLocaleString()}`}</td>
+                          {/* Not $0. An unrecorded amount and a zero payment differ. */}
+                          <td className="text-end" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                            {b.amountPaid === null || b.amountPaid === undefined
+                              ? <Unknown />
+                              : `$${Number(b.amountPaid).toLocaleString()}`}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -357,28 +474,21 @@ export default function PersonProfilePage() {
             </SectionCard>
           )}
 
-          {profile.engagement !== undefined && profile.engagement && (
+          {/* ── Site activity ────────────────────────────────────────────── */}
+          {tab === 'activity' && (
             <SectionCard title="Site activity">
-              <div className="row">
-                <Field label="Sessions" value={profile.engagement.sessions || <Unknown />} />
-                <Field
-                  label="First visit"
-                  value={profile.engagement.firstSeen
-                    ? new Date(profile.engagement.firstSeen).toLocaleDateString() : null}
-                />
-                <Field
-                  label="Last visit"
-                  value={profile.engagement.lastSeen
-                    ? new Date(profile.engagement.lastSeen).toLocaleDateString() : null}
-                />
-                <Field label="Properties" value={profile.engagement.sites.join(', ')} />
-              </div>
+              {profile.engagement ? (
+                <div className="row">
+                  <Field label="Sessions" value={profile.engagement.sessions || null} />
+                  <Field label="First visit" value={fmtDate(profile.engagement.firstSeen)} />
+                  <Field label="Last visit" value={fmtDate(profile.engagement.lastSeen)} />
+                  <Field label="Properties" value={profile.engagement.sites.join(', ')} />
+                </div>
+              ) : (
+                <p className="text-muted small mb-0">No site activity linked to this person.</p>
+              )}
             </SectionCard>
           )}
-
-          <Link to="/admin/people" className="btn btn-sm btn-outline-secondary mt-2">
-            Back to People
-          </Link>
         </>
       )}
     </div>

@@ -32,14 +32,47 @@ import { EventDomain, TimelineEvent, domainsForSections, getPersonTimeline } fro
  * scoped surface shows everything, so they are handled separately below.
  */
 
+/**
+ * Everything the Lead detail page shows, plus what it does not.
+ *
+ * The brief requires existing lead/enrollment/visitor detail URLs to resolve to
+ * this profile, which only works if the profile is a SUPERSET. The first version
+ * carried six fields against that page's contact block, tracking block,
+ * qualification, ownership, consent and notes — so it was a downgrade for anyone
+ * who opened it instead of the lead page.
+ */
 export interface AcquisitionPanel {
+  // Contact
+  phone: string | null;
+  role: string | null;
+  companySize: string | null;
+  industry: string | null;
+  linkedinUrl: string | null;
+  // Attribution
   source: string | null;
   formType: string | null;
   utmSource: string | null;
   utmCampaign: string | null;
+  pageUrl: string | null;
+  interestArea: string | null;
+  message: string | null;
+  firstSeen: string | null;
+  // Qualification
   pipelineStage: string | null;
   leadScore: number | null;
-  firstSeen: string | null;
+  temperature: string | null;
+  temperatureUpdatedAt: string | null;
+  qualificationLevel: string | null;
+  interestLevel: string | null;
+  maturityScore: number | null;
+  // Ownership and follow-up
+  status: string | null;
+  assignedAdmin: string | null;
+  lastContactedAt: string | null;
+  notes: string | null;
+  /** The brief asks for consent explicitly. Null means never recorded. */
+  consentContact: boolean | null;
+  leadId: number | null;
 }
 
 export interface LearningPanel {
@@ -190,9 +223,20 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
   // ── Acquisition ───────────────────────────────────────────────────────────
   if (may('acquisition', query.sections)) {
     const acq = await sequelize.query<AcquisitionPanel>(
-      `SELECT source, form_type AS "formType", utm_source AS "utmSource",
-              utm_campaign AS "utmCampaign", pipeline_stage AS "pipelineStage",
-              lead_score AS "leadScore", min(created_at) OVER () AS "firstSeen"
+      `SELECT id AS "leadId", phone, role, company_size AS "companySize", industry,
+              linkedin_url AS "linkedinUrl",
+              source, form_type AS "formType", utm_source AS "utmSource",
+              utm_campaign AS "utmCampaign", page_url AS "pageUrl",
+              interest_area AS "interestArea", message,
+              pipeline_stage AS "pipelineStage", lead_score AS "leadScore",
+              lead_temperature AS temperature,
+              temperature_updated_at AS "temperatureUpdatedAt",
+              qualification_level AS "qualificationLevel",
+              interest_level AS "interestLevel", maturity_score AS "maturityScore",
+              status, assigned_admin AS "assignedAdmin",
+              last_contacted_at AS "lastContactedAt", notes,
+              consent_contact AS "consentContact",
+              min(created_at) OVER () AS "firstSeen"
        FROM leads WHERE lower(btrim(email)) = :email
        ORDER BY created_at ASC LIMIT 1`,
       { type: QueryTypes.SELECT, replacements: { email } },
