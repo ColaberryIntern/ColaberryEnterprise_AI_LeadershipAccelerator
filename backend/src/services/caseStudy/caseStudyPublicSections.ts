@@ -51,6 +51,7 @@ import type {
 import type {
   PublicCaseStudyArchitecture,
   PublicCaseStudyArtifact,
+  PublicCaseStudyDetail,
   PublicCaseStudyContributor,
   PublicCaseStudyMeasurement,
   PublicCaseStudyMetric,
@@ -227,6 +228,36 @@ export function projectDiagramSource(value: unknown): string | null {
   if (source.length > MAX_DIAGRAM_SOURCE_CHARS) return null;
   if (source.includes('<')) return null;
   return source;
+}
+
+/**
+ * The narrated walkthrough, or null.
+ *
+ * Every URL goes through `safeHttpUrl` for the same reason the artifact URLs do: these are
+ * admin-editable and land in `src` attributes, so a `javascript:` value would be stored
+ * XSS. A walkthrough with no playable `url` is dropped whole rather than rendered as an
+ * empty player with a caption track attached to nothing.
+ */
+export function projectWalkthroughVideo(
+  content: CaseStudySnapshotContent,
+): PublicCaseStudyDetail['walkthroughVideo'] {
+  const v = content?.walkthroughVideo;
+  if (!v) return null;
+  const url = safeHttpUrl(v.url);
+  const title = text(v.title);
+  if (!url || !title) return null;
+  const duration = typeof v.durationSeconds === 'number'
+    && Number.isFinite(v.durationSeconds) && v.durationSeconds > 0
+    ? Math.round(v.durationSeconds) : null;
+  return {
+    url,
+    title,
+    captionsUrl: safeHttpUrl(v.captionsUrl),
+    posterUrl: safeHttpUrl(v.posterUrl),
+    durationSeconds: duration,
+    narrationSource: v.narrationSource === 'synthetic' || v.narrationSource === 'human'
+      ? v.narrationSource : null,
+  };
 }
 
 export function projectArchitecture(

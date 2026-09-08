@@ -5,6 +5,7 @@ import CaseStudyVerificationBadge from '../../components/caseStudy/CaseStudyVeri
 import { heroFacts, heroMetricsFor, visibleSections } from './storyDetailV2Model';
 import StoryHeroActions from './StoryHeroActions';
 import StoryContextStrip from './StoryContextStrip';
+import { StoryWalkthrough } from './storyDetailV2Sections';
 import StorySectionList from './StorySectionList';
 import { storyIndicators } from './storyIndicatorModel';
 import { placeStoryFigures } from './storyFigurePlacement';
@@ -165,6 +166,11 @@ export function StoryDetailArticle({
           ) : null}
         </div>
       </section>
+
+      {/* The walkthrough sits directly under the masthead, above everything else on the
+          page. Ali: "put at the top of the case study". It renders nothing at all on a
+          record with no video, which is every record but one today. */}
+      <StoryWalkthrough video={record.walkthroughVideo} />
 
       <StoryContextStrip indicators={indicators} facts={facts} metrics={metrics} />
 

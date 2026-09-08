@@ -1205,6 +1205,20 @@
       "disposition": "deterministic",
       "rule": "snapshot-composite"
     },
+    "CaseStudySnapshotContent.walkthroughVideo": {
+      "authoring": "admin; a narrated walkthrough produced for this record",
+      "sourcePriority": "human override > repo sync",
+      "aiMayInfer": false,
+      "approvalRequired": true,
+      "indexHome": "—",
+      "detailHome": "top of the detail page, above the situation band",
+      "publicBehaviour": "every URL through safeHttpUrl; dropped entirely without a playable url",
+      "emptyBehaviour": "no player - the band is absent, not an empty frame",
+      "privacy": "public",
+      "test": "caseStudyWalkthroughVideo.test.ts",
+      "disposition": "human_approved",
+      "rule": "authored"
+    },
     "CaseStudyTaxonomy.builtByType": {
       "authoring": "admin narrative panel",
       "sourcePriority": "human override > repo sync",
@@ -2060,6 +2074,20 @@
       "rule": "public-projection-mirror"
     },
     "PublicCaseStudyDetail.verificationMethod": {
+      "authoring": "not authored — computed by caseStudyPublicProjection.ts",
+      "sourcePriority": "projection of the approved snapshot",
+      "aiMayInfer": false,
+      "approvalRequired": false,
+      "indexHome": "—",
+      "detailHome": "detail page",
+      "publicBehaviour": "always present",
+      "emptyBehaviour": "empty array or empty string",
+      "privacy": "public",
+      "test": "caseStudyPublicProjection.test.ts",
+      "disposition": "deterministic",
+      "rule": "public-projection-mirror"
+    },
+    "PublicCaseStudyDetail.walkthroughVideo": {
       "authoring": "not authored — computed by caseStudyPublicProjection.ts",
       "sourcePriority": "projection of the approved snapshot",
       "aiMayInfer": false,

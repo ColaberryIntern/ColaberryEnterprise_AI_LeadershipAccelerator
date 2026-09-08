@@ -274,3 +274,38 @@
   border: var(--border-1) solid color-mix(in srgb, var(--text-on-inverse) 18%, transparent);
   border-radius: var(--radius-lg);
 }
+
+/* ------------------------------------------------------- walkthrough video --- */
+
+/* The narrated walkthrough, directly under the masthead.
+
+   CAPPED, NOT FULL-BLEED. The file is 16:9 at 1920x1080; letting it run the full band
+   width on a wide monitor makes a 1100px-tall video that pushes every verified figure on
+   the page below the fold, which inverts what this page is for. The reader should meet the
+   walkthrough and the evidence together. */
+.cbv2-story__walkthrough {
+  display: grid;
+  gap: 0.9rem;
+  max-width: 60rem;
+}
+.cbv2-story__walkthrough-title {
+  margin: 0;
+  font-size: 1.35rem;
+}
+.cbv2-story__walkthrough-player {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  /* A poster is a still of the first slide, so it should sit edge to edge like the video
+     it stands in for rather than being letterboxed inside its own frame. */
+  object-fit: cover;
+  background: #11161a;
+  border-radius: 12px;
+  border: 1px solid rgba(20, 30, 40, 0.14);
+}
+.cbv2-story__walkthrough-note {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--cbv2-ink-muted, #5d6873);
+}

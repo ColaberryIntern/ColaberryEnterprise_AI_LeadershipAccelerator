@@ -347,3 +347,29 @@
   font-size: .85rem;
   color: var(--cs-fg-muted);
 }
+
+/* ------------------------------------------------------------ walkthrough --- */
+
+/* The narrated walkthrough, directly under the masthead.
+
+   CAPPED, NOT FULL-BLEED. The file is 16:9 at 1920x1080; run full width on a wide monitor
+   that is a video over a thousand pixels tall, which pushes every verified figure on the
+   record below the fold and inverts what the page is for. */
+.cs-walkthrough { display: grid; gap: .9rem; max-width: 56rem; }
+.cs-walkthrough-player {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  /* The poster is a still of the first slide, so it should sit edge to edge like the
+     video it stands in for rather than being letterboxed inside its own frame. */
+  object-fit: cover;
+  background: #11161a;
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+}
+.cs-walkthrough-note {
+  margin: 0;
+  font-size: .88rem;
+  line-height: 1.5;
+  color: var(--cs-fg-muted);
+}
