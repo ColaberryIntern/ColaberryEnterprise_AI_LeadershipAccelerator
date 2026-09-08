@@ -6,6 +6,9 @@ import { buildAgentManagerConversationSystemPrompt } from './agentBlueprint/agen
 import {
   applyConfirmedReliabilityChange, buildConfirmationCardText, detectConfirmationReply, detectReliabilityIntent, toPendingConfirmation,
 } from './managerReliabilityIntentService';
+import {
+  applyConfirmedGoalChange, buildGoalConfirmationCardText, detectChangeGoalIntent, toPendingGoalConfirmation,
+} from './managerGoalIntentService';
 import { detectWorkStatusQuery, buildWorkStatusReply } from './agentWorkStatusIntentService';
 import { detectUncertaintyQuery, buildUncertaintyReply } from './agentUncertaintyIntentService';
 import { detectInterventionIntentQuery, buildInterventionIntentReply } from './agentInterventionIntentService';
@@ -19,11 +22,16 @@ import { detectInterventionIntentQuery, buildInterventionIntentReply } from './a
 // deferred scope (see AgentManagerMessage.ts's own header comment).
 //
 // Reese Agentic AI Employee mission, Checkpoint B (2026-09-04) narrows that
-// deferral by exactly one real slice: reliability-declaration intent
+// deferral by one real slice: reliability-declaration intent
 // (QUARANTINE_METRIC/RESTORE_METRIC) is now detected and gated behind a real
-// confirmation turn — see managerReliabilityIntentService.ts. Every other
-// intent (ASK/INSTRUCT/CORRECT/APPROVE/COACH/SCHEDULE/...) is still purely
-// conversational, unchanged.
+// confirmation turn — see managerReliabilityIntentService.ts.
+//
+// Capability 8 (2026-09-08) narrows it by one more: CHANGE_GOAL is now
+// detected and gated the same way, riding the generic
+// `pending_intent_confirmation` column instead of a dedicated one — see
+// managerGoalIntentService.ts. Every other intent
+// (ASK/INSTRUCT/CORRECT/APPROVE/REJECT/COACH/SCHEDULE/ASSIGN_WORK/
+// REPORT_DATA_ISSUE/...) is still purely conversational, unchanged.
 
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
 const HISTORY_LIMIT = 20;
@@ -125,6 +133,44 @@ async function handlePendingOrNewReliabilityIntent(
 }
 
 /**
+ * Reese Agentic AI Employee mission, Capability 8 — the second real intent
+ * on the generic `pending_intent_confirmation` column (CHANGE_GOAL), same
+ * shape as handlePendingOrNewReliabilityIntent above but riding the generic
+ * column rather than a dedicated one. Checked AFTER the reliability handler
+ * so a pending reliability confirmation always keeps priority — a
+ * conversation is never left with two different pending confirmations
+ * competing for the same short "confirm"/"cancel" reply.
+ */
+async function handlePendingOrNewGoalIntent(
+  agentId: string,
+  conversation: AgentManagerConversation,
+  messageText: string,
+  participantEmail: string,
+  participantOrgMemberId: string | null,
+): Promise<string | null> {
+  const pending = conversation.pending_intent_confirmation;
+
+  if (pending) {
+    const verdict = detectConfirmationReply(messageText);
+    if (verdict === 'confirm') {
+      await conversation.update({ pending_intent_confirmation: null });
+      const { summary } = await applyConfirmedGoalChange(agentId, pending, participantEmail, participantOrgMemberId);
+      return summary;
+    }
+    await conversation.update({ pending_intent_confirmation: null });
+    return 'Okay, no change made — the goal stays as it was. Let me know if you did want to change that.';
+  }
+
+  const detected = detectChangeGoalIntent(messageText);
+  if (detected) {
+    await conversation.update({ pending_intent_confirmation: toPendingGoalConfirmation(detected) });
+    return buildGoalConfirmationCardText(detected);
+  }
+
+  return null;
+}
+
+/**
  * Reese Agentic AI Employee mission, Checkpoint F — a manager asking about
  * this agent's real workload ("what are you working on" / "what's
  * overdue") gets a deterministic answer built from real Ticket rows, never
@@ -198,6 +244,14 @@ export async function sendManagerMessage(
   const reliabilityReply = await handlePendingOrNewReliabilityIntent(conversation, messageText, participantEmail);
   if (reliabilityReply !== null) {
     return persistAgentReplyAndReturnView(conversation, agentId, reliabilityReply);
+  }
+
+  // Reese Agentic AI Employee mission, Capability 8 — CHANGE_GOAL intent.
+  // Checked right after reliability (same "pending confirmation owns the
+  // next reply" posture) and before every purely-informational query below.
+  const goalIntentReply = await handlePendingOrNewGoalIntent(agentId, conversation, messageText, participantEmail, participantOrgMemberId);
+  if (goalIntentReply !== null) {
+    return persistAgentReplyAndReturnView(conversation, agentId, goalIntentReply);
   }
 
   const workStatusReply = await handleWorkStatusQuery(agent, messageText);

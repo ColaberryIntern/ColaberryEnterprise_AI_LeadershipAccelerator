@@ -90,6 +90,7 @@ import { ensureMetricReliabilityRecordSchema } from './db/ensureMetricReliabilit
 import { ensureStudentAssessmentSchema } from './db/ensureStudentAssessmentSchema';
 import { ensureChecklistInstanceSchema } from './db/ensureChecklistInstanceSchema';
 import { ensureAgentManagerConversationReliabilitySchema } from './db/ensureAgentManagerConversationReliabilitySchema';
+import { ensureAgentManagerConversationIntentSchema } from './db/ensureAgentManagerConversationIntentSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureCaseStudySchema, assertCaseStudySchema } from './db/ensureCaseStudySchema';
 import {
@@ -2755,6 +2756,10 @@ async function start(): Promise<void> {
   // on the existing agent_manager_conversations table. Additive, idempotent,
   // no flag.
   await ensureAgentManagerConversationReliabilitySchema();
+  // Reese Agentic AI Employee mission, Capability 8 — the generic pending-
+  // intent-confirmation workflow's one new column (pending_intent_confirmation)
+  // on the same table. Additive, idempotent, no flag.
+  await ensureAgentManagerConversationIntentSchema();
   // AI Workforce Reset, Phase D.1 "Inventory" — department/scope (Ali signed off on
   // abac-design.md's own recommendations wholesale, 2026-08-24). Additive, idempotent, no flag.
   await ensureAiAgentDepartmentScopeSchema();
