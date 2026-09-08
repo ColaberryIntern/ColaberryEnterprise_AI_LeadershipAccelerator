@@ -22,6 +22,20 @@ jest.mock('../../services/managerReliabilityIntentService', () => ({
   applyConfirmedReliabilityChange: jest.fn(),
 }));
 
+// Capability 8 — the same requireActual() above also now executes
+// agentManagerConversationService.ts's new managerGoalIntentService.ts
+// import, which transitively imports agentGoalService.ts ->
+// trustMetricsService.ts -> agentPermissionService.ts -> the full models
+// barrel, crashing this file's own partial model mocks the exact same way
+// the reliability mock above already guards against. Mocked wholesale for
+// the same reason.
+jest.mock('../../services/managerGoalIntentService', () => ({
+  detectChangeGoalIntent: jest.fn(() => null),
+  buildGoalConfirmationCardText: jest.fn(() => ''),
+  toPendingGoalConfirmation: jest.fn(),
+  applyConfirmedGoalChange: jest.fn(),
+}));
+
 jest.mock('../../services/agentManagerConversationService', () => {
   const actual = jest.requireActual('../../services/agentManagerConversationService');
   return { ...actual, getConversationHistory: jest.fn(), sendManagerMessage: jest.fn() };
