@@ -519,7 +519,17 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
               'You are responding to an inbound email reply from a lead.',
               'The lead said: "' + body.substring(0, 500) + '"',
               'Respond helpfully and specifically to what they asked or said.',
-              'If they asked about pricing, mention the upcoming April 14 cohort and suggest a strategy call.',
+              // The instruction here used to read "mention the upcoming April 14
+              // cohort". It shipped in spring and was still telling leads in
+              // September about an "upcoming" cohort five months past — a
+              // hardcoded fact in a prompt outlives the fact itself, and nothing
+              // in the reply looks wrong, so nobody notices.
+              //
+              // NO DATE, PRICE OR SEAT COUNT MAY BE STATED HERE. This path sends
+              // via nodemailer WITHOUT passing through messageValidatorService,
+              // so nothing downstream checks what the model asserts. Until it
+              // does, the only safe instruction is to name no such fact at all.
+              'If they asked about pricing, suggest a strategy call to talk it through. Do NOT state a price, a cohort date, a start date, a deadline or a seat count — you do not have current figures, and a stale one is worse than none.',
               'If they expressed interest, acknowledge it warmly and offer to schedule a call.',
               'If they asked a question, answer it directly.',
               'Keep it concise (3-5 sentences). Be warm, professional, and helpful.',
