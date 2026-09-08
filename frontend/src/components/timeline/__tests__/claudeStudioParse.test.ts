@@ -105,6 +105,15 @@ describe('parseClaudeStudio — happy path', () => {
     expect(s.objectives).toEqual(['Convert an idea into constraints', 'Separate symptom from cause']);
   });
 
+  it('keeps the heading INSIDE html as well as exposing it separately', () => {
+    // The contract that broke in production: `html` is the block's innerHTML and
+    // still contains the <h4>. A caller that renders `heading` AND `html` prints
+    // it twice. Pinned here so the shape cannot change silently.
+    expect(s.blocks.project.heading).toBe('Week 1 — Problem Framing');
+    expect(s.blocks.project.html).toContain('<h4>Week 1 — Problem Framing</h4>');
+    expect(s.blocks.artifact.html).toContain('<h4>Interactive brief</h4>');
+  });
+
   it('reads every named block', () => {
     ['project', 'artifact', 'trust', 'deliverables', 'reflection', 'rubric']
       .forEach((name) => expect(s.blocks[name]).toBeDefined());

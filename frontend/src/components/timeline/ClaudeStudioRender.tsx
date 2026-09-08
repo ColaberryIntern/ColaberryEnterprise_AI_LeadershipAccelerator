@@ -456,7 +456,10 @@ const ClaudeStudioRender: React.FC<Props> = ({
           <>
             <h3 className="st-h">Set up your Project</h3>
             <section className="st-block">
-              {block('project').heading && <h4>{block('project').heading}</h4>}
+              {/* `html` is the block's innerHTML and ALREADY contains its <h4> —
+                  rendering `heading` as well printed "Week 2 — Research and
+                  Evidence" twice, one line above itself. Same for the Artifact
+                  block. Reported from production 2026-09-08. */}
               <div dangerouslySetInnerHTML={{ __html: block('project').html }} />
             </section>
           </>
@@ -534,7 +537,7 @@ const ClaudeStudioRender: React.FC<Props> = ({
           <>
             <h3 className="st-h">What the Artifact must contain</h3>
             <section className="st-block">
-              {block('artifact').heading && <h4>{block('artifact').heading}</h4>}
+              {/* See the Project block above: `html` carries the <h4> already. */}
               <div dangerouslySetInnerHTML={{ __html: block('artifact').html }} />
             </section>
           </>
