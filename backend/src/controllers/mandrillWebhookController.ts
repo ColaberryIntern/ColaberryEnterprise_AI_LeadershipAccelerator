@@ -10,6 +10,7 @@ import { respondAsLead } from '../services/testing/campaignSimulator';
 import { processOptOut } from '../services/unsubscribeEnforcementService';
 import ScheduledEmail from '../models/ScheduledEmail';
 import { handleTicketReplyEmail } from '../services/workforce/ticketReplyService';
+import { resolveExplorerReplyRouting } from '../services/explorerGrowth/explorerInboundRouter';
 import { redactForLogs } from '../utils/piiRedaction';
 
 /** Map Mandrill event types to our outcome types */
@@ -438,8 +439,65 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
         return;
       }
 
+      // Explorer Growth OS — divert Explorer replies BEFORE the auto-reply
+      // below (plan §15.5, §21.3: "Explorer campaigns must NOT use the
+      // bypassing auto-reply path").
+      //
+      // WHAT THAT PATH BYPASSES: the block below calls generateMessage and
+      // hands the result straight to nodemailer. It never passes through
+      // messageValidatorService, so none of the validator's guards apply —
+      // including the Explorer fact guard, whose entire job is to stop a
+      // generated message asserting a date or price nobody resolved. An
+      // Explorer reply answered here would be answered by an unvalidated
+      // generator.
+      //
+      // ADDITIVE: resolveExplorerReplyRouting returns NOT_HANDLED unless the
+      // flag is on AND the sender is a known Explorer. Every existing campaign
+      // takes exactly the path it took before, which the tests assert directly.
+      let explorerHandled = false;
+      try {
+        const routing = await resolveExplorerReplyRouting(lead.id, body);
+        if (routing.handled) {
+          explorerHandled = routing.suppressAutoReply;
+          console.log(
+            JSON.stringify({
+              level: 'info',
+              service: 'explorer-growth',
+              event: 'explorer_reply_routed',
+              outcome: 'success',
+              lead_id: lead.id,
+              reply_class: routing.classification?.class ?? null,
+              route: routing.classification?.route ?? null,
+              source: routing.classification?.source ?? null,
+            }),
+          );
+        }
+      } catch (routeErr: any) {
+        // FAIL CLOSED. If we cannot tell whether this is an Explorer, we must
+        // not fall through to an unvalidated auto-reply on the assumption that
+        // they are not one. Staying silent costs a reply; guessing wrong sends
+        // an ungrounded message to a learner.
+        explorerHandled = true;
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            service: 'explorer-growth',
+            event: 'explorer_reply_routing_failed',
+            error_class: 'ExplorerRoutingError',
+            outcome: 'failure',
+            lead_id: lead.id,
+            message: String(routeErr?.message ?? '').slice(0, 200),
+          }),
+        );
+      }
+
       // Auto-reply: generate an AI response and send it back
       try {
+        if (explorerHandled) {
+          console.log('[MandrillInbound] Skipping auto-reply — Explorer reply routed to the classifier');
+          processed++;
+          continue;
+        }
         // Don't auto-reply to Ali personal outreach — Ali handles those personally
         const isAliOutreach = await CommunicationLog.findOne({
           where: { lead_id: lead.id, metadata: { trigger: 'ali_personal_outreach' } } as any,
