@@ -57,17 +57,24 @@ export function isOrgAccountType(v: string): v is OrgAccountType {
 /**
  * Entry site → account type.
  *
- * Keys are bare hostnames, lowercased, without scheme or `www.`. Edit this table
- * to change what a site produces; nothing else needs to know.
+ * Keys are a lowercased hostname, OPTIONALLY followed by a path prefix.
+ * Longest key wins, so `a.com/consulting` beats a bare `a.com`.
+ *
+ * THE PATH FORM EXISTS BECAUSE ONE DOMAIN WILL SOON MEAN TWO THINGS. Colaberry
+ * Enterprise is the Business and Training entrance today and will later offer
+ * consulting as well. A hostname-only table cannot express that: the domain
+ * would have to be either Business or Consulting for everyone. Adding
+ * `enterprise.colaberry.ai/consulting` here, when that page exists, is then a
+ * one-line change rather than a redesign.
  *
  * `aiflotation.com` is the reason this file exists: those registrations were
  * creating free training accounts for people who had come to have something
- * built for them.
+ * built for them. It replaced `dataflotation.com`, which is deliberately NOT
+ * listed — the old domain should not quietly keep minting accounts.
  */
 export const ENTRY_SITE_ACCOUNT_TYPES: Readonly<Record<string, OrgAccountType>> = {
   'aiflotation.com': 'client',
   'www.aiflotation.com': 'client',
-  'dataflotation.com': 'client',
 };
 
 /**
@@ -83,10 +90,49 @@ export function normalizeEntrySite(raw: string | null | undefined): string {
   if (!value) return '';
 
   const withoutScheme = value.replace(/^[a-z][a-z0-9+.-]*:\/\//, '');
-  const host = withoutScheme.split('/')[0].split('?')[0].split('#')[0];
+  const withoutQuery = withoutScheme.split('?')[0].split('#')[0];
+
+  const slash = withoutQuery.indexOf('/');
+  const hostPart = slash === -1 ? withoutQuery : withoutQuery.slice(0, slash);
+  const pathPart = slash === -1 ? '' : withoutQuery.slice(slash);
+
   // Port stripped, but www. is NOT: the table lists both forms explicitly, so a
   // silent rewrite here cannot mask a missing entry.
-  return host.split(':')[0];
+  const host = hostPart.split(':')[0];
+
+  // The PATH IS KEPT, because one domain will soon mean two things. Trailing
+  // slashes are dropped so `/consulting` and `/consulting/` are one key.
+  const path = pathPart.replace(/\/+$/, '');
+  return path ? `${host}${path}` : host;
+}
+
+/**
+ * Look up an entry site, most specific first.
+ *
+ * `enterprise.colaberry.ai/consulting/start` tries that, then
+ * `/consulting`, then the bare host. Longest match wins, so a general domain
+ * mapping never shadows a specific page.
+ */
+export function lookupEntrySite(
+  normalized: string,
+  // Injectable ONLY so a test can exercise this function against a table that
+  // contains the one-domain-two-meanings case before that page exists. Without
+  // it a test has to restate the matching rule against a stand-in table, which
+  // proves the test's own reimplementation works and nothing about this code.
+  table: Readonly<Record<string, OrgAccountType>> = ENTRY_SITE_ACCOUNT_TYPES,
+): OrgAccountType | undefined {
+  if (!normalized) return undefined;
+
+  const slash = normalized.indexOf('/');
+  const host = slash === -1 ? normalized : normalized.slice(0, slash);
+  const segments = slash === -1 ? [] : normalized.slice(slash + 1).split('/').filter(Boolean);
+
+  for (let depth = segments.length; depth > 0; depth--) {
+    const key = `${host}/${segments.slice(0, depth).join('/')}`;
+    const hit = table[key];
+    if (hit) return hit;
+  }
+  return table[host];
 }
 
 export interface AccountTypeResolution {
@@ -114,7 +160,7 @@ export function resolveAccountType(input: {
   }
 
   const host = normalizeEntrySite(input.entrySite);
-  const mapped = ENTRY_SITE_ACCOUNT_TYPES[host];
+  const mapped = lookupEntrySite(host);
   if (mapped) return { accountType: mapped, matched: true, host };
 
   return { accountType: DEFAULT_ACCOUNT_TYPE, matched: false, host };
