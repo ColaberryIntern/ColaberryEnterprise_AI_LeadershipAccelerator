@@ -54,11 +54,11 @@
    deliberate choice somewhere. This site has no theme control and no JavaScript to set
    one, so it honours the reader's OS preference instead.
 
-   These values MIRROR the `[data-theme="dark"]` block in design/colors.css. They are
+   These values MIRROR the `[data-theme="dark"]` block in design/tokens/colors.css. They are
    duplicated because CSS cannot alias one selector's declarations to another - if that
    file's dark set changes, change this too. The attribute still wins where it is set.
 
-   Kept here rather than in design/colors.css so that file stays a pristine copy of the
+   Kept here rather than in design/tokens/colors.css so that file stays a pristine copy of the
    upstream export and can be re-vendored without losing this. Same placement, and same
    reasoning, as the AI Flotation site. */
 @media (prefers-color-scheme: dark) {
