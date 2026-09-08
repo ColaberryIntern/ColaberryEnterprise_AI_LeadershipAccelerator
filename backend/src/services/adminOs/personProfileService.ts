@@ -72,7 +72,27 @@ export interface AcquisitionPanel {
   notes: string | null;
   /** The brief asks for consent explicitly. Null means never recorded. */
   consentContact: boolean | null;
+  evaluating90Days: boolean | null;
+  createdAt: string | null;
   leadId: number | null;
+  /** The denominator the Lead page shows beside the score. */
+  leadScoreMax: number;
+}
+
+export interface AppointmentRow {
+  kind: 'appointment' | 'strategy_call';
+  title: string | null;
+  scheduledAt: string | null;
+  status: string | null;
+  notes: string | null;
+  meetLink: string | null;
+}
+
+export interface AutomationRow {
+  type: string;
+  status: string | null;
+  detail: string | null;
+  createdAt: string | null;
 }
 
 export interface LearningPanel {
@@ -131,6 +151,17 @@ export interface PersonProfile {
   billing?: BillingPanel[];
   engagement?: EngagementPanel | null;
   /** The summary above the detail. Progressive disclosure, as the brief asks. */
+  appointments?: AppointmentRow[];
+  automation?: AutomationRow[];
+  /**
+   * Why intent and temperature are absent, when they are.
+   *
+   * They are acquisition signals. Once somebody has enrolled, "this student is
+   * hot" tells a reader nothing they can act on — the question that scoring
+   * answered has already been answered by the enrolment. Suppressed rather than
+   * shown, and explained rather than silently missing.
+   */
+  intentSuppressedReason?: string;
   journey?: JourneySummary;
   /** One ordered history across every domain the caller may see. */
   timeline?: TimelineEvent[];
@@ -149,6 +180,24 @@ export interface ProfileQuery {
    */
   visibleEnrollmentIds: string[] | null;
 }
+
+/**
+ * Stages at which intent and temperature stop being informative.
+ *
+ * Ali, 2026-09-08: "if they are enrolled, hide their current intent. Knowing
+ * that an enrolled student is hot, is not informing to us."
+ *
+ * He is right, and the reason is worth stating: a temperature or intent score
+ * answers "how likely are they to convert". Once they HAVE converted, the score
+ * is a stale answer to a settled question, and leaving it on the page invites
+ * someone to act on it as though it still meant something.
+ */
+const POST_CONVERSION_STAGES: readonly string[] = [
+  'enrolled_student', 'active_learner', 'graduate', 'returning_customer',
+];
+
+/** The Lead page's score denominator, kept here so both surfaces agree. */
+const LEAD_SCORE_MAX = 105;
 
 /** Which section grants which panel. One place, so a panel cannot drift. */
 const PANEL_SECTIONS: Record<string, readonly string[]> = {
@@ -236,12 +285,28 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
               status, assigned_admin AS "assignedAdmin",
               last_contacted_at AS "lastContactedAt", notes,
               consent_contact AS "consentContact",
+              evaluating_90_days AS "evaluating90Days",
+              created_at AS "createdAt",
               min(created_at) OVER () AS "firstSeen"
        FROM leads WHERE lower(btrim(email)) = :email
        ORDER BY created_at ASC LIMIT 1`,
       { type: QueryTypes.SELECT, replacements: { email } },
     );
-    profile.acquisition = acq[0] ?? null;
+    const row = acq[0] ?? null;
+    if (row) {
+      row.leadScoreMax = LEAD_SCORE_MAX;
+      if (POST_CONVERSION_STAGES.includes(person.stage)) {
+        // Suppressed on the SERVER, not hidden in the UI: an intent score that
+        // reaches the browser is one a future component can render by accident.
+        row.temperature = null;
+        row.temperatureUpdatedAt = null;
+        row.leadScore = null;
+        profile.intentSuppressedReason =
+          'Intent and temperature are hidden for enrolled people. They score how likely '
+          + 'someone is to convert, and this person already has.';
+      }
+    }
+    profile.acquisition = row;
   } else {
     profile.withheldPanels.push('acquisition');
   }
@@ -313,6 +378,38 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
     profile.withheldPanels.push('engagement');
   }
 
+  // ── Appointments and automation, both lead-page parity ────────────────────
+  if (may('acquisition', query.sections)) {
+    const leadIdForPanels = profile.acquisition?.leadId ?? null;
+    if (leadIdForPanels !== null) {
+      // Booked time, from both places it is recorded. A strategy call and an
+      // appointment are the same fact to a reader, and splitting them across two
+      // panels is how someone concludes there is nothing booked.
+      profile.appointments = await sequelize.query<AppointmentRow>(
+        `SELECT 'appointment' AS kind, title, scheduled_at AS "scheduledAt",
+                status::text AS status, outcome_notes AS notes, NULL AS "meetLink"
+         FROM appointments WHERE lead_id = :leadId
+         UNION ALL
+         SELECT 'strategy_call' AS kind, 'Strategy call' AS title, scheduled_at AS "scheduledAt",
+                status::text AS status, notes, meet_link AS "meetLink"
+         FROM strategy_calls WHERE lead_id = :leadId
+         ORDER BY "scheduledAt" DESC NULLS LAST`,
+        { type: QueryTypes.SELECT, replacements: { leadId: leadIdForPanels } },
+      );
+
+      profile.automation = await sequelize.query<AutomationRow>(
+        `SELECT type, status, provider_response AS detail, created_at AS "createdAt"
+         FROM automation_logs
+         WHERE related_type = 'lead' AND related_id = :leadIdText
+         ORDER BY created_at DESC LIMIT 50`,
+        { type: QueryTypes.SELECT, replacements: { leadIdText: String(leadIdForPanels) } },
+      );
+    } else {
+      profile.appointments = [];
+      profile.automation = [];
+    }
+  }
+
   // ── Journey summary and the unified timeline ──────────────────────────────
   //
   // Both need the person's source-record ids. Resolved once, here, rather than
@@ -353,6 +450,12 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
   });
 
   profile.journey = await buildJourney(email, leadIds, enrollmentIds, query.sections, profile.timeline);
+
+  // The KPI has to obey the same rule as the field, or the header contradicts
+  // the panel below it — which is worse than showing the number in both places.
+  if (POST_CONVERSION_STAGES.includes(person.stage)) {
+    profile.journey.intentScore = null;
+  }
 
   return profile;
 }
