@@ -70,7 +70,7 @@ The repo is organized around a four-layer model defined in [CLAUDE.md](CLAUDE.md
 | [docs/](docs/) | Architecture, agent catalog, phase reports, audits, sprint reviews, screenshots. | [docs/README.md](docs/README.md) |
 | [directives/](directives/) | Standard operating procedures. Human-readable, verification-gated. | [directives/README.md](directives/README.md) |
 | [tests/](tests/) | Browser E2E layer. Unit tests are colocated, not here. | [tests/README.md](tests/README.md) |
-| [apps/](apps/) | Standalone brand microsites (`cpn-public`, `ai-flotation-public`), each staged for extraction to its own repo. | see each app's README |
+| [apps/](apps/) | Standalone brand microsites (`cpn-public`, `ai-flotation-public`, `refactored-public`), each staged for extraction to its own repo. | see each app's README |
 | [packages/](packages/) | Shared single-file packages: `brand-system`, `tracking-sdk`, `app-build`. | |
 | [system/](system/) | Portal-owned auto-generated state maps and contracts. **Never hand-edit.** | [system/README.md](system/README.md) |
 | [nginx/](nginx/) | Nginx config and the multi-stage image that bakes the frontend build. | [nginx/README.md](nginx/README.md) |
