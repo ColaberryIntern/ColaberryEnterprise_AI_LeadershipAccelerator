@@ -9,6 +9,7 @@ import { CLAUDE_STUDIOS, studioForWeek, studioByKey, adaptations, CERTIFICATION_
 import { RUBRIC_DIMENSIONS, STAGE_ORDER } from '../claudeStudios/types';
 import { WEEK_BLUEPRINTS } from '../weekBlueprints';
 import { validateStudio, validateAllStudios } from '../../seeds/seedClaudeStudioCards';
+import { COMPETENCY_TO_SKILL } from '../../constants/competencySkillCrosswalk';
 
 describe('Claude Studio — coverage', () => {
   it('covers every week 0-12 exactly once', () => {
@@ -100,6 +101,31 @@ describe('Claude Studio — assessment and trust', () => {
       expect(s.instructor_notes.trim().length).toBeGreaterThan(80);
       expect(s.misconceptions.length).toBeGreaterThanOrEqual(2);
     });
+  });
+});
+
+describe('Claude Studio — competencies use the controlled vocabulary', () => {
+  // `competencies` is not free text. CAPE's type→skill seed
+  // (services/cape/capeTypeSkillMapSeeds.ts) crosswalks every competency id
+  // through COMPETENCY_TO_SKILL, and an id outside that map produces a skill map
+  // with nothing in it — evidence that looks recorded but credits no skill.
+  //
+  // This suite exists because the first draft of these studios used descriptive
+  // ids ("problem_framing", "executive_communication", "responsible_ai") that
+  // read well and mapped to nothing. CI caught the registry half of that; this
+  // catches the per-week half, which nothing else was checking.
+  const known = Object.keys(COMPETENCY_TO_SKILL);
+
+  CLAUDE_STUDIOS.forEach((s) => {
+    it(`week ${s.week} uses only crosswalk-known competency ids`, () => {
+      const unknown = s.competencies.filter((c) => !known.includes(c));
+      expect(unknown).toEqual([]);
+    });
+  });
+
+  it('collectively exercises a spread of skills rather than one axis', () => {
+    const skills = new Set(CLAUDE_STUDIOS.flatMap((s) => s.competencies.map((c) => COMPETENCY_TO_SKILL[c])));
+    expect(skills.size).toBeGreaterThanOrEqual(3);
   });
 });
 

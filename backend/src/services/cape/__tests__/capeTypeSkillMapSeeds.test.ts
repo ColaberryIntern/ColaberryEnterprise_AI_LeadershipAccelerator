@@ -29,7 +29,10 @@ describe('computeAllTypeSkillMapDrafts', () => {
 
   it('produces exactly one draft per registered type — zero missing, zero duplicated', () => {
     expect(drafts.length).toBe(realSlugs.length);
-    expect(drafts.length).toBe(50);
+    // 51 since claude_studio joined CARD_TYPES. The assertion above already
+    // pins drafts to the registry size dynamically; this literal is the guard
+    // against the registry itself silently shrinking, so it moves with it.
+    expect(drafts.length).toBe(51);
     const draftSlugs = drafts.map((d) => d.type_slug).sort();
     expect(draftSlugs).toEqual([...realSlugs].sort());
     expect(new Set(draftSlugs).size).toBe(draftSlugs.length); // no duplicates
@@ -112,8 +115,8 @@ describe('computeTypeSkillMapDraft (single-type unit checks)', () => {
 describe('seedTypeSkillMaps', () => {
   it('happy path: calls findOrCreate once per registered type, scoped to type + is_current', async () => {
     const result = await seedTypeSkillMaps();
-    expect(findOrCreate).toHaveBeenCalledTimes(50);
-    expect(result.created).toBe(50);
+    expect(findOrCreate).toHaveBeenCalledTimes(51);
+    expect(result.created).toBe(51);
     const [firstCallArg] = findOrCreate.mock.calls[0];
     expect(firstCallArg.where.scope_type).toBe('type');
     expect(firstCallArg.where.is_current).toBe(true);
@@ -126,6 +129,6 @@ describe('seedTypeSkillMaps', () => {
     findOrCreate.mockResolvedValue([{}, false]); // findOrCreate returns wasCreated:false every time
     const result = await seedTypeSkillMaps();
     expect(result.created).toBe(0);
-    expect(result.skipped).toBe(50);
+    expect(result.skipped).toBe(51);
   });
 });

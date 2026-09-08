@@ -167,6 +167,31 @@ retarget them without a deploy.
 
 ---
 
+## Analytics
+
+The renderer emits events through the existing `frontend/src/utils/tracker.ts` layer, which
+already no-ops under Do Not Track and when the tracker never initialised:
+
+| Event | Fired when | Payload |
+|---|---|---|
+| `claude_studio_viewed` | The studio is opened (once per mount) | `cert_active`, `stages` |
+| `claude_studio_stage_completed` | A stage checkbox is ticked | `stage`, `done`, `total` |
+| `claude_studio_prompt_copied` | A prompt is copied | `kind`, `index` |
+| `claude_studio_launched` | A Claude.ai launch link is clicked | `target` (`conversation` \| `projects`) |
+| `claude_studio_submitted` / `_revised` | A submission succeeds | `attempt`, `has_project_proof` |
+
+Every event carries `card_id` and `variant` (drawer or workspace) and **nothing else**.
+
+**What is deliberately never sent:** prompt text, reflection text, the Artifact or Project-proof
+URL, or anything the student wrote or pasted. A studio's premise is that the student's Claude
+work stays theirs, and an analytics call is exactly where that promise leaks if nobody says so
+out loud. Preview mode (an instructor looking at a studio) emits nothing at all.
+
+Card open, start and completion are additionally tracked server-side by the existing
+`TimelineCardProgress` / `onCardCompleted` progression path, as for every other type.
+
+---
+
 ## Authoring a studio for a non-canonical week
 
 The 13 canonical weeks are hand-authored. For any other week, drop a Claude Studio card on it

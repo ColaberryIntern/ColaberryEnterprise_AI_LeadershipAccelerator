@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import portalApi from '../../utils/portalApi';
 import { copyText } from '../../utils/clipboard';
+import { trackEvent } from '../../utils/tracker';
 import {
   parseClaudeStudio, ParsedStudio, StageKey, STAGE_ORDER, STAGE_LABELS,
   loadDraft, saveDraft, clearDraft, StudioDraft, EMPTY_DRAFT,
@@ -212,6 +213,32 @@ const ClaudeStudioRender: React.FC<Props> = ({
     return () => { alive = false; };
   }, [cardId, preview]);
 
+  /**
+   * Analytics — METADATA ONLY, and deliberately so.
+   *
+   * We record that a stage was ticked, that a prompt of a given kind was copied,
+   * that a launch link was clicked, and that a submission happened. We never send
+   * prompt text, reflection text, the Artifact URL, or anything the student wrote
+   * or pasted. A studio's whole premise is that their Claude work stays theirs,
+   * and an analytics call is exactly the sort of place that promise leaks.
+   *
+   * `trackEvent` already no-ops under Do Not Track and when the tracker never
+   * initialised, so these are safe to fire unconditionally.
+   */
+  const track = useCallback((event: string, props: Record<string, unknown> = {}) => {
+    if (preview) return;   // an instructor previewing is not a student doing the work
+    trackEvent(`claude_studio_${event}`, { card_id: cardId || null, variant: variant || 'drawer', ...props });
+  }, [cardId, variant, preview]);
+
+  // Studio opened. Fires once per mount; `resumed` distinguishes a returning
+  // student from a first open, which is the signal worth having here.
+  const viewedRef = useRef(false);
+  useEffect(() => {
+    if (viewedRef.current || !studio || preview) return;
+    viewedRef.current = true;
+    track('viewed', { cert_active: studio.certActive, stages: studio.stages.length });
+  }, [studio, preview, track]);
+
   const persist = useCallback((next: StudioDraft) => {
     setDraft(next);
     if (cardId && !preview) {
@@ -223,7 +250,9 @@ const ClaudeStudioRender: React.FC<Props> = ({
 
   const toggleStage = (key: StageKey) => {
     const has = draft.stages.includes(key);
-    persist({ ...draft, stages: has ? draft.stages.filter((s) => s !== key) : [...draft.stages, key] });
+    const stages = has ? draft.stages.filter((s) => s !== key) : [...draft.stages, key];
+    persist({ ...draft, stages });
+    if (!has) track('stage_completed', { stage: key, done: stages.length, total: stagesTotal });
   };
 
   const toggleCheck = (i: number) => {
@@ -234,6 +263,8 @@ const ClaudeStudioRender: React.FC<Props> = ({
   const copy = (index: number, text: string) => {
     const done = () => {
       setCopied((s) => { const n = new Set(s); n.add(index); return n; });
+      // Kind and position only. The prompt body never leaves the page.
+      track('prompt_copied', { kind: studio?.prompts[index]?.kind || 'unknown', index });
       onCopiedRef.current?.();
       window.setTimeout(() => setCopied((s) => { const n = new Set(s); n.delete(index); return n; }), 2400);
     };
@@ -268,11 +299,14 @@ const ClaudeStudioRender: React.FC<Props> = ({
         reflection: draft.reflection.trim(),
         ai_disclosure: draft.aiDisclosure.trim() || null,
       });
+      const attempt = Number(res?.data?.attempt) || 1;
       setServerState({
         submitted: true,
-        attempt: Number(res?.data?.attempt) || 1,
+        attempt,
         review_state: res?.data?.review_state || 'pending_review',
       });
+      // Whether it happened and whether it was a revision — not what was written.
+      track(attempt > 1 ? 'revised' : 'submitted', { attempt, has_project_proof: !!draft.projectProofUrl.trim() });
       clearDraft(cardId);
       if (onSubmitted) await onSubmitted();
     } catch (e: any) {
@@ -325,8 +359,8 @@ const ClaudeStudioRender: React.FC<Props> = ({
         {(studio.intro || summary) && <p className="st-sum">{studio.intro || summary}</p>}
 
         <div className="st-launch">
-          <a href={studio.chatUrl} target="_blank" rel="noopener noreferrer">Open Claude &rarr;</a>
-          <a href={studio.projectsUrl} target="_blank" rel="noopener noreferrer">Open Claude Projects &rarr;</a>
+          <a href={studio.chatUrl} target="_blank" rel="noopener noreferrer" onClick={() => track('launched', { target: 'conversation' })}>Open Claude &rarr;</a>
+          <a href={studio.projectsUrl} target="_blank" rel="noopener noreferrer" onClick={() => track('launched', { target: 'projects' })}>Open Claude Projects &rarr;</a>
         </div>
         <p className="st-privacy">
           These open Claude.ai in a new tab and use your own authorized Claude account. Nothing you type
