@@ -10,11 +10,13 @@
  */
 const mockFindOne = jest.fn();
 const mockFindOrCreate = jest.fn();
+const mockFindAll = jest.fn();
 jest.mock('../../models/MetricReliabilityRecord', () => ({
   __esModule: true,
   default: {
     findOne: (...a: any[]) => mockFindOne(...a),
     findOrCreate: (...a: any[]) => mockFindOrCreate(...a),
+    findAll: (...a: any[]) => mockFindAll(...a),
   },
 }));
 
@@ -26,6 +28,7 @@ import {
   getReliabilityStatus,
   isMetricUsable,
   restoreMetric,
+  getActiveReliabilityIssues,
   MetricRestorationError,
 } from '../metricReliabilityService';
 
@@ -223,5 +226,39 @@ describe('restoreMetric', () => {
     await expect(
       restoreMetric({ sourceSystem: 'attendance', metricKey: 'attendance.*', recoveryEvidence: 'fixed', restoredByEmail: 'ali@colaberry.com' }),
     ).rejects.toThrow(MetricRestorationError);
+  });
+});
+
+describe('getActiveReliabilityIssues', () => {
+  it('honesty boundary: zero non-healthy records is a genuine empty array, never fabricated', async () => {
+    mockFindAll.mockResolvedValue([]);
+
+    const issues = await getActiveReliabilityIssues();
+
+    expect(issues).toEqual([]);
+  });
+
+  it('happy path: real non-healthy records across ANY source, mapped to the real public shape', async () => {
+    mockFindAll.mockResolvedValue([
+      fakeRecord({ source_system: 'attendance', metric_key: 'attendance.*', status: 'quarantined', reason: 'broken' }),
+      fakeRecord({ source_system: 'timeline', metric_key: 'timeline.*', status: 'degraded', severity: 'low', reason: 'flaky' }),
+    ]);
+
+    const issues = await getActiveReliabilityIssues();
+
+    expect(issues).toEqual([
+      { sourceSystem: 'attendance', metricKey: 'attendance.*', status: 'quarantined', severity: 'high', reason: 'broken' },
+      { sourceSystem: 'timeline', metricKey: 'timeline.*', status: 'degraded', severity: 'low', reason: 'flaky' },
+    ]);
+  });
+
+  it('queries only non-healthy records — never fetches the whole table indiscriminately', async () => {
+    mockFindAll.mockResolvedValue([]);
+
+    await getActiveReliabilityIssues();
+
+    const call = mockFindAll.mock.calls[0][0];
+    expect(call.where.status).toBeDefined();
+    expect(Object.getOwnPropertySymbols(call.where.status).length).toBeGreaterThan(0); // a real Op.ne, not a literal 'healthy'
   });
 });

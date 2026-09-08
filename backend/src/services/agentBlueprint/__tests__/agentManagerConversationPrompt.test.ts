@@ -8,20 +8,32 @@
 jest.mock('../../managerDirectiveService', () => ({ getActiveDirectiveTexts: jest.fn() }));
 jest.mock('../../agentMemoryProposalService', () => ({ getApprovedMemoryTexts: jest.fn() }));
 jest.mock('../agentRecentActivitySummary', () => ({ getRecentActivitySummary: jest.fn() }));
+// Reese Agentic AI Employee mission, Capability 8 — same isolation reasoning
+// as agentSystemPrompt.test.ts: mocked wholesale so this file doesn't need
+// to also stub AgentRoleCharter/MetricReliabilityRecord.
+jest.mock('../agentContextLayers', () => ({
+  buildRoleCharterBlock: jest.fn(() => Promise.resolve('')),
+  buildReliabilityStateBlock: jest.fn(() => Promise.resolve('DATA RELIABILITY STATE: No data sources are currently flagged unreliable — all known sources are healthy.')),
+}));
 
 import { getActiveDirectiveTexts } from '../../managerDirectiveService';
 import { getApprovedMemoryTexts } from '../../agentMemoryProposalService';
 import { getRecentActivitySummary } from '../agentRecentActivitySummary';
+import { buildRoleCharterBlock, buildReliabilityStateBlock } from '../agentContextLayers';
 import { buildAgentManagerConversationSystemPrompt } from '../agentManagerConversationPrompt';
 
 const mockActiveDirectives = getActiveDirectiveTexts as unknown as jest.Mock;
 const mockApprovedMemory = getApprovedMemoryTexts as unknown as jest.Mock;
 const mockRecentActivity = getRecentActivitySummary as unknown as jest.Mock;
+const mockRoleCharter = buildRoleCharterBlock as unknown as jest.Mock;
+const mockReliabilityState = buildReliabilityStateBlock as unknown as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockApprovedMemory.mockResolvedValue([]);
   mockRecentActivity.mockResolvedValue({ tickets: [], events: [] });
+  mockRoleCharter.mockResolvedValue('');
+  mockReliabilityState.mockResolvedValue('DATA RELIABILITY STATE: No data sources are currently flagged unreliable — all known sources are healthy.');
 });
 
 describe('buildAgentManagerConversationSystemPrompt', () => {
@@ -117,5 +129,37 @@ describe('buildAgentManagerConversationSystemPrompt — recent activity injectio
 
     expect(prompt).toContain('You have no recent tickets or recorded activity yet');
     expect(prompt).not.toContain('YOUR REAL RECENT WORK');
+  });
+});
+
+describe('buildAgentManagerConversationSystemPrompt — runtime context layers (Capability 8, 2026-09-08)', () => {
+  it('platform safety rules are always first, and reliability state always appears — previously missing entirely from this path', async () => {
+    mockActiveDirectives.mockResolvedValue([]);
+
+    const prompt = await buildAgentManagerConversationSystemPrompt('agent-1', 'Reese', 'You are Reese.');
+
+    expect(prompt.indexOf('PLATFORM SAFETY RULES')).toBe(1); // leading '\n' at index 0
+    expect(prompt).toContain('DATA RELIABILITY STATE');
+    expect(prompt.indexOf('PLATFORM SAFETY RULES')).toBeLessThan(prompt.indexOf('You are Reese.'));
+  });
+
+  it('happy path: a real role charter is fetched for this agent and injected ahead of the persona', async () => {
+    mockActiveDirectives.mockResolvedValue([]);
+    mockRoleCharter.mockResolvedValue('ROLE CHARTER: You are the Student Success Mentor. Keep students engaged.');
+
+    const prompt = await buildAgentManagerConversationSystemPrompt('agent-1', 'Reese', 'You are Reese.');
+
+    expect(mockRoleCharter).toHaveBeenCalledWith('agent-1');
+    expect(prompt).toContain('ROLE CHARTER');
+    expect(prompt.indexOf('ROLE CHARTER')).toBeLessThan(prompt.indexOf('You are Reese.'));
+  });
+
+  it('a real active reliability issue surfaces on the manager path — the exact gap discovery found (this layer previously did not exist here at all)', async () => {
+    mockActiveDirectives.mockResolvedValue([]);
+    mockReliabilityState.mockResolvedValue('DATA RELIABILITY STATE (do not trust or cite these sources until restored):\n- attendance (attendance.*): quarantined — broken');
+
+    const prompt = await buildAgentManagerConversationSystemPrompt('agent-1', 'Reese', 'You are Reese.');
+
+    expect(prompt).toContain('attendance (attendance.*): quarantined');
   });
 });

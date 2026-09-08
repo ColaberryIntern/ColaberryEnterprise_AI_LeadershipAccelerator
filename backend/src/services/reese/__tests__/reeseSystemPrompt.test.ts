@@ -32,6 +32,15 @@ jest.mock('../reeseStudentSuccessHighlights', () => ({
 jest.mock('../reeseHealthAssessmentHighlights', () => ({
   getReeseHealthAssessmentHighlight: jest.fn(),
 }));
+// Reese Agentic AI Employee mission, Capability 8 — agentSystemPrompt.ts now
+// transitively calls agentContextLayers.ts, which queries real models
+// (AgentRoleCharter, MetricReliabilityRecord). Mocked wholesale for the same
+// reason as the highlights mocks above: this file tests voice/tone/
+// directive-injection, not the new layers' own content.
+jest.mock('../../agentBlueprint/agentContextLayers', () => ({
+  buildRoleCharterBlock: jest.fn(() => Promise.resolve('')),
+  buildReliabilityStateBlock: jest.fn(() => Promise.resolve('DATA RELIABILITY STATE: No data sources are currently flagged unreliable — all known sources are healthy.')),
+}));
 
 import { getLearnerContextBlock } from '../../learnerContextService';
 import { getReeseAgentId } from '../reeseIdentitySeed';
@@ -151,6 +160,17 @@ describe('buildReeseSystemPrompt — Student Success 360 highlights (Checkpoint 
     const prompt = await buildReeseSystemPrompt('enrollment-8');
 
     expect(prompt).not.toContain('ADDITIONAL CONTEXT');
+  });
+
+  it('Capability 8 (2026-09-08): highlights now land BEFORE the closing line (mandated layer-6 position), not appended after the whole prompt', async () => {
+    mockLearnerContext.mockResolvedValue('');
+    mockHighlights.mockResolvedValue('ADDITIONAL CONTEXT:\n- 1 open support ticket.');
+
+    const prompt = await buildReeseSystemPrompt('enrollment-12');
+
+    const highlightsIndex = prompt.indexOf('ADDITIONAL CONTEXT');
+    const closingIndex = prompt.indexOf('direct-message conversation');
+    expect(closingIndex).toBeGreaterThan(highlightsIndex);
   });
 });
 
