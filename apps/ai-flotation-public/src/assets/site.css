@@ -24,10 +24,12 @@
  * it carries no {{brand.*}} tokens.
  */
 
-@import url('design/colors.css');
-@import url('design/typography.css');
-@import url('design/spacing.css');
-@import url('design/motion.css');
+/* The design system is vendored from its own repository by
+   backend/src/scripts/syncDesignSystems.js. Import its published entry point rather
+   than individual token files: styles.css declares the order the design system
+   itself depends on (fonts, tokens, base, components), and following it means a
+   reorganisation upstream cannot silently drop a stylesheet from this build. */
+@import url('design/styles.css');
 
 :root {
   /* Site-local additions, both flagged as deviations from the source.

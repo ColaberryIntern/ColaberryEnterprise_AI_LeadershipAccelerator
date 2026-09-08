@@ -43,11 +43,12 @@
  * ---------------------------------------------------------------------------
  */
 
-@import url('design/colors.css');
-@import url('design/typography.css');
-@import url('design/spacing.css');
-@import url('design/motion.css');
-@import url('design/base.css');
+/* The design system is vendored from its own repository by
+   backend/src/scripts/syncDesignSystems.js. Import its published entry point rather
+   than individual token files: styles.css declares the order the design system
+   itself depends on (fonts, tokens, base, components), and following it means a
+   reorganisation upstream cannot silently drop a stylesheet from this build. */
+@import url('design/styles.css');
 
 /* The design system switches themes on an attribute (`data-theme="dark"`), which needs a
    deliberate choice somewhere. This site has no theme control and no JavaScript to set
