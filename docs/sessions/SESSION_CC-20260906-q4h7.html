@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, September 7, 2026 at 6:21 PM</div>
-    <div><span class="sid">CC-20260906-q4h7</span><span class="count">9 changes</span></div>
+    <div class="meta">Generated Tuesday, September 8, 2026 at 11:17 AM</div>
+    <div><span class="sid">CC-20260906-q4h7</span><span class="count">10 changes</span></div>
   </header>
   <main>
     
@@ -192,6 +192,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">A browser harness drives the real flow against a stubbed API - 13 checks over the happy path and both failure paths. Site harness green across 8 routes x 4 viewports; `appSourcesAreSeeded` + `brandPageCategories` 42/42; boundary validator OK, 16 files.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">**The host Ali named is not our platform.** `enterprise.colaberry.com` redirects to `login.refactored.ai` Auth0 with `redirect_uri=app.colaberry.com/callback`, and `/enroll` on it fails outright - it is the same Auth0 tenant that is already not sending his login emails. Ours is `enterprise.colaberry.ai`, whose `/enroll` serves fine. **Our email demonstrably works**, which is what made the move worth doing rather than moving a broken experience onto our own domain: `communication_logs` holds 277 &quot;Welcome to Colaberry&quot; magic links with status `sent`, most recent the same day. **The call order is the whole feature.** `createExplorerEnrollment` hardcodes `source: &#39;open_house&#39;` on the lead it captures, so the account call alone would file every CPN signup under Colaberry&#39;s open house. Its capture is a `findOrCreate` keyed on email, so ingesting the CPN lead FIRST means the canonical lead already exists with its OpportunityLift source and `LeadTenantContext`, and the account call finds it. Reversing two lines misattributes every signup and breaks nothing visible, so it is asserted in the harness. **Failure favours the person:** a failed ingest still creates the account, and a failed account never claims the details were lost, because the lead survives. **The site harness caught a real violation** - two filled primary buttons on the page - which the closing block lost.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">10</span>
+          <h2>**The unscripted-agent guard named one brand; its own reasoning named none**</h2>
+          <span class="badge">2026-09-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Starting the voice half of the scholarship interview surfaced a latent safety defect. `synthflowService` refuses to dial when a shell-agent call carries no prompt - the agent&#39;s saved prompt is literally `{prompt}`, so an empty one produces, in its own comment&#39;s words, &quot;an unscripted one on a number the person may associate with a different business&quot;. The check was `brandSlug === &#39;ai-flotation&#39;`. Every other brand arriving without a prompt would have dialled. It is now universal: any branded call without instructions is skipped with `reason: &#39;no_prompt&#39;`. Unbranded Colaberry welcome/interest calls, whose agents hold real saved instructions rather than a shell, are deliberately unaffected. Added `cpn/scholarshipCallPrompt.ts` and a `promptForSource` selector in `callbackRequestService`, so CPN has a script the moment it is routed to voice.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">41 tests across 4 suites - 17 new on the prompt, 5 new on the guard, plus the existing `synthflowAgentResolution` and `requestCallbackAction` suites unchanged and green. `tsc --noEmit` clean. The guard suite spies on `fetch` and throws if anything reaches the network, so a test that gets past the guard fails loudly rather than dialling.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**It had never fired, which is why it survived.** Nothing but AI Flotation was routed to voice, so the gap was invisible - a trap armed for whoever came second, and the brand that came second is a nonprofit phoning people who are asking it for help. **Checked the capability before building on it**, the same way the free-account move checked email: voice is configured in prod (`SYNTHFLOW_API_KEY`, `ENABLE_VOICE_CALLS`, four agent ids) and works, though the lifetime record is 1,148 failed against 234 sent. Those failures are historical - April 2026 alone is 537 - and September is 3 sent, 1 failed. **Separate finding, not fixed here:** `error_message` is NULL on all 1,148 voice failures, so no failure reason has ever been recorded. CLAUDE.md&#39;s observability rules require an `error_class` on a caught failure, and voice does not have one. **The CPN prompt is not the Flotation prompt with nouns swapped.** It repeats the written interview&#39;s three refusals and adds two that only exist on a phone: it says it is an AI before anything else, and it takes no for an answer after a single offer. A voice agent that pushes past a brush-off is harassment, and these are the people least able to afford it.</span></div>
           
         </div>
       </article>

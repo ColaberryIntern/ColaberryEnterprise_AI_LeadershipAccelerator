@@ -109,12 +109,26 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
     return { success: true, data: { skipped: true, reason: 'no_agent_id' } };
   }
 
-  // AI Flotation shares a SHELL agent whose saved prompt is only `{prompt}`. The
-  // instructions therefore arrive at call time, and without them the agent is not neutral -
-  // it is unscripted, on a number the person may associate with a different business.
-  // Refusing to dial is the safe outcome; a silent no-op is better than an improvised call.
-  if (params.brandSlug === 'ai-flotation' && !(params.prompt || '').trim()) {
-    console.warn('[Synthflow] AI Flotation call has no prompt. Refusing to dial an unscripted agent.');
+  // The shell agent's saved prompt is only `{prompt}`. The instructions therefore arrive
+  // at call time, and without them the agent is not neutral - it is unscripted, on a
+  // number the person may associate with a different business. Refusing to dial is the
+  // safe outcome; a silent no-op is better than an improvised call.
+  //
+  // THIS USED TO NAME ONE BRAND, AND THE RATIONALE ABOVE NAMES NONE.
+  //
+  // The check read `brandSlug === 'ai-flotation'`, which was every brand wired to voice
+  // at the time it was written. Any other brand arriving here without a prompt would
+  // have dialled a stranger with an empty instruction block - precisely the outcome the
+  // paragraph above calls unacceptable, forbidden for one brand and permitted for
+  // everyone else. Nothing had routed a second brand to voice yet, so it had never
+  // fired: it was a trap armed for whoever came next, which was CPN.
+  //
+  // Now any branded call must carry its own instructions, and a brand without them is
+  // skipped with a reason - a visible no-op rather than an improvised call.
+  if (params.brandSlug && !(params.prompt || '').trim()) {
+    console.warn(
+      `[Synthflow] ${params.brandSlug} call has no prompt. Refusing to dial an unscripted agent.`
+    );
     return { success: true, data: { skipped: true, reason: 'no_prompt' } };
   }
 
