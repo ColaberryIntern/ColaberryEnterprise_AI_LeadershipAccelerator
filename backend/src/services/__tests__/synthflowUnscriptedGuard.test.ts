@@ -16,7 +16,7 @@ jest.mock('../../config/env', () => ({
 jest.mock('../launchSafety', () => ({ isKillSwitchActive: jest.fn().mockResolvedValue(false) }));
 jest.mock('../settingsService', () => ({ getTestOverrides: jest.fn().mockResolvedValue({ enabled: false }) }));
 
-import { triggerVoiceCall } from '../synthflowService';
+import { triggerVoiceCall, resolveAgentId } from '../synthflowService';
 
 /**
  * A branded call must never be dialled without its own instructions.
@@ -93,27 +93,60 @@ describe('refusing to dial an unscripted agent', () => {
     }
   });
 
-  it('an unconfigured CPN agent skips rather than borrowing the Colaberry one', async () => {
-    // The other half of the safety story. `resolveAgentId` sends cpn to its OWN slot
-    // with no fallback: the generic callback agent carries Colaberry's saved
-    // training-site script, so falling through would answer a scholarship applicant
-    // as the bootcamp's callback line. Unset must mean silence, not substitution.
-    const envAny = jest.requireMock('../../config/env').env as any;
-    const saved = envAny.synthflowCpnAgentId;
-    envAny.synthflowCpnAgentId = '';
-    try {
-      const res = await triggerVoiceCall({
-        name: 'Sam',
-        phone: '+15550100',
-        callType: 'callback',
-        brandSlug: 'cpn',
-        prompt: 'a real scholarship script',
-      } as any);
+  describe('which agent CPN borrows when it has none of its own', () => {
+    // Ali, 2026-09-08: phone-number provisioning is blocked, so CPN reuses the AI
+    // Flotation agent for now. Safe ONLY because that agent is a `{prompt}` shell
+    // with no script of its own - borrowing a shell is not borrowing a voice.
+    //
+    // The Colaberry agents are the opposite: they carry saved scripts, and falling
+    // through to one would answer a scholarship applicant as the bootcamp's callback
+    // line. That distinction is the entire rule, so both halves are pinned.
+    const envAny = () => jest.requireMock('../../config/env').env as any;
 
-      expect(res).toMatchObject({ success: true, data: { skipped: true, reason: 'no_agent_id' } });
-    } finally {
-      envAny.synthflowCpnAgentId = saved;
-    }
+    it('borrows the AI Flotation SHELL when SYNTHFLOW_CPN_AGENT_ID is unset', () => {
+      const e = envAny();
+      const saved = e.synthflowCpnAgentId;
+      e.synthflowCpnAgentId = '';
+      try {
+        expect(resolveAgentId({ callType: 'callback', brandSlug: 'cpn' })).toBe('agent-flotation');
+      } finally {
+        e.synthflowCpnAgentId = saved;
+      }
+    });
+
+    it('never borrows a Colaberry agent, which carries its own script', () => {
+      const e = envAny();
+      const saved = e.synthflowCpnAgentId;
+      e.synthflowCpnAgentId = '';
+      try {
+        const agent = resolveAgentId({ callType: 'callback', brandSlug: 'cpn' });
+
+        // The defect this replaced: cpn fell through to the callback agent.
+        expect(agent).not.toBe('agent-callback');
+        expect(agent).not.toBe('agent-interest');
+        expect(agent).not.toBe('agent-welcome');
+      } finally {
+        e.synthflowCpnAgentId = saved;
+      }
+    });
+
+    it('prefers its own agent the moment one is configured', () => {
+      expect(resolveAgentId({ callType: 'callback', brandSlug: 'cpn' })).toBe('agent-cpn');
+    });
+
+    it('skips entirely when neither its own agent nor the shell exists', () => {
+      const e = envAny();
+      const savedCpn = e.synthflowCpnAgentId;
+      const savedFlot = e.synthflowAiFlotationAgentId;
+      e.synthflowCpnAgentId = '';
+      e.synthflowAiFlotationAgentId = '';
+      try {
+        expect(resolveAgentId({ callType: 'callback', brandSlug: 'cpn' })).toBeFalsy();
+      } finally {
+        e.synthflowCpnAgentId = savedCpn;
+        e.synthflowAiFlotationAgentId = savedFlot;
+      }
+    });
   });
 
   it('does NOT block an unbranded call, which legitimately uses the agent as saved', async () => {
