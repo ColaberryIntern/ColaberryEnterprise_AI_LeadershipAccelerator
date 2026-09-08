@@ -14,6 +14,11 @@ import crypto from 'crypto';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { Organization, OrgMember, Enrollment, Lead } from '../models';
+import {
+  resolveAccountType,
+  grantsTrainingEnrollment,
+  type OrgAccountType,
+} from './orgAccountType';
 import { createFreeAccount } from './freeSignupService';
 import { sendOrgInviteEmail, sendOrgWelcomeEmail } from './emailService';
 import { assertMemberInOrg } from '../middlewares/orgAuth';
@@ -64,12 +69,34 @@ export interface RegisterManagerInput {
   name: string;
   company?: string | null;
   email: string;
+  /**
+   * Where they came in. Hostname, full URL, or referrer — `normalizeEntrySite`
+   * accepts any of them, because which form the front end happens to send must
+   * not change the account a person gets.
+   *
+   * Optional, and its absence is the OLD behaviour: an unmapped site resolves to
+   * `management_account`, which is what every existing row was backfilled to.
+   */
+  entrySite?: string | null;
+  /** Explicit override, for an internal caller creating an account directly. */
+  accountType?: string | null;
 }
 
 export interface RegisterManagerResult {
-  jwt: string;
-  organization: { id: string; name: string; owner_enrollment_id: string };
-  enrollment: { id: string; full_name: string; email: string; tier: string };
+  /**
+   * NULLABLE, and the null case is a consulting account.
+   *
+   * A consulting client has no training enrollment, so there is no student
+   * session to hand back. Returning a JWT anyway would mean minting a portal
+   * session for an account that has no portal presence — the exact conflation
+   * this change exists to end.
+   */
+  jwt: string | null;
+  organization: { id: string; name: string; owner_enrollment_id: string | null; organization_type: string };
+  /** Null for consulting accounts, which are deliberately not enrolled. */
+  enrollment: { id: string; full_name: string; email: string; tier: string } | null;
+  /** Always present. Every business account is a lead (see step 4). */
+  lead_id: number | null;
 }
 
 export interface OrgOverview {
@@ -120,26 +147,95 @@ export interface FeedItem {
 
 // ── Register a manager (dual account) ────────────────────────────────────────
 
+/**
+ * Find-or-create an organization that has NO owner enrollment.
+ *
+ * `Organization.findOrCreate({ where: { owner_enrollment_id: null } })` cannot
+ * work: Postgres treats NULLs as distinct, so the lookup matches nothing and
+ * every repeat submit inserts another row. The manager's roster email is the
+ * stable identity when there is no enrollment to key on.
+ *
+ * Returns the same `[instance, created]` shape as findOrCreate so the caller
+ * reads identically in both branches — and `created` still gates the welcome
+ * email, so a re-registration does not re-send.
+ */
+async function findOrCreateConsultingOrg(
+  email: string,
+  orgName: string,
+  accountType: OrgAccountType,
+): Promise<[InstanceType<typeof Organization>, boolean]> {
+  const existingMember = await OrgMember.findOne({
+    where: { email, role: 'manager' },
+    attributes: ['org_id'],
+  });
+
+  if (existingMember) {
+    const org = await Organization.findByPk((existingMember as any).org_id);
+    if (org) return [org, false];
+  }
+
+  const created = await Organization.create({
+    owner_enrollment_id: null,
+    name: orgName,
+    organization_type: accountType,
+  } as any);
+  return [created, true];
+}
+
 export async function registerManager(input: RegisterManagerInput): Promise<RegisterManagerResult> {
   const name = (input.name || '').trim();
   const email = (input.email || '').toLowerCase().trim();
   if (!name || !email) throw new Error('name and email are required');
 
-  // 1) The manager's own free student enrollment (idempotent by email).
-  const free = await createFreeAccount({ full_name: name, email });
-  const ownerEnrollmentId = free.enrollment.id;
+  // 0) Which of the three accounts is this? The entry site decides.
+  const resolved = resolveAccountType({ accountType: input.accountType, entrySite: input.entrySite });
+  const accountType = resolved.accountType;
+
+  // 1) The manager's own free student enrollment — EXCEPT for consulting.
+  //
+  // A consulting client came to have something built. Enrolling them as a
+  // student put them on learner rosters, in learner counts, and in the nurture
+  // the Explorer engine runs. That is what happened to the AI Flotation
+  // registrations, and it is the mistake this branch exists to stop.
+  //
+  // The organization can legitimately have no owner enrollment: ESC-1 relaxed
+  // `owner_enrollment_id` to nullable in 2026-08 for exactly this shape, and
+  // kept the unique index — Postgres treats NULLs as distinct, so any number of
+  // enrollment-less client organizations coexist.
+  const free = grantsTrainingEnrollment(accountType)
+    ? await createFreeAccount({ full_name: name, email })
+    : null;
+  const ownerEnrollmentId = free?.enrollment.id ?? null;
   const orgName = (input.company || '').trim() || name;
 
-  // 2) Find-or-create the management org (idempotent on owner_enrollment_id).
+  // 2) Find-or-create the org (idempotent on owner_enrollment_id).
   //
   // `orgCreated` is captured, not discarded: it is the ONLY honest signal that
   // this registration actually created a business account rather than replaying
   // an existing one, and it gates the welcome email below. Re-registering with
   // the same email must not re-send.
-  const [organization, orgCreated] = await Organization.findOrCreate({
-    where: { owner_enrollment_id: ownerEnrollmentId },
-    defaults: { owner_enrollment_id: ownerEnrollmentId, name: orgName } as any,
-  });
+  //
+  // CONSULTING ACCOUNTS KEY ON EMAIL, NOT ON THE NULL ENROLLMENT. Because
+  // Postgres treats NULLs as distinct, `where: { owner_enrollment_id: null }`
+  // matches nothing and every repeat submit would insert another organization.
+  // The manager's email is the stable identity when there is no enrollment.
+  const [organization, orgCreated] = ownerEnrollmentId
+    ? await Organization.findOrCreate({
+        where: { owner_enrollment_id: ownerEnrollmentId },
+        defaults: {
+          owner_enrollment_id: ownerEnrollmentId,
+          name: orgName,
+          organization_type: accountType,
+        } as any,
+      })
+    : await findOrCreateConsultingOrg(email, orgName, accountType);
+
+  // Backfill the type on an organization that predates it, without ever
+  // overwriting one that is already set — a re-registration from a different
+  // entry site must not silently reclassify an existing account.
+  if (!organization.organization_type) {
+    await organization.update({ organization_type: accountType });
+  }
 
   // 3) Find-or-create the manager's roster row (idempotent on (org_id, email)).
   await OrgMember.findOrCreate({
@@ -169,10 +265,29 @@ export async function registerManager(input: RegisterManagerInput): Promise<Regi
   // still empty, so re-registering never overwrites an existing link.
   if (!organization.lead_id) {
     try {
-      const lead = await Lead.findOne({ where: { email }, attributes: ['id'] });
-      if (lead) {
-        await organization.update({ lead_id: (lead as unknown as { id: number }).id });
-      }
+      // CREATE one when none exists. Linking-only is why five of six business
+      // accounts had no lead: registration and lead capture are separate calls
+      // and the capture step is skippable, so an account could exist with
+      // nothing joining it to the CRM but a matching email string.
+      //
+      // DELIBERATELY NOT `leadService.createLead`. That helper calls
+      // `tryEnrollInWarmCampaign` on every path, so routing registrations
+      // through it would silently enrol every new business account into lead
+      // nurture — real emails, to someone who just signed up and is already
+      // getting the welcome. "Everyone is a lead" is a CRM statement, not a
+      // licence to start a campaign.
+      const existing = await Lead.findOne({ where: { email }, attributes: ['id'] });
+      const lead =
+        existing ??
+        (await Lead.create({
+          name,
+          email,
+          company: (input.company || '').trim() || null,
+          source: resolved.host || 'business_registration',
+          status: 'new',
+          notes: `Auto-created at ${accountType} account registration`,
+        } as any));
+      await organization.update({ lead_id: (lead as unknown as { id: number }).id });
     } catch (err) {
       console.error(
         JSON.stringify({
@@ -237,19 +352,24 @@ export async function registerManager(input: RegisterManagerInput): Promise<Regi
   }
 
   return {
-    jwt: free.jwt,
+    // Null for consulting: no training enrollment means no student session, and
+    // minting one anyway would hand a portal token to an account with no portal
+    // presence.
+    jwt: free?.jwt ?? null,
     organization: {
       id: organization.id,
       name: organization.name,
       // `ownerEnrollmentId`, not `organization.owner_enrollment_id`. The column became
-      // nullable in 2026-08 so a client company can exist without an enrollment (ESC-1),
-      // but a management account registered through THIS path always has one — it is the
-      // key findOrCreate just matched on. Returning the local keeps the non-null contract
-      // this function's callers rely on, without a cast that would also silence a real
-      // null somewhere else later.
+      // nullable in 2026-08 so a client company can exist without an enrollment (ESC-1).
+      // A training or management registration through THIS path always has one — it is
+      // the key findOrCreate just matched on — and a consulting one deliberately has
+      // none. Returning the local keeps that distinction honest rather than reading back
+      // a value the consulting branch never wrote.
       owner_enrollment_id: ownerEnrollmentId,
+      organization_type: organization.organization_type ?? accountType,
     },
-    enrollment: free.enrollment,
+    enrollment: free?.enrollment ?? null,
+    lead_id: (organization.lead_id as number | null) ?? null,
   };
 }
 
