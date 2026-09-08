@@ -201,11 +201,13 @@ All four suites run without a database and are therefore inside the CI gate.
 
 ## Known deferred work
 
-- **Thumbnail image.** `thumbnail_url` is wired to
-  `/thumbnails/curriculum-types/claude_studio.jpg` and the slug is registered in
-  `scripts/curriculum-type-thumbnails/prompts.json`, but the image itself has not been
-  generated — that step needs the production host's `OPENAI_API_KEY` and a paid image call.
-  To finish it:
+- **Thumbnail is an interim banner, not the AI one.** The shipped
+  `frontend/public/thumbnails/curriculum-types/claude_studio.jpg` was drawn locally by
+  `scripts/curriculum-type-thumbnails/makeInterimBanner.js` — same 900x300 geometry, same
+  Colaberry wordmark chip, same JPEG settings as the generated set, so it sits correctly
+  beside them on every surface. The proper gpt-image-2 banner needs the production host's
+  `OPENAI_API_KEY` and a paid image call. The slug is already registered in
+  `prompts.json`, so generating it later overwrites this file in place with no code change:
   ```bash
   ssh root@95.216.199.47 'cd /root/thumb-gen && node generateOnHost.js --only claude_studio'
   scp root@95.216.199.47:/root/thumb-gen/raw/claude_studio.png ./raw/
