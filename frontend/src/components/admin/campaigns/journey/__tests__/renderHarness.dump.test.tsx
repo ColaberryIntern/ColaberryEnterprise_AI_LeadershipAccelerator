@@ -164,6 +164,28 @@ const PAYLOAD = {
 
 const maybeIt = process.env.HARNESS_OUT ? it : it.skip;
 
+/**
+ * A real payload, when one is supplied.
+ *
+ * `HARNESS_PAYLOAD` points at a JSON file captured from the live graph endpoint.
+ * It is READ, never committed: production data does not belong in the repo, so the
+ * fixture above stays synthetic and the real thing lives outside it. Pointing this
+ * at a live capture is how the component gets exercised against the shape and the
+ * skew the API actually produces — 16 campaigns, one entry node holding 20,850
+ * leads, several nodes at zero — rather than against numbers chosen to look good.
+ */
+function loadPayload(): any {
+  const file = process.env.HARNESS_PAYLOAD;
+  if (!file) return PAYLOAD;
+  const real = JSON.parse(fs.readFileSync(file, 'utf8'));
+  // eslint-disable-next-line no-console
+  console.log(
+    `[harness] real payload: ${real.nodes.length} nodes, ${real.edges.length} edges, ` +
+      `${real.validation?.total_leads?.toLocaleString?.() ?? '?'} leads`,
+  );
+  return real;
+}
+
 maybeIt('writes the rendered component to disk', async () => {
   // The palette is chosen in JS from data-theme and baked into the SVG's fills, so
   // a dark capture has to be RENDERED dark. Restyling a light render with dark CSS
@@ -173,7 +195,7 @@ maybeIt('writes the rendered component to disk', async () => {
     document.documentElement.setAttribute('data-theme', 'dark');
   }
 
-  mockedApi.getCampaignGraph.mockResolvedValue({ data: PAYLOAD } as any);
+  mockedApi.getCampaignGraph.mockResolvedValue({ data: loadPayload() } as any);
   mockedApi.getGraphEdgeUsers.mockResolvedValue({
     data: { users: [], total: 0, page: 1, limit: 50 },
   } as any);

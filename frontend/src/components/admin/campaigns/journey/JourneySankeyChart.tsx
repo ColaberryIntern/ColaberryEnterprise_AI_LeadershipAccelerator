@@ -53,7 +53,7 @@ const FALLBACK_WIDTH = 900;
  * from the horizontal axis to the vertical one. Height therefore grows with the
  * node count and the page scrolls.
  */
-const MIN_PX_PER_NODE = 34;
+const MIN_PX_PER_NODE = 38;
 
 /** Right-hand fraction of the plot whose labels must render inward. */
 const LABEL_FLIP_AT = 0.82;

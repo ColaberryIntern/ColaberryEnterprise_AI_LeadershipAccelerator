@@ -433,8 +433,10 @@ describe('OutreachJourneyFlow — empty, error and warning states', () => {
   it('derives the largest leak from the data on screen', async () => {
     await render(<OutreachJourneyFlow />);
     await settle();
-    // 280 arrive at Ignored and none leave.
-    expect(text()).toContain('280 leads stop at Ignored');
+    // 280 arrive at Ignored and none leave. "journeys", not "leads": band volumes
+    // count paths taken and node counts count distinct people, and live data shows
+    // the two do not reconcile.
+    expect(text()).toContain('280 journeys stop at Ignored');
     expect(text()).toContain('What needs attention');
   });
 });

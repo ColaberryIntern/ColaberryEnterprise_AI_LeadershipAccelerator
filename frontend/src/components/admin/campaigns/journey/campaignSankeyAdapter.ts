@@ -111,6 +111,11 @@ export interface SankeyViewModel {
   droppedZeroLinks: number;
   /** Nodes left with no edges after that removal. */
   droppedOrphanNodes: number;
+  /**
+   * Nodes invented for ids that edges referenced but the payload never defined.
+   * Non-zero means the backend sent a dangling reference — real, and visible.
+   */
+  synthesizedNodes: number;
   /** Campaign nodes folded into an aggregate, if any. */
   collapsedCampaigns: number;
   /** Sum of all drawn link volumes. Used to assert conservation in tests. */
@@ -129,6 +134,16 @@ export interface AdapterOptions {
   journeyView?: JourneyView;
   /** Campaigns drawn individually before the rest become "Other campaigns". */
   maxCampaigns?: number;
+  /**
+   * Minimum share of total campaign volume a campaign needs to be drawn alone.
+   *
+   * A count cap alone is the wrong rule, and live data shows why: production has one
+   * campaign with 9,658 leads and a tail of campaigns with 12 to 18. Taking the top
+   * eight still draws five nodes whose bands are invisible and whose labels stack on
+   * each other. Below this share a campaign cannot be seen even when it is drawn, so
+   * grouping it costs the reader nothing and buys back the space.
+   */
+  minCampaignShare?: number;
   /** Label truncation width for the diagram only. */
   labelChars?: number;
 }
@@ -169,6 +184,7 @@ export function buildSankeyView(
 ): SankeyViewModel {
   const journeyView: JourneyView = options.journeyView ?? 'campaign';
   const maxCampaigns = Math.max(1, options.maxCampaigns ?? 8);
+  const minCampaignShare = Math.max(0, options.minCampaignShare ?? 0.01);
   const labelChars = Math.max(6, options.labelChars ?? 22);
 
   const empty: SankeyViewModel = {
@@ -177,6 +193,7 @@ export function buildSankeyView(
     stages: STAGE_ORDER,
     droppedZeroLinks: 0,
     droppedOrphanNodes: 0,
+    synthesizedNodes: 0,
     collapsedCampaigns: 0,
     totalLinkVolume: 0,
   };
@@ -198,15 +215,24 @@ export function buildSankeyView(
       campaigns.map((c) => c.id),
     );
     collapsedCampaigns = campaigns.length;
-  } else if (campaigns.length > maxCampaigns) {
+  } else if (campaigns.length > 0) {
     // Biggest first, ties broken by label so the same data always yields the same
     // chart — an unstable sort here would reshuffle the diagram between refreshes.
     const ranked = [...campaigns].sort(
       (a, b) => b.count - a.count || a.label.localeCompare(b.label),
     );
-    const overflow = ranked.slice(maxCampaigns);
-    for (const c of overflow) remap.set(c.id, AGGREGATE_OTHER_CAMPAIGNS);
-    if (overflow.length > 0) {
+    const totalCampaignVolume = ranked.reduce((s, c) => s + safeVolume(c.count), 0);
+    const floor = totalCampaignVolume * minCampaignShare;
+
+    // Two reasons to group, either sufficient: past the cap, or too small to see.
+    const overflow = ranked.filter(
+      (c, i) => i >= maxCampaigns || (totalCampaignVolume > 0 && c.count < floor),
+    );
+
+    // Never group EVERY campaign — that would silently turn the Campaigns view into
+    // the First touch view and leave the reader with a control that does nothing.
+    if (overflow.length > 0 && overflow.length < ranked.length) {
+      for (const c of overflow) remap.set(c.id, AGGREGATE_OTHER_CAMPAIGNS);
       aggregateMembers.set(
         AGGREGATE_OTHER_CAMPAIGNS,
         overflow.map((c) => c.id),
@@ -333,6 +359,37 @@ export function buildSankeyView(
     });
   }
 
+  /**
+   * Nodes an edge points at that the payload never defined.
+   *
+   * Found in live data: a deleted campaign whose edges outlived it. The previous
+   * behaviour dropped those links when their endpoint failed to resolve, which
+   * silently removed their leads from the total — a diagram quietly disagreeing
+   * with its own source. A placeholder is drawn instead, so the volume survives and
+   * the gap is visible rather than absorbed.
+   */
+  let synthesizedNodes = 0;
+  for (const id of touched) {
+    if (indexById.has(id)) continue;
+    if (aggregateMembers.has(id)) continue;
+    synthesizedNodes += 1;
+    const type = id.split('_')[0] || 'unknown';
+    const stage = stageForNodeType(type);
+    pushNode({
+      id,
+      name: 'Unknown node',
+      fullName: `Unknown node (${id}) — referenced by a path but missing from the graph`,
+      stage,
+      stageLabel: stageLabel(stage),
+      // No count was supplied; its throughput is whatever flows through it.
+      value: 0,
+      nodeType: type,
+      memberIds: [id],
+      aggregate: false,
+      drillable: false,
+    });
+  }
+
   const droppedOrphanNodes =
     graphNodes.filter((n) => !remap.has(n.id) && !touched.has(n.id)).length;
 
@@ -364,6 +421,7 @@ export function buildSankeyView(
     stages: STAGE_ORDER,
     droppedZeroLinks,
     droppedOrphanNodes,
+    synthesizedNodes,
     collapsedCampaigns,
     totalLinkVolume,
   };

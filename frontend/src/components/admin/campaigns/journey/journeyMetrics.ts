@@ -153,17 +153,74 @@ export function findLargestLeak(view: SankeyViewModel): Insight | null {
 
   if (!best) return null;
   const pct = safeRate(best.leaked, best.arrived);
+  /**
+   * "journeys", not "leads".
+   *
+   * Band volumes count PATHS TAKEN and node counts count DISTINCT LEADS, and in
+   * live data the two do not reconcile: one lead contacted by both email and SMS
+   * appears in two source→outreach bands. Never Visited reports 3,775 leads while
+   * 24,610 journeys arrive at it. Calling the arrivals "leads" overstated the
+   * largest leak by more than six times, so the sentence now names the unit the
+   * number is actually in.
+   */
   return {
     kind: 'leak',
-    title: `${best.leaked.toLocaleString()} leads stop at ${best.node.fullName}`,
+    title: `${best.leaked.toLocaleString()} journeys stop at ${best.node.fullName}`,
     detail:
       pct === null
-        ? `${best.node.fullName} is where the most leads stop moving forward.`
-        : `${pct.toFixed(1)}% of everyone who reaches ${best.node.fullName} goes no further. ` +
-          'This is the largest single drop-off in the view.',
+        ? `${best.node.fullName} is where the most journeys stop moving forward.`
+        : `${pct.toFixed(1)}% of everything arriving at ${best.node.fullName} goes no further — ` +
+          'the largest single drop-off in the view. Counted in journeys along a path, ' +
+          'not distinct people.',
     evidence: `${best.arrived.toLocaleString()} arrived − ${(best.arrived - best.leaked).toLocaleString()} continued = ${best.leaked.toLocaleString()} stopped`,
     sufficient: true,
     focusNodeId: best.node.id,
+  };
+}
+
+/**
+ * Nodes whose bands carry more than the node says it holds.
+ *
+ * A Sankey assumes flow conservation. This graph does not have it, for a defensible
+ * reason: `count` is distinct leads and `volume` is journeys, so any lead on two
+ * paths inflates the bands relative to the node. Twelve of thirty-five nodes were
+ * affected in the 2026-09-08 production payload.
+ *
+ * It is reported rather than corrected because it is not the frontend's number to
+ * correct — and because a reader comparing a node's printed figure against its band
+ * thickness deserves to be told why they differ instead of concluding the chart is
+ * broken.
+ */
+export function findFlowMismatch(view: SankeyViewModel): Insight | null {
+  const outgoing = new Map<string, number>();
+  const incoming = new Map<string, number>();
+  for (const l of view.links) {
+    outgoing.set(l.fromId, (outgoing.get(l.fromId) ?? 0) + l.value);
+    incoming.set(l.toId, (incoming.get(l.toId) ?? 0) + l.value);
+  }
+
+  let affected = 0;
+  let worst: { name: string; count: number; flow: number } | null = null;
+  for (const node of view.nodes) {
+    if (node.value <= 0 || node.aggregate) continue;
+    const flow = Math.max(incoming.get(node.id) ?? 0, outgoing.get(node.id) ?? 0);
+    if (flow <= node.value) continue;
+    affected += 1;
+    if (!worst || flow - node.value > worst.flow - worst.count) {
+      worst = { name: node.fullName, count: node.value, flow };
+    }
+  }
+
+  if (!worst) return null;
+  return {
+    kind: 'quality',
+    title: `${affected} node${affected === 1 ? '' : 's'} carry more journeys than distinct leads`,
+    detail:
+      'Band thickness counts journeys along a path; the figure under each node counts ' +
+      'distinct people. A lead reached on two channels appears in two bands, so the two ' +
+      'will not add up. The bands are the flow, the node figures are the population.',
+    evidence: `largest gap: ${worst.name} holds ${worst.count.toLocaleString()} leads across ${worst.flow.toLocaleString()} journeys`,
+    sufficient: true,
   };
 }
 
@@ -204,17 +261,47 @@ export function findBestOpportunity(view: SankeyViewModel): Insight | null {
   let best: { node: SankeyViewModel['nodes'][number]; rate: number; converted: number; pop: number } | null = null;
   let bestBelowFloor: { node: SankeyViewModel['nodes'][number]; pop: number } | null = null;
 
+  let inconsistent = 0;
   for (const node of view.nodes) {
     const converted = toOutcome.get(node.id);
     if (!converted) continue;
     const pop = populationOf(node.id, node.value);
     if (pop <= 0) continue;
+
+    /**
+     * Refuse to rank a node that reports more conversions than it holds.
+     *
+     * Live data does this: "Alumni Re-Engagement" reports 4 leads and 64 journeys
+     * into outcomes, because counts are distinct people and volumes are paths. The
+     * previous version divided one by the other and crowned a grouped bucket at
+     * "364.1%". Clamping to 100% would have been worse than useless — it would
+     * present a contradiction as a perfect result. A rate that cannot be computed
+     * honestly is not computed; the mismatch is reported by findFlowMismatch.
+     */
+    if (converted > pop) {
+      inconsistent += 1;
+      continue;
+    }
+
     if (pop < MIN_SAMPLE_FOR_RATE) {
       if (!bestBelowFloor || pop > bestBelowFloor.pop) bestBelowFloor = { node, pop };
       continue;
     }
     const rate = (converted / pop) * 100;
     if (!best || rate > best.rate) best = { node, rate, converted, pop };
+  }
+
+  if (!best && !bestBelowFloor && inconsistent > 0) {
+    return {
+      kind: 'opportunity',
+      title: 'No path can be ranked on conversion',
+      detail:
+        `${inconsistent} path${inconsistent === 1 ? '' : 's'} into an outcome carry more ` +
+        'journeys than the node reports leads, so a conversion rate would be a ratio of two ' +
+        'different things. Nothing is ranked rather than something being invented.',
+      evidence: `${inconsistent} node${inconsistent === 1 ? '' : 's'} excluded for reporting conversions above their own population`,
+      sufficient: false,
+    };
   }
 
   if (!best) {
@@ -293,7 +380,10 @@ export function deriveInsights(
   data: CampaignGraphData | null | undefined,
   view: SankeyViewModel,
 ): Insight[] {
-  return [findLargestLeak(view), findBestOpportunity(view), findDataWarning(data, view)].filter(
-    (i): i is Insight => i !== null,
-  );
+  return [
+    findLargestLeak(view),
+    findBestOpportunity(view),
+    findFlowMismatch(view),
+    findDataWarning(data, view),
+  ].filter((i): i is Insight => i !== null);
 }

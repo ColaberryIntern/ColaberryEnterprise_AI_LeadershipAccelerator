@@ -32,8 +32,25 @@ ignore rate), not production data. They demonstrate that the component *lays out
 correctly at a given width and theme. They say nothing about whether the live
 endpoint returns what this component expects.
 
-An authenticated capture against `/admin/campaigns` on the live app is still
-outstanding; it needs an `admin_token`, which was not available in this session.
+An authenticated capture of `/admin/campaigns` showing THIS component is not
+possible yet for a simple reason: the branch is not deployed, so production still
+serves the force graph. That capture belongs after a deploy.
+
+**What was verified against production instead** (2026-09-08, super_admin token):
+
+- The live contract. `GET /api/admin/campaign-intelligence/graph` returned 35 nodes,
+  91 edges, 24,679 leads. Every node type it emits maps to a real stage; no unknown
+  types. See `__tests__/liveContract.dump.test.ts`.
+- The component against live DATA. The real payload was rendered through the real
+  component, which is how four defects were found that no synthetic fixture had
+  triggered — see the session log for `CC-20260907-b3f7`.
+- The brand question. 44 campaigns: 36 on one brand, 8 with none; all 16 campaigns
+  that appear in the graph share that single brand. The selector will offer one
+  option until campaigns exist under another brand, and the backend says so.
+
+The production-derived render is deliberately NOT committed here — production data
+does not belong in the repo. Regenerate it with `HARNESS_PAYLOAD` pointed at a fresh
+capture.
 
 **Two further limits, stated rather than glossed:**
 
