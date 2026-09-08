@@ -1,5 +1,6 @@
 import { LeadSource, EntryPoint, FormDefinition, RawLeadPayload, Lead } from '../models';
 import { createLead } from './leadService';
+import { ensureProspectAccount } from './leads/prospectAccount';
 import { logActivity } from './activityService';
 import { verifyHmacSignature } from '../utils/hmac';
 import { normalizeWithFieldMap, validateNormalized, NormalizedLead } from '../utils/normalizeFields';
@@ -135,6 +136,18 @@ export async function handleIngest(req: IngestRequest): Promise<IngestResult> {
       corporate_sponsorship_interest: normalized.corporate_sponsorship_interest,
       timeline: '',
     } as any);
+
+    // 7b. An enquiry that asked for something gets a way back in.
+    //
+    // Until this, an AI Flotation submission wrote a Lead and nothing else, so the person
+    // appeared nowhere in the Accelerator - which reads `Enrollment` - and had no account to
+    // return to. Best-effort by design: the submission must never be lost to a failure on
+    // the programme side of the house.
+    await ensureProspectAccount({
+      sourceSlug: source.slug,
+      email: normalized.email,
+      name: normalized.name,
+    });
 
     // 8. Stamp the new ingest-specific fields on the lead.
     const leadUpdates: Record<string, any> = { source_id: source.id, entry_point_id: entry.id };

@@ -32,9 +32,19 @@ jest.mock('../managerReliabilityIntentService', () => ({
   toPendingConfirmation: jest.fn(),
   applyConfirmedReliabilityChange: jest.fn(),
 }));
+jest.mock('../managerGoalIntentService', () => ({
+  detectChangeGoalIntent: jest.fn(() => null),
+  buildGoalConfirmationCardText: jest.fn(() => ''),
+  toPendingGoalConfirmation: jest.fn(),
+  applyConfirmedGoalChange: jest.fn(),
+}));
 jest.mock('../agentWorkStatusIntentService', () => ({
   detectWorkStatusQuery: jest.fn(() => null),
   buildWorkStatusReply: jest.fn(),
+}));
+jest.mock('../agentInterventionIntentService', () => ({
+  detectInterventionIntentQuery: jest.fn(() => null),
+  buildInterventionIntentReply: jest.fn(),
 }));
 
 const mockAssessmentFindAll = jest.fn();

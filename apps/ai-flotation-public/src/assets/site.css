@@ -24,10 +24,12 @@
  * it carries no {{brand.*}} tokens.
  */
 
-@import url('design/colors.css');
-@import url('design/typography.css');
-@import url('design/spacing.css');
-@import url('design/motion.css');
+/* The design system is vendored from its own repository by
+   backend/src/scripts/syncDesignSystems.js. Import its published entry point rather
+   than individual token files: styles.css declares the order the design system
+   itself depends on (fonts, tokens, base, components), and following it means a
+   reorganisation upstream cannot silently drop a stylesheet from this build. */
+@import url('design/styles.css');
 
 :root {
   /* Site-local additions, both flagged as deviations from the source.
@@ -44,7 +46,7 @@
    deliberate choice somewhere. This site has no theme control and no JavaScript to set
    one, so it honours the reader's OS preference instead.
 
-   These values MIRROR the `[data-theme="dark"]` block in design/colors.css. They are
+   These values MIRROR the `[data-theme="dark"]` block in design/tokens/colors.css. They are
    duplicated because CSS cannot alias one selector's declarations to another - if that
    file's dark set changes, change this too. The attribute still wins where it is set. */
 @media (prefers-color-scheme: dark) {
@@ -362,7 +364,7 @@ footer.site .fine { font-size: var(--fs-caption); color: var(--fg-muted); margin
   .stratum .tag { min-width: 0; width: 100%; }
 }
 
-/* design/motion.css already collapses motion under this query; this covers the
+/* design/tokens/motion.css already collapses motion under this query; this covers the
    scroll-behaviour it does not set. */
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; }

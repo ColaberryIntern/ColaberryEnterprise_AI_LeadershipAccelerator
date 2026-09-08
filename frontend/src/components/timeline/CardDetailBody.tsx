@@ -22,6 +22,7 @@ function hashStr(s: string): number {
 }
 import SetupLabRender from './SetupLabRender';
 import PromptCatalogRender from './PromptCatalogRender';
+import ClaudeStudioRender from './ClaudeStudioRender';
 import ArchitectTimeMachine from './ArchitectTimeMachine';
 import BuildArtifactsRender from './BuildArtifactsRender';
 import ReflectionReview from './ReflectionReview';
@@ -263,6 +264,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   // iframe. `blog` shares the 'deepdive' band, so gate on type to not hijack it.
   const isDeepDive = card.render_band === 'deepdive' && card.type === 'deep_dive';
   const isSetupLab = card.render_band === 'setup_lab';   // Claude Code enablement lab: dark native panel + Copy button
+  const isClaudeStudio = card.render_band === 'claude_studio';   // Claude Studio: four-stage Claude.ai loop + submission (bespoke renderer)
   const isPromptCatalog = card.render_band === 'prompt_catalog';   // Prompt Lab: practice-prompt catalog (categories + reveal + copy)
   const isArchitectMindset = card.render_band === 'architect_mindset';   // The Architect Time Machine: cinematic decision simulation (bespoke renderer)
   const isBuildArtifacts = card.render_band === 'build_artifacts';   // Build Artifact(s) Lab: pick artifact + project, build station
@@ -345,7 +347,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
         )}
       </div>
 
-      <div className={`${isReader || isDeepDive ? 'tld-body tld-body--reader' : 'tld-body'}${isSetupLab ? ' tld-body--setuplab' : ''}${isPromptCatalog ? ' tld-body--promptcatalog' : ''}${isArchitectMindset ? ' tld-body--architect' : ''}${isBuildArtifacts ? ' tld-body--buildartifacts' : ''}`}>
+      <div className={`${isReader || isDeepDive ? 'tld-body tld-body--reader' : 'tld-body'}${isSetupLab ? ' tld-body--setuplab' : ''}${isPromptCatalog ? ' tld-body--promptcatalog' : ''}${isClaudeStudio ? ' tld-body--claudestudio' : ''}${isArchitectMindset ? ' tld-body--architect' : ''}${isBuildArtifacts ? ' tld-body--buildartifacts' : ''}`}>
         {isReader ? (
           content?.body_html
             ? <iframe className="tld-lessonframe tld-readerframe" title="Self Study reading" sandbox={READER_SANDBOX} srcDoc={readerDoc(content.body_html, content.title || card.title, { cardId: card.id, doneIds: readerProg.initialDoneIds })} />
@@ -368,6 +370,12 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
             : generating
               ? <GeneratingReader />
               : <div className="tld-note" style={{ margin: 20 }}>This prompt catalog has not been generated yet.</div>
+        ) : isClaudeStudio ? (
+          content && content.body_html
+            ? <ClaudeStudioRender bodyHtml={content.body_html} title={content.title || card.title} summary={content.summary} estMin={card.estimated_time} points={pts} difficulty={card.difficulty} variant="drawer" cardId={card.id} completed={done} preview={preview} onCopied={() => setCopyGateMet(true)} onSubmitted={completeSafely} />
+            : generating
+              ? <GeneratingReader />
+              : <div className="tld-note" style={{ margin: 20 }}>This studio has not been generated yet.</div>
         ) : isArchitectMindset ? (
           <ArchitectTimeMachine cardId={card.id} variant="drawer" preview={preview} completed={done} onEnterWorkspace={onEnterWorkspace} />
         ) : isBuildArtifacts ? (

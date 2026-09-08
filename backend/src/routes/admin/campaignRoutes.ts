@@ -20,6 +20,7 @@ import { generateTrackedLink, getCampaignROI } from '../../services/campaignLink
 import {
   handleListCampaigns,
   handleCreateCampaign,
+  handleListAssignableBrands,
   handleGetCampaign,
   handleUpdateCampaign,
   handleDeleteCampaign,
@@ -79,6 +80,9 @@ const router = Router();
 router.get('/api/admin/campaigns', requireAdmin, handleListCampaigns);
 router.post('/api/admin/campaigns', requireAdmin, handleCreateCampaign);
 router.post('/api/admin/campaigns/build-cold', requireAdmin, handleBuildColdCampaign);
+// Registered before '/api/admin/campaigns/:id' so the literal segment is not
+// swallowed by the id param — the ordering trap this repo has hit before.
+router.get('/api/admin/campaigns/assignable-brands', requireAdmin, handleListAssignableBrands);
 router.get('/api/admin/campaigns/sequence-templates', requireAdmin, handleGetSequenceTemplates);
 router.get('/api/admin/campaigns/:id', requireAdmin, handleGetCampaign);
 router.patch('/api/admin/campaigns/:id', requireAdmin, handleUpdateCampaign);

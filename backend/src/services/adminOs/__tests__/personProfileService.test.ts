@@ -189,6 +189,85 @@ describe('person profile', () => {
     expect(first.replacements.email).toBe('someone@example.com');
   });
 
+  // ── Intent stops informing once someone converts ─────────────────────────
+
+  it('hides intent and temperature for an enrolled person', async () => {
+    // Ali, 2026-09-08: "if they are enrolled, hide their current intent. Knowing
+    // that an enrolled student is hot, is not informing to us." A temperature
+    // answers "how likely are they to convert" — once they have, it is a stale
+    // answer to a settled question that invites someone to act on it.
+    query.mockReset();
+    query.mockResolvedValueOnce([{ ...IDENTITY, stage: 'enrolled_student' }]);
+    query.mockResolvedValueOnce([{ leadScore: 88, temperature: 'hot', temperatureUpdatedAt: '2026-01-01', leadId: 5 }]);
+    query.mockResolvedValue([]);
+
+    const profile = await getPersonProfile({
+      email: 'someone@example.com',
+      sections: sectionsFor('owner'),
+      visibleEnrollmentIds: null,
+    });
+
+    expect(profile!.acquisition!.temperature).toBeNull();
+    expect(profile!.acquisition!.leadScore).toBeNull();
+    expect(profile!.acquisition!.temperatureUpdatedAt).toBeNull();
+    expect(profile!.intentSuppressedReason).toBeTruthy();
+    // The KPI must obey the same rule, or the header contradicts the panel.
+    expect(profile!.journey!.intentScore).toBeNull();
+  });
+
+  it('keeps intent for someone still in acquisition', async () => {
+    query.mockReset();
+    query.mockResolvedValueOnce([{ ...IDENTITY, stage: 'lead' }]);
+    query.mockResolvedValueOnce([{ leadScore: 30, temperature: 'cold', leadId: 938 }]);
+    query.mockResolvedValue([]);
+
+    const profile = await getPersonProfile({
+      email: 'someone@example.com',
+      sections: sectionsFor('owner'),
+      visibleEnrollmentIds: null,
+    });
+
+    expect(profile!.acquisition!.temperature).toBe('cold');
+    expect(profile!.acquisition!.leadScore).toBe(30);
+    expect(profile!.intentSuppressedReason).toBeUndefined();
+  });
+
+  it('carries the score denominator the lead page shows', async () => {
+    query.mockReset();
+    query.mockResolvedValueOnce([{ ...IDENTITY, stage: 'lead' }]);
+    query.mockResolvedValueOnce([{ leadScore: 30, leadId: 938 }]);
+    query.mockResolvedValue([]);
+    const profile = await getPersonProfile({
+      email: 'someone@example.com',
+      sections: sectionsFor('owner'),
+      visibleEnrollmentIds: null,
+    });
+    // "30" alone is not readable; the Lead page says "out of 105 possible".
+    expect(profile!.acquisition!.leadScoreMax).toBe(105);
+  });
+
+  // ── The timeline, which the first version omitted entirely ───────────────
+
+  it('gates timeline domains by section, like the panels', async () => {
+    const { domainsForSections } = await import('../personTimelineService');
+    // A mentor gets learning history and no sales history.
+    expect(domainsForSections(sectionsFor('mentor'))).toEqual(
+      expect.arrayContaining(['learning']),
+    );
+    expect(domainsForSections(sectionsFor('mentor'))).not.toContain('sales');
+    expect(domainsForSections(sectionsFor('mentor'))).not.toContain('commerce');
+
+    // A revenue identity gets sales and commerce, not learning.
+    const rev = domainsForSections(sectionsFor('revenue'));
+    expect(rev).toEqual(expect.arrayContaining(['sales', 'commerce']));
+    expect(rev).not.toContain('learning');
+  });
+
+  it('gives an identity with no person sections no timeline domains at all', async () => {
+    const { domainsForSections } = await import('../personTimelineService');
+    expect(domainsForSections(sectionsFor('community_organizer'))).toEqual([]);
+  });
+
   it('parameterises the email rather than interpolating it', async () => {
     await getPersonProfile({
       email: "x' OR '1'='1@example.com",

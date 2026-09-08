@@ -43,6 +43,14 @@ jest.mock('../ticketService', () => ({
   addTicketComment: jest.fn(),
 }));
 
+// Capability 8's CHANGE_GOAL intent is unrelated to this file's reliability
+// scenarios — mocked wholesale so it never fires on this file's own messages.
+jest.mock('../managerGoalIntentService', () => ({
+  detectChangeGoalIntent: jest.fn(() => null),
+  buildGoalConfirmationCardText: jest.fn(() => ''),
+  toPendingGoalConfirmation: jest.fn(),
+  applyConfirmedGoalChange: jest.fn(),
+}));
 // Checkpoint F's work-status query is unrelated to this file's reliability
 // scenarios — mocked wholesale so none of these tests need to also stub the
 // Ticket/AdminUser models agentWorkStatusIntentService.ts queries directly.
@@ -53,6 +61,10 @@ jest.mock('../agentWorkStatusIntentService', () => ({
 jest.mock('../agentUncertaintyIntentService', () => ({
   detectUncertaintyQuery: jest.fn(() => false),
   buildUncertaintyReply: jest.fn(),
+}));
+jest.mock('../agentInterventionIntentService', () => ({
+  detectInterventionIntentQuery: jest.fn(() => null),
+  buildInterventionIntentReply: jest.fn(),
 }));
 
 import { getInstrumentedOpenAI } from '../openaiInstrumented';

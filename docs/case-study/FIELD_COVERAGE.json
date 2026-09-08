@@ -127,6 +127,20 @@
       "disposition": "verified_evidence",
       "rule": "authored"
     },
+    "CaseStudyArchitectureSection.diagramImageUrl": {
+      "authoring": "admin narrative panel; rendered from diagramSource by scripts/renderCaseStudyDiagram.js",
+      "sourcePriority": "human override > repo sync",
+      "aiMayInfer": false,
+      "approvalRequired": true,
+      "indexHome": "—",
+      "detailHome": "architecture band — the picture Training and AI Flotation show instead of a live chart",
+      "publicBehaviour": "through safeHttpUrl, and carried ONLY beside a diagramSource",
+      "emptyBehaviour": "no picture — Enterprise still draws the live chart from the source",
+      "privacy": "public",
+      "test": "caseStudyPhotoAndDiagram.test.ts",
+      "disposition": "human_approved",
+      "rule": "authored"
+    },
     "CaseStudyArchitectureSection.diagramSource": {
       "authoring": "admin narrative panel; mermaid",
       "sourcePriority": "human override > repo sync",
@@ -1191,6 +1205,20 @@
       "disposition": "deterministic",
       "rule": "snapshot-composite"
     },
+    "CaseStudySnapshotContent.walkthroughVideo": {
+      "authoring": "admin; a narrated walkthrough produced for this record",
+      "sourcePriority": "human override > repo sync",
+      "aiMayInfer": false,
+      "approvalRequired": true,
+      "indexHome": "—",
+      "detailHome": "top of the detail page, above the situation band",
+      "publicBehaviour": "every URL through safeHttpUrl; dropped entirely without a playable url",
+      "emptyBehaviour": "no player - the band is absent, not an empty frame",
+      "privacy": "public",
+      "test": "caseStudyWalkthroughVideo.test.ts",
+      "disposition": "human_approved",
+      "rule": "authored"
+    },
     "CaseStudyTaxonomy.builtByType": {
       "authoring": "admin narrative panel",
       "sourcePriority": "human override > repo sync",
@@ -1486,6 +1514,20 @@
       "rule": "public-projection-mirror"
     },
     "PublicCaseStudyArchitecture.diagram": {
+      "authoring": "not authored — computed by caseStudyPublicProjection.ts",
+      "sourcePriority": "projection of the approved snapshot",
+      "aiMayInfer": false,
+      "approvalRequired": false,
+      "indexHome": "—",
+      "detailHome": "nested in detail",
+      "publicBehaviour": "always present",
+      "emptyBehaviour": "empty array or empty string",
+      "privacy": "public",
+      "test": "caseStudyPublicProjection.test.ts",
+      "disposition": "deterministic",
+      "rule": "public-projection-mirror"
+    },
+    "PublicCaseStudyArchitecture.diagramImageUrl": {
       "authoring": "not authored — computed by caseStudyPublicProjection.ts",
       "sourcePriority": "projection of the approved snapshot",
       "aiMayInfer": false,
@@ -2032,6 +2074,20 @@
       "rule": "public-projection-mirror"
     },
     "PublicCaseStudyDetail.verificationMethod": {
+      "authoring": "not authored — computed by caseStudyPublicProjection.ts",
+      "sourcePriority": "projection of the approved snapshot",
+      "aiMayInfer": false,
+      "approvalRequired": false,
+      "indexHome": "—",
+      "detailHome": "detail page",
+      "publicBehaviour": "always present",
+      "emptyBehaviour": "empty array or empty string",
+      "privacy": "public",
+      "test": "caseStudyPublicProjection.test.ts",
+      "disposition": "deterministic",
+      "rule": "public-projection-mirror"
+    },
+    "PublicCaseStudyDetail.walkthroughVideo": {
       "authoring": "not authored — computed by caseStudyPublicProjection.ts",
       "sourcePriority": "projection of the approved snapshot",
       "aiMayInfer": false,

@@ -7,6 +7,14 @@ import { Lead, Campaign, CampaignLead, CommunicationLog, Enrollment, StrategyCal
 import Visitor from '../../models/Visitor';
 import AlumniReferralProfile from '../../models/AlumniReferralProfile';
 import { Op, fn, col, literal } from 'sequelize';
+import {
+  loadCampaignBrandMap,
+  summarizeBrands,
+  UNATTRIBUTED,
+  UNATTRIBUTED_BRAND_ID,
+  type BrandSummary,
+  type CampaignBrandMap,
+} from './campaignBrandAttribution';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -36,6 +44,13 @@ export interface CampaignGraphNode {
     velocity?: NodeVelocityMetrics;
   };
   source_breakdown?: Record<string, number>;
+  /**
+   * Owning brand. Populated on `campaign` nodes only — every other layer is
+   * lead-side and has no brand of its own, and inventing one for them would
+   * imply an attribution the data does not contain.
+   */
+  brand_id?: string;
+  brand_name?: string;
 }
 
 export interface EdgeVelocityMetrics {
@@ -89,6 +104,15 @@ export interface CampaignGraphData {
   validation: CampaignGraphValidation;
   time_window?: string;
   timeline_buckets?: TimelineBucket[];
+  /**
+   * Every brand present in the UNFILTERED graph for this time window, so the
+   * brand selector keeps all of its options after a brand is chosen. Deriving
+   * the options from the filtered response instead would collapse the dropdown
+   * to the single selected brand and strand the user there.
+   */
+  brands?: BrandSummary[];
+  /** Echo of the applied brand filter, so the UI can never mislabel its own state. */
+  brand_filter?: string | null;
 }
 
 export interface LeadPathRecord {
@@ -179,7 +203,19 @@ function sortedPercentile(sorted: number[], p: number): number {
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
 }
 
-function getTimeWindowCutoff(window: string): Date | null {
+/**
+ * Scope the anonymous-visitor count to the same window as the lead paths.
+ *
+ * Exported so the rule can be tested without a database. The bug it guards against
+ * shipped for months: an unscoped `Visitor.count()` beside a filtered lead set
+ * reported 2,180 Site Visitors inside a 7-day view holding 55 leads.
+ */
+export function visitorCountOptions(cutoff: Date | null): { where: any } | undefined {
+  if (!cutoff) return undefined;
+  return { where: { first_seen_at: { [Op.gte]: cutoff } } };
+}
+
+export function getTimeWindowCutoff(window: string): Date | null {
   const now = new Date();
   switch (window) {
     case '24h': return new Date(now.getTime() - 24 * 3600_000);
@@ -813,21 +849,37 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[], totalAnonymousVi
     });
   }
 
-  // Visitor nodes — include both linked leads AND anonymous (unlinked) visitors
+  /**
+   * Site Visitors counts LEADS who visited — not everyone who visited.
+   *
+   * It previously counted `visitorLeadCount + anonymousOnlyCount`, mixing people
+   * who never became leads into a funnel whose every other node counts leads. In
+   * production that read "12 total leads" beside "Site Visitors 382", which is not
+   * a flow anyone can follow: 382 cannot come out of 12. It also took 96.7% of the
+   * Response column, flattening every other share on the chart to noise.
+   *
+   * Reported twice from the live page before it was fixed properly — the first pass
+   * only scoped the count to the time window, which took it from 2,180 to 382 and
+   * left the real problem, that this is a different population, untouched.
+   *
+   * The anonymous figure is NOT discarded. It stays in `visits_generated`, where it
+   * is the honest and genuinely useful fact it always was: how many people browsed
+   * without ever becoming a lead. The UI surfaces it as context rather than as
+   * funnel volume.
+   */
   const visitorEngagedCount = leadPaths.filter(l => l.has_visitor_record && l.first_touch.type !== null).length;
   const anonymousOnlyCount = Math.max(0, totalAnonymousVisitors - visitorLeadCount);
-  const totalSiteVisitors = visitorLeadCount + anonymousOnlyCount;
   nodes.push({
     id: 'visitor_site',
     type: 'visitor',
     label: 'Site Visitors',
-    count: totalSiteVisitors,
+    count: visitorLeadCount,
     metrics: {
-      active_users: totalSiteVisitors,
+      active_users: visitorLeadCount,
       engaged_count: visitorEngagedCount,
-      unengaged_count: totalSiteVisitors - visitorEngagedCount,
-      conversion_rate: totalLeads > 0 ? Math.round((totalSiteVisitors / totalLeads) * 100) : 0,
-      visits_generated: anonymousOnlyCount,  // anonymous (unlinked) visitors
+      unengaged_count: Math.max(0, visitorLeadCount - visitorEngagedCount),
+      conversion_rate: totalLeads > 0 ? Math.round((visitorLeadCount / totalLeads) * 100) : 0,
+      visits_generated: anonymousOnlyCount,  // browsed, never became a lead
     },
   });
 
@@ -868,14 +920,24 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[], totalAnonymousVi
   }
 
   // Campaign nodes
+  //
+  // Brand is resolved once for the whole set rather than per node: one round of
+  // three queries instead of 3N, and every node in a render shares a single
+  // consistent answer.
+  const brandLoad = await loadCampaignBrandMap(Array.from(campaignLeadSets.keys()));
+  const campaignBrands = brandLoad.map;
+
   for (const [campaignId, leadSet] of campaignLeadSets) {
     const name = campaignNames.get(campaignId) || 'Unknown';
     const metrics = campaignMetrics.get(campaignId) || { activeCount: 0, messagesSent: 0 };
+    const brand = campaignBrands.get(campaignId) || UNATTRIBUTED;
     const count = leadSet.size;
     nodes.push({
       id: `campaign_${campaignId}`,
       type: 'campaign',
       label: shortenCampaignName(name),
+      brand_id: brand.brand_id,
+      brand_name: brand.brand_name,
       count,
       metrics: {
         active_users: metrics.activeCount,
@@ -1168,7 +1230,31 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[], totalAnonymousVi
     }
   }
 
-  return { nodes, edges: validEdges, validation };
+  // Brand attribution failures are data-quality facts, so they ride the same
+  // warnings channel the rest of the validation uses rather than a private one.
+  for (const w of brandLoad.warnings) validation.warnings.push(w);
+
+  const brands = summarizeBrands(
+    nodes.filter((n) => n.type === 'campaign').map((n) => ({ id: n.id, count: n.count })),
+    campaignBrands,
+  );
+
+  // Say it plainly when the brand dimension cannot separate anything. A selector
+  // offering one option looks broken; a selector offering one option next to a
+  // sentence explaining why does not.
+  const attributedBrands = brands.filter((b) => b.attributed);
+  if (brands.length > 0 && attributedBrands.length === 0) {
+    validation.warnings.push(
+      'No campaign carries a brand. Brand filtering cannot separate these campaigns.',
+    );
+  } else if (attributedBrands.length === 1 && brands.length === 1) {
+    validation.warnings.push(
+      `All ${brands[0].campaign_count} campaigns belong to ${brands[0].brand_name}. ` +
+        'Brand filtering will not narrow this view until campaigns exist under another brand.',
+    );
+  }
+
+  return { nodes, edges: validEdges, validation, brands };
 }
 
 // ─── Node membership test (shared by drilldown + slice) ─────────────────────
@@ -1239,26 +1325,92 @@ export function buildTimelineBuckets(leadPaths: LeadPathRecord[], bucketCount = 
 
 // ─── Main entry point ───────────────────────────────────────────────────────
 
-export async function getCampaignGraphData(timeWindow?: string): Promise<CampaignGraphData> {
+/**
+ * Restrict lead paths to those touching at least one campaign of `brandId`.
+ *
+ * ANY-of, not all-of. This is the one place brand filtering could not reuse
+ * `getSlicedGraphData`: that function chains its node filters with AND, which is
+ * right for progressive drill-down ("engaged AND enrolled") and wrong for a brand,
+ * where a lead qualifies by touching ANY one of the brand's campaigns. Passing a
+ * brand's campaign ids to the slice endpoint would return only the leads enrolled
+ * in every campaign that brand runs, which is close to always zero.
+ */
+function filterPathsByBrand(
+  paths: LeadPathRecord[],
+  brandId: string,
+  brandMap: CampaignBrandMap,
+): LeadPathRecord[] {
+  return paths.filter((lead) =>
+    lead.campaign_enrollments.some((e) => {
+      const brand = brandMap.get(e.campaign_id) || UNATTRIBUTED;
+      return brand.brand_id === brandId;
+    }),
+  );
+}
+
+export async function getCampaignGraphData(
+  timeWindow?: string,
+  brandId?: string | null,
+): Promise<CampaignGraphData> {
+  // A brand-filtered graph is derived from the unfiltered one for this window and
+  // deliberately does NOT overwrite the cache. `graphCache.leadPaths` is the
+  // population that node-users, edge-users and slice all measure themselves
+  // against; letting a filtered view replace it would silently rescope every
+  // drill-down and every "of N leads" denominator on the page.
+  if (brandId) {
+    const base = await getCampaignGraphData(timeWindow);
+    const allPaths = graphCache?.leadPaths ?? [];
+    const campaignIds = Array.from(
+      new Set(allPaths.flatMap((p) => p.campaign_enrollments.map((e) => e.campaign_id))),
+    );
+    const { map } = await loadCampaignBrandMap(campaignIds);
+    const cohort = filterPathsByBrand(allPaths, brandId, map);
+
+    // An empty cohort is a legitimate answer, not an error: it means this brand
+    // ran campaigns that no lead in this window ever entered. Returning an empty
+    // graph lets the UI say that; throwing would render it as a failure.
+    const data = await buildGraphFromPaths(cohort);
+    data.time_window = timeWindow || 'all';
+    // Options come from the unfiltered graph so the selector keeps every brand.
+    data.brands = base.brands;
+    data.brand_filter = brandId;
+    return data;
+  }
+
   const cacheKey = timeWindow || 'all';
   if (graphCache && graphCache.cacheKey === cacheKey && Date.now() - graphCache.ts < CACHE_TTL) {
     return graphCache.data;
   }
 
-  // Fetch lead paths and total anonymous visitor count in parallel
+  /**
+   * The cutoff is resolved BEFORE the queries, because the visitor count has to
+   * honour it too.
+   *
+   * It previously did not. `Visitor.count()` counted every visitor ever recorded
+   * while `leadPaths` was filtered to the window, so a 7-day view reported 55 leads
+   * beside 2,180 Site Visitors — the all-time total, sitting inside a one-week
+   * funnel. Reported from production on 2026-09-08: "how can you have 2180 site
+   * visitors coming from 20 people". The force graph had the same defect; drawing
+   * the two numbers next to each other is what made it visible.
+   */
+  const cutoff = timeWindow && timeWindow !== 'all' ? getTimeWindowCutoff(timeWindow) : null;
+
   const [leadPaths_raw, totalAnonymousVisitors] = await Promise.all([
     buildLeadPaths(),
-    Visitor.count().catch(() => 0),
+    // Narrowed explicitly: passing options widens Sequelize's return type to
+    // `number | GroupedCountResultItem[]`, and only a grouped count yields the
+    // array form. This call never groups, so anything but a number is a zero.
+    Visitor.count(visitorCountOptions(cutoff) as any)
+      .then((n: unknown) => (typeof n === 'number' ? n : 0))
+      .catch(() => 0),
   ]);
 
   let leadPaths = leadPaths_raw;
-  if (timeWindow && timeWindow !== 'all') {
-    const cutoff = getTimeWindowCutoff(timeWindow);
-    if (cutoff) leadPaths = leadPaths.filter(lp => lp.created_at >= cutoff);
-  }
+  if (cutoff) leadPaths = leadPaths.filter(lp => lp.created_at >= cutoff);
 
   const data = await buildGraphFromPaths(leadPaths, totalAnonymousVisitors);
   data.time_window = cacheKey;
+  data.brand_filter = null;
 
   graphCache = { data, leadPaths, ts: Date.now(), cacheKey };
   return data;

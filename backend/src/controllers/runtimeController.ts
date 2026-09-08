@@ -28,6 +28,7 @@ import { ensureFreshContent } from '../services/timeline/cardContentService';
 import { uploadCertificate, getCertificateFile } from '../services/runtime/certificateService';
 import { uploadFieldGuide, getFieldGuideStatus } from '../services/runtime/fieldGuideService';
 import { uploadBuildArtifact } from '../services/runtime/buildArtifactService';
+import { submitClaudeStudio, getClaudeStudioStatus } from '../services/runtime/claudeStudioService';
 import fs from 'fs/promises';
 
 function fail(res: Response, err: any, next: NextFunction) {
@@ -126,6 +127,31 @@ export async function handleBuildArtifactUpload(req: Request, res: Response, nex
       is_sample: body.is_sample as unknown as boolean,
     }));
   } catch (e) { fail(res, e, next); }
+}
+
+// Claude Studio: the student did the work in their OWN Claude.ai account and
+// submits the Artifact link, the stages they completed, their self-checks, and
+// their written reflection. We never receive their conversations, prompts, or
+// Project sources — see claudeStudioService for the privacy contract.
+const claudeStudioSchema = z.object({
+  artifact_url: z.string().min(1).max(2048),
+  project_proof_url: z.string().max(2048).nullable().optional(),
+  stages_completed: z.array(z.string().max(20)).max(8),
+  checks_confirmed: z.array(z.number().int().min(0).max(50)).max(50),
+  checks_total: z.number().int().min(0).max(50),
+  reflection: z.string().min(1).max(8000),
+  ai_disclosure: z.string().max(2000).nullable().optional(),
+});
+
+export async function handleClaudeStudioSubmit(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = claudeStudioSchema.parse(req.body || {});
+    res.json(await submitClaudeStudio(eid(req), String(req.params.cardId), body));
+  } catch (e) { fail(res, e, next); }
+}
+
+export async function handleClaudeStudioStatus(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await getClaudeStudioStatus(eid(req), String(req.params.cardId))); } catch (e) { fail(res, e, next); }
 }
 
 const labSchema = z.object({ prompt: z.string().min(1), output: z.string().optional() });

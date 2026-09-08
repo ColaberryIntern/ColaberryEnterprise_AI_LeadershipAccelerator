@@ -51,6 +51,7 @@ import type {
 import type {
   PublicCaseStudyArchitecture,
   PublicCaseStudyArtifact,
+  PublicCaseStudyDetail,
   PublicCaseStudyContributor,
   PublicCaseStudyMeasurement,
   PublicCaseStudyMetric,
@@ -229,6 +230,36 @@ export function projectDiagramSource(value: unknown): string | null {
   return source;
 }
 
+/**
+ * The narrated walkthrough, or null.
+ *
+ * Every URL goes through `safeHttpUrl` for the same reason the artifact URLs do: these are
+ * admin-editable and land in `src` attributes, so a `javascript:` value would be stored
+ * XSS. A walkthrough with no playable `url` is dropped whole rather than rendered as an
+ * empty player with a caption track attached to nothing.
+ */
+export function projectWalkthroughVideo(
+  content: CaseStudySnapshotContent,
+): PublicCaseStudyDetail['walkthroughVideo'] {
+  const v = content?.walkthroughVideo;
+  if (!v) return null;
+  const url = safeHttpUrl(v.url);
+  const title = text(v.title);
+  if (!url || !title) return null;
+  const duration = typeof v.durationSeconds === 'number'
+    && Number.isFinite(v.durationSeconds) && v.durationSeconds > 0
+    ? Math.round(v.durationSeconds) : null;
+  return {
+    url,
+    title,
+    captionsUrl: safeHttpUrl(v.captionsUrl),
+    posterUrl: safeHttpUrl(v.posterUrl),
+    durationSeconds: duration,
+    narrationSource: v.narrationSource === 'synthetic' || v.narrationSource === 'human'
+      ? v.narrationSource : null,
+  };
+}
+
 export function projectArchitecture(
   content: CaseStudySnapshotContent,
 ): PublicCaseStudyArchitecture | null {
@@ -255,6 +286,12 @@ export function projectArchitecture(
     .map((e) => ({ from: text(e.from), to: text(e.to), label: text(e.label) || null }));
   const diagram = nodes.length > 0 ? { nodes, edges } : null;
   const diagramSource = projectDiagramSource(a.diagramSource);
+  // Through the same gate every other public URL passes, because this one is
+  // set by a human override and would otherwise be an admin-editable `src`.
+  // Only carried when there is a source for it to depict: an image with no
+  // source behind it is a picture nothing in the record can be checked against,
+  // and `renderCaseStudyDiagram.js` cannot have produced one.
+  const diagramImageUrl = diagramSource ? safeHttpUrl(a.diagramImageUrl) : null;
   // `dataStores` joins the emptiness test, which makes this agree with the
   // snapshot builder: `caseStudySnapshotSections.ts:168` already counts data
   // stores when deciding whether an architecture section exists at all. Before
@@ -268,7 +305,9 @@ export function projectArchitecture(
     && !dataStores.length && !diagram && !diagramSource) {
     return null;
   }
-  return { narrative, stack, capabilities, integrations, dataStores, diagram, diagramSource };
+  return {
+    narrative, stack, capabilities, integrations, dataStores, diagram, diagramSource, diagramImageUrl,
+  };
 }
 
 /**

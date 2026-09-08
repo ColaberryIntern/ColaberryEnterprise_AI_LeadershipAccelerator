@@ -294,3 +294,80 @@ describe('the mermaid source is a human artifact, sanitised at the boundary', ()
     })).toBeNull();
   });
 });
+
+/**
+ * The rendered picture of that chart, for the two surfaces that cannot draw one.
+ *
+ * WHAT THIS IS DEFENDING. Only the Enterprise app can draw mermaid; it imports the
+ * library from a CDN its own CSP allows. `training.colaberry.com` serves
+ * `script-src 'self' ...` with no CDN in it, and the AI Flotation shell ships no
+ * dependencies at all. Both rendered the architecture band with no chart while
+ * `diagramSource` sat in the payload the whole time — present in the data, invisible
+ * on the page. `diagramImageUrl` is the form all three can show.
+ *
+ * Two properties matter and both are asserted below, because each has a way of
+ * being quietly wrong:
+ *
+ *   1. It goes through `safeHttpUrl`, like every other public URL. The field is set
+ *      by a human override and lands in an `img src`, so a `javascript:` value here
+ *      would be stored XSS.
+ *   2. It is carried ONLY beside a source. An image with no `diagramSource` behind it
+ *      is a picture the record cannot be checked against, and
+ *      `renderCaseStudyDiagram.js` could not have produced it — it renders the source.
+ */
+describe('the pre-rendered diagram image, for surfaces that cannot draw mermaid', () => {
+  const IMAGE = 'https://enterprise.colaberry.ai/site-v2/diagram-example.png';
+  const CHART = 'flowchart TD\n  api[Planner API] --> worker[Route worker]';
+
+  it('travels beside the source it depicts', () => {
+    const projected = projectArchitecture({
+      ...contentWith([]),
+      architecture: {
+        stack: ['TypeScript'], capabilities: [], diagramSource: CHART, diagramImageUrl: IMAGE,
+      },
+    });
+    expect(projected?.diagramImageUrl).toBe(IMAGE);
+    // The source is still there. Enterprise keeps drawing the live chart from it;
+    // the picture is for the surfaces that cannot. Mutating the projection to
+    // return the image INSTEAD of the source breaks this line.
+    expect(projected?.diagramSource).toBe(CHART);
+  });
+
+  it('is dropped when there is no source behind it', () => {
+    const projected = projectArchitecture({
+      ...contentWith([]),
+      architecture: { stack: ['TypeScript'], capabilities: [], diagramImageUrl: IMAGE },
+    });
+    expect(projected?.diagramImageUrl).toBeNull();
+  });
+
+  it('refuses a javascript: URL, which would be stored XSS in an img src', () => {
+    const projected = projectArchitecture({
+      ...contentWith([]),
+      architecture: {
+        stack: [], capabilities: [], diagramSource: CHART,
+        // eslint-disable-next-line no-script-url -- the payload under test
+        diagramImageUrl: 'javascript:alert(1)',
+      },
+    });
+    expect(projected?.diagramImageUrl).toBeNull();
+    // The chart itself is unaffected: a bad picture must not cost the record its
+    // architecture band.
+    expect(projected?.diagramSource).toBe(CHART);
+  });
+
+  it('is null on the ordinary record that names no image', () => {
+    const projected = projectArchitecture({
+      ...contentWith([]),
+      architecture: { stack: ['TypeScript'], capabilities: [], diagramSource: CHART },
+    });
+    expect(projected?.diagramImageUrl).toBeNull();
+  });
+
+  it('cannot on its own keep an otherwise empty section alive', () => {
+    expect(projectArchitecture({
+      ...contentWith([]),
+      architecture: { stack: [], capabilities: [], diagramImageUrl: IMAGE },
+    })).toBeNull();
+  });
+});

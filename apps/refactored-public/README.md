@@ -1,38 +1,7 @@
-# Refactored.ai — retired, redirects to Colaberry Enterprise
+# Refactored.ai — public site
 
-**There is no site here any more.** On 2026-09-07 the decision was taken to retire the old
-Refactored portal rather than redesign it. `refactored.ai` and `www.refactored.ai` now
-return `301` to `https://enterprise.colaberry.ai/` for every path.
-
-The app directory survives the retirement because the build and a test guard both need it,
-not because it serves anything. `src/index.html` is a single fallback page that should
-never render in production — see the comment at the top of that file for why it exists and
-why it deliberately does not auto-redirect.
-
-## Not in effect yet
-
-The redirect is committed, not live. `refactored.ai`'s apex and `www` are Route 53 ALIAS
-records pointing at an AWS Network Load Balancer that still serves the legacy learning
-platform. Moving them requires credentials for that AWS account, and as of 2026-09-07
-nobody has confirmed holding them.
-
-`refactored-preview.colaberry.ai` runs the identical redirect and **is** ours, so the
-behaviour can be verified there before any DNS moves.
-
-## What the redirect deliberately breaks
-
-The legacy platform answers on this hostname today: Auth0 sign-in at
-`login.refactored.ai`, a student dashboard, and roughly 1,900 `/course/` and `/learn/`
-pages. After the DNS move they stop answering. That is the intended outcome of retiring
-the portal, and it is the reason the cutover is worth doing deliberately rather than
-quietly.
-
-## Why every path lands on the destination's root
-
-`enterprise.colaberry.ai` is a React single-page app with a catch-all route, so every path
-there returns `200` whether or not it exists. `/individuals`, `/organizations` and
-`/enterprise` all answered `200` when checked and none is a real route. A path-preserving
-map would have passed testing and delivered every visitor to a not-found component.
+The public product site for Refactored.ai: the operating platform for the agentic
+workforce. Ten pages, no dependencies, no bundler.
 
 ## Build
 
@@ -40,13 +9,58 @@ map would have passed testing and delivered every visitor to a not-found compone
 npm run build          # emits dist/
 ```
 
-No dependencies, no bundler — see the comment at the top of `packages/app-build/index.js`.
+`packages/app-build` copies `src/` to `dist/`, inlines the v2 tracker, substitutes
+`{{brand.*}}` tokens and content-hashes every asset reference. No bundler — see the
+comment at the top of `packages/app-build/index.js` for why that is a decision rather
+than an omission.
 
-## What is kept, and why
+## What is here
 
-| Path | Kept because |
+| Route | Purpose |
 |---|---|
-| `legacy-capture/` | The archive of what the site was. Not built, not served. |
-| `port-from-capture.js` | Documents how the port was done. Guarded so it cannot be run by accident and resurrect the retired pages. |
-| `brand.config.js` | Stable slugs only. Still resolves the `refactored` brand for historical events and any lead that references it. |
-| `EXTRACTION.md` | What would move with this app if it were ever lifted out. |
+| `/` | The whole story: what the platform is, who it is for, how it is governed |
+| `/platform/` | The operating model in business terms |
+| `/ai-workforce/` | Managed AI employees, their limits, the accountability loop |
+| `/software-factory/` | Customer problem to operated application |
+| `/learning/` | Paths, projects, certification, portfolio |
+| `/trust-before-intelligence/` | How Ram's book shapes the product |
+| `/about/` | Origin, mission, recognition |
+| `/contact/` | The one form on the site |
+| `/privacy/`, `/terms/` | Legal |
+
+## Where it is served
+
+**`refactored-preview.colaberry.ai`**, and only there for now.
+
+`refactored.ai` itself is not served from this repository and cannot be. The shared nginx
+container terminates no TLS — every hostname in it listens on port 80 because Cloudflare
+handles HTTPS in front — and `refactored.ai` is the one Colaberry domain that is *not*
+behind Cloudflare. Pointing it at that container would refuse every HTTPS request.
+
+The production path is S3 plus CloudFront with an ACM certificate, which gets TLS without
+putting a Hetzner box in front of the domain. See
+`docs/architecture/multi-tenancy/REFACTORED_CUTOVER.md`.
+
+## Claims
+
+`claims.json` records every public capability claim, its status and what it rests on.
+**Only `verified` claims ship in the present tense.** `qualified` claims ship with their
+hedge attached, `roadmap` must be visibly marked, and `prohibited` must not appear at all.
+
+The register exists because a false capability claim is the one defect on a marketing
+site that no test catches — the page renders perfectly and every check stays green.
+
+Notably absent by policy: customer counts, revenue, placement or completion rates, market
+size, performance benchmarks, security certifications, and named customers or logos.
+
+## Conventions
+
+- Every page is a directory with `index.html`. Every internal link must resolve to a
+  shipped page — `backend/src/__tests__/appInternalLinks.test.ts` fails the build otherwise.
+- **Adding a route means adding it to `backend/src/services/pageCategoryMaps.ts`.**
+  A page missing from that map is categorised `other`, which is indistinguishable from a
+  page nobody visited: no error, no warning, and the funnel silently scores zero.
+  `brandPageCategories.test.ts` enforces it.
+- Design tokens live in `src/assets/design/`. Colours come from tokens only, never
+  literals, so both themes stay correct.
+- `brand.config.js` carries stable slugs only. Never a tenant ID, brand ID or secret.

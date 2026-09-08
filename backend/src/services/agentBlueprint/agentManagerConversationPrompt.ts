@@ -1,6 +1,8 @@
 import { getActiveDirectiveTexts } from '../managerDirectiveService';
 import { getApprovedMemoryTexts } from '../agentMemoryProposalService';
 import { getRecentActivitySummary } from './agentRecentActivitySummary';
+import { PLATFORM_SAFETY_RULES_BLOCK } from './platformSafetyRules';
+import { buildRoleCharterBlock, buildReliabilityStateBlock } from './agentContextLayers';
 
 /** Coarse relative time for prompt text only (not user-facing UI, which has
  * its own real timeAgo() in the frontend) — just needs to be clear enough
@@ -50,11 +52,20 @@ export async function buildAgentManagerConversationSystemPrompt(
   agentName: string,
   agentSystemPrompt: string | null,
 ): Promise<string> {
-  const parts: string[] = [
+  // Reese Agentic AI Employee mission, Capability 8 — runtime context layers
+  // 1-2 (immutable platform safety rules, then role charter and authority)
+  // precede the persona, same order as the student-facing path
+  // (agentSystemPrompt.ts) — one real order, not two drifting ones.
+  const parts: string[] = ['\n' + PLATFORM_SAFETY_RULES_BLOCK];
+
+  const roleCharterBlock = await buildRoleCharterBlock(agentId);
+  if (roleCharterBlock) parts.push('\n' + roleCharterBlock);
+
+  parts.push(
     agentSystemPrompt && agentSystemPrompt.trim()
       ? agentSystemPrompt
       : `You are ${agentName}, an AI agent at Colaberry. No system prompt has been configured for you yet — answer plainly and honestly, and say so if asked what your instructions are.`,
-  ];
+  );
 
   const directives = await getActiveDirectiveTexts(agentId);
   if (directives.length) {
@@ -71,6 +82,11 @@ export async function buildAgentManagerConversationSystemPrompt(
     const memoryLines = memories.map((m) => `- ${m}`).join('\n');
     parts.push('\nAPPROVED MEMORY (facts a manager has reviewed and approved about this context):\n' + memoryLines);
   }
+
+  // Layer 5 — current metric reliability/quarantine state. Previously
+  // missing entirely from this path (only the student-facing prompt had
+  // any reliability awareness, buried inside the learner-context block).
+  parts.push('\n' + (await buildReliabilityStateBlock()));
 
   const activity = await getRecentActivitySummary(agentId);
   if (activity.tickets.length || activity.events.length) {

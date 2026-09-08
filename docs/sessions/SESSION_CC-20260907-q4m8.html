@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, September 7, 2026 at 4:04 PM</div>
-    <div><span class="sid">CC-20260907-q4m8</span><span class="count">4 changes</span></div>
+    <div class="meta">Generated Tuesday, September 8, 2026 at 4:12 PM</div>
+    <div><span class="sid">CC-20260907-q4m8</span><span class="count">12 changes</span></div>
   </header>
   <main>
     
@@ -117,6 +117,126 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">`node apps/refactored-public/port-from-capture.js` exits 1 with the explanation. `brandPageCategories.test.ts` still asserts `categorizePagePath(&#39;/individuals&#39;, &#39;refactored&#39;) === &#39;program&#39;` and passes.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">The map is kept deliberately. Historical visitor events still carry those paths, and a categoriser that forgot them would silently reclassify years of recorded traffic as `other`.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>Found that the merged nginx redirect could never have worked</h2>
+          <span class="badge">2026-09-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">No code, a verification. `git grep &quot;listen 443\|ssl_certificate\|certbot&quot;` over `nginx/` returns **nothing** — the container terminates no TLS at all. Every hostname listens on port 80 because Cloudflare handles HTTPS in front of it.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`git grep -n &quot;listen &quot; origin/main -- nginx/*.conf` returns only `listen 80` variants.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`refactored.ai` is the one Colaberry domain **not** behind Cloudflare — Route 53 straight to AWS. Pointing it at our box would have refused every HTTPS request, breaking a domain that currently works. Caught before any DNS was touched, but this was a gap in what shipped on 2026-09-07: the cutover doc said &quot;issue a certificate with certbot&quot; and nothing in the config consumed one.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>Confirmed AWS write access, correcting an earlier overstatement</h2>
+          <span class="badge">2026-09-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Nothing. Evidence gathering.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Route 53 console — account **903195713680**, hosted zone **Z36GZ3BINBIAA6**, apex `A` an editable ALIAS to `refactored-nlb-prod-2edb9df08b1ba450.elb.us-west-2.amazonaws.com` (US West / Oregon). Corroborates the zone facts the cutover doc rests on: Google MX, Mandrill SPF, `_dmarc` at `p=reject`, an ACM validation CNAME.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">&quot;Nobody has confirmed AWS access&quot; was carried as the top blocker through several updates. Commit `d4198ec2` (2026-08-30) already recorded a session exporting all 45 zone records, which requires authenticated read — I should have checked the repo&#39;s own history against the assumption instead of repeating it.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>Retire the nginx path entirely; the redirect moves to AWS</h2>
+          <span class="badge">2026-09-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Deleted `nginx/refactored.conf`, `nginx/refactored-preview.conf` and the whole of `apps/refactored-public/`. Removed the app from `nginx/Dockerfile` (source copy, build invocation, docroot copy) and from `package.json`&#39;s `build:apps`. Rewrote `REFACTORED_CUTOVER.md` around the AWS design. Lowered the `brandPageCategories` app-count floor from 3 to 2, with the reason in a comment.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`npm run build:apps` green for both remaining apps. `node scripts/validate-app-boundaries.js` OK, 12 files. **78 tests across 5 guard suites pass** under `jest.ci.config.ts`. Backend `tsc --noEmit` exit 0 under TypeScript 5.7.3.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Target is CloudFront over an S3 redirect bucket with an ACM cert in `us-east-1`, plus a CloudFront Function collapsing every path to the destination root — S3&#39;s own redirect preserves the path, which would land visitors on the SPA&#39;s catch-all. ACM auto-renews, so no certbot and no 443 listener on a box that already has memory pressure. Route 53 changes last; rollback is two records.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">08</span>
+          <h2>Fix four dangling references the deletion would have left</h2>
+          <span class="badge">2026-09-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`package.json` `build:apps` and `.github/workflows/design-system-sync.yml` both still iterated `refactored-public` and would have failed outright. `README.md` and a comment in `nginx/opportunitylift.conf` referenced files that no longer exist.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">repo-wide grep for `refactored-public|nginx/refactored|refactored-preview` across json/yml/conf/ts/js returns nothing outside historical docs. `npm run build:apps` runs clean.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Two of the four were live breakages, not cosmetics. Grepping after a deletion is what caught them.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">09</span>
+          <h2>Correct a mis-scope: &quot;route everything to enterprise&quot; meant links, not instead-of-a-site</h2>
+          <span class="badge">2026-09-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Scope only. The operator confirmed a new Refactored.ai site was wanted all along; the redirect built earlier had answered the wrong question.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Operator confirmation.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The retirement itself was still right — nothing from the old portal came back. The clean slate turned out to be the ideal starting point: no Bootstrap, no jQuery, no CloudFront, no legacy markup to fight.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">10</span>
+          <h2>Build the Refactored.ai public site</h2>
+          <span class="badge">2026-09-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Recreated `apps/refactored-public` as a real product site. Ten pages: `/`, `/platform/`, `/ai-workforce/`, `/software-factory/`, `/learning/`, `/trust-before-intelligence/`, `/about/`, `/contact/`, `/privacy/`, `/terms/`. A full design token system in `src/assets/design/` on the spec&#39;s &quot;Terminal&quot; direction — IBM Plex Mono for headings, Plex Sans for body, dark as the committed default with light honoured through both `prefers-color-scheme` and an explicit `data-theme`. Restored the app to `package.json`, the design-sync workflow, the README and the nginx image; recreated `nginx/refactored-preview.conf` to serve it. Added the ten routes to `pageCategoryMaps.ts` and restored the app-count floor to 3.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Build green. Boundaries OK, 15 files. **105 tests across 5 guard suites pass** (up from 78 — every new page is checked for categorisation and link integrity). Playwright over all 10 routes × 2 themes × 2 widths: all 200, **no horizontal overflow at 375px or 1440px**, no console or page errors, and tab switching verified to actually change panels. Built HTML references only Google Fonts and the platform origin — zero CDN debt, against 421 CloudFront references in the site it replaces.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`claims.json` records every public capability claim and what it rests on. Verified from the codebase before writing copy: Reese (188 files), Cory (194), Maya (50), Cora (35); Delivery OS covers the whole discovery→design→acceptance→quality arc. **&quot;Software Factory&quot; appears in ZERO backend files** — it ships as a marketing name for the real Delivery OS capability, recorded as `qualified` rather than `verified`. No customer counts, revenue, placement rates, benchmarks or security certifications appear anywhere, and the homepage says so explicitly rather than staying quiet about it.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">11</span>
+          <h2>Two visual defects found by looking, not by testing</h2>
+          <span class="badge">2026-09-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`p, li { max-width: 66ch }` was leaking into component chrome, so the hero&#39;s status bar stopped filling its container. Added a `.no-measure` opt-out and applied it where components own the paragraph. Separately, `.wrap-narrow` centred itself, so a narrow hero started further right than the full-width section beneath it — the constraint now falls on the container&#39;s children so both share one left edge.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Re-shot all 40 viewport combinations after each fix; &quot;no problems found&quot; both times, and the alignment confirmed by eye at x=152 on both blocks.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Neither defect fails a test. Both were only visible in a screenshot, which is the argument for looking at the thing.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">12</span>
+          <h2>The screenshot harness was lying, and nearly took the report with it</h2>
+          <span class="badge">2026-09-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Nothing shipped. The scratchpad harness served 404s for every request: `path.join` emits backslashes on Windows while the directory argument arrived with forward slashes, so its `file.startsWith(DIST)` guard rejected everything. Fixed with `path.resolve` on both sides.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Before the fix, `document.body.innerHTML.length` was **74** and the page had no title; after, 24,983 with the right title and H1.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Forty screenshots had been captured of an empty error page and the run reported no failures, because the crash came before the problem list printed. What caught it was asserting on a click that had to work — `#tab-client` timing out. An assertion on real behaviour caught what forty images did not.</span></div>
           
         </div>
       </article>

@@ -242,6 +242,71 @@
           </form>
 
           <!--
+            THE SECOND DOOR, AND IT IS A DOOR, NOT A FALLBACK.
+
+            Ali's decision was that voice is an EQUAL path with the form always
+            offered - never the thing you are pushed to if you could not manage
+            typing. So it sits beside the written interview with the same weight,
+            says plainly that it makes no difference which you choose, and the
+            written one stays on screen either way.
+
+            Consent is explicit and specific: an AI, a recording, and a call now.
+            "Contact me" would not cover any of those.
+          -->
+          <section class="voice-door" aria-labelledby="vd-h">
+            <div class="card-label">
+              <span class="badge" aria-hidden="true">2</span> Or talk instead of typing
+            </div>
+            <h2 id="vd-h">Have our AI call you</h2>
+            <p class="note">
+              The same conversation, on the phone, in about five minutes. <strong>It makes
+              no difference which one you choose</strong> and nobody is scored on either.
+              It tells you it is an AI when you pick up, and if it is a bad moment just say
+              so and it will offer to call another time.
+            </p>
+            <p class="note">
+              <strong>The number may not look like ours.</strong> OpportunityLift shares a
+              phone line with Colaberry, the training provider it works with, so the caller
+              ID will show their number rather than a Career Pathways Network one. Worth
+              knowing before an unfamiliar number rings you.
+            </p>
+
+            <form class="intake" id="scholarship-call" data-form="scholarship_interview_call"
+                  data-thanks="Thank you. If everything is working you should get a call shortly. If it does not come through, the written version above works just as well and a person will read either.">
+              <h2>Call me</h2>
+              <p class="note">Both fields are needed: the number to ring, and an email so we know who you are.</p>
+
+              <label for="call-phone">Phone number</label>
+              <input id="call-phone" name="phone" type="tel" autocomplete="tel" required
+                     placeholder="+1 555 0100" />
+
+              <label for="call-email">Email</label>
+              <input id="call-email" name="email" type="email" autocomplete="email" required />
+
+              <label for="call-name">Your name</label>
+              <input id="call-name" name="name" type="text" autocomplete="name" />
+
+              <label for="call-message">What would you like to be able to build or do?</label>
+              <textarea id="call-message" name="message" rows="2"
+                        placeholder="An app that helps my mum track her medication."></textarea>
+
+              <div class="consent">
+                <input id="call-consent" name="consent_contact" type="checkbox" required />
+                <label for="call-consent">
+                  I agree to be called now by an AI assistant on this number, and understand
+                  the call is recorded and written up so a person at Career Pathways Network
+                  can read it.
+                </label>
+              </div>
+
+              <button class="btn btn-secondary" type="submit" data-cta="Call me now">
+                Call me now
+              </button>
+              <div class="status" role="status" aria-live="polite"></div>
+            </form>
+          </section>
+
+          <!--
             THE CONVERSATION, IN THE PAGE.
 
             Hidden until the form is submitted, because an empty chat box beside a

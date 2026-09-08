@@ -10,6 +10,15 @@ const RegisterSchema = z.object({
   name: z.string().trim().min(1, 'name is required'),
   company: z.string().trim().max(255).optional(),
   email: z.string().trim().toLowerCase().email('a valid email is required'),
+  // Which entry site they came from — this is what decides Training vs Business
+  // vs Consulting. Optional, and its absence keeps the old behaviour
+  // (management_account), so any existing caller that never sends it is
+  // unaffected. Generous length because a referrer URL is legitimately long.
+  entrySite: z.string().trim().max(500).optional(),
+  // `accountType` is deliberately NOT accepted from a public body. It is an
+  // internal override, and honouring it here would let anyone self-assign their
+  // account type — a consulting account skips the training enrollment, so this
+  // is a privilege boundary rather than a preference.
 });
 
 const InvitesSchema = z.object({

@@ -246,6 +246,33 @@ const SEEDS: SeedSource[] = [
         required_fields: ['email'],
       },
       {
+        // /scholarships/, the voice door beside the written interview.
+        //
+        // Phone AND email are both required because `request_callback` refuses
+        // without either: the phone is what it dials, the email is how the lead
+        // resolves idempotently. Making them optional here would produce a form
+        // that submits happily and never rings.
+        //
+        // A row here is only half of it - the call fires from a RoutingRule, seeded
+        // in seedRoutingRules.ts, and speaks with the prompt in
+        // services/cpn/scholarshipCallPrompt.ts. All three, or nothing happens.
+        slug: 'scholarship_interview_call',
+        name: 'Scholarship Interview Call',
+        page: '/scholarships',
+        form_name: 'scholarship-interview-call',
+        description: 'Request an AI voice interview about a scholarship',
+        field_map: {
+          name: 'name',
+          email: 'email',
+          phone: 'phone',
+          city_state: 'metadata.city_state',
+          message: 'metadata.message',
+          consent_contact: 'consent_contact',
+          page_url: 'metadata.page_url',
+        },
+        required_fields: ['email', 'phone'],
+      },
+      {
         // /support/. Named `champion_interest` rather than `donor_interest`
         // because that is the slug EXTRACTION.md already declared, and renaming a
         // published identifier to read better is how attribution breaks.

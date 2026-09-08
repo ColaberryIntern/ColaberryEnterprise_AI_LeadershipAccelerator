@@ -45,3 +45,12 @@ PROGRESS.md merge=union
 # guarantee. One careless commit from a machine with core.autocrlf=true would have
 # been enough to break deploys entirely.
 *.sh text eol=lf
+
+# Vendored brand design systems, written by backend/src/scripts/syncDesignSystems.js.
+#
+# These files must match their source repository BYTE FOR BYTE, because that byte
+# comparison is how the sync decides whether anything changed. Git's autocrlf would
+# rewrite the line endings on checkout, every synced file would then differ from
+# upstream on a fresh clone, and the scheduled job would open an identical pull request
+# every single day forever. -text disables the conversion entirely.
+apps/*/src/assets/design/** -text

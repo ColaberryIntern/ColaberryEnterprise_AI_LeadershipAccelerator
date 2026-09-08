@@ -21,11 +21,25 @@ const SUPPORTED_RENDER_BANDS = new Set<string>([
   'presentation', 'demo', 'interview', 'build_story', 'github', 'skills_jar',
   'milestone', 'achievement', 'badge', 'streak', 'setup_lab', 'prompt_catalog', 'build_artifacts',
   'architect_mindset',
+  'claude_studio',   // Claude Studio — four-stage Claude.ai loop (ClaudeStudioRender, drawer + workspace)
+  // peer_wins was missing from this list although CardDetailBody has rendered it
+  // via PeerWinsPanel since the Cohort Wins build. The list was stale, not the
+  // renderer — added here so the guard reflects what the Classroom can actually draw.
+  'peer_wins',
 ]);
 
 describe('typeRegistry', () => {
   it('registers the 51 canonical curriculum types', () => {
-    // 38 base (35 + testimonial/podcast/blog; 'overview' retired 2026-07-21) + setup_lab (Claude Code enablement) + 11 intelligence-pipeline types (community_live_session + 10 generators) + architect_mindset (The Architect Time Machine).
+    // 37 base (35 + testimonial/podcast/blog; 'overview' retired 2026-07-21) + setup_lab
+    // (Claude Code enablement) + 11 intelligence-pipeline types (community_live_session +
+    // 10 generators) + architect_mindset (The Architect Time Machine) + claude_studio
+    // (the Claude.ai weekly studio).
+    //
+    // NOTE: this expectation read 51 while the registry held 50, so the assertion was
+    // already red on main before claude_studio was added — the arithmetic in the old
+    // comment described a type that had been removed without the count being updated.
+    // Adding claude_studio brings the two back into agreement; the breakdown above is
+    // recounted against the actual array rather than carried forward.
     expect(CARD_TYPES.length).toBe(51);
     expect(allTypes().length).toBeGreaterThanOrEqual(51);
   });

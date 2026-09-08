@@ -36,6 +36,11 @@ import {
 import { sendSmsViaGhl } from '../services/ghlService';
 import { getTestOverrides } from '../services/settingsService';
 import Lead from '../models/Lead';
+import {
+  InvalidBrandError,
+  listAssignableBrands,
+  resolveCampaignBrand,
+} from '../services/campaignBrandAssignment';
 
 // ── Campaign CRUD ────────────────────────────────────────────────────
 
@@ -56,7 +61,18 @@ export async function handleListCampaigns(req: Request, res: Response, next: Nex
 
 export async function handleCreateCampaign(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { name, description, type, sequence_id, targeting_criteria, channel_config, budget_total, ai_system_prompt } = req.body;
+    const {
+      name,
+      description,
+      type,
+      sequence_id,
+      targeting_criteria,
+      channel_config,
+      budget_total,
+      ai_system_prompt,
+      brand_id,
+      sender_profile_id,
+    } = req.body;
 
     if (!name || !type) {
       res.status(400).json({ error: 'name and type are required' });
@@ -75,6 +91,19 @@ export async function handleCreateCampaign(req: Request, res: Response, next: Ne
       return;
     }
 
+    // Resolved BEFORE the insert so a bad brand id is a 400 rather than a campaign
+    // that exists with a dangling foreign key.
+    let brand;
+    try {
+      brand = await resolveCampaignBrand({ brandId: brand_id, senderProfileId: sender_profile_id });
+    } catch (err) {
+      if (err instanceof InvalidBrandError) {
+        res.status(400).json({ error: err.message });
+        return;
+      }
+      throw err;
+    }
+
     const campaign = await createCampaign({
       name,
       description,
@@ -85,9 +114,12 @@ export async function handleCreateCampaign(req: Request, res: Response, next: Ne
       budget_total,
       ai_system_prompt,
       created_by: adminId,
+      brand_id: brand.brand_id,
+      tenant_id: brand.tenant_id,
+      sender_profile_id: sender_profile_id ?? null,
     });
 
-    res.status(201).json({ campaign });
+    res.status(201).json({ campaign, brand_resolved_from: brand.resolved_from });
   } catch (error) {
     next(error);
   }
@@ -106,9 +138,49 @@ export async function handleGetCampaign(req: Request, res: Response, next: NextF
   }
 }
 
+/**
+ * Brands a campaign can be created under.
+ *
+ * Its own endpoint rather than a field on some existing payload, because the
+ * campaign form needs the list BEFORE a campaign exists.
+ */
+export async function handleListAssignableBrands(
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    res.json({ brands: await listAssignableBrands() });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function handleUpdateCampaign(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const campaign = await updateCampaign(req.params.id as string, req.body);
+    // Re-resolved on update too, so correcting a campaign's brand is possible and
+    // an invalid one is still refused rather than written.
+    const patch = { ...req.body };
+    if ('brand_id' in patch || 'sender_profile_id' in patch) {
+      try {
+        const brand = await resolveCampaignBrand({
+          brandId: patch.brand_id,
+          senderProfileId: patch.sender_profile_id,
+        });
+        patch.brand_id = brand.brand_id;
+        // Only overwrite the tenant when a brand actually resolved; clearing it
+        // because someone unset the brand would orphan the campaign from its tenant.
+        if (brand.tenant_id) patch.tenant_id = brand.tenant_id;
+      } catch (err) {
+        if (err instanceof InvalidBrandError) {
+          res.status(400).json({ error: err.message });
+          return;
+        }
+        throw err;
+      }
+    }
+
+    const campaign = await updateCampaign(req.params.id as string, patch);
     if (!campaign) {
       res.status(404).json({ error: 'Campaign not found' });
       return;

@@ -60,6 +60,13 @@ describe('the ingest response key', () => {
     // Both features hang off this one identity; if either stops using it they have drifted
     // apart and one of them will be reading a token the other never set.
     expect(page).toContain('startInterview(payloadId');
-    expect(page).toContain('startPreview(callPayloadId)');
+
+    // The call-me path hands the SAME resolved id to the preview. It used to call
+    // `startPreview(callPayloadId)` directly and that threw on every request - the function
+    // belongs to the other IIFE - so the hand-off crosses by event now. What this test
+    // guards is the identity, not the mechanism: it must still be this id that travels.
+    expect(page).toMatch(/token: callPayloadId/);
+    expect(page).toMatch(/addEventListener\('flotation:preview-token'/);
+    expect(page).toMatch(/startPreview\(token\)/);
   });
 });

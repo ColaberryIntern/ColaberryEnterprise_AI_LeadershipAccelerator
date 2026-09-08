@@ -1,0 +1,45 @@
+WEBVTT
+
+1
+00:00:00.500 --> 00:00:07.460
+A GitHub profile is already proof of what someone can do. Almost nobody reads it that way.
+
+2
+00:00:08.600 --> 00:00:13.390
+Sign in with GitHub. That is the entire setup.
+
+3
+00:00:14.500 --> 00:00:20.240
+Repositories import from one or more GitHub accounts, public or private.
+
+4
+00:00:21.300 --> 00:00:28.670
+Six phases analyse each repository. Every phase records its own status and its own error.
+
+5
+00:00:29.800 --> 00:00:34.620
+Nothing is written about a repository until it has been analysed.
+
+6
+00:00:35.700 --> 00:00:41.400
+One failing agent costs one section of the portfolio, not the whole run.
+
+7
+00:00:42.500 --> 00:00:51.470
+Framework detection writes a mandatory override into the prompt. The model phrases the finding; it does not determine it.
+
+8
+00:00:52.600 --> 00:00:58.350
+The headline and summary are generated from the code, not typed by the developer.
+
+9
+00:00:59.400 --> 00:01:07.870
+Every figure is counted from the repository at commit 966e5d69, and can be re-derived.
+
+10
+00:01:09.000 --> 00:01:16.240
+Nothing covers the pipeline, the agents or the endpoints. The record says so itself.
+
+11
+00:01:17.300 --> 00:01:21.420
+Every claim on the page is pinned to a commit you can open.

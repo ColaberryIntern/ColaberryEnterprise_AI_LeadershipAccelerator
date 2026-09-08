@@ -12,15 +12,26 @@ jest.mock('../../managerDirectiveService', () => ({
 jest.mock('../../agentMemoryProposalService', () => ({
   getApprovedMemoryTexts: jest.fn(),
 }));
+// Reese Agentic AI Employee mission, Capability 8 — agentContextLayers.ts
+// calls real services backed by real models (AgentRoleCharter,
+// MetricReliabilityRecord); mocked wholesale here since this file only
+// needs its 2 new layers to render predictable, non-empty text, not their
+// own real logic (agentContextLayers.test.ts covers that).
+jest.mock('../agentContextLayers', () => ({
+  buildRoleCharterBlock: jest.fn(() => Promise.resolve('')),
+  buildReliabilityStateBlock: jest.fn(() => Promise.resolve('DATA RELIABILITY STATE: No data sources are currently flagged unreliable — all known sources are healthy.')),
+}));
 
 import { getLearnerContextBlock } from '../../learnerContextService';
 import { getActiveDirectiveTexts } from '../../managerDirectiveService';
 import { getApprovedMemoryTexts } from '../../agentMemoryProposalService';
+import { buildRoleCharterBlock } from '../agentContextLayers';
 import { buildAgentSystemPrompt } from '../agentSystemPrompt';
 
 const mockLearnerContext = getLearnerContextBlock as unknown as jest.Mock;
 const mockActiveDirectives = getActiveDirectiveTexts as unknown as jest.Mock;
 const mockApprovedMemory = getApprovedMemoryTexts as unknown as jest.Mock;
+const mockRoleCharter = buildRoleCharterBlock as unknown as jest.Mock;
 
 const CURRICULUM_QA_PERSONA = `You are CurriculumQA, a review agent that checks generated curriculum content for
 factual and pedagogical quality before it reaches students.
@@ -82,14 +93,18 @@ describe('buildAgentSystemPrompt', () => {
 });
 
 describe('buildAgentSystemPrompt — manager directive injection (Checkpoint C, 2026-08-28)', () => {
-  it('regression: omitting agentId never calls getActiveDirectiveTexts at all (byte-for-byte backward compat with every pre-Checkpoint-C caller)', async () => {
+  it('regression: omitting agentId never calls getActiveDirectiveTexts, getApprovedMemoryTexts, or buildRoleCharterBlock at all — no directive/memory/role-charter block, though the new universal layers (safety rules, reliability state) still appear regardless of agentId', async () => {
     mockLearnerContext.mockResolvedValue('');
     const prompt = await buildAgentSystemPrompt(CURRICULUM_QA_PERSONA, 'enrollment-6');
 
     expect(mockActiveDirectives).not.toHaveBeenCalled();
     expect(mockApprovedMemory).not.toHaveBeenCalled();
+    expect(mockRoleCharter).not.toHaveBeenCalled();
     expect(prompt).not.toContain('MANAGER DIRECTIVES');
     expect(prompt).not.toContain('APPROVED MEMORY');
+    expect(prompt).not.toContain('ROLE CHARTER');
+    expect(prompt).toContain('PLATFORM SAFETY RULES');
+    expect(prompt).toContain('DATA RELIABILITY STATE');
   });
 
   it('happy path: agentId with active directives injects a real MANAGER DIRECTIVES block', async () => {
@@ -161,5 +176,76 @@ describe('buildAgentSystemPrompt — approved memory injection (Checkpoint E, 20
     expect(prompt).toContain('MANAGER DIRECTIVES');
     expect(prompt).toContain('APPROVED MEMORY');
     expect(prompt.indexOf('APPROVED MEMORY')).toBeGreaterThan(prompt.indexOf('MANAGER DIRECTIVES'));
+  });
+});
+
+describe('buildAgentSystemPrompt — runtime context layers (Capability 8, 2026-09-08)', () => {
+  it('platform safety rules are always the first content in the prompt, ahead of the persona block', async () => {
+    mockLearnerContext.mockResolvedValue('');
+
+    const prompt = await buildAgentSystemPrompt(CURRICULUM_QA_PERSONA, 'enrollment-13');
+
+    const safetyIndex = prompt.indexOf('PLATFORM SAFETY RULES');
+    const personaIndex = prompt.indexOf('CurriculumQA');
+    expect(safetyIndex).toBeGreaterThanOrEqual(0);
+    expect(safetyIndex).toBeLessThan(personaIndex);
+  });
+
+  it('the reliability-state layer always appears, even with no agentId and no learner context', async () => {
+    mockLearnerContext.mockResolvedValue('');
+
+    const prompt = await buildAgentSystemPrompt(CURRICULUM_QA_PERSONA, 'enrollment-14');
+
+    expect(prompt).toContain('DATA RELIABILITY STATE');
+  });
+
+  it('happy path: a real role charter (agentId set, charter exists) is injected between safety rules and the persona block', async () => {
+    mockLearnerContext.mockResolvedValue('');
+    mockActiveDirectives.mockResolvedValue([]);
+    mockRoleCharter.mockResolvedValue('ROLE CHARTER: You are the Curriculum Reviewer. Check content before it reaches students.');
+
+    const prompt = await buildAgentSystemPrompt(CURRICULUM_QA_PERSONA, 'enrollment-15', { agentId: 'agent-7' });
+
+    expect(mockRoleCharter).toHaveBeenCalledWith('agent-7');
+    const safetyIndex = prompt.indexOf('PLATFORM SAFETY RULES');
+    const charterIndex = prompt.indexOf('ROLE CHARTER');
+    const personaIndex = prompt.indexOf('CurriculumQA');
+    expect(safetyIndex).toBeLessThan(charterIndex);
+    expect(charterIndex).toBeLessThan(personaIndex);
+  });
+
+  it('boundary: agentId set but no charter written yet (empty string) means no ROLE CHARTER block, no crash', async () => {
+    mockLearnerContext.mockResolvedValue('');
+    mockActiveDirectives.mockResolvedValue([]);
+    mockRoleCharter.mockResolvedValue('');
+
+    const prompt = await buildAgentSystemPrompt(CURRICULUM_QA_PERSONA, 'enrollment-16', { agentId: 'agent-8' });
+
+    expect(prompt).not.toContain('ROLE CHARTER');
+  });
+
+  it('extraBlocksBeforeClosing lands before the closing line, not appended after the whole prompt', async () => {
+    mockLearnerContext.mockResolvedValue('');
+
+    const prompt = await buildAgentSystemPrompt(CURRICULUM_QA_PERSONA, 'enrollment-17', {
+      extraBlocksBeforeClosing: ['STUDENT SUCCESS 360: real evidence block.'],
+    });
+
+    const extraIndex = prompt.indexOf('STUDENT SUCCESS 360');
+    const closingIndex = prompt.indexOf('direct-message conversation');
+    expect(extraIndex).toBeGreaterThanOrEqual(0);
+    expect(extraIndex).toBeLessThan(closingIndex);
+  });
+
+  it('empty/falsy entries in extraBlocksBeforeClosing are skipped, never rendered as blank sections', async () => {
+    mockLearnerContext.mockResolvedValue('');
+
+    const prompt = await buildAgentSystemPrompt(CURRICULUM_QA_PERSONA, 'enrollment-18', {
+      extraBlocksBeforeClosing: ['', 'REAL BLOCK: present.'],
+    });
+
+    expect(prompt).toContain('REAL BLOCK: present.');
+    // no stray leading blank line from the skipped empty entry
+    expect(prompt).not.toContain('\n\n\nREAL BLOCK');
   });
 });

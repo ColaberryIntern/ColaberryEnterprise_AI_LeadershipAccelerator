@@ -152,25 +152,49 @@ export const BRAND_PAGE_CATEGORIES: Record<string, BrandPageCategoryMap> = {
    * Several h1s in the capture are navigation text ("LEARN") rather than page headings,
    * so these categories were read from each page's content and forms, not its heading.
    */
-  // RETIRED 2026-09-07, AND DELIBERATELY LEFT INTACT.
+  // TWO GENERATIONS OF SITE IN ONE MAP, DELIBERATELY.
   //
-  // refactored.ai now returns 301 to enterprise.colaberry.ai for every path, and the
-  // eleven ported pages below were deleted from apps/refactored-public/src. The map stays
-  // for two reasons. Historical visitor events still carry these paths, and a categoriser
-  // that stopped recognising them would silently reclassify years of recorded traffic as
-  // `other` — rewriting the past to match the present. And brandPageCategories.test.ts
-  // asserts several of these entries directly, as the canonical example of one brand's
-  // rules not leaking into another's.
+  // The paths below the divider belong to the ported portal that was retired on
+  // 2026-09-07. They are kept because historical visitor events still carry them, and a
+  // categoriser that stopped recognising them would silently reclassify years of recorded
+  // traffic as `other` — rewriting the past to match the present. brandPageCategories.test.ts
+  // also asserts several of them directly, as the canonical example of one brand's rules
+  // not leaking into another's.
   //
-  // Do not add to this map. A new page on this brand means the retirement was reversed,
-  // which is a decision to make in docs/architecture/multi-tenancy/REFACTORED_CUTOVER.md
-  // before it is a line here.
+  // The paths above the divider are the site that replaced it: a real product site for
+  // Refactored.ai rather than a copy of the old learning portal. Every one of them exists
+  // in apps/refactored-public/src, and the on-disk guard checks that.
+  //
+  // The two generations barely collide: the new site uses `/contact` where the old one
+  // used `/contact-us`, and `/platform` where the old one used `/platform-interest`.
+  // `/privacy` and `/terms` are the deliberate exception — the same path in both, meaning
+  // the same thing, so one `legal` entry serves old events and new pages alike.
   refactored: {
     exact: {
-      // The only path still on disk: a fallback page that should never render, because
-      // nginx redirects ahead of it. See apps/refactored-public/src/index.html.
       '/': 'homepage',
-      // The three audience pages: what Refactored offers, and to whom.
+
+      // --- Current site ---------------------------------------------------
+      // The product pages. Each explains part of the offering to an audience that is
+      // still deciding, which is what `program` means for every other brand here.
+      '/platform': 'program',
+      '/ai-workforce': 'program',
+      '/software-factory': 'program',
+      '/learning': 'program',
+      // The methodology page. Deliberately NOT `case_studies`: it argues a position and
+      // shows no outcomes, so scoring it as evidence would inflate a signal against a
+      // page that proves nothing.
+      '/trust-before-intelligence': 'program',
+      // Deliberately NOT `homepage`. That is Colaberry's rule for its own /about, and
+      // inheriting it here is the exact cross-brand leak this module exists to stop.
+      '/about': 'about',
+      // The one page on the new site carrying a form and a submit CTA. `contact` rather
+      // than `enroll`: its promise is "a person will reply", not a commitment to buy.
+      // The form's own form_started (30) and form_submitted (50) carry the real intent
+      // regardless of this category.
+      '/contact': 'contact',
+
+      // --- Retired portal, kept for historical events ---------------------
+      // The three audience pages: what Refactored offered, and to whom.
       '/individuals': 'program',
       '/organizations': 'program',
       '/enterprise': 'program',

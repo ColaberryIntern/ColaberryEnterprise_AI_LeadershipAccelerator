@@ -33,7 +33,7 @@
 import { QueryTypes } from 'sequelize';
 import { sameContent } from './lib/certItemContent';
 import { sequelize } from '../config/database';
-import { ensureCertPrepSchema, missingCertTables } from '../db/ensureCertPrepSchema';
+import { ensureCertPrepSchema, missingCertTables, CERT_TABLES } from '../db/ensureCertPrepSchema';
 import { seedBlueprint, getCurrentBlueprint } from '../services/certPrep/certBlueprintService';
 import { createDraftRevision, validateRevision, setReviewStatus } from '../services/certPrep/certQuestionBankService';
 import { CCAR_FOUNDATIONS_BLUEPRINT } from '../data/certBlueprints/ccarFoundations';
@@ -81,7 +81,10 @@ async function main(): Promise<void> {
   if (missing.length > 0) {
     throw new Error(`schema incomplete — missing ${missing.join(', ')}`);
   }
-  log('schema          : all 8 tables present');
+  // Counted, not written down: a hard-coded number here said "all 8" after a
+  // ninth table existed, which is the same class of lie the post-condition
+  // in ensureCertPrepSchema exists to prevent.
+  log(`schema          : all ${CERT_TABLES.length} tables present`);
 
   const seeded = await seedBlueprint(CCAR_FOUNDATIONS_BLUEPRINT);
   log(`blueprint       : track ${seeded.track_id} ${seeded.blueprint_version} `

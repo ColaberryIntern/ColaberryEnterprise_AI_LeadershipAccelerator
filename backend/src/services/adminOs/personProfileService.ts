@@ -3,6 +3,7 @@ import { sequelize } from '../../config/database';
 import { LifecycleStage } from './lifecycle';
 import { normalizeEmail } from './identityResolution';
 import { visibleStagesForSections } from './personScope';
+import { EventDomain, TimelineEvent, domainsForSections, getPersonTimeline } from './personTimelineService';
 
 /**
  * The 360° person profile.
@@ -31,14 +32,67 @@ import { visibleStagesForSections } from './personScope';
  * scoped surface shows everything, so they are handled separately below.
  */
 
+/**
+ * Everything the Lead detail page shows, plus what it does not.
+ *
+ * The brief requires existing lead/enrollment/visitor detail URLs to resolve to
+ * this profile, which only works if the profile is a SUPERSET. The first version
+ * carried six fields against that page's contact block, tracking block,
+ * qualification, ownership, consent and notes — so it was a downgrade for anyone
+ * who opened it instead of the lead page.
+ */
 export interface AcquisitionPanel {
+  // Contact
+  phone: string | null;
+  role: string | null;
+  companySize: string | null;
+  industry: string | null;
+  linkedinUrl: string | null;
+  // Attribution
   source: string | null;
   formType: string | null;
   utmSource: string | null;
   utmCampaign: string | null;
+  pageUrl: string | null;
+  interestArea: string | null;
+  message: string | null;
+  firstSeen: string | null;
+  // Qualification
   pipelineStage: string | null;
   leadScore: number | null;
-  firstSeen: string | null;
+  temperature: string | null;
+  temperatureUpdatedAt: string | null;
+  qualificationLevel: string | null;
+  interestLevel: string | null;
+  maturityScore: number | null;
+  // Ownership and follow-up
+  status: string | null;
+  assignedAdmin: string | null;
+  lastContactedAt: string | null;
+  notes: string | null;
+  /** The brief asks for consent explicitly. Null means never recorded. */
+  consentContact: boolean | null;
+  evaluating90Days: boolean | null;
+  createdAt: string | null;
+  leadId: number | null;
+  /** The denominator the Lead page shows beside the score. */
+  leadScoreMax: number;
+}
+
+export interface AppointmentRow {
+  kind: 'appointment' | 'strategy_call';
+  title: string | null;
+  scheduledAt: string | null;
+  status: string | null;
+  notes: string | null;
+  meetLink: string | null;
+}
+
+export interface AutomationRow {
+  type: string;
+  status: string | null;
+  detail: string | null;
+  createdAt: string | null;
 }
 
 export interface LearningPanel {
@@ -64,6 +118,26 @@ export interface EngagementPanel {
   sites: string[];
 }
 
+/**
+ * The journey summary the brief asks for: first touch, time in stage, and the
+ * shape of the relationship, above the detail.
+ *
+ * Every figure is counted, not estimated. A count we cannot compute is null
+ * rather than 0 — the same rule the metric registry enforces everywhere else.
+ */
+export interface JourneySummary {
+  firstTouch: string | null;
+  lastActivity: string | null;
+  daysKnown: number | null;
+  sessions: number;
+  pageEvents: number;
+  campaigns: number;
+  emailsSent: number;
+  enrollments: number;
+  /** Highest recorded intent score, when the caller may see sales data. */
+  intentScore: number | null;
+}
+
 export interface PersonProfile {
   email: string;
   name: string | null;
@@ -76,6 +150,23 @@ export interface PersonProfile {
   learning?: LearningPanel[];
   billing?: BillingPanel[];
   engagement?: EngagementPanel | null;
+  /** The summary above the detail. Progressive disclosure, as the brief asks. */
+  appointments?: AppointmentRow[];
+  automation?: AutomationRow[];
+  /**
+   * Why intent and temperature are absent, when they are.
+   *
+   * They are acquisition signals. Once somebody has enrolled, "this student is
+   * hot" tells a reader nothing they can act on — the question that scoring
+   * answered has already been answered by the enrolment. Suppressed rather than
+   * shown, and explained rather than silently missing.
+   */
+  intentSuppressedReason?: string;
+  journey?: JourneySummary;
+  /** One ordered history across every domain the caller may see. */
+  timeline?: TimelineEvent[];
+  /** Domains excluded from the timeline by this caller's permissions. */
+  timelineDomains?: EventDomain[];
   /** Named so the UI can say what it is NOT showing, rather than silently omitting. */
   withheldPanels: string[];
 }
@@ -89,6 +180,24 @@ export interface ProfileQuery {
    */
   visibleEnrollmentIds: string[] | null;
 }
+
+/**
+ * Stages at which intent and temperature stop being informative.
+ *
+ * Ali, 2026-09-08: "if they are enrolled, hide their current intent. Knowing
+ * that an enrolled student is hot, is not informing to us."
+ *
+ * He is right, and the reason is worth stating: a temperature or intent score
+ * answers "how likely are they to convert". Once they HAVE converted, the score
+ * is a stale answer to a settled question, and leaving it on the page invites
+ * someone to act on it as though it still meant something.
+ */
+const POST_CONVERSION_STAGES: readonly string[] = [
+  'enrolled_student', 'active_learner', 'graduate', 'returning_customer',
+];
+
+/** The Lead page's score denominator, kept here so both surfaces agree. */
+const LEAD_SCORE_MAX = 105;
 
 /** Which section grants which panel. One place, so a panel cannot drift. */
 const PANEL_SECTIONS: Record<string, readonly string[]> = {
@@ -163,14 +272,41 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
   // ── Acquisition ───────────────────────────────────────────────────────────
   if (may('acquisition', query.sections)) {
     const acq = await sequelize.query<AcquisitionPanel>(
-      `SELECT source, form_type AS "formType", utm_source AS "utmSource",
-              utm_campaign AS "utmCampaign", pipeline_stage AS "pipelineStage",
-              lead_score AS "leadScore", min(created_at) OVER () AS "firstSeen"
+      `SELECT id AS "leadId", phone, role, company_size AS "companySize", industry,
+              linkedin_url AS "linkedinUrl",
+              source, form_type AS "formType", utm_source AS "utmSource",
+              utm_campaign AS "utmCampaign", page_url AS "pageUrl",
+              interest_area AS "interestArea", message,
+              pipeline_stage AS "pipelineStage", lead_score AS "leadScore",
+              lead_temperature AS temperature,
+              temperature_updated_at AS "temperatureUpdatedAt",
+              qualification_level AS "qualificationLevel",
+              interest_level AS "interestLevel", maturity_score AS "maturityScore",
+              status, assigned_admin AS "assignedAdmin",
+              last_contacted_at AS "lastContactedAt", notes,
+              consent_contact AS "consentContact",
+              evaluating_90_days AS "evaluating90Days",
+              created_at AS "createdAt",
+              min(created_at) OVER () AS "firstSeen"
        FROM leads WHERE lower(btrim(email)) = :email
        ORDER BY created_at ASC LIMIT 1`,
       { type: QueryTypes.SELECT, replacements: { email } },
     );
-    profile.acquisition = acq[0] ?? null;
+    const row = acq[0] ?? null;
+    if (row) {
+      row.leadScoreMax = LEAD_SCORE_MAX;
+      if (POST_CONVERSION_STAGES.includes(person.stage)) {
+        // Suppressed on the SERVER, not hidden in the UI: an intent score that
+        // reaches the browser is one a future component can render by accident.
+        row.temperature = null;
+        row.temperatureUpdatedAt = null;
+        row.leadScore = null;
+        profile.intentSuppressedReason =
+          'Intent and temperature are hidden for enrolled people. They score how likely '
+          + 'someone is to convert, and this person already has.';
+      }
+    }
+    profile.acquisition = row;
   } else {
     profile.withheldPanels.push('acquisition');
   }
@@ -242,5 +378,141 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
     profile.withheldPanels.push('engagement');
   }
 
+  // ── Appointments and automation, both lead-page parity ────────────────────
+  if (may('acquisition', query.sections)) {
+    const leadIdForPanels = profile.acquisition?.leadId ?? null;
+    if (leadIdForPanels !== null) {
+      // Booked time, from both places it is recorded. A strategy call and an
+      // appointment are the same fact to a reader, and splitting them across two
+      // panels is how someone concludes there is nothing booked.
+      profile.appointments = await sequelize.query<AppointmentRow>(
+        `SELECT 'appointment' AS kind, title, scheduled_at AS "scheduledAt",
+                status::text AS status, outcome_notes AS notes, NULL AS "meetLink"
+         FROM appointments WHERE lead_id = :leadId
+         UNION ALL
+         SELECT 'strategy_call' AS kind, 'Strategy call' AS title, scheduled_at AS "scheduledAt",
+                status::text AS status, notes, meet_link AS "meetLink"
+         FROM strategy_calls WHERE lead_id = :leadId
+         ORDER BY "scheduledAt" DESC NULLS LAST`,
+        { type: QueryTypes.SELECT, replacements: { leadId: leadIdForPanels } },
+      );
+
+      profile.automation = await sequelize.query<AutomationRow>(
+        `SELECT type, status, provider_response AS detail, created_at AS "createdAt"
+         FROM automation_logs
+         WHERE related_type = 'lead' AND related_id = :leadIdText
+         ORDER BY created_at DESC LIMIT 50`,
+        { type: QueryTypes.SELECT, replacements: { leadIdText: String(leadIdForPanels) } },
+      );
+    } else {
+      profile.appointments = [];
+      profile.automation = [];
+    }
+  }
+
+  // ── Journey summary and the unified timeline ──────────────────────────────
+  //
+  // Both need the person's source-record ids. Resolved once, here, rather than
+  // per branch: the same email keys both, and re-deriving it in every query
+  // would let them drift apart about who this person is.
+  const leadRows = await sequelize.query<{ id: number }>(
+    `SELECT id FROM leads WHERE lower(btrim(email)) = :email`,
+    { type: QueryTypes.SELECT, replacements: { email } },
+  );
+  const leadIds = leadRows.map((r) => r.id);
+
+  // Enrolment ids respect the mentor narrowing, so a mentor's timeline cannot
+  // carry learning events from a learner outside their scope.
+  const scoped = query.visibleEnrollmentIds;
+  const enrollmentIds =
+    scoped !== null && scoped.length === 0
+      ? []
+      : (profile.learning ?? []).map((l) => l.enrollmentId).length > 0
+        ? (profile.learning ?? []).map((l) => l.enrollmentId)
+        : (
+            await sequelize.query<{ id: string }>(
+              `SELECT id FROM enrollments WHERE lower(btrim(email)) = :email
+               ${scoped === null ? '' : 'AND id IN (:ids)'}`,
+              {
+                type: QueryTypes.SELECT,
+                replacements: scoped === null ? { email } : { email, ids: scoped },
+              },
+            )
+          ).map((r) => r.id);
+
+  const domains = domainsForSections(query.sections);
+  profile.timelineDomains = domains;
+  profile.timeline = await getPersonTimeline({
+    leadIds,
+    enrollmentIds,
+    domains,
+    limit: 150,
+  });
+
+  profile.journey = await buildJourney(email, leadIds, enrollmentIds, query.sections, profile.timeline);
+
+  // The KPI has to obey the same rule as the field, or the header contradicts
+  // the panel below it — which is worse than showing the number in both places.
+  if (POST_CONVERSION_STAGES.includes(person.stage)) {
+    profile.journey.intentScore = null;
+  }
+
   return profile;
+}
+
+/**
+ * The counts above the detail.
+ *
+ * Counted from the source tables rather than inferred from the timeline page,
+ * because the timeline is capped at 150 events and a count taken from it would
+ * silently understate anyone busier than that.
+ */
+async function buildJourney(
+  email: string,
+  leadIds: number[],
+  enrollmentIds: string[],
+  sections: readonly string[],
+  timeline: TimelineEvent[],
+): Promise<JourneySummary> {
+  const hasLeads = leadIds.length > 0;
+
+  const counts = hasLeads
+    ? (
+        await sequelize.query<{
+          sessions: string; page_events: string; campaigns: string;
+          emails: string; first_touch: string | null; intent: string | null;
+        }>(
+          `SELECT
+             (SELECT COUNT(*) FROM visitor_sessions WHERE lead_id IN (:leadIds))::text AS sessions,
+             (SELECT COUNT(*) FROM page_events WHERE lead_id IN (:leadIds) AND event_type <> 'heartbeat')::text AS page_events,
+             (SELECT COUNT(*) FROM campaign_leads WHERE lead_id IN (:leadIds))::text AS campaigns,
+             (SELECT COUNT(*) FROM scheduled_emails WHERE lead_id IN (:leadIds) AND sent_at IS NOT NULL)::text AS emails,
+             (SELECT MIN(created_at) FROM leads WHERE id IN (:leadIds)) AS first_touch,
+             (SELECT MAX(score)::text FROM intent_scores WHERE lead_id IN (:leadIds)) AS intent`,
+          { type: QueryTypes.SELECT, replacements: { leadIds } },
+        )
+      )[0]
+    : null;
+
+  const firstTouch = counts?.first_touch ?? null;
+  const lastActivity = timeline.length > 0 ? timeline[0].occurredAt : null;
+
+  return {
+    firstTouch,
+    lastActivity,
+    // null, not 0, when there is no first touch to measure from.
+    daysKnown: firstTouch
+      ? Math.max(0, Math.round((Date.now() - new Date(firstTouch).getTime()) / 86400000))
+      : null,
+    sessions: Number(counts?.sessions ?? 0),
+    pageEvents: Number(counts?.page_events ?? 0),
+    campaigns: Number(counts?.campaigns ?? 0),
+    emailsSent: Number(counts?.emails ?? 0),
+    enrollments: enrollmentIds.length,
+    // Sales data. Withheld rather than shown as 0 when the caller lacks it.
+    intentScore:
+      sections.includes('leads') || sections.includes('revenue') || sections.includes('lead_ingestion')
+        ? (counts?.intent != null ? Number(counts.intent) : null)
+        : null,
+  };
 }

@@ -273,6 +273,26 @@ const AUTHORED: Record<string, Entry> = {
     emptyBehaviour: 'band hides entirely — no empty frame',
     test: 'caseStudyPublicSections.test.ts',
   }),
+  // Authored explicitly rather than left to the `snapshot-composite` rule, which called it
+  // "assembled by caseStudySnapshotBuilder from the sections above" with
+  // approvalRequired false. Neither is true: it is a human override, and it is narrated
+  // content on a public page, so it needs the same approval as any other authored section.
+  'CaseStudySnapshotContent.walkthroughVideo': D({
+    disposition: 'human_approved', aiMayInfer: false,
+    authoring: 'admin; a narrated walkthrough produced for this record',
+    detailHome: 'top of the detail page, above the situation band',
+    publicBehaviour: 'every URL through safeHttpUrl; dropped entirely without a playable url',
+    emptyBehaviour: 'no player - the band is absent, not an empty frame',
+    test: 'caseStudyWalkthroughVideo.test.ts',
+  }),
+  'CaseStudyArchitectureSection.diagramImageUrl': D({
+    disposition: 'human_approved', aiMayInfer: false,
+    authoring: 'admin narrative panel; rendered from diagramSource by scripts/renderCaseStudyDiagram.js',
+    detailHome: 'architecture band — the picture Training and AI Flotation show instead of a live chart',
+    publicBehaviour: 'through safeHttpUrl, and carried ONLY beside a diagramSource',
+    emptyBehaviour: 'no picture — Enterprise still draws the live chart from the source',
+    test: 'caseStudyPhotoAndDiagram.test.ts',
+  }),
   'CaseStudyArchitectureSection.diagram': D({
     disposition: 'verified_evidence', aiMayInfer: false,
     authoring: 'repo analyzer nodes/edges',

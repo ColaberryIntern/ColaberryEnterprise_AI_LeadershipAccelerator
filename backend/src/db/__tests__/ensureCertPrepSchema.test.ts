@@ -1,6 +1,6 @@
 /**
  * Static contract test for ensureCertPrepSchema — asserts the SQL statement array
- * declares the 8 Cert Prep tables and the constraints the service layer relies on
+ * declares the 9 Cert Prep tables and the constraints the service layer relies on
  * for idempotency and answer protection, WITHOUT requiring a live database (same
  * convention as ensureCapeSchema.test.ts). sequelize.query is mocked so importing
  * the module never attempts a real connection.
@@ -8,7 +8,7 @@
 jest.mock('../../config/database', () => ({ sequelize: { query: jest.fn().mockResolvedValue([]) } }));
 
 import { sequelize } from '../../config/database';
-import { ensureCertPrepSchema } from '../ensureCertPrepSchema';
+import { ensureCertPrepSchema, CERT_TABLES } from '../ensureCertPrepSchema';
 
 const mockQuery = sequelize.query as unknown as jest.Mock;
 
@@ -19,7 +19,7 @@ beforeEach(() => {
 });
 
 describe('ensureCertPrepSchema', () => {
-  it('happy path: issues CREATE TABLE IF NOT EXISTS for all 8 Cert Prep tables', async () => {
+  it('happy path: issues CREATE TABLE IF NOT EXISTS for all 9 Cert Prep tables', async () => {
     await ensureCertPrepSchema();
     const statements = statementsFrom();
 
@@ -32,6 +32,7 @@ describe('ensureCertPrepSchema', () => {
       'cert_responses',
       'cert_readiness_snapshots',
       'cert_evidence_mappings',
+      'cert_question_triage',
     ].forEach((table) => {
       expect(
         statements.some((s) => new RegExp(`CREATE TABLE IF NOT EXISTS ${table}\\b`).test(s)),
@@ -65,6 +66,32 @@ describe('ensureCertPrepSchema', () => {
       /UNIQUE INDEX.*cert_question_revisions \(question_key, revision\)/.test(s))).toBe(true);
     // one current version per track
     expect(statements.some((s) => /UNIQUE INDEX.*cert_tracks \(track_id\) WHERE is_current/.test(s))).toBe(true);
+  });
+
+  it('declares the triage table, its uniqueness key, and REGISTERS it in CERT_TABLES', async () => {
+    // Registration is the half that is easy to forget and expensive to miss:
+    // CERT_TABLES drives the post-condition, so a table created but unlisted
+    // means a failed CREATE on production still logs "all tables present".
+    await ensureCertPrepSchema();
+    const statements = statementsFrom();
+
+    expect(statements.some((s) => /CREATE TABLE IF NOT EXISTS cert_question_triage[ (]/.test(s))).toBe(true);
+    expect(CERT_TABLES).toContain('cert_question_triage');
+
+    // Per (question, revision, model, PROMPT VERSION). The last one is the point:
+    // a better prompt over the same revision is a new opinion, not a duplicate.
+    expect(statements.some((s) =>
+      /UNIQUE INDEX.*cert_question_triage \(question_key, revision, reviewer_model, prompt_version\)/.test(s))).toBe(true);
+  });
+
+  it('keeps triage OUT of the approval path — it has no review_status column', async () => {
+    // The gate is review_status on cert_question_revisions. If a triage verdict
+    // ever became a column there, a machine opinion and a human decision would
+    // be one field, and nothing would stop the first being read as the second.
+    await ensureCertPrepSchema();
+    const triage = statementsFrom().find((s) => /CREATE TABLE IF NOT EXISTS cert_question_triage[ (]/.test(s))!;
+    expect(triage).not.toMatch(/review_status/);
+    expect(triage).not.toMatch(/approved/);
   });
 
   it('unverified blueprint facts stay nullable — no guessed weight is cemented into the schema', async () => {

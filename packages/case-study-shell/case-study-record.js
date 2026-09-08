@@ -33,6 +33,7 @@
 (function () {
   'use strict';
 
+
   var root = document.getElementById('cs-record');
   if (!root) return;
 
@@ -189,12 +190,49 @@
         wrap.appendChild(ul);
         return wrap;
       }
+      /*
+       * THE CHART, AS A PICTURE, BECAUSE THIS SHELL CANNOT DRAW ONE.
+       *
+       * `architecture.diagramSource` is mermaid text. The Colaberry Enterprise
+       * app renders it live by importing mermaid from a CDN at runtime; this
+       * shell is dependency-free vanilla JavaScript on purpose, so it has
+       * nothing to render mermaid WITH. For a long time it simply dropped the
+       * field: the source arrived in the payload on every record that had one,
+       * and the band printed prose and chips with no chart at all.
+       *
+       * `diagramImageUrl` is that same chart, rendered ahead of time from this
+       * record's own source by `scripts/renderCaseStudyDiagram.js` and served
+       * from the platform. An `img` needs no library, so it is the one form
+       * this shell can show.
+       *
+       * The URL has already been through `safeHttpUrl` server-side. It is set
+       * here with `setAttribute` on an element that is only ever an `img`, so
+       * there is no path from this value to script execution even if that gate
+       * were to change.
+       */
+      function diagram(url, source) {
+        if (!url || !source) return null;
+        var fig = el('figure', 'cs-diagram');
+        var img = el('img', 'cs-diagram-img');
+        img.setAttribute('src', url);
+        img.setAttribute('loading', 'lazy');
+        img.setAttribute('decoding', 'async');
+        // A diagram with no description is unreadable to a screen reader, and
+        // "diagram" alone tells nobody anything.
+        img.setAttribute('alt', 'Architecture diagram for ' + (c.title || 'this record'));
+        fig.appendChild(img);
+        fig.appendChild(el('figcaption', 'cs-diagram-caption',
+          'A diagram the delivery team drew.'));
+        return fig;
+      }
+
       return section('architecture', 'What was built', [
         prose(a.narrative),
         chips('Stack', a.stack),
         chips('Capabilities', a.capabilities),
         chips('Integrations', a.integrations),
         chips('Data stores', a.dataStores),
+        diagram(a.diagramImageUrl, a.diagramSource),
       ]);
     },
 
@@ -322,6 +360,55 @@
     return dl;
   }
 
+
+  /*
+   * THE NARRATED WALKTHROUGH, AT THE TOP OF THE RECORD.
+   *
+   * A native `video` rather than an embed: the platform serves the file, so no third party
+   * is handed a record of who watched a client's delivery, and this domain sends no CSP at
+   * all so there is nothing to widen either way.
+   *
+   * Not autoplayed and `preload="none"`. It carries narration - a page that starts talking
+   * at a reader is a page they leave - and a several-megabyte file should not be fetched by
+   * every visitor who never presses play.
+   *
+   * The `track` is the accessible copy of captions the picture already carries burned in;
+   * burned-in text cannot be resized, translated, turned off or read by a screen reader.
+   */
+  function walkthrough(c) {
+    var v = c.walkthroughVideo;
+    if (!v || !v.url) return null;
+    var wrap = el('div', 'cs-walkthrough');
+    var video = document.createElement('video');
+    video.className = 'cs-walkthrough-player';
+    video.setAttribute('controls', '');
+    video.setAttribute('preload', 'none');
+    video.setAttribute('playsinline', '');
+    if (v.posterUrl) video.setAttribute('poster', v.posterUrl);
+    var src = document.createElement('source');
+    src.setAttribute('src', v.url);
+    src.setAttribute('type', 'video/mp4');
+    video.appendChild(src);
+    if (v.captionsUrl) {
+      var track = document.createElement('track');
+      track.setAttribute('kind', 'captions');
+      track.setAttribute('srclang', 'en');
+      track.setAttribute('label', 'English');
+      track.setAttribute('src', v.captionsUrl);
+      track.setAttribute('default', '');
+      video.appendChild(track);
+    }
+    wrap.appendChild(video);
+    // Labelled, not left to be assumed. An unlabelled synthetic voice is a small
+    // deception, and this system's whole claim is that it does not make those.
+    if (v.narrationSource === 'synthetic') {
+      wrap.appendChild(el('p', 'cs-walkthrough-note',
+        'A walkthrough of the delivered system. The narration is a synthetic voice; the '
+        + 'figures it states are the verified metrics recorded further down this page.'));
+    }
+    return section('walkthrough', v.title || 'Walkthrough', [wrap]);
+  }
+
   /* ------------------------------------------------------------------ load --- */
 
   function notFound() {
@@ -365,6 +452,11 @@
       root.appendChild(hero(c, surface));
       var f = facts(c);
       if (f) root.appendChild(f);
+
+      // Directly under the masthead, above every band. Renders nothing on a record with
+      // no walkthrough, which is every record but one today.
+      var w = walkthrough(c);
+      if (w) root.appendChild(w);
 
       var order = (surface && surface.sectionOrder) || [];
       order.forEach(function (band) {

@@ -86,18 +86,21 @@ export async function buildReeseSystemPrompt(enrollmentId: string): Promise<stri
     agentId = undefined;
   }
 
-  const base = await buildAgentSystemPrompt(REESE_PERSONA_BLOCK, enrollmentId, {
+  // Reese Agentic AI Employee mission, Capability 8 — computed BEFORE the
+  // assembly call and passed through extraBlocksBeforeClosing so these land
+  // in the mandated layer-6 position (Student Success 360 evidence), rather
+  // than appended after the whole prompt including the closing line.
+  const highlights = await getReeseStudentSuccessHighlights(enrollmentId);
+  const healthHighlight = await getReeseHealthAssessmentHighlight(enrollmentId);
+
+  return buildAgentSystemPrompt(REESE_PERSONA_BLOCK, enrollmentId, {
     agentLabel: 'reese',
     agentId,
+    extraBlocksBeforeClosing: [highlights, healthHighlight],
     closingLine:
       '\nThis is a direct-message conversation, not a lesson-scoped chat — you may ' +
       "be asked about anything across the student's whole journey. Reply in Reese's " +
       'voice per the principles above; keep it to a few sentences unless real depth ' +
       'is asked for.',
   });
-
-  const highlights = await getReeseStudentSuccessHighlights(enrollmentId);
-  const healthHighlight = await getReeseHealthAssessmentHighlight(enrollmentId);
-  const extraBlocks = [highlights, healthHighlight].filter(Boolean).join('\n\n');
-  return extraBlocks ? `${base}\n\n${extraBlocks}` : base;
 }

@@ -1,0 +1,194 @@
+/* Component layer. Flat, bordered surfaces; minimal shadow; no gradients. */
+
+/* Labels and eyebrows ----------------------------------------------------- */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0;
+}
+.label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+.lede { font-size: var(--step-1); color: var(--fg-muted); }
+.muted { color: var(--fg-muted); }
+
+/* Buttons ----------------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2xs);
+  min-height: var(--tap);
+  padding: 0.7rem 1.25rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font-family: var(--font-sans);
+  font-size: var(--step-0);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.btn-primary { background: var(--accent); color: var(--accent-contrast); }
+.btn-primary:hover { background: var(--accent-hover); color: var(--accent-contrast); }
+.btn-primary:active { background: var(--accent-press); }
+
+.btn-ghost { background: transparent; color: var(--fg); border-color: var(--line-strong); }
+.btn-ghost:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+.btn-row { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+
+/* Surfaces ---------------------------------------------------------------- */
+.card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--space-m);
+}
+.card-accent { border-left: 3px solid var(--accent); }
+
+.grid { display: grid; gap: var(--space-m); }
+.grid-2 { grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); }
+.grid-3 { grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+
+/* Status pills. Pills ONLY here — compact statuses, never on buttons or nav. */
+.pill {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  padding: 0.18em 0.55em;
+  border-radius: var(--radius-pill);
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.pill-live { color: var(--success); background: var(--success-soft); }
+.pill-soon { color: var(--warning); background: var(--warning-soft); }
+
+/* Masthead and footer ----------------------------------------------------- */
+.masthead {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.bar { display: flex; align-items: center; gap: var(--space-s); min-height: 4rem; }
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: var(--step-0);
+  color: var(--fg);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.logo .mark { color: var(--accent); }
+.spacer { flex: 1; }
+
+.nav { display: flex; align-items: center; gap: var(--space-2xs); flex-wrap: wrap; }
+.nav a {
+  color: var(--fg-muted);
+  text-decoration: none;
+  font-size: 0.92rem;
+  padding: 0.55rem 0.6rem;
+  min-height: var(--tap);
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius);
+}
+.nav a:hover { color: var(--fg); background: var(--bg-elevated); }
+.nav a[aria-current="page"] { color: var(--accent); }
+.nav .btn { font-size: 0.9rem; padding: 0.55rem 0.9rem; }
+
+/* Mobile: the nav collapses into a disclosure. It is a <details> element, so it is
+   keyboard operable and screen-reader announced without a line of JavaScript — which
+   also means it cannot break when a script fails to load. */
+.nav-toggle { display: none; }
+
+@media (max-width: 60rem) {
+  .nav-toggle { display: block; margin-left: auto; }
+  .nav-toggle > summary {
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: var(--tap);
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--fg);
+    cursor: pointer;
+  }
+  .nav-toggle > summary::-webkit-details-marker { display: none; }
+  .nav-toggle[open] > summary { border-color: var(--accent); color: var(--accent); }
+  .nav-desktop { display: none; }
+  .nav-toggle .nav {
+    position: absolute;
+    left: 0;
+    right: 0;
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--line);
+    padding: var(--space-s) clamp(1.15rem, 5vw, 2.5rem);
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3xs);
+  }
+  .nav-toggle .nav a { width: 100%; }
+}
+
+.foot {
+  border-top: 1px solid var(--line);
+  padding-block: var(--space-xl);
+  color: var(--fg-muted);
+  font-size: 0.92rem;
+}
+.foot a { color: var(--fg-muted); text-decoration: none; }
+.foot a:hover { color: var(--accent); text-decoration: underline; }
+.foot h4 { font-size: 0.72rem; letter-spacing: var(--tracking-label); text-transform: uppercase; color: var(--fg-faint); }
+
+/* Tables ------------------------------------------------------------------ */
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.65rem 0.85rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+thead th {
+  background: var(--bg-sunk);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: 0; }
+
+/* Forms ------------------------------------------------------------------- */
+.field { display: flex; flex-direction: column; gap: var(--space-3xs); }
+.field > label { font-size: 0.9rem; font-weight: 600; }
+.field input, .field textarea, .field select {
+  font: inherit;
+  min-height: var(--tap);
+  padding: 0.6rem 0.75rem;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+}
+.field input:focus, .field textarea:focus { border-color: var(--accent); }
+.hint { font-size: 0.84rem; color: var(--fg-faint); max-width: none; }
+
+.form-status { padding: var(--space-s); border-radius: var(--radius); border: 1px solid; }
+.form-status[data-state="ok"] { color: var(--success); border-color: var(--success); background: var(--success-soft); }
+.form-status[data-state="error"] { color: var(--danger); border-color: var(--danger); background: var(--danger-soft); }

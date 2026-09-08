@@ -167,6 +167,36 @@
   border-radius: 999px;
 }
 
+/* ---------------------------------------------------------------- diagram --- */
+
+/* A FLOWCHART IS TALL AND NARROW, AND THE LAYOUT HAS TO EXPECT THAT SHAPE.
+   These are rendered portrait - the Repo2Reputation chart is 776 x 1434 - so
+   letting it run to the full band width would blow a screen and a half of
+   height into the middle of the architecture section. It is capped at a width
+   that keeps the node labels readable and centred, and it scrolls rather than
+   pushing the page sideways on a phone. */
+.cs-diagram {
+  margin: .5rem 0 0;
+  padding: 1rem;
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+  overflow-x: auto;
+}
+.cs-diagram-img {
+  display: block;
+  width: 100%;
+  max-width: 34rem;
+  height: auto;
+  margin-inline: auto;
+}
+.cs-diagram-caption {
+  margin: .75rem 0 0;
+  font-size: .8rem;
+  text-align: center;
+  color: var(--cs-fg-muted);
+}
+
 .cs-people, .cs-repos { display: grid; gap: .5rem; }
 .cs-repo { display: flex; gap: .75rem; align-items: baseline; }
 .cs-repo-date { font-size: .8rem; color: var(--cs-fg-muted); }
@@ -315,5 +345,31 @@
 .record-byline {
   margin: 0;
   font-size: .85rem;
+  color: var(--cs-fg-muted);
+}
+
+/* ------------------------------------------------------------ walkthrough --- */
+
+/* The narrated walkthrough, directly under the masthead.
+
+   CAPPED, NOT FULL-BLEED. The file is 16:9 at 1920x1080; run full width on a wide monitor
+   that is a video over a thousand pixels tall, which pushes every verified figure on the
+   record below the fold and inverts what the page is for. */
+.cs-walkthrough { display: grid; gap: .9rem; max-width: 56rem; }
+.cs-walkthrough-player {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  /* The poster is a still of the first slide, so it should sit edge to edge like the
+     video it stands in for rather than being letterboxed inside its own frame. */
+  object-fit: cover;
+  background: #11161a;
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+}
+.cs-walkthrough-note {
+  margin: 0;
+  font-size: .88rem;
+  line-height: 1.5;
   color: var(--cs-fg-muted);
 }
