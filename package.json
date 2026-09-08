@@ -15,7 +15,7 @@
     "test": "npm run test --workspaces",
     "lint": "npm run lint --workspaces",
     "validate:boundaries": "node scripts/validate-app-boundaries.js",
-    "build:apps": "node apps/cpn-public/build.js && node apps/ai-flotation-public/build.js && node apps/refactored-public/build.js",
+    "build:apps": "node apps/cpn-public/build.js && node apps/ai-flotation-public/build.js",
     "dev:setup": "bash scripts/dev-setup.sh",
     "seed:admin": "npm run seed:admin --workspace=backend",
     "seed:students": "npm run seed:students --workspace=backend",

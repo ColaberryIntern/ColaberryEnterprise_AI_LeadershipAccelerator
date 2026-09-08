@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, September 7, 2026 at 4:04 PM</div>
-    <div><span class="sid">CC-20260907-q4m8</span><span class="count">4 changes</span></div>
+    <div class="meta">Generated Tuesday, September 8, 2026 at 2:51 PM</div>
+    <div><span class="sid">CC-20260907-q4m8</span><span class="count">8 changes</span></div>
   </header>
   <main>
     
@@ -117,6 +117,66 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">`node apps/refactored-public/port-from-capture.js` exits 1 with the explanation. `brandPageCategories.test.ts` still asserts `categorizePagePath(&#39;/individuals&#39;, &#39;refactored&#39;) === &#39;program&#39;` and passes.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">The map is kept deliberately. Historical visitor events still carry those paths, and a categoriser that forgot them would silently reclassify years of recorded traffic as `other`.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>Found that the merged nginx redirect could never have worked</h2>
+          <span class="badge">2026-09-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">No code, a verification. `git grep &quot;listen 443\|ssl_certificate\|certbot&quot;` over `nginx/` returns **nothing** — the container terminates no TLS at all. Every hostname listens on port 80 because Cloudflare handles HTTPS in front of it.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`git grep -n &quot;listen &quot; origin/main -- nginx/*.conf` returns only `listen 80` variants.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`refactored.ai` is the one Colaberry domain **not** behind Cloudflare — Route 53 straight to AWS. Pointing it at our box would have refused every HTTPS request, breaking a domain that currently works. Caught before any DNS was touched, but this was a gap in what shipped on 2026-09-07: the cutover doc said &quot;issue a certificate with certbot&quot; and nothing in the config consumed one.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>Confirmed AWS write access, correcting an earlier overstatement</h2>
+          <span class="badge">2026-09-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Nothing. Evidence gathering.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Route 53 console — account **903195713680**, hosted zone **Z36GZ3BINBIAA6**, apex `A` an editable ALIAS to `refactored-nlb-prod-2edb9df08b1ba450.elb.us-west-2.amazonaws.com` (US West / Oregon). Corroborates the zone facts the cutover doc rests on: Google MX, Mandrill SPF, `_dmarc` at `p=reject`, an ACM validation CNAME.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">&quot;Nobody has confirmed AWS access&quot; was carried as the top blocker through several updates. Commit `d4198ec2` (2026-08-30) already recorded a session exporting all 45 zone records, which requires authenticated read — I should have checked the repo&#39;s own history against the assumption instead of repeating it.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>Retire the nginx path entirely; the redirect moves to AWS</h2>
+          <span class="badge">2026-09-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Deleted `nginx/refactored.conf`, `nginx/refactored-preview.conf` and the whole of `apps/refactored-public/`. Removed the app from `nginx/Dockerfile` (source copy, build invocation, docroot copy) and from `package.json`&#39;s `build:apps`. Rewrote `REFACTORED_CUTOVER.md` around the AWS design. Lowered the `brandPageCategories` app-count floor from 3 to 2, with the reason in a comment.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`npm run build:apps` green for both remaining apps. `node scripts/validate-app-boundaries.js` OK, 12 files. **78 tests across 5 guard suites pass** under `jest.ci.config.ts`. Backend `tsc --noEmit` exit 0 under TypeScript 5.7.3.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Target is CloudFront over an S3 redirect bucket with an ACM cert in `us-east-1`, plus a CloudFront Function collapsing every path to the destination root — S3&#39;s own redirect preserves the path, which would land visitors on the SPA&#39;s catch-all. ACM auto-renews, so no certbot and no 443 listener on a box that already has memory pressure. Route 53 changes last; rollback is two records.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">08</span>
+          <h2>Fix four dangling references the deletion would have left</h2>
+          <span class="badge">2026-09-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`package.json` `build:apps` and `.github/workflows/design-system-sync.yml` both still iterated `refactored-public` and would have failed outright. `README.md` and a comment in `nginx/opportunitylift.conf` referenced files that no longer exist.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">repo-wide grep for `refactored-public|nginx/refactored|refactored-preview` across json/yml/conf/ts/js returns nothing outside historical docs. `npm run build:apps` runs clean.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Two of the four were live breakages, not cosmetics. Grepping after a deletion is what caught them.</span></div>
           
         </div>
       </article>
