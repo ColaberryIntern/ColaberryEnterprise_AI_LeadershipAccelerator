@@ -55,8 +55,24 @@ export interface TriageResult {
   errorClass?: string | null;
 }
 
-/** The prompt is the load-bearing part of this process, so it is versioned. */
-export const TRIAGE_PROMPT_VERSION = 'v1-adversarial';
+/**
+ * The prompt is the load-bearing part of this process, so it is versioned — and
+ * this is the version that proved why.
+ *
+ * v1-adversarial asked the reviewer to argue against every answer and then
+ * decide. It flagged 3 of the first 3 questions on production, with concerns
+ * that conceded the author's point and objected anyway. An objection can be
+ * constructed against any question ever written, so a reviewer that reports its
+ * argument instead of its judgement flags everything, and a report that flags
+ * everything is indistinguishable from no triage.
+ *
+ * v2-argument-wins separates the two: state the argument, then judge whether it
+ * DEFEATS the answer, and only flag when it does. Because this constant is part
+ * of the triage table's unique key, a v2 run is a new opinion rather than a
+ * duplicate suppressed against v1's rows — which is the reason that column is in
+ * the key at all.
+ */
+export const TRIAGE_PROMPT_VERSION = 'v2-argument-wins';
 
 /** The reviewer. A different model family from the author, which is the point. */
 export const TRIAGE_MODEL = 'gpt-4o-mini';

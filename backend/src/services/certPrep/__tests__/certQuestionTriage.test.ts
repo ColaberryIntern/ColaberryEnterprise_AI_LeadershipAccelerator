@@ -173,13 +173,57 @@ describe('the retry policy', () => {
   });
 });
 
+describe('an argument that loses is not a concern', () => {
+  /**
+   * The defect this replaced: v1 asked the reviewer to argue against every
+   * answer and then decide, and it flagged 3 of the first 3 real questions —
+   * with concerns that conceded the author's point and objected anyway. An
+   * objection can be constructed against any question ever written, so a
+   * reviewer reporting its argument rather than its judgement flags everything,
+   * and a report that flags everything is the same as no triage.
+   */
+  it('argument_wins false means no_concerns, whatever else the model said', async () => {
+    mCreate.mockResolvedValue(reply(JSON.stringify({
+      argument_against: 'One could argue parallelism is also architectural.',
+      argument_wins: false,
+      verdict: 'needs_human',                                  // model contradicts itself
+      concerns: [{ kind: 'defensible_distractor', option: 'A', detail: 'A could be considered.' }],
+    })));
+    const r = await triageQuestion(question);
+    expect(r.verdict).toBe('no_concerns');
+    expect(r.concerns).toEqual([]);
+  });
+
+  it('argument_wins true keeps the concern', async () => {
+    mCreate.mockResolvedValue(reply(JSON.stringify({
+      argument_against: 'C is the same claim in different words.',
+      argument_wins: true,
+      verdict: 'needs_human',
+      severity: 'high',
+      concerns: [{ kind: 'defensible_distractor', option: 'C', detail: 'C states the same rule as B.' }],
+    })));
+    const r = await triageQuestion(question);
+    expect(r.verdict).toBe('needs_human');
+    expect(r.concerns).toHaveLength(1);
+  });
+
+  it('the prompt tells the reviewer that finding an argument is not a finding', async () => {
+    mCreate.mockResolvedValue(reply('{"argument_wins":false,"verdict":"no_concerns","concerns":[]}'));
+    await triageQuestion(question);
+    const system = mCreate.mock.calls[0][0].messages[0].content as string;
+    expect(system).toContain('"I found an argument" is not a finding');
+    expect(system).toContain('only when your argument WINS');
+    expect(system).toContain('is the normal,');   // "...normal, expected outcome"
+  });
+});
+
 describe('the prompt argues against the answer', () => {
   it('tells the reviewer to break the question, not confirm it', async () => {
     mCreate.mockResolvedValue(reply('{"verdict":"no_concerns","concerns":[]}'));
     await triageQuestion(question);
     const system = mCreate.mock.calls[0][0].messages[0].content as string;
-    expect(system).toContain('BREAK the question, not to confirm it');
     expect(system).toContain('AGAINST the marked answer');
+    expect(system).toContain('does it actually DEFEAT');
   });
 
   it('shows the reviewer which option is marked correct and why', async () => {
