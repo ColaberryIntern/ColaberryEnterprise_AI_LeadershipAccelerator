@@ -20,6 +20,7 @@ import CurriculumComposerTab from './orchestration/composer/CurriculumComposerTa
 import TimelineEditorTab from './orchestration/TimelineEditorTab';
 import FeedControlTab from './orchestration/FeedControlTab';
 import WorkstationTab from './orchestration/WorkstationTab';
+import AdminCapeSettingsPage from './AdminCapeSettingsPage';
 import '../../styles/orchestration.css';
 
 const API = process.env.REACT_APP_API_URL || '';
@@ -34,6 +35,13 @@ const TABS = [
   { id: 'types', label: 'Experience Studio' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'feed-control', label: 'Feed Control' },
+  // Folded in from the sidebar 2026-09-08. Architecture Skills is the CAPE
+  // rubric — the 10 skill definitions and 4 evidence-band weights that decide
+  // what a student is measured on. That is curriculum CONFIGURATION, authored
+  // by the same people who author the curriculum itself, so it belongs beside
+  // Feed Control rather than as a sibling of the Accelerator in the sidebar.
+  // Its /admin/cape-settings route stays live.
+  { id: 'skills', label: 'Architecture Skills' },
   { id: 'analytics', label: 'Analytics' },
   { id: 'health', label: 'Health' },
 ];
@@ -77,11 +85,16 @@ export default function AdminOrchestrationPage() {
     <div className="orch-engine">
       <div className="container-fluid py-4" style={{ maxWidth: activeTab === 'mini-sections' ? 1600 : 1200 }}>
 
+        {/* Titled "Curriculum" to match the sidebar (renamed 2026-09-08). The
+            ROUTE stays /admin/orchestration so every existing deep link and
+            ?tab= link keeps working; only the human-facing name changed. The
+            Feed Control tab below is also the way into the Governance board,
+            which is why that board no longer needs a sidebar entry of its own. */}
         <PageHeader
-          title="Orchestration"
+          title="Curriculum"
           icon="git-branch-line"
-          subtitle="Program-wide AI curriculum configuration."
-          breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Orchestration' }]}
+          subtitle="Program-wide curriculum authoring: Composer, Experience Studio, Timeline, and Feed Control."
+          breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Curriculum' }]}
           trust={trust}
           actions={<StatusBadge label="System Online" tone="success" icon="pulse-line" />}
         />
@@ -109,6 +122,7 @@ export default function AdminOrchestrationPage() {
           {activeTab === 'overview' && <ProgramOverviewTab {...tabProps} />}
           {activeTab === 'timeline' && <TimelineEditorTab />}
           {activeTab === 'feed-control' && <FeedControlTab />}
+          {activeTab === 'skills' && <AdminCapeSettingsPage embedded />}
           {activeTab === 'sessions' && <SessionControlTab {...tabProps} />}
           {activeTab === 'sections' && <SectionControlTab {...tabProps} onNavigateToMiniSections={handleNavigateToMiniSections} />}
           {activeTab === 'mini-sections' && <MiniSectionControlTab {...tabProps} initialLessonId={selectedLessonId} />}
