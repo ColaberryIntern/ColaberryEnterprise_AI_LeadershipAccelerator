@@ -189,6 +189,28 @@ describe('person profile', () => {
     expect(first.replacements.email).toBe('someone@example.com');
   });
 
+  // ── The timeline, which the first version omitted entirely ───────────────
+
+  it('gates timeline domains by section, like the panels', async () => {
+    const { domainsForSections } = await import('../personTimelineService');
+    // A mentor gets learning history and no sales history.
+    expect(domainsForSections(sectionsFor('mentor'))).toEqual(
+      expect.arrayContaining(['learning']),
+    );
+    expect(domainsForSections(sectionsFor('mentor'))).not.toContain('sales');
+    expect(domainsForSections(sectionsFor('mentor'))).not.toContain('commerce');
+
+    // A revenue identity gets sales and commerce, not learning.
+    const rev = domainsForSections(sectionsFor('revenue'));
+    expect(rev).toEqual(expect.arrayContaining(['sales', 'commerce']));
+    expect(rev).not.toContain('learning');
+  });
+
+  it('gives an identity with no person sections no timeline domains at all', async () => {
+    const { domainsForSections } = await import('../personTimelineService');
+    expect(domainsForSections(sectionsFor('community_organizer'))).toEqual([]);
+  });
+
   it('parameterises the email rather than interpolating it', async () => {
     await getPersonProfile({
       email: "x' OR '1'='1@example.com",
