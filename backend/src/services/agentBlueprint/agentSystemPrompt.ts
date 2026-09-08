@@ -1,6 +1,8 @@
 import { getLearnerContextBlock } from '../learnerContextService';
 import { getActiveDirectiveTexts } from '../managerDirectiveService';
 import { getApprovedMemoryTexts } from '../agentMemoryProposalService';
+import { PLATFORM_SAFETY_RULES_BLOCK } from './platformSafetyRules';
+import { buildRoleCharterBlock, buildReliabilityStateBlock } from './agentContextLayers';
 
 /**
  * Reese Phase 3 (Agent Blueprint) — the persona-block + learner-context
@@ -35,6 +37,16 @@ import { getApprovedMemoryTexts } from '../agentMemoryProposalService';
  * memory-approval state is read by the runtime, not a dead flag like
  * OpenclawLearning.applied: a proposal reaches this prompt if and only if
  * its status is 'approved', queried fresh on every call.
+ *
+ * Reese Agentic AI Employee mission, Capability 8 (2026-09-08) — the
+ * "byte-for-byte identical" claim above no longer holds: every call now
+ * unconditionally gets 2 new layers ahead of the persona block (platform
+ * safety rules, then a role charter when the caller passes `agentId` and
+ * one is set) and a reliability-state layer before the learner-context
+ * block — reordering both this and agentManagerConversationPrompt.ts
+ * toward the mission's mandated 10-layer runtime-context sequence. See
+ * agentContextLayers.ts and platformSafetyRules.ts for the 2 new shared
+ * layer builders (one real implementation, used by both prompt paths).
  */
 export interface BuildAgentSystemPromptOptions {
   /** Lowercased, used only in the learner-context-failure log line's `service` field. */
@@ -45,6 +57,11 @@ export interface BuildAgentSystemPromptOptions {
    * rows for it are fetched and injected. Omit to reproduce the exact prior
    * (pre-Checkpoint-C) output. */
   agentId?: string;
+  /** Reese Agentic AI Employee mission, Capability 8 — caller-supplied
+   * blocks (e.g. Student Success 360 evidence) inserted BEFORE the closing
+   * line, in the mandated runtime-context order's layer-6 position, rather
+   * than appended after the whole prompt by the caller. */
+  extraBlocksBeforeClosing?: string[];
 }
 
 const DEFAULT_CLOSING_LINE =
@@ -80,7 +97,19 @@ export async function buildAgentSystemPrompt(
   enrollmentId: string,
   options?: BuildAgentSystemPromptOptions,
 ): Promise<string> {
-  const parts: string[] = [personaBlock];
+  // Reese Agentic AI Employee mission, Capability 8 — runtime context layers
+  // 1-2 (immutable platform safety rules, then role charter and authority)
+  // now precede the persona block itself, per the mission's mandated order.
+  // Layer 1 is universal and static; layer 2 needs a real agentId, same gate
+  // as directives/memory below.
+  const parts: string[] = ['\n' + PLATFORM_SAFETY_RULES_BLOCK];
+
+  if (options?.agentId) {
+    const roleCharterBlock = await buildRoleCharterBlock(options.agentId);
+    if (roleCharterBlock) parts.push('\n' + roleCharterBlock);
+  }
+
+  parts.push(personaBlock);
 
   if (options?.agentId) {
     const directives = await getActiveDirectiveTexts(options.agentId);
@@ -89,6 +118,11 @@ export async function buildAgentSystemPrompt(
     const memories = await getApprovedMemoryTexts(options.agentId);
     if (memories.length) parts.push(buildMemoryBlock(memories));
   }
+
+  // Layer 5 — current metric reliability/quarantine state. Always present
+  // (see agentContextLayers.ts's own header for why this one doesn't stay
+  // silent when healthy).
+  parts.push('\n' + (await buildReliabilityStateBlock()));
 
   let learnerBlock = '';
   try {
@@ -101,6 +135,10 @@ export async function buildAgentSystemPrompt(
     learnerBlock = '';
   }
   if (learnerBlock) parts.push('\n' + learnerBlock);
+
+  for (const block of options?.extraBlocksBeforeClosing ?? []) {
+    if (block) parts.push('\n' + block);
+  }
 
   parts.push(options?.closingLine ?? DEFAULT_CLOSING_LINE);
 

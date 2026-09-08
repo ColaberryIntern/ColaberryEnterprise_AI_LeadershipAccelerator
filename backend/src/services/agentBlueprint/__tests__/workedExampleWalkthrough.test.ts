@@ -16,6 +16,17 @@ jest.mock('../../../models/CommunityMember', () => ({ findOrCreate: jest.fn(), f
 jest.mock('../../../models/AiAgent', () => ({ findOne: jest.fn() }));
 jest.mock('../../../models/Cohort', () => ({ findOne: jest.fn() }));
 jest.mock('../../learnerContextService', () => ({ getLearnerContextBlock: jest.fn() }));
+// Reese Agentic AI Employee mission, Capability 8 — agentSystemPrompt.ts now
+// unconditionally calls agentContextLayers.ts, which queries real models
+// (AgentRoleCharter, MetricReliabilityRecord). Mocked here to preserve this
+// file's own "structurally zero real writes / no live DB connection" claim
+// — without this, buildAgentSystemPrompt() genuinely hits a real DB
+// connection via the reliability-state layer, which is always called
+// regardless of options.
+jest.mock('../agentContextLayers', () => ({
+  buildRoleCharterBlock: jest.fn(() => Promise.resolve('')),
+  buildReliabilityStateBlock: jest.fn(() => Promise.resolve('DATA RELIABILITY STATE: No data sources are currently flagged unreliable — all known sources are healthy.')),
+}));
 
 import AdminUser from '../../../models/AdminUser';
 import Enrollment from '../../../models/Enrollment';
