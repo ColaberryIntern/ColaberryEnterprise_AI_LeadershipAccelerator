@@ -329,7 +329,15 @@
     var owner = (c.artifacts || []).filter(function (a) {
       return a.access === 'open' && (a.url === c.heroImageUrl || a.previewUrl === c.heroImageUrl);
     })[0];
-    if (c.heroImageUrl && owner) {
+    /* WHEN THERE IS A WALKTHROUGH, THE PICTURE SLOT IS THE PLAYER. Ali: "shouldn't the
+       video be in the hero section?" - and the band this replaced opened a record with two
+       visuals doing the same job, a screenshot of the product then a film of it, with the
+       reader scrolling past the first to reach the second. The poster falls back to the
+       cover, so the masthead looks unchanged until somebody presses play. */
+    var player = walkthrough(c, c.heroImageUrl && owner ? c.heroImageUrl : null);
+    if (player) {
+      head.appendChild(player);
+    } else if (c.heroImageUrl && owner) {
       var fig = el('figure', 'cs-cover');
       var img = document.createElement('img');
       img.src = c.heroImageUrl;
@@ -362,7 +370,7 @@
 
 
   /*
-   * THE NARRATED WALKTHROUGH, AT THE TOP OF THE RECORD.
+   * THE NARRATED WALKTHROUGH, IN THE MASTHEAD'S PICTURE SLOT.
    *
    * A native `video` rather than an embed: the platform serves the file, so no third party
    * is handed a record of who watched a client's delivery, and this domain sends no CSP at
@@ -375,16 +383,17 @@
    * The `track` is the accessible copy of captions the picture already carries burned in;
    * burned-in text cannot be resized, translated, turned off or read by a screen reader.
    */
-  function walkthrough(c) {
+  function walkthrough(c, posterFallback) {
     var v = c.walkthroughVideo;
     if (!v || !v.url) return null;
-    var wrap = el('div', 'cs-walkthrough');
+    var fig = el('figure', 'cs-cover cs-cover--video');
     var video = document.createElement('video');
     video.className = 'cs-walkthrough-player';
     video.setAttribute('controls', '');
     video.setAttribute('preload', 'none');
     video.setAttribute('playsinline', '');
-    if (v.posterUrl) video.setAttribute('poster', v.posterUrl);
+    var poster = v.posterUrl || posterFallback;
+    if (poster) video.setAttribute('poster', poster);
     var src = document.createElement('source');
     src.setAttribute('src', v.url);
     src.setAttribute('type', 'video/mp4');
@@ -398,15 +407,15 @@
       track.setAttribute('default', '');
       video.appendChild(track);
     }
-    wrap.appendChild(video);
+    fig.appendChild(video);
     // Labelled, not left to be assumed. An unlabelled synthetic voice is a small
     // deception, and this system's whole claim is that it does not make those.
-    if (v.narrationSource === 'synthetic') {
-      wrap.appendChild(el('p', 'cs-walkthrough-note',
-        'A walkthrough of the delivered system. The narration is a synthetic voice; the '
-        + 'figures it states are the verified metrics recorded further down this page.'));
-    }
-    return section('walkthrough', v.title || 'Walkthrough', [wrap]);
+    fig.appendChild(el('figcaption', 'cs-walkthrough-note',
+      v.narrationSource === 'synthetic'
+        ? (v.title || 'Walkthrough') + '. Narrated by a synthetic voice; the figures it '
+          + 'states are the verified metrics recorded below.'
+        : (v.title || 'Walkthrough')));
+    return fig;
   }
 
   /* ------------------------------------------------------------------ load --- */
@@ -452,11 +461,6 @@
       root.appendChild(hero(c, surface));
       var f = facts(c);
       if (f) root.appendChild(f);
-
-      // Directly under the masthead, above every band. Renders nothing on a record with
-      // no walkthrough, which is every record but one today.
-      var w = walkthrough(c);
-      if (w) root.appendChild(w);
 
       var order = (surface && surface.sectionOrder) || [];
       order.forEach(function (band) {

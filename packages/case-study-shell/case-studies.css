@@ -350,18 +350,19 @@
 
 /* ------------------------------------------------------------ walkthrough --- */
 
-/* The narrated walkthrough, directly under the masthead.
+/* The walkthrough player IN THE MASTHEAD, in the slot the cover image otherwise holds.
 
-   CAPPED, NOT FULL-BLEED. The file is 16:9 at 1920x1080; run full width on a wide monitor
-   that is a video over a thousand pixels tall, which pushes every verified figure on the
-   record below the fold and inverts what the page is for. */
-.cs-walkthrough { display: grid; gap: .9rem; max-width: 56rem; }
+   It reuses `.cs-cover` for placement so the hero grid is unchanged and a record without a
+   walkthrough is untouched. Only the picture differs: a video needs a fixed 16:9 box
+   rather than an image's intrinsic height, or the masthead reflows the moment the poster
+   loads. */
+.cs-cover--video { display: grid; gap: .6rem; }
 .cs-walkthrough-player {
   display: block;
   width: 100%;
   aspect-ratio: 16 / 9;
-  /* The poster is a still of the first slide, so it should sit edge to edge like the
-     video it stands in for rather than being letterboxed inside its own frame. */
+  /* The poster is a frame of the video, so it fills the box like the video it stands in
+     for rather than being letterboxed inside its own frame. */
   object-fit: cover;
   background: #11161a;
   border: 1px solid var(--cs-line);
@@ -369,7 +370,7 @@
 }
 .cs-walkthrough-note {
   margin: 0;
-  font-size: .88rem;
+  font-size: .82rem;
   line-height: 1.5;
   color: var(--cs-fg-muted);
 }
