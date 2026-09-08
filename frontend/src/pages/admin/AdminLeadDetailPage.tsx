@@ -5,6 +5,9 @@ import ActivityTimeline from '../../components/admin/ActivityTimeline';
 import AddNoteForm from '../../components/admin/AddNoteForm';
 import AppointmentCard from '../../components/admin/AppointmentCard';
 import ScheduleAppointmentModal from '../../components/admin/ScheduleAppointmentModal';
+// Extracted so this page and the 360 profile share ONE write path while both
+// exist. When this page is retired the components are already in place.
+import LeadPipelineBar from '../../components/admin/lead/LeadPipelineBar';
 import TemperatureBadge from '../../components/TemperatureBadge';
 import JourneyTimeline from '../../components/admin/JourneyTimeline';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
@@ -96,7 +99,7 @@ interface VisitorData {
   }>;
 }
 
-import { PIPELINE_STAGES, PIPELINE_STAGE_COLORS, STATUS_VALUES } from '../../constants';
+import { STATUS_VALUES } from '../../constants';
 
 const STATUS_OPTIONS = STATUS_VALUES;
 
@@ -205,21 +208,6 @@ function AdminLeadDetailPage() {
     }
   };
 
-  const handlePipelineStageChange = async (newStage: string) => {
-    const oldStage = pipelineStage;
-    setPipelineStage(newStage);
-    try {
-      await api.patch(`/api/admin/leads/${id}/pipeline`, {
-        pipeline_stage: newStage,
-        from_stage: oldStage,
-      });
-      setActivityRefreshKey((k) => k + 1);
-    } catch (err) {
-      console.error('Failed to update pipeline stage:', err);
-      setPipelineStage(oldStage);
-    }
-  };
-
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '-';
     return new Date(dateStr).toLocaleString('en-US', {
@@ -248,10 +236,6 @@ function AdminLeadDetailPage() {
     if (type === 'email') return 'Email';
     if (type === 'alert') return 'Alert';
     return 'Voice Call';
-  };
-
-  const getStageBadgeColor = (stage: string) => {
-    return PIPELINE_STAGE_COLORS[stage] || 'var(--text-muted)';
   };
 
   // Per-page trust signal (Basecamp todo 10027085963) derived from the live lead record.
@@ -348,19 +332,14 @@ function AdminLeadDetailPage() {
       {/* Pipeline Stage Bar */}
       <div className="mb-4">
         <SectionCard>
-          <div className="d-flex align-items-center gap-2 flex-wrap">
-            <span className="text-muted small fw-bold me-2">Pipeline:</span>
-            {PIPELINE_STAGES.map((stage) => (
-              <button
-                key={stage.key}
-                className={`btn btn-sm ${pipelineStage === stage.key ? 'text-white' : 'btn-outline-secondary'}`}
-                style={pipelineStage === stage.key ? { backgroundColor: getStageBadgeColor(stage.key), borderColor: getStageBadgeColor(stage.key) } : {}}
-                onClick={() => handlePipelineStageChange(stage.key)}
-              >
-                {stage.label}
-              </button>
-            ))}
-          </div>
+          <LeadPipelineBar
+            leadId={lead.id}
+            stage={pipelineStage}
+            onChanged={(next) => {
+              setPipelineStage(next);
+              setActivityRefreshKey((k) => k + 1);
+            }}
+          />
         </SectionCard>
       </div>
 
