@@ -189,6 +189,7 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
   const [bookings, setBookings] = useState<BookingCard[] | undefined>(undefined);
   const [attaching, setAttaching] = useState(false);
   const [attachError, setAttachError] = useState('');
+  const [sendError, setSendError] = useState('');
   const sinceRef = useRef<string | undefined>(undefined);
   const endRef = useRef<HTMLDivElement | null>(null);
 
@@ -240,12 +241,35 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
     const text = draft.trim();
     if (!text) return;
     const wasAsking = asking;
-    setDraft(''); setAsking(false);
+    setDraft(''); setAsking(false); setSendError('');
     try {
       const msg = await postRoomMessage(roomId, text, wasAsking ? 'question' : undefined);
       sinceRef.current = msg.created_at;
       setMessages((prev) => [...(prev || []), msg]);
-    } catch { setDraft(text); setAsking(wasAsking); }
+    } catch (err: any) {
+      /**
+       * A FAILED SEND MUST SAY SO.
+       *
+       * This catch used to restore the draft and nothing else. To the student
+       * that is: type a question, press Send, the text reappears in the box,
+       * nothing happens, no reason given. Reported on 2026-09-08 as "students
+       * are unable to post comments or questions in the chat", and nobody -
+       * including the person reporting it - could say why, because the UI had
+       * discarded the only explanation that existed.
+       *
+       * The draft is still restored so nothing they typed is lost. What is new
+       * is that the reason survives.
+       */
+      setDraft(text); setAsking(wasAsking);
+      const status = err?.response?.status;
+      setSendError(
+        status === 403
+          ? 'You are not able to post in this room. If you think that is wrong, tell your instructor which room it is.'
+          : status === 401
+            ? 'Your session has expired. Refresh the page and sign in again, then send it.'
+            : 'That did not send. Your message is still in the box, so press Send to try again.',
+      );
+    }
   };
 
   // Attach-from-chat: uploads through the same Docs & Files endpoint as the
@@ -412,6 +436,7 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
             <div ref={endRef} />
           </div>
           {attachError && <div className="rm-upload-error">{attachError}</div>}
+          {sendError && <div className="rm-upload-error" role="alert">{sendError}</div>}
           <div className="rm-chatbar">
             <button type="button" className={`rm-askbtn${asking ? ' on' : ''}`} onClick={() => setAsking((v) => !v)} title="Ask as a question so people can mark the answer" aria-pressed={asking}>❓</button>
             {view.can_upload_resource && (
