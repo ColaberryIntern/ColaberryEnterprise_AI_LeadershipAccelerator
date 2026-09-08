@@ -65,6 +65,14 @@ capture.
    truthful; their stage is still carried by their colour, their label and the
    table.
 
+## Status: shipped
+
+This work is live in production as of 2026-09-08 (PRs #2273, #2289, #2303). These
+images remain component renders against a synthetic fixture — they are not, and were
+never, production proof. The production verification that does exist is recorded in
+`docs/sessions/CC-20260907-b3f7.md`: the compiled artifact was read inside the
+running container after each deploy.
+
 ## What was fixed because of these renders
 
 Three defects that every unit assertion had passed over:
