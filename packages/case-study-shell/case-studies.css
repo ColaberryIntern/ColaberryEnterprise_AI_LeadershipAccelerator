@@ -374,3 +374,23 @@
   line-height: 1.5;
   color: var(--cs-fg-muted);
 }
+
+/* A figure BETWEEN two bands. Full width and unindented on purpose: it belongs
+   to neither neighbour, and anything that visually tucked it under the heading
+   above would make that heading its caption. These replaced a trailing band of
+   three-across thumbnails — the size IS the change. */
+.cs-figure { margin: 0; display: grid; gap: .6rem; }
+.cs-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+}
+.cs-figure figcaption {
+  display: grid;
+  gap: .25rem;
+  font-size: .9rem;
+  color: var(--cs-fg-muted);
+  max-width: 68ch;
+}
