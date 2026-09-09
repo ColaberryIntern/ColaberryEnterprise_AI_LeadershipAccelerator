@@ -246,6 +246,52 @@ describe('person profile', () => {
     expect(profile!.acquisition!.leadScoreMax).toBe(105);
   });
 
+  // ── Data & trust: gaps are stated, never left blank ──────────────────────
+
+  it('names the acquisition gap for a person with no lead', async () => {
+    // The 86. A blank acquisition panel reads as "nothing happened"; the gap
+    // says "this person was never captured as a lead", which is actionable.
+    query.mockReset();
+    query.mockResolvedValueOnce([{ ...IDENTITY, traced: false }]);
+    query.mockResolvedValue([]);
+
+    const profile = await getPersonProfile({
+      email: 'someone@example.com',
+      sections: sectionsFor('owner'),
+      visibleEnrollmentIds: null,
+    });
+
+    const fields = profile!.trust!.gaps.map((g) => g.field);
+    expect(fields).toContain('Acquisition history');
+    expect(profile!.trust!.tracedToLead).toBe(false);
+    expect(profile!.trust!.matchMethod).toBe('none');
+  });
+
+  it('always names outcomes as uncomputable, because no completion status exists', async () => {
+    // enrollments.status holds only active and withdrawn. This gap is not
+    // person-specific — it is a property of the schema, and saying so stops
+    // someone reading an absent graduation as "did not graduate".
+    const profile = await getPersonProfile({
+      email: 'someone@example.com',
+      sections: sectionsFor('owner'),
+      visibleEnrollmentIds: null,
+    });
+    const outcomes = profile!.trust!.gaps.find((g) => g.field === 'Outcomes');
+    expect(outcomes).toBeDefined();
+    expect(outcomes!.reason).toMatch(/active and withdrawn/);
+  });
+
+  it('reports source record ids so any figure can be traced back', async () => {
+    const profile = await getPersonProfile({
+      email: 'someone@example.com',
+      sections: sectionsFor('owner'),
+      visibleEnrollmentIds: null,
+    });
+    expect(profile!.trust).toBeDefined();
+    expect(Array.isArray(profile!.trust!.leadIds)).toBe(true);
+    expect(Array.isArray(profile!.trust!.enrollmentIds)).toBe(true);
+  });
+
   // ── The timeline, which the first version omitted entirely ───────────────
 
   it('gates timeline domains by section, like the panels', async () => {

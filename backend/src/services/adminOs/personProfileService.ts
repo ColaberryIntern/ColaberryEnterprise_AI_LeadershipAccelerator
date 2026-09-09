@@ -79,6 +79,31 @@ export interface AcquisitionPanel {
   leadScoreMax: number;
 }
 
+/**
+ * Data & trust — the brief's last profile section, and the one this whole
+ * workstream has been arguing for.
+ *
+ * It answers "how much of this should you believe": which source records
+ * resolve to this person, how they were matched, whether consent was recorded,
+ * how fresh the data is, and — most usefully — what CANNOT be computed for them
+ * and why. A gap stated is a gap a reader can act on; a gap left blank reads as
+ * a zero.
+ */
+export interface TrustPanel {
+  /** Source records that resolve to this person. */
+  leadIds: number[];
+  enrollmentIds: string[];
+  /** How identity was established. Email is the only automatic method. */
+  matchMethod: 'exact_email' | 'none';
+  /** False for the 86 enrolments with no acquisition record. */
+  tracedToLead: boolean;
+  consentRecorded: boolean | null;
+  /** Most recent activity we hold, from the timeline. */
+  lastActivity: string | null;
+  /** What we cannot say about this person, and why. Never rendered as zero. */
+  gaps: Array<{ field: string; reason: string }>;
+}
+
 export interface AppointmentRow {
   kind: 'appointment' | 'strategy_call';
   title: string | null;
@@ -162,6 +187,7 @@ export interface PersonProfile {
    * shown, and explained rather than silently missing.
    */
   intentSuppressedReason?: string;
+  trust?: TrustPanel;
   journey?: JourneySummary;
   /** One ordered history across every domain the caller may see. */
   timeline?: TimelineEvent[];
@@ -450,6 +476,48 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
   });
 
   profile.journey = await buildJourney(email, leadIds, enrollmentIds, query.sections, profile.timeline);
+
+  // ── Data & trust ──────────────────────────────────────────────────────────
+  //
+  // The gaps are derived from what the lifecycle contract already records as
+  // unjoinable, plus what is genuinely absent for THIS person — so the list is
+  // specific rather than a generic disclaimer nobody reads.
+  const gaps: Array<{ field: string; reason: string }> = [];
+  if (leadIds.length === 0) {
+    gaps.push({
+      field: 'Acquisition history',
+      reason: 'No lead record. This person enrolled without ever being captured as a lead, '
+        + 'so there is nothing recorded about how they found us.',
+    });
+  }
+  if (profile.acquisition && profile.acquisition.consentContact === null) {
+    gaps.push({
+      field: 'Contact consent',
+      reason: 'Never recorded. This is not the same as consent being refused.',
+    });
+  }
+  gaps.push({
+    field: 'Outcomes',
+    reason: 'Completion, graduation and placement cannot be computed: enrollments.status holds '
+      + 'only active and withdrawn, so no completion state exists in the data.',
+  });
+  if (enrollmentIds.length > 0) {
+    gaps.push({
+      field: 'Lifetime revenue',
+      reason: 'No local payments table. Transactions live in PaySimple and are not yet joined, '
+        + 'so per-person revenue is unavailable rather than zero.',
+    });
+  }
+
+  profile.trust = {
+    leadIds,
+    enrollmentIds,
+    matchMethod: leadIds.length > 0 && enrollmentIds.length > 0 ? 'exact_email' : 'none',
+    tracedToLead: profile.tracedToLead,
+    consentRecorded: profile.acquisition?.consentContact ?? null,
+    lastActivity: profile.journey.lastActivity,
+    gaps,
+  };
 
   // The KPI has to obey the same rule as the field, or the header contradicts
   // the panel below it — which is worse than showing the number in both places.

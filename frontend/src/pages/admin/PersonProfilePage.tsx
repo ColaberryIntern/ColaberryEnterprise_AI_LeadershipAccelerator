@@ -93,6 +93,16 @@ interface TimelineEvent {
   occurredAt: string; domain: string; source: string; type: string; summary: string | null;
 }
 
+interface TrustPanel {
+  leadIds: number[];
+  enrollmentIds: string[];
+  matchMethod: string;
+  tracedToLead: boolean;
+  consentRecorded: boolean | null;
+  lastActivity: string | null;
+  gaps: Array<{ field: string; reason: string }>;
+}
+
 interface Journey {
   firstTouch: string | null; lastActivity: string | null; daysKnown: number | null;
   sessions: number; pageEvents: number; campaigns: number; emailsSent: number;
@@ -109,6 +119,7 @@ interface Profile {
   appointments?: AppointmentRow[];
   automation?: AutomationRow[];
   intentSuppressedReason?: string;
+  trust?: TrustPanel;
   journey?: Journey;
   timeline?: TimelineEvent[];
   timelineDomains?: string[];
@@ -153,7 +164,7 @@ const fmtDate = (v: string | null | undefined) =>
   (v ? new Date(v).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : null);
 const fmtDateTime = (v: string | null | undefined) => (v ? new Date(v).toLocaleString() : null);
 
-type TabKey = 'timeline' | 'journey' | 'acquisition' | 'notes' | 'strategy' | 'engagement' | 'learning' | 'billing' | 'activity';
+type TabKey = 'timeline' | 'journey' | 'acquisition' | 'notes' | 'strategy' | 'engagement' | 'learning' | 'billing' | 'activity' | 'trust';
 
 export default function PersonProfilePage() {
   const { email: rawEmail } = useParams<{ email: string }>();
@@ -173,6 +184,9 @@ export default function PersonProfilePage() {
   const [showAppointment, setShowAppointment] = useState(false);
   // Bumped after any write so the activity timeline reflects it immediately.
   const [activityKey, setActivityKey] = useState(0);
+  // The brief's third disclosure level: summary, then domain sections, then the
+  // raw record behind a single event.
+  const [rawEvent, setRawEvent] = useState<TimelineEvent | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -238,6 +252,9 @@ export default function PersonProfilePage() {
     if (profile.learning !== undefined) t.push({ key: 'learning', label: 'Programme', count: profile.learning.length });
     if (profile.billing !== undefined) t.push({ key: 'billing', label: 'Billing', count: profile.billing.length });
     if (profile.engagement !== undefined) t.push({ key: 'activity', label: 'Site activity' });
+    // Last, because it is about the data rather than the person — but present
+    // for everyone, because "how much of this should I believe" always applies.
+    if (profile.trust) t.push({ key: 'trust', label: 'Data & trust', count: profile.trust.gaps.length });
     return t;
   }, [profile]);
 
@@ -418,7 +435,12 @@ export default function PersonProfilePage() {
                       {profile.timeline
                         .filter((e) => domainFilter === 'all' || e.domain === domainFilter)
                         .map((e, i) => (
-                          <tr key={`${e.source}-${e.occurredAt}-${i}`}>
+                          <tr
+                            key={`${e.source}-${e.occurredAt}-${i}`}
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => setRawEvent(e)}
+                            title="Open the underlying record"
+                          >
                             <td className="text-muted small text-nowrap" style={{ fontVariantNumeric: 'tabular-nums' }}>
                               {fmtDateTime(e.occurredAt)}
                             </td>
@@ -812,6 +834,87 @@ export default function PersonProfilePage() {
               )}
             </SectionCard>
           )}
+          {/* ── Data & trust ─────────────────────────────────────────────── */}
+          {tab === 'trust' && profile.trust && (
+            <div className="row g-3">
+              <div className="col-lg-6">
+                <SectionCard title="Identity">
+                  <div className="row">
+                    <Field label="Matched by" value={
+                      profile.trust.matchMethod === 'exact_email'
+                        ? 'Exact email'
+                        : <span className="text-muted">Single source only</span>} />
+                    <Field label="Lead records" value={profile.trust.leadIds.length || null} />
+                    <Field label="Enrolment records" value={profile.trust.enrollmentIds.length || null} />
+                    <Field label="Traced to acquisition" value={
+                      profile.trust.tracedToLead
+                        ? <span className="badge text-bg-success">Yes</span>
+                        : <span className="badge text-bg-warning">No</span>} />
+                    <Field label="Consent recorded" value={
+                      profile.trust.consentRecorded === null
+                        ? null
+                        : <span className={`badge text-bg-${profile.trust.consentRecorded ? 'success' : 'danger'}`}>
+                            {profile.trust.consentRecorded ? 'Yes' : 'No'}
+                          </span>} />
+                    <Field label="Freshest activity" value={fmtDateTime(profile.trust.lastActivity)} />
+                  </div>
+                </SectionCard>
+              </div>
+
+              <div className="col-lg-6">
+                <SectionCard title="What we cannot tell you">
+                  {profile.trust.gaps.length === 0 ? (
+                    <p className="text-muted small mb-0">No known gaps for this person.</p>
+                  ) : (
+                    <ul className="list-unstyled mb-0">
+                      {profile.trust.gaps.map((g) => (
+                        <li key={g.field} className="mb-3">
+                          <div className="fw-semibold small">{g.field}</div>
+                          {/* Stated, not blank. A blank reads as zero. */}
+                          <div className="text-muted small">{g.reason}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </SectionCard>
+              </div>
+            </div>
+          )}
+
+          {/* ── Raw event drawer ─────────────────────────────────────────── */}
+          {rawEvent && (
+            <>
+              <div className="modal d-block" tabIndex={-1} role="dialog"
+                style={{ background: 'rgba(0,0,0,.4)' }} onClick={() => setRawEvent(null)}>
+                <div className="modal-dialog modal-dialog-centered" role="document"
+                  onClick={(e) => e.stopPropagation()}>
+                  <div className="modal-content">
+                    <div className="modal-header">
+                      <h5 className="modal-title">{rawEvent.type}</h5>
+                      <button type="button" className="btn-close" aria-label="Close"
+                        onClick={() => setRawEvent(null)} />
+                    </div>
+                    <div className="modal-body">
+                      <div className="row">
+                        <Field label="When" value={fmtDateTime(rawEvent.occurredAt)} />
+                        <Field label="Domain" value={rawEvent.domain} />
+                        <Field label="Source table" value={<code>{rawEvent.source}</code>} />
+                        <Field label="Detail" wide value={rawEvent.summary} />
+                      </div>
+                      {/* Naming the table is the point: any figure on this page
+                          can be traced to the rows behind it. */}
+                      <p className="text-muted small mb-0">
+                        This event came from <code>{rawEvent.source}</code>. Every row in the
+                        timeline is labelled with the table it was read from, so any number here
+                        can be checked against the data.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
           {acq?.leadId && (
             <ScheduleAppointmentModal
               leadId={acq.leadId}
