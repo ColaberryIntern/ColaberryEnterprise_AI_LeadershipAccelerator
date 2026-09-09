@@ -10,6 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import { SIGNED_DOC_DIR } from '../../config/upload';
 import { documentsFor, outstandingRequirements, verifyDocument } from '../../services/internship/internshipDocumentService';
+import { activate, activeInternView, buildChecklist } from '../../services/internship/internshipActivationService';
 
 /**
  * Admin — AI Internship applications.
@@ -270,6 +271,68 @@ router.post('/api/admin/internship/documents/:documentId/verify', requireSection
       context: { message: err?.message },
     }));
     res.status(500).json({ error: 'Could not record that.' });
+  }
+});
+
+/** GET /api/admin/internship/applications/:id/onboarding */
+router.get('/api/admin/internship/applications/:id/onboarding', requireSection('internship'), async (req: Request, res: Response) => {
+  try {
+    const application = await InternshipApplication.findByPk(String(req.params.id));
+    if (!application) { res.status(404).json({ error: 'Application not found.' }); return; }
+    const view = await activeInternView(application);
+    res.json({ state: application.state, ...view });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_admin_onboarding_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not load onboarding.' });
+  }
+});
+
+/**
+ * POST /api/admin/internship/applications/:id/activate
+ *
+ * The ONLY route that puts someone in the internship cohort. Reviewer-gated, and
+ * it refuses with the outstanding blockers rather than a bare error, so the
+ * reviewer sees WHY — most often an unverified document or an inactive membership.
+ */
+router.post('/api/admin/internship/applications/:id/activate', requireSection('internship'), async (req: Request, res: Response) => {
+  const actorId = String((req.admin as any)?.email ?? (req.admin as any)?.sub ?? 'unknown-admin');
+  try {
+    const application = await InternshipApplication.findByPk(String(req.params.id));
+    if (!application) { res.status(404).json({ error: 'Application not found.' }); return; }
+
+    const result = await activate({ application, actor: 'reviewer', actorId });
+
+    if (!result.ok && result.reason === 'blocked') {
+      res.status(409).json({
+        error: 'Not ready to activate yet.',
+        blockers: result.blockers.map((b) => ({ key: b.key, label: b.label, waiting_on: b.waiting_on })),
+      });
+      return;
+    }
+    if (!result.ok) {
+      res.status(409).json({ error: `Cannot activate from ${result.state}.` });
+      return;
+    }
+
+    const checklist = await buildChecklist(application);
+    res.json({ ...result, checklist });
+  } catch (err: any) {
+    if (err instanceof InvalidInternshipTransitionError) {
+      res.status(409).json({ error: 'That is not available from this status.' });
+      return;
+    }
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_activate_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message, application_id: String(req.params.id) },
+    }));
+    res.status(500).json({ error: 'Could not activate.' });
   }
 });
 

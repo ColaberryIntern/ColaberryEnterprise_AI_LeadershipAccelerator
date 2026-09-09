@@ -29,6 +29,7 @@ import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
 import CommunityPulse from './CommunityPulse';
 import NextLiveClassCard from './NextLiveClassCard';
 import InternshipOpportunityCard from './InternshipOpportunityCard';
+import InternshipCommandCard from './InternshipCommandCard';
 import { fetchInternshipStatus, InternshipStatus } from '../../../services/internshipApi';
 import { useNextLiveSession } from './useNextLiveSession';
 import '../../../components/timeline/timeline.css';
@@ -559,7 +560,11 @@ const TodayShell: React.FC = () => {
               (from live_sessions) show the live-session card; otherwise fall
               back to the first-class cohort countdown UNCHANGED. The Open House
               "Coming up" card below is unaffected in either case. */}
-          {internship?.render && (
+          {/* Once someone is an intern the recruiting card is replaced by the
+              command card — "after activation, replace the recruiting card with a
+              compact Internship Command Card". Same slot, different job. */}
+          {internship?.render && internship.card_state === 'active' && <InternshipCommandCard />}
+          {internship?.render && internship.card_state !== 'active' && (
             <InternshipOpportunityCard
               status={internship}
               onChanged={() => setInternshipToken((n) => n + 1)}
