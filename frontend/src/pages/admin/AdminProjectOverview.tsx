@@ -385,6 +385,25 @@ function AdminProjectOverview({ initialCohortId }: ProjectOverviewProps = {}) {
                                               <td style={{ paddingLeft: 24 }}>
                                                 <div className="fw-medium">{s.full_name}</div>
                                                 <div className="text-muted" style={{ fontSize: 10 }}>{s.email}{s.company ? ` · ${s.company}` : ''}</div>
+                                                {/* The Command Center is the student's own GitHub Pages site, built by
+                                                    STORY-000 at the root of their repo. It is a public URL, so it opens
+                                                    from here — it is not a local-only thing. Absent until they publish
+                                                    Pages, which is why this renders only when the URL exists rather
+                                                    than showing a dead button for everyone else. */}
+                                                {s.command_center_url && (
+                                                  <a
+                                                    href={s.command_center_url}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="d-inline-flex align-items-center gap-1 mt-1"
+                                                    style={{ fontSize: 10 }}
+                                                    title={s.command_center_url}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                  >
+                                                    <i className="ri-dashboard-3-line" aria-hidden="true" />
+                                                    Command Center
+                                                  </a>
+                                                )}
                                               </td>
                                               <td>{s.organization_name || <span className="text-muted">Not set</span>}</td>
                                               <td className="text-center">

@@ -20,7 +20,7 @@ import CertBankPanel from '../CertBankPanel';
 import { QuestionCard, isFixtureReviewer } from '../CertReviewPanel';
 import { EvidenceRow } from '../CertEvidenceReviewPanel';
 import { bankTrust } from '../AdminCertPrepPage';
-import { sortForTriage } from '../CertCohortPanel';
+import { sortForTriage, hasStartedPractising } from '../CertCohortPanel';
 import type { BankHealth, QuestionRevision, EvidenceMapping, CohortReadinessRow } from '../../../../services/certPrepAdminApi';
 
 const noop = () => undefined;
@@ -223,5 +223,41 @@ describe('cohort triage order', () => {
 
   it('boundary: an empty cohort sorts to an empty list rather than throwing', () => {
     expect(sortForTriage([])).toEqual([]);
+  });
+});
+
+/**
+ * Who appears on the cert prep roster.
+ *
+ * Ali: "People should not show up on the cert prep until they have started practicing."
+ * The trap is filtering on `overall_state` instead of `answered_total`: readiness is
+ * computed on a schedule, so a student who answered fifty questions this morning still
+ * reads `not_measured` until the job runs. Filtering on state would hide exactly the people
+ * who are working, which is the opposite of the request.
+ */
+describe('hasStartedPractising', () => {
+  const row = (over: Partial<CohortReadinessRow>): CohortReadinessRow => ({
+    enrollment_id: 'e1', full_name: 'A', email: 'a@b.c',
+    overall_state: 'not_measured', overall_scaled: null, knowledge_scaled: null,
+    answered_total: 0, evidence_coverage_pct: null, sample_confidence: null,
+    computed_at: null, ...over,
+  } as CohortReadinessRow);
+
+  it('counts one answered question as started', () => {
+    expect(hasStartedPractising(row({ answered_total: 1 }))).toBe(true);
+  });
+
+  it('does not count an enrolled student who has answered nothing', () => {
+    expect(hasStartedPractising(row({ answered_total: 0 }))).toBe(false);
+  });
+
+  it('keeps a student who has answered but has not been scored yet', () => {
+    // THE LOAD-BEARING CASE. `not_measured` with real attempts is the normal state
+    // between practising and the next readiness run. Filtering on state drops them.
+    expect(hasStartedPractising(row({ answered_total: 40, overall_state: 'not_measured', computed_at: null }))).toBe(true);
+  });
+
+  it('treats a missing count as not started rather than throwing', () => {
+    expect(hasStartedPractising(row({ answered_total: undefined as unknown as number }))).toBe(false);
   });
 });
