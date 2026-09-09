@@ -107,6 +107,75 @@ export function StoryHeroMetrics({
   );
 }
 
+/* -------------------------------------------------------- hero figure --- */
+
+/**
+ * The masthead's picture: the walkthrough player when the record has one, the cover
+ * image otherwise.
+ *
+ * ONE SLOT, NOT TWO. This began as a band under the masthead, and that shipped a record
+ * opening with two visuals doing the same job - a screenshot of the product, then a film
+ * of the product, with the reader scrolling past the first to reach the second. The hero
+ * already owns a picture slot and the masthead's right half was built for it.
+ *
+ * THE POSTER FALLS BACK TO THE COVER, so a record with a walkthrough looks exactly as it
+ * did until somebody presses play, and a record without one is untouched.
+ *
+ * A NATIVE `video`, NOT AN EMBED. The platform serves the file, so no third party is
+ * handed a record of who watched a client's delivery. `media-src` already allows the
+ * platform origin here, where an embed would need `frame-src` and hand playback away.
+ *
+ * NOT AUTOPLAYED, and `preload="none"`. It carries narration, and a page that starts
+ * talking at a reader who came to read is a page they leave; a multi-megabyte file should
+ * not be fetched by every visitor who never presses play. The poster is what they see, so
+ * nothing is lost by not preloading.
+ */
+export function StoryHeroFigure({
+  video,
+  cover,
+}: {
+  video: PublicCaseStudyDetail['walkthroughVideo'];
+  cover: { src: string; alt: string } | null;
+}): React.ReactElement | null {
+  if (video) {
+    return (
+      <figure className="cbv2-story__cover cbv2-story__cover--video">
+        <video
+          className="cbv2-story__walkthrough-player"
+          controls
+          preload="none"
+          playsInline
+          poster={video.posterUrl ?? cover?.src ?? undefined}
+        >
+          <source src={video.url} type="video/mp4" />
+          {/* Separate from the captions burned into the picture: burned-in text cannot be
+              resized, translated, turned off, or read by a screen reader. */}
+          {video.captionsUrl ? (
+            <track kind="captions" srcLang="en" label="English" src={video.captionsUrl} default />
+          ) : null}
+        </video>
+        {/* Said on the page rather than left to be assumed. An unlabelled synthetic voice
+            is a small deception, and this system's whole claim is that it does not make
+            those. */}
+        {video.narrationSource === 'synthetic' ? (
+          <figcaption className="cbv2-story__walkthrough-note">
+            {video.title}. Narrated by a synthetic voice; the figures it states are the
+            verified metrics recorded below.
+          </figcaption>
+        ) : (
+          <figcaption className="cbv2-story__walkthrough-note">{video.title}</figcaption>
+        )}
+      </figure>
+    );
+  }
+  if (!cover) return null;
+  return (
+    <figure className="cbv2-story__cover">
+      <img src={cover.src} alt={cover.alt} loading="eager" decoding="async" />
+    </figure>
+  );
+}
+
 /* ------------------------------------------------------------ contributors --- */
 
 /**
@@ -115,57 +184,6 @@ export function StoryHeroMetrics({
  * crediting people honestly never costs anybody their privacy, and the count
  * keeps the credit list from implying a smaller team than the one that worked.
  */
-/**
- * The narrated walkthrough, at the top of the record.
- *
- * A NATIVE `video`, NOT AN EMBED. The platform serves the file, so no third party is
- * handed a record of who watched a client's delivery. It also keeps the CSP story simple:
- * `media-src` already allows the platform origin here, where a YouTube embed would need
- * `frame-src` and hand playback to someone else's player.
- *
- * NOT AUTOPLAYED. It carries narration, and a page that starts talking at a reader who
- * came to read is a page they leave. `preload="none"` for the same reason - a 2.6MB file
- * should not be fetched by every visitor who never presses play.
- *
- * THE CAPTION TRACK IS SEPARATE FROM THE BURNED-IN CAPTIONS the picture already carries.
- * Burned-in text cannot be resized, translated, turned off, or read by a screen reader.
- */
-export function StoryWalkthrough({
-  video,
-}: {
-  video: PublicCaseStudyDetail['walkthroughVideo'];
-}): React.ReactElement | null {
-  if (!video) return null;
-  return (
-    <section className="cbv2-rv cbv2-section" data-section="walkthrough">
-      <div className="cbv2-wrap cbv2-story__walkthrough" data-story-zone="walkthrough">
-        <h2 className="cbv2-story__walkthrough-title">{video.title}</h2>
-        <video
-          className="cbv2-story__walkthrough-player"
-          controls
-          preload="none"
-          playsInline
-          poster={video.posterUrl ?? undefined}
-        >
-          <source src={video.url} type="video/mp4" />
-          {video.captionsUrl ? (
-            <track kind="captions" srcLang="en" label="English" src={video.captionsUrl} default />
-          ) : null}
-        </video>
-        {/* Said on the page rather than left to be assumed. A synthetic voice that is not
-            labelled is a small deception, and this system's whole claim is that it does
-            not make those. */}
-        {video.narrationSource === 'synthetic' ? (
-          <p className="cbv2-story__walkthrough-note">
-            A walkthrough of the delivered system. The narration is a synthetic voice; the
-            figures it states are the verified metrics recorded further down this page.
-          </p>
-        ) : null}
-      </div>
-    </section>
-  );
-}
-
 export function StoryContributors({
   contributors,
   anonymousCount,
