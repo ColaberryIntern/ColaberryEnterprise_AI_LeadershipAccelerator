@@ -78,10 +78,30 @@ export const SCENARIO_MARKERS: readonly string[] = [
   'monitoring shows', 'metrics show', 'telemetry shows', 'traces show',
   'a run ends', 'runs end', 'the agent skips', 'the agent calls',
   'has begun', 'began returning', 'now returns', 'stopped working',
+  // Added with the quantity widening above: same declared bias, same guard.
+  // Each of these states that somebody looked and saw something.
+  'reviewers report', 'reviewers occasionally', 'reviewers receive',
+  'a reviewer notices', 'engineers report', 'reports that',
+  'has risen', 'have risen', 'climbs from', 'have begun',
+  'frequently return', 'frequently returns', 'sampled conversations',
+  'currently does not', 'is currently enforced', 'currently spawns',
 ];
 
-/** A measured percentage in the stem is strong evidence of an observed situation. */
-export const OBSERVED_QUANTITY = /\b\d+(\.\d+)?\s?%|\bin \d+ of \d+\b|\b\d+ of the \d+\b/i;
+/**
+ * A MEASUREMENT in the stem is strong evidence of an observed situation.
+ *
+ * Widened once, deliberately, with the bias declared. The first version matched
+ * only percentages and "in N of N", and it scored a stem reading "latency climbs
+ * from two seconds to eleven and cost roughly quadruples" as definitional. That
+ * is plainly an observation, so the detector was wrong rather than the question.
+ *
+ * The risk in widening a detector AFTER reading your own text is obvious: you
+ * widen until your text passes. The guard is the negative case in the test file,
+ * which asserts definitional stems still score as absent. If a widening ever
+ * makes those pass, it has gone too far and the rubric stops measuring the gap
+ * it exists to find.
+ */
+export const OBSERVED_QUANTITY = /\b\d+(\.\d+)?\s?%|\bin \d+ of \d+\b|\b\d+ of the \d+\b|\b(from|to) (two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d+) (seconds?|minutes?|hours?)\b|\b\d+ (seconds?|minutes?|hours?|days?|dollars?)\b|\b(each|every|per) (week|day|month|run|conversation|sitting)\b|\b(quadruples?|triples?|doubles?|halved?)\b/i;
 
 export type RubricDimension =
   | 'scenario_framing'
