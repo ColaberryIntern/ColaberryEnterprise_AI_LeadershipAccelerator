@@ -82,34 +82,49 @@ export const NAV_GROUPS: NavGroup[] = [
     { path: '/admin/missed-opportunities', label: 'Missed Opportunities', icon: 'mail-close-line' },
     { path: '/admin/content-queue', label: 'Content Queue', icon: 'article-line' },
   ]},
+  // The Accelerator is the front door of the Program domain: cohorts, the
+  // people in them, what they are taught, and the work they produce all hang
+  // off /admin/accelerator's own tabs now. Five surfaces that used to sit here
+  // as siblings were folded into those tabs (2026-09-08) and deliberately kept
+  // OUT of this list so the sidebar stops competing with the page:
+  //
+  //   Community Roles          -> a section under the Cohorts tab
+  //   Cert Prep / Case Studies / Projects -> Accelerator program-level tabs
+  //   Feed Control Governance  -> already reachable from Curriculum > Feed Control
+  //
+  // Their ROUTES stay live and their pages are unchanged. What changes is only
+  // that they are no longer sidebar entries — which is exactly why each one is
+  // restated in UNLISTED_PATH_SECTIONS below. Dropping a nav entry without that
+  // restatement makes sectionForPath() return null, and ProtectedRoute then
+  // bounces every scoped identity off a page the API would have served. That
+  // failure is the one the case-studies comment used to warn about here.
   { label: 'Program', section: 'program', links: [
     { path: '/admin/accelerator', label: 'Accelerator', icon: 'graduation-cap-line' },
-    { path: '/admin/community-roles', label: 'Community Roles', icon: 'user-star-line' },
-    { path: '/admin/orchestration', label: 'Orchestration', icon: 'flow-chart' },
-    { path: '/admin/cape-settings', label: 'Architecture Skills', icon: 'radar-line' },
-    { path: '/admin/feed-control-governance', label: 'Feed Control Governance', icon: 'shield-star-line' },
-    // Cert Prep MUST stay in this group: the backend's mgmtSectionGate maps
-    // /api/admin/cert-prep to 'program', and a nav entry in any other group
-    // would give sectionForPath() a different answer than the API's gate — the
-    // link would render for an identity the API then 403s, or vanish for one it
-    // would have served.
-    { path: '/admin/cert-prep', label: 'Cert Prep', icon: 'award-line' },
+    // Renamed from "Orchestration": this is the curriculum authoring surface
+    // (Composer, Experience Studio, Timeline, Feed Control), and "Curriculum"
+    // is what it is called everywhere except this label. The PATH is unchanged
+    // so every existing deep link, bookmark and ?tab= link keeps working.
+    { path: '/admin/orchestration', label: 'Curriculum', icon: 'flow-chart' },
     { path: '/admin/workforce', label: 'AI Organization', icon: 'team-line' },
-    { path: '/admin/brain', label: 'Enterprise Intelligence', icon: 'brain-line' },
-    { path: '/admin/projects', label: 'Projects', icon: 'rocket-2-line' },
-    // Case Studies sit in Program because a Case Study is the publishable
-    // projection of a Project, so the roles that manage Projects manage these.
-    // The section MUST stay 'program': the backend's mgmtSectionGate maps
-    // /api/admin/case-studies to 'program', and without a matching nav entry
-    // sectionForPath() returns null, which hides the link AND makes
-    // ProtectedRoute bounce every scoped identity while a legacy admin who
-    // types the URL still sees a working page.
-    { path: '/admin/case-studies', label: 'Case Studies', icon: 'award-line' },
   ]},
   { label: 'Intelligence', section: 'intelligence', links: [
     { path: '/admin/ceo', label: 'CEO Command', icon: 'vip-crown-line' },
     { path: '/admin/cb-system', label: 'CB System', icon: 'robot-2-line' },
     { path: '/admin/intelligence', label: 'Intelligence OS', icon: 'cpu-line' },
+    // Moved out of the Program group 2026-09-08. The Enterprise Memory Graph
+    // spans leads, agents, campaigns and projects; students are one node type
+    // among many, so it sits with the other platform-wide intelligence
+    // surfaces rather than beside the Accelerator.
+    //
+    // THE SECTION IS PINNED TO 'program' ON PURPOSE and must not be allowed to
+    // inherit this group's 'intelligence'. The backend's mgmtSectionGate maps
+    // /api/admin/brain to 'program'; changing the nav section without changing
+    // the gate would make the two disagree, and changing BOTH would silently
+    // re-scope who can open the page — an access decision, not a nav tidy-up.
+    // This is the same presentation-vs-authorization split the Revenue group
+    // already uses for Leads and Pipeline (grouped under Revenue, gated on
+    // 'leads'). Moving a link between groups must never move access with it.
+    { path: '/admin/brain', label: 'Enterprise Intelligence', icon: 'brain-line', section: 'program' },
     { path: '/admin/insights', label: 'Insights', icon: 'lightbulb-line' },
     { path: '/admin/governance', label: 'Governance', icon: 'shield-keyhole-line' },
     { path: '/admin/governance-policy', label: 'Governance Policies', icon: 'shield-star-line' },
@@ -197,6 +212,25 @@ export const UNLISTED_PATH_SECTIONS: ReadonlyArray<readonly [string, string]> = 
   // AI workforce and knowledge operations.
   ['/admin/agent-orphans', 'intelligence'],
   ['/admin/knowledge-ops', 'intelligence'],
+  // Folded into the Accelerator page's tabs on 2026-09-08 and removed from the
+  // Program nav group. Every one of these keeps a live route and a working
+  // page, so each MUST keep its section: the backend's mgmtSectionGate maps
+  // /api/admin/community, /api/admin/cert-prep, /api/admin/case-studies,
+  // /api/admin/projects and /api/admin/feed-control all to 'program', and this
+  // list is the frontend half of that contract. Without these rows
+  // sectionForPath() returns null for the routes and ProtectedRoute bounces
+  // every scoped identity off pages the API would happily serve — while a
+  // legacy admin typing the URL still gets a working page, which is the
+  // silent, role-dependent breakage this file warns about twice above.
+  ['/admin/community-roles', 'program'],
+  ['/admin/cert-prep', 'program'],
+  ['/admin/case-studies', 'program'],
+  ['/admin/projects', 'program'],
+  ['/admin/feed-control-governance', 'program'],
+  // Architecture Skills (the CAPE rubric) became a tab on the Curriculum page
+  // in the same pass — curriculum configuration, authored by the people who
+  // author the curriculum. Its route stays live and its section is unchanged.
+  ['/admin/cape-settings', 'program'],
 ];
 
 /**

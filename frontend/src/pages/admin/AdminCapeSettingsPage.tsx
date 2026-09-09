@@ -210,7 +210,15 @@ function EvidenceBandWeightsPanel({
   );
 }
 
-const AdminCapeSettingsPage: React.FC = () => {
+interface CapeSettingsProps {
+  /** True when rendered as a tab inside the Curriculum page rather than as its
+   *  own route — suppresses the page-level header so the surface does not show
+   *  two competing titles. Defaults to false, so the standalone
+   *  /admin/cape-settings route is unchanged. */
+  embedded?: boolean;
+}
+
+const AdminCapeSettingsPage: React.FC<CapeSettingsProps> = ({ embedded = false }) => {
   const [defs, setDefs] = useState<SkillDefinition[]>([]);
   const [weightsCurrent, setWeightsCurrent] = useState<EvidenceBandWeights | null>(null);
   const [weightsHistory, setWeightsHistory] = useState<EvidenceBandWeights[]>([]);
@@ -244,11 +252,15 @@ const AdminCapeSettingsPage: React.FC = () => {
 
   return (
     <div className="admin-page">
-      <PageHeader
-        title="Architecture Skills"
-        subtitle="The Phase 0-1 minimal settings panel for CAPE — skill definitions and evidence-band weights. The full Feed Control governance board ships in a later phase."
-        icon="radar-line"
-      />
+      {/* Suppressed when embedded as the Curriculum page's Architecture Skills
+          tab: that page already carries the title and breadcrumb. */}
+      {!embedded && (
+        <PageHeader
+          title="Architecture Skills"
+          subtitle="The Phase 0-1 minimal settings panel for CAPE — skill definitions and evidence-band weights. The full Feed Control governance board ships in a later phase."
+          icon="radar-line"
+        />
+      )}
 
       {error && <div className="alert alert-danger">{error}</div>}
       {loading ? (

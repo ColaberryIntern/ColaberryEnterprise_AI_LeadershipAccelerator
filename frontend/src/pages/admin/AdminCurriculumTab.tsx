@@ -1,56 +1,82 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../../utils/api';
+import { SectionCard, StatCard, StatusBadge } from '../../components/admin/shell';
 
-interface CurriculumModule {
+/**
+ * AdminCurriculumTab — what this cohort is actually taught, week by week.
+ *
+ * REBUILT 2026-09-08. The previous version read
+ * `/cohorts/:id/curriculum/modules`, which queries `curriculum_modules WHERE
+ * cohort_id = :id`. That is the pre-Timeline authoring model: nothing in the
+ * Curriculum Composer writes it, so the tab rendered "No curriculum modules
+ * found for this cohort" for every cohort on the platform, including ones
+ * teaching that week. It was not a data gap, it was the wrong table.
+ *
+ * The live curriculum is `timeline_cards`, and it is COURSE-scoped: cards carry
+ * `program_id` and leave `cohort_id` NULL, because one curriculum is shared
+ * across every cohort of a course. A cohort reaches its curriculum through
+ * `cohorts.program_id` — which is why the old cohort-id lookup could never have
+ * returned anything, however much curriculum existed.
+ *
+ * Two empty states, not one, because they need different fixes: a cohort with
+ * no parent Course has nothing to show and someone must attach it; a Course
+ * with no cards needs authoring in the Composer.
+ *
+ * DROPPED IN THE REBUILD: the per-lesson status override and the lab-response
+ * viewer. Both wrote through `curriculum_lessons`, the same dead model, so
+ * neither had anything to act on for any live cohort. The endpoints remain
+ * mounted and untouched; if the override is wanted again it belongs against
+ * `timeline_card_progress`, which is a different feature, not a port.
+ */
+
+interface CurriculumCard {
   id: string;
-  module_number: number;
+  type: string;
+  type_label: string;
   title: string;
-  description: string;
-  skill_area: string;
-  total_lessons: number;
-  lessons: CurriculumLesson[];
+  subtitle: string | null;
+  week: number | null;
+  bucket: string;
+  visibility: string;
+  status: string;
+  order: number | null;
 }
 
-interface CurriculumLesson {
-  id: string;
-  lesson_number: number;
-  title: string;
-  lesson_type: string;
-  estimated_minutes: number;
-  requires_structured_input: boolean;
+interface CurriculumWeek {
+  week: number | null;
+  label: string;
+  cards: CurriculumCard[];
+  total: number;
+  published: number;
+  draft: number;
+}
+
+interface CohortCurriculum {
+  cohort_id: string;
+  cohort_name: string;
+  program_id: string | null;
+  program_name: string | null;
+  has_program: boolean;
+  weeks: CurriculumWeek[];
+  totals: { cards: number; published: number; draft: number; weeks: number };
+}
+
+interface ProgressCard {
+  id: string; title: string; type_label: string; visibility: string;
+  status: string; quiz_score: number | null; completed_at: string | null;
 }
 
 interface ParticipantProgress {
   enrollment_id: string;
-  overall_progress: number;
-  total_lessons: number;
-  completed_lessons: number;
-  modules: Array<{
-    id: string;
-    module_number: number;
-    title: string;
-    skill_area: string;
-    total_lessons: number;
-    completed_lessons: number;
-    status: string;
-    lessons: Array<{
-      id: string;
-      lesson_number: number;
-      title: string;
-      lesson_type: string;
-      status: string;
-      quiz_score: number | null;
-      completed_at: string | null;
-    }>;
+  full_name: string;
+  overall_pct: number;
+  completed_cards: number;
+  total_cards: number;
+  weeks: Array<{
+    week: number | null; label: string; total: number; completed: number;
+    in_progress: number; pct: number; cards: ProgressCard[];
   }>;
-}
-
-interface LabResponse {
-  lesson_id: string;
-  lesson_title: string;
-  lesson_type: string;
-  structured_responses: Record<string, any>;
-  completed_at: string | null;
 }
 
 interface EnrollmentInfo {
@@ -60,28 +86,29 @@ interface EnrollmentInfo {
   company: string;
 }
 
-const SKILL_COLORS: Record<string, string> = {
-  strategy_trust: '#6366f1',
-  governance: '#ef4444',
-  requirements: '#3b82f6',
-  build_discipline: '#8b5cf6',
-  executive_authority: '#10b981',
+const VISIBILITY_TONE: Record<string, 'success' | 'warning' | 'neutral' | 'info'> = {
+  published: 'success',
+  scheduled: 'info',
+  draft: 'warning',
+  archived: 'neutral',
 };
 
-const LESSON_TYPE_BADGES: Record<string, { bg: string; label: string }> = {
-  section: { bg: '#eef2ff', label: 'Section' },
-  concept: { bg: '#e0e7ff', label: 'Concept' },
-  lab: { bg: '#f3e8ff', label: 'Lab' },
-  assessment: { bg: '#fef3c7', label: 'Assessment' },
-  reflection: { bg: '#fef9c3', label: 'Reflection' },
+const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }> = {
+  locked: { bg: '#f1f5f9', color: '#64748b', label: 'Locked' },
+  available: { bg: '#dbeafe', color: '#1d4ed8', label: 'Available' },
+  in_progress: { bg: '#fef3c7', color: '#b45309', label: 'In progress' },
+  completed: { bg: '#dcfce7', color: '#15803d', label: 'Completed' },
 };
 
-const STATUS_STYLES: Record<string, { bg: string; color: string }> = {
-  locked: { bg: '#f1f5f9', color: '#94a3b8' },
-  available: { bg: '#dbeafe', color: '#2563eb' },
-  in_progress: { bg: '#fef3c7', color: '#d97706' },
-  completed: { bg: '#dcfce7', color: '#16a34a' },
-};
+function ProgressBar({ pct }: { pct: number }) {
+  const color = pct >= 70 ? 'var(--bs-success)' : pct >= 40 ? 'var(--bs-warning)' : 'var(--bs-danger)';
+  return (
+    <div className="progress" style={{ height: 6 }} role="progressbar"
+      aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Curriculum progress">
+      <div className="progress-bar" style={{ width: `${Math.min(100, Math.max(0, pct))}%`, background: color }} />
+    </div>
+  );
+}
 
 interface Props {
   cohortId: string;
@@ -90,386 +117,275 @@ interface Props {
 }
 
 export default function AdminCurriculumTab({ cohortId, enrollments, showToast }: Props) {
-  const [modules, setModules] = useState<CurriculumModule[]>([]);
-  const [modulesLoading, setModulesLoading] = useState(false);
+  const [curriculum, setCurriculum] = useState<CohortCurriculum | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [expandedWeek, setExpandedWeek] = useState<string | null>(null);
+
   const [selectedEnrollmentId, setSelectedEnrollmentId] = useState('');
   const [progress, setProgress] = useState<ParticipantProgress | null>(null);
   const [progressLoading, setProgressLoading] = useState(false);
-  const [labResponses, setLabResponses] = useState<LabResponse[]>([]);
-  const [labLoading, setLabLoading] = useState(false);
-  const [expandedModule, setExpandedModule] = useState<string | null>(null);
-  const [viewingLab, setViewingLab] = useState<LabResponse | null>(null);
-  const [overrideModal, setOverrideModal] = useState<{ lessonId: string; lessonTitle: string; currentStatus: string } | null>(null);
-  const [overrideStatus, setOverrideStatus] = useState('');
-  const [exportLoading, setExportLoading] = useState(false);
 
-  const loadModules = useCallback(async () => {
+  const loadCurriculum = useCallback(async () => {
     if (!cohortId) return;
-    setModulesLoading(true);
+    setLoading(true);
+    setLoadError(null);
     try {
-      const res = await api.get(`/api/admin/accelerator/cohorts/${cohortId}/curriculum/modules`);
-      setModules(res.data.modules || []);
-    } catch { showToast('Failed to load curriculum modules', 'error'); }
-    setModulesLoading(false);
-  }, [cohortId, showToast]);
+      const res = await api.get(`/api/admin/accelerator/cohorts/${cohortId}/curriculum/timeline`);
+      setCurriculum(res.data);
+    } catch {
+      setLoadError('Failed to load the curriculum for this cohort.');
+    } finally {
+      setLoading(false);
+    }
+  }, [cohortId]);
 
-  useEffect(() => { loadModules(); }, [loadModules]);
+  useEffect(() => { loadCurriculum(); }, [loadCurriculum]);
 
-  const loadParticipantProgress = async (enrollmentId: string) => {
-    if (!enrollmentId) { setProgress(null); setLabResponses([]); return; }
+  // Clear the selected participant when the cohort changes — their progress
+  // belongs to the previous cohort, and the API rejects a mismatched pairing.
+  useEffect(() => { setSelectedEnrollmentId(''); setProgress(null); }, [cohortId]);
+
+  const loadProgress = async (enrollmentId: string) => {
+    setSelectedEnrollmentId(enrollmentId);
+    if (!enrollmentId) { setProgress(null); return; }
     setProgressLoading(true);
-    setLabLoading(true);
     try {
-      const [progRes, labRes] = await Promise.all([
-        api.get(`/api/admin/accelerator/enrollments/${enrollmentId}/curriculum-progress`),
-        api.get(`/api/admin/accelerator/enrollments/${enrollmentId}/lab-responses`),
-      ]);
-      setProgress(progRes.data);
-      setLabResponses(labRes.data.responses || []);
-    } catch { showToast('Failed to load participant data', 'error'); }
-    setProgressLoading(false);
-    setLabLoading(false);
+      const res = await api.get(`/api/admin/accelerator/cohorts/${cohortId}/curriculum/timeline/${enrollmentId}`);
+      setProgress(res.data);
+    } catch {
+      showToast('Failed to load participant progress', 'error');
+      setProgress(null);
+    } finally {
+      setProgressLoading(false);
+    }
   };
 
-  const handleOverride = async () => {
-    if (!overrideModal || !selectedEnrollmentId || !overrideStatus) return;
-    try {
-      await api.put(`/api/admin/accelerator/curriculum/lessons/${overrideModal.lessonId}/override`, {
-        enrollment_id: selectedEnrollmentId,
-        status: overrideStatus,
-      });
-      showToast('Lesson status updated', 'success');
-      setOverrideModal(null);
-      loadParticipantProgress(selectedEnrollmentId);
-    } catch { showToast('Failed to override status', 'error'); }
-  };
+  const composerHref = useMemo(
+    () => (curriculum?.program_id
+      ? `/admin/orchestration?tab=composer&program=${curriculum.program_id}`
+      : '/admin/orchestration?tab=composer'),
+    [curriculum]
+  );
 
-  const handleExport = async () => {
-    if (!selectedEnrollmentId) return;
-    setExportLoading(true);
-    try {
-      const res = await api.get(`/api/admin/accelerator/enrollments/${selectedEnrollmentId}/project-architect`);
-      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      const participant = enrollments.find(e => e.id === selectedEnrollmentId);
-      a.href = url;
-      a.download = `project-architect-${participant?.full_name?.replace(/\s+/g, '-').toLowerCase() || selectedEnrollmentId}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast('Export downloaded', 'success');
-    } catch { showToast('Failed to export data', 'error'); }
-    setExportLoading(false);
-  };
+  if (loading) {
+    return (
+      <SectionCard title="Curriculum">
+        <div className="text-center py-5">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Loading…</span>
+          </div>
+        </div>
+      </SectionCard>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <SectionCard title="Curriculum">
+        <div className="d-flex align-items-center justify-content-between">
+          <span className="text-danger small mb-0">{loadError}</span>
+          <button className="btn btn-sm btn-outline-secondary" onClick={loadCurriculum}>Retry</button>
+        </div>
+      </SectionCard>
+    );
+  }
+
+  // Empty state 1 — no parent Course. Distinct from "no cards": nothing can be
+  // shown until someone attaches this cohort to a Course, and authoring more
+  // curriculum would not help.
+  if (curriculum && !curriculum.has_program) {
+    return (
+      <SectionCard title="Curriculum" subtitle={curriculum.cohort_name}>
+        <div className="border rounded p-4 text-center">
+          <div className="fw-semibold mb-1">This cohort is not attached to a Course.</div>
+          <p className="text-muted small mb-3">
+            Curriculum is authored per Course and shared across that Course&apos;s cohorts.
+            Until this cohort has a parent Course there is no curriculum to show —
+            set one on the cohort&apos;s Edit form.
+          </p>
+        </div>
+      </SectionCard>
+    );
+  }
+
+  const totals = curriculum?.totals;
 
   return (
-    <div className="row g-3">
-      {/* Left Column: Module Structure */}
-      <div className="col-lg-5">
-        <div className="card border-0 shadow-sm">
-          <div className="card-header bg-white border-bottom d-flex align-items-center justify-content-between" style={{ padding: '12px 16px' }}>
-            <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>
-              <i className="bi bi-mortarboard me-2"></i>Curriculum Structure
-            </span>
-            <span className="badge bg-secondary">{modules.length} modules</span>
+    <>
+      <SectionCard
+        title="Curriculum"
+        subtitle={curriculum?.program_name
+          ? `Course: ${curriculum.program_name} — shared by every cohort of this Course.`
+          : 'Course curriculum.'}
+        icon="book-open-line"
+        actions={
+          <div className="d-flex gap-1">
+            <button className="btn btn-sm btn-outline-secondary" onClick={loadCurriculum}>Refresh</button>
+            <Link className="btn btn-sm btn-outline-primary" to={composerHref}>Open Composer</Link>
           </div>
-          <div className="card-body p-0">
-            {modulesLoading ? (
-              <div className="text-center py-4">
-                <div className="spinner-border spinner-border-sm" role="status"><span className="visually-hidden">Loading...</span></div>
-              </div>
-            ) : modules.length === 0 ? (
-              <div className="text-center text-muted py-4">No curriculum modules found for this cohort</div>
-            ) : (
-              <div className="list-group list-group-flush">
-                {modules.map((mod) => {
-                  const color = SKILL_COLORS[mod.skill_area] || '#6366f1';
-                  const isExpanded = expandedModule === mod.id;
-                  return (
-                    <div key={mod.id}>
-                      <button
-                        className="list-group-item list-group-item-action border-0 d-flex align-items-center gap-2 py-2 px-3"
-                        onClick={() => setExpandedModule(isExpanded ? null : mod.id)}
-                        style={{ borderLeft: `3px solid ${color}` }}
-                      >
-                        <div
-                          className="d-flex align-items-center justify-content-center rounded flex-shrink-0"
-                          style={{ width: 28, height: 28, background: `${color}15`, fontSize: 12, fontWeight: 700, color }}
-                        >
-                          {mod.module_number}
-                        </div>
-                        <div className="flex-grow-1 text-start">
-                          <div className="small fw-semibold">{mod.title}</div>
-                          <div style={{ fontSize: 11, color: '#94a3b8' }}>
-                            {mod.total_lessons} lessons · {mod.skill_area.replace(/_/g, ' ')}
-                          </div>
-                        </div>
-                        <i className={`bi bi-chevron-${isExpanded ? 'up' : 'down'} small`} style={{ color: '#94a3b8' }}></i>
-                      </button>
-                      {isExpanded && mod.lessons && (
-                        <div style={{ background: '#f8fafc' }}>
-                          {mod.lessons
-                            .sort((a, b) => a.lesson_number - b.lesson_number)
-                            .map((lesson) => {
-                              const typeBadge = LESSON_TYPE_BADGES[lesson.lesson_type] || { bg: '#f1f5f9', label: lesson.lesson_type };
-                              return (
-                                <div key={lesson.id} className="d-flex align-items-center gap-2 py-2 px-4" style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                  <span className="small text-muted" style={{ width: 20 }}>{lesson.lesson_number}.</span>
-                                  <span className="small flex-grow-1">{lesson.title}</span>
-                                  <span className="badge" style={{ background: typeBadge.bg, color: '#475569', fontSize: 10 }}>
-                                    {typeBadge.label}
-                                  </span>
-                                  <span style={{ fontSize: 10, color: '#94a3b8' }}>{lesson.estimated_minutes}m</span>
-                                </div>
-                              );
-                            })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+        }
+      >
+        <div className="row g-3 mb-3">
+          <div className="col-6 col-lg-3">
+            <StatCard label="Weeks" value={totals?.weeks ?? 0} icon="calendar-line" tone="primary" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Cards" value={totals?.cards ?? 0} icon="stack-line" tone="info" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Published" value={totals?.published ?? 0} icon="checkbox-circle-line"
+              tone="success" hint="Visible to students" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Draft" value={totals?.draft ?? 0} icon="draft-line"
+              tone={(totals?.draft ?? 0) > 0 ? 'warning' : 'neutral'} hint="Not yet visible" />
           </div>
         </div>
-      </div>
 
-      {/* Right Column: Participant Progress & Lab Responses */}
-      <div className="col-lg-7">
-        {/* Participant Selector */}
-        <div className="card border-0 shadow-sm mb-3">
-          <div className="card-body py-2 px-3">
-            <div className="d-flex gap-2 align-items-center">
-              <label className="form-label small fw-medium mb-0 flex-shrink-0">Participant:</label>
-              <select
-                className="form-select form-select-sm"
-                value={selectedEnrollmentId}
-                onChange={(e) => {
-                  setSelectedEnrollmentId(e.target.value);
-                  loadParticipantProgress(e.target.value);
-                }}
+        {/* Empty state 2 — the Course exists, nothing authored in it yet. */}
+        {curriculum && curriculum.weeks.length === 0 && (
+          <div className="border rounded p-4 text-center">
+            <div className="fw-semibold mb-1">No curriculum has been authored for this Course yet.</div>
+            <p className="text-muted small mb-3">
+              Cards are created in the Curriculum Composer and published to the Timeline.
+              Once published they appear here and in the student feed.
+            </p>
+            <Link className="btn btn-sm btn-primary" to={composerHref}>Open the Composer</Link>
+          </div>
+        )}
+
+        {curriculum?.weeks.map((w) => {
+          const key = String(w.week ?? 'unscheduled');
+          const open = expandedWeek === key;
+          return (
+            <div key={key} className="border rounded mb-2">
+              <button
+                className="btn w-100 text-start d-flex align-items-center justify-content-between p-3"
+                onClick={() => setExpandedWeek(open ? null : key)}
+                aria-expanded={open}
               >
-                <option value="">Select participant...</option>
-                {enrollments.map((e) => (
-                  <option key={e.id} value={e.id}>{e.full_name} — {e.company}</option>
-                ))}
-              </select>
-              {selectedEnrollmentId && (
-                <button
-                  className="btn btn-sm btn-outline-primary flex-shrink-0"
-                  onClick={handleExport}
-                  disabled={exportLoading}
-                  title="Export Project Architect data"
-                >
-                  <i className="bi bi-download me-1"></i>
-                  {exportLoading ? 'Exporting...' : 'Export'}
-                </button>
+                <span className="d-flex align-items-center gap-2 flex-wrap">
+                  <i className={`ri-arrow-${open ? 'down' : 'right'}-s-line`} aria-hidden="true" />
+                  <span className="fw-semibold">{w.label}</span>
+                  <span className="text-muted small">{w.total} card{w.total === 1 ? '' : 's'}</span>
+                </span>
+                <span className="d-flex gap-1">
+                  {w.published > 0 && <StatusBadge label={`${w.published} published`} tone="success" />}
+                  {w.draft > 0 && <StatusBadge label={`${w.draft} draft`} tone="warning" />}
+                </span>
+              </button>
+
+              {open && (
+                <div className="border-top table-responsive">
+                  <table className="table table-sm mb-0 align-middle">
+                    <thead className="table-light">
+                      <tr>
+                        <th scope="col">Card</th>
+                        <th scope="col">Type</th>
+                        <th scope="col">Section</th>
+                        <th scope="col">Visibility</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {w.cards.map((c) => (
+                        <tr key={c.id}>
+                          <td>
+                            <div className="fw-medium">{c.title}</div>
+                            {c.subtitle && <div className="text-muted small">{c.subtitle}</div>}
+                          </td>
+                          <td className="small text-muted">{c.type_label}</td>
+                          <td className="small text-muted text-capitalize">{c.bucket}</td>
+                          <td>
+                            <StatusBadge label={c.visibility} tone={VISIBILITY_TONE[c.visibility] ?? 'neutral'} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
-          </div>
+          );
+        })}
+      </SectionCard>
+
+      <SectionCard
+        title="Participant progress"
+        subtitle="Measured against PUBLISHED cards only — a draft was never shown to the student, so counting it would report everyone as permanently behind."
+        icon="user-search-line"
+        className="mt-3"
+      >
+        <div className="mb-3" style={{ maxWidth: 420 }}>
+          <label className="form-label small fw-medium" htmlFor="curriculum-participant">Participant</label>
+          <select
+            id="curriculum-participant"
+            className="form-select form-select-sm"
+            value={selectedEnrollmentId}
+            onChange={(e) => loadProgress(e.target.value)}
+          >
+            <option value="">Select a participant…</option>
+            {enrollments.map((e) => (
+              <option key={e.id} value={e.id}>{e.full_name} — {e.email}</option>
+            ))}
+          </select>
         </div>
 
-        {!selectedEnrollmentId ? (
-          <div className="card border-0 shadow-sm">
-            <div className="card-body text-center text-muted py-5">
-              <i className="bi bi-person-circle" style={{ fontSize: 32, opacity: 0.3 }}></i>
-              <p className="small mt-2 mb-0">Select a participant to view their curriculum progress</p>
-            </div>
-          </div>
-        ) : progressLoading ? (
-          <div className="card border-0 shadow-sm">
-            <div className="card-body text-center py-4">
-              <div className="spinner-border spinner-border-sm" role="status"><span className="visually-hidden">Loading...</span></div>
-            </div>
-          </div>
-        ) : progress ? (
-          <>
-            {/* Progress Overview */}
-            <div className="card border-0 shadow-sm mb-3">
-              <div className="card-header bg-white border-bottom" style={{ padding: '12px 16px' }}>
-                <div className="d-flex justify-content-between align-items-center">
-                  <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>
-                    <i className="bi bi-graph-up me-2"></i>Curriculum Progress
-                  </span>
-                  <span className="fw-bold" style={{ color: '#6366f1' }}>{progress.overall_progress}%</span>
-                </div>
-              </div>
-              <div className="card-body">
-                <div className="progress mb-3" style={{ height: 8, background: '#f1f5f9', borderRadius: 4 }}>
-                  <div className="progress-bar" style={{ width: `${progress.overall_progress}%`, background: '#6366f1', borderRadius: 4 }}></div>
-                </div>
-                <div className="small text-muted mb-3">{progress.completed_lessons}/{progress.total_lessons} lessons completed</div>
-
-                {/* Module Progress */}
-                {progress.modules.map((mod) => {
-                  const color = SKILL_COLORS[mod.skill_area] || '#6366f1';
-                  const pct = mod.total_lessons > 0 ? Math.round((mod.completed_lessons / mod.total_lessons) * 100) : 0;
-                  return (
-                    <div key={mod.id} className="mb-3">
-                      <div className="d-flex justify-content-between align-items-center mb-1">
-                        <span className="small fw-medium">
-                          M{mod.module_number}: {mod.title}
-                        </span>
-                        <span className="small" style={{ color: pct === 100 ? '#10b981' : '#94a3b8' }}>
-                          {mod.completed_lessons}/{mod.total_lessons} ({pct}%)
-                        </span>
-                      </div>
-                      <div className="progress mb-1" style={{ height: 4, background: '#f1f5f9' }}>
-                        <div className="progress-bar" style={{ width: `${pct}%`, background: color }}></div>
-                      </div>
-                      {/* Lesson statuses */}
-                      <div className="d-flex flex-wrap gap-1 mt-1">
-                        {mod.lessons.map((lesson) => {
-                          const st = STATUS_STYLES[lesson.status] || STATUS_STYLES.locked;
-                          return (
-                            <div
-                              key={lesson.id}
-                              className="d-flex align-items-center gap-1 px-2 py-1 rounded"
-                              style={{ background: st.bg, fontSize: 10, cursor: 'pointer' }}
-                              title={`${lesson.title} — ${lesson.status}${lesson.quiz_score != null ? ` (${lesson.quiz_score}%)` : ''}`}
-                              onClick={() => {
-                                setOverrideModal({ lessonId: lesson.id, lessonTitle: lesson.title, currentStatus: lesson.status });
-                                setOverrideStatus(lesson.status);
-                              }}
-                            >
-                              <span style={{ color: st.color, fontWeight: 600 }}>{lesson.lesson_number}</span>
-                              <span style={{ color: st.color }}>{lesson.status === 'completed' ? '✓' : lesson.status === 'in_progress' ? '…' : lesson.status === 'available' ? '○' : '🔒'}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Lab Responses */}
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white border-bottom" style={{ padding: '12px 16px' }}>
-                <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>
-                  <i className="bi bi-journal-code me-2"></i>Lab Responses ({labResponses.length})
-                </span>
-              </div>
-              <div className="card-body p-0">
-                {labLoading ? (
-                  <div className="text-center py-4">
-                    <div className="spinner-border spinner-border-sm" role="status"><span className="visually-hidden">Loading...</span></div>
-                  </div>
-                ) : labResponses.length === 0 ? (
-                  <div className="text-center text-muted py-4 small">No lab responses submitted yet</div>
-                ) : (
-                  <div className="list-group list-group-flush">
-                    {labResponses.map((lab, i) => (
-                      <button
-                        key={i}
-                        className="list-group-item list-group-item-action d-flex align-items-center justify-content-between py-2 px-3"
-                        onClick={() => setViewingLab(lab)}
-                      >
-                        <div>
-                          <div className="small fw-medium">{lab.lesson_title}</div>
-                          <div style={{ fontSize: 11, color: '#94a3b8' }}>
-                            {lab.lesson_type} · {lab.completed_at ? new Date(lab.completed_at).toLocaleDateString() : 'In progress'}
-                          </div>
-                        </div>
-                        <i className="bi bi-chevron-right small text-muted"></i>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="card border-0 shadow-sm">
-            <div className="card-body text-center text-muted py-4 small">
-              No curriculum data found for this participant
+        {progressLoading && (
+          <div className="text-center py-4">
+            <div className="spinner-border spinner-border-sm text-primary" role="status">
+              <span className="visually-hidden">Loading…</span>
             </div>
           </div>
         )}
-      </div>
 
-      {/* Lab Response Detail Modal */}
-      {viewingLab && (
-        <>
-          <div className="modal-backdrop show" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} />
-          <div className="modal show d-block" role="dialog" aria-modal="true">
-            <div className="modal-dialog modal-lg">
-              <div className="modal-content">
-                <div className="modal-header">
-                  <h5 className="modal-title h6">{viewingLab.lesson_title}</h5>
-                  <button type="button" className="btn-close" onClick={() => setViewingLab(null)} />
+        {!progressLoading && !progress && (
+          <div className="text-muted small">Select a participant to see how far they have got.</div>
+        )}
+
+        {!progressLoading && progress && (
+          <>
+            <div className="d-flex align-items-center justify-content-between mb-1">
+              <span className="fw-semibold">{progress.full_name}</span>
+              <span className="small text-muted">
+                {progress.completed_cards} of {progress.total_cards} cards · {progress.overall_pct}%
+              </span>
+            </div>
+            <div className="mb-3"><ProgressBar pct={progress.overall_pct} /></div>
+
+            {progress.total_cards === 0 && (
+              <div className="text-muted small">
+                Nothing is published for this Course yet, so there is no progress to measure.
+              </div>
+            )}
+
+            {progress.weeks.map((w) => (
+              <div key={String(w.week ?? 'unscheduled')} className="mb-3">
+                <div className="d-flex justify-content-between small mb-1">
+                  <span className="fw-medium">{w.label}</span>
+                  <span className="text-muted">{w.completed}/{w.total} · {w.pct}%</span>
                 </div>
-                <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-                  {viewingLab.structured_responses && Object.keys(viewingLab.structured_responses).length > 0 ? (
-                    <div>
-                      {Object.entries(viewingLab.structured_responses).map(([key, value]) => (
-                        <div key={key} className="mb-3">
-                          <label className="form-label small fw-semibold text-capitalize" style={{ color: '#475569' }}>
-                            {key.replace(/_/g, ' ')}
-                          </label>
-                          <div
-                            className="form-control form-control-sm"
-                            style={{ background: '#f8fafc', minHeight: 40, whiteSpace: 'pre-wrap', fontSize: 13 }}
-                          >
-                            {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-muted text-center py-3">No structured data</div>
-                  )}
-                </div>
-                <div className="modal-footer">
-                  <button className="btn btn-outline-secondary btn-sm" onClick={() => setViewingLab(null)}>Close</button>
+                <ProgressBar pct={w.pct} />
+                <div className="d-flex flex-wrap gap-1 mt-2">
+                  {w.cards.map((c) => {
+                    const s = STATUS_STYLE[c.status] ?? STATUS_STYLE.locked;
+                    return (
+                      <span
+                        key={c.id}
+                        className="badge rounded-pill"
+                        style={{ background: s.bg, color: s.color, fontWeight: 500 }}
+                        title={`${c.title} — ${s.label}${c.quiz_score != null ? ` · score ${c.quiz_score}` : ''}`}
+                      >
+                        {c.title.length > 34 ? `${c.title.slice(0, 33)}…` : c.title}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Override Status Modal */}
-      {overrideModal && (
-        <>
-          <div className="modal-backdrop show" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} />
-          <div className="modal show d-block" role="dialog" aria-modal="true">
-            <div className="modal-dialog modal-sm">
-              <div className="modal-content">
-                <div className="modal-header">
-                  <h5 className="modal-title h6">Override Lesson Status</h5>
-                  <button type="button" className="btn-close" onClick={() => setOverrideModal(null)} />
-                </div>
-                <div className="modal-body">
-                  <p className="small mb-2"><strong>{overrideModal.lessonTitle}</strong></p>
-                  <p className="small text-muted mb-3">Current status: <strong>{overrideModal.currentStatus}</strong></p>
-                  <select
-                    className="form-select form-select-sm"
-                    value={overrideStatus}
-                    onChange={(e) => setOverrideStatus(e.target.value)}
-                  >
-                    <option value="locked">Locked</option>
-                    <option value="available">Available</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="completed">Completed</option>
-                  </select>
-                </div>
-                <div className="modal-footer">
-                  <button className="btn btn-outline-secondary btn-sm" onClick={() => setOverrideModal(null)}>Cancel</button>
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={handleOverride}
-                    disabled={overrideStatus === overrideModal.currentStatus}
-                  >
-                    Update Status
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
+            ))}
+          </>
+        )}
+      </SectionCard>
+    </>
   );
 }
