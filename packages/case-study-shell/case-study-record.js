@@ -475,6 +475,12 @@
     video.setAttribute('controls', '');
     video.setAttribute('preload', 'none');
     video.setAttribute('playsinline', '');
+    // Required for the CAPTIONS, not the video. A cross-origin `track` is refused unless
+    // the media element itself is a CORS request, and this page is on another brand's
+    // domain while the file is served from the platform. Without it the track's
+    // readyState goes to 3 (ERROR) and the cue list stays empty while the video plays
+    // fine — nothing looks broken except the missing captions.
+    video.setAttribute('crossorigin', 'anonymous');
     var poster = v.posterUrl || posterFallback;
     if (poster) video.setAttribute('poster', poster);
     var src = document.createElement('source');
