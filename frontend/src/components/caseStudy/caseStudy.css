@@ -178,10 +178,29 @@
   box-shadow: var(--shadow-md);
 }
 
+/*
+ * THE SAME PICTURE SHAPE AS THE OTHER TWO BRANDS. Ali, 2026-09-08: "Make the
+ * Card in enterprise the same size as AI flotation and training site."
+ *
+ * Measured at 1440px before changing anything, because the cards themselves
+ * were not the problem: enterprise 444px wide, training 447px — already the
+ * same. The PICTURE was the difference. `height: auto` let every cover render
+ * at whatever proportion its own screenshot happened to be, so one record's
+ * card showed a 2.35:1 letterbox 168px tall while the sibling sites showed
+ * 205px and 278px. A grid whose pictures each pick their own height reads as a
+ * ragged edge rather than a set of comparable objects.
+ *
+ * 16/10 matches the training site's card, the closest sibling by width, and
+ * gives a screenshot more room than 16/9 did. `top`, not centre: these are
+ * pictures of screens, and a screen puts its title bar and first heading at the
+ * top — a centred crop of a tall page throws both away.
+ */
 .cbv2-cs-card__media {
   display: block;
   width: 100%;
-  height: auto;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  object-position: center top;
   border-radius: var(--radius-md);
   background: var(--surface-sunken);
 }

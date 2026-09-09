@@ -276,7 +276,13 @@
      it was told to hold - a 16/9 rule that measured 368x318. Taking the image
      out of flow leaves the box's own height as the only thing to size it from. */
   position: relative;
-  aspect-ratio: 16 / 9;
+  /* 16/10, matching the Enterprise and training cards. All three sites show
+     the same records, so a picture that is a different shape on each one makes
+     one library look like three. Measured 2026-09-08: enterprise 444px wide,
+     training 447px - the cards already agreed, the pictures did not. It also
+     gives a screenshot more room than 16/9 did. (The walkthrough player below
+     stays 16/9: that is the video's own shape, not a card's.) */
+  aspect-ratio: 16 / 10;
   background: var(--cs-bg);
   border-bottom: 1px solid var(--cs-line);
 }
@@ -393,4 +399,57 @@
   font-size: .9rem;
   color: var(--cs-fg-muted);
   max-width: 68ch;
+}
+
+/* ---------- KEEP READING: other records on THIS site ---------- */
+/* Ali, 2026-09-08: "show other related project at the end of the Case Study's
+   so they can continue looking through related case studys." The surface is the
+   filter and it is the server's, so a record not published to this brand cannot
+   appear here. Three at most: an invitation to keep reading, not a second index. */
+.cs-related-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cs-related-link {
+  display: grid;
+  gap: .6rem;
+  height: 100%;
+  align-content: start;
+  color: inherit;
+  text-decoration: none;
+}
+.cs-related-link img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  object-position: center top;
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+  background: var(--cs-bg);
+}
+.cs-related-link:hover .cs-related-title { text-decoration: underline; }
+.cs-related-link:focus-visible { outline: 2px solid var(--cs-accent); outline-offset: 3px; }
+.cs-related-meta {
+  margin: 0;
+  font-size: .72rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--cs-accent);
+}
+.cs-related-title { margin: 0; font-size: 1rem; line-height: 1.3; }
+.cs-related-note {
+  margin: 0;
+  font-size: .88rem;
+  line-height: 1.5;
+  color: var(--cs-fg-muted);
+  /* Three lines: a standfirst here is a taste of the record, not the record. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
