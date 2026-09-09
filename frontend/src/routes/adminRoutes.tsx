@@ -55,6 +55,7 @@ const GovernanceCommandCenter = lazy(() => import('../pages/admin/GovernanceComm
 const AdminGovernancePolicyPage = lazy(() => import('../pages/admin/AdminGovernancePolicyPage'));
 const AdminProjectOverview = lazy(() => import('../pages/admin/AdminProjectOverview'));
 const AdminCaseStudiesPage = lazy(() => import('../pages/admin/AdminCaseStudiesPage'));
+const AdminInternshipPage = lazy(() => import('../pages/admin/AdminInternshipPage'));
 const AdminCaseStudyDetailPage = lazy(() => import('../pages/admin/AdminCaseStudyDetailPage'));
 const InboxCOSPage = lazy(() => import('../pages/admin/inbox/InboxCOSPage'));
 const ContentQueuePage = lazy(() => import('../pages/admin/ContentQueuePage'));
@@ -180,6 +181,7 @@ const adminRoutes = (
             and is wrong here. Kept in this order anyway so the file reads the
             same way as the business-account pair above. */}
         <Route path="/admin/case-studies" element={<AdminCaseStudiesPage />} />
+        <Route path="/admin/internship" element={<AdminInternshipPage />} />
         <Route path="/admin/case-studies/:id" element={<AdminCaseStudyDetailPage />} />
         <Route path="/admin/inbox" element={<InboxCOSPage />} />
         <Route path="/admin/content-queue" element={<ContentQueuePage />} />

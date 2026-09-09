@@ -77,6 +77,16 @@ export const NAV_GROUPS: NavGroup[] = [
     { path: '/admin/routing-rules', label: 'Routing Rules', icon: 'node-tree' },
     { path: '/admin/autonomous', label: 'Autonomous', icon: 'lightbulb-flash-line' },
   ]},
+  // AI Internship applications. Its own group because it has its own section
+  // key: the queue carries an applicant's resume, phone number and interview
+  // transcript, which is a wider grant than the Program group's curriculum work.
+  // The section matches what mgmtSectionGate classifies /api/admin/internship
+  // under, so nav visibility and API access agree by construction — a link that
+  // renders for someone the API will then 403 is the failure this file keeps
+  // warning about. Admissions (Dhee) holds this section, so she sees it here.
+  { label: 'AI Internship', section: 'internship', links: [
+    { path: '/admin/internship', label: 'Applications', icon: 'user-follow-line' },
+  ]},
   { label: 'Inbox & Content', section: 'inbox_content', links: [
     { path: '/admin/inbox', label: 'Inbox COS', icon: 'inbox-2-line' },
     { path: '/admin/missed-opportunities', label: 'Missed Opportunities', icon: 'mail-close-line' },
