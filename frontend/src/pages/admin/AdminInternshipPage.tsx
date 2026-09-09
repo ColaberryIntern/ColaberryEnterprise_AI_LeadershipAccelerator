@@ -4,6 +4,7 @@ import {
   ApplicationDetail, QueueBucket, QueueResponse, ReviewerDecision,
   decideInternshipApplication, fetchInternshipApplication, fetchInternshipQueue,
 } from '../../services/adminInternshipApi';
+import InternshipDocumentPanel from '../../components/admin/internship/InternshipDocumentPanel';
 
 /**
  * AdminInternshipPage — the AI Internship review queue and decision surface.
@@ -429,6 +430,11 @@ const AdminInternshipPage: React.FC = () => {
               ))}
             </SectionCard>
           )}
+
+          <InternshipDocumentPanel
+            applicationId={selected}
+            onChanged={() => { void loadDetail(selected); void loadQueue(bucket); }}
+          />
 
           <SectionCard title="Decide" icon="gavel-line">
             {decisionNote && <div className="alert alert-success" role="status">{decisionNote}</div>}

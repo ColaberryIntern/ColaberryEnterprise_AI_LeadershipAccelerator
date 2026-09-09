@@ -130,3 +130,56 @@ export async function decideInternshipApplication(id: string, body: {
   const { data } = await api.post(`/api/admin/internship/applications/${id}/decide`, body);
   return data;
 }
+
+// ── Documents ───────────────────────────────────────────────────────────────
+
+export interface AdminDocumentRow {
+  id: string;
+  document_type: string;
+  kind: 'generated' | 'signed_upload';
+  revision: number;
+  status: string;
+  original_filename: string | null;
+  mime_type: string | null;
+  byte_size: number | null;
+  checksum_short: string | null;
+  document_public_id: string | null;
+  verified_by: string | null;
+  verified_at: string | null;
+  rejection_reason: string | null;
+  created_at: string;
+}
+
+export interface AdminDocumentsView {
+  requirements: Array<{
+    document_type: string;
+    title: string;
+    requires_signature: boolean;
+    generated: boolean;
+    latest_upload_revision: number | null;
+    verified: boolean;
+    correction_requested: boolean;
+    rejection_reason: string | null;
+  }>;
+  all_verified: boolean;
+  documents: AdminDocumentRow[];
+}
+
+export async function fetchInternshipDocumentsAdmin(applicationId: string): Promise<AdminDocumentsView> {
+  const { data } = await api.get<AdminDocumentsView>(`/api/admin/internship/applications/${applicationId}/documents`);
+  return data;
+}
+
+/** The reviewer has to actually look at the page before accepting it. */
+export function internshipDocumentFileUrl(documentId: string): string {
+  const base = process.env.REACT_APP_API_URL || '';
+  return `${base}/api/admin/internship/documents/${documentId}/file`;
+}
+
+export async function verifyInternshipDocument(documentId: string, body: {
+  accept: boolean;
+  rejection_reason?: string | null;
+}): Promise<{ ok: boolean; all_verified: boolean; state: string }> {
+  const { data } = await api.post(`/api/admin/internship/documents/${documentId}/verify`, body);
+  return data;
+}

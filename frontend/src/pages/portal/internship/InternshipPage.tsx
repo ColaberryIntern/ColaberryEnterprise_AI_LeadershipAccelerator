@@ -10,6 +10,7 @@ import {
 } from '../../../services/internshipApi';
 import InternshipInterview from './InternshipInterview';
 import InternshipSummary from './InternshipSummary';
+import InternshipDocuments from './InternshipDocuments';
 
 /**
  * The AI Internship application surface.
@@ -152,6 +153,10 @@ const InternshipPage: React.FC = () => {
   const showInterview = ['interview_channel_selected', 'interview_scheduled', 'interview_in_progress'].includes(state)
     && !forceSummary;
   const showSummary = state === 'interview_complete' || forceSummary;
+  // The offer-letter package. Shown from approval through to verification, so a
+  // correction request keeps the upload control in reach rather than hiding it.
+  const showDocuments = ['approved', 'offer_letter_ready', 'signed_documents_uploaded', 'documents_verified']
+    .includes(state);
 
   return (
     <PortalShell>
@@ -412,7 +417,11 @@ const InternshipPage: React.FC = () => {
           />
         )}
 
-        {!showIntake && !showChannel && !showInterview && !showSummary && status && (
+        {showDocuments && (
+          <InternshipDocuments onChanged={() => { void reload(); }} />
+        )}
+
+        {!showIntake && !showChannel && !showInterview && !showSummary && !showDocuments && status && (
           <section className="ip-card">
             <h2>{status.title}</h2>
             <p className="ip-muted">

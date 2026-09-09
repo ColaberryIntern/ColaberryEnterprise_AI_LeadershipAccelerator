@@ -72,11 +72,26 @@ interface SynthflowResponse {
  * caller skips deterministically rather than dialling with somebody else's voice.
  */
 export function resolveAgentId(params: { callType: 'welcome' | 'interest' | 'callback' | 'internship_interview'; brandSlug?: string }): string {
-  // AI Internship interview. FIRST and unconditional: an applicant expecting a
-  // qualification interview must never reach an agent carrying a bootcamp sales
-  // script. Unset returns '' and the caller skips with `no_agent_id`.
+  // AI Internship interview. FIRST, so an applicant expecting a qualification
+  // interview can never reach an agent carrying a bootcamp sales script.
+  //
+  // WHEN ITS OWN SLOT IS UNSET IT BORROWS THE AI FLOTATION SHELL, which is the
+  // decision Ali took on 2026-09-09 ("use the agent we already have, we will carry
+  // that into production for now") — and it is safe for exactly the reason the
+  // OpportunityLift branch below already relies on: the AI Flotation agent's saved
+  // prompt is literally `{prompt}`, so it has no opinions of its own and whatever
+  // we send at call time IS the call. Borrowing a shell is not borrowing a voice.
+  //
+  // What it must NEVER fall through to is `synthflowCallbackAgentId` or
+  // `synthflowInterestAgentId`: those carry saved bootcamp/training-site scripts,
+  // so an internship applicant would be sold a bootcamp seat by an agent that
+  // never heard of the internship. That is the defect this whole function's
+  // comments exist to prevent, and it stays prevented.
+  //
+  // If BOTH slots are empty the call is skipped with `no_agent_id` rather than
+  // dialling an unscripted agent.
   if (params.callType === 'internship_interview' || params.brandSlug === 'colaberry-internship') {
-    return env.synthflowInternshipAgentId;
+    return env.synthflowInternshipAgentId || env.synthflowAiFlotationAgentId;
   }
   if (params.brandSlug === 'ai-flotation') return env.synthflowAiFlotationAgentId;
 
