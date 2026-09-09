@@ -16,6 +16,13 @@ import api from '../../../utils/api';
  * UNPUBLISHED SINKS. Within every section, unpublished cards fall to the bottom (the API
  * sorts them there) and render greyed. They stay visible because a card withheld from
  * students is a fact about the curriculum, not noise.
+ *
+ * PACE LIVES ON THE CLASS DASHBOARD, NOT HERE. The gold/green/yellow/red bands and the
+ * per-student table were originally in this file, which buried them two clicks deep in a
+ * drill-down tab and made a hand-written `?tab=curriculum` URL the only practical way to
+ * reach them. They are now `StudentPacePanel`, rendered on the Class Dashboard where Ali
+ * asked for them. This tab answers "which parts of the curriculum are people finishing";
+ * that panel answers "where is each student". Same endpoint, opposite halves.
  */
 
 interface Card {
@@ -27,14 +34,11 @@ interface Week {
   week: number | null; cardCount: number; publishedCardCount: number; completedPct: number;
   studentsCompletedAny: number; isScheduledWeek: boolean; sections: Section[];
 }
+/** The response also carries `pace` and `students`; StudentPacePanel renders those on the
+ *  Class Dashboard and fetches them with `?view=pace`. This tab reads the tree only. */
 interface Completion {
   scheduledWeek: number; deliveredSessions: number; activeStudents: number;
   weeks: Week[];
-  pace: { gold: number; green: number; yellow: number; red: number };
-  students: Array<{
-    enrollmentId: string; name: string; weeksCompleted: number; cardsCompleted: number;
-    furthestWeekTouched: number | null; delta: number; band: string;
-  }>;
 }
 
 /**
@@ -49,14 +53,6 @@ export function completionTone(pct: number): { cls: string; label: string } {
   if (pct >= 5) return { cls: 'warning', label: 'thin' };
   return { cls: 'danger', label: 'skipped' };
 }
-
-const BAND_TONE: Record<string, string> = {
-  gold: 'warning', green: 'success', yellow: 'warning', red: 'danger',
-};
-const BAND_LABEL: Record<string, string> = {
-  gold: 'Gold · 2+ weeks ahead', green: 'Green · keeping up',
-  yellow: 'Yellow · 1 week behind', red: 'Red · 2+ weeks behind',
-};
 
 const bucketLabel = (b: string) => b.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -73,7 +69,6 @@ export default function CurriculumCompletionTab({ cohortId }: { cohortId: string
   const [data, setData] = useState<Completion | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openWeeks, setOpenWeeks] = useState<Set<string>>(new Set());
-  const [drill, setDrill] = useState<{ name: string; rows: Array<{ week: number | null; publishedCardCount: number; completed: number; completedPct: number; weekDone: boolean }> } | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -88,13 +83,6 @@ export default function CurriculumCompletionTab({ cohortId }: { cohortId: string
     if (next.has(key)) next.delete(key); else next.add(key);
     return next;
   });
-
-  const openStudent = async (enrollmentId: string) => {
-    setDrill(null);
-    const res = await api.get(
-      `/api/admin/accelerator/cohorts/${cohortId}/students/${enrollmentId}/week-breakdown`);
-    setDrill({ name: res.data.name, rows: res.data.rows });
-  };
 
   const totals = useMemo(() => {
     if (!data) return null;
@@ -119,21 +107,6 @@ export default function CurriculumCompletionTab({ cohortId }: { cohortId: string
             {data.deliveredSessions} sessions delivered.
           </p>
         </div>
-      </div>
-
-      {/* Pace. The counts are the KPI Ali asked for; the caption states the rule so the
-          colours are never a mystery, and the raw numbers sit beside every student below. */}
-      <div className="row g-2 mb-3">
-        {(['gold', 'green', 'yellow', 'red'] as const).map((b) => (
-          <div className="col-6 col-md-3" key={b}>
-            <div className={`card border-${BAND_TONE[b]}`}>
-              <div className="card-body py-2">
-                <div className="small text-muted text-uppercase">{BAND_LABEL[b]}</div>
-                <div className={`fs-4 fw-bold text-${BAND_TONE[b]}`}>{data.pace[b]}</div>
-              </div>
-            </div>
-          </div>
-        ))}
       </div>
 
       {totals && (
@@ -214,56 +187,6 @@ export default function CurriculumCompletionTab({ cohortId }: { cohortId: string
         </table>
       </div>
 
-      <h6>Students by pace</h6>
-      <div className="table-responsive">
-        <table className="table table-sm align-middle">
-          <thead>
-            <tr>
-              <th>Participant</th><th>Band</th><th>Weeks completed</th>
-              <th>Delta vs class</th><th>Cards completed</th><th>Furthest week</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.students.map((s) => (
-              <tr key={s.enrollmentId} onClick={() => { void openStudent(s.enrollmentId); }} style={{ cursor: 'pointer' }}>
-                <td>{s.name}</td>
-                <td><span className={`badge bg-${BAND_TONE[s.band]}`}>{s.band}</span></td>
-                <td>{s.weeksCompleted}</td>
-                <td className={s.delta < 0 ? 'text-danger' : 'text-success'}>
-                  {s.delta > 0 ? `+${s.delta}` : s.delta}
-                </td>
-                <td>{s.cardsCompleted}</td>
-                <td>{s.furthestWeekTouched ?? '-'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {drill && (
-        <div className="card mt-3">
-          <div className="card-body">
-            <div className="d-flex justify-content-between">
-              <h6 className="mb-2">{drill.name} — week by week</h6>
-              <button className="btn btn-sm btn-link" onClick={() => setDrill(null)}>Close</button>
-            </div>
-            <table className="table table-sm">
-              <thead><tr><th>Week</th><th>Completed</th><th>Published cards</th><th>%</th><th>Counts as done</th></tr></thead>
-              <tbody>
-                {drill.rows.map((r) => (
-                  <tr key={String(r.week)}>
-                    <td>{r.week === null ? 'Unscheduled' : `Week ${r.week}`}</td>
-                    <td>{r.completed}</td>
-                    <td>{r.publishedCardCount}</td>
-                    <td className={`text-${completionTone(r.completedPct).cls}`}>{r.completedPct}%</td>
-                    <td>{r.weekDone ? 'yes' : 'no'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
