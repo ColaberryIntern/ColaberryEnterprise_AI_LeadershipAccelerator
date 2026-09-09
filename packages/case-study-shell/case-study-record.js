@@ -124,13 +124,39 @@
 
   /* ------------------------------------------------------------- the bands --- */
 
+  /* See the UNIT row in `metricCard`.
+
+     Word sets rather than a built RegExp: the unit is record data, so escaping
+     it into a pattern is a needless place for a `%` or a `.` to change the
+     meaning of the match. Splitting both sides on non-word characters gives the
+     same whole-word test with nothing to escape. Every word of the unit must
+     appear, so "percentage points" is only redundant when BOTH do. */
+  function unitWords(text) {
+    return String(text || '').toLowerCase().split(/[^a-z0-9%]+/).filter(Boolean);
+  }
+
+  function unitAlreadyInValue(valueDisplay, unit) {
+    var wanted = unitWords(unit);
+    if (!wanted.length) return false;
+    var present = unitWords(valueDisplay);
+    return wanted.every(function (w) { return present.indexOf(w) >= 0; });
+  }
+
   function metricCard(m) {
     var card = el('li', 'cs-metric');
     card.appendChild(el('p', 'cs-metric-value', m.valueDisplay));
     card.appendChild(el('p', 'cs-metric-label', m.label));
     if (m.verificationClass) card.appendChild(el('p', 'cs-verify', m.verificationClass));
+    /* The UNIT row is dropped when `valueDisplay` already says the unit,
+       because otherwise the card says it twice: "14 decision records" above a
+       row reading UNIT: records. MEASURED, not suspected - 13 of the 14 metrics
+       published across the three live records do this, so it is a property of
+       display values that read as complete phrases rather than fourteen
+       separate authoring slips. Word-boundary matched, so a unit that genuinely
+       adds something ("41%" with unit "percentage points") still prints. */
     var rows = [
-      ['Baseline', m.baseline], ['Unit', m.unit],
+      ['Baseline', m.baseline],
+      ['Unit', unitAlreadyInValue(m.valueDisplay, m.unit) ? '' : m.unit],
       ['Sample', m.sample], ['Methodology', m.methodology],
     ].filter(function (r) { return r[1]; });
     if (rows.length) {
