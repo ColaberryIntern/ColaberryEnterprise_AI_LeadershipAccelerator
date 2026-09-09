@@ -211,11 +211,16 @@ Four consequences, each of which has already produced a weak card:
 
 - **`valueDisplay` is the entire headline.** It must read as a complete phrase on its
   own — *"14 decision records"*, not *"14"*. Nothing else renders beside it.
-- **…but `unit` prints too, as its own row.** `valueDisplay: "14 decision records"` with
-  `unit: "records"` makes the card say "records" twice, which it does on the live record
-  today. Either carry the noun in `valueDisplay` and keep `unit` as the bare token it is
-  for machines, or drop it from the display value — but decide, rather than finding out
-  on the published page.
+- **`unit` is metadata, and the card decides whether to print it.** Write `valueDisplay`
+  as the complete phrase and set `unit` to the bare token. The renderer suppresses the
+  UNIT row when the value already says that word, so *"14 decision records"* no longer
+  sits above a row reading UNIT: records. **You do not have to trade one against the
+  other.** A unit that adds something the value does not say — `41%` with unit
+  `percentage points` — still prints, which is the case the rule exists to protect.
+
+  Measured, not guessed: **13 of the 14 metrics published across the three live records
+  repeated their unit.** That is what makes it a rendering decision rather than fourteen
+  separate authoring slips.
 - **`methodology` is the card's body.** It is the longest text in the card and the only
   place a sceptical reader can check your working. A single clause leaves the card
   visibly empty; write the paragraph that lets someone reproduce the number.
