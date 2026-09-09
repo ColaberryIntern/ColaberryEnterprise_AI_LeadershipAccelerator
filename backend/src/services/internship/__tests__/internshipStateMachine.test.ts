@@ -97,20 +97,35 @@ describe('approval does not equal membership', () => {
   });
 });
 
-describe('the payment gate (discovery report §3.1)', () => {
-  it('requires payment by default, because the verified spec says the intern pays', () => {
-    expect(stateAfterDocumentsVerified({ requiresSubscription: true, hasActiveComp: false }))
-      .toBe('payment_pending');
+describe('the payment gate (confirmed by Ali 2026-09-09)', () => {
+  const gate = (o: Partial<Parameters<typeof stateAfterDocumentsVerified>[0]>) =>
+    stateAfterDocumentsVerified({
+      requiresSubscription: true, hasActiveSubscription: false, hasActiveComp: false, ...o,
+    });
+
+  it('requires the membership by default — $149/yr-term or $199 month-to-month', () => {
+    expect(gate({})).toBe('payment_pending');
+  });
+
+  it('a student already paying Colaberry is already covered (membership inclusion)', () => {
+    // The waiver rule: a current Data Analytics student or IPBC does not pay twice.
+    expect(gate({ hasActiveSubscription: true })).toBe('activation_pending');
   });
 
   it('a comped intern skips payment without the internship becoming free for everyone', () => {
-    expect(stateAfterDocumentsVerified({ requiresSubscription: true, hasActiveComp: true }))
-      .toBe('activation_pending');
+    // Ram referral / Ali approval, granted via subscriptionService.grantFreeAccess.
+    expect(gate({ hasActiveComp: true })).toBe('activation_pending');
+  });
+
+  it('keeps "already paying" and "waived" distinct, so an audit can tell them apart', () => {
+    expect(gate({ hasActiveSubscription: true, hasActiveComp: false })).toBe('activation_pending');
+    expect(gate({ hasActiveSubscription: false, hasActiveComp: true })).toBe('activation_pending');
+    // Both skip payment, but they are different facts and both are passed separately.
+    expect(stateAfterDocumentsVerified.length).toBe(1);
   });
 
   it('a deliberately free internship is one setting, not a schema change', () => {
-    expect(stateAfterDocumentsVerified({ requiresSubscription: false, hasActiveComp: false }))
-      .toBe('activation_pending');
+    expect(gate({ requiresSubscription: false })).toBe('activation_pending');
   });
 
   it('an unpaid application can be expired by the system but never activated by it', () => {

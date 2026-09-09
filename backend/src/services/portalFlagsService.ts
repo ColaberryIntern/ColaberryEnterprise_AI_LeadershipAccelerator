@@ -10,6 +10,16 @@ export function isPortalTodayRedesignEnabled(): boolean {
   return process.env.PORTAL_TODAY_REDESIGN_ENABLED !== 'false';
 }
 
+/**
+ * AI Internship application flow. Default OFF: the whole funnel — card, intake,
+ * interview, offer letter — ships dark and is turned on deliberately once Dhee's
+ * review queue exists to receive applications. An application nobody can review
+ * is worse than no application form at all.
+ */
+export function isInternshipEnabled(): boolean {
+  return process.env.INTERNSHIP_ENABLED === 'true';
+}
+
 export interface PortalFlags {
   today_redesign: boolean;
   // CAPE Phase 5 — Today Plan + learner controls (design doc §16 Phase 5).
@@ -18,8 +28,13 @@ export interface PortalFlags {
   // both this student-facing flag and the backend route gate in
   // capeTodayPlanController.ts.
   cape_today_plan: boolean;
+  internship: boolean;
 }
 
 export function getPortalFlags(): PortalFlags {
-  return { today_redesign: isPortalTodayRedesignEnabled(), cape_today_plan: env.capeTodayPlanEnabled };
+  return {
+    today_redesign: isPortalTodayRedesignEnabled(),
+    cape_today_plan: env.capeTodayPlanEnabled,
+    internship: isInternshipEnabled(),
+  };
 }
