@@ -50,6 +50,12 @@
       "caption": "Nothing is written about a repository until it has been analysed."
     },
     {
+      "kind": "footage",
+      "seconds": 6,
+      "gif_start": 22.5,
+      "caption": "Select the analysed repositories and generate. The developer writes nothing."
+    },
+    {
       "kind": "cards",
       "seconds": 6,
       "rows": [

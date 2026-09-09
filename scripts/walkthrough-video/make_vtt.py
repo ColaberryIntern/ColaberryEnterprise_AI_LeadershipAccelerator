@@ -30,7 +30,8 @@ def main():
     cfg = raw if isinstance(raw, dict) else {"slides": raw}
     deck = cfg["slides"]
     out_name = os.path.splitext(cfg.get("output", "walkthrough.mp4"))[0] + ".vtt"
-    timings = {t["index"]: t for t in json.load(open(os.path.join(deck_dir, "timings.json"), encoding="utf-8"))}
+    stem = os.path.splitext(os.path.basename(deck_path))[0]
+    timings = {t["index"]: t for t in json.load(open(os.path.join(deck_dir, stem + ".timings.json"), encoding="utf-8"))}
 
     lines = ["WEBVTT", ""]
     clock = 0.0

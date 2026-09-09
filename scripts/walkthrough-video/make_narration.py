@@ -77,7 +77,12 @@ async def main():
     # one toolchain without overwriting each other's narration.
     deck_path = os.path.abspath(args.deck)
     deck_dir = os.path.dirname(deck_path)
-    audio_dir = os.path.join(deck_dir, "audio")
+    stem = os.path.splitext(os.path.basename(deck_path))[0]
+# Per-deck, not per-directory. All the decks live in decks/, so a single timings.json
+# beside them is SHARED - and the last narration run silently wins. Repo2Reputation was
+# built once with the training system's segment durations that way: same slide count, so
+# nothing errored, every segment just held for the wrong length.
+    audio_dir = os.path.join(deck_dir, "audio", stem)
     os.makedirs(audio_dir, exist_ok=True)
     deck_raw = json.load(open(deck_path, encoding="utf-8"))
     deck = deck_raw["slides"] if isinstance(deck_raw, dict) else deck_raw
@@ -99,7 +104,7 @@ async def main():
         timings.append({"index": i, "audio_seconds": round(d, 2), "seconds": seconds})
         print(f"  {i:02d}  voice {d:5.2f}s  ->  segment {seconds:5.1f}s   {text[:50]}")
 
-    with open(os.path.join(deck_dir, "timings.json"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(deck_dir, stem + ".timings.json"), "w", encoding="utf-8") as fh:
         json.dump(timings, fh, indent=1)
     print(f"\nvoice: {VOICE} at {RATE}")
     print(f"total: {sum(t['seconds'] for t in timings):.1f}s across {len(timings)} segments")

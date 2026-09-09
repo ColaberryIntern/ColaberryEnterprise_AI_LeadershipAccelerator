@@ -6,7 +6,7 @@
       "kind": "title",
       "seconds": 6,
       "title": "From AI Lessons to Verifiable AI Capability",
-      "subtitle": "The AI Systems Architect programme  ·  built by the Colaberry team",
+      "subtitle": "The AI Systems Architect programme  \u00b7  built by the Colaberry team",
       "caption": "Course completion is not capability. A record saying someone watched a module answers a question nobody outside the classroom is asking."
     },
     {
@@ -37,15 +37,36 @@
       "caption": "Six steps from a lesson to a portfolio, and it matters which of them are automatic and which are deliberately not."
     },
     {
+      "kind": "screenshot",
+      "seconds": 8,
+      "path": "C:/Users/ali_m/Downloads/r2r-out/shot-story-build.png",
+      "caption": "The applied build a learner receives: what done means, which requirement it fulfils, and the repository that stays theirs."
+    },
+    {
       "kind": "cards",
       "seconds": 8,
       "rows": [
-        ["10", "competencies, each verified separately"],
-        ["4", "evidence bands: applied work 0.35, self-claim 0.20"],
-        ["2", "human gates, both must pass"]
+        [
+          "10",
+          "competencies, each verified separately"
+        ],
+        [
+          "4",
+          "evidence bands: applied work 0.35, self-claim 0.20"
+        ],
+        [
+          "2",
+          "human gates, both must pass"
+        ]
       ],
       "accent_index": 1,
       "caption": "A self-claim and a piece of applied work are not weighted the same, because a claim is not proof."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 8,
+      "path": "C:/Users/ali_m/Downloads/r2r-out/shot-repo-evidence.png",
+      "caption": "The build plan written into the learner's own repository, each sync carrying a correlation id."
     },
     {
       "kind": "title",
