@@ -9,6 +9,15 @@ const DEFAULTS: Record<string, any> = {
   price_per_enrollment: 4500,
   enable_voice_calls: false,
   enable_auto_email: true,
+  // Explorer Growth OS send pacing. The executor plans the next day's sends the
+  // night before and spreads them across this window instead of releasing them
+  // all when it opens. Editable here because the right cadence depends on the
+  // rest of the sending programme, not on this subsystem.
+  explorer_stagger_enabled: true,
+  explorer_send_window_start_hour: 8,
+  explorer_send_window_end_hour: 17,
+  explorer_stagger_min_gap_minutes: 4,
+  explorer_max_sends_per_day: 200,
   // Email (SMTP / Mandrill) configuration
   smtp_host: 'smtp.mandrillapp.com',
   smtp_port: 587,

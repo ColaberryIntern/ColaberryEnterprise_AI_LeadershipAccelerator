@@ -22,6 +22,13 @@
  */
 import { Op } from 'sequelize';
 import { ExplorerJourneyDecision, Campaign } from '../../models';
+import { getAllSettings } from '../settingsService';
+import {
+  resolveStaggerConfig,
+  planStagger,
+  nextWindowOpen,
+  STAGGER_DEFAULTS,
+} from './explorerSendSchedule';
 import ScheduledEmail from '../../models/ScheduledEmail';
 import { env } from '../../config/env';
 import { isExplorerFeatureEnabled } from '../../config/explorerGrowthFlags';
@@ -37,11 +44,28 @@ import { redactForLogs } from '../../utils/piiRedaction';
  */
 export const DECISION_FRESHNESS_HOURS = 36;
 
+/**
+ * The zone the send window is expressed in.
+ *
+ * Matches `campaignSendWindow`'s own default, so the stagger and the engine's
+ * window check agree about what "8am" means. If they disagreed, slots would be
+ * placed outside the window the engine enforces and every one of them would be
+ * deferred — a schedule that looks planned and never sends.
+ */
+export const EXPLORER_SEND_TIMEZONE = 'America/Chicago';
+
 export interface ExecutionResult {
   attempted: number;
   queued: number;
   skipped: number;
   reasons: Record<string, number>;
+  /** Did not fit in today's window; left unexecuted for the next run. */
+  deferredToNextDay?: number;
+  /** Minutes between sends, so a run's shape is visible in the log. */
+  gapMinutes?: number;
+  /** First and last send time planned, for the same reason. */
+  firstSendAt?: string;
+  lastSendAt?: string;
 }
 
 const emptyResult = (): ExecutionResult => ({ attempted: 0, queued: 0, skipped: 0, reasons: {} });
@@ -73,6 +97,11 @@ export async function executeDecision(
   },
   now: Date,
   result: ExecutionResult,
+  /**
+   * When this send should go out. Undefined means "as soon as the window
+   * allows", which is what the caller passes when staggering is off.
+   */
+  sendAt?: Date,
 ): Promise<void> {
   result.attempted += 1;
 
@@ -127,7 +156,12 @@ export async function executeDecision(
     // NO subject or body. The engine generates from the composite context at
     // send time, which is what routes it through the validator and the fact
     // guard. Pre-rendering copy here would bypass both.
-    scheduled_for: now,
+    //
+    // The STAGGERED slot, not `now`. Queueing everything at the run time made
+    // every message eligible the instant the send window opened, which is a
+    // burst at 8am competing with every other campaign that also starts then.
+    // The slot is computed the night before and spread across the day.
+    scheduled_for: sendAt ?? now,
     max_attempts: 1,
     attempts_made: 0,
     metadata: {
@@ -169,9 +203,49 @@ export async function runExplorerExecution(now: Date = new Date()): Promise<Exec
     order: [['created_at', 'ASC']],
   });
 
-  for (const row of pending) {
+  // Plan the day's shape before queueing anything.
+  //
+  // Settings are read ONCE per run rather than per decision: an operator
+  // editing the window while this is running should not produce a schedule
+  // built half from the old values and half from the new.
+  //
+  // A settings failure falls back to the documented defaults rather than
+  // aborting. The alternative is that a bad row in `system_settings` silently
+  // stops all Explorer sending, which is a worse failure than sending on the
+  // default cadence.
+  let config = STAGGER_DEFAULTS;
+  try {
+    config = resolveStaggerConfig(await getAllSettings());
+  } catch (err: unknown) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        service: 'explorer-growth',
+        event: 'explorer_stagger_settings_unreadable',
+        outcome: 'partial',
+        note: 'falling back to defaults',
+        message: String((err as { message?: string })?.message ?? '').slice(0, 200),
+      }),
+    );
+  }
+
+  const windowOpen = nextWindowOpen(now, config, EXPLORER_SEND_TIMEZONE);
+  const plan = planStagger(pending.length, windowOpen, config);
+
+  result.deferredToNextDay = plan.deferred;
+  result.gapMinutes = plan.gapMinutes;
+  result.firstSendAt = plan.slots[0]?.toISOString();
+  result.lastSendAt = plan.slots[plan.slots.length - 1]?.toISOString();
+
+  // Anything past the plan's capacity is simply not touched: left unexecuted so
+  // the next night picks it up. Compressing the gap to fit would reintroduce the
+  // burst, and marking them done would lose them.
+  const schedulable = pending.slice(0, plan.slots.length);
+
+  for (let i = 0; i < schedulable.length; i++) {
+    const row = schedulable[i];
     try {
-      await executeDecision(row as never, now, result);
+      await executeDecision(row as never, now, result, plan.slots[i]);
     } catch (err: unknown) {
       // One bad decision must not stop the batch, and it must not be silently
       // marked executed either — it stays pending and is retried next run.
