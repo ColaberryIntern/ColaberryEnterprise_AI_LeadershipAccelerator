@@ -143,7 +143,15 @@ export async function getPeopleRoster(query: PeopleQuery): Promise<PeopleRoster>
     FULL OUTER JOIN (
       SELECT lower(btrim(e.email)) AS email,
              max(e.full_name) AS name,
-             max(e.status::text) AS status,
+             -- Any CURRENT enrolment outranks a withdrawn one. Written as
+             -- bool_or because max() is ALPHABETICAL: 'withdrawn' > 'active',
+             -- so re-enrolled people were counted as lapsed. That mislabelled
+             -- 29 of the 53 the roster reported on 2026-09-08.
+             CASE
+               WHEN bool_or(e.status::text = 'active') THEN 'active'
+               WHEN bool_or(e.status::text = 'completed') THEN 'completed'
+               ELSE 'withdrawn'
+             END AS status,
              min(e.created_at) AS first_seen,
              max(e.created_at) AS last_seen
       FROM enrollments e

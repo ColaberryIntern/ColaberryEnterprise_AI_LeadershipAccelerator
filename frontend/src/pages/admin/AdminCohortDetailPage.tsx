@@ -5,6 +5,7 @@ import { useToast } from '../../components/ui/ToastProvider';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal } from '../../components/admin/shell/trust';
+import PersonLink from '../../components/admin/person/PersonLink';
 
 interface CohortDetail {
   id: string;
@@ -261,7 +262,9 @@ function AdminCohortDetailPage() {
               ) : (
                 participants.map((p) => (
                   <tr key={p.id}>
-                    <td className="fw-medium">{p.full_name}</td>
+                    <td className="fw-medium">
+                      <PersonLink name={p.full_name} email={p.email} />
+                    </td>
                     <td>
                       <a href={`mailto:${p.email}`}>{p.email}</a>
                     </td>
