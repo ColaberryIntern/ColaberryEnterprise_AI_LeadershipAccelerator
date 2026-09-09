@@ -69,6 +69,10 @@ export interface ProjectRow {
   maturity_score: number | null;
   has_repo: boolean;
   repo_url: string | null;
+  /** The student's Command Center — a GitHub Pages site at the root of their own repo.
+   *  Stored inside `projects.project_variables`, NOT as a column, which is why a schema
+   *  search for `command_center_url` finds nothing. Null until they publish Pages. */
+  command_center_url: string | null;
   has_exec_summary: boolean;
   artifacts: number;
   tasks_total: number;
@@ -185,6 +189,7 @@ export async function getProjectDelivery(opts: { cohortId?: string } = {}): Prom
             p.project_stage     AS stage,
             p.maturity_score,
             p.github_repo_url   AS repo_url,
+            p.project_variables->>'command_center_url' AS command_center_url,
             (p.executive_summary IS NOT NULL AND p.executive_summary <> '') AS has_exec_summary
        FROM projects p
        LEFT JOIN enrollments e ON e.id = p.enrollment_id
@@ -262,6 +267,7 @@ export async function getProjectDelivery(opts: { cohortId?: string } = {}): Prom
       maturity_score: r.maturity_score,
       has_repo,
       repo_url: has_repo ? r.repo_url : null,
+      command_center_url: r.command_center_url || null,
       has_exec_summary: !!r.has_exec_summary,
       artifacts,
       tasks_total: total,

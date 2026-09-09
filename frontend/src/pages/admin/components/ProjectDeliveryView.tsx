@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../../utils/api';
 import { SectionCard, StatCard, StatusBadge } from '../../../components/admin/shell';
 import CaseStudyKpi from './projectDelivery/CaseStudyKpi';
+import CaseStudyReadinessModal from './projectDelivery/CaseStudyReadinessModal';
 import BuildEvidencePanel, { ProjectEvidence } from './projectDelivery/BuildEvidencePanel';
 import ArtifactsPanel, { ArtifactGroup } from './projectDelivery/ArtifactsPanel';
 import ReleaseRow, {
@@ -45,6 +46,9 @@ interface ProjectRow {
   maturity_score: number | null;
   has_repo: boolean;
   repo_url: string | null;
+  /** The student's Command Center — a GitHub Pages site at the root of their own repo.
+   *  Null until they publish Pages, which is why the icon renders conditionally. */
+  command_center_url: string | null;
   has_exec_summary: boolean;
   artifacts: number;
   tasks_total: number;
@@ -185,6 +189,10 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
   const [evidence, setEvidence] = useState<Record<string, ProjectEvidence>>({});
   const [artifacts, setArtifacts] = useState<Record<string, ArtifactGroup[]>>({});
   const [detailLoading, setDetailLoading] = useState<string | null>(null);
+  /** The row whose readiness breakdown is open, or null. Holds the row rather than an id
+   *  so the modal keeps rendering the numbers it was opened with even if the list refreshes
+   *  underneath it. */
+  const [scoreFor, setScoreFor] = useState<ProjectRow | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -319,8 +327,40 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
                   onClick={() => toggle(r.project_id)} aria-expanded={open}>
                   <i className={`ri-arrow-${open ? 'down' : 'right'}-s-line`} aria-hidden="true" /> {r.name || '(unnamed project)'}
                 </button>
-                <div className="text-muted small text-truncate">
-                  {r.student_name || '—'}{r.cohort_name ? ` · ${r.cohort_name}` : ''}
+                <div className="text-muted small text-truncate d-flex align-items-center gap-2">
+                  <span className="text-truncate">
+                    {r.student_name || '—'}{r.cohort_name ? ` · ${r.cohort_name}` : ''}
+                  </span>
+                  {/* TOP LEVEL, next to the name, because it is the fastest way to see the
+                      thing the student actually built. Both are public URLs the platform
+                      already stores; each renders only when detected, so a row never shows
+                      a link that goes nowhere. */}
+                  {r.command_center_url && (
+                    <a
+                      href={r.command_center_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={`Command Center — ${r.command_center_url}`}
+                      aria-label="Open the Command Center"
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ lineHeight: 1 }}
+                    >
+                      <i className="ri-dashboard-3-line" aria-hidden="true" />
+                    </a>
+                  )}
+                  {r.repo_url && (
+                    <a
+                      href={r.repo_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={`Repository — ${r.repo_url}`}
+                      aria-label="Open the repository"
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ lineHeight: 1 }}
+                    >
+                      <i className="ri-github-fill" aria-hidden="true" />
+                    </a>
+                  )}
                 </div>
               </div>
 
@@ -352,7 +392,11 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
                   <span className="small text-muted">{r.tasks_complete}/{r.tasks_total}</span>
                 )}
                 {r.tasks_overdue > 0 && <StatusBadge label={`${r.tasks_overdue} overdue`} tone="danger" />}
-                <CaseStudyKpi readiness={r.readiness} alreadyCaseStudy={r.already_case_study} />
+                <CaseStudyKpi
+                  readiness={r.readiness}
+                  alreadyCaseStudy={r.already_case_study}
+                  onOpen={r.already_case_study ? undefined : () => setScoreFor(r)}
+                />
               </div>
             </div>
 
@@ -428,6 +472,15 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
           </div>
         );
       })}
+
+      {scoreFor && (
+        <CaseStudyReadinessModal
+          projectName={scoreFor.name || '(unnamed project)'}
+          studentName={scoreFor.student_name}
+          readiness={scoreFor.readiness}
+          onClose={() => setScoreFor(null)}
+        />
+      )}
     </SectionCard>
   );
 }
