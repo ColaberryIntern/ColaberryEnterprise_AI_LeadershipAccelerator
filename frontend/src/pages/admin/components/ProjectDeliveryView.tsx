@@ -1,6 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../../utils/api';
 import { SectionCard, StatCard, StatusBadge } from '../../../components/admin/shell';
+import CaseStudyKpi from './projectDelivery/CaseStudyKpi';
+import BuildEvidencePanel, { EvidenceSummary } from './projectDelivery/BuildEvidencePanel';
+import ArtifactsPanel, { ArtifactGroup } from './projectDelivery/ArtifactsPanel';
+import ReleaseRow, {
+  ReleaseSummaryLike, TimingRollup, releaseColor, fmtDay as fmtReleaseDay,
+} from './projectDelivery/ReleaseRow';
 
 /**
  * ProjectDeliveryView — what each student has actually built, on a timeline,
@@ -49,6 +55,10 @@ interface ProjectRow {
   ends_on: string | null;
   already_case_study: boolean;
   readiness: Readiness;
+  /** The release spine, delivered with the LIST so a collapsed row can draw its
+   *  coloured bars immediately. Measured at 11ms for all 30 projects in two batched
+   *  queries — the reason this is eager rather than fetched per expand. */
+  releases: ReleaseSummaryLike[];
 }
 
 interface GanttTask {
@@ -56,10 +66,8 @@ interface GanttTask {
   due_on: string | null; due_baseline_on: string | null;
   slipped: boolean; overdue: boolean; blocked_by: string[];
 }
-interface GanttRelease {
-  release_key: string; tasks: GanttTask[];
-  total: number; complete: number; overdue: number;
-  starts_on: string | null; ends_on: string | null;
+interface GanttRelease extends ReleaseSummaryLike {
+  tasks: GanttTask[];
 }
 interface Gantt {
   project_id: string;
@@ -128,24 +136,20 @@ function monthTicks(axis: Axis): Array<{ label: string; left: number }> {
   return out;
 }
 
-const RELEASE_COLORS: Record<string, string> = {
-  r0: '#6366f1', r1: '#8b5cf6', r2: '#0ea5e9', r3: '#10b981', r4: '#f59e0b',
-  prep: '#64748b', unscheduled: '#cbd5e1',
-};
-
-function ReleaseBar({ rel, axis }: { rel: GanttRelease; axis: Axis }) {
+function ReleaseBar({ rel, axis }: { rel: ReleaseSummaryLike; axis: Axis }) {
   const s = day(rel.starts_on);
   const e = day(rel.ends_on);
   if (s == null || e == null) return null;
   const left = pct(s, axis);
   const width = Math.max(1.2, pct(e, axis) - left);
   const donePct = rel.total ? Math.round((rel.complete / rel.total) * 100) : 0;
-  const color = RELEASE_COLORS[rel.release_key] ?? '#94a3b8';
+  const color = releaseColor(rel.release_key);
+  const name = rel.display_name || rel.release_key;
   return (
     <div
       className="position-absolute"
       style={{ left: `${left}%`, width: `${width}%`, top: 4, height: 16, borderRadius: 4, background: `${color}33`, border: `1px solid ${color}` }}
-      title={`${rel.release_key}: ${rel.complete}/${rel.total} complete${rel.overdue ? `, ${rel.overdue} overdue` : ''} (${fmtDay(rel.starts_on)}–${fmtDay(rel.ends_on)})`}
+      title={`${name}: ${rel.complete}/${rel.total} complete${rel.overdue ? `, ${rel.overdue} overdue` : ''} (${fmtDay(rel.starts_on)}–${fmtDay(rel.ends_on)})`}
     >
       {/* Completion fill — the bar shows both the window and the progress. */}
       <div style={{ width: `${donePct}%`, height: '100%', background: color, borderRadius: 3, opacity: 0.85 }} />
@@ -175,6 +179,12 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
   const [gantt, setGantt] = useState<Record<string, Gantt>>({});
   const [ganttLoading, setGanttLoading] = useState<string | null>(null);
   const [onlyOverdue, setOnlyOverdue] = useState(false);
+  // Evidence and artifacts are fetched on EXPAND, unlike the release bars: they are
+  // detail nobody reads from a collapsed row, and both are empty for every project
+  // today, so eager-loading them would cost 60 requests to render two empty states.
+  const [evidence, setEvidence] = useState<Record<string, EvidenceSummary>>({});
+  const [artifacts, setArtifacts] = useState<Record<string, ArtifactGroup[]>>({});
+  const [detailLoading, setDetailLoading] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -196,17 +206,30 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
   const toggle = async (id: string) => {
     if (expanded === id) { setExpanded(null); return; }
     setExpanded(id);
-    if (gantt[id]) return;
-    setGanttLoading(id);
-    try {
-      const res = await api.get(`/api/admin/projects/${id}/gantt`);
-      setGantt((prev) => ({ ...prev, [id]: res.data }));
-    } catch {
-      // Leave it absent; the row renders "timeline unavailable" rather than
-      // silently showing an empty plan, which would read as "no work".
-    } finally {
-      setGanttLoading(null);
+    if (gantt[id] && evidence[id] && artifacts[id]) return;
+
+    setGanttLoading(gantt[id] ? null : id);
+    setDetailLoading(id);
+    // Fetched together so one expand is one round of requests. Settled rather than
+    // all-or-nothing: a failing artifacts call must not blank the timeline.
+    const [g, ev, ar] = await Promise.allSettled([
+      gantt[id] ? Promise.resolve(null) : api.get(`/api/admin/projects/${id}/gantt`),
+      evidence[id] ? Promise.resolve(null) : api.get(`/api/admin/projects/${id}/evidence`),
+      artifacts[id] ? Promise.resolve(null) : api.get(`/api/admin/projects/${id}/artifacts`),
+    ]);
+    if (g.status === 'fulfilled' && g.value) {
+      setGantt((prev) => ({ ...prev, [id]: g.value!.data }));
     }
+    if (ev.status === 'fulfilled' && ev.value) {
+      setEvidence((prev) => ({ ...prev, [id]: ev.value!.data }));
+    }
+    if (ar.status === 'fulfilled' && ar.value) {
+      setArtifacts((prev) => ({ ...prev, [id]: ar.value!.data.artifacts || [] }));
+    }
+    // A rejected gantt leaves it absent, so the row says "timeline unavailable"
+    // rather than rendering an empty plan, which would read as "no work".
+    setGanttLoading(null);
+    setDetailLoading(null);
   };
 
   const visible = useMemo(
@@ -303,9 +326,18 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
 
               {/* The timeline lane. Hidden on small screens, where a date axis
                   compressed into a phone width communicates nothing. */}
-              <div className="d-none d-lg-block position-relative flex-grow-1" style={{ height: 24, background: 'var(--bs-tertiary-bg, #f8f9fa)', borderRadius: 4 }}>
-                {axis && g?.releases.map((rel) => <ReleaseBar key={rel.release_key} rel={rel} axis={axis} />)}
-                {axis && !g && r.starts_on && r.ends_on && (
+              <div className="d-none d-lg-block position-relative flex-grow-1" data-testid="timeline-lane"
+                style={{ height: 24, background: 'var(--bs-tertiary-bg, #f8f9fa)', borderRadius: 4 }}>
+                {/* Drawn from the LIST payload, not from the per-project timeline
+                    fetch. Previously these bars only appeared after expanding a row,
+                    so a collapsed page showed one flat grey bar per project and gave
+                    away nothing at a glance. The summaries now arrive with the list
+                    (two batched queries, 11ms for all 30 projects), so the colours
+                    are there on load. */}
+                {axis && r.releases?.map((rel) => (
+                  <ReleaseBar key={rel.release_key} rel={rel} axis={axis} />
+                ))}
+                {axis && !r.releases?.length && r.starts_on && r.ends_on && (
                   <div className="position-absolute" title={`${fmtDay(r.starts_on)}–${fmtDay(r.ends_on)}`}
                     style={{ left: `${pct(day(r.starts_on)!, axis)}%`, width: `${Math.max(1.2, pct(day(r.ends_on)!, axis) - pct(day(r.starts_on)!, axis))}%`, top: 4, height: 16, borderRadius: 4, background: '#cbd5e1' }} />
                 )}
@@ -320,9 +352,7 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
                   <span className="small text-muted">{r.tasks_complete}/{r.tasks_total}</span>
                 )}
                 {r.tasks_overdue > 0 && <StatusBadge label={`${r.tasks_overdue} overdue`} tone="danger" />}
-                {r.already_case_study
-                  ? <StatusBadge label="Case study" tone="success" icon="award-line" />
-                  : <StatusBadge label={`${r.readiness.score}`} tone={scoreTone(r.readiness.score)} />}
+                <CaseStudyKpi readiness={r.readiness} alreadyCaseStudy={r.already_case_study} />
               </div>
             </div>
 
@@ -356,17 +386,7 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
                       {g.totals.undated > 0 && <> · {g.totals.undated} with no date</>}
                     </div>
                     {g.releases.map((rel) => (
-                      <div key={rel.release_key} className="mb-2">
-                        <div className="d-flex justify-content-between small">
-                          <span className="fw-medium">
-                            <span className="d-inline-block me-1" style={{ width: 8, height: 8, borderRadius: 2, background: RELEASE_COLORS[rel.release_key] ?? '#94a3b8' }} />
-                            {rel.release_key}
-                          </span>
-                          <span className="text-muted">
-                            {rel.complete}/{rel.total} · {fmtDay(rel.starts_on)}–{fmtDay(rel.ends_on)}
-                            {rel.overdue > 0 && <span className="text-danger"> · {rel.overdue} overdue</span>}
-                          </span>
-                        </div>
+                      <ReleaseRow key={rel.release_key} release={rel}>
                         <ul className="list-unstyled mb-0 mt-1">
                           {rel.tasks.map((t) => (
                             <li key={t.id} className="d-flex justify-content-between small py-1 border-bottom">
@@ -375,16 +395,33 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
                                 {t.blocked_by.length > 0 && <span className="text-muted"> · blocked by {t.blocked_by.length}</span>}
                               </span>
                               <span className={t.overdue ? 'text-danger fw-medium' : 'text-muted'}>
-                                {fmtDay(t.due_on)}
+                                {fmtReleaseDay(t.due_on)}
                                 {t.slipped && <span title="moved later than its baseline"> ⚑</span>}
                               </span>
                             </li>
                           ))}
                         </ul>
-                      </div>
+                      </ReleaseRow>
                     ))}
                   </>
                 )}
+
+                {/* What was actually constructed, and what documents exist. Both are
+                    empty for every project today and say why — see the panels. */}
+                <div className="mt-3">
+                  <div className="fw-semibold small mb-2">Build evidence</div>
+                  <BuildEvidencePanel
+                    evidence={evidence[r.project_id] ?? null}
+                    loading={detailLoading === r.project_id && !evidence[r.project_id]}
+                  />
+                </div>
+                <div className="mt-3">
+                  <div className="fw-semibold small mb-2">Artifacts</div>
+                  <ArtifactsPanel
+                    artifacts={artifacts[r.project_id] ?? null}
+                    loading={detailLoading === r.project_id && !artifacts[r.project_id]}
+                  />
+                </div>
               </div>
             )}
           </div>

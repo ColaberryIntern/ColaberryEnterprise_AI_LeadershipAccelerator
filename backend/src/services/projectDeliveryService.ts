@@ -26,6 +26,7 @@ import { sequelize } from '../config/database';
 // Imported rather than restated so the two cannot drift into disagreeing about
 // who counts as enrolled.
 import { DEPARTED_ENROLLMENT_STATUSES } from './acceleratorCurrentClassesService';
+import { getReleaseSummaries, ReleaseSummary } from './projectDeliveryDetail';
 
 /** Task statuses that count as finished. The others are not_started, in_progress, blocked. */
 export const DONE_TASK_STATUSES = ['complete'] as const;
@@ -78,6 +79,10 @@ export interface ProjectRow {
   ends_on: string | null;
   already_case_study: boolean;
   readiness: ProjectReadiness;
+  /** The release spine, included in the LIST payload so the collapsed row can draw
+   *  coloured bars without a per-project timeline fetch. Batched into two queries for
+   *  all projects — see getReleaseSummaries. */
+  releases: ReleaseSummary[];
 }
 
 /**
@@ -233,6 +238,10 @@ export async function getProjectDelivery(opts: { cohortId?: string } = {}): Prom
   );
   const caseStudies = new Set(csAgg.map((r) => r.project_id));
 
+  // Batched: two queries for ALL projects, not one pair per project. This is what
+  // lets a collapsed row render its release colours without the operator clicking.
+  const releasesByProject = await getReleaseSummaries(ids);
+
   const out: ProjectRow[] = rows.map((r) => {
     const t = tasks.get(r.project_id);
     const total = t ? Number(t.total) : 0;
@@ -262,6 +271,7 @@ export async function getProjectDelivery(opts: { cohortId?: string } = {}): Prom
       starts_on: t?.starts_on ?? null,
       ends_on: t?.ends_on ?? null,
       already_case_study: caseStudies.has(r.project_id),
+      releases: releasesByProject.get(r.project_id) ?? [],
       readiness: computeReadiness({
         tasks_total: total,
         tasks_complete: complete,
@@ -281,101 +291,13 @@ export async function getProjectDelivery(opts: { cohortId?: string } = {}): Prom
   });
 }
 
-export interface GanttTask {
-  id: string;
-  title: string;
-  status: string;
-  release_key: string | null;
-  due_on: string | null;
-  due_baseline_on: string | null;
-  /** True when due_on has moved later than the baseline it was planned against. */
-  slipped: boolean;
-  overdue: boolean;
-  blocked_by: string[];
-}
-
-export interface GanttRelease {
-  release_key: string;
-  tasks: GanttTask[];
-  total: number;
-  complete: number;
-  overdue: number;
-  starts_on: string | null;
-  ends_on: string | null;
-}
-
-/**
- * One project's tasks as a Gantt, grouped into its release spine.
- *
- * Undated tasks are returned in their release but with null dates rather than
- * dropped: 67 of 656 tasks carry no due date in production, and silently hiding
- * them would make a plan look smaller and healthier than it is.
- */
-export async function getProjectGantt(projectId: string): Promise<{
-  project_id: string;
-  releases: GanttRelease[];
-  totals: { tasks: number; complete: number; overdue: number; undated: number };
-}> {
-  const rows = await sequelize.query<any>(
-    `SELECT id, title, status, release_key,
-            due_on::text, due_baseline_on::text, blocked_by
-       FROM student_tasks
-      WHERE project_id = :projectId
-      ORDER BY release_key NULLS LAST, due_on NULLS LAST, position`,
-    { replacements: { projectId }, type: QueryTypes.SELECT }
-  );
-
-  const today = new Date().toISOString().slice(0, 10);
-  const byRelease = new Map<string, GanttTask[]>();
-
-  for (const r of rows) {
-    const due = r.due_on ? String(r.due_on).slice(0, 10) : null;
-    const base = r.due_baseline_on ? String(r.due_baseline_on).slice(0, 10) : null;
-    const done = (DONE_TASK_STATUSES as readonly string[]).includes(r.status);
-    const key = r.release_key ?? 'unscheduled';
-    const task: GanttTask = {
-      id: r.id,
-      title: r.title,
-      status: r.status,
-      release_key: r.release_key ?? null,
-      due_on: due,
-      due_baseline_on: base,
-      slipped: !!(due && base && due > base),
-      overdue: !!(due && !done && due < today),
-      blocked_by: Array.isArray(r.blocked_by) ? r.blocked_by : [],
-    };
-    const list = byRelease.get(key);
-    if (list) list.push(task);
-    else byRelease.set(key, [task]);
-  }
-
-  const releases: GanttRelease[] = [...byRelease.entries()].map(([release_key, list]) => {
-    const dates = list.map((t) => t.due_on).filter((d): d is string => !!d).sort();
-    return {
-      release_key,
-      tasks: list,
-      total: list.length,
-      complete: list.filter((t) => (DONE_TASK_STATUSES as readonly string[]).includes(t.status)).length,
-      overdue: list.filter((t) => t.overdue).length,
-      starts_on: dates[0] ?? null,
-      ends_on: dates[dates.length - 1] ?? null,
-    };
-  }).sort((a, b) => {
-    // Chronological by start; the unscheduled bucket sinks to the end.
-    if (a.starts_on && b.starts_on) return a.starts_on.localeCompare(b.starts_on);
-    if (a.starts_on) return -1;
-    if (b.starts_on) return 1;
-    return a.release_key.localeCompare(b.release_key);
-  });
-
-  return {
-    project_id: projectId,
-    releases,
-    totals: {
-      tasks: rows.length,
-      complete: releases.reduce((n, r) => n + r.complete, 0),
-      overdue: releases.reduce((n, r) => n + r.overdue, 0),
-      undated: rows.filter((r: any) => !r.due_on).length,
-    },
-  };
-}
+/* The Gantt, build evidence and artifact readers moved to projectDeliveryDetail.ts
+ * when this file approached CLAUDE.md's 500-line ceiling. Re-exported here so the
+ * route layer keeps one import site and existing callers do not break. */
+export {
+  getProjectGantt,
+  getProjectEvidence,
+  getProjectArtifacts,
+  getReleaseSummaries,
+} from './projectDeliveryDetail';
+export type { GanttTask, GanttRelease, ReleaseSummary } from './projectDeliveryDetail';
