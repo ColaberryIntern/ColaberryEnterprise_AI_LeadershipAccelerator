@@ -153,6 +153,80 @@
     return card;
   }
 
+  /* ============================ FIGURES IN THE ARTICLE =======================
+     Ali, 2026-09-08, looking at a record whose three artifacts sat unused in a
+     band at the bottom: "use the artifact pictures within the scope of the
+     article... They would def have to be bigger though."
+
+     A PORT of the Enterprise rules in
+     `frontend/src/pages/publicV2/storyFigurePlacement.ts`, deliberately
+     unchanged, so the same record does not read as two different arguments on
+     two brands.
+
+     BETWEEN SECTIONS, NOT INSIDE THEM. A figure inside "The measurement" is
+     captioned by that heading whether anyone wrote a caption or not; between
+     two sections it belongs to neither and claims only what its own caption
+     says.
+     ======================================================================== */
+
+  var IMAGE_ARTIFACT_TYPES = ['screenshot', 'architecture', 'photo'];
+  var FIGURE_GAP_SECTIONS = ['situation', 'build', 'architecture', 'measurement', 'roadmap', 'contributors'];
+  /* Each of these ends on something the record claims to have proved, and an
+     atmosphere photograph directly beneath one borrows its authority. */
+  var ATMOSPHERE_EXCLUDED_AFTER = ['architecture', 'measurement', 'roadmap', 'contributors'];
+
+  function figureAllowedAfter(a, section) {
+    if (FIGURE_GAP_SECTIONS.indexOf(section) < 0) return false;
+    if (a.presentation === 'atmosphere') return ATMOSPHERE_EXCLUDED_AFTER.indexOf(section) < 0;
+    return true;
+  }
+
+  /* Returns { after: {section: [artifact]}, placed: [url] }.
+     THE CONSTRAINED KIND GOES FIRST: atmosphere can use a subset of the gaps
+     evidence can, so allocating in record order lets an evidence image take the
+     one gap a photograph could have used and strand it. */
+  function placeFigures(artifacts, order, excludeUrl) {
+    var usable = (artifacts || []).filter(function (a) {
+      var url = a.previewUrl || a.url;
+      return a.access === 'open' && url && url !== excludeUrl
+        && IMAGE_ARTIFACT_TYPES.indexOf(a.artifactType) >= 0;
+    });
+    var gaps = (order || []).filter(function (k) { return FIGURE_GAP_SECTIONS.indexOf(k) >= 0; });
+    var after = {}, placed = [], taken = {};
+    if (!usable.length || !gaps.length) return { after: after, placed: placed };
+
+    function assign(a) {
+      for (var i = 0; i < gaps.length; i += 1) {
+        var gap = gaps[i];
+        if (taken[gap]) continue;
+        if (!figureAllowedAfter(a, gap)) continue;
+        taken[gap] = true;
+        after[gap] = (after[gap] || []).concat([a]);
+        placed.push(a.previewUrl || a.url);
+        return;
+      }
+    }
+    usable.forEach(function (a) { if (a.presentation === 'atmosphere') assign(a); });
+    usable.forEach(function (a) { if (a.presentation !== 'atmosphere') assign(a); });
+    return { after: after, placed: placed };
+  }
+
+  /* Full width, and that is the point of the change - these used to be thumbnails
+     three-across in a trailing band. */
+  function figureNode(a) {
+    var fig = el('figure', 'cs-figure');
+    var img = document.createElement('img');
+    img.src = a.previewUrl || a.url;
+    img.alt = a.title;
+    img.loading = 'lazy';
+    fig.appendChild(img);
+    var cap = el('figcaption');
+    if (a.title) cap.appendChild(el('strong', null, a.title));
+    if (a.description) cap.appendChild(el('span', null, a.description));
+    fig.appendChild(cap);
+    return fig;
+  }
+
   var BANDS = {
     situation: function (c) {
       var s = c.situation;
@@ -269,9 +343,18 @@
       ]);
     },
 
-    artifacts: function (c) {
-      var open = (c.artifacts || []).filter(function (a) { return a.access === 'open'; });
-      return section('artifacts', 'Artifacts', [
+    artifacts: function (c, placed) {
+      /* WHAT IS LEFT. A picture already met in the article does not appear
+         again, and the COVER counts as already met - excluding it only from the
+         gaps still let it return here, which is the same repeat one band lower.
+         When everything found a home this band renders nothing, which is right:
+         it exists to show what the reader has not already seen. */
+      var seen = (placed || []).concat(c.heroImageUrl ? [c.heroImageUrl] : []);
+      var open = (c.artifacts || []).filter(function (a) {
+        return a.access === 'open' && seen.indexOf(a.previewUrl || a.url) < 0;
+      });
+      if (!open.length) return null;
+      return section('artifacts', 'More from this project', [
         list(open, function (a) {
           var li = el('li', 'cs-artifact');
           var img = a.previewUrl || a.url;
@@ -463,12 +546,19 @@
       if (f) root.appendChild(f);
 
       var order = (surface && surface.sectionOrder) || [];
+      /* Placed against the order this page will actually render, so a figure
+         can never land after a section the record does not have. */
+      var figures = placeFigures(c.artifacts, order, c.heroImageUrl);
       order.forEach(function (band) {
         if (band === 'hero' || band === 'cta') return;
         var render = BANDS[band];
         if (!render) return;
-        var node = render(c);
-        if (node) root.appendChild(node);
+        var node = render(c, figures.placed);
+        if (!node) return;
+        root.appendChild(node);
+        (figures.after[band] || []).forEach(function (a) {
+          root.appendChild(figureNode(a));
+        });
       });
     })
     .catch(function () { notFound(); });
