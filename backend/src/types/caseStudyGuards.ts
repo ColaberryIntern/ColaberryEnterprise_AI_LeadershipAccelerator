@@ -21,6 +21,7 @@
  */
 
 import {
+  CASE_STUDY_METRIC_SHAPES,
   CASE_STUDY_SURFACE_KEYS,
   CASE_STUDY_VERIFICATION_CLASSES,
   CASE_STUDY_VERIFICATION_METHODS,
@@ -28,6 +29,11 @@ import {
 } from './caseStudy';
 import type {
   CaseStudyArtifactVisibility,
+  CaseStudyMetricCollection,
+  CaseStudyMetricMember,
+  CaseStudyMetricPayload,
+  CaseStudyMetricPlain,
+  CaseStudyMetricShape,
   CaseStudyBuilderIdentityMode,
   CaseStudyBuiltByType,
   CaseStudyOrganizationIdentityMode,
@@ -254,4 +260,89 @@ export function describeSectionKey(value: CaseStudySectionKey): string {
     case 'cta': return 'Call to action';
     default: return assertNever(value, 'CaseStudySectionKey');
   }
+}
+
+/* ──────────────────────────────────────────────── metric shape guards ──── */
+
+/**
+ * Runtime guards for the metric payloads, in this file's own style rather than
+ * zod. The spec asked for zod; this module has never imported it and its whole
+ * convention is narrow type predicates over frozen tuples, which the contract
+ * suite already walks member by member. A second validation idiom in one file
+ * would be the drift, not the safety.
+ *
+ * These are STRUCTURAL only. They answer "is this the shape it claims to be",
+ * not "is this figure true" - truth is the publish gate's job, and the gate's
+ * blockers are deliberately separate so a malformed payload and a dishonest one
+ * fail with different names.
+ */
+
+export function isCaseStudyMetricShape(v: unknown): v is CaseStudyMetricShape {
+  return isMember(CASE_STUDY_METRIC_SHAPES, v);
+}
+
+function isFiniteNumber(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+function isNonEmptyString(v: unknown): v is string {
+  return typeof v === 'string' && v.trim().length > 0;
+}
+
+export function isCaseStudyMetricMember(v: unknown): v is CaseStudyMetricMember {
+  if (!v || typeof v !== 'object') return false;
+  const m = v as Record<string, unknown>;
+  if (!isNonEmptyString(m.name)) return false;
+  if (m.status !== undefined && !['yes', 'no', 'demo', 'partial'].includes(m.status as string)) {
+    return false;
+  }
+  return m.href === undefined || typeof m.href === 'string';
+}
+
+function membersOk(v: unknown): boolean {
+  return v === undefined || (Array.isArray(v) && v.every(isCaseStudyMetricMember));
+}
+
+export function isCaseStudyMetricPayload(v: unknown): v is CaseStudyMetricPayload {
+  if (!v || typeof v !== 'object') return false;
+  const p = v as Record<string, unknown>;
+  switch (p.shape) {
+    case 'count':
+      return isFiniteNumber(p.value) && membersOk(p.members);
+    case 'ratio':
+      return isFiniteNumber(p.numerator) && isFiniteNumber(p.denominator) && membersOk(p.members);
+    case 'share':
+      return isFiniteNumber(p.numerator) && isFiniteNumber(p.denominator)
+        && (p.denominatorNote === undefined || typeof p.denominatorNote === 'string');
+    case 'span':
+      return isNonEmptyString(p.startDate) && isNonEmptyString(p.endDate)
+        && (p.count === undefined || isFiniteNumber(p.count))
+        && (p.countLabel === undefined || typeof p.countLabel === 'string');
+    case 'series':
+      return isNonEmptyString(p.unit) && Array.isArray(p.points)
+        && p.points.every((pt) => {
+          if (!pt || typeof pt !== 'object') return false;
+          const point = pt as Record<string, unknown>;
+          return isNonEmptyString(point.date) && isFiniteNumber(point.value);
+        });
+    default:
+      return false;
+  }
+}
+
+/** All three fields are required together: two thirds of an answer is not one. */
+export function isCaseStudyMetricPlain(v: unknown): v is CaseStudyMetricPlain {
+  if (!v || typeof v !== 'object') return false;
+  const p = v as Record<string, unknown>;
+  return isNonEmptyString(p.counts) && isNonEmptyString(p.from) && isNonEmptyString(p.cannotShow);
+}
+
+export function isCaseStudyMetricCollection(v: unknown): v is CaseStudyMetricCollection {
+  if (!v || typeof v !== 'object') return false;
+  const c = v as Record<string, unknown>;
+  return isNonEmptyString(c.collectorKey)
+    && isNonEmptyString(c.collectedSha)
+    && isNonEmptyString(c.reproduceCommand)
+    && isNonEmptyString(c.outputHash)
+    && isNonEmptyString(c.collectedAt);
 }

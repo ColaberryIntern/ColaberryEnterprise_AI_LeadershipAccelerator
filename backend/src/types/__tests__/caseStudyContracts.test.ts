@@ -2,12 +2,17 @@ import fs from 'fs';
 import path from 'path';
 
 import {
+  CASE_STUDY_METRIC_SHAPES,
   CASE_STUDY_SURFACE_KEYS,
   CASE_STUDY_VERIFICATION_CLASSES,
   CASE_STUDY_VERIFICATION_METHODS,
   PUBLISHABLE_SURFACE_KEYS,
 } from '../caseStudy';
-import type { CaseStudySnapshotContent } from '../caseStudy';
+import type {
+  CaseStudyMetricEntry,
+  CaseStudyMetricPayload,
+  CaseStudySnapshotContent,
+} from '../caseStudy';
 import { CASE_STUDY_PROVENANCE_PRECEDENCE } from '../caseStudyProvenance';
 import {
   FORBIDDEN_PUBLIC_KEYS,
@@ -32,6 +37,11 @@ import {
   describeSurfaceKey,
   describeVerificationClass,
   describeVerificationMethod,
+  isCaseStudyMetricCollection,
+  isCaseStudyMetricMember,
+  isCaseStudyMetricPayload,
+  isCaseStudyMetricPlain,
+  isCaseStudyMetricShape,
   isCaseStudySortKey,
   isCaseStudySurfaceKey,
   isCaseStudyVerificationClass,
@@ -490,5 +500,112 @@ describe('the contract modules are leaf modules', () => {
       expect(code).not.toMatch(/\bas\s+any\b/);
       expect(code).not.toMatch(/<any[,>]/);
     }
+  });
+});
+
+/* ────────────────────────────────────────────────────── metric shapes ──── */
+
+/**
+ * Shapes exist because a metric that is really a ratio used to arrive as the
+ * STRING "4 of 7", with the seven module names buried in a methodology
+ * paragraph. The card could not draw a meter because nothing told it there was
+ * a denominator.
+ *
+ * THE LAST TEST IN THIS BLOCK IS THE IMPORTANT ONE. Every field is optional so
+ * that records published before shapes existed keep validating, keep passing
+ * the gate on exactly the blockers they pass today, and keep rendering what
+ * they render today. A shaped-metrics feature that quietly invalidated the
+ * existing library would be a worse defect than the one it fixes.
+ */
+describe('metric shapes', () => {
+  it('declares the five shapes, so a sixth is a decision rather than a typo', () => {
+    expect([...CASE_STUDY_METRIC_SHAPES]).toEqual(['count', 'ratio', 'share', 'span', 'series']);
+    for (const shape of CASE_STUDY_METRIC_SHAPES) {
+      expect(isCaseStudyMetricShape(shape)).toBe(true);
+    }
+    expect(isCaseStudyMetricShape('percentage')).toBe(false);
+    expect(isCaseStudyMetricShape(undefined)).toBe(false);
+  });
+
+  it('accepts one well-formed payload per shape', () => {
+    const payloads: CaseStudyMetricPayload[] = [
+      { shape: 'count', value: 14, members: [{ name: 'Transport selection', href: 'https://x/y' }] },
+      {
+        shape: 'ratio',
+        numerator: 4,
+        denominator: 7,
+        members: [{ name: 'abacEvaluator', status: 'yes' }, { name: 'demoUnsafeAction', status: 'demo' }],
+      },
+      { shape: 'share', numerator: 46, denominator: 292, denominatorNote: 'Includes docs and config.' },
+      { shape: 'span', startDate: '2026-04-13', endDate: '2026-05-01', count: 78, countLabel: 'commits' },
+      { shape: 'series', unit: 'commits', points: [{ date: '2026-04-13', value: 5 }] },
+    ];
+    for (const payload of payloads) {
+      expect({ shape: payload.shape, ok: isCaseStudyMetricPayload(payload) })
+        .toEqual({ shape: payload.shape, ok: true });
+    }
+  });
+
+  it('rejects a payload whose structure does not match its own shape', () => {
+    // A ratio with no denominator is the exact failure the string "4 of 7" hid.
+    expect(isCaseStudyMetricPayload({ shape: 'ratio', numerator: 4 })).toBe(false);
+    expect(isCaseStudyMetricPayload({ shape: 'count', value: 'fourteen' })).toBe(false);
+    expect(isCaseStudyMetricPayload({ shape: 'span', startDate: '2026-04-13' })).toBe(false);
+    expect(isCaseStudyMetricPayload({ shape: 'series', unit: 'commits', points: [{ date: 'x' }] })).toBe(false);
+    expect(isCaseStudyMetricPayload({ shape: 'nonsense', value: 1 })).toBe(false);
+    expect(isCaseStudyMetricPayload(null)).toBe(false);
+  });
+
+  it('rejects a member whose status is outside the vocabulary', () => {
+    expect(isCaseStudyMetricMember({ name: 'auditLog', status: 'yes' })).toBe(true);
+    expect(isCaseStudyMetricMember({ name: 'auditLog', status: 'maybe' })).toBe(false);
+    expect(isCaseStudyMetricMember({ status: 'yes' })).toBe(false);
+  });
+
+  it('requires all three plain-language answers together', () => {
+    // Two thirds of an answer is not an answer: a card that says what a number
+    // counts and where it came from, but not what it cannot show, reads as more
+    // certain than the number is.
+    const full = { counts: 'Modules', from: 'The tree at the pinned commit', cannotShow: 'Whether they pass' };
+    expect(isCaseStudyMetricPlain(full)).toBe(true);
+    expect(isCaseStudyMetricPlain({ ...full, cannotShow: '   ' })).toBe(false);
+    expect(isCaseStudyMetricPlain({ counts: 'Modules', from: 'The tree' })).toBe(false);
+  });
+
+  it('requires a collection to carry its whole audit trail', () => {
+    const collected = {
+      collectorKey: 'modules_with_tests',
+      collectedSha: 'd6e3db66',
+      reproduceCommand: 'git ls-tree -r --name-only d6e3db66 guardrails/',
+      outputHash: 'a'.repeat(64),
+      collectedAt: '2026-09-09T00:00:00.000Z',
+    };
+    expect(isCaseStudyMetricCollection(collected)).toBe(true);
+    // Without the hash there is no way to tell drift from a re-run, which is
+    // the only reason this record exists.
+    expect(isCaseStudyMetricCollection({ ...collected, outputHash: '' })).toBe(false);
+  });
+
+  it('leaves a metric with no shape exactly as valid as it was', () => {
+    // The legacy shape: one scalar and five paragraphs. Every new field absent.
+    const legacy: CaseStudyMetricEntry = {
+      key: 'decision_records',
+      label: 'Architectural decisions written down as they were made',
+      valueDisplay: '14 decision records',
+      unit: 'records',
+      metricType: 'delivery_output',
+      verification: { class: 'verified', method: 'repo' },
+      isHeadline: true,
+      publishable: true,
+      measurement: { limitations: ['A written decision is not a correct decision.'] },
+    };
+    expect(legacy.shape).toBeUndefined();
+    expect(legacy.payload).toBeUndefined();
+    expect(legacy.plain).toBeUndefined();
+    expect(legacy.collected).toBeUndefined();
+    // And the guards say "absent", never "invalid" - the distinction the whole
+    // additive-only promise rests on.
+    expect(isCaseStudyMetricShape(legacy.shape)).toBe(false);
+    expect(isCaseStudyMetricPayload(legacy.payload)).toBe(false);
   });
 });

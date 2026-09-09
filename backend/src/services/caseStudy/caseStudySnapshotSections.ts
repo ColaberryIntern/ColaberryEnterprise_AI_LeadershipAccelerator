@@ -196,6 +196,14 @@ export function buildMetrics(
   for (const manifest of orderedManifests(repos)) {
     for (const outcome of manifest.outcomes ?? []) {
       if (byKey.has(outcome.key)) continue;
+      /*
+       * NO DISPLAY MEANS NO METRIC, DELIBERATELY. An outcome that registered a
+       * collector and typed no figure has nothing to show until the collector
+       * has run. Creating an entry here with an empty or placeholder value
+       * would put a blank metric on the record and, worse, would be the first
+       * step towards inventing one.
+       */
+      if (!outcome.valueDisplay) continue;
       byKey.set(outcome.key, {
         key: outcome.key,
         label: outcome.label,
