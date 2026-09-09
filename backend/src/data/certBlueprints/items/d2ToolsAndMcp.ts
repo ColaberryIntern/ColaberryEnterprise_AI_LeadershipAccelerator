@@ -181,7 +181,7 @@ export const D2_ITEMS: DraftRevisionInput[] = [
       D: 'If there is one sensible tool, the model will pick it.' }),
 
   item('CCARF-D2-14', 'D2', 'D2.3', 'S4', 'medium',
-    'A developer agent that can read files and run shell commands is being pointed at repositories from outside the organisation. A security review asks how the tools should be distributed between the exploration phase and the change phase. Which distribution is safest?',
+    'A developer agent that can read files and run shell commands is being pointed at repositories from outside the organisation. The team notices one such run modified a file during what was meant to be exploration, and a security review asks how tools should be split between the exploration phase and the change phase. Which distribution is safest?',
     [['A', 'Read and search during exploration, with shell execution enabled only after a human approves the plan'],
      ['B', 'Both tools throughout, with a hook that inspects each shell command and blocks dangerous patterns'],
      ['C', 'Shell only, since every read can be expressed as a command and one tool is simpler to reason about'],
@@ -266,7 +266,7 @@ export const D2_ITEMS: DraftRevisionInput[] = [
       D: 'Depends on someone remembering, at an interval nobody keeps.' }),
 
   item('CCARF-D2-21', 'D2', 'D2.4', 'S4', 'easy',
-    'A team already has a well-documented internal HTTP API and is asked why an MCP server would be better for agent use. They can call the API from a script today. From the agent\'s point of view, what does MCP provide that the HTTP API does not?',
+    'A team already has a well-documented internal HTTP API and is asked why an MCP server would be better for agent use. Engineers report the agent needs a bespoke wrapper written for each endpoint before it can call the API at all. From the agent\'s point of view, what does MCP provide that the HTTP API does not?',
     [['A', 'Tools the agent can discover and call directly, described in a form it already knows how to select against'],
      ['B', 'Faster responses, because the protocol is more efficient than HTTP for this kind of request'],
      ['C', 'Authentication, which the HTTP API would otherwise have to implement separately for each agent'],

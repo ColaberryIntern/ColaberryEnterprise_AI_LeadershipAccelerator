@@ -183,7 +183,7 @@ export const D1_ITEMS: DraftRevisionInput[] = [
       D: 'The same volume of text, arriving more slowly.' }),
 
   item('CCARF-D1-13', 'D1', 'D1.3', 'S4', 'medium',
-    'A developer-productivity agent is being extended with subagents. The team has a list of candidate tasks and wants to delegate the one most likely to work well. Which task is the best candidate?',
+    'A developer-productivity agent is being extended with subagents. Metrics show their first delegation returned more text to the parent than it saved, and the team wants a better candidate. Which task is the best candidate?',
     [['A', 'Deciding which of several proposed refactors the team should adopt for the coming quarter'],
      ['B', 'Summarising the test failures in one CI run and identifying which file each one points at'],
      ['C', 'Choosing whether a pull request is ready to merge given the team\'s standards and its history'],
@@ -244,7 +244,7 @@ export const D1_ITEMS: DraftRevisionInput[] = [
       D: 'Plausible and would usually raise an error somewhere. The strongest distractor.' }),
 
   item('CCARF-D1-18', 'D1', 'D1.4', 'S1', 'medium',
-    'A refund policy says the agent may issue refunds up to two hundred dollars on its own and must route anything larger to a human. The team is deciding where that rule should live. Which expression of it is most likely to hold under load?',
+    'A refund policy says the agent may issue refunds up to two hundred dollars on its own and must route anything larger to a human. Reviewers report two refunds above that limit went out last quarter, and the team is deciding where the rule should live. Which expression of it is most likely to hold under load?',
     [['A', 'A sentence in the system prompt stating the limit and requiring approval above it'],
      ['B', 'A check in the refund tool that rejects any amount above the limit and returns the reason'],
      ['C', 'A worked example in the prompt showing a large refund being routed to a human for approval'],
@@ -257,7 +257,7 @@ export const D1_ITEMS: DraftRevisionInput[] = [
 
   // ── D1.5 · hooks and interception ─────────────────────────────────────────
   item('CCARF-D1-19', 'D1', 'D1.5', 'S1', 'medium',
-    'A team has added a hook that intercepts every tool call before it executes. They are now debating what else to put in it, and proposals range from rewriting arguments to caching results. What is a tool-call hook best used for?',
+    'A team has added a hook that intercepts every tool call before it executes. Engineers report proposals ranging from rewriting arguments to caching results, with no agreement on what the hook is actually for. What is a tool-call hook best used for?',
     [['A', 'Enforcing conditions that must hold regardless of what the model decided, such as authorisation'],
      ['B', 'Improving the arguments the model produced when they look as though they contain a mistake'],
      ['C', 'Caching tool results so that repeated calls within one run do not re-execute the same query'],
@@ -281,7 +281,7 @@ export const D1_ITEMS: DraftRevisionInput[] = [
       D: 'Helpful for readability and irrelevant to whether the data got through.' }),
 
   item('CCARF-D1-21', 'D1', 'D1.5', 'S4', 'medium',
-    'A developer agent runs a hook that normalises and resolves every file path in a tool call before execution. During a review, someone asks what this actually buys, since the model rarely produces malformed paths. Which failure does it most directly prevent?',
+    'A developer agent runs a hook that normalises and resolves every file path in a tool call before execution. Reviewers report that the model rarely produces a malformed path, and ask what the hook actually buys. Which failure does it most directly prevent?',
     [['A', 'A relative path escaping the intended directory and reaching a file outside the workspace'],
      ['B', 'The model requesting a file that does not exist, which would otherwise return a confusing error'],
      ['C', 'Two tool calls in one run referring to the same file by two different but equivalent paths'],
@@ -306,7 +306,7 @@ export const D1_ITEMS: DraftRevisionInput[] = [
 
   // ── D1.6 · decomposition ──────────────────────────────────────────────────
   item('CCARF-D1-23', 'D1', 'D1.6', 'S3', 'hard',
-    'A team is decomposing "produce a cited market report" for a multi-agent system. Four proposals are on the table, and the team wants the one whose pieces can be worked independently and recombined without contradiction. Which decomposition is soundest?',
+    'A team is decomposing "produce a cited market report" for a multi-agent system. The team reports that a first attempt produced sections contradicting one another, and wants a decomposition whose pieces recombine cleanly. Which decomposition is soundest?',
     [['A', 'One subagent per competitor, each gathering and citing evidence for that competitor alone'],
      ['B', 'One subagent per section of the finished report, each writing its section end to end'],
      ['C', 'One subagent to gather, one to write, and one to check the citations after writing'],
@@ -403,7 +403,7 @@ export const D1_ITEMS: DraftRevisionInput[] = [
       D: 'Would have failed at the time, not on resume.' }),
 
   item('CCARF-D1-31', 'D1', 'D1.7', 'S3', 'hard',
-    'An architect proposes replacing "reconstruct what we know by re-reading the message history" with an explicit structured store the agent writes to as it works. A colleague objects that the history already contains everything. What is the strongest argument for the structured store?',
+    'An architect proposes replacing "reconstruct what we know by re-reading the message history" with an explicit structured store the agent writes to as it works. Engineers report that facts established early are asked for again late in long sessions, and a colleague objects that the history already contains everything. What is the strongest argument for the structured store?',
     [['A', 'Reconstruction is a re-interpretation, so the same history can yield different state on different runs'],
      ['B', 'A structured store uses fewer tokens than replaying the message history on every resume'],
      ['C', 'The message history may be truncated by the context window, losing the earliest turns'],

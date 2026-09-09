@@ -101,6 +101,36 @@ export const SCENARIO_MARKERS: readonly string[] = [
  * makes those pass, it has gone too far and the rubric stops measuring the gap
  * it exists to find.
  */
+
+/**
+ * KNOWN FALSE NEGATIVES — read this before widening SCENARIO_MARKERS again.
+ *
+ * After the 2026-09-08 rewrite the bank scores 129/150 on all six dimensions.
+ * Of the 21 residuals, 3 are the declared multi-select items (A2, B3, D3 — see
+ * `ccarFoundationsItems.ts`) and the other 18 are FALSE NEGATIVES of the
+ * scenario detector, hand-checked one by one:
+ *
+ *   D1-06 D1-08 D1-14 D1-16 D1-22 D1-24 D1-28 D1-30
+ *   D2-04 D2-07 D2-08 D2-10 D2-11 D2-16 D2-17 D2-18 D2-22 D2-24
+ *
+ * Every one of them opens with something observed — "Transcripts show the agent
+ * responding by retrying the same id", "During a two-hour index outage last
+ * week, agents reported that no relevant material existed", "Human agents report
+ * spending the first several minutes of each escalation working out what the
+ * customer wanted". The detector misses them because SCENARIO_MARKERS is an
+ * enumeration of specific subject-verb pairs rather than a general rule, and
+ * these use pairs that are not on the list.
+ *
+ * THE FIX IS NOT TO ADD THEIR PHRASINGS TO THE LIST. The detector was widened
+ * once already, deliberately and with the bias declared above; widening it a
+ * second time to absorb 18 items whose text was written after the ruler existed
+ * is how a measurement stops being independent of the thing it measures. These
+ * 18 are recorded here instead so the residual count stays explainable and
+ * nobody re-derives the same "fix".
+ *
+ * The true scenario-framing rate is therefore 147/150, not the 132/150 the
+ * detector reports. Quote the measured number, and quote this note beside it.
+ */
 export const OBSERVED_QUANTITY = /\b\d+(\.\d+)?\s?%|\bin \d+ of \d+\b|\b\d+ of the \d+\b|\b(from|to) (two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d+) (seconds?|minutes?|hours?)\b|\b\d+ (seconds?|minutes?|hours?|days?|dollars?)\b|\b(each|every|per) (week|day|month|run|conversation|sitting)\b|\b(quadruples?|triples?|doubles?|halved?)\b/i;
 
 export type RubricDimension =
