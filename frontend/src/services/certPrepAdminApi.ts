@@ -128,6 +128,37 @@ export interface QuestionOption {
 }
 
 /**
+ * One dimension of the item rubric, as the server measured it.
+ *
+ * `note` is the actionable line and is null exactly when the dimension is met,
+ * so a card can render notes without deciding for itself what counts as a
+ * problem. The verdict says WHICH WAY it missed — a stem can be too short or too
+ * long, and telling a reviewer only that it "failed" makes them go and measure.
+ */
+export interface RubricDimensionScore {
+  id: string;
+  verdict: 'meets' | 'short' | 'long' | 'absent';
+  measured: number | null;
+  reference: number | null;
+  note: string | null;
+}
+
+/**
+ * The rubric's verdict on one question. ADVISORY — it measures whether an item
+ * looks like a real exam item, not whether it is correct or fair. It gates
+ * nothing; a human still decides.
+ */
+export interface RubricScore {
+  question_key: string;
+  domain_id: string;
+  met: number;
+  of: number;
+  dimensions: RubricDimensionScore[];
+  /** The one change that moves the most, or null when nothing is outstanding. */
+  firstFix: string | null;
+}
+
+/**
  * A revision as the review queue returns it — WITH the answer key and rationale,
  * because that is what review means. Never pass one of these to a student view.
  */
@@ -147,6 +178,8 @@ export interface QuestionRevision {
   reviewer: string | null;
   reviewed_at: string | null;
   created_at: string;
+  /** Computed per request by the server; absent on an older backend. */
+  rubric?: RubricScore;
 }
 
 export async function fetchReviewQueue(status: ReviewStatus): Promise<QuestionRevision[]> {

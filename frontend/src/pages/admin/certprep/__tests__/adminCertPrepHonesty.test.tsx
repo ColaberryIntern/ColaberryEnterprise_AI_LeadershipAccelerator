@@ -21,7 +21,7 @@ import { QuestionCard, isFixtureReviewer } from '../CertReviewPanel';
 import { EvidenceRow } from '../CertEvidenceReviewPanel';
 import { bankTrust } from '../AdminCertPrepPage';
 import { sortForTriage, hasStartedPractising } from '../CertCohortPanel';
-import type { BankHealth, QuestionRevision, EvidenceMapping, CohortReadinessRow } from '../../../../services/certPrepAdminApi';
+import type { BankHealth, QuestionRevision, EvidenceMapping, CohortReadinessRow, RubricScore } from '../../../../services/certPrepAdminApi';
 
 const noop = () => undefined;
 
@@ -77,6 +77,23 @@ const readinessRow = (over: Partial<CohortReadinessRow> = {}): CohortReadinessRo
   overall_state: 'building', overall_scaled: 600, knowledge_scaled: 640,
   sample_confidence: 0.8, evidence_coverage_pct: 20, answered_total: 30,
   computed_at: '2026-09-01T00:00:00.000Z',
+  ...over,
+});
+
+const rubric = (over: Partial<RubricScore> = {}): RubricScore => ({
+  question_key: 'A1',
+  domain_id: 'D1',
+  met: 4,
+  of: 6,
+  dimensions: [
+    { id: 'scenario_framing', verdict: 'absent', measured: null, reference: null, note: 'No observed situation. The reference opens every stem with one.' },
+    { id: 'stem_length', verdict: 'short', measured: 18, reference: 46, note: '18 words against a reference median of 46.' },
+    { id: 'option_length', verdict: 'meets', measured: 17, reference: 17, note: null },
+    { id: 'options_are_approaches', verdict: 'meets', measured: 4, reference: 4, note: null },
+    { id: 'option_count', verdict: 'meets', measured: 4, reference: 4, note: null },
+    { id: 'rationale_names_distractors', verdict: 'meets', measured: 3, reference: 3, note: null },
+  ],
+  firstFix: 'No observed situation. The reference opens every stem with one.',
   ...over,
 });
 
@@ -259,5 +276,61 @@ describe('hasStartedPractising', () => {
 
   it('treats a missing count as not started rather than throwing', () => {
     expect(hasStartedPractising(row({ answered_total: undefined as unknown as number }))).toBe(false);
+  });
+});
+
+// ── the rubric score, where the approval decision is made ────────────────────
+
+describe('rubric score in the review queue', () => {
+  const card = (q: QuestionRevision) => renderToStaticMarkup(<QuestionCard q={q} onMoved={noop} />);
+
+  it('shows the score next to the question being approved', () => {
+    const html = card(revision({ rubric: rubric() }));
+    expect(html).toContain('4/6');
+  });
+
+  it('names each missed dimension with the note, not a bare failure', () => {
+    // "stem_length: fail" sends a reviewer to go and measure. The number and the
+    // reference are what let them decide without leaving the page.
+    const html = card(revision({ rubric: rubric() }));
+    expect(html).toContain('18 words against a reference median of 46');
+    expect(html).toContain('Stem length');
+    expect(html).toContain('Opens with a real situation');
+  });
+
+  it('lists what is missing and NOT what already meets', () => {
+    // A list of six rows where four say "fine" buries the two that do not.
+    //
+    // Both halves asserted together on purpose. Written as two `not.toContain`
+    // calls, this passed with the whole rubric block deleted — an absent panel
+    // contains nothing, so a negative-only assertion cannot tell "correctly
+    // omitted" from "rendered nothing at all".
+    const html = card(revision({ rubric: rubric() }));
+    expect(html).toContain('Stem length');
+    expect(html).toContain('Opens with a real situation');
+    expect(html).not.toContain('Four options, single select');
+    expect(html).not.toContain('Explains every wrong option');
+  });
+
+  it('calls out the one fix that moves the most', () => {
+    const html = card(revision({ rubric: rubric() }));
+    expect(html).toContain('Fix first:');
+  });
+
+  it('says the score is ADVISORY, so 6/6 is not permission to skip reading', () => {
+    // The failure this guards against is a reviewer treating a green number as
+    // the review. The rubric cannot see whether the answer key is right.
+    const html = card(revision({ rubric: rubric({ met: 6, of: 6, dimensions: [], firstFix: null }) }));
+    expect(html).toContain('6/6');
+    expect(html).toMatch(/Advisory/i);
+    expect(html).toContain('not whether');
+  });
+
+  it('renders the card normally when the backend sends no rubric', () => {
+    // An older backend, or a deploy where the two halves land apart. The card
+    // must still show the question rather than crashing the whole queue.
+    const html = card(revision());
+    expect(html).toContain('To bound what it can read');
+    expect(html).not.toContain('Rubric');
   });
 });
