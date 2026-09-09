@@ -55,8 +55,8 @@ const scanned: Scanned[] = [
 
 describe('no component or client names a surface', () => {
   it('scans every file in the module, so the rule cannot pass by scanning nothing', () => {
-    expect(componentFiles.length).toBe(10);
-    expect(scanned.length).toBe(12);
+    expect(componentFiles.length).toBe(11);
+    expect(scanned.length).toBe(13);
   });
 
   it.each(SURFACE_WORDS)('never mentions "%s"', (word) => {

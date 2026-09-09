@@ -39,6 +39,27 @@ export interface CaseStudyMetricAttributes {
   verified_at?: Date | null;
   is_headline?: boolean;
   publishable?: boolean;
+  /*
+   * SHAPED METRICS. All nullable, all written only by a collector or the shape
+   * migration, and nothing reads them until one has. A row written before these
+   * columns existed keeps loading, gating and rendering exactly as it did.
+   *
+   * count | ratio | share | span | series. Deliberately a plain string rather
+   * than an enum column: the guard in `caseStudyGuards.ts` rejects a payload
+   * that disagrees with its shape, and a database constraint would turn a bad
+   * write into a 500 instead of a reported sync issue.
+   */
+  shape?: string | null;
+  payload?: Record<string, any> | null;
+  /** Written by a human, never by a collector. All three answers or none. */
+  plain?: Record<string, any> | null;
+  collector_key?: string | null;
+  collected_sha?: string | null;
+  /** The one collection field that ever reaches a reader. */
+  reproduce_command?: string | null;
+  /** sha256 of the payload. Same sha with a different hash is drift. */
+  output_hash?: string | null;
+  collected_at?: Date | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -64,6 +85,14 @@ class CaseStudyMetric extends Model<CaseStudyMetricAttributes> implements CaseSt
   declare verified_at: Date | null;
   declare is_headline: boolean;
   declare publishable: boolean;
+  declare shape: string | null;
+  declare payload: Record<string, any> | null;
+  declare plain: Record<string, any> | null;
+  declare collector_key: string | null;
+  declare collected_sha: string | null;
+  declare reproduce_command: string | null;
+  declare output_hash: string | null;
+  declare collected_at: Date | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -90,6 +119,14 @@ CaseStudyMetric.init(
     verified_at: { type: DataTypes.DATE, allowNull: true },
     is_headline: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     publishable: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    shape: { type: DataTypes.STRING(20), allowNull: true },
+    payload: { type: DataTypes.JSONB, allowNull: true },
+    plain: { type: DataTypes.JSONB, allowNull: true },
+    collector_key: { type: DataTypes.STRING(60), allowNull: true },
+    collected_sha: { type: DataTypes.STRING(64), allowNull: true },
+    reproduce_command: { type: DataTypes.TEXT, allowNull: true },
+    output_hash: { type: DataTypes.STRING(64), allowNull: true },
+    collected_at: { type: DataTypes.DATE, allowNull: true },
   },
   {
     sequelize,

@@ -131,6 +131,56 @@ export type CaseStudySortKey = 'featured' | 'newest' | 'strongest-proof' | 'rece
 /* ------------------------------------------------------- leaf structures --- */
 
 /** A figure, with the context that makes it readable. */
+/**
+ * The five ways a number can be shaped, mirrored from the backend.
+ *
+ * WHY A SHAPE AT ALL. A metric used to arrive as one string: "4 of 7". The card
+ * could not draw a meter, because nothing in the payload said there was a
+ * denominator - the seven modules were prose in a methodology paragraph. The
+ * shape is what lets a renderer know which picture is honest for this number.
+ */
+export type CaseStudyMetricShape = 'count' | 'ratio' | 'share' | 'span' | 'series';
+
+export interface CaseStudyMetricMember {
+  readonly name: string;
+  readonly status?: 'yes' | 'no' | 'demo' | 'partial';
+  readonly href?: string;
+}
+
+export type CaseStudyMetricPayload =
+  | { readonly shape: 'count'; readonly value: number; readonly members?: readonly CaseStudyMetricMember[] }
+  | {
+      readonly shape: 'ratio';
+      readonly numerator: number;
+      readonly denominator: number;
+      readonly members?: readonly CaseStudyMetricMember[];
+    }
+  | {
+      readonly shape: 'share';
+      readonly numerator: number;
+      readonly denominator: number;
+      readonly denominatorNote?: string;
+    }
+  | {
+      readonly shape: 'span';
+      readonly startDate: string;
+      readonly endDate: string;
+      readonly count?: number;
+      readonly countLabel?: string;
+    }
+  | {
+      readonly shape: 'series';
+      readonly points: readonly { readonly date: string; readonly value: number }[];
+      readonly unit: string;
+    };
+
+/** Three answers a reader deserves before trusting a figure, in plain language. */
+export interface CaseStudyMetricPlain {
+  readonly counts: string;
+  readonly from: string;
+  readonly cannotShow: string;
+}
+
 export interface PublicCaseStudyMetric {
   readonly label: string;
   readonly valueDisplay: string;
@@ -141,6 +191,20 @@ export interface PublicCaseStudyMetric {
   readonly sample: string | null;
   readonly methodology: string | null;
   readonly limitations: readonly string[];
+  /*
+   * `null` on every record written before shapes existed, which is the whole
+   * reason the renderer can keep the old definition list as its fallback
+   * without asking whether a record is new or old.
+   */
+  readonly shape: CaseStudyMetricShape | null;
+  readonly payload: CaseStudyMetricPayload | null;
+  readonly plain: CaseStudyMetricPlain | null;
+  /*
+   * The one field that escapes the collection record. A reader can act on "run
+   * this and you get the same number"; the output hash and collection time are
+   * how the sync detects drift and say nothing to a reader, so they never cross.
+   */
+  readonly reproduceCommand: string | null;
 }
 
 /** Prose as paragraphs, never HTML. The renderer decides markup, not the API. */

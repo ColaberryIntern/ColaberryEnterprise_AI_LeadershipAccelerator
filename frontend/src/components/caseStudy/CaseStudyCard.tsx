@@ -14,8 +14,13 @@ import './caseStudy.css';
  * rounded-looking placeholder. `headlineMetric` is `null` on the wire precisely
  * so the absence is representable, and `proofPointFor()` below answers it with a
  * fact already on the payload - a capability, a deliverable, a stack entry -
- * rather than with a number. Every string the card prints comes off the record
- * it was handed; `CaseStudyCard.test.tsx` proves it by extracting every digit
+ * rather than with a number.
+ *
+ * THE CARD ITSELF NOW RENDERS NEITHER, since it was cut to one shared height
+ * across every index. `proofPointFor` is kept and tested because it is the
+ * answer any surface needs when a record carries no verified figure.
+ *
+ * Every string the card prints comes off the record it was handed; `CaseStudyCard.test.tsx` proves it by extracting every digit
  * group from the rendered card and asserting each one appears in the payload.
  *
  * WHY THE HREF IS A PROP. The card does not know which surface it is on and
@@ -83,16 +88,25 @@ export function CaseStudyCard({
   className,
 }: CaseStudyCardProps): React.ReactElement {
   const Heading = `h${headingLevel}` as 'h2' | 'h3' | 'h4';
-  const metric = caseStudy.headlineMetric;
-  const proof = metric ? null : proofPointFor(caseStudy);
   const context = contextLine(caseStudy);
-  const headline = metric ? 'metric' : proof ? 'proof-point' : 'none';
 
   return (
     <article
       className={`cbv2-cs-card${className ? ` ${className}` : ''}`}
       data-case-study={caseStudy.slug}
-      data-headline={headline}
+      /*
+       * `data-headline` USED TO LIVE HERE AND IT WAS A LIE. It reported
+       * "metric" or "proof-point" long after the card stopped rendering either
+       * of them, so a test asserting the attribute passed while the thing it
+       * described was absent from the page. An attribute describing something
+       * the card does not render is worse than no attribute: it is a green
+       * check over a missing feature.
+       *
+       * The card renders no figure at all. The headline metric and its
+       * verification live on the RECORD page, in the measurement band, with the
+       * baseline and methodology that make the number checkable.
+       */
+      data-figure="none"
     >
       {caseStudy.heroImageUrl ? (
         <img
@@ -120,13 +134,15 @@ export function CaseStudyCard({
       ) : null}
 
       {/*
-        ONE CARD SHAPE ACROSS THREE SITES. Ali, 2026-09-09, looking at /proof
-        beside aiflotation.com/results: "The cards ... are too big. They should
-        be the same size as the ones on colaberry training and ai flotation ...
-        All the cards should be the same size."
+        ONE CARD SHAPE ACROSS EVERY SITE. Ali, 2026-09-09, comparing the index
+        pages side by side: "The cards ... are too big. They should be the same
+        size as the ones on [the other two sites] ... All the cards should be
+        the same size." The surface names are paraphrased here on purpose: this
+        module must not name a surface, and `caseStudySurfaceNeutrality` fails
+        on any file that does, comments included.
 
         Measured at 1440px before cutting anything: this card was 905px tall
-        against 541 on AI Flotation - and the gap was not styling. It rendered
+        against 541 on the narrower sites, and the gap was not styling. It rendered
         FOUR blocks the others do not: the headline metric, the proof point, and
         two tag lists whose chips wrapped to four rows. Ten leaf text nodes
         against six. No amount of CSS makes a card with four extra blocks the

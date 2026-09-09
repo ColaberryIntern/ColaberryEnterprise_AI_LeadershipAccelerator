@@ -90,6 +90,7 @@ import { PARSEABLE_MANIFEST_FILENAME, pickManifestFilename, readCaseStudyManifes
 import type { CaseStudyManifest } from './caseStudyManifestReader';
 import { isCaseStudyProjectSourceError, loadCaseStudyProjectFacts, toPlatformFactsSeed } from './caseStudyProjectSource';
 import { linkPortfolioArtifacts, linkProjectEvidence } from './caseStudyEvidenceSource';
+import { collectRegisteredMetrics } from './collectors/collectRegisteredMetrics';
 import { buildCaseStudySnapshot } from './caseStudySnapshotBuilder';
 import { persistCaseStudySnapshot } from './caseStudySnapshotStore';
 import { scoreCaseStudyReadiness } from './caseStudyReadinessService';
@@ -293,6 +294,33 @@ export async function syncCaseStudy(input: SyncCaseStudyInput): Promise<CaseStud
           manifest,
         };
       });
+
+      /* 2b ─ registered collectors: figures the repository computes ---------- */
+      //
+      // ONLY WHAT A MANIFEST ASKED FOR. A repository is not measured on five
+      // axes because it happens to be attached; it is measured on the ones its
+      // own manifest registered, and a repository that registered none costs
+      // nothing here - not even the commit-log requests.
+      try {
+        const report = await collectRegisteredMetrics({
+          caseStudyId,
+          correlationId,
+          repos,
+          fetchImpl: input.fetchImpl,
+          collectedAt: clock(),
+        });
+        for (const entry of report.entries) {
+          // A held figure is the operator's business: it means a number moved
+          // under a human who had already approved it, or a collector changed
+          // its mind about a commit that cannot have changed.
+          if (entry.outcome === 'drift_held' || entry.outcome === 'published_held') {
+            repoIssues.push({ repoRef: entry.repoRef, errorClass: 'MetricDrift', path: entry.collectorKey });
+          }
+        }
+      } catch (err) {
+        // Collecting is additive. Losing it costs figures, never the record.
+        repoIssues.push({ repoRef: 'collector', errorClass: errorClassOf(err) });
+      }
 
       /* 3 ─ platform facts: Project, evidence, artifacts, metrics ----------- */
       let projectSeed: CaseStudyProjectPlatformSeed | null = null;

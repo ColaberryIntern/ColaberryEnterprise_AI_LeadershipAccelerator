@@ -645,6 +645,20 @@
       "disposition": "human_approved",
       "rule": "narrative-prose"
     },
+    "CaseStudyMetricEntry.collected": {
+      "authoring": "written by the collector on sync, never by hand",
+      "sourcePriority": "collector only",
+      "aiMayInfer": false,
+      "approvalRequired": false,
+      "indexHome": "—",
+      "detailHome": "the reproduce command, behind a disclosure",
+      "publicBehaviour": "ONLY reproduceCommand crosses. The output hash and collection time are how the sync detects drift; they tell a reader nothing and would invite reading a hash as proof.",
+      "emptyBehaviour": "the metric was typed rather than computed; nothing renders",
+      "privacy": "partly internal",
+      "test": "caseStudyPublicProjection.test.ts",
+      "disposition": "deterministic",
+      "rule": "authored"
+    },
     "CaseStudyMetricEntry.isHeadline": {
       "authoring": "admin narrative panel",
       "sourcePriority": "human override > repo sync",
@@ -729,6 +743,34 @@
       "disposition": "deterministic",
       "rule": "deterministic-scalar"
     },
+    "CaseStudyMetricEntry.payload": {
+      "authoring": "collector output, structured; never prose parsed into numbers",
+      "sourcePriority": "collector > human entry",
+      "aiMayInfer": false,
+      "approvalRequired": false,
+      "indexHome": "—",
+      "detailHome": "the numbers the meter, chips or sparkline are drawn from",
+      "publicBehaviour": "projected after a guard confirms it matches its own shape",
+      "emptyBehaviour": "no picture is drawn; the value still renders as text",
+      "privacy": "public",
+      "test": "caseStudyContracts.test.ts",
+      "disposition": "deterministic",
+      "rule": "authored"
+    },
+    "CaseStudyMetricEntry.plain": {
+      "authoring": "a human writes all three answers — what it counts, where it came from, what it cannot show",
+      "sourcePriority": "human entry only — a collector NEVER writes this",
+      "aiMayInfer": false,
+      "approvalRequired": true,
+      "indexHome": "—",
+      "detailHome": "three short blocks under the figure",
+      "publicBehaviour": "projected only when all three answers are present",
+      "emptyBehaviour": "the method box renders instead; readiness warns",
+      "privacy": "public",
+      "test": "caseStudyPublishGate.test.ts",
+      "disposition": "human_approved",
+      "rule": "authored"
+    },
     "CaseStudyMetricEntry.publishable": {
       "authoring": "admin narrative panel",
       "sourcePriority": "human override > repo sync",
@@ -741,6 +783,20 @@
       "privacy": "public",
       "test": "caseStudyPublishGate.test.ts",
       "disposition": "human_approved",
+      "rule": "authored"
+    },
+    "CaseStudyMetricEntry.shape": {
+      "authoring": "collector, or the shape migration; a human may set it by hand",
+      "sourcePriority": "collector > human entry",
+      "aiMayInfer": false,
+      "approvalRequired": false,
+      "indexHome": "—",
+      "detailHome": "chooses which picture the metric card draws",
+      "publicBehaviour": "projected ONLY when the payload agrees with it",
+      "emptyBehaviour": "the card falls back to the definition list every record used before shapes existed — absence is the legacy path, not a defect",
+      "privacy": "public",
+      "test": "caseStudyContracts.test.ts",
+      "disposition": "deterministic",
       "rule": "authored"
     },
     "CaseStudyMetricEntry.unit": {
@@ -2185,6 +2241,48 @@
       "disposition": "deterministic",
       "rule": "public-projection-mirror"
     },
+    "PublicCaseStudyMetric.payload": {
+      "authoring": "projection of CaseStudyMetricEntry.payload",
+      "sourcePriority": "projection",
+      "aiMayInfer": false,
+      "approvalRequired": false,
+      "indexHome": "—",
+      "detailHome": "the drawn numbers",
+      "publicBehaviour": "guarded before it crosses",
+      "emptyBehaviour": "no picture",
+      "privacy": "public",
+      "test": "caseStudyPublicProjection.test.ts",
+      "disposition": "deterministic",
+      "rule": "authored"
+    },
+    "PublicCaseStudyMetric.plain": {
+      "authoring": "projection of CaseStudyMetricEntry.plain",
+      "sourcePriority": "projection",
+      "aiMayInfer": false,
+      "approvalRequired": true,
+      "indexHome": "—",
+      "detailHome": "three plain-language blocks",
+      "publicBehaviour": "all three answers or none",
+      "emptyBehaviour": "method box instead",
+      "privacy": "public",
+      "test": "caseStudyPublicProjection.test.ts",
+      "disposition": "human_approved",
+      "rule": "authored"
+    },
+    "PublicCaseStudyMetric.reproduceCommand": {
+      "authoring": "projection of CaseStudyMetricEntry.collected.reproduceCommand",
+      "sourcePriority": "collector only",
+      "aiMayInfer": false,
+      "approvalRequired": false,
+      "indexHome": "—",
+      "detailHome": "a disclosure reading \"How this was counted\"",
+      "publicBehaviour": "the one field that escapes the collection record, because a sceptic can act on it",
+      "emptyBehaviour": "no disclosure is rendered",
+      "privacy": "public",
+      "test": "caseStudyPublicProjection.test.ts",
+      "disposition": "deterministic",
+      "rule": "authored"
+    },
     "PublicCaseStudyMetric.sample": {
       "authoring": "not authored — computed by caseStudyPublicProjection.ts",
       "sourcePriority": "projection of the approved snapshot",
@@ -2198,6 +2296,20 @@
       "test": "caseStudyPublicProjection.test.ts",
       "disposition": "deterministic",
       "rule": "public-projection-mirror"
+    },
+    "PublicCaseStudyMetric.shape": {
+      "authoring": "projection of CaseStudyMetricEntry.shape",
+      "sourcePriority": "projection",
+      "aiMayInfer": false,
+      "approvalRequired": false,
+      "indexHome": "—",
+      "detailHome": "selects the metric card visual",
+      "publicBehaviour": "null unless shape and payload agree",
+      "emptyBehaviour": "legacy definition-list card",
+      "privacy": "public",
+      "test": "caseStudyPublicProjection.test.ts",
+      "disposition": "deterministic",
+      "rule": "authored"
     },
     "PublicCaseStudyMetric.unit": {
       "authoring": "not authored — computed by caseStudyPublicProjection.ts",

@@ -105,6 +105,8 @@
 import {
   Blockers,
   collectMetrics,
+  ruleCollectedSha,
+  ruleMetricShapes,
   rulePendingMetrics,
   ruleBuilderConsent,
   ruleOrganizationConsent,
@@ -183,6 +185,12 @@ export function evaluateCaseStudyPublishGate(
     // above closes the STRUCTURED path; this closes the one V-29 measured open,
     // where an identifier typed into a narrative field is published verbatim.
     ruleRepoIdentityInProse(content, b);
+    // 12 and 13 - the shaped-metric rules. Both are no-ops on a metric with no
+    // `shape` and no `collected`, which is every metric written before shapes
+    // existed: an additive feature must not retroactively block the library it
+    // was added to.
+    ruleMetricShapes(metrics, b);
+    ruleCollectedSha(metrics, content, b);
   } else if (input.snapshot) {
     b.add('snapshot_not_approved', 'case_study_snapshots.content',
       `snapshot version ${input.snapshot.version} carries no content object`,

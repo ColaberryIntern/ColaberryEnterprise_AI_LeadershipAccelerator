@@ -94,10 +94,13 @@ describe('a record with no verified metric renders a proof point, never a number
     expect(textOf(markup)).toContain(noMetric.title);
   });
 
-  it('marks the headline as a proof point rather than a metric', () => {
-    const markup = card(noMetric);
-    expect(markup).toContain('data-headline="proof-point"');
-    expect(markup).toContain('data-proof-point="true"');
+  it('says plainly that it renders no figure, rather than claiming one', () => {
+    // `data-headline="proof-point"` used to be asserted here and it was false:
+    // the card stopped rendering a proof point when every index was cut to one
+    // shared height, and this assertion kept passing anyway. An attribute that
+    // describes something absent from the page is a green check over a missing
+    // feature, so it was replaced with one that is true of what renders.
+    expect(card(noMetric)).toContain('data-figure="none"');
   });
 
   it('renders no metric element and no metric value', () => {
@@ -114,11 +117,14 @@ describe('a record with no verified metric renders a proof point, never a number
   });
 
   it('draws the proof point from a fact on the record', () => {
+    // The HELPER is what is tested, deliberately. The card no longer prints its
+    // answer, but this is the question any surface has to answer when a record
+    // carries no verified figure, and it must keep answering it from the
+    // payload rather than from an invented number.
     expect(proofPointFor(noMetric)).toEqual({
       value: 'Agentic workflow',
       label: 'Primary capability',
     });
-    expect(textOf(card(noMetric))).toContain('Agentic workflow');
   });
 
   it('falls back through capability, deliverable and stack in that order', () => {
@@ -138,7 +144,7 @@ describe('a record with no verified metric renders a proof point, never a number
     });
     const markup = card(bare);
     expect(proofPointFor(bare)).toBeNull();
-    expect(markup).toContain('data-headline="none"');
+    expect(markup).toContain('data-figure="none"');
     // Still a complete card: title, and the record's own verification pair.
     expect(textOf(markup)).toContain(bare.title);
     expect(markup).toContain('data-verification-class="verified"');
@@ -149,15 +155,14 @@ describe('a record with no verified metric renders a proof point, never a number
 describe('a record with a verified metric renders it through the shared Metric', () => {
   const withMetric = summary();
 
-  it('marks the headline as a metric and labels the figure with its class', () => {
+  it('renders NO figure even when the record has a verified one', () => {
+    // This is the honest statement of what the card does. The figure, its badge
+    // and the baseline and methodology that make it checkable all live on the
+    // record page, which has room for them; a 368px card never did.
     const markup = card(withMetric);
-    expect(markup).toContain('data-headline="metric"');
-    expect(markup).toContain('data-metric="true"');
-    expect(markup).toContain('data-evidence="verified"');
-  });
-
-  it('prints the approved value display verbatim', () => {
-    expect(textOf(card(withMetric))).toContain('41% fewer');
+    expect(markup).toContain('data-figure="none"');
+    expect(markup).not.toContain('data-metric="true"');
+    expect(textOf(markup)).not.toContain('41% fewer');
   });
 
   it('prints no number that is not already in the payload', () => {
@@ -167,15 +172,17 @@ describe('a record with a verified metric renders it through the shared Metric',
     }
   });
 
-  it('shows the figure its own badge when it was verified differently from the record', () => {
+  it('shows the RECORD verification, never the figure it does not render', () => {
     const differing = summary({
       verificationClass: 'verified',
       verificationMethod: 'repo',
       headlineMetric: metric({ verificationClass: 'anonymized', verificationMethod: 'client' }),
     });
     const markup = card(differing);
-    expect(markup).toContain('data-verification-method="client"');
     expect(markup).toContain('data-verification-method="repo"');
+    // Showing the metric's method beside no metric would attribute the record's
+    // badge to a figure the reader cannot see.
+    expect(markup).not.toContain('data-verification-method="client"');
   });
 });
 

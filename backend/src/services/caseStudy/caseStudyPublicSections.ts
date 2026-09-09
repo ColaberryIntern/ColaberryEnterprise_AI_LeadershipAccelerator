@@ -33,6 +33,9 @@ import {
 import { normalizeFacetList } from './caseStudyFilterService';
 import {
   assertNever,
+  isCaseStudyMetricPayload,
+  isCaseStudyMetricPlain,
+  isCaseStudyMetricShape,
   isCaseStudyVerificationMethod,
   isPublicVerificationClass,
 } from '../../types/caseStudyGuards';
@@ -40,6 +43,7 @@ import type {
   CaseStudyArtifactRef,
   CaseStudyContributor,
   CaseStudyMetricEntry,
+  CaseStudyMetricShape,
   CaseStudyRepositoryRef,
   CaseStudyRoadmapItem,
   CaseStudySnapshotContent,
@@ -165,7 +169,33 @@ export function projectMetric(metric: CaseStudyMetricEntry): PublicCaseStudyMetr
     sample: text(ctx?.sample) || null,
     methodology: text(ctx?.methodology) || null,
     limitations: lines(ctx?.limitations),
+    /*
+     * SHAPE AND PAYLOAD CROSS TOGETHER OR NOT AT ALL. A shape with no matching
+     * payload would tell the renderer to draw a meter it has no numbers for,
+     * so the guard runs here rather than trusting whatever was stored: a record
+     * written before the guards existed, or hand-edited in the admin, must
+     * degrade to the plain definition list, not to a broken chart.
+     */
+    shape: shapedPair(metric),
+    payload: isCaseStudyMetricPayload(metric.payload) ? metric.payload : null,
+    plain: isCaseStudyMetricPlain(metric.plain) ? metric.plain : null,
+    /*
+     * The command crosses; the hash and the timestamp do not. A reader can act
+     * on "run this and you get the same number". A sha256 of the collector
+     * output tells them nothing and invites reading a hash as proof.
+     */
+    reproduceCommand: text(metric.collected?.reproduceCommand) || null,
   };
+}
+
+/**
+ * The shape, but only when the payload actually backs it and agrees with it.
+ * Returns null on any disagreement, which is the renderer's signal to fall back.
+ */
+function shapedPair(metric: CaseStudyMetricEntry): CaseStudyMetricShape | null {
+  if (!isCaseStudyMetricShape(metric.shape)) return null;
+  if (!isCaseStudyMetricPayload(metric.payload)) return null;
+  return metric.payload.shape === metric.shape ? metric.shape : null;
 }
 
 export const projectMetrics = (metrics: readonly CaseStudyMetricEntry[]): PublicCaseStudyMetric[] =>

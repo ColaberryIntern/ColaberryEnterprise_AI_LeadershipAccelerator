@@ -83,6 +83,7 @@ export function makeRepoFacts(over: RepoFactsOverrides = {}): CaseStudyRepoFacts
     repoUrl: `https://github.com/${metadata.owner}/${metadata.name}`,
     documents: [],
     filesRead: ['README.md'],
+    treePaths: ['README.md'],
     fileCount: 120,
     treeTruncated: false,
     treeSource: 'github',
