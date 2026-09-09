@@ -493,7 +493,15 @@
       track.setAttribute('srclang', 'en');
       track.setAttribute('label', 'English');
       track.setAttribute('src', v.captionsUrl);
-      track.setAttribute('default', '');
+      /* NOT `default`, and that is the whole fix for a doubled read-over.
+         `build_video.py` BURNS the narration into the picture - deliberately, it
+         is what the reference clip does - and this sidecar is the ACCESSIBLE
+         COPY of the same sentences, for a screen reader, a translation or a
+         reader who wants them larger. Marking it `default` made the browser
+         paint those words a second time, in its own black bar, directly over a
+         frame that already said them. Shipped, so it was on two live records.
+         The track stays: it is reachable from the player's CC control and by
+         assistive technology, which is what it was written for. */
       video.appendChild(track);
     }
     fig.appendChild(video);

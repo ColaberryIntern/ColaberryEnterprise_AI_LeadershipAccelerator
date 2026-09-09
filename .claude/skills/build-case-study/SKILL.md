@@ -469,6 +469,39 @@ python make_vtt.py       --deck <dir>/deck.json   # the accessible caption sidec
 `make_narration.py` runs FIRST. Segment durations come from how long each sentence
 actually takes to speak, not from the deck's guesses, or a slide ends mid-word.
 
+### The captions exist TWICE, on purpose — and only one of them may be shown
+
+`build_video.py` **burns the narration into the picture**. `make_vtt.py` writes the same
+sentences again as a `.vtt` sidecar. Both are deliberate and neither is redundant: a
+burned-in caption cannot be read by a screen reader, resized, translated or turned off,
+and a `track` element needs a real file.
+
+**So the player must NOT mark that track `default`.** It shipped that way and put two
+read-overs on the same frame on two live records — the burned-in grey box, and the
+browser painting the identical words underneath it in its own black bar. The track stays
+attached, reachable from the CC control and to assistive technology, which is the job it
+was written for.
+
+It is also worth knowing that `crossorigin="anonymous"` on the `<video>` is load-bearing
+for the captions and nothing else: a cross-origin `track` is refused without it, the
+track's `readyState` goes to 3 and the cue list stays empty while the video plays
+perfectly. Nothing looks broken except the missing captions.
+
+**Check it on the rendered page, not in the markup.** The two layers are only obviously
+two layers when you look at a frame:
+
+```js
+// captions the browser is painting — should be 0 showing, with the cues still there
+[...document.querySelector('video').textTracks].map(t => ({ mode: t.mode, cues: t.cues?.length }))
+```
+
+And to see what is burned in, pull the file rather than trusting the player, which will
+not have buffered anything under `preload="none"`:
+
+```bash
+ffmpeg -ss 8 -i walkthrough.mp4 -frames:v 1 -y frame.png
+```
+
 ### Every figure it narrates is already a metric on the record
 
 The video is a **second surface for the same claims**, never a place for new ones. If a

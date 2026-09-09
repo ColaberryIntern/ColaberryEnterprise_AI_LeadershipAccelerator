@@ -161,7 +161,11 @@ export function StoryHeroFigure({
           {/* Separate from the captions burned into the picture: burned-in text cannot be
               resized, translated, turned off, or read by a screen reader. */}
           {video.captionsUrl ? (
-            <track kind="captions" srcLang="en" label="English" src={video.captionsUrl} default />
+            {/* NOT `default`: build_video.py burns the narration into the picture, so
+                a shown track paints the same words a second time in the
+                browser's own bar. The sidecar is the ACCESSIBLE copy -
+                still reachable from the CC control and to assistive tech. */}
+            <track kind="captions" srcLang="en" label="English" src={video.captionsUrl} />
           ) : null}
         </video>
         {/* Said on the page rather than left to be assumed. An unlabelled synthetic voice
