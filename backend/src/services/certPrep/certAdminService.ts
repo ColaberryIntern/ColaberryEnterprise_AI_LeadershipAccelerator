@@ -2,6 +2,7 @@ import { Op, QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
 import CertQuestion from '../../models/CertQuestion';
 import CertQuestionRevision from '../../models/CertQuestionRevision';
+import { scoreItem } from './certQuestionRubric';
 import CertReadinessSnapshot from '../../models/CertReadinessSnapshot';
 import CertEvidenceMapping from '../../models/CertEvidenceMapping';
 
@@ -218,12 +219,25 @@ export async function getItemStatistics(blueprintVersion?: string): Promise<Item
   });
 }
 
+/** How the bank scores against the item rubric, over the latest revision of each. */
+export interface BankRubricSummary {
+  /** Questions scored — the latest revision of each, not every revision. */
+  scored: number;
+  /** How many meet all six dimensions. */
+  fully_meets: number;
+  /** Median dimensions met, or null on an empty bank. */
+  median_met: number | null;
+  of: number;
+}
+
 export interface BankHealth {
   total_questions: number;
   by_status: Record<string, number>;
   approved_by_domain: Record<string, number>;
   /** Domains with no approved items — a form cannot be built for these. */
   domains_with_no_approved: string[];
+  /** Advisory quality signal; gates nothing. */
+  rubric: BankRubricSummary;
 }
 
 /**
@@ -252,7 +266,56 @@ export async function getBankHealth(blueprintVersion: string, allDomainIds: stri
     by_status: byStatus,
     approved_by_domain: approvedByDomain,
     domains_with_no_approved: allDomainIds.filter((d) => !approvedByDomain[d]),
+    rubric: await getBankRubricSummary(blueprintVersion),
   };
+}
+
+/**
+ * How the bank scores against the item rubric, as one summary.
+ *
+ * Scored over the LATEST revision of each question, because that is the version
+ * the team has decided on — scoring every revision would count the pre-rewrite
+ * text the bank has already replaced and report the bank as worse than it is.
+ *
+ * Separate from the per-item statistics table, which is driven by student
+ * RESPONSES and is therefore empty until people start answering. The rubric can
+ * be computed the moment a question exists, so bank quality is visible from the
+ * first day rather than after the first cohort.
+ */
+export async function getBankRubricSummary(blueprintVersion: string): Promise<BankRubricSummary> {
+  const rows = await CertQuestionRevision.findAll({
+    where: { blueprint_version: blueprintVersion },
+  });
+
+  const latest = new Map<string, typeof rows[number]>();
+  for (const r of rows) {
+    const seen = latest.get(r.question_key);
+    if (!seen || r.revision > seen.revision) latest.set(r.question_key, r);
+  }
+
+  let fullyMeets = 0;
+  const metCounts: number[] = [];
+  for (const r of latest.values()) {
+    const score = scoreItem({
+      question_key: r.question_key,
+      domain_id: r.domain_id,
+      objective_id: r.objective_id ?? '',
+      stem: r.stem,
+      options: (r.options ?? []).map((o) => ({ key: o.key, text: o.text })),
+      correct_keys: r.correct_keys ?? [],
+      rationale: r.rationale ?? null,
+      distractor_rationales: r.distractor_rationales ?? null,
+    });
+    metCounts.push(score.met);
+    if (score.met === score.of) fullyMeets += 1;
+  }
+
+  metCounts.sort((a, b) => a - b);
+  const median = metCounts.length === 0
+    ? null
+    : metCounts[Math.floor(metCounts.length / 2)];
+
+  return { scored: metCounts.length, fully_meets: fullyMeets, median_met: median, of: 6 };
 }
 
 /** Students past the fence who have never answered anything. */

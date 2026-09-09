@@ -84,6 +84,14 @@ export async function fetchNotStarted(cohortId: string): Promise<NotStartedStude
 
 // ── bank health and item quality ─────────────────────────────────────────────
 
+/** How the bank scores against the item rubric, over the latest revision of each. */
+export interface BankRubricSummary {
+  scored: number;
+  fully_meets: number;
+  median_met: number | null;
+  of: number;
+}
+
 export interface BankHealth {
   blueprint_version: string;
   total_questions: number;
@@ -91,6 +99,8 @@ export interface BankHealth {
   approved_by_domain: Record<string, number>;
   /** The silent cause of short forms: a domain the form planner cannot fill. */
   domains_with_no_approved: string[];
+  /** Advisory quality signal; gates nothing. Absent on an older backend. */
+  rubric?: BankRubricSummary;
 }
 
 export interface ItemStatistic {
