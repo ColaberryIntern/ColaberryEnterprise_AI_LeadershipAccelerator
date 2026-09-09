@@ -11,6 +11,11 @@ import {
   handleGetPresenterNotes,
   handleGetPresenterPage,
 } from '../controllers/sessionLiveController';
+import {
+  handleGetInternshipStatus, handleStartInternshipApplication, handleSaveInternshipIntake,
+  handleSelectInternshipChannel, handleDismissInternshipCard,
+  handleInternshipCardImpression, handleInternshipCardOpened,
+} from '../controllers/internshipController';
 import { requireBuildEntitlement } from '../middlewares/requireBuildEntitlement';
 import { requireContentEntitlement } from '../middlewares/requireContentEntitlement';
 import { requireOrgManager } from '../middlewares/orgAuth';
@@ -249,6 +254,41 @@ const watchBeatRateLimiter = rateLimit({
   message: { error: 'Too many watch beats — please slow down' },
 });
 router.post('/api/portal/runtime/cards/:cardId/watch', watchBeatRateLimiter, requireParticipant, handleWatchBeat);
+
+// ── AI Internship (participant surface) ─────────────────────────────────────
+// Every handler scopes to req.participant.sub; none accepts an application id
+// from the client, so reading another applicant's data is unrepresentable
+// rather than merely forbidden. The whole surface is dark until
+// INTERNSHIP_ENABLED=true.
+//
+// Write endpoints are rate limited because they are the abuse surface the
+// contract names: "Rate-limit application and call scheduling endpoints" and
+// "Prevent call abuse and repeated rapid callbacks."
+const internshipWriteRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests — please slow down' },
+});
+// Analytics beats are chattier than actions and must never block the page, so
+// they get their own, looser bucket rather than eating the write allowance.
+const internshipBeatRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests — please slow down' },
+});
+
+router.get('/api/portal/internship/status', requireParticipant, handleGetInternshipStatus);
+router.post('/api/portal/internship/application', internshipWriteRateLimiter, requireParticipant, handleStartInternshipApplication);
+router.put('/api/portal/internship/intake', internshipWriteRateLimiter, requireParticipant, handleSaveInternshipIntake);
+router.post('/api/portal/internship/interview/channel', internshipWriteRateLimiter, requireParticipant, handleSelectInternshipChannel);
+router.post('/api/portal/internship/card/dismiss', internshipWriteRateLimiter, requireParticipant, handleDismissInternshipCard);
+router.post('/api/portal/internship/card/impression', internshipBeatRateLimiter, requireParticipant, handleInternshipCardImpression);
+router.post('/api/portal/internship/card/opened', internshipBeatRateLimiter, requireParticipant, handleInternshipCardOpened);
+
 // Blog 2-minute read gate: continuous-dwell heartbeat + collect (ambient blogs, no card row).
 router.post('/api/portal/runtime/today/blog/:blogId/read', watchBeatRateLimiter, requireParticipant, handleBlogReadBeat);
 router.post('/api/portal/runtime/today/blog/:blogId/collect', requireParticipant, handleBlogCollect);

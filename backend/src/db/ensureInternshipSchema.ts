@@ -336,6 +336,27 @@ export async function ensureInternshipSchema(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS uq_internship_document_revision
        ON internship_documents (application_id, document_type, kind, revision)`,
     `CREATE INDEX IF NOT EXISTS idx_internship_documents_app ON internship_documents (application_id, document_type)`,
+
+    // ── Today-card dismissal ───────────────────────────────────────────────
+    // "Allow temporary dismissal with a server-stored reappearance date."
+    //
+    // SERVER-stored, not localStorage, and that is the point: a student who
+    // dismisses the card on their laptop should not be pestered by it on their
+    // phone ten minutes later. Storing it per-device would make "not now" mean
+    // "not now, on this browser", which is not what the student said.
+    //
+    // One row per enrollment, upserted — a dismissal replaces the previous one
+    // rather than accumulating a history nobody reads.
+    `CREATE TABLE IF NOT EXISTS internship_card_dismissals (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       dismissed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       reappear_at TIMESTAMPTZ NOT NULL,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS uq_internship_card_dismissal_enrollment
+       ON internship_card_dismissals (enrollment_id)`,
   ];
 
   for (const sql of statements) {
@@ -389,6 +410,7 @@ export const REQUIRED_TABLES = [
   'internship_requirement_acknowledgements',
   'internship_document_templates',
   'internship_documents',
+  'internship_card_dismissals',
 ] as const;
 
 export async function assertInternshipSchema(): Promise<void> {

@@ -1,0 +1,199 @@
+/* AI Internship application page.
+ *
+ * Scoped entirely under .ip-root so nothing here can leak into the rest of the
+ * portal, matching the .pp-root convention PathPage uses.
+ */
+
+.ip-root {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+.ip-head h1 {
+  font-size: 28px;
+  margin: 0 0 8px;
+  color: var(--strong, #111827);
+}
+
+.ip-lede {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--muted, #4b5563);
+  margin: 0 0 24px;
+  max-width: 60ch;
+}
+
+.ip-card {
+  background: var(--card, #fff);
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.ip-card h2 {
+  font-size: 18px;
+  margin: 0 0 6px;
+  color: var(--strong, #111827);
+}
+
+.ip-sub { margin-top: 0; margin-bottom: 18px; }
+.ip-muted { color: var(--muted, #6b7280); font-size: 13.5px; line-height: 1.55; }
+.ip-next { margin-top: 14px; }
+
+.ip-list {
+  margin: 12px 0 0;
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--muted, #4b5563);
+}
+.ip-list strong { color: var(--strong, #111827); }
+
+/* The "we will never ask for your key" notice. Deliberately loud — a student
+   conditioned by other platforms will go looking for the field. */
+.ip-warn {
+  margin: 18px 0 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(180, 83, 9, 0.08);
+  border: 1px solid rgba(180, 83, 9, 0.22);
+  color: #92400e;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.ip-alert {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(185, 28, 28, 0.08);
+  border: 1px solid rgba(185, 28, 28, 0.25);
+  color: #991b1b;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.ip-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.ip-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ip-field--wide { grid-column: 1 / -1; }
+
+.ip-field > span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--strong, #374151);
+}
+
+.ip-field input,
+.ip-field select,
+.ip-field textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--line, #d1d5db);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--card, #fff);
+  color: var(--strong, #111827);
+}
+
+.ip-field input:focus-visible,
+.ip-field select:focus-visible,
+.ip-field textarea:focus-visible,
+.ip-check input:focus-visible,
+.ip-choice:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+}
+
+.ip-fieldset {
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 10px;
+  padding: 16px;
+  margin: 20px 0 0;
+}
+
+.ip-fieldset legend {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0 6px;
+  color: var(--strong, #374151);
+}
+
+.ip-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--muted, #4b5563);
+  padding: 7px 0;
+  cursor: pointer;
+}
+
+/* Big enough to hit on a phone, and aligned to the first line of its label
+   rather than floating in the middle of a three-line consent. */
+.ip-check input {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  margin-top: 1px;
+}
+
+.ip-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.ip-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+/* The two channels are given identical visual weight on purpose: "channel choice
+   must not affect approval scoring", and a design that makes one look like the
+   real option and the other like a fallback would steer people regardless. */
+.ip-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  padding: 18px;
+  border: 1px solid var(--line, #d1d5db);
+  border-radius: 10px;
+  background: var(--card, #fff);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.ip-choice strong { font-size: 14.5px; color: var(--strong, #111827); }
+.ip-choice span { font-size: 13px; color: var(--muted, #6b7280); line-height: 1.5; }
+
+.ip-choice:hover { border-color: #7c3aed; background: rgba(124, 58, 237, 0.03); }
+
+.ip-choice.is-chosen {
+  border-color: #7c3aed;
+  background: rgba(124, 58, 237, 0.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ip-choice { transition: none; }
+}
+
+@media (max-width: 640px) {
+  .ip-grid,
+  .ip-choices {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ip-card { padding: 18px; }
+  .ip-root { padding: 16px 12px 48px; }
+}

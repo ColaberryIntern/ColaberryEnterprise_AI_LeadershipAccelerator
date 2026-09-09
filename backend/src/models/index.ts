@@ -429,6 +429,8 @@ import CapstoneReviewApproval from './CapstoneReviewApproval';
 import CohortMembership from './CohortMembership';
 import InternshipApplication from './InternshipApplication';
 import InternshipStatusEvent from './InternshipStatusEvent';
+import InternshipAdministrativeIntake from './InternshipAdministrativeIntake';
+import InternshipCardDismissal from './InternshipCardDismissal';
 import CareerMentorScope from './CareerMentorScope';
 import DeliveryProjectSourceLink from './DeliveryProjectSourceLink';
 import DeliveryProjectMember from './DeliveryProjectMember';
@@ -1578,6 +1580,7 @@ export {
   // AI Internship — lifecycle, audit trail, and the secondary cohort
   // membership that activation grants without touching enrollments.cohort_id.
   CohortMembership, InternshipApplication, InternshipStatusEvent,
+  InternshipAdministrativeIntake, InternshipCardDismissal,
   CareerMentorScope,
   DeliveryProjectMember,
   DeliveryClientSigninToken,

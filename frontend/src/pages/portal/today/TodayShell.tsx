@@ -28,6 +28,8 @@ import SkillDetailDrawer from './SkillDetailDrawer';
 import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
 import CommunityPulse from './CommunityPulse';
 import NextLiveClassCard from './NextLiveClassCard';
+import InternshipOpportunityCard from './InternshipOpportunityCard';
+import { fetchInternshipStatus, InternshipStatus } from '../../../services/internshipApi';
 import { useNextLiveSession } from './useNextLiveSession';
 import '../../../components/timeline/timeline.css';
 // The "Your timeline" section below renders .te-feed / .te-feed-head /
@@ -66,6 +68,18 @@ const TodayShell: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const fileRef = React.useRef<HTMLInputElement>(null);
   const [streak, setStreak] = useState<StreakView | null>(null);
+  // AI Internship card. Null until the status call settles, and null forever if
+  // the flag is off or the call fails — the rail simply has one fewer card,
+  // which is the correct degraded state for an optional opportunity surface.
+  const [internship, setInternship] = useState<InternshipStatus | null>(null);
+  const [internshipToken, setInternshipToken] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    fetchInternshipStatus()
+      .then((s) => { if (alive) setInternship(s); })
+      .catch(() => { if (alive) setInternship(null); });
+    return () => { alive = false; };
+  }, [internshipToken]);
   const [curriculum, setCurriculum] = useState<TimelineFeedCard[]>([]);
   // Section-bucket order for the whole curriculum feed (pre_class -> learn ->
   // ... -> advance) — needed to find the "active next step" the same way
@@ -545,6 +559,12 @@ const TodayShell: React.FC = () => {
               (from live_sessions) show the live-session card; otherwise fall
               back to the first-class cohort countdown UNCHANGED. The Open House
               "Coming up" card below is unaffected in either case. */}
+          {internship?.render && (
+            <InternshipOpportunityCard
+              status={internship}
+              onChanged={() => setInternshipToken((n) => n + 1)}
+            />
+          )}
           {nextLiveSession ? (
             <NextLiveClassCard session={nextLiveSession} />
           ) : schedule?.first_class ? (

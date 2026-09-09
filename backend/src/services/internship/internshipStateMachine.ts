@@ -316,17 +316,41 @@ export const REVIEWER_DECISIONS = {
 export type ReviewerDecision = keyof typeof REVIEWER_DECISIONS;
 
 /**
- * Where a verified-documents application goes next.
+ * Where a verified-documents application goes next — the payment gate.
  *
- * Extracted so the payment gate has exactly one implementation. `hasActiveComp`
- * is the spec's "Dhee can grant free access with an end date she sets" — a
- * comped intern skips payment without the internship being free for everyone.
+ * Extracted so the gate has exactly one implementation.
+ *
+ * ── THE POLICY THIS ENCODES ────────────────────────────────────────────────
+ *
+ * Confirmed by Ali 2026-09-09: the internship requires the membership —
+ * $149/mo billed annually or $199/mo month-to-month (the same two plans already
+ * in subscriptionService.PLANS; the difference is the BILLING TERM, not the
+ * content). The internship itself is a membership INCLUSION rather than a
+ * separate product, which is why this returns "already covered" rather than
+ * "charge them again" for a student who is paying.
+ *
+ * Per STUDENT_PLANS_AND_INTERNSHIP_POLICY.md the fee is WAIVED for:
+ *   - anyone already paying Colaberry (a current Data Analytics student, IPBC)
+ *     → `hasActiveSubscription`
+ *   - anyone referred by Ram or approved by Ali
+ *     → `hasActiveComp` (an admin-granted comp seat, subscriptionService.grantFreeAccess)
+ * Everyone else pays the membership.
+ *
+ * `hasActiveSubscription` is deliberately separate from `hasActiveComp`. Both
+ * skip payment, but they are different facts about a person and the reviewer
+ * queue has to be able to tell them apart: one is a paying customer, the other
+ * is an exception someone authorised. Collapsing them into a single boolean
+ * would make an audit of "who got in free" impossible to answer.
  */
 export function stateAfterDocumentsVerified(params: {
   requiresSubscription: boolean;
+  /** An active paid plan already covers this person — the membership inclusion rule. */
+  hasActiveSubscription: boolean;
+  /** An admin-granted comp seat — the Ram-referral / Ali-approval waiver. */
   hasActiveComp: boolean;
 }): Extract<InternshipState, 'payment_pending' | 'activation_pending'> {
   if (!params.requiresSubscription) return 'activation_pending';
+  if (params.hasActiveSubscription) return 'activation_pending';
   if (params.hasActiveComp) return 'activation_pending';
   return 'payment_pending';
 }
