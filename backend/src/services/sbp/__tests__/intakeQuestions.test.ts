@@ -17,8 +17,20 @@ const CLINIC_IDEA =
   + 'from consultants, works out how urgent each patient is, and books them into the '
   + 'right therapist calendar without double-booking anyone.';
 
-function reply(questions: unknown) {
-  return { choices: [{ message: { content: JSON.stringify({ questions }) } }] };
+/**
+ * `covered` defaults to one entry because the SCHEMA now requires the field and
+ * a real response always carries it. A short question set with nothing quoted
+ * as already-answered is refused on purpose - see the "no covered angles"
+ * rule in the service - so a fixture without it would be testing a response
+ * shape the model can no longer produce.
+ *
+ * The "never returns fewer than 3" test below deliberately passes none, because
+ * that is exactly the unjustified case it exists to keep refusing.
+ */
+function reply(questions: unknown, covered: unknown = [
+  { angle: 'THE JOB', evidence: 'triage incoming referral letters for the clinic' },
+]) {
+  return { choices: [{ message: { content: JSON.stringify({ questions, covered }) } }] };
 }
 
 const GROUNDED = [
@@ -92,7 +104,9 @@ describe('intake interview — generation', () => {
   });
 
   it('never returns fewer than 3 questions, on any path', async () => {
-    const client = { create: jest.fn().mockResolvedValue(reply([GROUNDED[0]])) };
+    // One question and NO covered evidence: a model skipping nine angles
+    // without saying why. Refused, retried, then degraded to the fallback set.
+    const client = { create: jest.fn().mockResolvedValue(reply([GROUNDED[0]], [])) };
     const r = await generateIntakeQuestions({ idea: CLINIC_IDEA, size: 'workflow', client: client as any });
     expect(r.questions.length).toBeGreaterThanOrEqual(3);
   });

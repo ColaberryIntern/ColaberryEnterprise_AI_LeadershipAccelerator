@@ -48,8 +48,22 @@ export interface IntakeQuestion {
   kind?: 'text' | 'single' | 'multi';
 }
 
+/** One angle the description already answered, and the phrase that answered it. */
+export interface CoveredAngle {
+  angle: string;
+  evidence: string;
+}
+
 export interface IntakeQuestionsResult {
   questions: IntakeQuestion[];
+  /**
+   * What was NOT asked, and why. Empty on the degraded path, because the
+   * fallback set knows nothing about the student's description.
+   *
+   * This is the receipt for a short interview: a student who wrote three
+   * paragraphs and got two questions can be shown the other eight, quoted.
+   */
+  covered: CoveredAngle[];
   /** false when the model failed and the generic set was substituted. */
   generated: boolean;
   model: string | null;
@@ -98,6 +112,16 @@ function defaultClient(): Pick<OpenAI['chat']['completions'], 'create'> | null {
  */
 const QUESTION_ID_MAX = 80;
 const QUESTION_TEXT_MAX = 500;
+
+/** Well-formed covered entries only. A claim with no quote is not evidence. */
+function coveredAngles(raw: unknown): CoveredAngle[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((c): c is CoveredAngle => {
+    const v = c as CoveredAngle | null;
+    return !!v && typeof v.angle === 'string' && v.angle.trim().length > 0
+      && typeof v.evidence === 'string' && v.evidence.trim().length > 0;
+  });
+}
 
 function isQuestionShaped(v: unknown): v is IntakeQuestion {
   const q = v as IntakeQuestion | null;
@@ -152,7 +176,10 @@ export async function generateIntakeQuestions(opts: IntakeQuestionsOptions): Pro
       error_class: errorClass, message, attempts, model, duration_ms: Date.now() - started,
       degraded_to: 'generic_question_set',
     });
-    return { questions: fallbackQuestions(size), generated: false, model: null, attempts };
+    // `covered` is empty on this path, and that is the honest answer: the
+    // fallback set was written without ever seeing this student's description,
+    // so it cannot claim any angle was already answered.
+    return { questions: fallbackQuestions(size), covered: [], generated: false, model: null, attempts };
   };
 
   if (!client) return degrade('ConfigError', 'OPENAI_API_KEY is not configured', 0);
@@ -161,9 +188,9 @@ export async function generateIntakeQuestions(opts: IntakeQuestionsOptions): Pro
   let lastProblem = '';
 
   for (let attempt = 1; attempt <= MAX_SHAPE_ATTEMPTS; attempt += 1) {
+    // No {{MIN}} substitution any more: there is no minimum. See QUESTION_TARGETS.
     const system = INTAKE_SYSTEM_PROMPT
-      .replace('{{MIN}}', String(QUESTION_TARGETS[size].min))
-      .replace('{{MAX}}', String(QUESTION_TARGETS[size].max));
+      .replace(/\{\{MAX\}\}/g, String(QUESTION_TARGETS[size].max));
     try {
       const res: any = await client.create({
         model,
@@ -183,19 +210,60 @@ export async function generateIntakeQuestions(opts: IntakeQuestionsOptions): Pro
       let parsed: any;
       try { parsed = JSON.parse(content); } catch { lastProblem = 'unparseable JSON'; continue; }
 
-      const questions: IntakeQuestion[] = Array.isArray(parsed?.questions)
-        ? parsed.questions.filter(isQuestionShaped) : [];
-      if (questions.length < 3) { lastProblem = 'fewer than 3 well-formed questions'; continue; }
-      if (!isGroundedInIdea(questions, opts.idea)) {
+      const returned: unknown[] = Array.isArray(parsed?.questions) ? parsed.questions : [];
+      const questions: IntakeQuestion[] = returned.filter(isQuestionShaped);
+      const covered = coveredAngles(parsed?.covered);
+
+      /*
+       * THE OLD RULE HERE WAS `questions.length < 3` AND IT WAS A REAL DEFECT.
+       *
+       * It could not tell "the model returned junk" apart from "the student's
+       * description already answered almost everything". So the better a
+       * student wrote, the more likely their response was rejected, retried,
+       * and finally degraded to the GENERIC fallback set — the exact outcome
+       * this adaptive path exists to prevent, arriving only for the students
+       * who put in the most effort.
+       *
+       * The two cases are now separated on evidence:
+       *   malformed  some returned entries failed the shape check  -> retry
+       *   short      well-formed, and the model quoted what covers -> accept
+       */
+      const malformed = returned.length - questions.length;
+      if (malformed > 0) {
+        lastProblem = `${malformed} of ${returned.length} questions were malformed`;
+        continue;
+      }
+      /*
+       * A SHORT INTERVIEW HAS TO BE JUSTIFIED.
+       *
+       * Asking fewer than the tier maximum means angles were skipped, and the
+       * only acceptable reason is that the description already answered them.
+       * So a short set must quote at least one. Without this the change that
+       * removed the floors would also let a degrading model quietly ask one
+       * question and skip nine, which looks identical to the feature working.
+       *
+       * The existing suite already pinned this from the other direction: "never
+       * returns fewer than 3 questions, on any path" passes a single question
+       * and no evidence, and still degrades to the fallback set.
+       */
+      if (questions.length < QUESTION_TARGETS[size].max && covered.length === 0) {
+        lastProblem = `${questions.length} questions but no covered angles quoted`;
+        continue;
+      }
+      // Grounding checks questions that EXIST. A legitimately empty set has
+      // nothing to be generic about, and running the check on it would reject
+      // exactly the case this change was made to allow.
+      if (questions.length > 0 && !isGroundedInIdea(questions, opts.idea)) {
         lastProblem = 'questions were generic — none referenced the student\'s own idea';
         continue;
       }
 
       const capped = questions.slice(0, QUESTION_TARGETS[size].max);
       log('intake_questions', opts.correlationId, 'success', {
-        attempt, model, count: capped.length, size, duration_ms: Date.now() - started,
+        attempt, model, count: capped.length, covered_count: covered.length, size,
+        duration_ms: Date.now() - started,
       });
-      return { questions: capped, generated: true, model, attempts: attempt };
+      return { questions: capped, covered, generated: true, model, attempts: attempt };
     } catch (err: any) {
       lastProblem = err?.message || 'upstream error';
       const isTimeout = /timeout|ETIMEDOUT|aborted/i.test(lastProblem);
