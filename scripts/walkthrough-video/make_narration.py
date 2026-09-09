@@ -19,6 +19,7 @@ The narration text IS the caption text, so what is heard and what is read are th
 sentence - a caption that paraphrases its own voiceover is a second script to keep in sync,
 and it drifts.
 """
+import argparse
 import asyncio
 import json
 import os
@@ -27,7 +28,6 @@ import subprocess
 import edge_tts
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-AUDIO = os.path.join(HERE, "audio")
 VOICE = "en-US-AndrewNeural"
 # Slightly under pace. The default read is brisk for narration that has to land a figure
 # and its denominator in one breath.
@@ -69,15 +69,25 @@ def duration(path):
 
 
 async def main():
-    os.makedirs(AUDIO, exist_ok=True)
-    deck = json.load(open(os.path.join(HERE, "deck.json"), encoding="utf-8"))
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--deck", default=os.path.join(HERE, "deck.json"))
+    args = ap.parse_args()
+
+    # Audio and timings live BESIDE the deck, so several records can be built from the
+    # one toolchain without overwriting each other's narration.
+    deck_path = os.path.abspath(args.deck)
+    deck_dir = os.path.dirname(deck_path)
+    audio_dir = os.path.join(deck_dir, "audio")
+    os.makedirs(audio_dir, exist_ok=True)
+    deck_raw = json.load(open(deck_path, encoding="utf-8"))
+    deck = deck_raw["slides"] if isinstance(deck_raw, dict) else deck_raw
     timings = []
 
     for i, s in enumerate(deck):
         text = s["caption"]
         # mp3, not wav: edge-tts emits mp3 and ffmpeg reads it as an input either way, so
         # converting first would only lose a generation of quality for nothing.
-        path = os.path.join(AUDIO, f"{i:02d}.mp3")
+        path = os.path.join(audio_dir, f"{i:02d}.mp3")
         await speak(text, path)
         if not os.path.exists(path) or os.path.getsize(path) < 1000:
             raise SystemExit(f"narration {i} produced nothing: {path}")
@@ -89,7 +99,7 @@ async def main():
         timings.append({"index": i, "audio_seconds": round(d, 2), "seconds": seconds})
         print(f"  {i:02d}  voice {d:5.2f}s  ->  segment {seconds:5.1f}s   {text[:50]}")
 
-    with open(os.path.join(HERE, "timings.json"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(deck_dir, "timings.json"), "w", encoding="utf-8") as fh:
         json.dump(timings, fh, indent=1)
     print(f"\nvoice: {VOICE} at {RATE}")
     print(f"total: {sum(t['seconds'] for t in timings):.1f}s across {len(timings)} segments")

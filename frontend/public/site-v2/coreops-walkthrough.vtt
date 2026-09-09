@@ -1,0 +1,41 @@
+WEBVTT
+
+1
+00:00:00.500 --> 00:00:08.170
+Operations teams do not distrust automation because it is inaccurate. They distrust it because they cannot see what it did.
+
+2
+00:00:09.300 --> 00:00:18.440
+What it cannot do is establish that a person agreed, that they were who they claimed to be, and that the agreement can be shown to someone else weeks later.
+
+3
+00:00:19.500 --> 00:00:26.550
+Telemetry in, a proposal out, and a boundary in the middle that the system cannot cross on its own.
+
+4
+00:00:28.500 --> 00:00:35.140
+The guardrails tab states what is enforced and what is not, rather than implying everything is.
+
+5
+00:00:36.200 --> 00:00:45.050
+A policy evaluator decides whether an action is permissible at all, and anything that would write is held in a queue until a person acts.
+
+6
+00:00:46.100 --> 00:00:52.960
+A system whose central claim is that its choices are provable after the fact has written its choices down.
+
+7
+00:00:54.100 --> 00:01:00.500
+Every requirement traced to the thing that satisfies it, in the system's own command centre.
+
+8
+00:01:01.600 --> 00:01:12.250
+One decision record commits to multi-factor authentication on the approving account; another binds approval to a verified identity rather than to a session.
+
+9
+00:01:13.300 --> 00:01:21.620
+Both are published on the record rather than left out. The system proves who agreed to a change, not that the change was the right one.
+
+10
+00:01:22.700 --> 00:01:26.840
+Every claim on the page is pinned to a commit you can open.

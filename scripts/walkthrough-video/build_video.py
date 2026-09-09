@@ -10,6 +10,7 @@ and every figure on a slide is one this case study already verified at commit 96
 Slides are rendered once with Pillow and looped by ffmpeg; footage segments are composited
 over the same background so the two never look like different videos.
 """
+import argparse
 import json
 import os
 import subprocess
@@ -20,11 +21,11 @@ W, H = 1920, 1080
 FPS = 30
 OUT = os.path.dirname(os.path.abspath(__file__))
 SEG = os.path.join(OUT, "segments")
-GIF = r"C:/Users/ali_m/Downloads/r2r-src/docs/images/demoPortfolio.gif"
-DIAGRAM = r"C:/Users/ali_m/Downloads/r2r-out/diagram-repo2reputation-architecture.png"
-
-# The demo recording carries a Windows taskbar and letterboxing; this is the live app.
-CROP = (0, 0, 3782, 1615)
+# Set from the deck. A record with a demo recording declares one; a record without any
+# moving footage - which is most of them - uses `screenshot` slides of its real captures
+# instead, and never touches the GIF path at all.
+GIF = None
+GIF_CROP = None
 
 FONT_DIR = "C:/Windows/Fonts/"
 F_BOLD = FONT_DIR + "arialbd.ttf"
@@ -162,6 +163,30 @@ def slide_image(path, cap, max_h=620):
     return img
 
 
+def slide_screenshot(path, cap):
+    """
+    A real capture of the running system, filling the frame above the caption.
+
+    Separate from `slide_image` because the constraint is different. `slide_image` caps
+    HEIGHT, which is right for a portrait chart; a screenshot is usually landscape and
+    wants the width, and a record with no demo recording carries these instead of footage.
+    Bounded on both axes so a tall capture cannot slide under the caption box, which is
+    the mistake the diagram slide made first.
+    """
+    img = background().convert("RGBA")
+    art = Image.open(path).convert("RGBA")
+    max_w, max_h = 1560, 700
+    scale = min(max_w / art.width, max_h / art.height)
+    art = art.resize((int(art.width * scale), int(art.height * scale)), Image.LANCZOS)
+    pad = 20
+    x = (W - art.width) // 2
+    top = 70
+    rounded_card(img, [x - pad, top - pad, x + art.width + pad, top + art.height + pad], 20)
+    img.alpha_composite(art, (x, top))
+    caption(img, cap)
+    return img
+
+
 def slide_diagram(path, phases, cap):
     """
     The pipeline chart, large enough to read, beside the phase names.
@@ -210,6 +235,8 @@ def footage_frames(gif_start, seconds, cap):
     timelapse, so the frames are held at that real rate rather than being interpolated
     into motion the source never had.
     """
+    if not GIF:
+        raise SystemExit("a footage segment needs a `gif` in the deck")
     gif = Image.open(GIF)
     rate = gif.n_frames / 234.61
     start = int(round(gif_start * rate))
@@ -221,7 +248,7 @@ def footage_frames(gif_start, seconds, cap):
     for i in range(count):
         idx = min(start + i, gif.n_frames - 1)
         gif.seek(idx)
-        shot = gif.convert("RGB").crop(CROP)
+        shot = gif.convert("RGB").crop(GIF_CROP)
         shot = shot.resize((1660, int(shot.height * 1660 / shot.width)), Image.LANCZOS)
         frame = background().convert("RGBA")
         pad = 16
@@ -241,15 +268,32 @@ def run(cmd):
 
 
 def main():
+    global GIF, GIF_CROP, SEG
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--deck", default=os.path.join(OUT, "deck.json"))
+    args = ap.parse_args()
+
+    deck_path = os.path.abspath(args.deck)
+    deck_dir = os.path.dirname(deck_path)
+    raw = json.load(open(deck_path, encoding="utf-8"))
+    # A bare list is still a valid deck - it is what the first record used. An object adds
+    # the output name and the optional footage source without breaking that.
+    cfg = raw if isinstance(raw, dict) else {"slides": raw}
+    slides = cfg["slides"]
+    GIF = cfg.get("gif")
+    GIF_CROP = tuple(cfg.get("gifCrop", (0, 0, 0, 0))) if cfg.get("gifCrop") else None
+    out_name = cfg.get("output", "walkthrough.mp4")
+
+    SEG = os.path.join(deck_dir, "segments")
     os.makedirs(SEG, exist_ok=True)
-    bg_path = os.path.join(OUT, "bg.png")
+    bg_path = os.path.join(deck_dir, "bg.png")
     background().save(bg_path)
 
-    deck = json.load(open(os.path.join(OUT, "deck.json"), encoding="utf-8"))
+    deck = slides
 
     # Durations come from the narration, not from the deck's guesses: a slide that ends
     # before its own sentence does cuts the last word off.
-    timings_path = os.path.join(OUT, "timings.json")
+    timings_path = os.path.join(deck_dir, "timings.json")
     timings = {}
     if os.path.exists(timings_path):
         timings = {t["index"]: t for t in json.load(open(timings_path, encoding="utf-8"))}
@@ -259,7 +303,7 @@ def main():
     for i, s in enumerate(deck):
         seg = os.path.join(SEG, f"{i:02d}.mp4")
         dur = timings[i]["seconds"] if i in timings else s["seconds"]
-        voice = os.path.join(OUT, "audio", f"{i:02d}.wav")
+        voice = os.path.join(deck_dir, "audio", f"{i:02d}.mp3")
         has_voice = os.path.exists(voice)
         # 0.5s of silence before the voice starts, then pad to the full segment length.
         afilter = ["-af", "adelay=500:all=1,apad"]
@@ -289,6 +333,8 @@ def main():
                             s.get("accent_index")).convert("RGB").save(png)
             elif s["kind"] == "image":
                 slide_image(s["path"], s["caption"]).convert("RGB").save(png)
+            elif s["kind"] == "screenshot":
+                slide_screenshot(s["path"], s["caption"]).convert("RGB").save(png)
             elif s["kind"] == "diagram":
                 slide_diagram(s["path"], s["phases"], s["caption"]).convert("RGB").save(png)
             run([
@@ -306,12 +352,12 @@ def main():
         segments.append(seg)
         print(f"  segment {i:02d} {s['kind']:8s} {dur:>4}s  ok")
 
-    listfile = os.path.join(OUT, "concat.txt")
+    listfile = os.path.join(deck_dir, "concat.txt")
     with open(listfile, "w", encoding="utf-8") as fh:
         for s in segments:
             fh.write(f"file '{s.replace(os.sep, '/')}'\n")
 
-    final = os.path.join(OUT, "repo2reputation-walkthrough.mp4")
+    final = os.path.join(deck_dir, out_name)
     run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", listfile,
          "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
          "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2",

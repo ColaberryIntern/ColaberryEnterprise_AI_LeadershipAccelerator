@@ -1,0 +1,119 @@
+{
+  "slug": "your-repositories-already-wrote-your-resume",
+  "output": "repo2reputation-walkthrough.mp4",
+  "gif": "C:/Users/ali_m/Downloads/r2r-src/docs/images/demoPortfolio.gif",
+  "_gifNote": "The subject repository's own committed demo recording. gifCrop removes the Windows taskbar and the letterbox, leaving the application window.",
+  "gifCrop": [
+    0,
+    0,
+    3782,
+    1615
+  ],
+  "slides": [
+    {
+      "kind": "title",
+      "seconds": 5,
+      "title": "Your Repositories Already Wrote Your Resume",
+      "subtitle": "Repo2Reputation  \u00b7  a Colaberry learner build",
+      "caption": "A GitHub profile is already proof of what someone can do. Almost nobody reads it that way."
+    },
+    {
+      "kind": "footage",
+      "seconds": 5,
+      "gif_start": 1.0,
+      "caption": "Sign in with GitHub. That is the entire setup."
+    },
+    {
+      "kind": "footage",
+      "seconds": 5,
+      "gif_start": 11.5,
+      "caption": "Repositories import from one or more GitHub accounts, public or private."
+    },
+    {
+      "kind": "diagram",
+      "seconds": 8,
+      "path": "C:/Users/ali_m/Downloads/r2r-out/diagram-repo2reputation-architecture.png",
+      "phases": [
+        "Enrichment",
+        "Code intelligence",
+        "File classification",
+        "Semantic chunking",
+        "Intelligence agents",
+        "Inference engine"
+      ],
+      "caption": "Six phases analyse each repository. Every phase records its own status and its own error."
+    },
+    {
+      "kind": "footage",
+      "seconds": 4,
+      "gif_start": 18.0,
+      "caption": "Nothing is written about a repository until it has been analysed."
+    },
+    {
+      "kind": "cards",
+      "seconds": 6,
+      "rows": [
+        [
+          "6",
+          "phases in the pipeline"
+        ],
+        [
+          "8",
+          "agents, each isolated from the others failing"
+        ],
+        [
+          "45",
+          "HTTP endpoints"
+        ]
+      ],
+      "accent_index": 1,
+      "caption": "One failing agent costs one section of the portfolio, not the whole run."
+    },
+    {
+      "kind": "title",
+      "seconds": 7,
+      "title": "The role is decided in code.",
+      "subtitle": "Before the language model is asked.",
+      "caption": "Framework detection writes a mandatory override into the prompt. The model phrases the finding; it does not determine it."
+    },
+    {
+      "kind": "footage",
+      "seconds": 6,
+      "gif_start": 30.0,
+      "caption": "The headline and summary are generated from the code, not typed by the developer."
+    },
+    {
+      "kind": "cards",
+      "seconds": 6,
+      "rows": [
+        [
+          "78",
+          "commits across 21 weeks"
+        ],
+        [
+          "16",
+          "migrations, each reversible"
+        ],
+        [
+          "142",
+          "files at the pinned commit"
+        ]
+      ],
+      "caption": "Every figure is counted from the repository at commit 966e5d69, and can be re-derived."
+    },
+    {
+      "kind": "title",
+      "seconds": 6,
+      "title": "20 tests, over 1 of 142 files.",
+      "subtitle": "Published, not hidden.",
+      "caption": "Nothing covers the pipeline, the agents or the endpoints. The record says so itself."
+    },
+    {
+      "kind": "title",
+      "seconds": 5,
+      "title": "Read the full record",
+      "subtitle": "Colaberry Enterprise  \u00b7  Colaberry Training  \u00b7  AI Flotation",
+      "caption": "Every claim on the page is pinned to a commit you can open."
+    }
+  ]
+}
