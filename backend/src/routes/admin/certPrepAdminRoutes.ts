@@ -35,6 +35,7 @@ import {
 } from '../../services/certPrep/certAdminService';
 import { getCurrentBlueprint } from '../../services/certPrep/certBlueprintService';
 import { setReviewStatus } from '../../services/certPrep/certQuestionBankService';
+import { scoreItem } from '../../services/certPrep/certQuestionRubric';
 import { setMappingState, listPendingForReview } from '../../services/certPrep/certEvidenceService';
 import CertQuestionRevision from '../../models/CertQuestionRevision';
 import { Op } from 'sequelize';
@@ -120,6 +121,21 @@ router.get('/api/admin/cert-prep/items', requireAdmin, async (req, res, next) =>
 
 // ── question review ──────────────────────────────────────────────────────────
 
+/**
+ * The review queue, each question carrying its rubric score.
+ *
+ * WHY THE SCORE IS COMPUTED HERE RATHER THAN STORED. `scoreItem` is pure and
+ * deterministic, so a stored score is a cache that can disagree with the rubric
+ * that produced it — and a reviewer looking at a stale number is worse off than
+ * one looking at none, because they have no way to tell. Recomputing on read
+ * costs microseconds against a query that is already fetching the content.
+ *
+ * The score is ADVISORY and deliberately does not gate anything. It measures
+ * whether an item looks like a real exam item, which is not the same question as
+ * whether it is correct, fair, or teaches the right thing — and only a human
+ * reading it can answer those. A rubric that blocked approval would quietly
+ * become the definition of a good question.
+ */
 router.get('/api/admin/cert-prep/questions', requireAdmin, async (req, res, next) => {
   if (!gate(res)) return;
   try {
@@ -129,7 +145,22 @@ router.get('/api/admin/cert-prep/questions', requireAdmin, async (req, res, next
       order: [['created_at', 'ASC']],
       limit: 200,
     });
-    res.json({ questions: rows });
+    const questions = rows.map((row) => ({
+      // Spread the PLAIN row, never the Sequelize instance: spreading an instance
+      // drops every column, which this repo has been bitten by before.
+      ...row.get({ plain: true }),
+      rubric: scoreItem({
+        question_key: row.question_key,
+        domain_id: row.domain_id,
+        objective_id: row.objective_id ?? '',
+        stem: row.stem,
+        options: (row.options ?? []).map((o) => ({ key: o.key, text: o.text })),
+        correct_keys: row.correct_keys ?? [],
+        rationale: row.rationale ?? null,
+        distractor_rationales: row.distractor_rationales ?? null,
+      }),
+    }));
+    res.json({ questions });
   } catch (err) { fail(res, err, next); }
 });
 
