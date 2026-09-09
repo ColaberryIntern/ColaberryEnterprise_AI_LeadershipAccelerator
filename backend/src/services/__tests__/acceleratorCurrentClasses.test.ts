@@ -4,7 +4,46 @@ import {
   selectStartingSoon,
   isoDay,
   ClassCandidate,
+  ENROLLMENT_STATUSES,
+  DEPARTED_ENROLLMENT_STATUSES,
+  AWAITING_REVIEW_STATUSES,
 } from '../acceleratorCurrentClassesService';
+
+/**
+ * Enum literals used in the SQL, pinned.
+ *
+ * This exists because of a production 500: the query filtered
+ * `status NOT IN ('withdrawn','cancelled')` and `cancelled` is not a member of
+ * `enum_enrollments_status`. Postgres does not quietly match nothing against an
+ * unknown enum label — it raises `invalid input value for enum` and takes the
+ * whole endpoint down. So a one-word typo here is an outage, and it is not
+ * visible to the compiler, which sees only a string inside a SQL template.
+ */
+describe('enum literals used in the SQL', () => {
+  it('every excluded enrollment status is a real member of the enum', () => {
+    for (const s of DEPARTED_ENROLLMENT_STATUSES) {
+      expect(ENROLLMENT_STATUSES).toContain(s);
+    }
+  });
+
+  it('excludes withdrawn but NOT suspended', () => {
+    // Suspension is routine and transient here (the CCPP dashboard re-suspends
+    // nightly), so treating it as departed would undercount live classes.
+    expect(DEPARTED_ENROLLMENT_STATUSES).toContain('withdrawn');
+    expect(DEPARTED_ENROLLMENT_STATUSES).not.toContain('suspended');
+  });
+
+  it('does not reintroduce "cancelled", which is not an enrollment status', () => {
+    expect(ENROLLMENT_STATUSES).not.toContain('cancelled' as never);
+    expect(DEPARTED_ENROLLMENT_STATUSES).not.toContain('cancelled' as never);
+  });
+
+  it('awaits review only on statuses that precede a review', () => {
+    // 'reviewed' and 'flagged' have both been looked at; counting either would
+    // overstate the queue.
+    expect([...AWAITING_REVIEW_STATUSES].sort()).toEqual(['pending', 'submitted']);
+  });
+});
 
 /**
  * The three rules that decide "is this class teaching right now" are the whole

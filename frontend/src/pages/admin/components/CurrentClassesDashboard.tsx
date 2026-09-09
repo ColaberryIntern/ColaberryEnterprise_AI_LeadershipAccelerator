@@ -41,7 +41,9 @@ interface CurrentClass {
   avg_readiness: number | null;
   avg_attendance: number | null;
   at_risk_count: number;
-  submissions_pending: number;
+  /** Null when the backend could not compute it. Rendered as nothing rather than
+   *  as "0 awaiting review", which would be a claim we cannot support. */
+  submissions_pending: number | null;
 }
 
 interface Snapshot {
@@ -284,7 +286,7 @@ export default function CurrentClassesDashboard({ onOpenCohort }: Props) {
             </div>
           </div>
 
-          {c.submissions_pending > 0 && (
+          {c.submissions_pending != null && c.submissions_pending > 0 && (
             <div className="mt-2 small">
               <StatusBadge label={`${c.submissions_pending} submission${c.submissions_pending === 1 ? '' : 's'} awaiting review`} tone="info" icon="inbox-line" />
             </div>
