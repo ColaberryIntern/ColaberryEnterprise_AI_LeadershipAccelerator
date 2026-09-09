@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import api from '../../utils/api';
 import AdminPreviewStackPanel from '../../components/admin/AdminPreviewStackPanel';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import ProjectDeliveryView from './components/ProjectDeliveryView';
 import { TrustSignal } from '../../components/admin/shell/trust';
 
 interface CohortProjectStats {
@@ -37,6 +38,8 @@ interface ProjectOverviewProps {
 }
 
 function AdminProjectOverview({ initialCohortId }: ProjectOverviewProps = {}) {
+  // Delivery leads; the legacy cohort roll-up stays reachable rather than deleted.
+  const [view, setView] = useState<'delivery' | 'cohorts'>('delivery');
   const [stats, setStats] = useState<CohortProjectStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -149,7 +152,27 @@ function AdminProjectOverview({ initialCohortId }: ProjectOverviewProps = {}) {
         </div>
       </PageHeader>
 
-      {loading && (
+      {/* Delivery is the primary view: it answers "what has each student built,
+          and which builds are close to being a case study", which is what this
+          page is for. The original cohort roll-up is kept behind the second tab
+          rather than deleted — it owns the roster, portal-access toggles and the
+          add-student flow, none of which the delivery view replaces. */}
+      <ul className="nav nav-pills mb-3">
+        <li className="nav-item">
+          <button className={`nav-link${view === 'delivery' ? ' active' : ''}`} onClick={() => setView('delivery')}>
+            Delivery &amp; Timeline
+          </button>
+        </li>
+        <li className="nav-item">
+          <button className={`nav-link${view === 'cohorts' ? ' active' : ''}`} onClick={() => setView('cohorts')}>
+            Cohort Roster
+          </button>
+        </li>
+      </ul>
+
+      {view === 'delivery' && <ProjectDeliveryView cohortId={initialCohortId} />}
+
+      {view === 'cohorts' && loading && (
         <div className="text-center py-5">
           <div className="spinner-border text-primary" role="status">
             <span className="visually-hidden">Loading...</span>
@@ -157,9 +180,9 @@ function AdminProjectOverview({ initialCohortId }: ProjectOverviewProps = {}) {
         </div>
       )}
 
-      {!loading && error && <div className="alert alert-danger">{error}</div>}
+      {view === 'cohorts' && !loading && error && <div className="alert alert-danger">{error}</div>}
 
-      {!loading && !error && (
+      {view === 'cohorts' && !loading && !error && (
         <>
           {/* Add Student Modal */}
           {showAddModal && (

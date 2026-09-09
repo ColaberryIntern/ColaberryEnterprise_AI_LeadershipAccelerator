@@ -4,6 +4,7 @@ import { Cohort, Enrollment } from '../../models';
 import Project from '../../models/Project';
 import ProjectArtifact from '../../models/ProjectArtifact';
 import { resolveProjectRepos } from '../../services/projectRepoResolver';
+import { getProjectDelivery, getProjectGantt } from '../../services/projectDeliveryService';
 import { Op } from 'sequelize';
 import { sequelize } from '../../config/database';
 
@@ -289,6 +290,37 @@ router.post('/api/admin/projects/:id/import', requireAdmin, async (req: Request,
     res.json(result);
   } catch (err: any) {
     console.error('[AdminProjectOverview] POST /import error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/projects/delivery[?cohort_id=]
+ * Every project with its build numbers, ranked by case-study readiness.
+ * The cohort filter is OPTIONAL by design: the Accelerator page scopes this to
+ * the cohort a drill-down came from, while the global view stays unfiltered.
+ */
+router.get('/api/admin/projects/delivery', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const cohortId = typeof req.query.cohort_id === 'string' && req.query.cohort_id
+      ? req.query.cohort_id
+      : undefined;
+    res.json({ projects: await getProjectDelivery({ cohortId }) });
+  } catch (err: any) {
+    console.error('[AdminProjectOverview] GET /delivery error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/projects/:projectId/gantt
+ * One project's tasks grouped into its release spine, for the timeline view.
+ */
+router.get('/api/admin/projects/:projectId/gantt', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    res.json(await getProjectGantt(String(req.params.projectId)));
+  } catch (err: any) {
+    console.error('[AdminProjectOverview] GET /gantt error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
