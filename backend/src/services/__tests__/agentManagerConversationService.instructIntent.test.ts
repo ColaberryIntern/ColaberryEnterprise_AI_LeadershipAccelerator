@@ -1,15 +1,11 @@
 /**
- * agentManagerConversationService — CHANGE_GOAL confirmation workflow
- * integration (Reese Agentic AI Employee mission, Capability 8). Pins the
- * real two-turn state machine at the point it actually lives — inside
- * sendManagerMessage() — not just the pure detector in isolation
- * (managerGoalIntentService.test.ts already covers that). Mirrors
- * agentManagerConversationService.reliabilityConfirmation.test.ts's own
- * structure exactly, on the generic pending_intent_confirmation column
- * instead of the dedicated reliability one. The core safety property under
- * test: a goal change is NEVER applied on the same turn it's first
- * detected, and a pending reliability confirmation always outranks a
- * pending/newly-detected goal-change intent on the same turn.
+ * agentManagerConversationService — INSTRUCT confirmation workflow
+ * integration (Reese Agentic AI Employee mission, Capability 8). Mirrors
+ * agentManagerConversationService.oneOnOneIntent.test.ts's own structure
+ * exactly, on the same generic pending_intent_confirmation column. Core
+ * safety property under test: a directive is NEVER saved on the same turn
+ * it's first detected, and a pending CHANGE_GOAL or SCHEDULE_ONE_ON_ONE
+ * confirmation always outranks a newly-typed directive on the same turn.
  */
 const mockAiAgentFindByPk = jest.fn();
 jest.mock('../../models/AiAgent', () => ({ __esModule: true, default: { findByPk: (...a: any[]) => mockAiAgentFindByPk(...a) } }));
@@ -31,14 +27,10 @@ jest.mock('../openaiInstrumented', () => ({ getInstrumentedOpenAI: jest.fn() }))
 jest.mock('../agentBlueprint/agentManagerConversationPrompt', () => ({ buildAgentManagerConversationSystemPrompt: jest.fn() }));
 
 const mockDetectReliabilityIntent = jest.fn(() => null);
-// detectConfirmationReply is the one function agentManagerConversationService.ts
-// shares between the reliability flow AND the goal-intent flow (both pending-
-// confirmation handlers reuse the same generic confirm/cancel-word detector) —
-// so unlike a normal wholesale stub, this must behave realistically for this
-// file's own 'confirm'/'cancel' test messages, or the goal-confirmation turn
-// never actually registers as confirmed. Full word-list coverage is
-// managerReliabilityIntentService.test.ts's own job; this only needs to be
-// right for the literal words this file's tests send.
+// detectConfirmationReply is shared across every pending-confirmation flow
+// (reliability, CHANGE_GOAL, SCHEDULE_ONE_ON_ONE, INSTRUCT) — must behave
+// realistically for this file's own 'confirm'/'cancel' test messages, same
+// reasoning as the sibling intent test files' own mocks.
 jest.mock('../managerReliabilityIntentService', () => ({
   detectReliabilityIntent: (...a: any[]) => mockDetectReliabilityIntent(...a),
   detectConfirmationReply: jest.fn((msg: string) => {
@@ -52,24 +44,25 @@ jest.mock('../managerReliabilityIntentService', () => ({
   applyConfirmedReliabilityChange: jest.fn(),
 }));
 
-const mockCreateGoal = jest.fn();
-jest.mock('../agentGoalService', () => ({
-  createGoal: (...a: any[]) => mockCreateGoal(...a),
+// This file tests the INSTRUCT flow specifically — CHANGE_GOAL and
+// SCHEDULE_ONE_ON_ONE are unrelated, mocked wholesale so neither fires on
+// this file's own messages.
+jest.mock('../managerGoalIntentService', () => ({
+  detectChangeGoalIntent: jest.fn(() => null),
+  buildGoalConfirmationCardText: jest.fn(() => ''),
+  toPendingGoalConfirmation: jest.fn(),
+  applyConfirmedGoalChange: jest.fn(),
 }));
-
-// This file tests the CHANGE_GOAL flow specifically — SCHEDULE_ONE_ON_ONE is
-// unrelated, mocked wholesale so it never fires on this file's own messages.
 jest.mock('../managerOneOnOneIntentService', () => ({
   detectScheduleOneOnOneIntent: jest.fn(() => null),
   buildOneOnOneConfirmationCardText: jest.fn(() => ''),
   toPendingOneOnOneConfirmation: jest.fn(),
   applyConfirmedOneOnOneSchedule: jest.fn(),
 }));
-jest.mock('../managerDirectiveIntentService', () => ({
-  detectInstructIntent: jest.fn(() => null),
-  buildDirectiveConfirmationCardText: jest.fn(() => ''),
-  toPendingDirectiveConfirmation: jest.fn(),
-  applyConfirmedDirective: jest.fn(),
+
+const mockCreateDirective = jest.fn();
+jest.mock('../managerDirectiveService', () => ({
+  createDirective: (...a: any[]) => mockCreateDirective(...a),
 }));
 
 jest.mock('../agentWorkStatusIntentService', () => ({
@@ -102,65 +95,66 @@ beforeEach(() => {
   mockGetInstrumentedOpenAI.mockReturnValue({ chat: { completions: { create: mockCreateCompletion } } });
   mockAiAgentFindByPk.mockResolvedValue({ id: 'agent-1', agent_name: 'Reese', system_prompt: 'You are Reese.' });
   mockMessageFindAll.mockResolvedValue([]);
-  mockCreateGoal.mockResolvedValue({ id: 'goal-1' });
+  mockCreateDirective.mockResolvedValue({ id: 'directive-1' });
 });
 
-describe('sendManagerMessage — CHANGE_GOAL confirmation workflow', () => {
-  it('detection turn: a fresh goal-change request produces a confirmation card, sets pending state, and never calls the LLM or writes a real goal', async () => {
+describe('sendManagerMessage — INSTRUCT confirmation workflow', () => {
+  it('detection turn: a fresh standing-directive request produces a confirmation card, sets pending state, and never calls the LLM or saves a real directive', async () => {
     const conversation = fakeConversation();
     mockConversationFindOrCreate.mockResolvedValue([conversation, false]);
 
-    const result = await sendManagerMessage('agent-1', 'ali@colaberry.com', null, 'Set a goal: monthly cost at most $500.');
+    const result = await sendManagerMessage('agent-1', 'ali@colaberry.com', null, 'From now on, always CC me on financial tickets.');
 
     expect(mockCreateCompletion).not.toHaveBeenCalled();
-    expect(mockCreateGoal).not.toHaveBeenCalled();
+    expect(mockCreateDirective).not.toHaveBeenCalled();
     expect(conversation.update).toHaveBeenCalledWith(expect.objectContaining({
-      pending_intent_confirmation: expect.objectContaining({ intentType: 'CHANGE_GOAL', metricKey: 'monthly_cost_usd', targetValue: 500 }),
+      pending_intent_confirmation: expect.objectContaining({ intentType: 'INSTRUCT', directiveText: 'From now on, always CC me on financial tickets.' }),
     }));
     const agentTurn = mockMessageCreate.mock.calls.find((c) => c[0].role === 'agent');
     expect(agentTurn[0].content).toContain('confirm');
     expect(result.conversationId).toBe('conv-1');
   });
 
-  it('confirmation turn: a pending goal change + a real "confirm" reply creates the real goal and clears pending state', async () => {
-    const pending = { intentType: 'CHANGE_GOAL' as const, metricKey: 'monthly_cost_usd', comparison: 'at_most' as const, targetValue: 500, reason: 'Set a goal: monthly cost at most $500.', detectedAt: '2026-09-08T00:00:00.000Z' };
+  it('confirmation turn: a pending directive + a real "confirm" reply saves the real directive and clears pending state', async () => {
+    const pending = { intentType: 'INSTRUCT' as const, directiveText: 'From now on, always CC me on financial tickets.', detectedAt: '2026-09-09T00:00:00.000Z' };
     const conversation = fakeConversation({ pending_intent_confirmation: pending });
     mockConversationFindOrCreate.mockResolvedValue([conversation, false]);
 
     await sendManagerMessage('agent-1', 'ali@colaberry.com', 'org-member-1', 'confirm');
 
-    expect(mockCreateGoal).toHaveBeenCalledWith('agent-1', 'org-member-1', 'ali@colaberry.com', 'monthly_cost_usd', 'at_most', 500);
+    expect(mockCreateDirective).toHaveBeenCalledWith('agent-1', 'org-member-1', 'ali@colaberry.com', 'From now on, always CC me on financial tickets.');
     expect(conversation.update).toHaveBeenCalledWith({ pending_intent_confirmation: null });
     expect(mockCreateCompletion).not.toHaveBeenCalled();
     const agentTurn = mockMessageCreate.mock.calls.find((c) => c[0].role === 'agent');
-    expect(agentTurn[0].content).toContain('monthly cost');
+    expect(agentTurn[0].content).toContain('directive');
   });
 
-  it('cancel turn: a pending goal change + a "cancel" reply clears pending state without ever creating a goal', async () => {
-    const pending = { intentType: 'CHANGE_GOAL' as const, metricKey: 'monthly_cost_usd', comparison: 'at_most' as const, targetValue: 500, reason: 'Set a goal: monthly cost at most $500.', detectedAt: '2026-09-08T00:00:00.000Z' };
+  it('cancel turn: a pending directive + a "cancel" reply clears pending state without ever saving a real directive', async () => {
+    const pending = { intentType: 'INSTRUCT' as const, directiveText: 'From now on, always CC me.', detectedAt: '2026-09-09T00:00:00.000Z' };
     const conversation = fakeConversation({ pending_intent_confirmation: pending });
     mockConversationFindOrCreate.mockResolvedValue([conversation, false]);
 
     await sendManagerMessage('agent-1', 'ali@colaberry.com', null, 'cancel');
 
-    expect(mockCreateGoal).not.toHaveBeenCalled();
+    expect(mockCreateDirective).not.toHaveBeenCalled();
     expect(conversation.update).toHaveBeenCalledWith({ pending_intent_confirmation: null });
   });
 
-  it('priority: a pending RELIABILITY confirmation outranks a newly-typed goal-change message on the same turn', async () => {
-    const pendingReliability = { direction: 'quarantine', sourceSystem: 'attendance', metricKey: 'attendance.*', scopeType: 'global', scopeValue: null, reason: 'Attendance is broken.', detectedAt: '2026-09-08T00:00:00.000Z' };
-    const conversation = fakeConversation({ pending_reliability_confirmation: pendingReliability });
+  it('priority: a pending SCHEDULE_ONE_ON_ONE confirmation outranks a newly-typed directive on the same turn', async () => {
+    const pendingOneOnOne = { intentType: 'SCHEDULE_ONE_ON_ONE' as const, agenda: "Let's schedule a 1:1.", detectedAt: '2026-09-09T00:00:00.000Z' };
+    const conversation = fakeConversation({ pending_intent_confirmation: pendingOneOnOne });
     mockConversationFindOrCreate.mockResolvedValue([conversation, false]);
 
-    await sendManagerMessage('agent-1', 'ali@colaberry.com', null, 'Set a goal: monthly cost at most $500.');
+    await sendManagerMessage('agent-1', 'ali@colaberry.com', null, 'From now on, always CC me on financial tickets.');
 
-    // The reliability handler owns this turn (its own pending state existed);
-    // the goal handler must never even run its detector on this turn.
-    expect(mockCreateGoal).not.toHaveBeenCalled();
-    expect(conversation.update).toHaveBeenCalledWith({ pending_reliability_confirmation: null });
+    // The generic pending-confirmation handler owns this turn regardless of
+    // intent type; the new-detection path must never even run for a
+    // directive on this turn.
+    expect(mockCreateDirective).not.toHaveBeenCalled();
+    expect(conversation.update).toHaveBeenCalledWith({ pending_intent_confirmation: null });
   });
 
-  it('regression: a normal message with no pending state and no goal-change keywords goes through the unchanged LLM reply path', async () => {
+  it('regression: a normal message with no pending state and no standing-directive keywords goes through the unchanged LLM reply path', async () => {
     const conversation = fakeConversation();
     mockConversationFindOrCreate.mockResolvedValue([conversation, false]);
 
@@ -168,7 +162,7 @@ describe('sendManagerMessage — CHANGE_GOAL confirmation workflow', () => {
 
     expect(mockCreateCompletion).toHaveBeenCalledTimes(1);
     expect(conversation.update).not.toHaveBeenCalled();
-    expect(mockCreateGoal).not.toHaveBeenCalled();
+    expect(mockCreateDirective).not.toHaveBeenCalled();
     expect(result).toBeDefined();
   });
 });

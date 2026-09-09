@@ -48,6 +48,15 @@ jest.mock('../../services/managerOneOnOneIntentService', () => ({
   applyConfirmedOneOnOneSchedule: jest.fn(),
 }));
 
+// Capability 8's third generic-column intent (INSTRUCT) — mocked wholesale
+// for consistency with the other two intent mocks above.
+jest.mock('../../services/managerDirectiveIntentService', () => ({
+  detectInstructIntent: jest.fn(() => null),
+  buildDirectiveConfirmationCardText: jest.fn(() => ''),
+  toPendingDirectiveConfirmation: jest.fn(),
+  applyConfirmedDirective: jest.fn(),
+}));
+
 jest.mock('../../services/agentManagerConversationService', () => {
   const actual = jest.requireActual('../../services/agentManagerConversationService');
   return { ...actual, getConversationHistory: jest.fn(), sendManagerMessage: jest.fn() };

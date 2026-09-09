@@ -48,6 +48,12 @@ jest.mock('../managerOneOnOneIntentService', () => ({
   toPendingOneOnOneConfirmation: jest.fn(),
   applyConfirmedOneOnOneSchedule: jest.fn(),
 }));
+jest.mock('../managerDirectiveIntentService', () => ({
+  detectInstructIntent: jest.fn(() => null),
+  buildDirectiveConfirmationCardText: jest.fn(() => ''),
+  toPendingDirectiveConfirmation: jest.fn(),
+  applyConfirmedDirective: jest.fn(),
+}));
 jest.mock('../agentUncertaintyIntentService', () => ({
   detectUncertaintyQuery: jest.fn(() => false),
   buildUncertaintyReply: jest.fn(),

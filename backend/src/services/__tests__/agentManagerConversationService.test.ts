@@ -65,6 +65,12 @@ jest.mock('../managerOneOnOneIntentService', () => ({
   toPendingOneOnOneConfirmation: jest.fn(),
   applyConfirmedOneOnOneSchedule: jest.fn(),
 }));
+jest.mock('../managerDirectiveIntentService', () => ({
+  detectInstructIntent: jest.fn(() => null),
+  buildDirectiveConfirmationCardText: jest.fn(() => ''),
+  toPendingDirectiveConfirmation: jest.fn(),
+  applyConfirmedDirective: jest.fn(),
+}));
 // Same isolation reasoning as managerReliabilityIntentService above —
 // agentWorkStatusIntentService.ts imports Ticket/AdminUser model classes
 // directly; mocked wholesale here since this file only needs "not a
