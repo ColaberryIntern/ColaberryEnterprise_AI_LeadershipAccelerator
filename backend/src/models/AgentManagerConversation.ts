@@ -57,7 +57,21 @@ export interface PendingGoalChangeConfirmation {
   detectedAt: string;
 }
 
-export type PendingIntentConfirmation = PendingGoalChangeConfirmation;
+/**
+ * Capability 8, second intent on the generic column — SCHEDULE (a manager
+ * asking to book a 1:1 check-in). `agenda` is the manager's own message
+ * verbatim, not an extracted/summarized field — see
+ * managerOneOnOneIntentService.ts for why: agentOneOnOneService.createOneOnOne()
+ * takes only a free-text agenda, no date/time, so there is nothing to parse
+ * out beyond the trigger phrase itself.
+ */
+export interface PendingOneOnOneConfirmation {
+  intentType: 'SCHEDULE_ONE_ON_ONE';
+  agenda: string;
+  detectedAt: string;
+}
+
+export type PendingIntentConfirmation = PendingGoalChangeConfirmation | PendingOneOnOneConfirmation;
 
 export interface AgentManagerConversationAttributes {
   id?: string;
