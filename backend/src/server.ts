@@ -51,6 +51,7 @@ import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } f
 import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureLeadViewPreferenceSchema } from './db/ensureLeadViewPreferenceSchema';
+import { ensureScholarshipInterviewSchema } from './db/ensureScholarshipInterviewSchema';
 import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
 import { ensureExplorerGrowthSchema } from './db/ensureExplorerGrowthSchema';
 import { ensurePageEventLeadId } from './db/ensurePageEventLeadId';
@@ -89,6 +90,7 @@ import { ensureMetricReliabilityRecordSchema } from './db/ensureMetricReliabilit
 import { ensureStudentAssessmentSchema } from './db/ensureStudentAssessmentSchema';
 import { ensureChecklistInstanceSchema } from './db/ensureChecklistInstanceSchema';
 import { ensureAgentManagerConversationReliabilitySchema } from './db/ensureAgentManagerConversationReliabilitySchema';
+import { ensureAgentManagerConversationIntentSchema } from './db/ensureAgentManagerConversationIntentSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureCaseStudySchema, assertCaseStudySchema } from './db/ensureCaseStudySchema';
 import {
@@ -2431,6 +2433,7 @@ async function start(): Promise<void> {
   // Inbox Intel — Case Resolution Engine: 6 case-resolution tables (idempotent DDL).
   await ensureInboxCaseSchema();
   await ensureLeadViewPreferenceSchema();
+  await ensureScholarshipInterviewSchema();
   // ProofDesk Work Ledger — Milestone 1 (Foundation): 4 ledger tables + 12 additive
   // nullable ticket columns (idempotent DDL, shadow mode).
   await ensureWorkLedgerSchema();
@@ -2753,6 +2756,10 @@ async function start(): Promise<void> {
   // on the existing agent_manager_conversations table. Additive, idempotent,
   // no flag.
   await ensureAgentManagerConversationReliabilitySchema();
+  // Reese Agentic AI Employee mission, Capability 8 — the generic pending-
+  // intent-confirmation workflow's one new column (pending_intent_confirmation)
+  // on the same table. Additive, idempotent, no flag.
+  await ensureAgentManagerConversationIntentSchema();
   // AI Workforce Reset, Phase D.1 "Inventory" — department/scope (Ali signed off on
   // abac-design.md's own recommendations wholesale, 2026-08-24). Additive, idempotent, no flag.
   await ensureAiAgentDepartmentScopeSchema();

@@ -29,7 +29,14 @@ const PHASE_COLORS: Record<string, string> = {
 const maturityColor = (pct: number) =>
   pct >= 70 ? 'var(--status-success)' : pct >= 30 ? 'var(--status-warning)' : 'var(--status-danger)';
 
-function AdminProjectOverview() {
+interface ProjectOverviewProps {
+  /** Cohort to open expanded, when reached from a cohort drill-down on the
+   *  Accelerator page. Undefined when reached globally, where the page stays an
+   *  all-cohort roll-up and applies no class filter. */
+  initialCohortId?: string;
+}
+
+function AdminProjectOverview({ initialCohortId }: ProjectOverviewProps = {}) {
   const [stats, setStats] = useState<CohortProjectStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +44,7 @@ function AdminProjectOverview() {
   const [addForm, setAddForm] = useState({ full_name: '', email: '', company: '', title: '', phone: '' });
   const [adding, setAdding] = useState(false);
   const [addResult, setAddResult] = useState<{ success?: boolean; message?: string; error?: string } | null>(null);
-  const [expandedCohort, setExpandedCohort] = useState<string | null>(null);
+  const [expandedCohort, setExpandedCohort] = useState<string | null>(initialCohortId ?? null);
   const [cohortStudents, setCohortStudents] = useState<any[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [selectedProject, setSelectedProject] = useState<any>(null);
@@ -49,6 +56,22 @@ function AdminProjectOverview() {
       .catch(err => setError(err.response?.data?.error || 'Failed to load project overview'))
       .finally(() => setLoading(false));
   }, []);
+
+  // The row's own expand handler fetches on CLICK, so a cohort expanded from
+  // `initialCohortId` would render an open, permanently empty row. This does the
+  // same fetch once for that case. Deliberately not merged into the click
+  // handler: that one also collapses, and reusing it here would need a
+  // synthetic event.
+  useEffect(() => {
+    if (!initialCohortId) return;
+    let cancelled = false;
+    setLoadingStudents(true);
+    api.get(`/api/admin/projects/cohort/${initialCohortId}/students`)
+      .then(res => { if (!cancelled) setCohortStudents(res.data.students || []); })
+      .catch(() => { if (!cancelled) setCohortStudents([]); })
+      .finally(() => { if (!cancelled) setLoadingStudents(false); });
+    return () => { cancelled = true; };
+  }, [initialCohortId]);
 
   // Per-page trust signal — derived from project-overview coverage.
   const trust: TrustSignal = useMemo(() => {

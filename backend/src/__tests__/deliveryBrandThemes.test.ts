@@ -21,8 +21,11 @@ import * as path from 'path';
  */
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
+// tokens/colors.css, not design/colors.css. The design system is vendored from its own
+// repository by backend/src/scripts/syncDesignSystems.js, which reproduces that
+// repository's own layout rather than a flattened copy, so the tokens live one level down.
 const DESIGN_TOKENS = path.join(
-  REPO_ROOT, 'apps', 'ai-flotation-public', 'src', 'assets', 'design', 'colors.css',
+  REPO_ROOT, 'apps', 'ai-flotation-public', 'src', 'assets', 'design', 'tokens', 'colors.css',
 );
 const THEME_REGISTRY = path.join(REPO_ROOT, 'frontend', 'src', 'theme', 'deliveryBrandThemes.ts');
 

@@ -446,6 +446,133 @@ risk is horizontal overflow.
 
 ---
 
+## 8c. The walkthrough video — EVERY record gets one
+
+**A record without a narrated walkthrough is not finished.** Ali, after the first one
+shipped: *"go ahead and create for the other case study and also harden the Case study
+skill to include these videos on every case study creation."*
+
+It is roughly 80 seconds, 1080p, and it sits in the **masthead's picture slot** on all
+three surfaces — not in a band underneath. That was tried and it opened a record with two
+visuals doing the same job: the cover screenshot, then a film of the same product, with
+the reader scrolling past the first to reach the second.
+
+Toolchain: `scripts/walkthrough-video/`. Read its README before starting; it carries the
+failures below with the commands attached.
+
+```bash
+python make_narration.py --deck <dir>/deck.json   # neural voice -> audio/ + timings.json
+python build_video.py    --deck <dir>/deck.json   # slides + footage + audio -> mp4
+python make_vtt.py       --deck <dir>/deck.json   # the accessible caption sidecar
+```
+
+`make_narration.py` runs FIRST. Segment durations come from how long each sentence
+actually takes to speak, not from the deck's guesses, or a slide ends mid-word.
+
+### Every figure it narrates is already a metric on the record
+
+The video is a **second surface for the same claims**, never a place for new ones. If a
+number is spoken or printed on a card, it is a published metric on the record underneath,
+with its methodology, denominator and limitations. A figure that exists only in the video
+is an unverified claim that happens to be made of pixels and audio — the exact thing the
+publish gate exists to stop, arriving through a door the gate does not watch.
+
+Write the deck AFTER the metrics are authored, and take the numbers from the projection
+rather than from your notes.
+
+### What it is made of, in order of preference
+
+1. **The project's own demo recording**, if it committed one. Cropped to the application
+   window, held at its real rate — a 1.3fps timelapse shown as slow stills is honest;
+   interpolating it into motion the source never had is not.
+2. **Its real screenshots**, the same ones the record already publishes as artifacts.
+3. **Its own architecture diagram**, rendered from `diagramSource`.
+4. **Typographic slides** carrying the record's own sentences.
+
+Nothing is generated, staged or restaged. There is no fifth option.
+
+### CHECK EVERY FRAME FOR PEOPLE
+
+A learner's demo recording is usually a recording of **their own profile**, and it will
+contain their name, their photograph and their personal email address. The Repo2Reputation
+recording did, from frame 60 onwards.
+
+Choose footage windows that land only on placeholder-state frames, then **open the highest
+frame index you actually used and look at it**. Re-do this for every subject; it is not a
+property of the tool, it is a property of the recording.
+
+### The voice
+
+**Check what is already installed before offering anybody a trade-off.** The first cut
+shipped with the built-in Windows SAPI voice, presented as "the option that needs no
+install", and Ali's verdict was `voice is horrible`. `edge-tts` — Microsoft's neural voices
+— had been installed on the machine the whole time, so the provisioning gate that made SAPI
+look like the only free choice never applied.
+
+Default to `en-US-AndrewNeural`. Audition two or three first; it takes a minute. Their
+personality tags differ and the register matters. **The narration text is the caption text**
+— what is heard and what is read are the same sentence, or you are maintaining two scripts
+and they will drift.
+
+The endpoint returns `NoAudioReceived` intermittently under a burst. That is transient, not
+bad input; the retry is already in `speak()`, so do not remove it and conclude otherwise.
+
+### It is NOT an artifact
+
+`demo` exists in `CaseStudyArtifactType` and attaching it there is the obvious move. Do not.
+It would put a video in the artifacts carousel at a screenshot's aspect ratio **and make it
+a hero candidate through `HERO_IMAGE_PRIORITY`** — and a video that can win the cover is a
+video that can stand in for a screenshot of the running system.
+
+It is its own top-level snapshot section:
+
+```js
+applyHumanOverride({ path: 'walkthroughVideo', value: {
+  url, title, captionsUrl, posterUrl, durationSeconds, narrationSource: 'synthetic',
+}})
+```
+
+`narrationSource: 'synthetic'` makes the page say so. An unlabelled synthetic voice is a
+small deception and this system's whole claim is that it does not make those.
+
+### Three ways this fails silently, all of which shipped
+
+- **`ffmpeg -ss` into an animated GIF.** Seeks to 1s and 11.5s worked; a seek to 30s
+  produced a segment with **no picture at all** and exit code 0. Pull frames by index with
+  Pillow instead.
+- **The concat demuxer drops unreadable segments and still exits 0.** `ffprobe` the
+  finished file and compare against the intended length. **Short** means a segment was
+  dropped; **long** means one overran its trim. Never compute the duration.
+- **A cross-origin caption track is refused.** The `.vtt` and `.mp4` are served from the
+  platform while two of the three pages are on other domains, so both need
+  `Access-Control-Allow-Origin` **and** the player needs `crossorigin="anonymous"`. Miss
+  it and the video plays perfectly, the `.vtt` returns `200 text/vtt`, and the captions
+  simply never appear. `HTMLTrackElement.readyState` **3 is ERROR, 2 is LOADED** — it was
+  misread once and reported as working.
+
+### `docker cp` is not a deploy
+
+The video is baked into the nginx image from `frontend/public/site-v2/`. A copied-in file
+survives only until the container is next recreated, which on a box where other sessions
+deploy can be **nine minutes**. It silently reverted a re-recorded narration to the
+previous voice while the URL still returned 200 and the right byte count at the moment it
+was checked.
+
+Commit the file, merge, rebuild nginx. Verify with **md5 against the local file**, not a
+status code: two different videos both return 200.
+
+### Done means
+
+- [ ] Every figure spoken or shown is a published metric on the same record
+- [ ] Every frame used has been checked for a person's name, face or email
+- [ ] `ffprobe` duration matches intended, within a second
+- [ ] The caption track reports `readyState: 2` and a **non-zero cue count** on all three
+      surfaces, not just the same-origin one
+- [ ] The player renders in the masthead and above the fold on all three
+- [ ] The file was verified live by md5, after an nginx rebuild
+
+---
+
 ## 9. Record and snapshot must agree
 
 Overriding `identity.title` in the snapshot does **not** update `case_studies.title`.
@@ -495,7 +622,8 @@ resting state** for an unpublished draft.
 
 **Report denominators, never impressions.** Not "the detail page renders" but:
 sections authored X of X · candidates investigated X of X · metrics verified X of X ·
-artifacts X · images X · timeline entries X · prefixes X.
+artifacts X · images X · timeline entries X · prefixes X · walkthrough video
+X seconds, cues loading on X of 3 surfaces.
 
 **Never say complete, production-ready or published without evidence for each claim.**
 
@@ -511,6 +639,7 @@ artifacts X · images X · timeline entries X · prefixes X.
 | contributors | **0** | 2 |
 | artifacts | 3 | 2 |
 | **images** | **3** | **0** ← the live gap |
+| **walkthrough video** | added later | added later |
 | metrics with methodology + limitations | 4 of 4 | 6 of 6 |
 
 The tickets record scores higher on rigour and lower on pictures. Both patterns are

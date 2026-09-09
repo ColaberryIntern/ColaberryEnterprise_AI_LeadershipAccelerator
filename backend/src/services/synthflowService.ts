@@ -58,18 +58,45 @@ interface SynthflowResponse {
  * The agent carries its own knowledge base server-side, so this choice decides what the
  * person on the phone is told about — and by whom.
  *
- * ## AI Flotation never falls back
+ * ## The other brands never fall back
  *
- * Every other route here degrades to a neighbouring agent when its slot is unset, which is
- * reasonable while the agents all speak for the same business. AI Flotation does not: its
- * prospect answering the phone to a Colaberry bootcamp agent is worse than no call at all,
- * and it is the exact outcome the decision to give it its own agent was meant to prevent.
+ * Every Colaberry route here degrades to a neighbouring agent when its slot is unset, which
+ * is reasonable while those agents all speak for the same business. AI Flotation and
+ * OpportunityLift do not: their caller answering the phone to a Colaberry bootcamp agent is
+ * worse than no call at all, and it is the exact outcome giving them their own agents was
+ * meant to prevent.
  *
- * So an unconfigured AI Flotation agent returns empty, and the caller skips deterministically
- * rather than dialling with somebody else's voice.
+ * OpportunityLift is the sharper case. A scholarship applicant reaching the generic callback
+ * agent would be answered by the bootcamp's saved training-site script - a person asking a
+ * charity for help, spoken to as a sales lead. So an unconfigured slot returns empty and the
+ * caller skips deterministically rather than dialling with somebody else's voice.
  */
 export function resolveAgentId(params: { callType: 'welcome' | 'interest' | 'callback'; brandSlug?: string }): string {
   if (params.brandSlug === 'ai-flotation') return env.synthflowAiFlotationAgentId;
+
+  // OpportunityLift. Its own slot when configured, otherwise it BORROWS THE AI
+  // FLOTATION SHELL - and the distinction between those two fallbacks is the whole
+  // point of this branch.
+  //
+  // The Colaberry agents below carry their own saved scripts. Falling through to one
+  // of those would answer a scholarship applicant as the bootcamp's callback line: a
+  // person asking a charity for help, spoken to as a sales lead. That was the defect,
+  // and it stays fixed - CPN never reaches them.
+  //
+  // The AI Flotation agent is different in kind. Its saved prompt is literally
+  // `{prompt}`, so it has no opinions of its own and whatever we send at call time
+  // IS the call. Borrowing a shell is not borrowing a voice. That is the architecture
+  // voiceCallPrompt.ts describes: "one agent and one phone number can serve several
+  // brands, the instructions can change without touching a vendor dashboard."
+  //
+  // Ali, 2026-09-08, asked for this explicitly while phone-number provisioning is
+  // blocked, and it is safe precisely because the shell holds no script. The cost is
+  // real and not hidden: the CALLER ID is AI Flotation's number, so the prompt opens
+  // by saying who it is calling for and /scholarships/ warns that the number may not
+  // look like ours. Set SYNTHFLOW_CPN_AGENT_ID to take that cost away.
+  if (params.brandSlug === 'cpn') {
+    return env.synthflowCpnAgentId || env.synthflowAiFlotationAgentId;
+  }
 
   // 'callback' (inbound "call me now") uses its own dedicated agent so it never
   // conflates with Maya's proactive interest calls. Falls back to the interest
@@ -109,12 +136,26 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
     return { success: true, data: { skipped: true, reason: 'no_agent_id' } };
   }
 
-  // AI Flotation shares a SHELL agent whose saved prompt is only `{prompt}`. The
-  // instructions therefore arrive at call time, and without them the agent is not neutral -
-  // it is unscripted, on a number the person may associate with a different business.
-  // Refusing to dial is the safe outcome; a silent no-op is better than an improvised call.
-  if (params.brandSlug === 'ai-flotation' && !(params.prompt || '').trim()) {
-    console.warn('[Synthflow] AI Flotation call has no prompt. Refusing to dial an unscripted agent.');
+  // The shell agent's saved prompt is only `{prompt}`. The instructions therefore arrive
+  // at call time, and without them the agent is not neutral - it is unscripted, on a
+  // number the person may associate with a different business. Refusing to dial is the
+  // safe outcome; a silent no-op is better than an improvised call.
+  //
+  // THIS USED TO NAME ONE BRAND, AND THE RATIONALE ABOVE NAMES NONE.
+  //
+  // The check read `brandSlug === 'ai-flotation'`, which was every brand wired to voice
+  // at the time it was written. Any other brand arriving here without a prompt would
+  // have dialled a stranger with an empty instruction block - precisely the outcome the
+  // paragraph above calls unacceptable, forbidden for one brand and permitted for
+  // everyone else. Nothing had routed a second brand to voice yet, so it had never
+  // fired: it was a trap armed for whoever came next, which was CPN.
+  //
+  // Now any branded call must carry its own instructions, and a brand without them is
+  // skipped with a reason - a visible no-op rather than an improvised call.
+  if (params.brandSlug && !(params.prompt || '').trim()) {
+    console.warn(
+      `[Synthflow] ${params.brandSlug} call has no prompt. Refusing to dial an unscripted agent.`
+    );
     return { success: true, data: { skipped: true, reason: 'no_prompt' } };
   }
 

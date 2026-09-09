@@ -10,6 +10,7 @@ import {
 } from './consent/captureSignupConsent';
 import { triggerVoiceCall } from './synthflowService';
 import { buildFlotationCallPrompt } from './voiceCallPrompt';
+import { buildScholarshipCallPrompt } from './cpn/scholarshipCallPrompt';
 import { logCommunication } from './communicationLogService';
 
 // Two callbacks to the same lead inside this window collapse to one call. This is
@@ -17,6 +18,45 @@ import { logCommunication } from './communicationLogService';
 // duplicate webhook must NOT place a second phone call. 5 minutes comfortably
 // covers retry storms without blocking a genuine "call me again" later in the day.
 const CALLBACK_DEDUP_WINDOW_MS = 5 * 60 * 1000;
+
+/**
+ * The instructions for this call, chosen by the surface that asked for it.
+ *
+ * Returns `undefined` for a source with no script, which `synthflowService` now
+ * treats as a refusal to dial rather than as permission to improvise. Adding a
+ * brand to voice therefore means adding its prompt in the same change - the
+ * failure mode is a visible skip, never an unscripted agent phoning a stranger.
+ */
+function promptForSource(payload: {
+  source: string;
+  name?: string | null;
+  company?: string | null;
+  role?: string | null;
+  message?: string | null;
+  city_state?: string | null;
+}): string | undefined {
+  if (payload.source === 'ai-flotation') {
+    return buildFlotationCallPrompt({
+      name: payload.name,
+      company: payload.company,
+      role: payload.role,
+      message: payload.message,
+    });
+  }
+
+  // OpportunityLift. A scholarship applicant is not a sales prospect, so this is a
+  // different script rather than the same one with the nouns swapped - see
+  // cpn/scholarshipCallPrompt.ts for what it refuses to ask and why.
+  if (payload.source === 'cpn') {
+    return buildScholarshipCallPrompt({
+      name: payload.name,
+      message: payload.message,
+      cityState: payload.city_state,
+    });
+  }
+
+  return undefined;
+}
 
 export type CallbackStatus =
   | 'call_initiated' // handed to Synthflow, call_id returned
@@ -167,16 +207,11 @@ export async function requestInstantCallback(
     // them the call is skipped rather than improvised.
     brandSlug: payload.source,
     // Built per call rather than stored in the agent. The agent is a shell - its saved
-    // prompt is only `{prompt}` - so this string is what makes the call an AI Flotation
-    // call at all. Other sources keep the agent's own stored behaviour, unchanged.
-    prompt: payload.source === 'ai-flotation'
-      ? buildFlotationCallPrompt({
-        name: payload.name,
-        company: payload.company,
-        role: payload.role,
-        message: payload.message,
-      })
-      : undefined,
+    // prompt is only `{prompt}` - so this string is what makes the call belong to a
+    // brand at all. A source with no prompt here is now SKIPPED by synthflowService
+    // rather than dialled unscripted, so adding a brand to voice means adding its
+    // instructions in the same change.
+    prompt: promptForSource(payload),
     context: {
       lead_name: payload.name,
       lead_company: payload.company || undefined,

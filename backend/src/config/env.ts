@@ -88,6 +88,12 @@ export const env = {
   // base, and an AI Flotation prospect answering the phone to a Colaberry bootcamp agent
   // is a worse outcome than no call at all. Unset means the voice path skips, loudly.
   synthflowAiFlotationAgentId: process.env.SYNTHFLOW_AI_FLOTATION_AGENT_ID || '',
+  // OpportunityLift's own shell agent. Deliberately its own slot rather than reusing
+  // the Colaberry callback agent: that one carries a saved training-site script, so a
+  // scholarship applicant would have been answered by the bootcamp's callback agent.
+  // Unset means resolveAgentId returns nothing and the call is skipped with
+  // `no_agent_id` - a visible no-op, never a fallback onto someone else's script.
+  synthflowCpnAgentId: process.env.SYNTHFLOW_CPN_AGENT_ID || '',
 
   // Admin alert phone (for Cory health monitor voice alerts)
   adminAlertPhone: process.env.ADMIN_ALERT_PHONE || '',

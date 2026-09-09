@@ -8,11 +8,10 @@ COPY frontend/ ./frontend/
 ENV REACT_APP_API_URL=
 RUN npm run build:frontend
 
-# Build the refactored.ai preview AFTER the frontend, deliberately. Copying apps/ or
-# packages/ earlier would invalidate the cached `npm ci` and `build:frontend` layers on
-# every change to a brand page, turning a file-copy build into a full React rebuild. The
-# app build has no dependencies of its own: it copies src/ to dist/ and substitutes brand
-# tokens.
+# Build the brand apps AFTER the frontend, deliberately. Copying apps/ or packages/
+# earlier would invalidate the cached `npm ci` and `build:frontend` layers on every change
+# to a brand page, turning a file-copy build into a full React rebuild. The app builds have
+# no dependencies of their own: they copy src/ to dist/ and substitute brand tokens.
 COPY packages/ ./packages/
 COPY apps/refactored-public/ ./apps/refactored-public/
 COPY apps/ai-flotation-public/ ./apps/ai-flotation-public/
@@ -27,13 +26,16 @@ COPY --from=builder /app/apps/cpn-public/dist          /usr/share/nginx/opportun
 COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
 # Two server blocks on their own hostnames; nginx loads every *.conf in conf.d.
 #
-# The cutover config is now shipped as well. That is safe because a server block only ever
-# responds to its own `server_name`, and nothing sends refactored.ai here until its DNS
-# moves — which is a separate, deliberate act. Shipping it now means the path can be
-# verified by Host header BEFORE any traffic depends on it, rather than discovering a
-# mistake at cutover.
+# refactored.ai itself is deliberately absent, and its PREVIEW hostname is not.
+#
+# This image terminates no TLS: every hostname here listens on 80 because Cloudflare
+# handles HTTPS in front of it. refactored.ai is the one Colaberry domain NOT behind
+# Cloudflare, so a server block for it could only ever answer over plain HTTP. The built
+# site reaches that domain through S3 and CloudFront instead.
+#
+# refactored-preview.colaberry.ai IS behind Cloudflare, so it serves the same built files
+# with working TLS and no certificate work. It is where the site is reviewed.
 COPY nginx/refactored-preview.conf /etc/nginx/conf.d/refactored-preview.conf
-COPY nginx/refactored.conf         /etc/nginx/conf.d/refactored.conf
 COPY nginx/aiflotation.conf        /etc/nginx/conf.d/aiflotation.conf
 COPY nginx/opportunitylift.conf    /etc/nginx/conf.d/opportunitylift.conf
 # Included by nginx.conf at server level and re-included in every location that

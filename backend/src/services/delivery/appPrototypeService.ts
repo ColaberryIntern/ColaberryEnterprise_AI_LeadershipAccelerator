@@ -92,8 +92,16 @@ export function forSrcdoc(html: string): string {
   if (/<base\b/i.test(html)) return html;
 
   const tag = '<base href="about:srcdoc">';
-  if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (open) => `${open}\n${tag}`);
-  if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, (open) => `${open}\n<head>${tag}</head>`);
+  // `<head[^>]*>` also matches `<header>`, and every generated design is a fragment with no
+  // <head> and a <header> in it - so the tag landed in the body instead of at the top. It
+  // still worked, because browsers honour a <base> found in the body, but working by the
+  // parser's tolerance is not the same as being right. The lookahead requires the tag name
+  // to END at "head".
+  const HEAD_OPEN = /<head(?![a-z])[^>]*>/i;
+  const HTML_OPEN = /<html(?![a-z])[^>]*>/i;
+
+  if (HEAD_OPEN.test(html)) return html.replace(HEAD_OPEN, (open) => `${open}\n${tag}`);
+  if (HTML_OPEN.test(html)) return html.replace(HTML_OPEN, (open) => `${open}\n<head>${tag}</head>`);
 
   // No document scaffolding at all: the parser hoists a leading <base> into the head it
   // synthesises, so prepending is enough.

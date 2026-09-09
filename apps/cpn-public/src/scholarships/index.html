@@ -14,10 +14,11 @@
   <body>
     <a class="skip" href="#main">Skip to content</a>
 
-    <!-- The prototype leads with an announcement strip. The one true thing worth putting
-         at the top of every page is that applications are not open yet. -->
+    <!-- The prototype leads with an announcement strip. It pushes the free training,
+         which is the one thing on this site somebody can act on today. The "applications
+         are not open yet" message still leads the hero card on / and /scholarships/. -->
     <div class="announce">
-      Applications are not open yet. <a href="/scholarships/">Register your interest and we will tell you first</a>
+      The introductory AI training is free and open now. <a href="/learn-free/">Start learning today</a>
     </div>
 
     <header class="masthead">
@@ -37,6 +38,7 @@
           action here, and the design system allows exactly one per view.
         -->
         <nav class="nav" aria-label="Main">
+          <a href="/learn-free/">Learn free</a>
           <a href="/scholarships/" aria-current="page">Scholarships</a>
           <a href="/how-funds-work/">How funding works</a>
           <a href="/partners/">Partners</a>
@@ -111,9 +113,9 @@
             in their life.
           </p>
           <p>
-            If your weeks cannot hold 25 hours right now, the free introductory training at
-            <a href="https://refactored.ai">refactored.ai</a> is open to anyone and costs
-            nothing. Starting there is a real answer, not a consolation prize.
+            If your weeks cannot hold 25 hours right now, a
+            <a href="/learn-free/">free account</a> is open to anyone and costs nothing.
+            Starting there is a real answer, not a consolation prize.
           </p>
         </div>
       </section>
@@ -198,7 +200,7 @@
             blocked at Mandrill pending domain verification, so a confirmation email is a
             promise this site cannot keep.
           -->
-          <form class="intake" id="scholarship-interest" data-form="scholarship_interest"
+          <form class="intake" id="scholarship-interest" data-form="scholarship_interest" data-interview
                 data-thanks="Thank you. Your details are with us and a person will read them. You will not get an automatic email.">
             <h2>Scholarship interest</h2>
             <p class="note">
@@ -219,6 +221,13 @@
             <input id="city_state" name="city_state" type="text" autocomplete="address-level2"
                    placeholder="Plano, Texas" />
 
+            <label for="message">What would you like to be able to build or do?</label>
+            <textarea id="message" name="message" rows="3"
+                      placeholder="An app that helps my mum keep track of her medication."></textarea>
+            <p class="note" style="margin-top: var(--space-2)">
+              It can be small and specific. This is what we will talk about next.
+            </p>
+
             <div class="consent">
               <input id="consent" name="consent_contact" type="checkbox" />
               <label for="consent">
@@ -231,6 +240,109 @@
             </button>
             <div class="status" role="status" aria-live="polite"></div>
           </form>
+
+          <!--
+            THE SECOND DOOR, AND IT IS A DOOR, NOT A FALLBACK.
+
+            Ali's decision was that voice is an EQUAL path with the form always
+            offered - never the thing you are pushed to if you could not manage
+            typing. So it sits beside the written interview with the same weight,
+            says plainly that it makes no difference which you choose, and the
+            written one stays on screen either way.
+
+            Consent is explicit and specific: an AI, a recording, and a call now.
+            "Contact me" would not cover any of those.
+          -->
+          <section class="voice-door" aria-labelledby="vd-h">
+            <div class="card-label">
+              <span class="badge" aria-hidden="true">2</span> Or talk instead of typing
+            </div>
+            <h2 id="vd-h">Have our AI call you</h2>
+            <p class="note">
+              The same conversation, on the phone, in about five minutes. <strong>It makes
+              no difference which one you choose</strong> and nobody is scored on either.
+              It tells you it is an AI when you pick up, and if it is a bad moment just say
+              so and it will offer to call another time.
+            </p>
+            <p class="note">
+              <strong>The number may not look like ours.</strong> OpportunityLift shares a
+              phone line with Colaberry, the training provider it works with, so the caller
+              ID will show their number rather than a Career Pathways Network one. Worth
+              knowing before an unfamiliar number rings you.
+            </p>
+
+            <form class="intake" id="scholarship-call" data-form="scholarship_interview_call"
+                  data-thanks="Thank you. If everything is working you should get a call shortly. If it does not come through, the written version above works just as well and a person will read either.">
+              <h2>Call me</h2>
+              <p class="note">Both fields are needed: the number to ring, and an email so we know who you are.</p>
+
+              <label for="call-phone">Phone number</label>
+              <input id="call-phone" name="phone" type="tel" autocomplete="tel" required
+                     placeholder="+1 555 0100" />
+
+              <label for="call-email">Email</label>
+              <input id="call-email" name="email" type="email" autocomplete="email" required />
+
+              <label for="call-name">Your name</label>
+              <input id="call-name" name="name" type="text" autocomplete="name" />
+
+              <label for="call-message">What would you like to be able to build or do?</label>
+              <textarea id="call-message" name="message" rows="2"
+                        placeholder="An app that helps my mum track her medication."></textarea>
+
+              <div class="consent">
+                <input id="call-consent" name="consent_contact" type="checkbox" required />
+                <label for="call-consent">
+                  I agree to be called now by an AI assistant on this number, and understand
+                  the call is recorded and written up so a person at Career Pathways Network
+                  can read it.
+                </label>
+              </div>
+
+              <button class="btn btn-secondary" type="submit" data-cta="Call me now">
+                Call me now
+              </button>
+              <div class="status" role="status" aria-live="polite"></div>
+            </form>
+          </section>
+
+          <!--
+            THE CONVERSATION, IN THE PAGE.
+
+            Hidden until the form is submitted, because an empty chat box beside a
+            form is a second thing to fill in. `forms.js` dispatches the token it
+            got back from ingest and `interview.js` takes it from there.
+
+            The caveats sit ABOVE the first question rather than under the box: a
+            person about to describe their life should know before they start that
+            this is not scored, that nobody is deciding anything yet, and that
+            leaving halfway costs them nothing.
+          -->
+          <section class="interview" id="interview" hidden aria-labelledby="iv-h">
+            <div class="card-label">
+              <span class="badge" aria-hidden="true">?</span> A short conversation
+            </div>
+            <h2 id="iv-h">Tell us what you want to build</h2>
+            <p class="note">
+              About four minutes. This is <strong>not a test and not an application</strong>
+              — applications are not open yet and nothing here is scored. A person reads it.
+              You can stop at any point and close the tab; your details are already with us
+              and nothing is lost.
+            </p>
+
+            <div class="iv-log" role="log" aria-live="polite" aria-label="Conversation"></div>
+
+            <form class="iv-form">
+              <label class="iv-label" for="iv-input">Your reply</label>
+              <textarea class="iv-input" id="iv-input" rows="2"
+                        placeholder="Type your reply..."></textarea>
+              <button class="btn btn-primary iv-send" type="submit" data-cta="Send interview reply">
+                Send
+              </button>
+            </form>
+
+            <p class="iv-note note"></p>
+          </section>
         </div>
       </section>
     </main>
@@ -256,6 +368,7 @@
           <div>
             <h2>Scholars</h2>
             <nav aria-label="For scholars">
+              <a href="/learn-free/">Learn free</a>
               <a href="/scholarships/">Scholarships</a>
               <a href="/how-funds-work/">How funding works</a>
             </nav>
@@ -299,5 +412,6 @@
 
     <script src="/assets/track-v2.js" data-site="{{brand.sourceSlug}}" data-api="{{brand.platformApiBase}}" defer></script>
     <script src="/assets/forms.js" data-api="{{brand.platformApiBase}}" data-source="{{brand.sourceSlug}}" defer></script>
+    <script src="/assets/interview.js" data-interview-api="{{brand.platformApiBase}}" defer></script>
   </body>
 </html>

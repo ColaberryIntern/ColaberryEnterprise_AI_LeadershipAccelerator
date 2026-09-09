@@ -1,3 +1,4 @@
+import { Op } from 'sequelize';
 import MetricReliabilityRecord, {
   MetricReliabilityDeclaredBySource,
   MetricReliabilityScopeType,
@@ -85,6 +86,35 @@ export async function getReliabilityStatus(
     recordId: record.id,
     incidentTicketId: record.incident_ticket_id,
   };
+}
+
+export interface ActiveReliabilityIssue {
+  sourceSystem: string;
+  metricKey: string;
+  status: Exclude<MetricReliabilityStatus, 'healthy'>;
+  severity: MetricReliabilitySeverity | null;
+  reason: string;
+}
+
+/**
+ * Reese Agentic AI Employee mission, Capability 8 — every currently
+ * non-healthy record, across ALL sources, for the "current metric
+ * reliability/quarantine state" runtime context layer. Unlike
+ * getReliabilityStatus() (a per-metric lookup), this is the real "what's
+ * flagged right now" answer a manager conversation or agent prompt needs —
+ * absence of any row for a source still means healthy (same convention as
+ * the rest of this module), so this can genuinely return an empty array,
+ * not a fabricated "nothing to report."
+ */
+export async function getActiveReliabilityIssues(): Promise<ActiveReliabilityIssue[]> {
+  const records = await MetricReliabilityRecord.findAll({ where: { status: { [Op.ne]: 'healthy' } } });
+  return records.map((r) => ({
+    sourceSystem: r.source_system,
+    metricKey: r.metric_key,
+    status: r.status as Exclude<MetricReliabilityStatus, 'healthy'>,
+    severity: r.severity,
+    reason: r.reason,
+  }));
 }
 
 /** Fail-closed: only a real, current `healthy` status returns true. */

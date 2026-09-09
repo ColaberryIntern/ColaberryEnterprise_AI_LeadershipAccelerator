@@ -24,10 +24,12 @@
  * it carries no {{brand.*}} tokens.
  */
 
-@import url('design/colors.css');
-@import url('design/typography.css');
-@import url('design/spacing.css');
-@import url('design/motion.css');
+/* The design system is vendored from its own repository by
+   backend/src/scripts/syncDesignSystems.js. Import its published entry point rather
+   than individual token files: styles.css declares the order the design system
+   itself depends on (fonts, tokens, base, components), and following it means a
+   reorganisation upstream cannot silently drop a stylesheet from this build. */
+@import url('design/styles.css');
 
 :root {
   /* Site-local additions, both flagged as deviations from the source.
@@ -44,7 +46,7 @@
    deliberate choice somewhere. This site has no theme control and no JavaScript to set
    one, so it honours the reader's OS preference instead.
 
-   These values MIRROR the `[data-theme="dark"]` block in design/colors.css. They are
+   These values MIRROR the `[data-theme="dark"]` block in design/tokens/colors.css. They are
    duplicated because CSS cannot alias one selector's declarations to another - if that
    file's dark set changes, change this too. The attribute still wins where it is set. */
 @media (prefers-color-scheme: dark) {
@@ -362,7 +364,7 @@ footer.site .fine { font-size: var(--fs-caption); color: var(--fg-muted); margin
   .stratum .tag { min-width: 0; width: 100%; }
 }
 
-/* design/motion.css already collapses motion under this query; this covers the
+/* design/tokens/motion.css already collapses motion under this query; this covers the
    scroll-behaviour it does not set. */
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; }
@@ -389,14 +391,144 @@ footer.site .fine { font-size: var(--fs-caption); color: var(--fg-muted); margin
   background: var(--bg-elevated);
   border: 1px solid var(--line);
   border-radius: 10px;
-  max-width: 60rem;
+  max-width: 74rem;
+  /* The design frames are the point of this panel, so it takes back whatever the
+     window has spare either side of the site container. Capped, and clamped to zero
+     on a narrow screen, so it can never cause a sideways scroll. */
+  margin-inline: calc(-1 * max(0px, min(3rem, (100vw - var(--wrap)) / 2)));
 }
 
+/* ------------------------------------------------------------------
+   The scope reads as a document with a rail, not as one long column.
+   Ten sections of somebody's project scrolled end to end is a wall, and
+   the part worth paying for sits below the fold with nothing announcing
+   it.
+   ------------------------------------------------------------------ */
+.scope-shell {
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  gap: 3rem;
+  align-items: start;
+}
+
+.scope-main { min-width: 0; }
+.scope-main > section { scroll-margin-top: 1.5rem; }
+
+.scope-rail {
+  position: sticky;
+  top: 1.5rem;
+  align-self: start;
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
+}
+
+.scope-rail-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.scope-rail nav { display: flex; flex-direction: column; }
+
+.scope-rail a {
+  padding: 0.4rem 0 0.4rem 0.8rem;
+  border-left: 2px solid var(--line);
+  color: var(--fg-muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.scope-rail a:hover { color: var(--fg); }
+.scope-rail a.on { color: var(--fg); font-weight: 600; border-left-color: var(--accent); }
+
+/* Their own words. Promoted out of a collapsed <details>: nothing that earns
+   trust should need a click to find. */
+.scope-quotes { list-style: none; margin: 0; padding: 0; }
+
+.scope-quotes li {
+  padding: 0.85rem 0 0.85rem 1.1rem;
+  border-left: 2px solid var(--line);
+  color: var(--fg-muted);
+  max-width: 42rem;
+  margin-bottom: 0.5rem;
+}
+
+/* The fact/assumption split, stated rather than implied. */
+.trust-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 1px;
+  margin: 0 0 1.75rem;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.trust { background: var(--bg); padding: 1rem 1.2rem; }
+
+.trust dt {
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: 0.3rem;
+}
+
+.trust dd {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.trust dd small {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--fg-muted);
+  font-variant-numeric: normal;
+}
+
+.trust-missing-lead { margin-bottom: 0.75rem; }
+
+.chip {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  margin: 0 0.3rem 0.4rem 0;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.chip-open { color: var(--warning); border-color: var(--warning); }
+
+@media (max-width: 60rem) {
+  /* The rail becomes a scroll strip above the content. Hiding it would put the
+     reader back in the wall of text it exists to prevent. */
+  .scope-shell { grid-template-columns: 1fr; gap: 1.5rem; }
+  .scope-rail { position: static; max-height: none; }
+  .scope-rail nav { flex-direction: row; overflow-x: auto; gap: 0.25rem; padding-bottom: 0.4rem; }
+  .scope-rail a {
+    border-left: 0;
+    border-bottom: 2px solid var(--line);
+    white-space: nowrap;
+    padding: 0.4rem 0.7rem;
+  }
+  .scope-rail a.on { border-left: 0; border-bottom-color: var(--accent); }
+}
+
+/* Prose keeps a reading measure. The figures strip is deliberately not in this list:
+   it is a card grid, and a 42rem cap squashes it into the corner of its column. */
 .preview-status,
 .preview-title,
 .scope-summary,
 .scope-lead,
-.preview-counts,
 .preview-items,
 .preview-surfaces,
 .preview-open,
@@ -416,28 +548,37 @@ footer.site .fine { font-size: var(--fs-caption); color: var(--fg-muted); margin
   line-height: 1.2;
 }
 
+/* A card per figure. Laid out as bare dt/dd grid items, each label and its number
+   landed in different cells and the strip read as a sparse two-column list rather
+   than as a set of counts. */
 .preview-counts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-  gap: 1rem 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 1px;
   margin: 0 0 2rem;
-  padding: 1.25rem 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
 }
 
+.preview-counts .figure { background: var(--bg); padding: 1rem 1.2rem; }
+
 .preview-counts dt {
-  font-size: 0.8rem;
-  letter-spacing: 0.04em;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--fg-muted);
+  margin-bottom: 0.3rem;
 }
 
 .preview-counts dd {
-  margin: 0.15rem 0 0;
+  margin: 0;
+  font-family: var(--font-heading);
   font-size: 1.75rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
   color: var(--fg);
 }
 

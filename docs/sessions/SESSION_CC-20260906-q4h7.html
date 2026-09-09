@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, September 7, 2026 at 5:36 AM</div>
-    <div><span class="sid">CC-20260906-q4h7</span><span class="count">6 changes</span></div>
+    <div class="meta">Generated Tuesday, September 8, 2026 at 2:50 PM</div>
+    <div><span class="sid">CC-20260906-q4h7</span><span class="count">12 changes</span></div>
   </header>
   <main>
     
@@ -147,6 +147,96 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">All checks pass across 7 routes x 4 viewports x light/dark under the local harness; boundary validator OK, 14 files; build clean. The hero&#39;s two buttons were **measured** onto one row at 1440 and 1920 rather than eyeballed, after the first attempt wrapped them.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">**The harness reported 32 contrast failures that were all false, and the bug was in the harness.** `color-mix()` makes Chromium compute a background as `color(srgb 1 0.99 0.97 / 0.92)` - channels 0-1, where `rgb()` is 0-255 - so the parser read near-white as near-black and flagged the nav at 2.39:1 against a ground that is actually `#FFFDF8`. Fixed by parsing both syntaxes and by **compositing translucent layers** instead of stopping at the first painted one, which a sticky translucent header requires. The loosened parser was then re-proven against the original nav bug and still reports it at 1.00:1, so the fix removed the false positive without blinding the check. **A second real defect was found by looking, not by measuring, for the third time on this site.** On the accent band `.btn-primary` inverts to `--band-fg`; inside the band&#39;s white card that is white-on-white, so the primary action lost its fill entirely and rendered as bare green text. Contrast was 6.5:1 and every check passed - the failure was not legibility but that a button stopped looking like a button. The harness now compares each filled button&#39;s own background against the surface behind it, proven to bite at delta 0.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>**OpportunityLift: push the free training, and hand off to the signup that actually works**</h2>
+          <span class="badge">2026-09-07</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali asked for a free-account signup and a harder push on the free training. New `/learn-free/` page leads with &quot;You can start right now&quot;, explains **whose account it is before you click**, and hands off to `https://refactored.ai/signup`. &quot;Learn free&quot; is now first in the main nav and the footer, the announcement strip site-wide changed from &quot;applications are not open&quot; to &quot;the training is free and open now&quot;, and the homepage&#39;s step 01 routes through `/learn-free/` rather than jumping straight off-site. An optional `free_training_interest` capture (&quot;tell us when scholarships open&quot;) is seeded and mapped; it is deliberately separate from `scholarship_interest` because somebody who has started the training is a materially different person.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">All checks pass across 8 routes x 4 viewports x light/dark; boundary validator OK; `brandPageCategories` + `appSourcesAreSeeded` 42/42. `refactored.ai/signup` was confirmed live, redirecting to Auth0 at `login.refactored.ai`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**A CPN-native free account cannot ship, for two independent reasons, and building one would have produced accounts nobody could sign into.** `createExplorerEnrollment` takes no tenant or brand parameter - it places everyone into one shared Explorer cohort via `getOrCreateExplorerCohort()` - so a CPN signup would land in Colaberry&#39;s tenant, which is the exact cross-brand leak `pageCategoryMaps` exists to stop. And `handleCreateFreeAccount` answers &quot;Check your email for your sign-in link&quot; while **every brand&#39;s sender profile in production is `draft`**, CPN&#39;s included, so that mail cannot send. refactored.ai sidesteps both: it is a different domain with its own Auth0 identity and its own verification email, and it is where the free training actually lives. **The guard test earned its keep again** - the named CPN assertion failed the moment a fourth form appeared, which is precisely what it was added for. **Deploy note: `free_training_interest` is seed data.** Shipping the page without running `seedLeadSources` in production leaves the form live and rejecting, exactly as `/partners/` and `/support/` did on the first deploy.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">08</span>
+          <h2>**Scholarship interview: AI Flotation&#39;s model, applied to a person instead of a business**</h2>
+          <span class="badge">2026-09-07</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The written interview Ali asked for, keyed on the `raw_payload_id` the scholarship form already gets back from `/api/leads/ingest` - so the form, the conversation and the stored record hang off one identity with no second session store. New `scholarshipInterviewService` (prompt + 8-exchange cap + reviewer summary), `scholarshipInterviewController` on `POST /api/cpn/scholarship-interview`, `ScholarshipInterview` model with `ensureScholarshipInterviewSchema` DDL, and an in-page conversation on `/scholarships/` driven by a new `assets/interview.js` that `forms.js` hands off to via a `cpn:lead-captured` event. The form gained a &quot;what would you like to be able to build or do?&quot; field, which becomes the interview&#39;s opening turn AND is mapped to the lead so somebody who closes the tab has still told us the most useful thing.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">20 service tests, 62 across the three affected suites, `tsc --noEmit` exit 0 on TypeScript 5.9.3, boundary validator OK (15 files), full site harness green across 8 routes x 4 viewports. Separately, a browser harness drives the whole flow against a stubbed API - 14 checks including that the token from ingest is what the interview is keyed on, that the opening turn is the applicant&#39;s own words, that the reply box disappears on the closing turn, and that every revealed element meets AA. **The site harness could not have caught any of that**: the panel is `hidden` until submit, so every check it runs skipped the feature entirely.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**This is not the Flotation prompt with the nouns swapped.** Flotation interviews a business about a workflow; this interviews somebody asking for money, which changes what is safe to ask. Three rules are in the prompt rather than in a comment hoping to be honoured: never ask about money, debt, benefits, immigration status, health or household; never make somebody argue for their own worth; never imply a decision, because eligibility and the selection process do not exist and `/scholarships/` says so in public. **Most of the test file tests the prompt, which is deliberate** - those guarantees live in instructions to a model, so an edit that tightens the wording and drops one line would change nothing observable and quietly start asking a person who needs help what they have overcome. **The record carries no score, rank or eligibility column**, and the summary prompt forbids even &quot;strong candidate&quot;: a reviewer reading six sentences forms a picture, a reviewer reading six scored attributes starts ranking people against criteria nobody has agreed. **The 25 hours is asked as a question about their week, not their commitment** - &quot;can you commit?&quot; invites everyone to say yes. **Deploy note:** `scholarship_interest` gained `message` in its field map, so `seedLeadSources` must run again or the opening line never reaches the lead row.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">09</span>
+          <h2>**Free account moves off refactored.ai and onto the platform that actually sends email**</h2>
+          <span class="badge">2026-09-07</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali: &quot;The login goes to refactored.ai but not sending any login emails. Can you take over that page and make sure the login goes into a free account on enterprise.colaberry.com. It should show up as a lead from opportunity lift.&quot; `/learn-free/` no longer hands off; it now creates the account itself through a new `assets/signup.js`, which posts the CPN lead and then calls `/api/create-free-account`. Copy on `/scholarships/` and `/about/` follows, and the page states plainly that the sign-in email arrives from Colaberry with the subject &quot;Welcome to Colaberry&quot;.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">A browser harness drives the real flow against a stubbed API - 13 checks over the happy path and both failure paths. Site harness green across 8 routes x 4 viewports; `appSourcesAreSeeded` + `brandPageCategories` 42/42; boundary validator OK, 16 files.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The host Ali named is not our platform.** `enterprise.colaberry.com` redirects to `login.refactored.ai` Auth0 with `redirect_uri=app.colaberry.com/callback`, and `/enroll` on it fails outright - it is the same Auth0 tenant that is already not sending his login emails. Ours is `enterprise.colaberry.ai`, whose `/enroll` serves fine. **Our email demonstrably works**, which is what made the move worth doing rather than moving a broken experience onto our own domain: `communication_logs` holds 277 &quot;Welcome to Colaberry&quot; magic links with status `sent`, most recent the same day. **The call order is the whole feature.** `createExplorerEnrollment` hardcodes `source: &#39;open_house&#39;` on the lead it captures, so the account call alone would file every CPN signup under Colaberry&#39;s open house. Its capture is a `findOrCreate` keyed on email, so ingesting the CPN lead FIRST means the canonical lead already exists with its OpportunityLift source and `LeadTenantContext`, and the account call finds it. Reversing two lines misattributes every signup and breaks nothing visible, so it is asserted in the harness. **Failure favours the person:** a failed ingest still creates the account, and a failed account never claims the details were lost, because the lead survives. **The site harness caught a real violation** - two filled primary buttons on the page - which the closing block lost.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">10</span>
+          <h2>**The unscripted-agent guard named one brand; its own reasoning named none**</h2>
+          <span class="badge">2026-09-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Starting the voice half of the scholarship interview surfaced a latent safety defect. `synthflowService` refuses to dial when a shell-agent call carries no prompt - the agent&#39;s saved prompt is literally `{prompt}`, so an empty one produces, in its own comment&#39;s words, &quot;an unscripted one on a number the person may associate with a different business&quot;. The check was `brandSlug === &#39;ai-flotation&#39;`. Every other brand arriving without a prompt would have dialled. It is now universal: any branded call without instructions is skipped with `reason: &#39;no_prompt&#39;`. Unbranded Colaberry welcome/interest calls, whose agents hold real saved instructions rather than a shell, are deliberately unaffected. Added `cpn/scholarshipCallPrompt.ts` and a `promptForSource` selector in `callbackRequestService`, so CPN has a script the moment it is routed to voice.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">41 tests across 4 suites - 17 new on the prompt, 5 new on the guard, plus the existing `synthflowAgentResolution` and `requestCallbackAction` suites unchanged and green. `tsc --noEmit` clean. The guard suite spies on `fetch` and throws if anything reaches the network, so a test that gets past the guard fails loudly rather than dialling.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**It had never fired, which is why it survived.** Nothing but AI Flotation was routed to voice, so the gap was invisible - a trap armed for whoever came second, and the brand that came second is a nonprofit phoning people who are asking it for help. **Checked the capability before building on it**, the same way the free-account move checked email: voice is configured in prod (`SYNTHFLOW_API_KEY`, `ENABLE_VOICE_CALLS`, four agent ids) and works, though the lifetime record is 1,148 failed against 234 sent. Those failures are historical - April 2026 alone is 537 - and September is 3 sent, 1 failed. **Separate finding, not fixed here:** `error_message` is NULL on all 1,148 voice failures, so no failure reason has ever been recorded. CLAUDE.md&#39;s observability rules require an `error_class` on a caught failure, and voice does not have one. **The CPN prompt is not the Flotation prompt with nouns swapped.** It repeats the written interview&#39;s three refusals and adds two that only exist on a phone: it says it is an AI before anything else, and it takes no for an answer after a single offer. A voice agent that pushes past a brush-off is harassment, and these are the people least able to afford it.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">11</span>
+          <h2>**Activate CPN voice, and stop it answering in Colaberry&#39;s voice**</h2>
+          <span class="badge">2026-09-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali: &quot;yes activate CPN voice.&quot; The voice door now sits on `/scholarships/` beside the written interview at equal weight, with consent that names the AI, the recording and the call. `scholarship_interview_call` is seeded with phone AND email required, because `request_callback` refuses without either and an optional phone would produce a form that submits happily and never rings. New `seedRoutingRules.ts` makes the rule shippable rather than an admin-API step.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">36 tests across 4 suites; `tsc --noEmit` 0 errors, 0 error lines, unpiped; site harness green across 8 routes x 4 viewports; boundary validator OK, 16 files.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Activation surfaced a second, sharper version of the guard defect, and this one would have fired on the first call.** `resolveAgentId` routes by brand, and `cpn` fell through to `env.synthflowCallbackAgentId` - Colaberry&#39;s dedicated callback agent, which carries its own saved training-site script rather than a `{prompt}` shell. A scholarship applicant would have been answered by the bootcamp&#39;s callback line: a person asking a charity for help, spoken to as a sales lead, in a voice that is not ours. CPN now has its own slot with NO fallback, so unset means silence rather than substitution, and a test pins that it skips with `no_agent_id` instead of borrowing. **One manual step removed, one that cannot be.** Routing rules were admin-API-only, so `seedRoutingRules.ts` now ships the CPN rule - narrow by design: seeded by name, never deletes or deactivates, and operator-tuned rules including AI Flotation&#39;s are untouched, because a seeder asserting the full set would silently undo somebody&#39;s 3am tuning. What remains external is `SYNTHFLOW_CPN_AGENT_ID`: somebody must create a shell agent in the Synthflow dashboard and set it on prod. Until then every CPN call skips with `no_agent_id` and none is placed. **The voice door is beside the written interview, not beneath it** - the decision was that voice is an equal path, so it is not a smaller, greyer box under the real one.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">12</span>
+          <h2>**CPN borrows the AI Flotation shell, because a shell is not a voice**</h2>
+          <span class="badge">2026-09-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali: &quot;I&#39;m having a hard time creating new phone numbers. Could you use the same agent we used for the other AI voice agent. Everything is prompt based at run time so it should work the same.&quot; He is right, and it is the architecture `voiceCallPrompt.ts` already describes - &quot;one agent and one phone number can serve several brands&quot;. `resolveAgentId` now returns `synthflowCpnAgentId || synthflowAiFlotationAgentId` for cpn.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">39 tests across 4 suites, 4 of them new on the borrowing rule; site harness green across 8 routes x 4 viewports; boundary validator OK.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The rule is shell-yes, scripted-never, and that distinction is the whole change.** The AI Flotation agent&#39;s saved prompt is literally `{prompt}`, so it holds no opinions and whatever we send at call time IS the call - borrowing it is not borrowing a voice. The Colaberry callback, interest and welcome agents are the opposite: they carry saved scripts, and falling through to one would answer a scholarship applicant as the bootcamp&#39;s callback line. That was the defect fixed the same day, and it stays fixed; four tests pin both halves, including that CPN prefers its own agent the moment one is configured and skips entirely if neither exists. **The cost is the caller ID, and it is disclosed rather than hidden.** The number will be AI Flotation&#39;s, so somebody who asked a scholarship charity to ring them sees a business they have never heard of. `/scholarships/` now says so BEFORE they hand over a number, and the prompt handles &quot;who is this&quot; and &quot;I do not recognise this number&quot; directly, with an explicit instruction not to pretend the number is ours - somebody checking an unknown number and getting a half-truth has good reason to distrust everything after it. **Setting `SYNTHFLOW_CPN_AGENT_ID` later takes over with no code change**, and the disclosure copy is then the only thing to remove.</span></div>
           
         </div>
       </article>

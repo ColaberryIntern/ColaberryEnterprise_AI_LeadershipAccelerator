@@ -5,6 +5,7 @@ import CaseStudyVerificationBadge from '../../components/caseStudy/CaseStudyVeri
 import { heroFacts, heroMetricsFor, visibleSections } from './storyDetailV2Model';
 import StoryHeroActions from './StoryHeroActions';
 import StoryContextStrip from './StoryContextStrip';
+import { StoryHeroFigure } from './storyDetailV2Sections';
 import StorySectionList from './StorySectionList';
 import { storyIndicators } from './storyIndicatorModel';
 import { placeStoryFigures } from './storyFigurePlacement';
@@ -153,16 +154,20 @@ export function StoryDetailArticle({
             </div>
           </div>
 
-          {/* The cover, LAST in source order and second in the grid. A reader on
-              a phone gets the title, the standfirst and the offer before the
-              picture, which is the order that answers "what is this" fastest;
-              at desktop widths CSS lifts it into the masthead's empty right
-              half, where it costs no vertical space at all. */}
-          {cover ? (
-            <figure className="cbv2-story__cover">
-              <img src={cover.src} alt={cover.alt} loading="eager" decoding="async" />
-            </figure>
-          ) : null}
+          {/* The masthead's picture slot, LAST in source order and second in the
+              grid. A reader on a phone gets the title, the standfirst and the
+              offer before it, which is the order that answers "what is this"
+              fastest; at desktop widths CSS lifts it into the masthead's empty
+              right half, where it costs no vertical space at all.
+
+              WHEN THERE IS A WALKTHROUGH, THE SLOT IS THE PLAYER. Ali: "shouldn't
+              the video be in the hero section?" - and the alternative shipped
+              worse. A band under the masthead meant the record opened with TWO
+              visuals doing the same job, the cover and then the video, and the
+              reader had to scroll past a picture of the product to reach a film
+              of it. The poster falls back to the cover image, so a record with a
+              walkthrough looks exactly as it did until somebody presses play. */}
+          <StoryHeroFigure video={record.walkthroughVideo} cover={cover} />
         </div>
       </section>
 

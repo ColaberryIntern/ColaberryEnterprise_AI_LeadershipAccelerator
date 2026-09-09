@@ -46,7 +46,14 @@ function exactSignup(iso: string | null): string | undefined {
  * that promotes them. Backed by /api/admin/community/members (list) +
  * PATCH /api/admin/community/members/:id/role.
  */
-export default function AdminCommunityRolesPage() {
+interface Props {
+  /** True when rendered as a section inside the Accelerator page rather than as
+   *  its own route — suppresses the page-level header. Defaults to false so the
+   *  standalone /admin/community-roles route is unchanged. */
+  embedded?: boolean;
+}
+
+export default function AdminCommunityRolesPage({ embedded = false }: Props = {}) {
   const [members, setMembers] = useState<AdminCommunityMember[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -140,10 +147,20 @@ export default function AdminCommunityRolesPage() {
     }
   };
 
+  const SUBTITLE = 'Assign the mentor / staff role shown on member cards. Mark someone Staff to give them a Management Portal role (Owner, Admin, Curriculum, Revenue, Admissions, Support).';
+
   return (
     <>
-      <PageHeader title="Community Roles" subtitle="Assign the mentor / staff role shown on member cards. Mark someone Staff to give them a Management Portal role (Owner, Admin, Curriculum, Revenue, Admissions, Support)." />
-      <SectionCard>
+      {/* Embedded under the Accelerator page's Cohorts view, this is a SECTION of
+          that page, so it must not render a second PageHeader — two page titles
+          on one screen, each with its own breadcrumb, reads as a rendering bug.
+          The standalone /admin/community-roles route keeps the full header. */}
+      {!embedded && <PageHeader title="Community Roles" subtitle={SUBTITLE} />}
+      <SectionCard
+        title={embedded ? 'Community Roles' : undefined}
+        subtitle={embedded ? SUBTITLE : undefined}
+        icon={embedded ? 'user-star-line' : undefined}
+      >
         <form className="row g-2 align-items-end mb-3" onSubmit={onSearch}>
           <div className="col-md-6">
             <label className="form-label small fw-medium">Search by name</label>

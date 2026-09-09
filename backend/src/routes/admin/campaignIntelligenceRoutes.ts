@@ -183,7 +183,11 @@ router.get('/api/admin/campaign-intelligence/visitor-diagnostics', requireAdmin,
 router.get('/api/admin/campaign-intelligence/graph', requireAdmin, async (req: Request, res: Response) => {
   try {
     const timeWindow = req.query.timeWindow as string | undefined;
-    const data = await getCampaignGraphData(timeWindow);
+    // Absent and empty both mean "no brand filter". Trimmed so a stray space in a
+    // query string cannot become a brand id that matches nothing.
+    const rawBrand = typeof req.query.brandId === 'string' ? req.query.brandId.trim() : '';
+    const brandId = rawBrand.length > 0 ? rawBrand : undefined;
+    const data = await getCampaignGraphData(timeWindow, brandId);
     if (req.query.timeline === 'true') {
       const paths = getCachedLeadPaths();
       if (paths) data.timeline_buckets = buildTimelineBuckets(paths);

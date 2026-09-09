@@ -397,6 +397,7 @@ export function projectionFixture(
       methodology: 'Counted from the carrier export before and after.',
       limitations: ['One quarter of data.'],
     }],
+    walkthroughVideo: null,
     situation: {
       heading: 'The situation',
       body: ['Adjusters were triaging by hand.'],

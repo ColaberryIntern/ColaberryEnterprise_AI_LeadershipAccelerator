@@ -112,6 +112,7 @@ const detail = (artifacts: readonly PublicCaseStudyArtifact[]): PublicCaseStudyD
   engagementDuration: null,
   productionStatus: null,
   heroMetrics: [metric()],
+  walkthroughVideo: null,
   situation: null,
   timeline: [],
   architecture: architecture(),

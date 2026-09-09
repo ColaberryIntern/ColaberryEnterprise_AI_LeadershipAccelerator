@@ -14,6 +14,7 @@ import {
 import { generateOutreachMessage } from './reeseOutreachMessageService';
 import { initiateDm } from './reeseInitiateDmService';
 import { resolveStudentDisplayName } from './resolveStudentDisplayName';
+import { createOutreachChecklistInstance } from './outreachChecklist';
 
 // Reese Phase 2 (Autonomous Outreach) — the decision + orchestration sweep.
 // Named, non-negotiable constants (see execution-contract.md — logged there as
@@ -136,12 +137,19 @@ async function sendNewOutreach(
   // input type.
   await ticket.update({ risk_tier: RISK_TIER });
 
-  await initiateDm(enrollmentId, message);
-
-  // Governance (Milestone 4, shadow-mode only) — this call's verdict NEVER
-  // gates the send: the message has already been sent by the time this runs,
-  // matching ticketAgentDispatcher.ts's own established "evaluate but never
-  // block" contract for this exact chokepoint.
+  // Governance (Milestone 4, shadow-mode only) — evaluated BEFORE the real
+  // send, matching agentActionAuthorizationBridge.ts's own documented design
+  // intent ("authorization is evaluated BEFORE the real action runs — the
+  // conventional 'gate ahead of the action,' even in shadow/log-only mode")
+  // and the canonical caller pattern in ticketAgentDispatcher.ts. Ordering
+  // fix (2026-09-07): this call used to run AFTER initiateDm() below, a real,
+  // previously-flagged instance of the anti-pattern the mission text calls
+  // out by name ("do not preserve an unsafe pattern where the message is
+  // sent first and governance is logged afterward"). The verdict still never
+  // gates the send — that stays real, separate, deliberately out-of-scope
+  // work (the shadow-to-enforce migration) — this fix only corrects the
+  // ordering so that migration, whenever it happens, doesn't also require
+  // restructuring this call site.
   const eventId = crypto.randomUUID();
   await authorizeTicketDispatch({
     eventId,
@@ -151,6 +159,9 @@ async function sendNewOutreach(
     riskTier: RISK_TIER,
   });
 
+  await initiateDm(enrollmentId, message);
+
+  const nextFollowUpDueAt = new Date(Date.now() + FOLLOW_UP_DAYS * 24 * 60 * 60 * 1000);
   await ReeseOutreach.create({
     enrollment_id: enrollmentId,
     ticket_id: ticket.id,
@@ -160,9 +171,24 @@ async function sendNewOutreach(
     status: 'active',
     attempt_count: 1,
     last_contacted_at: new Date(),
-    next_follow_up_due_at: new Date(Date.now() + FOLLOW_UP_DAYS * 24 * 60 * 60 * 1000),
+    next_follow_up_due_at: nextFollowUpDueAt,
     risk_tier: RISK_TIER,
   });
+
+  // Reese Agentic AI Employee mission, Capability 6 — a real, persisted
+  // Outreach checklist per send, linked to this send's real ticket.
+  // Observational only (Ali's explicit choice, 2026-09-07): computed and
+  // persisted after the real send already happened, never gating it — see
+  // outreachChecklist.ts's own header for why. Fail-open: a checklist
+  // bookkeeping failure must never surface as an autonomous-outreach defect.
+  try {
+    await createOutreachChecklistInstance(ticket.id, signalType, goal, message, nextFollowUpDueAt);
+  } catch (e: any) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'reeseAutonomousOutreachService', event: 'outreach_checklist_instance_failed',
+      ticket_id: ticket.id, error_class: e?.name || 'Error', message: String(e?.message || e),
+    }));
+  }
 
   return { enrollmentId, signalType, action: 'sent', reason: `${signalType}_signal_fired` };
 }

@@ -8,6 +8,18 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 
 export interface CompositeContext {
+  /**
+   * Explorer Growth OS facts resolved for this learner (plan §11.2, §11.4).
+   *
+   * OPTIONAL, and its absence is meaningful rather than neutral. Missing means
+   * "this is not an Explorer send" and the Explorer fact guard does not apply.
+   * PRESENT means every date, price and seat count in the generated copy must
+   * appear here or the message is rejected — so an empty fact set is the
+   * strictest possible state, not the most permissive one.
+   *
+   * Consumed by `messageValidatorService` via `explorerGrowth/explorerFactGuard`.
+   */
+  explorer?: import('./explorerGrowth/explorerFactGuard').ExplorerFactSet;
   lead: {
     name: string;
     firstName: string;

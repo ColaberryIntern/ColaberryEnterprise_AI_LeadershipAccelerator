@@ -177,6 +177,28 @@ export interface PublicCaseStudyArchitecture {
    * this band entirely when the field is null — which is the normal case.
    */
   readonly diagramSource: string | null;
+  /**
+   * A pre-rendered image of `diagramSource`, or null.
+   *
+   * WHY A PICTURE AS WELL AS THE SOURCE. Only the Colaberry Enterprise app can
+   * draw mermaid: it loads the library from `cdn.jsdelivr.net` at runtime, which
+   * its own CSP allows. The other two surfaces cannot. `training.colaberry.com`
+   * serves `script-src 'self' ...` with no CDN in it, so the same dynamic import
+   * is refused there, and the AI Flotation shell is dependency-free vanilla
+   * JavaScript by design. Both of them ended up rendering the architecture band
+   * with no chart at all while the source sat in the payload — present in the
+   * data, invisible on the page.
+   *
+   * An image is the one form all three can show: `img-src` on the training site
+   * is `'self' data: blob: https:`, and the shell needs no library to place an
+   * `img`. So Enterprise keeps drawing the live chart and the other two render
+   * this, rather than a CSP being loosened or mermaid being bundled twice.
+   *
+   * It is rendered FROM `diagramSource` by `scripts/renderCaseStudyDiagram.js`,
+   * which refuses the same input `projectDiagramSource` refuses, so the picture
+   * and the record cannot disagree about what is renderable.
+   */
+  readonly diagramImageUrl: string | null;
 }
 
 export interface PublicCaseStudyMeasurement {
@@ -328,6 +350,25 @@ export interface PublicCaseStudyDetail {
   readonly heroMetrics: readonly PublicCaseStudyMetric[];
   readonly situation: PublicCaseStudySituation | null;
   readonly timeline: readonly PublicCaseStudyTimelineEntry[];
+  /**
+   * The narrated walkthrough, rendered at the top of the record, or null.
+   *
+   * A DEMONSTRATION, NEVER EVIDENCE. It is deliberately not an artifact: an artifact of
+   * type `demo` would sit in the artifacts carousel at a screenshot's aspect ratio and
+   * could win the cover through `HERO_IMAGE_PRIORITY`, and a video that can stand in for a
+   * screenshot of the running system is the substitution the publish rules exist to stop.
+   * Nothing reads this when resolving the hero, and it carries no verification class —
+   * every claim it narrates is a metric, a roadmap line or an evidence row on the same
+   * record, checked there.
+   */
+  readonly walkthroughVideo: {
+    readonly url: string;
+    readonly title: string;
+    readonly captionsUrl: string | null;
+    readonly posterUrl: string | null;
+    readonly durationSeconds: number | null;
+    readonly narrationSource: string | null;
+  } | null;
   readonly architecture: PublicCaseStudyArchitecture | null;
   readonly measurement: PublicCaseStudyMeasurement | null;
   readonly roadmap: readonly PublicCaseStudyRoadmapItem[];
@@ -391,6 +432,7 @@ const PUBLIC_DETAIL_KEY_MAP: Record<keyof PublicCaseStudyDetail, true> = {
   engagementDuration: true,
   productionStatus: true,
   heroMetrics: true,
+  walkthroughVideo: true,
   situation: true,
   timeline: true,
   architecture: true,

@@ -15,6 +15,7 @@
  */
 import CurriculumTypeDefinition, { CurriculumTypeDefinitionAttributes } from '../models/CurriculumTypeDefinition';
 import { INTEL_FORMATS } from './intelCardFormats';
+import { CLAUDE_STUDIO_STYLE, CLAUDE_STUDIO_STRUCTURE } from './claudeStudioFormat';
 
 type AuthoredFields = Partial<CurriculumTypeDefinitionAttributes>;
 
@@ -36,6 +37,7 @@ const THUMBNAIL_SLUGS = [
   'internship_activity', 'demo_tuesday', 'kes_wednesday', 'marketing_friday',
   'milestone', 'achievement', 'daily_streak', 'completion_badge',
   'setup_lab',   // Claude Code "get unblocked" enablement lab
+  'claude_studio',   // Claude.ai weekly studio — the think/decide/communicate counterpart to the Claude Code spine
   'architect_mindset',   // The Architect Time Machine — cinematic decision simulation
   'community_live_session',
   // Intelligence Pipeline types
@@ -235,6 +237,54 @@ Every opening tag has a matching closing tag. About 250–420 words.
 github_task: if {{setup_topic}} involves GitHub, a repository, commits, pushes, or CI, return a one-line description of the concrete git/CI action the portal should verify; otherwise null.
 
 Set the rest explicitly: questions = [], reflection = "", discussion_prompt = "", evaluation_criteria = []. completion: "Marked complete when the participant proves the outcome — verified automatically where a real check exists (e.g. GitHub), otherwise by submitting evidence."`;
+
+// ── Claude Studio ────────────────────────────────────────────────────────────
+// The 13 canonical weeks are HAND-AUTHORED in data/claudeStudios and written by
+// seeds/seedClaudeStudioCards. This prompt exists for the other path: an admin
+// dropping a Claude Studio onto a week that has no authored studio (a new
+// program, a custom cohort week). It pins the SAME <style> and the SAME data
+// attributes the authored cards emit, so a generated studio renders through
+// ClaudeStudioRender identically instead of falling back to raw HTML.
+const CLAUDE_STUDIO_GENERATION_PROMPT = `You author a "Claude Studio" for the AI Systems Architect Accelerator — the weekly studio where a business technologist uses CLAUDE.AI (conversations, Projects, and Artifacts) to think, research, decide, and communicate. It is deliberately NOT Claude Code: nothing here is built in a terminal, and no code is written. Ground everything in the WEEK CONTEXT above and refer to the week by its section TITLE, never by its number. Invent no claim the WEEK CONTEXT does not support.
+
+Every Claude Studio runs the same four-stage loop, in this order:
+  1. explore  — Explore in Claude: frame the problem, question assumptions, reason conversationally
+  2. organize — Organize in a Project: persistent instructions, approved sources, reusable context
+  3. create   — Create an Artifact: an interactive or presentable output
+  4. prove    — Prove and Publish: explain the decisions, reflect, attach the evidence
+
+The studio must produce ONE concrete career asset the student could show an employer — a brief, a model, a charter, a kit, a review. Name it explicitly.
+
+title: the words "Claude Studio", a space, an em dash, a space, then the studio's own name ending in the word "Studio". Example: "Claude Studio — Problem Framing Studio".
+
+summary: one sentence naming the career asset and the four stages.
+
+body_html: FIRST copy this <style> block VERBATIM, then emit the markup using ONLY these classes in exactly this structure.
+
+<style>${CLAUDE_STUDIO_STYLE}</style>
+
+Structure: ${CLAUDE_STUDIO_STRUCTURE}
+
+The data attributes are a hard contract — the student renderer reads them:
+- root: <div class="cs" data-claude-studio="1" data-chat-url="https://claude.ai/new" data-projects-url="https://claude.ai/projects" data-cert-active="0" data-career-asset="..." data-week-theme="...">
+- each stage: <section class="cs-stage" data-stage="explore|organize|create|prove" data-title="..." data-min="12"> containing a <p class="cs-inst"> and an <ol class="cs-steps"> of 2-4 <li>
+- each prompt: <div class="cs-prompt" data-prompt="starter|improve|followup" data-label="..." data-why="..."> containing <div class="cs-plabel">, <p class="cs-why">, and <pre class="cs-pre"> with the prompt text
+- blocks: <section class="cs-block" data-block="project|artifact|trust|deliverables|reflection|rubric">
+- reflection checks are <li data-check="1">; the free-response is <p class="cs-free" data-free-response="1">
+
+Emit exactly FOUR cs-stage sections, in order. Emit at least THREE cs-prompt blocks: one data-prompt="starter" and two of data-prompt="improve" / data-prompt="followup". Emit exactly THREE trust checkpoints. Emit a rubric table with exactly five rows, one per dimension: Reasoning, Evidence, Communication, Judgment, Responsible AI — each <tr data-dimension="...">.
+
+CERTIFICATION TIMING — a hard rule: certification preparation is active from Week 7 onward ONLY. If the WEEK CONTEXT names a week before Week 7, set data-cert-active="0" and do not mention exam or certification preparation as an active activity at all. From Week 7 on, set data-cert-active="1".
+
+RESPONSIBLE-AI RULES that must appear in the trust checkpoints where relevant:
+- Never present AI-generated stakeholder statements, interviews, or quotes as real.
+- Never present a visual simulation as an executed test run or a working agent.
+- Never reproduce protected certification exam questions, and label generated practice as practice.
+- The student's judgment on the week's central decision is not delegable.
+
+Prompts must be paste-ready and specific to the week's topic, with bracketed placeholders where the student supplies their own detail. Write them long enough to be genuinely useful — a one-line prompt is a failure here.
+
+Voice: direct, calm, professional. No hype, no emojis. Em dash only in the title. Set questions as [], github_task as null, evaluation_criteria as the five rubric dimensions, reflection as the free-response prompt, discussion_prompt as "", completion as "Marked complete when the participant submits their Artifact link and reflection."`;
 
 const PROMPT_LAB_GENERATION_PROMPT = `You author a "Prompt Lab" for the AI Systems Architect Accelerator — a catalog of hands-on PRACTICE PROMPTS a NON-TECHNICAL business executive pastes into Claude Code to practice this week by building small real things. Use ALL of the context above: the WEEK CONTEXT (the week's topic + objectives), THIS WEEK'S ACTIVITIES (the roster — especially the Deep Dive and the Anthropic course named there), and WHAT STUDENTS BUILD THIS WEEK (the concrete documents/deliverables). Refer to the week by its section TITLE, never its number. Invent no technical claim the context does not support.
 
@@ -674,6 +724,38 @@ export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
     evaluation_type: 'none',
     generation_prompt: SETUP_LAB_GENERATION_PROMPT,
     thumbnail_url: thumbnailUrlFor('setup_lab'),
+    approved: true,
+    status: 'ready',
+  },
+  claude_studio: {
+    label: 'Claude Studio',
+    student_label: 'Claude Studio',
+    description: 'The weekly Claude.ai studio — think, research, decide, communicate, and build an interactive business Artifact in Claude conversations, Projects, and Artifacts. The counterpart to the Claude Code build spine.',
+    category: 'Practice',
+    icon: 'bi-chat-square-text',
+    // Violet, deliberately NOT the coral used by the Claude Code spine — a
+    // student should be able to tell at a glance which tool a card needs.
+    badge_class: 'bg-primary',
+    estimated_time: 85,
+    capabilities: ['ai_chat', 'artifacts', 'evidence', 'portfolio', 'reflection', 'rubric', 'mentor_review', 'comments', 'bookmarks'],
+    inputs: [],
+    variable_keys: [],
+    outputs: [
+      { key: 'title', type: 'string', description: 'Claude Studio — {studio name}' },
+      { key: 'body_html', type: 'html', description: 'Four-stage studio: career asset, launch links, scenario, objectives, 4 cs-stage sections, Project setup, cs-prompt blocks, Artifact requirements, trust checkpoints, deliverables, reflection, rubric' },
+      { key: 'summary', type: 'string', description: 'One sentence naming the career asset and the four stages' },
+      { key: 'reflection', type: 'string', description: 'The substantive free-response reflection prompt' },
+      { key: 'evaluation_criteria', type: 'string[]', description: 'The five rubric dimensions' },
+    ],
+    // Completion requires real submission (Artifact URL + reflection + stage
+    // acknowledgement), enforced server-side in claudeStudioService — a viewed
+    // card is not a completed studio.
+    completion_rules: { on: 'submit' },
+    evaluation_type: 'rubric',
+    generation_prompt: CLAUDE_STUDIO_GENERATION_PROMPT,
+    // EXPLICIT — an authored entry overrides the ...AI_THUMBNAILS spread, so
+    // omitting this ships the type with no thumbnail (see community_live_session).
+    thumbnail_url: thumbnailUrlFor('claude_studio'),
     approved: true,
     status: 'ready',
   },

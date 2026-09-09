@@ -26,6 +26,23 @@ const UNLISTED: ReadonlyArray<readonly [string, string, string]> = [
   ['/admin/automation', '/api/admin/automation', 'system'],
   ['/admin/agent-orphans', '/api/admin/agent-orphans', 'intelligence'],
   ['/admin/knowledge-ops', '/api/admin/knowledge-ops', 'intelligence'],
+  // Folded into the Accelerator page's tabs on 2026-09-08 and dropped from the
+  // Program nav group. Routes and pages are unchanged; only the sidebar entry
+  // is gone, which is precisely what moves them into this contract. Each is
+  // paired with the API prefix its page actually calls — Community Roles talks
+  // to /api/admin/community, not to a /community-roles endpoint, so the pair is
+  // not a naming echo and cannot be derived from the route.
+  ['/admin/community-roles', '/api/admin/community', 'program'],
+  ['/admin/cert-prep', '/api/admin/cert-prep', 'program'],
+  ['/admin/case-studies', '/api/admin/case-studies', 'program'],
+  ['/admin/projects', '/api/admin/projects', 'program'],
+  // The governance board reads the CAPE surface, whose prefix was itself
+  // unmapped until this change — see the '/api/admin/cape' row in the gate.
+  ['/admin/feed-control-governance', '/api/admin/feed-control', 'program'],
+  ['/admin/feed-control-governance', '/api/admin/cape', 'program'],
+  // Architecture Skills became the Curriculum page's tab in the same pass and
+  // reads the same CAPE surface.
+  ['/admin/cape-settings', '/api/admin/cape', 'program'],
 ];
 
 describe('mgmtSectionGate — previously unmapped admin surfaces', () => {

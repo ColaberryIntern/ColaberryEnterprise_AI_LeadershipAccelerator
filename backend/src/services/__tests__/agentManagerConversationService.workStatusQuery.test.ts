@@ -36,6 +36,26 @@ jest.mock('../managerReliabilityIntentService', () => ({
   toPendingConfirmation: jest.fn(),
   applyConfirmedReliabilityChange: jest.fn(),
 }));
+jest.mock('../managerGoalIntentService', () => ({
+  detectChangeGoalIntent: jest.fn(() => null),
+  buildGoalConfirmationCardText: jest.fn(() => ''),
+  toPendingGoalConfirmation: jest.fn(),
+  applyConfirmedGoalChange: jest.fn(),
+}));
+jest.mock('../managerOneOnOneIntentService', () => ({
+  detectScheduleOneOnOneIntent: jest.fn(() => null),
+  buildOneOnOneConfirmationCardText: jest.fn(() => ''),
+  toPendingOneOnOneConfirmation: jest.fn(),
+  applyConfirmedOneOnOneSchedule: jest.fn(),
+}));
+jest.mock('../agentUncertaintyIntentService', () => ({
+  detectUncertaintyQuery: jest.fn(() => false),
+  buildUncertaintyReply: jest.fn(),
+}));
+jest.mock('../agentInterventionIntentService', () => ({
+  detectInterventionIntentQuery: jest.fn(() => null),
+  buildInterventionIntentReply: jest.fn(),
+}));
 
 const mockAdminUserFindOne = jest.fn();
 jest.mock('../../models/AdminUser', () => ({

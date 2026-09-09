@@ -5,6 +5,10 @@ import ActivityTimeline from '../../components/admin/ActivityTimeline';
 import AddNoteForm from '../../components/admin/AddNoteForm';
 import AppointmentCard from '../../components/admin/AppointmentCard';
 import ScheduleAppointmentModal from '../../components/admin/ScheduleAppointmentModal';
+// Extracted so this page and the 360 profile share ONE write path while both
+// exist. When this page is retired the components are already in place.
+import LeadPipelineBar from '../../components/admin/lead/LeadPipelineBar';
+import LeadStrategyPrep from '../../components/admin/lead/LeadStrategyPrep';
 import TemperatureBadge from '../../components/TemperatureBadge';
 import JourneyTimeline from '../../components/admin/JourneyTimeline';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
@@ -96,7 +100,7 @@ interface VisitorData {
   }>;
 }
 
-import { PIPELINE_STAGES, PIPELINE_STAGE_COLORS, STATUS_VALUES } from '../../constants';
+import { STATUS_VALUES } from '../../constants';
 
 const STATUS_OPTIONS = STATUS_VALUES;
 
@@ -205,21 +209,6 @@ function AdminLeadDetailPage() {
     }
   };
 
-  const handlePipelineStageChange = async (newStage: string) => {
-    const oldStage = pipelineStage;
-    setPipelineStage(newStage);
-    try {
-      await api.patch(`/api/admin/leads/${id}/pipeline`, {
-        pipeline_stage: newStage,
-        from_stage: oldStage,
-      });
-      setActivityRefreshKey((k) => k + 1);
-    } catch (err) {
-      console.error('Failed to update pipeline stage:', err);
-      setPipelineStage(oldStage);
-    }
-  };
-
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '-';
     return new Date(dateStr).toLocaleString('en-US', {
@@ -248,10 +237,6 @@ function AdminLeadDetailPage() {
     if (type === 'email') return 'Email';
     if (type === 'alert') return 'Alert';
     return 'Voice Call';
-  };
-
-  const getStageBadgeColor = (stage: string) => {
-    return PIPELINE_STAGE_COLORS[stage] || 'var(--text-muted)';
   };
 
   // Per-page trust signal (Basecamp todo 10027085963) derived from the live lead record.
@@ -348,19 +333,14 @@ function AdminLeadDetailPage() {
       {/* Pipeline Stage Bar */}
       <div className="mb-4">
         <SectionCard>
-          <div className="d-flex align-items-center gap-2 flex-wrap">
-            <span className="text-muted small fw-bold me-2">Pipeline:</span>
-            {PIPELINE_STAGES.map((stage) => (
-              <button
-                key={stage.key}
-                className={`btn btn-sm ${pipelineStage === stage.key ? 'text-white' : 'btn-outline-secondary'}`}
-                style={pipelineStage === stage.key ? { backgroundColor: getStageBadgeColor(stage.key), borderColor: getStageBadgeColor(stage.key) } : {}}
-                onClick={() => handlePipelineStageChange(stage.key)}
-              >
-                {stage.label}
-              </button>
-            ))}
-          </div>
+          <LeadPipelineBar
+            leadId={lead.id}
+            stage={pipelineStage}
+            onChanged={(next) => {
+              setPipelineStage(next);
+              setActivityRefreshKey((k) => k + 1);
+            }}
+          />
         </SectionCard>
       </div>
 
@@ -781,196 +761,8 @@ function AdminLeadDetailPage() {
         </div>
       )}
 
-      {activeTab === 'strategy' && (
-        <div>
-          {strategyCalls.length === 0 ? (
-            <SectionCard>
-              <div className="text-center py-4">
-                <p className="text-muted mb-0">No strategy calls found for this lead</p>
-              </div>
-            </SectionCard>
-          ) : (
-            strategyCalls.map((call: any) => {
-              const intel = call.intelligence;
-              let synthesis: any = null;
-              if (intel?.ai_synthesis) {
-                try { synthesis = JSON.parse(intel.ai_synthesis); } catch { /* ignore */ }
-              }
-
-              return (
-                <div key={call.id} className="mb-4">
-                  <SectionCard
-                    title={`Strategy Call — ${new Date(call.scheduled_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
-                    actions={
-                      <div className="d-flex gap-2">
-                        <StatusBadge
-                          label={call.status}
-                          tone={call.status === 'scheduled' ? 'primary' : call.status === 'completed' ? 'success' : call.status === 'no_show' ? 'danger' : 'neutral'}
-                        />
-                        {intel && (
-                          <StatusBadge
-                            label={`Prep: ${intel.completion_score}%`}
-                            tone={intel.completion_score >= 60 ? 'success' : intel.completion_score >= 30 ? 'warning' : 'neutral'}
-                          />
-                        )}
-                        {intel?.ai_confidence_score !== null && intel?.ai_confidence_score !== undefined && (
-                          <StatusBadge
-                            label={`AI: ${intel.ai_confidence_score}%`}
-                            tone={intel.ai_confidence_score >= 70 ? 'info' : 'warning'}
-                          />
-                        )}
-                      </div>
-                    }
-                  >
-                    {!intel ? (
-                      <p className="text-muted small mb-0">No prep form submitted yet</p>
-                    ) : (
-                      <div className="row g-3">
-                        {/* Completion Progress */}
-                        <div className="col-12">
-                          <div className="progress" style={{ height: 6 }}>
-                            <div
-                              className={`progress-bar ${intel.completion_score >= 60 ? 'bg-success' : 'bg-primary'}`}
-                              style={{ width: `${intel.completion_score}%` }}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Key Fields */}
-                        <div className="col-md-4">
-                          <div className="text-muted small">AI Maturity</div>
-                          <div className="fw-semibold">{intel.ai_maturity_level || '-'}</div>
-                        </div>
-                        <div className="col-md-4">
-                          <div className="text-muted small">Team Size</div>
-                          <div className="fw-semibold">{intel.team_size || '-'}</div>
-                        </div>
-                        <div className="col-md-4">
-                          <div className="text-muted small">Timeline</div>
-                          <div className="fw-semibold">{(intel.timeline_urgency || '-').replace(/_/g, ' ')}</div>
-                        </div>
-
-                        {/* Challenges */}
-                        {intel.primary_challenges?.length > 0 && (
-                          <div className="col-12">
-                            <div className="text-muted small mb-1">Challenges</div>
-                            <div className="d-flex flex-wrap gap-1">
-                              {intel.primary_challenges.map((c: string) => (
-                                <StatusBadge key={c} label={c} tone="neutral" />
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Tools */}
-                        {intel.current_tools?.length > 0 && (
-                          <div className="col-12">
-                            <div className="text-muted small mb-1">Current Tools</div>
-                            <div className="d-flex flex-wrap gap-1">
-                              {intel.current_tools.map((t: string) => (
-                                <StatusBadge key={t} label={t} tone="neutral" />
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Budget & Consulting */}
-                        {(intel.budget_range || intel.evaluating_consultants) && (
-                          <div className="col-12">
-                            <div className="text-muted small">Budget</div>
-                            <div>
-                              {intel.budget_range ? intel.budget_range.replace(/_/g, ' ') : 'Not specified'}
-                              {intel.evaluating_consultants && <span className="ms-2"><StatusBadge label="Evaluating consultants" tone="warning" /></span>}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Priority Use Case */}
-                        {intel.priority_use_case && (
-                          <div className="col-12">
-                            <div className="text-muted small">Priority Use Case</div>
-                            <div className="bg-light p-2 rounded small">{intel.priority_use_case}</div>
-                          </div>
-                        )}
-
-                        {/* Questions */}
-                        {intel.specific_questions && (
-                          <div className="col-12">
-                            <div className="text-muted small">Questions for Call</div>
-                            <div className="bg-light p-2 rounded small">{intel.specific_questions}</div>
-                          </div>
-                        )}
-
-                        {/* File Upload */}
-                        {intel.uploaded_file_name && (
-                          <div className="col-12">
-                            <div className="text-muted small">Uploaded Document</div>
-                            <StatusBadge label={intel.uploaded_file_name} tone="info" />
-                          </div>
-                        )}
-
-                        {/* AI Synthesis */}
-                        {synthesis && (
-                          <div className="col-12">
-                            <details>
-                              <summary className="fw-semibold small" style={{ cursor: 'pointer' }}>
-                                AI Synthesis (Confidence: {intel.ai_confidence_score}%)
-                              </summary>
-                              <div className="mt-2 bg-light p-3 rounded">
-                                <div className="mb-2">
-                                  <strong className="small">Executive Summary</strong>
-                                  <p className="small mb-2">{synthesis.executive_summary}</p>
-                                </div>
-                                {synthesis.pain_points?.length > 0 && (
-                                  <div className="mb-2">
-                                    <strong className="small">Pain Points</strong>
-                                    <ul className="small mb-1">
-                                      {synthesis.pain_points.map((p: string, i: number) => <li key={i}>{p}</li>)}
-                                    </ul>
-                                  </div>
-                                )}
-                                {synthesis.recommended_topics?.length > 0 && (
-                                  <div className="mb-2">
-                                    <strong className="small">Recommended Topics</strong>
-                                    <ul className="small mb-1">
-                                      {synthesis.recommended_topics.map((t: string, i: number) => <li key={i}>{t}</li>)}
-                                    </ul>
-                                  </div>
-                                )}
-                                <div className="mb-2">
-                                  <strong className="small">Suggested Approach</strong>
-                                  <p className="small mb-1">{synthesis.suggested_approach}</p>
-                                </div>
-                                {synthesis.red_flags?.length > 0 && (
-                                  <div className="mb-2">
-                                    <strong className="small text-danger">Red Flags</strong>
-                                    <ul className="small mb-1">
-                                      {synthesis.red_flags.map((r: string, i: number) => <li key={i}>{r}</li>)}
-                                    </ul>
-                                  </div>
-                                )}
-                                {intel.ai_recommended_focus?.length > 0 && (
-                                  <div>
-                                    <strong className="small">Focus Areas</strong>
-                                    <div className="d-flex flex-wrap gap-1 mt-1">
-                                      {intel.ai_recommended_focus.map((f: string) => (
-                                        <StatusBadge key={f} label={f} tone="primary" />
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </details>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </SectionCard>
-                </div>
-              );
-            })
-          )}
-        </div>
+      {activeTab === 'strategy' && lead && (
+        <LeadStrategyPrep leadId={lead.id} />
       )}
 
       {activeTab === 'journey' && (

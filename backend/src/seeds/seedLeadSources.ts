@@ -189,6 +189,11 @@ const SEEDS: SeedSource[] = [
           // to prevent. A phone number nobody can dial is worse than not asking.
           phone: 'phone',
           city_state: 'metadata.city_state',
+          // The opening line of the interview, in their words. Mapped so it
+          // reaches the lead row rather than living only in the conversation -
+          // somebody who submits the form and closes the tab before the
+          // interview starts has still told us the most useful thing.
+          message: 'metadata.message',
           consent_contact: 'consent_contact',
           page_url: 'metadata.page_url',
         },
@@ -216,6 +221,56 @@ const SEEDS: SeedSource[] = [
           page_url: 'metadata.page_url',
         },
         required_fields: ['email'],
+      },
+      {
+        // /learn-free/. NOT an application and NOT an account: the free training is
+        // delivered by refactored.ai on its own Auth0 sign-in, so this captures only
+        // "tell me when scholarships open" from somebody who is starting today.
+        //
+        // Deliberately separate from `scholarship_interest`. Someone who has begun the
+        // free training is a materially different person from someone who has only
+        // registered interest, and collapsing the two would lose exactly the signal that
+        // makes an application worth reading.
+        slug: 'free_training_interest',
+        name: 'Free Training Interest',
+        page: '/learn-free',
+        form_name: 'free-training-interest',
+        description: 'Keep-me-posted capture on the free training page',
+        field_map: {
+          name: 'name',
+          email: 'email',
+          city_state: 'metadata.city_state',
+          consent_contact: 'consent_contact',
+          page_url: 'metadata.page_url',
+        },
+        required_fields: ['email'],
+      },
+      {
+        // /scholarships/, the voice door beside the written interview.
+        //
+        // Phone AND email are both required because `request_callback` refuses
+        // without either: the phone is what it dials, the email is how the lead
+        // resolves idempotently. Making them optional here would produce a form
+        // that submits happily and never rings.
+        //
+        // A row here is only half of it - the call fires from a RoutingRule, seeded
+        // in seedRoutingRules.ts, and speaks with the prompt in
+        // services/cpn/scholarshipCallPrompt.ts. All three, or nothing happens.
+        slug: 'scholarship_interview_call',
+        name: 'Scholarship Interview Call',
+        page: '/scholarships',
+        form_name: 'scholarship-interview-call',
+        description: 'Request an AI voice interview about a scholarship',
+        field_map: {
+          name: 'name',
+          email: 'email',
+          phone: 'phone',
+          city_state: 'metadata.city_state',
+          message: 'metadata.message',
+          consent_contact: 'consent_contact',
+          page_url: 'metadata.page_url',
+        },
+        required_fields: ['email', 'phone'],
       },
       {
         // /support/. Named `champion_interest` rather than `donor_interest`

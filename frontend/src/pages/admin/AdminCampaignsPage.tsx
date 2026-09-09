@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 import Modal from '../../components/ui/Modal';
-import CampaignGraphTab from '../../components/admin/intelligence/entityPanel/CampaignGraphTab';
+import OutreachJourneyFlow from '../../components/admin/campaigns/journey/OutreachJourneyFlow';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal, TrustLevel } from '../../components/admin/shell/trust';
 
@@ -76,7 +76,18 @@ function AdminCampaignsPage() {
     sequence_id: '',
     budget_total: '',
     ai_system_prompt: '',
+    brand_id: '',
   });
+  /**
+   * Brands a campaign can be created under.
+   *
+   * Chosen at creation because it cannot be inferred later: nothing else on a
+   * campaign says which identity it belongs to, which is why every campaign made
+   * before this shipped is either the August tenancy backfill's default or
+   * unattributed, and why the brand filter on the journey chart had nothing to
+   * separate.
+   */
+  const [brands, setBrands] = useState<Array<{ id: string; name: string }>>([]);
   const [triggerRules, setTriggerRules] = useState<{ signal_type: string; min_count: number }[]>([]);
   const [triggerSettings, setTriggerSettings] = useState({
     min_intent_score: 45,
@@ -111,6 +122,13 @@ function AdminCampaignsPage() {
 
   useEffect(() => {
     Promise.all([fetchCampaigns(), fetchSequences()]).finally(() => setLoading(false));
+    // Non-blocking: a brand list that fails to load leaves the selector empty and
+    // the campaign unattributed, which is the pre-existing behaviour rather than a
+    // broken form.
+    api
+      .get('/api/admin/campaigns/assignable-brands')
+      .then((res) => setBrands(res.data?.brands ?? []))
+      .catch((err) => console.error('Failed to load assignable brands:', err));
   }, [fetchCampaigns, fetchSequences]);
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -120,6 +138,10 @@ function AdminCampaignsPage() {
         ...form,
         budget_total: form.budget_total ? parseFloat(form.budget_total) : null,
         sequence_id: form.sequence_id || null,
+        // Omitted rather than sent empty: the server treats a blank id as "no
+        // brand", and sending '' would look like a caller naming a brand that
+        // does not exist.
+        brand_id: form.brand_id || null,
       };
 
       if (form.type === 'behavioral_trigger') {
@@ -131,7 +153,7 @@ function AdminCampaignsPage() {
 
       await api.post('/api/admin/campaigns', payload);
       setShowModal(false);
-      setForm({ name: '', description: '', type: 'cold_outbound', sequence_id: '', budget_total: '', ai_system_prompt: '' });
+      setForm({ name: '', description: '', type: 'cold_outbound', sequence_id: '', budget_total: '', ai_system_prompt: '', brand_id: '' });
       setTriggerRules([]);
       setTriggerSettings({ min_intent_score: 45, require_all_rules: true, cooldown_hours: 72, auto_start_chat: false, exclude_identified: false });
       fetchCampaigns();
@@ -260,21 +282,12 @@ function AdminCampaignsPage() {
         </li>
       </ul>
 
-      {/* Campaign Intelligence Graph — full viewport */}
-      {activeTab === 'intelligence' && (
-        <div style={{ height: 'calc(100vh - 220px)', minHeight: 400 }}>
-          <SectionCard
-            title="Campaign Intelligence Graph"
-            actions={<span className="text-muted" style={{ fontSize: '0.65rem' }}>Click nodes for details</span>}
-            padded={false}
-            className="d-flex flex-column"
-          >
-            <div className="p-0" style={{ flex: '1 1 0', minHeight: 0, height: '100%' }}>
-              <CampaignGraphTab fullWidth />
-            </div>
-          </SectionCard>
-        </div>
-      )}
+      {/* Outreach Journey Flow.
+          Brings its own SectionCard and its own controls, so the fixed-height
+          viewport wrapper the force graph needed is gone: a Sankey plus its table,
+          KPI strip and insight rail is a page that scrolls, not a canvas that must
+          be sized to the window. */}
+      {activeTab === 'intelligence' && <OutreachJourneyFlow />}
 
       {/* Campaign List Tab */}
       {activeTab === 'campaigns' && (
@@ -393,6 +406,26 @@ function AdminCampaignsPage() {
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
+          </div>
+          <div className="mb-3">
+            <label htmlFor="camp-brand" className="form-label">Brand</label>
+            <select
+              id="camp-brand"
+              className="form-select"
+              value={form.brand_id}
+              onChange={(e) => setForm({ ...form, brand_id: e.target.value })}
+              disabled={brands.length === 0}
+            >
+              <option value="">Unattributed</option>
+              {brands.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+            <div className="form-text">
+              {brands.length === 0
+                ? 'No brands are configured, so this campaign will be unattributed.'
+                : 'Who this campaign sends as. Drives the brand filter on the Outreach Journey Flow.'}
+            </div>
           </div>
           <div className="row">
             <div className="col-md-6 mb-3">

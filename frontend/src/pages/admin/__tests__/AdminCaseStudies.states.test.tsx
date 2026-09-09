@@ -4,7 +4,9 @@ import AdminCaseStudiesPage from '../AdminCaseStudiesPage';
 import AdminCaseStudyDetailPage from '../AdminCaseStudyDetailPage';
 import * as adminApi from '../../../services/caseStudyAdminApi';
 import { CASE_STUDY_CONTROLS } from '../../../components/admin/caseStudy/caseStudyDesk';
-import { ALL_LINKS, NAV_GROUPS, sectionForPath } from '../../../components/Layout/adminNav';
+import {
+  ALL_LINKS, NAV_GROUPS, sectionForPath, UNLISTED_PATH_SECTIONS,
+} from '../../../components/Layout/adminNav';
 import * as H from '../__fixtures__/domHarness';
 import * as F from '../__fixtures__/caseStudyAdminFixtures';
 import { installCaseStudyApiMocks } from '../__fixtures__/caseStudyApiMocks';
@@ -273,15 +275,23 @@ describe('AdminCaseStudyDetailPage — a private repository is never named in a 
 });
 
 /**
- * THE NAV ENTRY IS LOAD-BEARING, NOT DECORATION.
+ * THE SECTION IS LOAD-BEARING, NOT THE NAV ENTRY.
  *
- * `sectionForPath` returns null for a path with no nav entry, which hides the
- * link AND makes `ProtectedRoute` bounce every section-scoped identity, while a
- * legacy admin typing the URL still gets a working page — a surface that
- * half-works and looks fine. The section must also match the backend's
- * `mgmtSectionGate`, which maps `/api/admin/case-studies` to `program`.
+ * `sectionForPath` returns null for a path classified by NEITHER a nav entry
+ * nor UNLISTED_PATH_SECTIONS, which makes `ProtectedRoute` bounce every
+ * section-scoped identity while a legacy admin typing the URL still gets a
+ * working page — a surface that half-works and looks fine. The section must
+ * also match the backend's `mgmtSectionGate`, which maps
+ * `/api/admin/case-studies` to `program`.
+ *
+ * REVISED 2026-09-08: Case Studies moved out of the Program nav group and
+ * became a tab on the Accelerator page. That makes the classification MORE
+ * important, not less — the sidebar entry that used to supply it is gone, so
+ * the path now depends entirely on its UNLISTED_PATH_SECTIONS row. These tests
+ * therefore assert the section (which must not change) separately from the nav
+ * placement (which deliberately did).
  */
-describe('adminNav — /admin/case-studies is registered under the right section', () => {
+describe('adminNav — /admin/case-studies keeps its section after leaving the sidebar', () => {
   it('resolves to the same section the backend gate uses', () => {
     expect(sectionForPath('/admin/case-studies')).toBe('program');
   });
@@ -290,21 +300,89 @@ describe('adminNav — /admin/case-studies is registered under the right section
     expect(sectionForPath(`/admin/case-studies/${ID}`)).toBe('program');
   });
 
-  it('appears in the Program group with a RemixIcon name carrying no ri- prefix', () => {
+  it('is no longer a sidebar entry — it lives on the Accelerator page', () => {
     const program = NAV_GROUPS.find((g) => g.label === 'Program');
-    const link = program?.links.find((l) => l.path === '/admin/case-studies');
-    expect(link).toBeDefined();
-    expect(link?.label).toBe('Case Studies');
-    expect(link?.icon).not.toMatch(/^ri-/);
-    expect(link?.icon).toBe('award-line');
+    expect(program?.links.some((l) => l.path === '/admin/case-studies')).toBe(false);
+    expect(ALL_LINKS.some((l) => l.path === '/admin/case-studies')).toBe(false);
   });
 
-  it('is reachable by a program-scoped identity and invisible to a sales one', () => {
-    const link = ALL_LINKS.find((l) => l.path === '/admin/case-studies');
-    expect(link?.section).toBe('program');
+  it('is still classified despite having no nav entry', () => {
+    // This is the exact regression the file header warns about: drop the nav
+    // entry and forget the UNLISTED row, and every scoped identity is bounced
+    // off a page the API would have served.
+    const unlisted = UNLISTED_PATH_SECTIONS.find(([p]) => p === '/admin/case-studies');
+    expect(unlisted).toBeDefined();
+    expect(unlisted?.[1]).toBe('program');
+  });
+
+  it('does not leak into a sales-scoped identity', () => {
     const salesCanSee = ALL_LINKS
       .filter((l) => l.section === 'leads')
       .some((l) => l.path === '/admin/case-studies');
     expect(salesCanSee).toBe(false);
+  });
+});
+
+/**
+ * The four other surfaces folded into the Accelerator page on the same day.
+ * Grouped here because they share one failure mode and one fix.
+ */
+describe('adminNav — every surface folded into the Accelerator page stays classified', () => {
+  const FOLDED_IN = [
+    '/admin/community-roles',
+    '/admin/cert-prep',
+    '/admin/case-studies',
+    '/admin/projects',
+    '/admin/feed-control-governance',
+    // Became the Curriculum page's Architecture Skills tab in the same pass.
+    '/admin/cape-settings',
+  ];
+
+  it.each(FOLDED_IN)('%s resolves to program', (path) => {
+    expect(sectionForPath(path)).toBe('program');
+  });
+
+  it.each(FOLDED_IN)('%s has no sidebar entry', (path) => {
+    expect(ALL_LINKS.some((l) => l.path === path)).toBe(false);
+  });
+
+  it('keeps Orchestration reachable at its original path under its new label', () => {
+    // The label changed to "Curriculum"; the PATH must not, or every existing
+    // deep link, bookmark and ?tab= link into the Composer breaks.
+    const link = ALL_LINKS.find((l) => l.path === '/admin/orchestration');
+    expect(link).toBeDefined();
+    expect(link?.label).toBe('Curriculum');
+    expect(sectionForPath('/admin/orchestration')).toBe('program');
+  });
+});
+
+/**
+ * Enterprise Intelligence moved between nav GROUPS. Grouping is presentation;
+ * the section is authorization. This asserts the move carried the first and not
+ * the second — the failure it guards against is subtle and silent, because the
+ * link would still render, just for the wrong set of identities.
+ */
+describe('adminNav — /admin/brain changes group without changing access', () => {
+  it('now appears under Intelligence rather than Program', () => {
+    const intelligence = NAV_GROUPS.find((g) => g.label === 'Intelligence');
+    const program = NAV_GROUPS.find((g) => g.label === 'Program');
+    expect(intelligence?.links.some((l) => l.path === '/admin/brain')).toBe(true);
+    expect(program?.links.some((l) => l.path === '/admin/brain')).toBe(false);
+  });
+
+  it('KEEPS the program section its API gate enforces, not the new group default', () => {
+    // mgmtSectionGate maps /api/admin/brain to 'program'. Letting this inherit
+    // the Intelligence group's section would make the nav and the API disagree
+    // about who may open the page.
+    expect(sectionForPath('/admin/brain')).toBe('program');
+    expect(ALL_LINKS.find((l) => l.path === '/admin/brain')?.section).toBe('program');
+  });
+
+  it('is not granted to an identity holding only intelligence', () => {
+    const canIntelligenceOnly = (s: string) => s === 'intelligence';
+    const reachable = ALL_LINKS
+      .filter((l) => !!l.section && canIntelligenceOnly(l.section))
+      .map((l) => l.path);
+    expect(reachable).not.toContain('/admin/brain');
   });
 });

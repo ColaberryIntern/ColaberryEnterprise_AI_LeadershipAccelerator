@@ -105,6 +105,7 @@ export const BAND: Record<string, Visual> = {
   badge: { kind: 'milestone', color: '#5BA63C' },
   streak: { kind: 'milestone', color: '#E8920C' },
   setup_lab: { kind: 'setuplab', color: '#D97757' },   // Claude Code enablement lab (dark, get-unblocked)
+  claude_studio: { kind: 'lab', color: '#6C5CE7' },   // Claude Studio — Claude.ai four-stage loop (violet, NOT the coral Claude Code spine)
   architect_mindset: { kind: 'timemachine', color: '#367895' },   // The Architect Time Machine (cinematic decision simulation)
 };
 export const visualFor = (band: string): Visual => BAND[band] || { kind: 'reading', color: '#367895' };
@@ -112,6 +113,13 @@ export const visualFor = (band: string): Visual => BAND[band] || { kind: 'readin
 // Curriculum types that run IN Claude Code — the tile shows a "Claude Code" corner
 // strip so a student knows they'll need Claude Code open to complete the activity.
 export const CLAUDE_CODE_TYPES = new Set(['setup_lab', 'prompt_lab', 'implementation_task', 'artifact_submission']);
+
+// Curriculum types that run in CLAUDE.AI (conversations / Projects / Artifacts)
+// rather than in Claude Code. Deliberately a separate strip in a separate colour:
+// a student glancing at the week needs to know which of the two tools an
+// activity needs, and "Claude Code" on a card that never opens a terminal is
+// the confusion this whole type exists to remove.
+export const CLAUDE_AI_TYPES = new Set(['claude_studio']);
 
 const KIND_GRADIENT: Record<Kind, string> = {
   video: 'linear-gradient(135deg,#367895,#2E6A86)',
@@ -402,6 +410,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
     >
       {watermark}
       {CLAUDE_CODE_TYPES.has(card.type) && <span className="mt-ribbon" style={{ background: 'linear-gradient(90deg,#D97757,#C4633A)' }}>Claude Code</span>}
+      {CLAUDE_AI_TYPES.has(card.type) && <span className="mt-ribbon" style={{ background: 'linear-gradient(90deg,#6C5CE7,#5546C9)' }}>Claude.ai</span>}
       {card.type === 'testimonial' && <span className="mt-ribbon">Testimonial</span>}
       {card.type === 'podcast' && <span className="mt-ribbon">Podcast</span>}
       {card.type === 'blog' && <span className="mt-ribbon blue">Blog</span>}

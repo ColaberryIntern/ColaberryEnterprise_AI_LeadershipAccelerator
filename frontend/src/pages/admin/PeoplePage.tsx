@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import api from '../../utils/api';
 import { PageHeader, SectionCard } from '../../components/admin/shell';
 import { fromDrilldownUrl } from '../../adminOs/drilldown';
@@ -157,7 +157,11 @@ export default function PeoplePage() {
                 <tbody>
                   {roster.rows.map((p) => (
                     <tr key={p.email}>
-                      <td>{p.name || <span className="text-muted">Unknown</span>}</td>
+                      <td>
+                        <Link to={`/admin/people/${encodeURIComponent(p.email)}`}>
+                          {p.name || <span className="text-muted">Unknown</span>}
+                        </Link>
+                      </td>
                       <td className="text-muted small">{p.email}</td>
                       <td>
                         <span className="badge text-bg-light">

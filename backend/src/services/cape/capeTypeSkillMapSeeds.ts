@@ -45,7 +45,11 @@ export const POLICY_GROUPS: Record<PolicyGroup, string[]> = {
   intelligence: ['ai_news_flash', 'ai_research_digest', 'ai_tool_of_the_day', 'ai_video_stream', 'ai_quote_of_the_day', 'ai_architecture_breakdown', 'build_breakdown', 'mcp_server_spotlight', 'claude_code_technique', 'market_intelligence'],
   checks: ['knowledge_check', 'survey', 'question', 'evaluation', 'certification_exercise'],
   prompt_build: ['prompt_lab', 'prompt_challenge', 'implementation_task', 'setup_lab', 'artifact_submission', 'project_task', 'build_story', 'internship_activity'],
-  judgment: ['reflection', 'architect_mindset', 'ai_video_feedback', 'mock_interview', 'presentation', 'demo'],
+  // claude_studio belongs here, not in prompt_build: a Claude Studio produces a
+  // reasoned, defended artifact (rubric = reasoning / evidence / communication /
+  // judgment / responsible AI), and grouping it with the Claude Code build spine
+  // would blur exactly the build-vs-think distinction the type exists to draw.
+  judgment: ['reflection', 'architect_mindset', 'ai_video_feedback', 'mock_interview', 'presentation', 'demo', 'claude_studio'],
   community: ['discussion', 'community_discussion', 'study_session', 'community_live_session'],
   delivery_events: ['live_class', 'event', 'demo_tuesday', 'kes_wednesday', 'marketing_friday'],
   system: ['milestone', 'achievement', 'daily_streak', 'completion_badge'],

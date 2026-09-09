@@ -48,6 +48,23 @@ jest.mock('../managerReliabilityIntentService', () => ({
   toPendingConfirmation: jest.fn(),
   applyConfirmedReliabilityChange: jest.fn(),
 }));
+// Capability 8 — managerGoalIntentService.ts transitively imports
+// agentGoalService.ts, which imports AiAgent/AdminUser/AgentGoal model
+// classes directly plus trustMetricsService/liveAgentsService. Same
+// isolation reasoning as the reliability mock above: this file only needs
+// "not a goal-change message" for its own unrelated test messages.
+jest.mock('../managerGoalIntentService', () => ({
+  detectChangeGoalIntent: jest.fn(() => null),
+  buildGoalConfirmationCardText: jest.fn(() => ''),
+  toPendingGoalConfirmation: jest.fn(),
+  applyConfirmedGoalChange: jest.fn(),
+}));
+jest.mock('../managerOneOnOneIntentService', () => ({
+  detectScheduleOneOnOneIntent: jest.fn(() => null),
+  buildOneOnOneConfirmationCardText: jest.fn(() => ''),
+  toPendingOneOnOneConfirmation: jest.fn(),
+  applyConfirmedOneOnOneSchedule: jest.fn(),
+}));
 // Same isolation reasoning as managerReliabilityIntentService above —
 // agentWorkStatusIntentService.ts imports Ticket/AdminUser model classes
 // directly; mocked wholesale here since this file only needs "not a
@@ -55,6 +72,14 @@ jest.mock('../managerReliabilityIntentService', () => ({
 jest.mock('../agentWorkStatusIntentService', () => ({
   detectWorkStatusQuery: jest.fn(() => null),
   buildWorkStatusReply: jest.fn(),
+}));
+jest.mock('../agentUncertaintyIntentService', () => ({
+  detectUncertaintyQuery: jest.fn(() => false),
+  buildUncertaintyReply: jest.fn(),
+}));
+jest.mock('../agentInterventionIntentService', () => ({
+  detectInterventionIntentQuery: jest.fn(() => null),
+  buildInterventionIntentReply: jest.fn(),
 }));
 
 import { getInstrumentedOpenAI } from '../openaiInstrumented';

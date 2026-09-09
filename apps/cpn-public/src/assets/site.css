@@ -43,21 +43,22 @@
  * ---------------------------------------------------------------------------
  */
 
-@import url('design/colors.css');
-@import url('design/typography.css');
-@import url('design/spacing.css');
-@import url('design/motion.css');
-@import url('design/base.css');
+/* The design system is vendored from its own repository by
+   backend/src/scripts/syncDesignSystems.js. Import its published entry point rather
+   than individual token files: styles.css declares the order the design system
+   itself depends on (fonts, tokens, base, components), and following it means a
+   reorganisation upstream cannot silently drop a stylesheet from this build. */
+@import url('design/styles.css');
 
 /* The design system switches themes on an attribute (`data-theme="dark"`), which needs a
    deliberate choice somewhere. This site has no theme control and no JavaScript to set
    one, so it honours the reader's OS preference instead.
 
-   These values MIRROR the `[data-theme="dark"]` block in design/colors.css. They are
+   These values MIRROR the `[data-theme="dark"]` block in design/tokens/colors.css. They are
    duplicated because CSS cannot alias one selector's declarations to another - if that
    file's dark set changes, change this too. The attribute still wins where it is set.
 
-   Kept here rather than in design/colors.css so that file stays a pristine copy of the
+   Kept here rather than in design/tokens/colors.css so that file stays a pristine copy of the
    upstream export and can be re-vendored without losing this. Same placement, and same
    reasoning, as the AI Flotation site. */
 @media (prefers-color-scheme: dark) {
@@ -794,6 +795,91 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
 .status { margin-top: var(--space-4); font-size: var(--fs-caption); min-height: 1.4rem; }
 .status[data-state="ok"] { color: var(--success); }
 .status[data-state="error"] { color: var(--danger); }
+
+/* ---------------------------------------------------------------------------
+   The voice door. Same weight as the written interview beside it, because the
+   decision was that voice is an equal option rather than a fallback - so it is
+   not a smaller, greyer box under the "real" one.
+   --------------------------------------------------------------------------- */
+.voice-door {
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 8px);
+  padding: var(--space-8);
+  box-shadow: var(--shadow);
+  max-width: var(--measure);
+  margin-top: var(--space-8);
+}
+.voice-door h2 { font-size: var(--fs-h3); margin: var(--space-4) 0 var(--space-3); }
+/* The form inside is already a card; nested chrome would read as a box in a box. */
+.voice-door .intake {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  margin-top: var(--space-6);
+  max-width: none;
+}
+
+/* ---------------------------------------------------------------------------
+   The scholarship interview.
+
+   Deliberately NOT styled as a messaging app. No avatars, no bubbles with tails,
+   no typing dots. This is a person telling a nonprofit what they want to do with
+   their life, and dressing it as a chat client makes it feel less consequential
+   than it is. Two clearly attributed columns of text, and a reply box.
+   --------------------------------------------------------------------------- */
+.interview {
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 8px);
+  padding: var(--space-8);
+  box-shadow: var(--shadow);
+  max-width: var(--measure);
+  margin-top: var(--space-6);
+}
+.interview h2 { font-size: var(--fs-h3); margin: var(--space-4) 0 var(--space-3); }
+.interview > .note { margin-bottom: var(--space-6); }
+
+.iv-log { display: flex; flex-direction: column; gap: var(--space-4); }
+.iv-log:empty { display: none; }
+
+.iv-turn { display: flex; flex-direction: column; gap: var(--space-1); }
+.iv-turn p { margin: 0; max-width: none; }
+
+/* Attribution is a label, not a colour: it has to survive greyscale, and it has
+   to be read out rather than inferred from which side a bubble sits on. */
+.iv-who {
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.iv-assistant .iv-who { color: var(--accent); }
+.iv-user p {
+  background: var(--accent-soft);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+}
+.iv-thinking p { color: var(--fg-muted); font-style: italic; }
+
+.iv-form { margin-top: var(--space-6); }
+.iv-label {
+  /* Present for a screen reader, absent for everyone else: the placeholder and
+     the conversation above it already say what this box is for. */
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.iv-send { margin-top: var(--space-4); width: 100%; }
+.iv-send:disabled { opacity: 0.55; cursor: progress; }
+.iv-note:not(:empty) {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+}
 
 /* ---------------------------------------------------------------------------
    Closing block. A tinted panel, from the prototype's final call to action.

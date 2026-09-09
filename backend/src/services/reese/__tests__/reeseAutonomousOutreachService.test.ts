@@ -21,6 +21,7 @@ jest.mock('../reeseSignalService', () => ({
 jest.mock('../reeseOutreachMessageService', () => ({ generateOutreachMessage: jest.fn() }));
 jest.mock('../reeseInitiateDmService', () => ({ initiateDm: jest.fn() }));
 jest.mock('../resolveStudentDisplayName', () => ({ resolveStudentDisplayName: jest.fn() }));
+jest.mock('../outreachChecklist', () => ({ createOutreachChecklistInstance: jest.fn() }));
 
 import ReeseOutreach from '../../../models/ReeseOutreach';
 import { createTicket } from '../../ticketService';
@@ -35,6 +36,7 @@ import {
 import { generateOutreachMessage } from '../reeseOutreachMessageService';
 import { initiateDm } from '../reeseInitiateDmService';
 import { resolveStudentDisplayName } from '../resolveStudentDisplayName';
+import { createOutreachChecklistInstance } from '../outreachChecklist';
 import { runReeseAutonomousOutreachSweep, countAutonomousSendsToday, DAILY_SEND_CAP } from '../reeseAutonomousOutreachService';
 
 const mockReeseOutreachCount = ReeseOutreach.count as unknown as jest.Mock;
@@ -50,6 +52,7 @@ const mockEvaluateAnomaly = evaluateBehaviorAnomalySignal as unknown as jest.Moc
 const mockGenerateMessage = generateOutreachMessage as unknown as jest.Mock;
 const mockInitiateDm = initiateDm as unknown as jest.Mock;
 const mockResolveStudentDisplayName = resolveStudentDisplayName as unknown as jest.Mock;
+const mockCreateOutreachChecklistInstance = createOutreachChecklistInstance as unknown as jest.Mock;
 
 const STUDENT_ID = 'd6a4b017-6716-4673-96b5-ab3074b70191'; // real-shaped UUID — the exact defect Ali flagged live
 const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
@@ -70,6 +73,7 @@ beforeEach(() => {
   mockGenerateMessage.mockResolvedValue('Real, unique outreach message.');
   mockInitiateDm.mockResolvedValue({ roomId: 'room-1', messageId: 'msg-1' });
   mockResolveStudentDisplayName.mockResolvedValue('Jordan Rivera');
+  mockCreateOutreachChecklistInstance.mockResolvedValue({ id: 'checklist-1' });
 });
 
 describe('runReeseAutonomousOutreachSweep — happy path', () => {
@@ -235,6 +239,41 @@ describe('runReeseAutonomousOutreachSweep — the required boundaries', () => {
     expect(result.sent).toBe(1);
     expect(mockInitiateDm).toHaveBeenCalled();
     expect(mockAuthorizeTicketDispatch).toHaveBeenCalledWith(expect.objectContaining({ riskTier: 'R3' }));
+  });
+
+  it('ordering fix (2026-09-07): governance is evaluated BEFORE the real send, never after — the anti-pattern the mission text flags by name', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+
+    await runReeseAutonomousOutreachSweep(false);
+
+    expect(mockAuthorizeTicketDispatch).toHaveBeenCalled();
+    expect(mockInitiateDm).toHaveBeenCalled();
+    const authorizeCallOrder = mockAuthorizeTicketDispatch.mock.invocationCallOrder[0];
+    const sendCallOrder = mockInitiateDm.mock.invocationCallOrder[0];
+    expect(authorizeCallOrder).toBeLessThan(sendCallOrder);
+  });
+
+  it('Capability 6: creates a real, observational Outreach checklist instance keyed on the real ticket id, computed AFTER the real send', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+
+    await runReeseAutonomousOutreachSweep(false);
+
+    expect(mockCreateOutreachChecklistInstance).toHaveBeenCalledWith(
+      'ticket-1', 'inactivity', expect.any(String), 'Real, unique outreach message.', expect.any(Date),
+    );
+    const sendCallOrder = mockInitiateDm.mock.invocationCallOrder[0];
+    const checklistCallOrder = mockCreateOutreachChecklistInstance.mock.invocationCallOrder[0];
+    expect(sendCallOrder).toBeLessThan(checklistCallOrder); // observational only — never computed before the send
+  });
+
+  it('fail-open: an Outreach checklist bookkeeping failure never breaks a real send that already succeeded', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+    mockCreateOutreachChecklistInstance.mockRejectedValue(new Error('DB write failed'));
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(result.sent).toBe(1);
+    expect(mockInitiateDm).toHaveBeenCalled();
   });
 
   it('no signal fires for an eligible student -> skipped, no send, no error', async () => {

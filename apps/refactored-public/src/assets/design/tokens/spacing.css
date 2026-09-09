@@ -1,0 +1,22 @@
+/* Spacing and radius tokens. Four-pixel base radius per the design direction: flat,
+   bordered surfaces, minimal shadow. Pills are reserved for compact statuses only. */
+:root {
+  --space-3xs: 0.25rem;
+  --space-2xs: 0.5rem;
+  --space-xs: 0.75rem;
+  --space-s: 1rem;
+  --space-m: 1.5rem;
+  --space-l: 2.25rem;
+  --space-xl: 3.5rem;
+  --space-2xl: 5rem;
+  --space-3xl: 7rem;
+
+  --radius: 4px;
+  --radius-pill: 999px;
+
+  --wrap: 76rem;
+  --wrap-narrow: 52rem;
+
+  /* Every interactive target clears 44px. */
+  --tap: 44px;
+}

@@ -274,3 +274,31 @@
   border: var(--border-1) solid color-mix(in srgb, var(--text-on-inverse) 18%, transparent);
   border-radius: var(--radius-lg);
 }
+
+/* ------------------------------------------------------- walkthrough video --- */
+
+/* The walkthrough player IN THE MASTHEAD, in the slot the cover image otherwise holds.
+
+   It inherits `.cbv2-story__cover`'s placement, so the hero grid is unchanged and a
+   record without a walkthrough is untouched. Only the picture itself differs: a video
+   needs a fixed 16:9 box rather than an image's intrinsic height, or the masthead reflows
+   the moment the poster loads. */
+.cbv2-story__cover--video { display: grid; gap: 0.6rem; }
+.cbv2-story__walkthrough-player {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  /* The poster is a frame of the video, so it fills the box like the video it stands in
+     for rather than being letterboxed inside its own frame. */
+  object-fit: cover;
+  background: #11161a;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+.cbv2-story__walkthrough-note {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  /* On the masthead's dark ground, not the light body. */
+  color: rgba(255, 255, 255, 0.72);
+}
