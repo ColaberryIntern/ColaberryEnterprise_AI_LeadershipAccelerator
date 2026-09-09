@@ -557,6 +557,70 @@
     root.appendChild(s);
   }
 
+  /* ====================== KEEP READING: OTHER RECORDS ========================
+     Ali, 2026-09-08: "show other related project at the end of the Case Study's
+     so they can continue looking through related case studys. This should be at
+     the bottom and only include Case Studys that can be shown on their
+     respective site."
+
+     THE SURFACE IS THE FILTER, and it is the server's, not a guess made here.
+     The same list endpoint the index uses is asked for THIS surface, so a
+     record that is not published to this brand cannot appear - which is the
+     whole of "only Case Studys that can be shown on their respective site".
+
+     Fetched SEPARATELY and appended when it arrives. The record must not wait
+     on it: if this request is slow or fails, the reader still gets the record,
+     and the page simply ends where it used to.
+     ======================================================================== */
+
+  function relatedBand(items, currentSlug) {
+    var others = (items || []).filter(function (r) { return r.slug !== currentSlug; });
+    if (!others.length) return null;
+    /* Three at most. This is an invitation to keep reading, not a second index -
+       the index is one click away and is where a reader goes to browse. */
+    others = others.slice(0, 3);
+
+    var sec = el('section', 'cs-band cs-related');
+    sec.id = 'related';
+    sec.appendChild(el('h2', 'cs-band-title', 'Keep reading'));
+    var ul = el('ul', 'cs-related-list');
+    others.forEach(function (r) {
+      var li = el('li', 'cs-related-item');
+      var a = document.createElement('a');
+      a.className = 'cs-related-link';
+      a.href = INDEX_PATH.replace(/\/+$/, '') + '/' + encodeURIComponent(r.slug) + '/';
+      if (r.heroImageUrl) {
+        var img = document.createElement('img');
+        img.src = r.heroImageUrl;
+        /* Decorative: the title is in the same link, so announcing both would
+           read the record's name twice. */
+        img.alt = '';
+        img.loading = 'lazy';
+        a.appendChild(img);
+      }
+      var body = el('div', 'cs-related-body');
+      if (r.primaryCapability) body.appendChild(el('p', 'cs-related-meta', humanize(r.primaryCapability)));
+      body.appendChild(el('h3', 'cs-related-title', r.title));
+      if (r.standfirst) body.appendChild(el('p', 'cs-related-note', r.standfirst));
+      a.appendChild(body);
+      li.appendChild(a);
+      ul.appendChild(li);
+    });
+    sec.appendChild(ul);
+    return sec;
+  }
+
+  function appendRelated(currentSlug) {
+    fetch(API + '/api/public/case-studies?surface=' + encodeURIComponent(SURFACE) + '&limit=4',
+          { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (body) {
+        var band = body && relatedBand(body.items, currentSlug);
+        if (band) root.appendChild(band);
+      })
+      .catch(function () { /* The record is already on the page. */ });
+  }
+
   var slug = slugFromPath();
   if (!slug) { notFound(); return; }
 
@@ -600,6 +664,10 @@
           root.appendChild(figureNode(a));
         });
       });
+
+      /* Last, and asynchronously: the record is already readable, so a slow
+         or failed list request costs the reader nothing. */
+      appendRelated(c.slug);
     })
     .catch(function () { notFound(); });
 })();

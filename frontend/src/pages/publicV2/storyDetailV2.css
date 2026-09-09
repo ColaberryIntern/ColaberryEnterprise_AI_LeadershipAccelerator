@@ -495,3 +495,69 @@
 /* Repository visibility. Same tag shape as the role beside it, because they are
    the same kind of fact and a second shape would imply a second importance. */
 .cbv2-story__repo-visibility { white-space: nowrap; }
+
+/* ---------- KEEP READING ---------- */
+/* Ali, 2026-09-08: "show other related project at the end of the Case Study's so
+   they can continue looking through related case studys... only include Case
+   Studys that can be shown on their respective site." The surface filter is the
+   server's; this only styles what it returns. Three at most — an invitation to
+   keep reading rather than a second index. */
+.cbv2-story__related {
+  display: grid;
+  gap: var(--space-5);
+  margin-top: var(--space-9);
+  padding-top: var(--space-7);
+  border-top: var(--border-1) solid var(--border-subtle);
+}
+.cbv2-related__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cbv2-related__link {
+  display: grid;
+  gap: var(--space-3);
+  height: 100%;
+  align-content: start;
+  color: inherit;
+  text-decoration: none;
+}
+/* 16/10 and cropped from the top, matching the index cards on all three sites —
+   these are pictures of screens, and a screen puts its heading at the top. */
+.cbv2-related__media {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  object-position: center top;
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+.cbv2-related__body { display: grid; gap: var(--space-2); }
+.cbv2-related__meta {
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-wide);
+  text-transform: uppercase;
+  color: var(--brand-primary);
+}
+.cbv2-related__title {
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold);
+  color: var(--text-strong);
+  line-height: 1.3;
+}
+.cbv2-related__link:hover .cbv2-related__title { text-decoration: underline; }
+.cbv2-related__link:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 3px; }
+.cbv2-related__note {
+  font-size: var(--fs-body-sm);
+  line-height: 1.5;
+  color: var(--text-muted);
+  /* Three lines: a taste of the record, not the record. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
