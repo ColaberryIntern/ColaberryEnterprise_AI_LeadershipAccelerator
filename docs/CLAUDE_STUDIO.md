@@ -250,6 +250,28 @@ All four suites run without a database and are therefore inside the CI gate.
 
 ---
 
+## Status
+
+**Live on production since 2026-09-08**, 13 cards seeded on `accelerator_prod` under program
+`92b98a72`. Verified in the live database (not from the seed's own output): 13 cards / weeks
+0-12 / all published / no duplicates / re-run gives `0 created, 13 updated` / 4 stages, 3
+prompts and the `data-claude-studio="1"` marker on all 13 / `data-cert-active` = 0 for weeks
+0-6 and 1 for 7-12.
+
+Three defects were found by a human opening the card in a browser, and **none of them by any
+automated check** — worth remembering when the next type ships:
+
+1. **The card title printed twice** in the workspace (chrome header + the renderer's own `<h2>`).
+2. **The intro landed three times** on the way in (tile description → card body → restated by
+   the scenario). The body no longer prints it when a scenario exists.
+3. **Block headings printed twice** on Project and Artifact — `ParsedBlock.html` is innerHTML
+   and already contains the `<h4>`, which was also rendered separately. The render proof counted
+   structure correctly the whole time and was blind to it; it now flags any `<h4>` text
+   appearing more than once, self-tested by injecting a duplicate.
+
+The guided prompt inputs (above) also came from that session: the first version expected students
+to hand-edit `[bracketed]` placeholders after pasting.
+
 ## Known deferred work
 
 - **Thumbnail is an interim banner, not the AI one.** The shipped

@@ -1,16 +1,184 @@
 ---
 name: build-curriculum-type
-description: Build or update ONE Curriculum Type end to end — an Experience Studio "AI Component" (a row in curriculum_type_definitions, backend /api/admin/components/*). From a name + one-line intent it derives the render band, Parts, generation prompt (written against the auto-injected week blueprint), thumbnail, and I/O contracts, then create-or-updates by slug (idempotent), previews against a real week, and approves. Invoke when Ali says "build a curriculum type", "set up the {X} card type", "certify the Experience Studio components", or wants to author/fix a curriculum type fast and accurately.
+description: Build or update ONE Curriculum Type end to end — an Experience Studio "AI Component" (a row in curriculum_type_definitions, backend /api/admin/components/*). From a name + one-line intent it derives the render band, Parts, generation prompt (written against the auto-injected week blueprint), thumbnail, and I/O contracts, then create-or-updates by slug (idempotent), previews against a real week, approves, and promotes to prod via two committed seed files. Invoke when Ali says "build a curriculum type", "set up the {X} card type", "certify the Experience Studio components", or wants to author/fix a curriculum type fast and accurately.
 ---
 
 # build-curriculum-type — the reusable Curriculum Type builder
 
 A **Curriculum Type** = one **AI Component** row in `curriculum_type_definitions`
 (model `backend/src/models/CurriculumTypeDefinition.ts`), authored in the
-**Experience Studio** tab of `/admin/orchestration`. Backend = the "Experience
-Builder": routes `/api/admin/components/*` (`componentController.ts`), services in
-`backend/src/services/components/*`. This skill takes as little as a **name + one
-line of intent** and produces a complete, working, approved component.
+**Experience Studio** tab of `/admin/orchestration`. Backend routes:
+`/api/admin/components/*` (`componentController.ts` + `routes/admin/componentRoutes.ts`);
+services in `backend/src/services/components/*`. This skill takes as little as a
+**name + one line of intent** and produces a complete, working, approved, **promoted**
+component. Everything here is verified against `origin/main` (2026-07-18).
+
+> **This skill was hardened from the real Overview / Self Study / Survey / Reflection
+> builds (7/15–7/18).** The gotchas below are the exact taxes those builds paid. Read
+> "Read this first" before touching anything — it prevents the mistakes that cost the
+> most rework.
+
+---
+
+## Adding a row to `CARD_TYPES` has FIVE obligations, not one
+
+Verified the hard way on 2026-09-08 building `claude_studio`: a new type is not one
+edit. Four of these five are enforced by tests you will not see until CI, and one of
+them (the thumbnail) cannot be deferred at all.
+
+| # | Obligation | Where | What happens if you skip it |
+|---|---|---|---|
+| 1 | Assign a **CAPE §7 policy group** | `services/cape/capeTypeSkillMapSeeds.ts` `POLICY_GROUPS` | `capeTypeSkillMapSeeds.test.ts` **throws at import**: `type "<slug>" is not assigned to any design-doc §7 policy group`. Suite fails to run. |
+| 2 | Bump the **hardcoded registry counts** | `capeTypeSkillMapSeeds.test.ts` (3 literals), `typeRegistry.test.ts` (1) | Count assertions fail (`Expected: 50, Received: 51`). |
+| 3 | Add the `render_band` to **`SUPPORTED_RENDER_BANDS`** | `services/timeline/__tests__/typeRegistry.test.ts` | "every render_band is one the Classroom can render" fails. |
+| 4 | Add the slug to **`THUMBNAIL_SLUGS`** *and* set `thumbnail_url` explicitly on the authored entry | `seeds/seedComponentAuthoring.ts` | The spread-override trap — ships with no thumbnail. |
+| 5 | Put a **real image file on disk** at `frontend/public/thumbnails/curriculum-types/<slug>.jpg` | — | See below. This one is a **CI gate**. |
+
+Also add the band to the frontend `BAND` map in `TimelineCard.tsx`, or
+`curriculumFormatContract.test.ts` (frontend) fails — that is the authoritative
+cross-check that every registry band has an explicit visual.
+
+### `competencies` is a CONTROLLED VOCABULARY, not free text
+
+The ids must be keys of `constants/competencySkillCrosswalk.ts` — today:
+`prompt_engineering, context_engineering, architecture, testing, debugging, deployment,
+github, communication, leadership, security, documentation, claude_code, systems_thinking,
+decision_making, tradeoffs, ai_governance`.
+
+Descriptive-but-invented ids (`problem_framing`, `executive_communication`,
+`responsible_ai`) read beautifully and **map to nothing**. CAPE throws on an unknown id at
+the registry level, so that half gets caught. The dangerous half is per-card / per-content
+competencies, which nothing checks: they write evidence records that look complete and
+credit **zero** skills. If your type ships its own content data, assert its competencies
+against the crosswalk in a test.
+
+### The thumbnail CANNOT be deferred
+
+`seedComponentAuthoring.test.ts` asserts every registry slug has a `thumbnail_url` **and
+that the file exists on disk**, and that suite **is in CI** (`jest.ci.config.ts` is an
+IGNORE-list and it is not on it). So "generate the banner later" is not available — it
+ships a broken hero and a red gate.
+
+The real gpt-image-2 pipeline needs the prod host's `OPENAI_API_KEY` and a paid call, which
+is often a stop condition. When it is, use:
+
+```bash
+node scripts/curriculum-type-thumbnails/makeInterimBanner.js --slug <slug> --accent '#RRGGBB'
+```
+
+It draws a real on-brand 900x300 JPEG locally with `sharp` — same geometry, same Colaberry
+wordmark chip, same JPEG settings as the generated set, so it sits correctly beside them on
+all three thumbnail surfaces. Register the slug's `scene` in `prompts.json` at the same
+time; running the real pipeline later overwrites the file in place with no code change.
+
+---
+
+## Read this first — the five things that bit every prior build
+
+1. **The subsystem lives on `main`, not your feature branch.** The current worktree
+   (`workstream/*`) almost certainly has the *legacy* 18-column model with **no**
+   `render_band` / `generation_prompt` / component routes. Author against **`main`/dev**.
+   Confirm before you start: `git ls-tree -r origin/main --name-only | grep componentController`.
+   If you're probing the dev backend, use the exec pattern in [Execution](#execution).
+
+2. **Slug is an immutable foreign key, and `label` can lie about it.** `timeline_cards.type`,
+   `component_versions.component_slug`, and analytics all key on `slug`. **Never rename a
+   slug** — it orphans real student data. Worse: a type's display name can diverge from its
+   slug. *"Self Study" is slug `warmup`* (`render_band: 'warmup'` too). Always `GET` the slug
+   first and read its real `label`/`student_label` before assuming the type is new.
+
+3. **Shipping a type means committing TWO code files, not one DB write.** A DB edit via
+   `/api/admin/components/*` is dev-local and does not reach prod. See
+   [Durability & promotion](#durability--promotion). Get this wrong and your work silently
+   never ships.
+
+4. **The student sees a ~400px right-side drawer, not a page.** Sandboxed iframe, no JS,
+   token-capped. Preview ≠ the student runtime. New visual *behavior* is **code, not data**.
+   Full details in **[references/render-surface.md](references/render-surface.md)** — read it
+   before you write any `body_html` or design a layout.
+
+5. **Approval is functional, not cosmetic.** `scaffoldPlan` filters the Curriculum Composer
+   to `approved: true` slugs (`composerAi.ts:82`). An unapproved type **cannot be scheduled**.
+
+---
+
+## Data vs. Code — the mental model that saves the most time
+
+| You want to change… | It's… | Where |
+|---|---|---|
+| Title/body wording, Parts, thumbnail, I/O contracts, difficulty, XP | **DATA** (author it) | `curriculum_type_definitions` row → promote to `seedComponentAuthoring.ts` |
+| The student chip label/icon, registry metadata (render_band, flags, competencies) for a canonical type | **DATA re-asserted by CODE on boot** | `typeRegistry.ts` (see [durability](#durability--promotion)) |
+| A brand-new *visual experience* (a reader, a live survey, an interactive panel) | **CODE** | `frontend/.../CardDetailBody.tsx` (+ siblings) — a PR, not a component edit |
+| Whether a week-summary type sees its sibling activities | **CODE** | `SECTION_ROSTER_TYPES` in `sectionCurriculumContext.ts` |
+
+If the type only needs a new generation prompt + Parts + thumbnail over an **existing**
+render band, it's pure authoring (fast). If it needs a render band with no existing
+renderer, flag the code PR as a separate follow-up — do not fake it in `body_html`.
+The render bands that already have a bespoke renderer are listed in
+[references/render-surface.md](references/render-surface.md).
+
+---
+
+## If you write a bespoke renderer that PARSES `body_html`
+
+Two traps, both paid for on 2026-09-08:
+
+- **Do not render an extracted heading AND the html it came from.** If your parser exposes
+  `heading` alongside `html`, and `html` is the block's innerHTML, the `<h4>` is in BOTH.
+  Rendering each prints the heading twice, one line above itself. State the contract on the
+  type ("`heading` is extracted from `html`, NOT removed — render one or the other") and pin
+  it with a test.
+- **Structural counts cannot see repetition.** Counting stages, prompts and inputs all passed
+  while two headings printed twice on every card. If you build a render proof, make it compare
+  the emitted TEXT against itself — e.g. flag any `<h4>` string appearing more than once — and
+  **self-test the detector by injecting a duplicate**. A check that can only ever report "none"
+  proves nothing.
+
+Ask the student's placeholders FOR them, too: authored prompts full of `[describe your role]`
+expect hand-editing after paste, which is easy to skip and fails silently. Offer input fields
+that fill the prompt live, leave unanswered placeholders VISIBLE rather than blank, and keep
+those answers client-side only — they are the student's own words about their own work.
+
+## The visual quality bar — a DISTINCT format + a REAL thumbnail (every type)
+
+Proven on the 10 intelligence-pipeline types (2026-07-20). Two rules that make types
+look intentional instead of interchangeable. Apply them to every type.
+
+**1. Ship a DISTINCT, self-contained styled `body_html` — never a generic `<h3>` list.**
+The generic/`intel` render band renders through `lessonDoc()`, which **preserves `<style>`**
+(only the reader/deepdive path strips it via `stripUnsafe`). So a type can carry its own
+complete look — a news brief, a spec sheet, a pull-quote, a system map — not the same
+seven headings every other type uses. If all your types read alike, this is why.
+- Author each type's **CSS + structure once** in a shared module and reuse it for BOTH the
+  sample content AND the generation prompt. Reference: `backend/src/seeds/intelCardFormats.ts`
+  (`{ style, render(data), sample, structure }` per type) → `sampleBodyFor(slug)` feeds
+  `seedIntelSampleCards.ts`; the same `style` + `structure` feed the generation prompt.
+- The generation prompt says: **"FIRST copy this `<style>` block VERBATIM, then emit the
+  markup using ONLY those classes in exactly this structure: …"** (the Announcement type and
+  all 10 intelligence types do this — the model reliably reproduces a pinned `<style>`).
+- Do **not** repeat the card's plain title as an `<h1>` inside the body — the drawer/workspace
+  chrome already shows `title`. Lead with the format's distinctive element.
+
+**2. Give it a REAL image thumbnail via the gpt-image-2 pipeline — the image IS the branded
+background (like the videos), not a vector/text placeholder.** Pipeline in
+`scripts/curriculum-type-thumbnails/`:
+1. Add `{ "slug", "label", "scene" }` to `prompts.json` — a text-free conceptual scene
+   metaphor (e.g. reflection → "a figure gazing at their reflection in a mirror"). The
+   `style_suffix` supplies the enterprise art direction (navy/teal, coral accent, no text/logos).
+2. Generate on the VPS host where `OPENAI_API_KEY` lives (~$0.06/img):
+   `ssh root@95.216.199.47 'cd /root/thumb-gen && node generateOnHost.js --only <slug>'`
+   (idempotent by output file; capped retries). `scp` the raw PNG back from `/root/thumb-gen/raw/`.
+3. `node scripts/curriculum-type-thumbnails/compositeAndInstall.js --raw <dir>` → center-crops
+   to 3:1, resizes 900×300, stamps the Colaberry wordmark, writes
+   `frontend/public/thumbnails/curriculum-types/<slug>.jpg`.
+
+**Thumbnail gotcha (cost a real bug):** an explicit `COMPONENT_AUTHORING[slug]` entry
+**overrides the `...AI_THUMBNAILS` spread**. So an authored type MUST set
+`thumbnail_url: thumbnailUrlFor(slug)` on its own entry AND have its slug in `THUMBNAIL_SLUGS`,
+or it ships with **no thumbnail** (this is exactly how `community_live_session` shipped blank).
+`seedComponentAuthoring.test.ts` catches it — and that suite **IS in CI** as of the `jest.ci.config.ts` ignore-list rewrite, so a missing thumbnail is a red gate, not a nit. (This line previously said the opposite; it was written under the old allow-list config.)
+
+---
 
 ## What to say to run it
 
@@ -19,114 +187,236 @@ Give me the two required lines; everything else has a sane default I derive.
 1. **name** — e.g. "Overview" (becomes `label`; `slug` = slugified name = the idempotency key).
 2. **intent** — one line: what the student does and why the type exists.
 
-Optionally override any Tier-2/3 field below. I ask only the handful of decisions
-that are genuinely yours (usually: title format, thumbnail, accent color, content shape).
+Optionally override any Tier-2/3 field below. I ask only the handful of decisions that are
+genuinely yours (usually: title format, thumbnail, accent color, content shape).
 
-## The KEY runtime facts (author against these — do not fight them)
+## Inputs
 
-- **The week blueprint is auto-injected.** `runtimePreview(slug, vars, model, programId, week)`
-  calls `getBlueprintContext(programId, week)` (`backend/src/services/timeline/blueprintContext.ts`),
-  which loads that week's `CurriculumBlueprint` and **prepends a "WEEK CONTEXT" block**
-  (title, purpose, learning_objectives, competencies, architect_domains, student_outcomes,
-  success_criteria, difficulty, hours) to the system prompt. So a zero-input type dropped
-  on a week self-generates from that week. **Write `generation_prompt` referencing "the
-  WEEK CONTEXT above", NOT `{{blueprint.*}}` placeholders.** Only `vars` (e.g. topic/week/
-  cohort) flow through `resolvePrompt`'s `{{}}`.
-- **The runtime forces a fixed output JSON schema.** Whatever the generation_prompt says,
-  the runtime asks the model for: `title, summary, body_html, questions[], reflection,
-  discussion_prompt, github_task, evaluation_criteria[], completion`. The generation_prompt's
-  job is to STEER what fills those keys (especially `title` and `body_html`).
-- **NOT auto-injected:** the per-week Anthropic course link (`curriculum_course_links`) and
-  live sessions. Only add references to them if you also wire that binding.
-- **New render *behavior* is code, not data.** If a type needs a brand-new `render_band`
-  with no existing student renderer (`CardDetailBody.tsx` today only has bespoke renderers
-  for `media`/`video` + `skills_jar`; everything else shares a generic content body), that
-  is a PR, not a component edit. Flag it as a follow-up.
+**Tier 1 (required):** `name` (→ `label`; `slug` = slugify(name) = idempotency key) and
+`intent` (one line: what the student does, why the type exists).
 
-## Parameters
+**Tier 2/3 (override the derivation):** the full field list, real column shapes, enums,
+and defaults are in **[references/component-api.md](references/component-api.md)**. Do not
+trust the old `xp {...}` / `flags {...}` groupings — those were fictions. The real columns
+are flat: `learning_xp`, `builder_xp`, `community_xp` (integers) and `evidence_required`,
+`github_required`, `ai_evaluation`, `instructor_review`, `portfolio_eligible` (booleans).
 
-### Tier 1 — required
-`name`, `intent`.
+Ask Ali only the genuinely-his decisions: title format, thumbnail picture, accent color,
+content shape, whether it's scored. Everything else is derived and logged.
 
-### Tier 2 — shape (override the derivation)
-`slug` (default slugify(name)), `student_label`, `render_band`
-(overview|media|deepdive|warmup|quiz|survey|promptlab|task|artifact|github|interview|
-skills_jar|evaluation|exam|reflection|discussion|community|presentation|demo|announcement),
-`bucket_default` (pre_class|learn|practice|build|reflect|share|advance), `difficulty`
-(intro|core|stretch), `estimated_time` (min), `xp` {learning,builder,community},
-`competencies` [], `capabilities` [] (the "Parts" — fetch live list `GET /api/admin/capabilities`;
-e.g. transcript, ai_chat, reflection, discussion, quiz, github, portfolio, mentor_review,
-peer_review, video, voice, camera, rubric, artifacts, evaluation, retry, hint_system,
-scoring, comments, likes, bookmarks, sharing, evidence), `flags`
-{evidence_required, github_required, ai_evaluation, instructor_review, portfolio_eligible,
-can_create_variables, can_create_artifacts}.
+---
 
-### Tier 3 — fine (leave blank to auto-generate)
-`generation_prompt` (steers title + body_html against WEEK CONTEXT), `design_prompt`,
-`evaluation_prompt` (if ai_evaluation), `reflection_prompt` (if a reflection Part),
-`github_prompt` (if github_required), `evaluation_type` (none|ai|rubric|instructor|peer),
-`completion_rules` {on: view|submit|evaluate|approve, min_score?}, `inputs`
-([{key,type,required}] — `[]` for a zero-author-input type), `outputs`, `dependencies` [],
-`category`, `tags` [], `icon` (bootstrap `bi-*`), `badge_class` (`bg-*`),
-`thumbnail` {source: template|custom, url?, art_direction?}, `preview_context`
-{program_id, week}, `approve` (bool).
+## How the generation prompt actually works (author against this)
 
-## Derivation rules (fill every blank before writing)
-1. Minimal input → draft via `POST /api/admin/components/generate` (closest `GET /api/admin/recipes`),
-   then sanity-check. `render_band` drives the default Part set; keep Parts consistent with
-   flags (scored ⇒ quiz+scoring; evidence ⇒ evidence+artifacts, +github if github_required).
-2. `generation_prompt` is mandatory. Write it to steer the fixed output keys, grounded in
-   WEEK CONTEXT, matched to difficulty and voice. Include evaluation/reflection/github
-   prompts only when the matching flag/Part is on.
-3. Contracts explicit: never omit a JSONB contract — write `[]`/`{}`.
-   `completion_rules.on` default: view (passive) / submit (evidence) / evaluate (scored).
+`runtimePreview(slug, variables, model, programId, week)` (`componentAiService.ts:100`):
+
+- **Prepends a "WEEK CONTEXT" block** via `getBlueprintContext(programId, week)` — the week's
+  title, focus/purpose, competencies, learning objectives, architect domains, student
+  outcomes, success criteria, level, and workload, ending with *"Make everything you generate
+  specific to this week's topic and level — do not produce generic content."* Write the
+  `generation_prompt` **referencing "the WEEK CONTEXT above"**, never `{{blueprint.*}}`. Only
+  `variables` flow through `{{...}}` via `resolvePrompt`.
+- **For `SECTION_ROSTER_TYPES`** (today just `overview`), also prepends "THIS WEEK'S
+  ACTIVITIES" — the real placed roster — so "what you'll cover" names the actual cards. A new
+  week-summary type must be **added to that Set in code** to get this.
+- **Forces a fixed output schema** (9 keys): `title, summary, body_html, questions[],
+  reflection, discussion_prompt, github_task, evaluation_criteria[], completion`. The prompt's
+  job is to STEER what fills those — especially `title` and `body_html`.
+
+**Prompt rules learned the hard way** (see the shipped exemplars in
+[references/worked-examples.md](references/worked-examples.md)):
+- **Use the week's section TITLE, never the week number.** Overview once "just said Overview
+  a bunch of times" because it wasn't grounded in the title.
+- Spell out `title` format exactly (e.g. `Overview — {week topic from WEEK CONTEXT}`).
+- Set the unused keys explicitly (`questions: []`, `github_task: null`, …) so the model
+  doesn't invent them.
+- `body_html` = **clean, self-contained, fully-balanced HTML, no scripts, no inline styles**
+  (the runtime and the reader enforce this). For bespoke-renderer types (e.g. Self Study), the
+  content carries NO `<style>/<nav>/<script>` — the renderer supplies all of that.
+- After a **blueprint edit, regenerate** — old outputs are cached and near-identical until you do.
+
+---
 
 ## Execution (idempotent, key on slug)
-A. `GET /api/admin/components/:slug` → 404 = create (`POST /api/admin/components`), else UPDATE.
-B. Set the full resolved field set (behavior, `capabilities`, all prompts, contracts,
-   icon, badge, xp, difficulty, bucket_default, category, tags, competencies).
-C. Thumbnail: custom → set `thumbnail_url` (URL or self-contained `data:image/svg+xml;base64,…`);
-   template → `POST /api/admin/components/:slug/thumbnail {source:'template'}`.
-D. Renderers: `POST /api/admin/components/:slug/renderers/backfill` (or per-surface) → 8/8.
-E. Validate: `POST /api/admin/components/:slug/preview {program_id, week}` → read the render.
-   Weak? refine via `.../codesign` and re-preview (≤3 passes). Save a good `preview_examples`.
-F. `GET /api/admin/components/:slug/estimate` (tokens/cost).
-G. `PUT /api/admin/components/:slug/approval {approved:true}` if approve.
-H. Verify: `GET /api/admin/components/:slug`; if any code changed, `tsc --noEmit`.
+
+**A. Confirm identity.** `GET /api/admin/components/:slug`. 404 ⇒ new (create). 200 ⇒ read the
+existing `label`/`student_label`/`render_band` first (guard against the `warmup`=Self Study trap).
+
+**B. Draft.** Minimal input → `POST /api/admin/components/generate {description, recipe?}`
+(closest of the 12 recipes via `GET /api/admin/recipes`). Sanity-check the draft; it is NOT saved.
+
+**C. Create or update.**
+- New: `POST /api/admin/components` (create **de-dupes** the slug — it is NOT an upsert, so the
+  GET-first check in step A is what makes this idempotent; created rows get `status: 'draft'`).
+- Existing: `PUT /api/admin/components/:slug` — patches only whitelisted `EDITABLE_FIELDS`
+  (silently drops anything else; `approved` and `slug` are not editable here), auto-snapshots
+  the prior version and bumps `component_version`.
+- Set the full resolved field set: identity, `render_band`, `bucket_default`, `difficulty`,
+  the three XP ints, the five flag booleans, `capabilities` (Parts), the prompt(s),
+  `inputs`/`outputs`/`completion_rules`/`evaluation_type`, `estimated_time`, `category`, `tags`,
+  `competencies`. Never omit a JSONB contract — write `[]` / `{}`.
+
+**D. Thumbnail.** Prefer a **static asset path** `thumbnail_url: /thumbnails/curriculum-types/<slug>.jpg`
+(regen pipeline: `scripts/curriculum-type-thumbnails/`) over an embedded data-URI — an LLM can
+copy a short URL verbatim into the prompt-driven thumbnail renderer; it cannot reproduce a
+data-URI. There are **three** thumbnail surfaces — see [render-surface.md](references/render-surface.md).
+Template fallback: `POST /api/admin/components/:slug/thumbnail {source:'template'}`.
+
+**E. Preview against a REAL week.** `POST /api/admin/components/:slug/preview {variables, model,
+program_id, week}`. Program "AI Systems Architect Accelerator" = `92b98a72-8681-4f04-8ba1-16a18334cd0b`
+(Week 1 = "Claude Code Foundations + Workspace"). **Read the render in the drawer's shape**, not
+as a page. Weak? `POST .../:slug/codesign` for ranked patches, apply, re-preview (≤3 passes).
+Note: preview caps at 1800 tokens; the persisted student path (`cardContentService`) uses 3200
+and returns only a 5-key subset — so **preview is a lower-fidelity approximation of the real card.**
+
+**F. Estimate + approve.** `GET .../:slug/estimate` (tokens/cost). `PUT .../:slug/approval
+{approved:true}` when Ali signs off (remember: this gates the Composer).
+
+**G. Promote** (see next section) — this is the step that actually ships it.
+
+**H. Verify.** `GET /api/admin/components/:slug`; if any code changed, `tsc --noEmit`.
+
+### Preview across ALL perspectives — tile + pop-up + workspace (REQUIRED)
+The API `/preview` (step E) is ONE low-fidelity approximation. Every type renders on
+**three real surfaces**, and it can look right on one and broken on another — the Skills
+Course looked perfect in the drawer but rendered as a **giant unstyled icon in the
+workspace**, because the workspace is not a `.tl-de` container so the `timeline.css`
+styling never applied. So always review the REAL generated content on all three:
+
+1. **The tile** (classroom feed) — `TimelineCard.tsx`: the `type_thumbnail`/poster, the
+   `student_label` chip, the meta line, and the click/open behavior (which button opens the
+   drawer vs. an external link).
+2. **The pop-up drawer** (~400–560px, inside `.tl-de`) — `CardDetailBody.tsx`: the real
+   `lessonDoc(body_html)` for a generic band, or the bespoke renderer (reader/survey/quiz/
+   skills). Generic `body_html` **keeps its own `<style>`** (lessonDoc does NOT strip it);
+   the reader/deepdive path DOES strip `<style>/<script>` via `stripUnsafe`.
+3. **The workspace** — `RuntimeWorkspace.tsx`: the center render for the band (a `fill`
+   iframe for `body_html`; a bespoke panel otherwise) plus the AI Mentor + comments +
+   readiness bar. **Bespoke panels must be wrapped in `.tl-de`** so their scoped CSS applies,
+   and the runtime open endpoint (`runtimeService.ts`) must actually RETURN the fields the
+   panel needs (e.g. `course`, `points`) — a field the feed sends but the runtime omits is
+   why "the workspace doesn't bring the info over."
+
+**Render it faithfully with no live server:** generate the REAL persisted content on dev
+(`generateCardContent(cardId)` via the exec pattern — the 3200-token student path, NOT the
+1800-token `/preview`), then build ONE self-contained HTML that shows the card as a tile, a
+~430px drawer frame that reconstructs `lessonDoc`/`readerDoc` **verbatim** (base stylesheet +
+the card's `body_html` in a sandboxed iframe), and a wide workspace frame — and open it for
+Ali. Do this for every type so Ali reviews the whole journey at once, not one screen at a time.
 
 ### Running against dev without a server/auth (the proven pattern)
 `accelerator-dev-backend` on the VPS runs current main with DB `accelerator_dev1`
-(**the env var `DB_NAME=accelerator_prod` LIES — always confirm with
-`select current_database()`**). Pipe a Node script to it over stdin — nothing is left
-on the box, and it uses the app's own models/connection:
+(**the env var `DB_NAME=accelerator_prod` LIES — always confirm with `select current_database()`**).
+Pipe a Node script over stdin — nothing is left on the box, and it uses the app's own models:
 
 ```
 ssh root@95.216.199.47 'docker exec -i accelerator-dev-backend node' < script.js
 ```
 
-In the script: `require('/app/dist/models/CurriculumTypeDefinition')`,
+In the script, require the compiled dist: `require('/app/dist/models/CurriculumTypeDefinition')`,
 `require('/app/dist/services/components/componentAiService')` (runtimePreview),
-`require('/app/dist/services/timeline/blueprintContext')` (getBlueprintContext).
-Program "AI Systems Architect Accelerator" = `92b98a72-8681-4f04-8ba1-16a18334cd0b`
-(Week 1 = "Claude Code Foundations + Workspace"), good for `preview_context`.
+`require('/app/dist/services/timeline/blueprintContext')` (getBlueprintContext),
+`require('/app/dist/seeds/seedComponentAuthoring')`.
+
+---
+
+## Durability & promotion
+
+**A DB edit via the API is dev-local and unpromoted.** Precisely:
+- A **container reboot preserves** your `generation_prompt` / `capabilities` / `thumbnail_url` —
+  nothing wipes them. **But** the boot `typeSeeder.seedCurriculumTypeDefinitions()` (gated on
+  `TIMELINE_ENGINE_ENABLED`) **re-asserts registry metadata** for the 36 canonical slugs —
+  `render_band, bucket_default, learning/builder/community_xp, difficulty, competencies`, the
+  five flags, `applicable_prompt_pairs` — from `typeRegistry.ts`, silently reverting any API
+  edit to **those** columns.
+- A **dev-DB reset/reseed** or `POST /api/admin/components/backfill?force=true` erases anything
+  not in code.
+- **Prod is a separate database.** It only ever receives your config through committed code.
+
+So to actually ship a type, commit **both** (then deploy — boot re-applies to the prod DB):
+
+1. **`backend/src/seeds/seedComponentAuthoring.ts`** — add/patch the slug's entry in
+   `COMPONENT_AUTHORING` (a `{slug: authoredFields}` map). This carries the authored experience:
+   `generation_prompt`, `renderers`, `thumbnail_url`, `capabilities`, `inputs`/`outputs`,
+   `completion_rules`, `evaluation_type`, `category`, icon, `estimated_time`, `approved`,
+   `status`. Idempotent, keyed on slug, `renderers` merge key-wise, missing slugs reported (never
+   created). Run it: `node dist/seeds/seedComponentAuthoring.js`.
+2. **`backend/src/services/timeline/typeRegistry.ts`** — if you changed the student chip
+   (`label`/`student_label`/`icon`) or any registry-metadata column for a canonical type, change
+   it HERE too, or the boot reseed reverts it and the student-facing chip stays stale (this is
+   the exact "chip still said Warm-up" bug).
+
+New (non-canonical) type not in `typeRegistry`? Then only `seedComponentAuthoring.ts` applies —
+but the row must already exist, so create it via the API (or add it to the registry) first.
+
+**CI coverage has CHANGED — re-check before trusting either claim.** `jest.ci.config.ts` is now
+an IGNORE-list, not an allow-list, so most backend suites (including
+`seedComponentAuthoring.test.ts` and the CAPE seed tests) DO gate. Still excluded, and therefore
+still silently red-able: `typeRegistry.test.ts`, `typeLaunchGate.test.ts`,
+`timelineAdminService.test.ts` — run those by hand, and expect `typeRegistry.test.ts` to be red
+already for reasons that predate you. Prod deploys after hours only.
+
+---
+
+## Pre-flight checklist (before authoring)
+- [ ] Am I reading `origin/main`, not the feature-branch worktree?
+- [ ] If this is a NEW row in `CARD_TYPES`: have I planned all **five obligations** above (CAPE policy group, hardcoded counts, SUPPORTED_RENDER_BANDS, THUMBNAIL_SLUGS + explicit `thumbnail_url`, a real thumbnail FILE) plus the frontend `BAND` map?
+- [ ] Are my `competencies` drawn from `competencySkillCrosswalk.ts`, not invented?
+- [ ] Does the slug already exist? What are its real `label`/`student_label`/`render_band`?
+- [ ] Is this pure authoring (existing render band) or does it need a **code** renderer / a new `render_band`? (If code — scope a PR, don't fake it in `body_html`.)
+- [ ] Which render band, and does its renderer already exist? ([render-surface.md](references/render-surface.md))
+- [ ] Scored/evidence? → questions/scoring may be **code-driven** (assessmentService), prompt only frames title/summary.
+
+## Definition of Done
+- [ ] Component created/updated by slug; all JSONB contracts explicit (`[]`/`{}`).
+- [ ] For a NEW registry type: all five obligations met, `BAND` map updated, and the CAPE + seedComponentAuthoring + typeRegistry + curriculumFormatContract suites run BY HAND (three of them are outside the CI ignore-list, one is not).
+- [ ] `competencies` validated against `competencySkillCrosswalk.ts` — including any per-week content data, which nothing else checks.
+- [ ] `generation_prompt` grounded in WEEK CONTEXT, uses the section title (never the number), unused keys set explicitly.
+- [ ] Emits a **distinct, self-contained styled `body_html`** (its own `<style>`+structure, not a generic `<h3>` list) — see "The visual quality bar".
+- [ ] Previewed against a real week across **ALL perspectives** (tile + pop-up drawer + workspace), each render verdict good — a type can look right in the drawer but broken in the workspace (unstyled panel / missing runtime field). See "Preview across ALL perspectives".
+- [ ] **Real image thumbnail** generated via the gpt-image-2 pipeline (not a placeholder), `thumbnail_url` set **explicitly** on the authored entry (the spread-override gotcha) + slug in `THUMBNAIL_SLUGS`, showing on all surfaces.
+- [ ] Approved (if Ali signed off) — remember it gates the Composer.
+- [ ] **Promoted:** `seedComponentAuthoring.ts` entry committed **and** `typeRegistry.ts` updated if the chip/metadata changed.
+- [ ] `tsc --noEmit` clean if any code changed; PROGRESS.md entry with Session ID + verification.
+
+---
+
+## Bulk certification pass (the next wave)
+
+When certifying many types at once (the ~36 registry types, `typeRegistry.ts:50`), don't do them
+one conversation at a time. Run a batch loop:
+
+1. **Inventory.** `GET /api/admin/components` → for each type record: `approved`, whether
+   `generation_prompt` is set, `render_band`, and whether its render band has a real renderer.
+   Sort into: *needs authoring*, *needs a code renderer* (defer to PRs), *already certified*.
+2. **Group by render family.** Types sharing a render band + Part set (e.g. the three `event`
+   types; `task`/`artifact`/`github` builders) can reuse one prompt skeleton — author the family
+   together. Certifying one type drags its render family's renderer along, so validate the family.
+3. **Author → preview → codesign in a pipeline**, one pass per type, previewing each against the
+   week it naturally sits on. Keep a running ledger (slug · authored? · previewed? · approved? ·
+   promoted?) so a crash doesn't lose place.
+4. **Promote in one commit per batch** to `seedComponentAuthoring.ts` (+ `typeRegistry.ts` where
+   metadata/chip changed), run the seed on dev, verify with an independent DB query (not the
+   seed's own output), then ship after hours.
+5. **Report** the ledger + the deferred code-renderer PRs.
+
+For a genuinely large fan-out (author + adversarially critique each type in parallel), this is a
+good candidate for a Workflow — but only if Ali opts into multi-agent orchestration.
+
+---
 
 ## Output (report back)
 slug · created|updated · component_version · render_band/bucket/difficulty/XP · Parts ·
-which of the 7 prompt stages set · thumbnail source+URL · renderer surfaces 8/8 ·
-preview verdict (title + a line on the body) · cost estimate · approved? ·
-a ✅/⚠️ checklist (identity·behavior·parts·prompts·contracts·thumbnail·renderers·preview·approval) ·
-anything needing a NEW render_band/code renderer (flag as a separate PR).
+which of the 7 prompt stages set · thumbnail source+URL (+ which surfaces show it) ·
+preview verdict (title + a line on the body, judged in the drawer's shape) · cost estimate ·
+approved? · **promoted?** (seedComponentAuthoring + typeRegistry) ·
+a ✅/⚠️ checklist (identity·render-surface·parts·prompts·contracts·thumbnail·preview·approval·promotion) ·
+anything needing a NEW render_band or a code renderer (flag as a separate PR).
 
-## Make it durable
-A dev-DB edit is wiped by a reseed. To persist + promote, add the authored fields to
-the committed seed `backend/src/seeds/seedComponentAuthoring.ts` (a `{slug: authoredFields}`
-map + an idempotent applier) and run it. That seed is the scalable home as you certify
-the ~15 week types (`SEQ.week` in `composerAi.ts`).
-
-## Worked example (Overview, done 2026-07-15)
-Input: name "Overview", intent "auto-writes what the week covers; zero author input,
-pulls the week blueprint." Resolved: render_band `overview`, `bg-info` teal, `bi-binoculars`,
-8 min, `inputs:[]`, `capabilities:[]`, fixed vista watermark (data-URI SVG), a 4-part
-generation_prompt (welcome · What you'll cover · Why it matters · By the end you'll be able to)
-steering `title` = "Overview — {week topic}" and `body_html`. Week-1 preview →
-"Overview — Claude Code Foundations + Workspace" + a balanced 4-part body, $0.0003/run.
+## References
+- **[references/component-api.md](references/component-api.md)** — verified endpoints, model
+  fields/contracts, forced schemas, WEEK CONTEXT, capabilities, recipes, the dual editor surface.
+- **[references/render-surface.md](references/render-surface.md)** — the drawer constraints,
+  bespoke render bands (code), the three thumbnail surfaces, preview vs. student runtime.
+- **[references/worked-examples.md](references/worked-examples.md)** — Overview, Self Study,
+  Survey, Knowledge Check, Evaluation as shipped copy-paste templates + their generation prompts.
