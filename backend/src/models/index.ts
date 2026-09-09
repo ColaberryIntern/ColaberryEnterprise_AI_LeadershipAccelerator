@@ -426,6 +426,9 @@ import TenantAccessAudit from './TenantAccessAudit';
 import DeliveryEngagement from './DeliveryEngagement';
 import DeliveryProject from './DeliveryProject';
 import CapstoneReviewApproval from './CapstoneReviewApproval';
+import CohortMembership from './CohortMembership';
+import InternshipApplication from './InternshipApplication';
+import InternshipStatusEvent from './InternshipStatusEvent';
 import CareerMentorScope from './CareerMentorScope';
 import DeliveryProjectSourceLink from './DeliveryProjectSourceLink';
 import DeliveryProjectMember from './DeliveryProjectMember';
@@ -1572,6 +1575,9 @@ export {
 
   // Living Career Portfolio (Gate 10 — versioned publication)
   CapstoneReviewApproval,
+  // AI Internship — lifecycle, audit trail, and the secondary cohort
+  // membership that activation grants without touching enrollments.cohort_id.
+  CohortMembership, InternshipApplication, InternshipStatusEvent,
   CareerMentorScope,
   DeliveryProjectMember,
   DeliveryClientSigninToken,
