@@ -305,3 +305,61 @@ try { fs.mkdirSync(ROOM_RECORDING_DIR, { recursive: true }); } catch { /* create
 const MAX_ROOM_RECORDING_SIZE = Number(process.env.MAX_ROOM_RECORDING_SIZE_BYTES) || 4 * 1024 * 1024 * 1024; // 4GB
 
 export { ROOM_RECORDING_DIR, MAX_ROOM_RECORDING_SIZE };
+
+// ── Signed internship documents — the offer-letter package coming back ────────
+//
+// ITS OWN INSTANCE AND ITS OWN DIRECTORY, deliberately, for the reason
+// buildArtifactUpload above already documents: `strategyPrepUpload` serves
+// strategy-prep and the admin accelerator routes, and widening it here would
+// quietly change what those two surfaces accept. That is how an allowlist stops
+// meaning anything.
+//
+// NARROWER than the others on purpose. A signed offer letter is a PDF or a clear
+// scan, and nothing else: no .docx (a signature in a Word file is not a signature),
+// no zip (we cannot verify what is inside one), no video. A student who exports the
+// wrong format gets a message telling them exactly what to send, which is a better
+// outcome than us storing something a reviewer then cannot accept.
+const SIGNED_DOC_DIR = process.env.INTERNSHIP_DOC_DIR || path.resolve('/app/uploads/internship-docs');
+try { fs.mkdirSync(SIGNED_DOC_DIR, { recursive: true }); } catch { /* created lazily on first write */ }
+
+const SIGNED_DOC_MIMES: Record<string, string> = {
+  'application/pdf': '.pdf',
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/webp': '.webp',
+  'image/heic': '.heic',
+};
+// 25MB: a phone photo of four signed pages, with room to spare. Well under
+// anything that would make a reviewer wait.
+const MAX_SIGNED_DOC_SIZE = 25 * 1024 * 1024;
+
+// Browsers and phones are unreliable about mime types — an iPhone scan often
+// arrives as application/octet-stream — so the extension is the fallback, exactly
+// as fieldGuideUpload and roomResourceUpload already do. A correct file must never
+// be rejected for a header we do not control.
+const SIGNED_DOC_EXT_FALLBACK = new Set(['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.heic']);
+
+const signedDocStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => { cb(null, SIGNED_DOC_DIR); },
+  filename: (_req, file, cb) => {
+    // Opaque UUID, never the applicant's own filename: their name and the document
+    // type must not be guessable from a path, and a filename from their machine is
+    // untrusted input we would otherwise be writing to disk.
+    const ext = path.extname(file.originalname).toLowerCase() || SIGNED_DOC_MIMES[file.mimetype] || '';
+    cb(null, `${crypto.randomUUID()}${ext}`);
+  },
+});
+
+function signedDocFilter(_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback): void {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (SIGNED_DOC_MIMES[file.mimetype] || SIGNED_DOC_EXT_FALLBACK.has(ext)) cb(null, true);
+  else cb(new Error('Upload your signed document as a PDF, or a clear photo or scan (PNG, JPG, WEBP, HEIC).'));
+}
+
+export const signedDocumentUpload = multer({
+  storage: signedDocStorage,
+  fileFilter: signedDocFilter,
+  limits: { fileSize: MAX_SIGNED_DOC_SIZE, files: 1 },
+});
+
+export { SIGNED_DOC_DIR, MAX_SIGNED_DOC_SIZE };

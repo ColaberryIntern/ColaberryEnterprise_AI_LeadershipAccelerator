@@ -416,3 +416,76 @@
   .ip-or { padding: 0; text-align: center; }
   .ip-q__yesno { flex-direction: column; }
 }
+
+/* ── Offer-letter package (Phase 5) ─────────────────────────────────────────── */
+
+.ip-steps {
+  margin: 0 0 22px;
+  padding-left: 22px;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--muted, #4b5563);
+}
+.ip-steps strong { color: var(--strong, #111827); }
+
+.ip-doc {
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+/* A correction request is the one state the student MUST notice, so it is marked
+   rather than left to be inferred from a line of text further down. */
+.ip-doc.is-correction {
+  border-color: rgba(180, 83, 9, 0.4);
+  background: rgba(180, 83, 9, 0.04);
+}
+
+.ip-doc.is-verified {
+  border-color: rgba(21, 128, 61, 0.3);
+  background: rgba(21, 128, 61, 0.03);
+}
+
+.ip-doc__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ip-doc__title {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--strong, #111827);
+  margin: 0 0 4px;
+}
+
+.ip-doc__why { margin: 0 0 4px; }
+.ip-doc__id { margin: 0; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.ip-doc__status { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; flex: none; }
+
+.ip-doc__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.ip-doc__hint { font-size: 12px; }
+
+.ip-alert--soft {
+  background: rgba(180, 83, 9, 0.08);
+  border-color: rgba(180, 83, 9, 0.25);
+  color: #92400e;
+  font-size: 13px;
+  margin: 10px 0 0;
+}
+
+@media (max-width: 640px) {
+  .ip-doc__head { flex-direction: column; }
+  .ip-doc__status { align-items: flex-start; flex-direction: row; }
+  .ip-doc__actions { flex-direction: column; align-items: stretch; }
+}

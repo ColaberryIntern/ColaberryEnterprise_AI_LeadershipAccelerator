@@ -172,6 +172,78 @@ export async function cancelInternshipCall(): Promise<{ cancelled: boolean }> {
   return data;
 }
 
+// ── The offer-letter package ────────────────────────────────────────────────
+
+export interface OfferDocument {
+  id: string;
+  document_type: string;
+  title: string;
+  document_public_id: string;
+  revision: number;
+  byte_size: number;
+  requires_signature: boolean;
+  why: string;
+}
+
+export interface DocumentRequirement {
+  document_type: string;
+  title: string;
+  requires_signature: boolean;
+  generated: boolean;
+  latest_upload_revision: number | null;
+  verified: boolean;
+  correction_requested: boolean;
+  rejection_reason: string | null;
+}
+
+export interface DocumentsView {
+  state: string;
+  documents: OfferDocument[];
+  requirements: DocumentRequirement[];
+  all_verified: boolean;
+}
+
+export async function fetchInternshipDocuments(): Promise<DocumentsView> {
+  const { data } = await portalApi.get<DocumentsView>('/api/portal/internship/documents');
+  return data;
+}
+
+/**
+ * Download a generated document.
+ *
+ * Fetched as a blob through the authed client rather than linked directly: the
+ * endpoint requires the participant JWT, so a plain <a href> would 401. The object
+ * URL is revoked immediately after the click to avoid leaking it for the page's
+ * lifetime.
+ */
+export async function downloadInternshipDocument(documentId: string, filename: string): Promise<void> {
+  const res = await portalApi.get(`/api/portal/internship/documents/${documentId}/download`, {
+    responseType: 'blob',
+  });
+  const url = window.URL.createObjectURL(res.data as Blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function uploadSignedInternshipDocument(
+  documentType: string,
+  file: File,
+): Promise<{ document_id: string; revision: number; state: string }> {
+  const form = new FormData();
+  form.append('document', file);
+  const { data } = await portalApi.post(
+    `/api/portal/internship/documents/${documentType}/signed`,
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  );
+  return data;
+}
+
 export async function dismissInternshipCard(days = 14): Promise<void> {
   await portalApi.post('/api/portal/internship/card/dismiss', { days });
 }

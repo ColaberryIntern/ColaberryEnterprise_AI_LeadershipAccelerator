@@ -434,6 +434,7 @@ import InternshipCardDismissal from './InternshipCardDismissal';
 import InternshipInterviewSession from './InternshipInterviewSession';
 import InternshipInterviewResponse from './InternshipInterviewResponse';
 import InternshipDecision from './InternshipDecision';
+import InternshipDocument from './InternshipDocument';
 import CareerMentorScope from './CareerMentorScope';
 import DeliveryProjectSourceLink from './DeliveryProjectSourceLink';
 import DeliveryProjectMember from './DeliveryProjectMember';
@@ -1586,6 +1587,7 @@ export {
   InternshipAdministrativeIntake, InternshipCardDismissal,
   InternshipInterviewSession, InternshipInterviewResponse,
   InternshipDecision,
+  InternshipDocument,
   CareerMentorScope,
   DeliveryProjectMember,
   DeliveryClientSigninToken,
