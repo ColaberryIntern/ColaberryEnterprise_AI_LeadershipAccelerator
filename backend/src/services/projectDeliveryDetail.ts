@@ -20,9 +20,11 @@ import {
   classifyTiming,
   rollUpTiming,
   summariseEvidence,
+  summariseVerification,
   groupArtifacts,
   TimingRollup,
   EvidenceSummary,
+  VerificationSummary,
   ArtifactGroup,
 } from './projectReleaseMeta';
 
@@ -235,16 +237,47 @@ export async function getProjectGantt(projectId: string): Promise<{
  * gap, not a bug here — the caller must render the cause rather than a row of zeros,
  * because zeros would assert "built nothing" when the truth is "nothing recorded".
  */
-export async function getProjectEvidence(projectId: string): Promise<EvidenceSummary> {
-  const rows = await sequelize.query<any>(
-    `SELECT files_created, files_modified, apis_added, ui_components_added,
-            tests_added, database_changes, execution_timestamp
-       FROM build_manifests
-      WHERE project_id = :projectId
-      ORDER BY execution_timestamp DESC`,
-    { replacements: { projectId }, type: QueryTypes.SELECT }
-  );
-  return summariseEvidence(rows);
+export interface ProjectEvidence {
+  /** Which source produced the picture below. 'repo_verification' is the one that
+   *  exists for real student work; 'build_manifests' only ever fires for projects
+   *  whose owner emits telemetry from their own Claude Code. */
+  source: 'repo_verification' | 'build_manifests' | 'none';
+  verification: VerificationSummary;
+  manifests: EvidenceSummary;
+}
+
+export async function getProjectEvidence(projectId: string): Promise<ProjectEvidence> {
+  const [manifestRows, verificationRows] = await Promise.all([
+    sequelize.query<any>(
+      `SELECT files_created, files_modified, apis_added, ui_components_added,
+              tests_added, database_changes, execution_timestamp
+         FROM build_manifests
+        WHERE project_id = :projectId
+        ORDER BY execution_timestamp DESC`,
+      { replacements: { projectId }, type: QueryTypes.SELECT }
+    ),
+    sequelize.query<any>(
+      `SELECT verification_json
+         FROM student_tasks
+        WHERE project_id = :projectId AND verification_json IS NOT NULL
+        ORDER BY verified_at DESC NULLS LAST`,
+      { replacements: { projectId }, type: QueryTypes.SELECT }
+    ),
+  ]);
+
+  const manifests = summariseEvidence(manifestRows);
+  const verification = summariseVerification(verificationRows);
+
+  // Repo verification wins when both exist: a matched commit is stronger evidence
+  // than a self-reported manifest, and it is the source that actually covers
+  // student work.
+  const source: ProjectEvidence['source'] = verification.has_verification
+    ? 'repo_verification'
+    : manifests.has_evidence
+      ? 'build_manifests'
+      : 'none';
+
+  return { source, verification, manifests };
 }
 
 /**

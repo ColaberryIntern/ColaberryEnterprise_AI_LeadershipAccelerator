@@ -4,6 +4,7 @@ import {
   classifyTiming,
   rollUpTiming,
   summariseEvidence,
+  summariseVerification,
   groupArtifacts,
 } from '../projectReleaseMeta';
 
@@ -187,6 +188,97 @@ describe('summariseEvidence', () => {
     const e = summariseEvidence([{ files_created: { unexpected: 'object' }, tests_added: 'oops' }]);
     expect(e.files_created).toBe(0);
     expect(e.tests_added).toBe(0);
+  });
+});
+
+describe('summariseVerification', () => {
+  const verified = (over: Record<string, unknown> = {}) => ({
+    verification_json: {
+      state: 'verified', reasons: [], commit_at: '2026-08-18T13:36:23Z',
+      checked_at: '2026-09-08T08:36:37.478Z',
+      commit_sha: 'b55c1179827f3bed3b174e795e72ceaff770d6fe',
+      outstanding: [], criteria_total: 3, criteria_passed: 3, ...over,
+    },
+  });
+
+  it('reports nothing for no rows', () => {
+    const s = summariseVerification([]);
+    expect(s.has_verification).toBe(false);
+    expect(s.commits).toBe(0);
+    expect(s.outstanding_count).toBe(0);
+  });
+
+  it('handles null and undefined without throwing', () => {
+    expect(summariseVerification(null).has_verification).toBe(false);
+    expect(summariseVerification(undefined).has_verification).toBe(false);
+  });
+
+  it('counts verified and in-progress tasks separately', () => {
+    const s = summariseVerification([
+      verified(),
+      verified({ state: 'in_progress', criteria_passed: 0, commit_sha: null }),
+    ]);
+    expect(s.tasks_with_verification).toBe(2);
+    expect(s.verified_tasks).toBe(1);
+    expect(s.in_progress_tasks).toBe(1);
+  });
+
+  it('counts DISTINCT commits — one commit closing three tasks is one commit', () => {
+    const s = summariseVerification([verified(), verified(), verified()]);
+    expect(s.commits).toBe(1);
+  });
+
+  it('picks the newest commit as latest', () => {
+    const s = summariseVerification([
+      verified({ commit_sha: 'aaa', commit_at: '2026-08-01T00:00:00Z' }),
+      verified({ commit_sha: 'bbb', commit_at: '2026-08-20T00:00:00Z' }),
+    ]);
+    expect(s.commits).toBe(2);
+    expect(s.latest_commit_sha).toBe('bbb');
+    expect(s.latest_commit_at).toBe('2026-08-20T00:00:00Z');
+  });
+
+  it('sums acceptance criteria across tasks', () => {
+    const s = summariseVerification([
+      verified({ criteria_passed: 3, criteria_total: 3 }),
+      verified({ criteria_passed: 0, criteria_total: 4 }),
+    ]);
+    expect(s.criteria_passed).toBe(3);
+    expect(s.criteria_total).toBe(7);
+  });
+
+  it('deduplicates outstanding criteria — the same blocker across tasks is one item', () => {
+    const s = summariseVerification([
+      verified({ state: 'in_progress', outstanding: ['Log every issue with a timestamp.', 'Handle missing data.'] }),
+      verified({ state: 'in_progress', outstanding: ['Log every issue with a timestamp.'] }),
+    ]);
+    expect(s.outstanding).toEqual(['Log every issue with a timestamp.', 'Handle missing data.']);
+    expect(s.outstanding_count).toBe(2);
+  });
+
+  it('treats a missing criteria count as 0, never NaN', () => {
+    // Every field in verification_json is optional; NaN would reach the UI.
+    const s = summariseVerification([{ verification_json: { state: 'verified' } }]);
+    expect(s.criteria_total).toBe(0);
+    expect(Number.isNaN(s.criteria_total)).toBe(false);
+    expect(s.has_verification).toBe(true);
+  });
+
+  it('skips rows whose verification_json is absent or malformed', () => {
+    const s = summariseVerification([
+      { verification_json: null },
+      { verification_json: 'not an object' },
+      verified(),
+    ]);
+    expect(s.tasks_with_verification).toBe(1);
+  });
+
+  it('tracks the most recent check time across rows', () => {
+    const s = summariseVerification([
+      verified({ checked_at: '2026-09-01T00:00:00Z' }),
+      verified({ checked_at: '2026-09-09T16:04:44Z' }),
+    ]);
+    expect(s.last_checked_at).toBe('2026-09-09T16:04:44Z');
   });
 });
 
