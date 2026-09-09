@@ -106,16 +106,35 @@ describe('unsubscribeEnforcementService', () => {
   // ─── T2: Unsubscribe Enforcement Lifecycle ───────────────────────────────
 
   describe('T2: processOptOut', () => {
-    test('should update lead status to unsubscribed', async () => {
+    // THESE TWO TESTS USED TO ASSERT THE BUG.
+    //
+    // Both called processOptOut(42, 'sms', 'STOP') and then expected the GLOBAL
+    // lead status and every CampaignLead to be suppressed — which is precisely
+    // the defect §35 D-4 describes: an SMS STOP killing that person's email.
+    // The expectation is inverted rather than deleted, because the old
+    // behaviour is exactly what must not come back.
+    test('an sms opt-out does NOT touch the global lead status', async () => {
       await processOptOut(42, 'sms', 'STOP', 'stop_keyword');
+      expect(mockLeadUpdate).not.toHaveBeenCalled();
+    });
+
+    test('an sms opt-out does NOT dnd every campaign', async () => {
+      await processOptOut(42, 'sms', 'STOP', 'stop_keyword');
+      expect(mockCampaignLeadUpdate).not.toHaveBeenCalled();
+    });
+
+    test('an EMAIL opt-out still suppresses globally, unchanged', async () => {
+      // An email unsubscribe IS the primary meaning of Lead.status
+      // 'unsubscribed'. Narrowing that was never the ask.
+      await processOptOut(42, 'email', 'unsubscribe link', 'footer');
       expect(mockLeadUpdate).toHaveBeenCalledWith(
         { status: 'unsubscribed' },
         { where: { id: 42 } },
       );
     });
 
-    test('should update all CampaignLead records to dnd', async () => {
-      await processOptOut(42, 'sms', 'STOP', 'stop_keyword');
+    test('an email opt-out still dnds every campaign, unchanged', async () => {
+      await processOptOut(42, 'email', 'unsubscribe link', 'footer');
       expect(mockCampaignLeadUpdate).toHaveBeenCalledWith(
         { lifecycle_status: 'dnd' },
         { where: { lead_id: 42 } },
