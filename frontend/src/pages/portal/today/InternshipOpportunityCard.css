@@ -1,0 +1,137 @@
+/* AI Internship opportunity card — Today side rail.
+ *
+ * The animation rules here are the accessibility contract from the
+ * implementation brief, expressed in CSS rather than in a comment:
+ *
+ *   "a short, subtle pulse every few minutes, not continuous blinking"
+ *   "do not cause layout movement"
+ *   "respect prefers-reduced-motion"
+ *
+ * WHY box-shadow AND NOT transform/scale/margin: a scale() would visually shove
+ * the neighbouring cards even though it does not reflow them, and any size or
+ * margin change genuinely reflows the rail. box-shadow paints outside the box
+ * model entirely, so the card cannot move anything — including itself.
+ *
+ * The cadence is NOT in CSS. An `animation-delay` loop would blink forever, and
+ * "every few minutes" would mean a 240s keyframe that is 98% dead air. The
+ * component adds .te-intern--pulse for one burst and removes it, so the pulse
+ * stops permanently once the student interacts. See the component's header.
+ */
+
+.te-intern {
+  /* Sits on the same .te-card/.te-scard base as its neighbours; only the
+     attention behaviour is bespoke. */
+  position: relative;
+  transition: box-shadow 200ms ease;
+}
+
+/* One burst = two gentle breaths, then nothing until the next interval. */
+.te-intern--pulse {
+  animation: te-intern-breathe 1200ms ease-in-out 2;
+}
+
+@keyframes te-intern-breathe {
+  0%   { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0); }
+  50%  { box-shadow: 0 0 0 6px rgba(124, 58, 237, 0.16); }
+  100% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0); }
+}
+
+/* A student who has asked for less motion gets none of it. Not a slower pulse,
+   not a shorter one — the animation is removed outright, and the card is still
+   fully usable because the pulse never carried information in the first place. */
+@media (prefers-reduced-motion: reduce) {
+  .te-intern,
+  .te-intern--pulse {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+.te-intern__badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(124, 58, 237, 0.12);
+  color: #6d28d9;
+  margin-bottom: 10px;
+}
+
+.te-intern__body {
+  font-size: 13.5px;
+  line-height: 1.5;
+  margin: 0 0 14px;
+}
+
+.te-intern__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Reserve the row's height whether or not a CTA renders, so status-only states
+   (under review, activation pending) do not change the rail's layout when the
+   student's status advances. */
+.te-intern__actions:empty {
+  min-height: 0;
+}
+
+.te-intern__cta {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* "Not now" is deliberately quiet — it is an escape hatch, not an option we are
+   steering anyone toward. */
+.te-intern__dismiss {
+  background: none;
+  border: none;
+  padding: 6px 8px;
+  font-size: 12.5px;
+  color: var(--muted, #6b7280);
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.te-intern__dismiss:hover {
+  color: var(--strong, #111827);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* Visible keyboard focus on both controls. The card is reachable by tab and the
+   focus ring must survive the theme. */
+.te-intern__dismiss:focus-visible,
+.te-intern__cta:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+}
+
+.te-intern__status {
+  font-size: 13px;
+  color: var(--muted, #6b7280);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.te-intern__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #7c3aed;
+  flex: none;
+}
+
+@media (max-width: 640px) {
+  .te-intern__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .te-intern__dismiss {
+    text-align: center;
+  }
+}

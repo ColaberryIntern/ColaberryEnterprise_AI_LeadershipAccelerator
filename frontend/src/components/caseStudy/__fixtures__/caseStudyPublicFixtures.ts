@@ -35,6 +35,13 @@ export const metric = (
   sample: 'eight distribution sites',
   methodology: 'Counted from the client inventory export before and after.',
   limitations: ['One season of data.'],
+  // The default fixture is UNSHAPED, deliberately: it is the shape most of the
+  // published library has, so a component test that passes here has been shown
+  // to work on a real record rather than only on the new path.
+  shape: null,
+  payload: null,
+  plain: null,
+  reproduceCommand: null,
   ...overrides,
 });
 

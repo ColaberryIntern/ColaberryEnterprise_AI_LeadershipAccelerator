@@ -238,7 +238,10 @@ describe('CaseStudyMeasurement never shows a figure without its context', () => 
     expect(text).toContain('approximately 300 per quarter');
     expect(text).toContain('Sample');
     expect(text).toContain('Methodology');
-    expect(text).toContain('Limitations');
+    // The limitation TEXT is what has to survive, not a heading over it. It now
+    // renders as one muted footer paragraph rather than a labelled bullet list:
+    // a bulleted list of caveats under a big number reads as a disclaimer
+    // somebody was made to write, and a sentence in the footer gets read.
     expect(text).toContain('One season of data.');
   });
 

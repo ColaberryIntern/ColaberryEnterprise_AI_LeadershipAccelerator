@@ -69,6 +69,27 @@ export const paceBandFor = (delta: number): PaceBand => {
   return 'red';
 };
 
+/**
+ * The order a week is actually taught in, matching `bucketEnum` in timelineAdminController
+ * and the `TimelineCardBucket` union.
+ *
+ * Sections used to come back `localeCompare`d, which put `advance` — the last thing in a
+ * week — first, and `pre_class` fifth. That is invisible in a list of seven rows and wrong
+ * in a heatmap, where the columns are read left to right as the shape of a week. Ali's
+ * whole framing was "put in the same order as curriculum", so the order belongs here rather
+ * than being re-derived by each consumer.
+ */
+export const BUCKET_ORDER = [
+  'pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance',
+] as const;
+
+/** Unknown buckets sort last rather than vanishing, so a new bucket shows up as a column
+ *  nobody ordered instead of silently disappearing from the grid. */
+export const bucketRank = (bucket: string): number => {
+  const i = (BUCKET_ORDER as readonly string[]).indexOf(bucket);
+  return i === -1 ? BUCKET_ORDER.length : i;
+};
+
 export interface CurriculumCard {
   readonly id: string;
   readonly title: string;
@@ -217,7 +238,8 @@ export async function getCurriculumCompletion(cohortId: string): Promise<Curricu
       const avg = pub.length
         ? Math.round((pub.reduce((s, c) => s + c.completedPct, 0) / pub.length) * 10) / 10 : 0;
       return { bucket, cardCount: mapped.length, completedPct: avg, cards: mapped };
-    }).sort((a, b) => a.bucket.localeCompare(b.bucket));
+    }).sort((a, b) => bucketRank(a.bucket) - bucketRank(b.bucket)
+      || a.bucket.localeCompare(b.bucket));
 
     const published = weekCards.filter((c) => c.status === 'active');
     const avgWeek = published.length

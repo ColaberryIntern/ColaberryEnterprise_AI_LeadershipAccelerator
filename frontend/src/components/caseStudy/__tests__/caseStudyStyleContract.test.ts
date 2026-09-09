@@ -49,7 +49,7 @@ function classStrings(source: string): string[] {
     .map((literal) => literal.replace(/\$\{[^}]*\}?/g, ' '));
 }
 
-describe('the case-study module ships ten components and one stylesheet', () => {
+describe('the case-study module ships eleven components and one stylesheet', () => {
   it('has a component file for every part the pages compose', () => {
     expect(sources).toEqual([
       'CaseStudyArchitecture.tsx',
@@ -59,6 +59,7 @@ describe('the case-study module ships ten components and one stylesheet', () => 
       'CaseStudyFilters.tsx',
       'CaseStudyLedger.tsx',
       'CaseStudyMeasurement.tsx',
+      'CaseStudyMetricShape.tsx',
       'CaseStudyRoadmap.tsx',
       'CaseStudyTimeline.tsx',
       'CaseStudyVerificationBadge.tsx',

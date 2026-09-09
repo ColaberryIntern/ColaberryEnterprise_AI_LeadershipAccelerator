@@ -66,6 +66,7 @@ import type {
   CaseStudyReadinessBand,
   CaseStudyReadinessCategory,
   CaseStudyReadinessInput,
+  ReadinessContext,
 } from './caseStudyReadinessRubric';
 
 /**
@@ -129,6 +130,27 @@ export interface CaseStudyReadinessGap {
   readonly remedy: string;
 }
 
+/**
+ * An advisory that costs no points.
+ *
+ * WHY NOT A RUBRIC CHECK. The rubric is a balanced hundred-point budget: each
+ * category's checks sum exactly to its weight, and that identity is asserted by
+ * the suite. A new scored check would have to take points from an existing one,
+ * silently rescoring every record in the library to introduce a note about a
+ * field almost none of them use yet.
+ *
+ * So a warning is its own channel. It names something worth fixing without
+ * pretending the record got worse when the rules changed under it.
+ */
+export interface CaseStudyReadinessWarning {
+  /** Stable identifier for UI anchors and tests. */
+  readonly code: 'metric_plain_missing';
+  /** Dotted path to the field, so the admin panel can link straight to it. */
+  readonly field: string;
+  readonly detail: string;
+  readonly remedy: string;
+}
+
 export interface CaseStudyReadinessCategoryScore {
   readonly category: CaseStudyReadinessCategory;
   readonly label: string;
@@ -152,7 +174,33 @@ export interface CaseStudyReadinessReport {
   readonly categories: readonly CaseStudyReadinessCategoryScore[];
   /** Every gap, in rubric order. Empty means every point was awarded. */
   readonly gaps: readonly CaseStudyReadinessGap[];
+  /** Advisories that cost no points. Never a publish decision either. */
+  readonly warnings: readonly CaseStudyReadinessWarning[];
   readonly advisory: string;
+}
+
+/**
+ * A shaped metric with no plain-language answers.
+ *
+ * WHY ONLY SHAPED METRICS. A record written before shapes existed has no
+ * `plain` on any of its figures, and warning about all of them would turn the
+ * panel into a wall of notices about a field that did not exist when the record
+ * was written. Declaring a shape is opting in, and a shaped figure carries a
+ * picture a reader will read confidently, which is exactly when the three
+ * answers matter most: what it counts, where it came from, what it cannot show.
+ */
+function plainLanguageWarnings(ctx: ReadinessContext): CaseStudyReadinessWarning[] {
+  const out: CaseStudyReadinessWarning[] = [];
+  ctx.metrics.forEach((metric, i) => {
+    if (!metric?.shape || metric.plain) return;
+    out.push(Object.freeze({
+      code: 'metric_plain_missing' as const,
+      field: `metrics[${i}].plain`,
+      detail: `${metric.label || metric.key || 'a shaped metric'} has a shape but no plain-language explanation`,
+      remedy: 'write the three answers: what this counts, where it came from, and what it does not show',
+    }));
+  });
+  return out;
 }
 
 /* ─────────────────────────────────────────────────────────────── scoring ──── */
@@ -226,6 +274,7 @@ export function scoreCaseStudyReadiness(input: CaseStudyReadinessInput): CaseStu
     band: bandFor(score),
     categories: Object.freeze(categories),
     gaps: Object.freeze(categories.flatMap((c) => c.gaps)),
+    warnings: Object.freeze(plainLanguageWarnings(ctx)),
     advisory: CASE_STUDY_READINESS_ADVISORY,
   });
 }

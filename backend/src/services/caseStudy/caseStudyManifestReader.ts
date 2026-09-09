@@ -27,9 +27,17 @@
  * `JSON.parse` error quotes the source, so it is discarded for a byte offset).
  */
 import { z } from 'zod';
-import { CASE_STUDY_SURFACE_KEYS, CASE_STUDY_VERIFICATION_METHODS } from '../../types/caseStudy';
+import {
+  CASE_STUDY_COLLECTOR_KEYS,
+  CASE_STUDY_SURFACE_KEYS,
+  CASE_STUDY_VERIFICATION_METHODS,
+} from '../../types/caseStudy';
 import type {
-  CaseStudyBuiltByType, CaseStudyRepoRole, CaseStudySurfaceKey, CaseStudyVerificationMethod,
+  CaseStudyBuiltByType,
+  CaseStudyCollectorKey,
+  CaseStudyRepoRole,
+  CaseStudySurfaceKey,
+  CaseStudyVerificationMethod,
 } from '../../types/caseStudy';
 
 /** Spec §8, in precedence order. The first one PRESENT is the manifest. */
@@ -90,12 +98,34 @@ const consentSchema = z.object({
   public_repo_link: z.boolean().optional(),
 });
 const repoSchema = z.object({ role: z.enum(REPO_ROLES).optional(), url: repoReference });
-const outcomeSchema = z.object({
+/*
+ * AN OUTCOME DECLARES A FIGURE OR IT DECLARES A COLLECTOR. Both is allowed, and
+ * then the collector wins on the next sync, because a repository counting its
+ * own test files is more trustworthy than a person remembering how many there
+ * were. Neither is a schema violation: an outcome that names nothing measurable
+ * is just a label, and the reader would have nothing to record.
+ *
+ * `value_display` used to be required. It is now conditionally required, which
+ * is the one relaxation in this change - every manifest that parsed before this
+ * still parses, because they all carry it.
+ */
+const outcomeObject = z.object({
   key: z.string().trim().min(1).max(80).regex(/^[a-z0-9]+(?:_[a-z0-9]+)*$/),
-  label: text(160), value_display: text(120),
+  label: text(160), value_display: text(120).optional(),
+  collector: z.enum(CASE_STUDY_COLLECTOR_KEYS).optional(),
   verification_method: z.enum(CASE_STUDY_VERIFICATION_METHODS).optional(),
   evidence_ref: text(200).optional(),
 });
+/*
+ * The refine wrapper is kept SEPARATE from the object above because the
+ * unknown-field reporter reads `outcomeObject.shape` to know which keys are
+ * known, and a refined schema has no `.shape`. Wrapping in place would have
+ * silently reported every legitimate outcome key as unknown.
+ */
+const outcomeSchema = outcomeObject.refine(
+  (o) => Boolean(o.value_display) || Boolean(o.collector),
+  { message: 'an outcome needs value_display, collector, or both', path: ['value_display'] },
+);
 const manifestSchema = z.object({
   schema_version: z.literal(1).optional(),
   project: projectSchema.optional(),
@@ -115,7 +145,7 @@ const NESTED_KEYS: Readonly<Record<string, readonly string[]>> = {
   consent: Object.keys(consentSchema.shape),
 };
 const ITEM_KEYS: Readonly<Record<string, readonly string[]>> = {
-  repos: Object.keys(repoSchema.shape), outcomes: Object.keys(outcomeSchema.shape),
+  repos: Object.keys(repoSchema.shape), outcomes: Object.keys(outcomeObject.shape),
 };
 
 /* ── exported contracts ── */
@@ -124,7 +154,14 @@ export interface CaseStudyManifestRepo { readonly url: string; readonly role?: C
 export interface CaseStudyManifestOutcome {
   readonly key: string;
   readonly label: string;
-  readonly valueDisplay: string;
+  /*
+   * `null` when the author registered a collector instead of typing a number.
+   * Nothing downstream invents a display for it - the metric simply does not
+   * exist until a collector has computed one.
+   */
+  readonly valueDisplay: string | null;
+  /** A repository routine that recomputes this figure on every sync. */
+  readonly collector?: CaseStudyCollectorKey;
   /** WHO the author says established it. Recorded; it proves nothing on its own. */
   readonly verificationMethod?: CaseStudyVerificationMethod;
   readonly evidenceRef?: string;
@@ -327,7 +364,7 @@ function toManifest(d: z.infer<typeof manifestSchema>): CaseStudyManifest {
     publication: d.publication && { requestedSurfaces: d.publication.requested_surfaces },
     consent: c && { organizationNamed: c.organization_named, buildersNamed: c.builders_named, publicRepoLink: c.public_repo_link },
     outcomes: d.outcomes?.map((o) => ({ // verificationClass is invariant 3: not read from input
-      key: o.key, label: o.label, valueDisplay: o.value_display,
+      key: o.key, label: o.label, valueDisplay: o.value_display ?? null, collector: o.collector,
       verificationMethod: o.verification_method, evidenceRef: o.evidence_ref,
       verificationClass: 'pending' as const,
     })),

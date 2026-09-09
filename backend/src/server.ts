@@ -65,6 +65,7 @@ import { ensureSbpSchema } from './db/ensureSbpSchema';
 import { ensureCertPrepSchema } from './db/ensureCertPrepSchema';
 import { ensureProjectArchiveSchema } from './db/ensureProjectArchiveSchema';
 import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
+import { ensureInternshipSchema } from './db/ensureInternshipSchema';
 import { ensureOauthTokenVaultSchema } from './db/ensureOauthTokenVaultSchema';
 import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
 import { ensureAgentAttachmentSchema } from './db/ensureAgentAttachmentSchema';
@@ -2605,6 +2606,12 @@ async function start(): Promise<void> {
   // useless without the UNIQUE indexes this creates, which is why it is
   // ensured at boot alongside its siblings rather than by the send script.
   await ensureEmailSendLedgerSchema();
+  // AI Internship: application lifecycle, two-channel interview, decisions,
+  // documents, and `cohort_memberships` — the secondary membership that lets an
+  // intern join the internship cohort WITHOUT disturbing the class cohort in
+  // enrollments.cohort_id (docs/AI_INTERNSHIP_DISCOVERY.md §3.2). Ensured after
+  // enrollments/cohorts exist, since every table here hangs off one of them.
+  await ensureInternshipSchema();
   // Durable store for provider-rotated OAuth refresh tokens (MS Graph/Hotmail).
   // Without it every rotation is discarded and the deployment drifts toward a
   // dead credential that only an interactive re-consent can recover.

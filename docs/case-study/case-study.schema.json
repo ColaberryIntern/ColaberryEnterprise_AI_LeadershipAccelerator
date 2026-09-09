@@ -32,18 +32,30 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
-        "industry": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "industry": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
         "capabilities": {
           "description": "Capability facets, e.g. rag, document-ai, agents.",
           "type": "array",
           "maxItems": 40,
-          "items": { "type": "string", "minLength": 1, "maxLength": 80 }
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
         },
         "stack": {
           "description": "Technologies. Repository inference also derives these; a declared list takes precedence over inference only.",
           "type": "array",
           "maxItems": 40,
-          "items": { "type": "string", "minLength": 1, "maxLength": 80 }
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
         },
         "method": {
           "description": "Delivery method label, e.g. AADM.",
@@ -60,9 +72,20 @@
         "type": {
           "description": "Who did the work. Same vocabulary as CaseStudyBuiltByType in backend/src/types/caseStudy.ts.",
           "type": "string",
-          "enum": ["learner", "intern", "client_team", "colaberry_team", "ai_flotation_team", "joint_team"]
+          "enum": [
+            "learner",
+            "intern",
+            "client_team",
+            "colaberry_team",
+            "ai_flotation_team",
+            "joint_team"
+          ]
         },
-        "program": { "type": "string", "minLength": 1, "maxLength": 160 }
+        "program": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
       }
     },
     "publication": {
@@ -75,7 +98,12 @@
           "maxItems": 4,
           "items": {
             "type": "string",
-            "enum": ["enterprise", "training", "ai-flotation", "refactored"]
+            "enum": [
+              "enterprise",
+              "training",
+              "ai-flotation",
+              "refactored"
+            ]
           }
         }
       }
@@ -85,9 +113,15 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
-        "organization_named": { "type": "boolean" },
-        "builders_named": { "type": "boolean" },
-        "public_repo_link": { "type": "boolean" }
+        "organization_named": {
+          "type": "boolean"
+        },
+        "builders_named": {
+          "type": "boolean"
+        },
+        "public_repo_link": {
+          "type": "boolean"
+        }
       }
     },
     "repos": {
@@ -97,11 +131,24 @@
       "items": {
         "type": "object",
         "additionalProperties": true,
-        "required": ["url"],
+        "required": [
+          "url"
+        ],
         "properties": {
           "role": {
             "type": "string",
-            "enum": ["primary", "frontend", "backend", "agents", "data", "infra", "docs", "evals", "demo", "other"]
+            "enum": [
+              "primary",
+              "frontend",
+              "backend",
+              "agents",
+              "data",
+              "infra",
+              "docs",
+              "evals",
+              "demo",
+              "other"
+            ]
           },
           "url": {
             "description": "An https:// URL or an owner/repo shorthand. http://, javascript:, file: and anything carrying whitespace or quoting characters are rejected.",
@@ -109,8 +156,14 @@
             "minLength": 1,
             "maxLength": 2048,
             "allOf": [
-              { "pattern": "^(https://[^/]+/.+|[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)$" },
-              { "not": { "pattern": "[\\s<>\"'`\\\\]" } }
+              {
+                "pattern": "^(https://[^/]+/.+|[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)$"
+              },
+              {
+                "not": {
+                  "pattern": "[\\s<>\"'`\\\\]"
+                }
+              }
             ]
           }
         }
@@ -123,7 +176,10 @@
       "items": {
         "type": "object",
         "additionalProperties": true,
-        "required": ["key", "label", "value_display"],
+        "required": [
+          "key",
+          "label"
+        ],
         "properties": {
           "key": {
             "description": "Stable snake_case identifier, e.g. triage_time.",
@@ -132,17 +188,39 @@
             "maxLength": 80,
             "pattern": "^[a-z0-9]+(?:_[a-z0-9]+)*$"
           },
-          "label": { "type": "string", "minLength": 1, "maxLength": 160 },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
           "value_display": {
-            "description": "Human-readable figure exactly as it should render, e.g. \"40 → 12 min\".",
+            "description": "Human-readable figure exactly as it should render, e.g. \"40 → 12 min\". Required unless the outcome registers a collector, in which case the repository computes it and any value typed here is replaced on the next sync.",
             "type": "string",
             "minLength": 1,
             "maxLength": 120
           },
+          "collector": {
+            "description": "A repository routine that recomputes this figure on every sync, from the tree at a pinned commit. The list is closed: an unrecognised key is a schema violation, never an extension point. If the repository can compute a figure, register the collector instead of typing it.",
+            "type": "string",
+            "enum": [
+              "test_files",
+              "modules_with_tests",
+              "decision_records",
+              "commit_span",
+              "commits_per_week"
+            ]
+          },
           "verification_method": {
             "description": "WHO the author says established the figure. Orthogonal to verification_class, and it never promotes the class out of `pending`.",
             "type": "string",
-            "enum": ["client", "repo", "platform", "internal", "self", "manual"]
+            "enum": [
+              "client",
+              "repo",
+              "platform",
+              "internal",
+              "self",
+              "manual"
+            ]
           },
           "evidence_ref": {
             "description": "Free-text pointer for a human verifier to follow. Never fetched.",
@@ -150,7 +228,19 @@
             "minLength": 1,
             "maxLength": 200
           }
-        }
+        },
+        "anyOf": [
+          {
+            "required": [
+              "value_display"
+            ]
+          },
+          {
+            "required": [
+              "collector"
+            ]
+          }
+        ]
       }
     }
   }

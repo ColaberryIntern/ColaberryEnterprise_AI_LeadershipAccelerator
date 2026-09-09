@@ -204,9 +204,41 @@ the platform does not already hold; setting it `false` withholds them.
 |---|---|---|---|---|
 | `outcomes[].key` | string | **yes** | 1–80 chars, `^[a-z0-9]+(?:_[a-z0-9]+)*$` | Stable identifier, e.g. `triage_time`. |
 | `outcomes[].label` | string | **yes** | 1–160 chars | |
-| `outcomes[].value_display` | string | **yes** | 1–120 chars | Renders exactly as written, e.g. `40 → 12 min`. |
+| `outcomes[].value_display` | string | conditional | 1–120 chars | Renders exactly as written, e.g. `40 → 12 min`. Required unless `collector` is set. |
+| `outcomes[].collector` | enum | conditional | `test_files` · `modules_with_tests` · `decision_records` · `commit_span` · `commits_per_week` | A routine that recomputes the figure from the repository on every sync. Required unless `value_display` is set. |
 | `outcomes[].verification_method` | enum | no | `client` · `repo` · `platform` · `internal` · `self` · `manual` | Who the author says established it. **Does not verify anything.** |
 | `outcomes[].evidence_ref` | string | no | 1–200 chars | Free-text pointer for a human verifier. Never fetched. |
+
+### Figures the repository can compute for itself
+
+An outcome declares a **figure**, a **collector**, or both.
+
+Typing `value_display` records what the author believes. Setting `collector` records
+where the number comes from, and the sync recomputes it on every run from the tree at a
+pinned commit, storing the exact command that reproduces it. When both are present the
+collector wins, because a repository counting its own test files is more reliable than
+a person remembering how many there were.
+
+The collector list is **closed**. These routines run against a checkout of somebody
+else's repository, so an unrecognised key is a schema violation rather than an extension
+point: the only code that ever runs is code that was reviewed here.
+
+| `collector` | Shape | What it counts |
+|---|---|---|
+| `test_files` | share | Test files as a share of source files. |
+| `modules_with_tests` | ratio | Named modules that have a test file, out of all of them. |
+| `decision_records` | count | Decision records committed to the repository. |
+| `commit_span` | span | First to last commit date, and how many commits fall inside. |
+| `commits_per_week` | series | Commits per calendar week across that span. |
+
+**A collector that cannot compute its figure returns nothing, and no metric is created.**
+It never falls back to a default, a zero, or a rounded guess. An empty repository is a
+repository with no measurement, not a repository that measured zero.
+
+Registering a collector and typing no figure means the metric **does not exist** until
+the first successful collection. That is the intended state, not a gap to fill in.
+
+---
 
 There is no `verification_class` field, deliberately. Writing one has no effect: it is
 treated as an unknown property, stripped, and reported back to the admin, while the

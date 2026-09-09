@@ -49,7 +49,38 @@ describe('portalFlagsService — cape_today_plan flag', () => {
     jest.resetModules();
     delete process.env.CAPE_TODAY_PLAN_ENABLED;
     delete process.env.PORTAL_TODAY_REDESIGN_ENABLED;
+    delete process.env.INTERNSHIP_ENABLED;
     const { getPortalFlags } = await import('../portalFlagsService');
-    expect(getPortalFlags()).toEqual({ today_redesign: true, cape_today_plan: false });
+    // Whole-object equality on purpose: this guard exists so that ADDING a flag
+    // is a deliberate, visible act rather than something that slips in with a
+    // default nobody chose. Every new flag must be added here with the default
+    // its author intended.
+    expect(getPortalFlags()).toEqual({
+      today_redesign: true,
+      cape_today_plan: false,
+      internship: false,
+    });
+  });
+
+  it('ships the internship funnel dark, and only env turns it on', async () => {
+    // Default OFF is load-bearing: the application flow must not accept
+    // applications before Dhee's review queue exists to receive them.
+    jest.resetModules();
+    delete process.env.INTERNSHIP_ENABLED;
+    const off = await import('../portalFlagsService');
+    expect(off.getPortalFlags().internship).toBe(false);
+    expect(off.isInternshipEnabled()).toBe(false);
+
+    jest.resetModules();
+    process.env.INTERNSHIP_ENABLED = 'true';
+    const on = await import('../portalFlagsService');
+    expect(on.getPortalFlags().internship).toBe(true);
+
+    // Only the exact string 'true' enables it — 'TRUE'/'1'/'yes' must not.
+    jest.resetModules();
+    process.env.INTERNSHIP_ENABLED = '1';
+    const loose = await import('../portalFlagsService');
+    expect(loose.getPortalFlags().internship).toBe(false);
+    delete process.env.INTERNSHIP_ENABLED;
   });
 });

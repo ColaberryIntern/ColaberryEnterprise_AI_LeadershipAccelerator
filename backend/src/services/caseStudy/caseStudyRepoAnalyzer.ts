@@ -115,6 +115,15 @@ export interface CaseStudyRepoFacts {
    */
   readonly manifestFile: RepoManifestFile | null;
   readonly filesRead: readonly string[];
+  /*
+   * Every path in the SCOPED tree, which is more than `filesRead`: that one
+   * holds only the handful of files whose contents were fetched. A collector
+   * counts paths and never opens them, so it needs the whole list.
+   *
+   * Not persisted anywhere. It lives for the duration of a sync and is dropped
+   * with the facts object, which is why carrying it costs nothing.
+   */
+  readonly treePaths: readonly string[];
   readonly fileCount: number;
   readonly treeTruncated: boolean;
   readonly treeSource: TreeRead['source'];
@@ -364,6 +373,10 @@ export async function analyzeRepository(input: AnalyzeRepositoryInput): Promise<
     documents: buildDocuments(selected, files),
     manifestFile: buildManifestFile(selected, files),
     filesRead: [...files.keys()].sort(),
+    // SORTED, like every other derived fact. GitHub does not promise a tree
+    // order, and AC4 requires that the same repository read twice produces a
+    // byte-identical facts object - which it did not, until this sort.
+    treePaths: [...scoped.tree.paths].sort(),
     fileCount: pathFacts.scannedPathCount,
     treeTruncated: scoped.tree.truncated,
     treeSource: tree.source,

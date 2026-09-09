@@ -37,6 +37,9 @@
 import type {
   CaseStudyArtifactType,
   CaseStudyBuiltByType,
+  CaseStudyMetricPayload,
+  CaseStudyMetricPlain,
+  CaseStudyMetricShape,
   CaseStudyRepoRole,
   CaseStudyRoadmapStatus,
   CaseStudySurfaceKey,
@@ -77,6 +80,23 @@ export interface PublicCaseStudyMetric {
   readonly sample: string | null;
   readonly methodology: string | null;
   readonly limitations: readonly string[];
+  /*
+   * The SHAPE a reader's card is drawn from, and null on every record written
+   * before shapes existed - which is what lets the renderer fall back to the
+   * definition list above without asking whether this is a new record.
+   */
+  readonly shape: CaseStudyMetricShape | null;
+  readonly payload: CaseStudyMetricPayload | null;
+  readonly plain: CaseStudyMetricPlain | null;
+  /*
+   * ONLY the reproduce command escapes `collected`, deliberately.
+   *
+   * `outputHash` and `collectedAt` are how the SYNC decides whether a figure
+   * drifted; they say nothing to a reader and would invite treating a hash as
+   * provenance. The command is the opposite: it is the whole point of a
+   * repository-verified number, because it lets a sceptic re-derive it.
+   */
+  readonly reproduceCommand: string | null;
 }
 
 /** Prose. Paragraphs, not HTML — the renderer decides markup, not the API. */

@@ -241,7 +241,14 @@ export const CASE_STUDY_SURFACE_PROFILES: Readonly<
       eyebrow: 'Build one of these',
       heading: 'Start the program that produced this work.',
       buttonLabel: 'See the program',
-      href: '/programs',
+      /* /accelerator, NOT /programs. This href is resolved on training.colaberry.com,
+         which has no /programs route -- it 404'd on every student-project page. The
+         program page there is /accelerator ("Bring your idea. We help you turn it into a
+         real AI system"). Cross-surface hrefs like this one are the weak link in the
+         profile: nothing in this repository can follow them, so they are pinned by
+         caseStudySurfaceCtaHrefs.test.ts and must be re-checked against the live site
+         when either side moves a route. */
+      href: '/accelerator',
     },
     ['who built it', 'what they learned', 'skills', 'stack', 'artifacts', 'portfolio proof'],
     /* training.colaberry.com, its own site on its own domain. A learner's

@@ -146,6 +146,53 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
     // failed. `recordUnderstandingFromConversation` never throws, but the guard stays
     // because that is a promise made by another module and this one should not depend on
     // it holding forever.
+    // ── AI Internship interview calls ──────────────────────────────────────
+    // Scoped to this source for the same reason the branch below is: the other
+    // agents on this number run bootcamp callbacks, where there is no interview to
+    // extract and doing so would be spend with no consumer.
+    //
+    // Deliberately runs even when the call did NOT complete cleanly and even with
+    // no transcript, unlike the branch below — a failed or silent interview call is
+    // a fact the applicant needs reflected in the portal ("the call did not work,
+    // finish online"), not something to drop. The service decides what a given
+    // outcome means.
+    //
+    // Non-fatal: recording that the call happened is this endpoint's contract with
+    // the vendor and must not be lost because extraction failed.
+    if (commMeta.source === 'internship-interview') {
+      try {
+        const { handleInternshipCallCompleted } = await import('../services/internship/internshipCallCompletion');
+        const outcome = await handleInternshipCallCompleted({
+          callId: call_id ? String(call_id) : null,
+          applicationId: commMeta.application_id ?? null,
+          sessionId: commMeta.session_id ?? null,
+          transcript: transcript || '',
+          status,
+          disposition,
+          recordingUrl: recording_url ?? null,
+          durationSeconds: typeof duration === 'number' ? duration : null,
+        });
+        console.log(JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          service: 'backend',
+          event: 'internship_call_completion_handled',
+          outcome: outcome.handled ? 'success' : 'partial',
+          context: outcome,
+        }));
+      } catch (intErr: any) {
+        console.warn(JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: 'warn',
+          service: 'backend',
+          event: 'internship_call_completion_failed',
+          outcome: 'failure',
+          error_class: intErr?.constructor?.name ?? 'Error',
+          context: { message: intErr?.message },
+        }));
+      }
+    }
+
     if (callCompleted && transcript && commMeta.source === 'ai-flotation') {
       try {
         const leadRecord = commLog.lead_id ? await Lead.findByPk(commLog.lead_id) : null;

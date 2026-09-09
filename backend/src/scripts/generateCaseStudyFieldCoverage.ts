@@ -204,6 +204,79 @@ const AUTHORED: Record<string, Entry> = {
       + 'be a headline — spec §23 will not render a big number with no method',
     test: 'caseStudyPublicSections.test.ts',
   }),
+  /* ── metric shapes: computed figures, and how a reader checks them ────── */
+  'CaseStudyMetricEntry.shape': D({
+    disposition: 'deterministic', aiMayInfer: false, approvalRequired: false,
+    authoring: 'collector, or the shape migration; a human may set it by hand',
+    sourcePriority: 'collector > human entry',
+    detailHome: 'chooses which picture the metric card draws',
+    publicBehaviour: 'projected ONLY when the payload agrees with it',
+    emptyBehaviour: 'the card falls back to the definition list every record used '
+      + 'before shapes existed — absence is the legacy path, not a defect',
+    test: 'caseStudyContracts.test.ts',
+  }),
+  'CaseStudyMetricEntry.payload': D({
+    disposition: 'deterministic', aiMayInfer: false, approvalRequired: false,
+    authoring: 'collector output, structured; never prose parsed into numbers',
+    sourcePriority: 'collector > human entry',
+    detailHome: 'the numbers the meter, chips or sparkline are drawn from',
+    publicBehaviour: 'projected after a guard confirms it matches its own shape',
+    emptyBehaviour: 'no picture is drawn; the value still renders as text',
+    test: 'caseStudyContracts.test.ts',
+  }),
+  'CaseStudyMetricEntry.plain': D({
+    disposition: 'human_approved', aiMayInfer: false, approvalRequired: true,
+    authoring: 'a human writes all three answers — what it counts, where it came '
+      + 'from, what it cannot show',
+    sourcePriority: 'human entry only — a collector NEVER writes this',
+    detailHome: 'three short blocks under the figure',
+    publicBehaviour: 'projected only when all three answers are present',
+    emptyBehaviour: 'the method box renders instead; readiness warns',
+    test: 'caseStudyPublishGate.test.ts',
+  }),
+  'CaseStudyMetricEntry.collected': D({
+    disposition: 'deterministic', aiMayInfer: false, approvalRequired: false,
+    authoring: 'written by the collector on sync, never by hand',
+    sourcePriority: 'collector only',
+    detailHome: 'the reproduce command, behind a disclosure',
+    publicBehaviour: 'ONLY reproduceCommand crosses. The output hash and collection '
+      + 'time are how the sync detects drift; they tell a reader nothing and would '
+      + 'invite reading a hash as proof.',
+    emptyBehaviour: 'the metric was typed rather than computed; nothing renders',
+    privacy: 'partly internal', test: 'caseStudyPublicProjection.test.ts',
+  }),
+  'PublicCaseStudyMetric.shape': D({
+    disposition: 'deterministic', approvalRequired: false,
+    authoring: 'projection of CaseStudyMetricEntry.shape',
+    sourcePriority: 'projection', detailHome: 'selects the metric card visual',
+    publicBehaviour: 'null unless shape and payload agree',
+    emptyBehaviour: 'legacy definition-list card', test: 'caseStudyPublicProjection.test.ts',
+  }),
+  'PublicCaseStudyMetric.payload': D({
+    disposition: 'deterministic', approvalRequired: false,
+    authoring: 'projection of CaseStudyMetricEntry.payload',
+    sourcePriority: 'projection', detailHome: 'the drawn numbers',
+    publicBehaviour: 'guarded before it crosses', emptyBehaviour: 'no picture',
+    test: 'caseStudyPublicProjection.test.ts',
+  }),
+  'PublicCaseStudyMetric.plain': D({
+    disposition: 'human_approved',
+    authoring: 'projection of CaseStudyMetricEntry.plain',
+    sourcePriority: 'projection', detailHome: 'three plain-language blocks',
+    publicBehaviour: 'all three answers or none', emptyBehaviour: 'method box instead',
+    test: 'caseStudyPublicProjection.test.ts',
+  }),
+  'PublicCaseStudyMetric.reproduceCommand': D({
+    disposition: 'deterministic', approvalRequired: false,
+    authoring: 'projection of CaseStudyMetricEntry.collected.reproduceCommand',
+    sourcePriority: 'collector only',
+    detailHome: 'a disclosure reading "How this was counted"',
+    publicBehaviour: 'the one field that escapes the collection record, because a '
+      + 'sceptic can act on it',
+    emptyBehaviour: 'no disclosure is rendered',
+    test: 'caseStudyPublicProjection.test.ts',
+  }),
+
   'CaseStudyTimelineEntry.sourceRef': D({
     disposition: 'internal_only',
     authoring: 'repo sync — a commit sha, PR number or internal record id',

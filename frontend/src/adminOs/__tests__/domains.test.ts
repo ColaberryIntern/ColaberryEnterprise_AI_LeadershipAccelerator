@@ -20,10 +20,11 @@ const ROLE_SECTIONS: Record<string, string[]> = {
   owner: [
     'dashboard', 'trust', 'war_room', 'revenue', 'campaigns', 'lead_ingestion',
     'inbox_content', 'program', 'intelligence', 'system', 'students', 'leads', 'career_review',
+    'internship',
   ],
   curriculum: ['dashboard', 'program'],
   revenue: ['dashboard', 'revenue', 'leads'],
-  admissions: ['dashboard', 'lead_ingestion'],
+  admissions: ['dashboard', 'lead_ingestion', 'internship'],
   support: ['students'],
   mentor: ['dashboard', 'career_review'],
   community_organizer: ['dashboard'],

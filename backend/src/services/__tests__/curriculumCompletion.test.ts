@@ -1,5 +1,5 @@
 import {
-  WEEK_DONE_THRESHOLD, paceBandFor, weekFromSessionTitle,
+  BUCKET_ORDER, WEEK_DONE_THRESHOLD, bucketRank, paceBandFor, weekFromSessionTitle,
 } from '../curriculumCompletionService';
 
 /**
@@ -82,5 +82,34 @@ describe('the week-done threshold', () => {
     // Passing 30 here would make every week complete and every student gold.
     expect(WEEK_DONE_THRESHOLD).toBeGreaterThan(0);
     expect(WEEK_DONE_THRESHOLD).toBeLessThan(1);
+  });
+});
+
+describe('sections come back in the order a week is taught', () => {
+  it('orders the seven buckets the way the curriculum runs', () => {
+    expect([...BUCKET_ORDER]).toEqual([
+      'pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance',
+    ]);
+  });
+
+  it('does not sort them alphabetically', () => {
+    // THE LOAD-BEARING ASSERTION. `localeCompare` was the original sort, which put
+    // `advance` — the last thing in a week — in the first column of the heatmap and
+    // `pre_class` in the fifth. Seven rows hid that; seven columns read left to right
+    // do not.
+    const alphabetical = [...BUCKET_ORDER].sort((a, b) => a.localeCompare(b));
+    const taught = [...BUCKET_ORDER].sort((a, b) => bucketRank(a) - bucketRank(b));
+    expect(taught).not.toEqual(alphabetical);
+    expect(taught[0]).toBe('pre_class');
+    expect(taught[taught.length - 1]).toBe('advance');
+  });
+
+  it('sorts an unknown bucket last instead of dropping it', () => {
+    // A bucket added to the enum but not to BUCKET_ORDER must still render as a column,
+    // otherwise cards silently vanish from a view whose whole job is showing what is there.
+    expect(bucketRank('some_new_bucket')).toBe(BUCKET_ORDER.length);
+    const mixed = ['advance', 'some_new_bucket', 'pre_class']
+      .sort((a, b) => bucketRank(a) - bucketRank(b));
+    expect(mixed).toEqual(['pre_class', 'advance', 'some_new_bucket']);
   });
 });

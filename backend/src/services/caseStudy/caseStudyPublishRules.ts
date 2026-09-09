@@ -53,7 +53,11 @@ export type CaseStudyPublishBlockerCode =
   | 'proof_metadata_missing'
   | 'self_attested_verification'
   | 'ai_generated_quote'
-  | 'unverified_claim';
+  | 'unverified_claim'
+  | 'metric_shape_payload_mismatch'
+  | 'metric_ratio_missing_denominator'
+  | 'metric_members_count_mismatch'
+  | 'metric_collected_sha_mismatch';
 
 export const CASE_STUDY_PUBLISH_BLOCKER_CODES = [
   'surface_not_publishable',
@@ -67,6 +71,10 @@ export const CASE_STUDY_PUBLISH_BLOCKER_CODES = [
   'self_attested_verification',
   'ai_generated_quote',
   'unverified_claim',
+  'metric_shape_payload_mismatch',
+  'metric_ratio_missing_denominator',
+  'metric_members_count_mismatch',
+  'metric_collected_sha_mismatch',
 ] as const;
 
 /** One reason a publish was refused. `message` names the FIELD and its VALUE. */
@@ -372,5 +380,115 @@ export function ruleProofMetadata(
     b.add('proof_metadata_missing', 'identity.productionStatus.verification.evidenceId',
       `production status "${ps.status}" is labelled verified but carries no evidence reference`,
       'link the evidence that establishes the deployment, or lower the verification class');
+  }
+}
+
+/**
+ * 12 - a shaped metric has to agree with itself.
+ *
+ * A METRIC WITH NO SHAPE TRIGGERS NONE OF THIS, and that is the point. Every
+ * record published before shapes existed carries no `shape`, no `payload` and no
+ * `collected`, and must pass exactly the blockers it passed yesterday. This rule
+ * only ever fires on a record that opted in and then contradicted itself.
+ *
+ * The four disagreements it catches, in the order they cost a reader:
+ *
+ *   payload mismatch      the card is told to draw a meter from numbers that
+ *                         are not there, so it draws nothing or it draws wrong
+ *   missing denominator   "4 of 7" with no 7 is the original defect, restated
+ *                         in a structured field where it looks fixed
+ *   members disagree      six names under a figure that says four is a claim
+ *                         the reader can check and catch, which is worse than
+ *                         a number they cannot check at all
+ *   sha mismatch          the figure was computed at one commit and the
+ *                         evidence pinned to another, so "reproduce this" does
+ *                         not reproduce it
+ *
+ * Only VISIBLE metrics are checked, like every other content rule here. An
+ * unpublishable metric may be mid-edit, and blocking a page over a figure
+ * nobody will see would be the gate refusing work it is not doing.
+ */
+export function ruleMetricShapes(metrics: readonly MetricAt[], b: Blockers): void {
+  for (const m of metrics) {
+    if (!visible(m)) continue;
+    const metric = m.metric;
+    if (!metric.shape) continue;
+
+    const payload = metric.payload;
+    if (!payload || payload.shape !== metric.shape) {
+      b.add('metric_shape_payload_mismatch', `${m.path}.payload`,
+        `${metricName(metric)} declares shape ${metric.shape} but its payload ${payload ? `says ${payload.shape}` : 'is missing'}`,
+        'recollect the figure so the payload matches the declared shape, or clear the shape so the metric renders as plain text');
+      continue;
+    }
+
+    if ((payload.shape === 'ratio' || payload.shape === 'share')
+      && !(Number.isFinite(payload.denominator) && payload.denominator > 0)) {
+      b.add('metric_ratio_missing_denominator', `${m.path}.payload.denominator`,
+        `${metricName(metric)} is a ${payload.shape} with no usable denominator`,
+        'give the figure the total it is measured against; a ratio without one is the string "4 of 7" again');
+    }
+
+    if (payload.shape === 'ratio' && Array.isArray(payload.members) && payload.members.length > 0) {
+      // Members may be CAPPED - a collector that found 200 modules lists 40 -
+      // so more members than the denominator is the contradiction, not fewer.
+      if (payload.members.length > payload.denominator) {
+        b.add('metric_members_count_mismatch', `${m.path}.payload.members`,
+          `${metricName(metric)} lists ${payload.members.length} members against a denominator of ${payload.denominator}`,
+          'recollect the figure; a reader can count the names, so a list longer than the total reads as an error in the number');
+      }
+      const yes = payload.members.filter((member) => member.status === 'yes').length;
+      if (payload.members.length === payload.denominator && yes !== payload.numerator) {
+        b.add('metric_members_count_mismatch', `${m.path}.payload.members`,
+          `${metricName(metric)} says ${payload.numerator} but ${yes} of its ${payload.members.length} members are marked yes`,
+          'recollect the figure so the marked members and the numerator agree');
+      }
+    }
+
+    if (payload.shape === 'count' && Array.isArray(payload.members)
+      && payload.members.length > payload.value) {
+      b.add('metric_members_count_mismatch', `${m.path}.payload.members`,
+        `${metricName(metric)} counts ${payload.value} but lists ${payload.members.length} members`,
+        'recollect the figure so the count is at least as large as the list under it');
+    }
+  }
+}
+
+/**
+ * 13 - a collected figure must be pinned to a commit the record still describes.
+ *
+ * WHY THIS IS A BLOCKER AND NOT A WARNING. The entire claim of a collected
+ * metric is "run this command at this commit and you get this number". When the
+ * snapshot has moved on to a newer commit and the figure has not, the page
+ * shows a number computed from a tree it no longer describes, under a command
+ * that reproduces a version of the work nobody is reading about. A checkable
+ * promise that fails when checked is worse than no promise at all.
+ *
+ * A metric with no `collected` block was typed by a human and makes no such
+ * promise, so it is not checked here.
+ *
+ * The comparison is against EVERY pinned repository, not just one. A case study
+ * spanning three repositories has three shas, and a figure collected from any
+ * of them is correctly pinned. Matching on the set is the honest test; picking
+ * the first would fail every multi-repository record.
+ */
+export function ruleCollectedSha(
+  metrics: readonly MetricAt[], content: CaseStudySnapshotContent, b: Blockers,
+): void {
+  const pinned = new Set(
+    arr(content.repositories).map((repo) => text(repo.lastSeenSha)).filter((sha) => sha.length > 0),
+  );
+  // No pinned sha at all means the repositories were never analysed, which
+  // other rules already report. Blocking here would double-report one problem.
+  if (pinned.size === 0) return;
+
+  for (const m of metrics) {
+    if (!visible(m)) continue;
+    const collected = m.metric.collected;
+    if (!collected) continue;
+    if (pinned.has(collected.collectedSha)) continue;
+    b.add('metric_collected_sha_mismatch', `${m.path}.collected.collectedSha`,
+      `${metricName(m.metric)} was computed at ${collected.collectedSha.slice(0, 8)}, which is not a commit this record is pinned to`,
+      're-run the sync so the figure is recomputed at the commit the record describes; a reproduce command against a different commit does not reproduce the number');
   }
 }

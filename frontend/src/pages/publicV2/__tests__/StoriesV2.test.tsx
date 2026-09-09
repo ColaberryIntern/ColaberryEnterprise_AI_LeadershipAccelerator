@@ -215,20 +215,26 @@ describe('cards route to the detail page and invent nothing', () => {
     H.mount();
     await H.settle();
     const card = H.q('[data-case-study="no-metric-record"]')!;
-    expect(card.getAttribute('data-headline')).toBe('proof-point');
-    expect(card.textContent).toContain('Retrieval');
+    // The card advertises no figure at all now, which is what it renders. It
+    // used to advertise "proof-point" after it had stopped drawing one.
+    expect(card.getAttribute('data-figure')).toBe('none');
     // The whole point: a record with no figure produces a card with no figure.
     expect(card.textContent?.match(/\d/g) ?? []).toEqual([]);
   });
 
   it('prints no digit a card did not receive', async () => {
-    const record = summary();
+    // A POSITIVE CONTROL, because the card no longer renders a figure and the
+    // extraction below would otherwise pass by finding nothing at all. The
+    // standfirst carries a number the payload also carries, so the loop is
+    // proved to be looking at real text before it is trusted to catch an
+    // invented one.
+    const record = summary({ standfirst: 'Rebuilt across 12 weeks with the client team.' });
     indexMock.mockResolvedValue(H.list({ items: [record], total: 1 }));
     H.mount();
     await H.settle();
     const payload = JSON.stringify(record);
     const digits = (H.q('[data-case-study="sample-record"]')?.textContent ?? '').match(/\d+/g) ?? [];
-    expect(digits.length).toBeGreaterThan(0);
+    expect(digits).toContain('12');
     for (const group of digits) expect(payload).toContain(group);
   });
 
