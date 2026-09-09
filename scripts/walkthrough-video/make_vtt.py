@@ -6,6 +6,7 @@ reference clip does. This file is the accessible copy of the same sentences: a b
 caption cannot be read by a screen reader, resized, translated, or turned off, and it is
 not what a `track` element needs. Same text, same cue boundaries as the narration.
 """
+import argparse
 import json
 import os
 
@@ -20,8 +21,16 @@ def ts(seconds):
 
 
 def main():
-    deck = json.load(open(os.path.join(HERE, "deck.json"), encoding="utf-8"))
-    timings = {t["index"]: t for t in json.load(open(os.path.join(HERE, "timings.json"), encoding="utf-8"))}
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--deck", default=os.path.join(HERE, "deck.json"))
+    args = ap.parse_args()
+    deck_path = os.path.abspath(args.deck)
+    deck_dir = os.path.dirname(deck_path)
+    raw = json.load(open(deck_path, encoding="utf-8"))
+    cfg = raw if isinstance(raw, dict) else {"slides": raw}
+    deck = cfg["slides"]
+    out_name = os.path.splitext(cfg.get("output", "walkthrough.mp4"))[0] + ".vtt"
+    timings = {t["index"]: t for t in json.load(open(os.path.join(deck_dir, "timings.json"), encoding="utf-8"))}
 
     lines = ["WEBVTT", ""]
     clock = 0.0
@@ -34,7 +43,7 @@ def main():
         lines += [f"{i + 1}", f"{ts(start)} --> {ts(end)}", s["caption"], ""]
         clock += seg
 
-    out = os.path.join(HERE, "repo2reputation-walkthrough.vtt")
+    out = os.path.join(deck_dir, out_name)
     with open(out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(lines))
     print(f"wrote {out}: {len(deck)} cues over {clock:.1f}s")

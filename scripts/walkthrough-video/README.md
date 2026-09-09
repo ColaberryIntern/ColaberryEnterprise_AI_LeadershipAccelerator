@@ -25,11 +25,20 @@ verified.
 
 ## Running it
 
+One deck per record, under `decks/`. Everything is written beside the deck file, so two
+records never overwrite each other's narration.
+
 ```bash
-python make_narration.py     # neural voice -> audio/NN.mp3 + timings.json
-python build_video.py        # slides + footage + audio -> repo2reputation-walkthrough.mp4
-python make_vtt.py           # the accessible caption sidecar
+D=decks/coreops.json
+python make_narration.py --deck $D   # neural voice -> audio/NN.mp3 + timings.json
+python build_video.py    --deck $D   # slides + footage + audio -> the mp4 it names
+python make_vtt.py       --deck $D   # the accessible caption sidecar
 ```
+
+A deck declares `output`, its `slides`, and optionally a `gif` plus `gifCrop` when the
+subject committed a demo recording. A record without one — most of them — uses
+`screenshot` slides of its real captures instead. Slide kinds: `title`, `cards`,
+`screenshot`, `diagram`, `image`, `footage`.
 
 `make_narration.py` must run first: segment durations come from how long each sentence
 actually takes to speak, not from the deck's guesses, or a slide ends mid-word.
