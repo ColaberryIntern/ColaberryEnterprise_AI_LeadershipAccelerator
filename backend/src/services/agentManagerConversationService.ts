@@ -9,6 +9,9 @@ import {
 import {
   applyConfirmedGoalChange, buildGoalConfirmationCardText, detectChangeGoalIntent, toPendingGoalConfirmation,
 } from './managerGoalIntentService';
+import {
+  applyConfirmedOneOnOneSchedule, buildOneOnOneConfirmationCardText, detectScheduleOneOnOneIntent, toPendingOneOnOneConfirmation,
+} from './managerOneOnOneIntentService';
 import { detectWorkStatusQuery, buildWorkStatusReply } from './agentWorkStatusIntentService';
 import { detectUncertaintyQuery, buildUncertaintyReply } from './agentUncertaintyIntentService';
 import { detectInterventionIntentQuery, buildInterventionIntentReply } from './agentInterventionIntentService';
@@ -26,11 +29,13 @@ import { detectInterventionIntentQuery, buildInterventionIntentReply } from './a
 // (QUARANTINE_METRIC/RESTORE_METRIC) is now detected and gated behind a real
 // confirmation turn — see managerReliabilityIntentService.ts.
 //
-// Capability 8 (2026-09-08) narrows it by one more: CHANGE_GOAL is now
-// detected and gated the same way, riding the generic
-// `pending_intent_confirmation` column instead of a dedicated one — see
-// managerGoalIntentService.ts. Every other intent
-// (ASK/INSTRUCT/CORRECT/APPROVE/REJECT/COACH/SCHEDULE/ASSIGN_WORK/
+// Capability 8 (2026-09-08) narrows it by two more, both riding the generic
+// `pending_intent_confirmation` column instead of a dedicated one:
+// CHANGE_GOAL (managerGoalIntentService.ts) and SCHEDULE
+// (managerOneOnOneIntentService.ts, 1:1 check-ins). See
+// handlePendingGenericIntentConfirmation/handleNewGenericIntentDetection
+// below for how the column dispatches across intent types. Every other
+// intent (ASK/INSTRUCT/CORRECT/APPROVE/REJECT/COACH/ASSIGN_WORK/
 // REPORT_DATA_ISSUE/...) is still purely conversational, unchanged.
 
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
@@ -132,16 +137,25 @@ async function handlePendingOrNewReliabilityIntent(
   return null;
 }
 
+function genericIntentCancelText(pending: NonNullable<AgentManagerConversation['pending_intent_confirmation']>): string {
+  if (pending.intentType === 'CHANGE_GOAL') {
+    return 'Okay, no change made — the goal stays as it was. Let me know if you did want to change that.';
+  }
+  return 'Okay, no 1:1 scheduled. Let me know if you did want to set one up.';
+}
+
 /**
- * Reese Agentic AI Employee mission, Capability 8 — the second real intent
- * on the generic `pending_intent_confirmation` column (CHANGE_GOAL), same
- * shape as handlePendingOrNewReliabilityIntent above but riding the generic
- * column rather than a dedicated one. Checked AFTER the reliability handler
- * so a pending reliability confirmation always keeps priority — a
+ * Reese Agentic AI Employee mission, Capability 8 — handles a PENDING
+ * confirmation on the generic `pending_intent_confirmation` column,
+ * dispatching by `intentType` to whichever intent actually detected it
+ * (CHANGE_GOAL, SCHEDULE_ONE_ON_ONE, ...). Checked AFTER the reliability
+ * handler (which owns its own dedicated column and keeps priority) — a
  * conversation is never left with two different pending confirmations
- * competing for the same short "confirm"/"cancel" reply.
+ * competing for the same short "confirm"/"cancel" reply. Returns null only
+ * when nothing is pending; a fresh detection is handleNewGenericIntentDetection's
+ * job below.
  */
-async function handlePendingOrNewGoalIntent(
+async function handlePendingGenericIntentConfirmation(
   agentId: string,
   conversation: AgentManagerConversation,
   messageText: string,
@@ -149,22 +163,45 @@ async function handlePendingOrNewGoalIntent(
   participantOrgMemberId: string | null,
 ): Promise<string | null> {
   const pending = conversation.pending_intent_confirmation;
+  if (!pending) return null;
 
-  if (pending) {
-    const verdict = detectConfirmationReply(messageText);
-    if (verdict === 'confirm') {
-      await conversation.update({ pending_intent_confirmation: null });
+  const verdict = detectConfirmationReply(messageText);
+  if (verdict === 'confirm') {
+    await conversation.update({ pending_intent_confirmation: null });
+    if (pending.intentType === 'CHANGE_GOAL') {
       const { summary } = await applyConfirmedGoalChange(agentId, pending, participantEmail, participantOrgMemberId);
       return summary;
     }
-    await conversation.update({ pending_intent_confirmation: null });
-    return 'Okay, no change made — the goal stays as it was. Let me know if you did want to change that.';
+    const { summary } = await applyConfirmedOneOnOneSchedule(agentId, pending, participantEmail, participantOrgMemberId);
+    return summary;
   }
 
-  const detected = detectChangeGoalIntent(messageText);
-  if (detected) {
-    await conversation.update({ pending_intent_confirmation: toPendingGoalConfirmation(detected) });
-    return buildGoalConfirmationCardText(detected);
+  await conversation.update({ pending_intent_confirmation: null });
+  return genericIntentCancelText(pending);
+}
+
+/**
+ * Reese Agentic AI Employee mission, Capability 8 — tries each generic
+ * intent's detector in turn against a FRESH message (no pending confirmation
+ * already in play — that's handlePendingGenericIntentConfirmation's job).
+ * Order is the priority when a message could plausibly match more than one
+ * — CHANGE_GOAL first since it shipped first, SCHEDULE_ONE_ON_ONE next.
+ * Adding a new intent here is the one place future intents plug in.
+ */
+async function handleNewGenericIntentDetection(
+  conversation: AgentManagerConversation,
+  messageText: string,
+): Promise<string | null> {
+  const goalDetected = detectChangeGoalIntent(messageText);
+  if (goalDetected) {
+    await conversation.update({ pending_intent_confirmation: toPendingGoalConfirmation(goalDetected) });
+    return buildGoalConfirmationCardText(goalDetected);
+  }
+
+  const oneOnOneDetected = detectScheduleOneOnOneIntent(messageText);
+  if (oneOnOneDetected) {
+    await conversation.update({ pending_intent_confirmation: toPendingOneOnOneConfirmation(oneOnOneDetected) });
+    return buildOneOnOneConfirmationCardText(oneOnOneDetected);
   }
 
   return null;
@@ -246,12 +283,18 @@ export async function sendManagerMessage(
     return persistAgentReplyAndReturnView(conversation, agentId, reliabilityReply);
   }
 
-  // Reese Agentic AI Employee mission, Capability 8 — CHANGE_GOAL intent.
+  // Reese Agentic AI Employee mission, Capability 8 — the generic pending-
+  // intent-confirmation column (CHANGE_GOAL, SCHEDULE_ONE_ON_ONE, ...).
   // Checked right after reliability (same "pending confirmation owns the
   // next reply" posture) and before every purely-informational query below.
-  const goalIntentReply = await handlePendingOrNewGoalIntent(agentId, conversation, messageText, participantEmail, participantOrgMemberId);
-  if (goalIntentReply !== null) {
-    return persistAgentReplyAndReturnView(conversation, agentId, goalIntentReply);
+  const pendingIntentReply = await handlePendingGenericIntentConfirmation(agentId, conversation, messageText, participantEmail, participantOrgMemberId);
+  if (pendingIntentReply !== null) {
+    return persistAgentReplyAndReturnView(conversation, agentId, pendingIntentReply);
+  }
+
+  const newIntentReply = await handleNewGenericIntentDetection(conversation, messageText);
+  if (newIntentReply !== null) {
+    return persistAgentReplyAndReturnView(conversation, agentId, newIntentReply);
   }
 
   const workStatusReply = await handleWorkStatusQuery(agent, messageText);

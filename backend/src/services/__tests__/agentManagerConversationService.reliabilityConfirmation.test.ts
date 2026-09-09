@@ -51,6 +51,12 @@ jest.mock('../managerGoalIntentService', () => ({
   toPendingGoalConfirmation: jest.fn(),
   applyConfirmedGoalChange: jest.fn(),
 }));
+jest.mock('../managerOneOnOneIntentService', () => ({
+  detectScheduleOneOnOneIntent: jest.fn(() => null),
+  buildOneOnOneConfirmationCardText: jest.fn(() => ''),
+  toPendingOneOnOneConfirmation: jest.fn(),
+  applyConfirmedOneOnOneSchedule: jest.fn(),
+}));
 // Checkpoint F's work-status query is unrelated to this file's reliability
 // scenarios — mocked wholesale so none of these tests need to also stub the
 // Ticket/AdminUser models agentWorkStatusIntentService.ts queries directly.
