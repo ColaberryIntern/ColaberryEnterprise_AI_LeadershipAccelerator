@@ -134,10 +134,13 @@ describe('people roster', () => {
     expect(sql).toContain("'enrolled_student'");
     expect(sql).toContain("'applicant'");
     expect(sql).toContain("'lead'");
-    // graduate IS assigned now: 'completed' is a real enum value and the
-    // expression reads it. It currently matches nobody, because nothing sets
-    // that status — a process gap the trust panel names explicitly.
-    expect(sql).toContain("THEN 'graduate'");
+    // 'lapsed' is assigned, and 'graduate' is NOT. Complete is never in a
+    // subscription business; someone who stops has lapsed. Before this, a
+    // withdrawn enrolment read as enrolled_student and inflated the active count
+    // by 62 people.
+    expect(sql).toContain("THEN 'lapsed'");
+    expect(sql).toContain("e.status = 'withdrawn'");
+    expect(sql).not.toContain("THEN 'graduate'");
     expect(sql).not.toContain("THEN 'active_learner'");
     expect(sql).not.toContain("THEN 'returning_customer'");
     expect(sql).not.toContain("THEN 'identified_visitor'");

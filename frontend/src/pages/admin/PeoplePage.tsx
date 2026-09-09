@@ -43,6 +43,7 @@ const STAGE_LABEL: Record<string, string> = {
   enrolled_student: 'Enrolled',
   active_learner: 'Active learner',
   graduate: 'Graduate',
+  lapsed: 'Lapsed',
   returning_customer: 'Returning customer',
 };
 

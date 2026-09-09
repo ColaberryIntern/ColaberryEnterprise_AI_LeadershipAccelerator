@@ -129,13 +129,16 @@ interface Profile {
 const STAGE_LABEL: Record<string, string> = {
   anonymous_visitor: 'Anonymous visitor', identified_visitor: 'Identified visitor',
   lead: 'Lead', applicant: 'Applicant', enrolled_student: 'Enrolled',
-  active_learner: 'Active learner', graduate: 'Graduate', returning_customer: 'Returning customer',
+  active_learner: 'Active learner', graduate: 'Graduate', lapsed: 'Lapsed',
+  returning_customer: 'Returning customer',
 };
 
 const STAGE_TONE: Record<string, 'info' | 'warning' | 'success' | 'neutral'> = {
   anonymous_visitor: 'neutral', identified_visitor: 'neutral', lead: 'info',
   applicant: 'warning', enrolled_student: 'success', active_learner: 'success',
-  graduate: 'success', returning_customer: 'success',
+  // Lapsed is the state the business exists to prevent, so it reads as a
+  // warning rather than a neutral end-state.
+  graduate: 'success', lapsed: 'warning', returning_customer: 'success',
 };
 
 const TEMPERATURE_TONE: Record<string, string> = { hot: 'danger', warm: 'warning', cold: 'secondary' };
