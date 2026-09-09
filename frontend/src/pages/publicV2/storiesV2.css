@@ -149,7 +149,15 @@
 }
 
 @media (min-width: 48rem) {
-  .cbv2-stories__results { grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); }
+  /* CAPPED, NOT STRETCHED. With `1fr` a row holding one or two items lets each
+     fill the whole row: the "Keep reading" cards measured 710px on Enterprise
+     and 1024px on AI Flotation against the 368px index card Ali called the
+     right size. `justify-content: start` plus a fixed upper track keeps a card
+     the same object whether the row holds one of them or four. */
+  .cbv2-stories__results {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 23rem));
+    justify-content: start;
+  }
 }
 
 .cbv2-stories__result { display: grid; min-width: 0; }
