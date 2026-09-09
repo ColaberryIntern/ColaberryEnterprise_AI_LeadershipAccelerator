@@ -529,9 +529,20 @@
   }
 }
 
-.cbv2-cs-measure__metric {
-  max-height: 800px;
-  overflow: hidden auto;
+/*
+ * THE LIST SCROLLS, NOT THE CARD. Capping the card and letting it scroll was
+ * the first attempt, and rendering it at 1440 showed why it was wrong: on a
+ * forty-member card the limitations footer and the reproduce command were
+ * pushed below the card's own fold. The caveat is the single thing on a metric
+ * card that must not be hideable, so the member list is what gets bounded and
+ * the footer always sits on screen under it.
+ */
+.cbv2-cs-shape__members,
+.cbv2-cs-shape__chips {
+  /* 18rem, not 22: at 390px every line of prose wraps further and 22 left the
+     worst-case card at 809px, over the 800 ceiling. Measured, not guessed. */
+  max-height: 18rem;
+  overflow-y: auto;
 }
 
 .cbv2-cs-measure__plain {
