@@ -81,11 +81,11 @@ export const LIFECYCLE: Record<LifecycleStage, LifecycleStageDef> = {
     label: 'Enrolled student',
     definition: 'A person with an active enrolment in a cohort.',
     evidence: 'enrollments row with status active',
-    joinable_today: false,
-    gap:
-      'enrollments has NO lead/visitor/person foreign key. The join to acquisition is an ' +
-      'email string match covering 83.4% of enrolments; 86 of 517 match nothing. Until the ' +
-      'identity layer lands, this stage cannot be reliably connected to the stages before it.',
+    // Was false until 2026-09-08. The identity layer landed: enrollments.person_id
+    // exists and is backfilled (517 of 526 rows; the 9 newer ones are picked up by
+    // re-running the idempotent backfill), so this stage now connects to the
+    // stages before it by a real key rather than an email string match.
+    joinable_today: true,
   },
   active_learner: {
     stage: 'active_learner',
@@ -104,9 +104,18 @@ export const LIFECYCLE: Record<LifecycleStage, LifecycleStageDef> = {
     stage: 'graduate',
     label: 'Graduate / alumni',
     definition: 'A student who completed their programme.',
-    evidence: 'enrolment completion record',
-    joinable_today: false,
-    gap: 'Inherits the enrolment join gap.',
+    evidence: "enrollments row with status 'completed'",
+    // The JOIN gap is closed, and 'completed' is a real value in
+    // enum_enrollments_status. So this stage is computable — but measured
+    // 2026-09-08, ZERO enrolments carry it: 464 active, 62 withdrawn, 0
+    // completed, 0 suspended.
+    //
+    // That is a process gap, not a schema one, and the distinction matters:
+    // nothing marks a student complete when their cohort ends. Until something
+    // does, this stage computes correctly and returns nobody — which is why the
+    // profile states it as a gap rather than letting an empty graduate count
+    // read as "nobody graduated".
+    joinable_today: true,
   },
   returning_customer: {
     stage: 'returning_customer',

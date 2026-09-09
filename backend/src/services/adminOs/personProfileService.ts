@@ -260,6 +260,7 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
             COALESCE(e.company, l.company) AS company,
             COALESCE(e.title, l.title) AS title,
             (CASE
+               WHEN e.status = 'completed' THEN 'graduate'
                WHEN e.email IS NOT NULL THEN 'enrolled_student'
                WHEN l.pipeline_stage IS NOT NULL AND l.pipeline_stage <> 'new_lead' THEN 'applicant'
                ELSE 'lead'
@@ -272,7 +273,10 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
      ) l
      FULL OUTER JOIN (
        SELECT lower(btrim(email)) AS email, max(full_name) AS name, max(company) AS company,
-              max(title) AS title
+              max(title) AS title,
+              -- Most advanced status wins, so one completed enrolment makes the
+              -- person a graduate even if they also hold an active one.
+              MAX(CASE WHEN status::text = 'completed' THEN 'completed' ELSE NULL END) AS status
        FROM enrollments WHERE lower(btrim(email)) = :email GROUP BY lower(btrim(email))
      ) e ON e.email = l.email`,
     { type: QueryTypes.SELECT, replacements: { email } },
@@ -496,10 +500,20 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
       reason: 'Never recorded. This is not the same as consent being refused.',
     });
   }
+  // Corrected 2026-09-08. The earlier wording said no completion state existed —
+  // it does: 'completed' is a value in enum_enrollments_status and the stage
+  // expression now reads it. The real gap is that NOTHING SETS IT.
   gaps.push({
-    field: 'Outcomes',
-    reason: 'Completion, graduation and placement cannot be computed: enrollments.status holds '
-      + 'only active and withdrawn, so no completion state exists in the data.',
+    field: 'Graduation',
+    reason: 'Computable but never set. enrollments.status supports "completed", and this profile '
+      + 'reads it, but no enrolment has ever carried it (464 active, 62 withdrawn, 0 completed as '
+      + 'of 2026-09-08). Nothing marks a student complete when their cohort ends, so an empty '
+      + 'graduate count means "not recorded", not "did not graduate".',
+  });
+  gaps.push({
+    field: 'Placement and employment',
+    reason: 'Not tracked anywhere in this database, so outcomes beyond graduation cannot be '
+      + 'reported at all.',
   });
   if (enrollmentIds.length > 0) {
     gaps.push({

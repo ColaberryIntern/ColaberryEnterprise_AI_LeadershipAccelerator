@@ -267,18 +267,22 @@ describe('person profile', () => {
     expect(profile!.trust!.matchMethod).toBe('none');
   });
 
-  it('always names outcomes as uncomputable, because no completion status exists', async () => {
-    // enrollments.status holds only active and withdrawn. This gap is not
-    // person-specific — it is a property of the schema, and saying so stops
-    // someone reading an absent graduation as "did not graduate".
+  it('says graduation is computable but never set, not that it is impossible', async () => {
+    // Corrected 2026-09-08. I had reported that no completion status existed;
+    // 'completed' IS a value in enum_enrollments_status and the stage expression
+    // reads it. The real gap is that nothing ever sets it — a process gap, not a
+    // schema one — and the two call for different fixes.
     const profile = await getPersonProfile({
       email: 'someone@example.com',
       sections: sectionsFor('owner'),
       visibleEnrollmentIds: null,
     });
-    const outcomes = profile!.trust!.gaps.find((g) => g.field === 'Outcomes');
-    expect(outcomes).toBeDefined();
-    expect(outcomes!.reason).toMatch(/active and withdrawn/);
+    const grad = profile!.trust!.gaps.find((g) => g.field === 'Graduation');
+    expect(grad).toBeDefined();
+    expect(grad!.reason).toMatch(/never set/i);
+    expect(grad!.reason).toMatch(/not "did not graduate"/);
+    // Placement is genuinely untracked, and stays a separate, harder gap.
+    expect(profile!.trust!.gaps.some((g) => g.field === 'Placement and employment')).toBe(true);
   });
 
   it('reports source record ids so any figure can be traced back', async () => {

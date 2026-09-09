@@ -31,11 +31,16 @@ import { visibleStagesForSections } from './personScope';
  *
  * ── STAGES THIS CAN AND CANNOT COMPUTE ──────────────────────────────────────
  *
- * Measured 2026-09-06: `enrollments.status` holds only 'active' (456) and
- * 'withdrawn' (62). There is NO completion status, so `graduate` cannot be
- * computed at all — which is exactly what lifecycle.ts already records. It is
- * therefore never assigned here rather than being approximated from something
- * that looks close.
+ * `graduate` IS computable: 'completed' is a real value in
+ * enum_enrollments_status and this expression reads it. But measured 2026-09-08,
+ * ZERO enrolments carry it — 464 active, 62 withdrawn, 0 completed. Nothing
+ * marks a student complete when their cohort ends, so this branch is correct and
+ * currently matches nobody. That is a process gap, and the profile's trust panel
+ * says so rather than letting an empty graduate count read as "nobody
+ * graduated".
+ *
+ * `active_learner` and `returning_customer` are still never assigned: attendance
+ * is unreliable, and there is no local payments source.
  */
 
 export interface PersonRow {
@@ -85,6 +90,7 @@ const MAX_LIMIT = 200;
  */
 const STAGE_SQL = `
   CASE
+    WHEN e.status = 'completed' THEN 'graduate'
     WHEN e.email IS NOT NULL THEN 'enrolled_student'
     WHEN l.pipeline_stage IS NOT NULL AND l.pipeline_stage <> 'new_lead' THEN 'applicant'
     ELSE 'lead'
