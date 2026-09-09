@@ -170,6 +170,69 @@ method, `verifiedAt`, real `evidenceId`, `publishable`, explicit headline decisi
 **Never invent a figure to fill a card.** An honest gap — `0`, `not built` — is a
 stronger fact than a manufactured one.
 
+### 5a. At least one metric must COMPARE, not just COUNT
+
+Sort every candidate into two kinds before writing any of them:
+
+| | What it says | From the live CoreOps record |
+|---|---|---|
+| **Change** | it is different now, and here is what it was | *7 modules · 4 with tests* — baseline: "A policy comment, which is what an unenforced boundary looks like." |
+| **Scale** | how much of a thing there is | *46 test files* — baseline: "n/a — this sizes the test surface rather than comparing it." |
+
+Scale metrics are legitimate and easy to verify, which is exactly why a record drifts
+into being **all** of them. Four counts of the repository's own contents is an inventory,
+not a result, and a reader who wanted to know whether the work mattered leaves without
+an answer.
+
+**Ship at least one change metric, or say in the measurement narrative why the record
+has none.** A build with no before-state is a real situation — greenfield work has
+nothing to compare against — and naming that is stronger than dressing four inventories
+up as outcomes.
+
+**`baseline: "n/a"` is the tell.** When you write it you have just built a scale metric.
+That is fine once; if it is true of every card, the set is wrong.
+
+### 5b. Write each field for the card it renders into
+
+The reader never sees the object. They see, in this order:
+
+```
+  <valueDisplay>                ← large, carries the whole claim
+  <label>                       ← the sentence under it
+  <verificationClass>           ← "verified"
+  BASELINE     <baseline>       ← labelled rows, in this order
+  UNIT         <unit>
+  SAMPLE       <sample>
+  METHODOLOGY  <methodology>
+  LIMITATIONS  every entry, in full
+```
+
+Four consequences, each of which has already produced a weak card:
+
+- **`valueDisplay` is the entire headline.** It must read as a complete phrase on its
+  own — *"14 decision records"*, not *"14"*. Nothing else renders beside it.
+- **…but `unit` prints too, as its own row.** `valueDisplay: "14 decision records"` with
+  `unit: "records"` makes the card say "records" twice, which it does on the live record
+  today. Either carry the noun in `valueDisplay` and keep `unit` as the bare token it is
+  for machines, or drop it from the display value — but decide, rather than finding out
+  on the published page.
+- **`methodology` is the card's body.** It is the longest text in the card and the only
+  place a sceptical reader can check your working. A single clause leaves the card
+  visibly empty; write the paragraph that lets someone reproduce the number.
+- **Every `limitation` is printed, in full, verbatim** — nothing truncates them. Write
+  them as sentences addressed to the reader, not as internal caveats. *"A file count is
+  not coverage, and 46 of 292 says nothing about which 46"* does more for the record's
+  credibility than the metric above it does.
+
+### 5c. The headline decision is public
+
+`isHeadline: true` selects `headlineMetric` in the **summary** projection — the payload
+every index card and every brand surface reads. It is not an internal ranking. It is the
+one number chosen to represent the whole record to somebody who has not opened it.
+
+Pick the metric that best answers *"did this work?"*. That is usually a change metric,
+and it is almost never the largest number.
+
 ---
 
 ## 6. Language the claim scanner rejects
@@ -440,6 +503,10 @@ risk is horizontal overflow.
 - [ ] The cover appears in the masthead, at a size that can be read
 - [ ] No band has a void larger than a card beside its content
 - [ ] Every metric card's methodology paragraph has a readable measure, not ~40 characters
+- [ ] **At least one metric compares** — not every baseline is `n/a` (§5a)
+- [ ] **No card says its unit twice** — read `valueDisplay` and the UNIT row together (§5b)
+- [ ] **Every limitation reads as a sentence to the reader** — they render in full (§5b)
+- [ ] **The headline metric is the one that answers "did this work?"** (§5c)
 - [ ] `pageScrollW === viewportW` at 1440 **and** 390
 - [ ] Diagrams are in the architecture section, not standing in for a picture
 - [ ] `problems[]` is empty
@@ -655,8 +722,8 @@ resting state** for an unpublished draft.
 
 **Report denominators, never impressions.** Not "the detail page renders" but:
 sections authored X of X · candidates investigated X of X · metrics verified X of X ·
-artifacts X · images X · timeline entries X · prefixes X · walkthrough video
-X seconds, cues loading on X of 3 surfaces.
+**metrics that compare X of X (§5a)** · artifacts X · images X · timeline entries X ·
+prefixes X · walkthrough video X seconds, cues loading on X of 3 surfaces.
 
 **Never say complete, production-ready or published without evidence for each claim.**
 
