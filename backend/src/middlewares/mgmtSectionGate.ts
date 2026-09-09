@@ -57,6 +57,14 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // the case-studies row above documents — an unmapped path is deny-by-default
   // for every scoped mgmt token, failing with an error nothing explains.
   ['/api/admin/cert-prep', 'program'],
+  // AI Internship application review. Its OWN section rather than 'program':
+  // the queue carries an applicant's resume, phone number and interview
+  // transcript, so reviewing an application is a materially wider grant than
+  // editing curriculum and the two should not travel together. Registered here
+  // with the routes, for the reason the case-studies row above documents — an
+  // unmapped path is deny-by-default for every scoped mgmt token, and
+  // 'admissions' (Dhee) is exactly such a token.
+  ['/api/admin/internship', 'internship'],
   // CAPE — the Architecture Skills taxonomy (skill definitions, evidence-band
   // weights) and the Feed Control governance board built on it. Programme work:
   // it defines what students are measured on, so it belongs with curriculum.
