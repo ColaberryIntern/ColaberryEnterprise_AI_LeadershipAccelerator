@@ -24,6 +24,14 @@
 -- Idempotent: every statement is IF NOT EXISTS. Safe to run twice; the second
 -- run is a no-op.
 --
+-- THE BACKEND ALSO SELF-HEALS THIS AT BOOT. `db/ensureCaseStudySchema.ts` carries
+-- the same eight columns as ADD COLUMN IF NOT EXISTS statements, so a deploy that
+-- forgets this file still ends up with the columns. Running it FIRST is still
+-- worth doing, and for a specific reason: Sequelize selects every attribute a
+-- model declares, so between a backend deploy and the boot that repairs the
+-- schema, every read of case_study_metrics would fail. Applying the migration
+-- before the deploy makes that window zero.
+--
 -- Run on prod:
 --   docker exec -i accelerator-db psql -U accelerator accelerator_prod \
 --     < backend/src/seeds/migrations/20260909_add_case_study_metric_shapes.sql
