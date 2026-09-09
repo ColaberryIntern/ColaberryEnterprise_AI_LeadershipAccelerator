@@ -431,6 +431,8 @@ import InternshipApplication from './InternshipApplication';
 import InternshipStatusEvent from './InternshipStatusEvent';
 import InternshipAdministrativeIntake from './InternshipAdministrativeIntake';
 import InternshipCardDismissal from './InternshipCardDismissal';
+import InternshipInterviewSession from './InternshipInterviewSession';
+import InternshipInterviewResponse from './InternshipInterviewResponse';
 import CareerMentorScope from './CareerMentorScope';
 import DeliveryProjectSourceLink from './DeliveryProjectSourceLink';
 import DeliveryProjectMember from './DeliveryProjectMember';
@@ -1581,6 +1583,7 @@ export {
   // membership that activation grants without touching enrollments.cohort_id.
   CohortMembership, InternshipApplication, InternshipStatusEvent,
   InternshipAdministrativeIntake, InternshipCardDismissal,
+  InternshipInterviewSession, InternshipInterviewResponse,
   CareerMentorScope,
   DeliveryProjectMember,
   DeliveryClientSigninToken,

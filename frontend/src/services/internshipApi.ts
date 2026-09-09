@@ -62,6 +62,116 @@ export async function selectInternshipChannel(channel: 'form' | 'phone'): Promis
   return data;
 }
 
+// ── The interview (both channels) ───────────────────────────────────────────
+
+export interface InterviewQuestionView {
+  question_key: string;
+  section: string;
+  section_title: string;
+  prompt: string;
+  answer_type: 'text' | 'long_text' | 'yes_no' | 'choice';
+  options: string[] | null;
+  required: boolean;
+  is_confirmation: boolean;
+}
+
+export interface InterviewProgressView {
+  version: number;
+  total: number;
+  resolved: number;
+  remaining: number;
+  complete: boolean;
+}
+
+export interface InterviewView {
+  state: string;
+  channel: 'form' | 'phone' | null;
+  progress: InterviewProgressView;
+  scheduled_call: { session_id: string; scheduled_for: string } | null;
+  questions: InterviewQuestionView[];
+}
+
+export interface SummaryLineView {
+  question_key: string;
+  section: string;
+  section_title: string;
+  question: string;
+  answer_display: string;
+  state: string;
+  answered_via: string | null;
+  is_confirmation: boolean;
+}
+
+export interface SummaryView {
+  state: string;
+  progress: InterviewProgressView;
+  needs_confirmation: string[];
+  lines: SummaryLineView[];
+}
+
+export interface AnswerPayload {
+  question_key: string;
+  answer_text?: string | null;
+  answer_value?: boolean | string | null;
+  state?: 'answered' | 'skipped';
+}
+
+export async function fetchInterview(): Promise<InterviewView> {
+  const { data } = await portalApi.get<InterviewView>('/api/portal/internship/interview');
+  return data;
+}
+
+export async function saveInterviewAnswers(
+  answers: AnswerPayload[],
+  isCorrection = false,
+): Promise<{ saved: string[]; rejected: string[]; progress: InterviewProgressView; state: string }> {
+  const { data } = await portalApi.put('/api/portal/internship/interview/answers', {
+    answers, is_correction: isCorrection,
+  });
+  return data;
+}
+
+export async function fetchInterviewSummary(): Promise<SummaryView> {
+  const { data } = await portalApi.get<SummaryView>('/api/portal/internship/interview/summary');
+  return data;
+}
+
+export async function confirmInterviewSummary(): Promise<{ confirmed: number; interview_complete: boolean; state: string }> {
+  const { data } = await portalApi.post('/api/portal/internship/interview/summary/confirm', { confirmed: true });
+  return data;
+}
+
+export async function submitInternshipApplication(): Promise<InternshipStatus> {
+  const { data } = await portalApi.post<InternshipStatus>('/api/portal/internship/submit', {});
+  return data;
+}
+
+/**
+ * Ask for the call now.
+ *
+ * A refusal comes back as 200 with `placed: false` and a human-readable `message`
+ * — no permission to call, no phone, nothing left to ask, cooldown, or calls
+ * unavailable. None of those are errors, so the caller shows the message rather
+ * than an error state.
+ */
+export async function requestInternshipCall(): Promise<
+  | { placed: true; session_id: string; remaining: number }
+  | { placed: false; reason: string; message: string }
+> {
+  const { data } = await portalApi.post('/api/portal/internship/interview/call', {});
+  return data;
+}
+
+export async function scheduleInternshipCall(scheduledFor: string): Promise<{ session_id: string; scheduled_for: string }> {
+  const { data } = await portalApi.post('/api/portal/internship/interview/call/schedule', { scheduled_for: scheduledFor });
+  return data;
+}
+
+export async function cancelInternshipCall(): Promise<{ cancelled: boolean }> {
+  const { data } = await portalApi.post('/api/portal/internship/interview/call/cancel', {});
+  return data;
+}
+
 export async function dismissInternshipCard(days = 14): Promise<void> {
   await portalApi.post('/api/portal/internship/card/dismiss', { days });
 }

@@ -22,7 +22,7 @@ async function emitFailureEvent(params: Parameters<typeof import('./aiEventServi
 interface VoiceCallParams {
   name: string;
   phone: string;
-  callType: 'welcome' | 'interest' | 'callback';
+  callType: 'welcome' | 'interest' | 'callback' | 'internship_interview';
   /**
    * Which brand is calling. Absent means the Colaberry bootcamp agents, which is what
    * every existing caller means and why this is optional rather than required.
@@ -71,7 +71,13 @@ interface SynthflowResponse {
  * charity for help, spoken to as a sales lead. So an unconfigured slot returns empty and the
  * caller skips deterministically rather than dialling with somebody else's voice.
  */
-export function resolveAgentId(params: { callType: 'welcome' | 'interest' | 'callback'; brandSlug?: string }): string {
+export function resolveAgentId(params: { callType: 'welcome' | 'interest' | 'callback' | 'internship_interview'; brandSlug?: string }): string {
+  // AI Internship interview. FIRST and unconditional: an applicant expecting a
+  // qualification interview must never reach an agent carrying a bootcamp sales
+  // script. Unset returns '' and the caller skips with `no_agent_id`.
+  if (params.callType === 'internship_interview' || params.brandSlug === 'colaberry-internship') {
+    return env.synthflowInternshipAgentId;
+  }
   if (params.brandSlug === 'ai-flotation') return env.synthflowAiFlotationAgentId;
 
   // OpportunityLift. Its own slot when configured, otherwise it BORROWS THE AI

@@ -8,14 +8,17 @@ import {
   selectInternshipChannel,
   startInternshipApplication,
 } from '../../../services/internshipApi';
+import InternshipInterview from './InternshipInterview';
+import InternshipSummary from './InternshipSummary';
 
 /**
  * The AI Internship application surface.
  *
- * Phase 2 covers the overview, Group A (administrative intake) and the interview
- * channel choice. The interview itself — both channels — is Phase 3, so the two
- * channel buttons record the choice and then say what happens next rather than
- * pretending to start something that does not exist yet.
+ * The overview, Group A (administrative intake), the channel choice, then the
+ * interview itself and the review-and-submit screen. The interview surface carries
+ * the call panel beside the questions, so choosing a channel is never a commitment
+ * — an applicant can start online, take a call, and come back, and the server
+ * recomputes what is left rather than tracking a per-channel cursor.
  *
  * ── THE FORM ASKS NO INTERVIEW QUESTIONS ───────────────────────────────────
  *
@@ -51,6 +54,9 @@ const InternshipPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<Saving>('idle');
   const [error, setError] = useState<string | null>(null);
+  // Lets the summary be reached from the interview without a lifecycle change,
+  // and lets 'go back to the interview' undo it.
+  const [forceSummary, setForceSummary] = useState(false);
 
   const [form, setForm] = useState({
     legal_name: '',
@@ -99,10 +105,13 @@ const InternshipPage: React.FC = () => {
     setSaving('saving');
     setError(null);
     try {
-      // `tools_acknowledged` is a client-side gate on the button, not a field the
-      // API takes — the durable record is an InternshipRequirementAcknowledgement
-      // row, written in Phase 3 alongside the interview. Sending it here would
-      // fail `.strict()`, which is the schema doing its job.
+      // `tools_acknowledged` gates the button here; it is not a field the API takes,
+      // and sending it would fail `.strict()` — the schema doing its job. The
+      // durable acknowledgement is captured by the interview's three tools
+      // questions (tools_required_ack, tools_ready_or_will_obtain,
+      // tools_secrets_ack), which are answers of record. The
+      // InternshipRequirementAcknowledgement row that mirrors them for the
+      // activation checklist lands with Phase 6.
       const { tools_acknowledged, work_auth_category, ...rest } = form;
       await saveInternshipIntake({
         ...rest,
@@ -136,7 +145,13 @@ const InternshipPage: React.FC = () => {
 
   const state = status?.application?.state ?? 'not_started';
   const showIntake = ['started', 'not_started'].includes(state);
-  const showChannel = ['administrative_intake_complete', 'interview_channel_selected'].includes(state);
+  // The channel choice is offered once, then the interview surface takes over —
+  // which itself carries the call panel, so switching channels never means
+  // coming back here.
+  const showChannel = state === 'administrative_intake_complete';
+  const showInterview = ['interview_channel_selected', 'interview_scheduled', 'interview_in_progress'].includes(state)
+    && !forceSummary;
+  const showSummary = state === 'interview_complete' || forceSummary;
 
   return (
     <PortalShell>
@@ -375,14 +390,29 @@ const InternshipPage: React.FC = () => {
             </div>
             {status?.application?.interview_channel && (
               <p className="ip-muted ip-next" role="status">
-                Noted — {status.application.interview_channel === 'phone' ? 'the call' : 'the online interview'} opens here shortly.
-                We are finishing this step; you will get an email the moment it is ready.
+                Noted. {status.application.interview_channel === 'phone'
+                  ? 'Your questions are ready below — ask for the call whenever you are.'
+                  : 'Your questions are ready below.'}
               </p>
             )}
           </section>
         )}
 
-        {!showIntake && !showChannel && status && (
+        {showInterview && (
+          <InternshipInterview
+            onProgressed={() => { void reload(); }}
+            onComplete={() => { setForceSummary(true); void reload(); }}
+          />
+        )}
+
+        {showSummary && (
+          <InternshipSummary
+            onSubmitted={() => { setForceSummary(false); void reload(); }}
+            onEditRequested={() => setForceSummary(false)}
+          />
+        )}
+
+        {!showIntake && !showChannel && !showInterview && !showSummary && status && (
           <section className="ip-card">
             <h2>{status.title}</h2>
             <p className="ip-muted">
