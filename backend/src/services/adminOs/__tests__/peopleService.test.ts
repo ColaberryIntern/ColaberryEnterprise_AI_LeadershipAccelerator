@@ -134,7 +134,10 @@ describe('people roster', () => {
     expect(sql).toContain("'enrolled_student'");
     expect(sql).toContain("'applicant'");
     expect(sql).toContain("'lead'");
-    expect(sql).not.toContain("THEN 'graduate'");
+    // graduate IS assigned now: 'completed' is a real enum value and the
+    // expression reads it. It currently matches nobody, because nothing sets
+    // that status — a process gap the trust panel names explicitly.
+    expect(sql).toContain("THEN 'graduate'");
     expect(sql).not.toContain("THEN 'active_learner'");
     expect(sql).not.toContain("THEN 'returning_customer'");
     expect(sql).not.toContain("THEN 'identified_visitor'");
