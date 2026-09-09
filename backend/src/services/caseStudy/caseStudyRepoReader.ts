@@ -469,3 +469,69 @@ export async function readSelectedFiles(
   }
   return files;
 }
+
+/* ─────────────────────────────────────────────────────── commit history ──── */
+
+/** Ten pages of 100. Beyond a thousand commits a span is a span either way. */
+const MAX_COMMIT_PAGES = 10;
+const COMMITS_PER_PAGE = 100;
+
+export interface RepoCommitDate {
+  readonly sha: string;
+  /** `YYYY-MM-DD`, UTC. */
+  readonly authoredDate: string;
+}
+
+/**
+ * The commit log, reduced to shas and UTC calendar dates.
+ *
+ * ONLY CALLED WHEN A MANIFEST REGISTERED A COMMIT-SHAPED COLLECTOR. Ten extra
+ * requests is a real cost against a rate limit that the whole analyzer is
+ * careful with, so a repository that asked for none of these figures pays
+ * nothing.
+ *
+ * DATES, NOT TIMESTAMPS, and UTC on purpose. A span read from a server in one
+ * timezone and rendered in another must be the same span, and a naive local
+ * conversion silently moves a commit made near midnight into the adjacent day.
+ *
+ * PARTIAL IS ALLOWED, SILENT FAILURE IS NOT. A page that fails stops the walk
+ * and reports an issue rather than throwing: a span over the commits that were
+ * read is still true, and the caller can see the read was incomplete.
+ */
+export async function readCommitHistory(
+  owner: string, repo: string, opts: GitHubReadOptions, issues: RepoAnalysisIssue[],
+): Promise<readonly RepoCommitDate[]> {
+  const out: RepoCommitDate[] = [];
+  for (let page = 1; page <= MAX_COMMIT_PAGES; page += 1) {
+    let result: RawResult;
+    try {
+      result = await githubApiRequest(
+        'GET',
+        `${repoPath(owner, repo)}/commits?per_page=${COMMITS_PER_PAGE}&page=${page}`,
+        opts,
+      );
+    } catch (err) {
+      issues.push({ error_class: classifyThrown(err), message: `commit history page ${page} unavailable` });
+      break;
+    }
+    if (!result.ok) {
+      // 409 here means the repository has no commits, which readCommitHead has
+      // already reported as a failure. Repeating it would be noise.
+      if (result.status !== 409) {
+        issues.push({ error_class: classifyResult(result), message: `commit history page ${page} unavailable` });
+      }
+      break;
+    }
+    const parsed = commitsPayloadSchema.safeParse(safeJson(result.body));
+    if (!parsed.success) {
+      issues.push({ error_class: 'Unknown', message: 'commit history was not the expected shape' });
+      break;
+    }
+    for (const commit of parsed.data) {
+      const at = committedAtOf(commit);
+      if (at) out.push({ sha: commit.sha, authoredDate: at.slice(0, 10) });
+    }
+    if (parsed.data.length < COMMITS_PER_PAGE) break;
+  }
+  return out;
+}

@@ -1052,6 +1052,48 @@ describe('the refusal is actionable and complete', () => {
       },
       // unverified_claim
       { content: bend((c) => { (c.identity as any).standfirst = 'Costs fell 41% in the first quarter.'; }) },
+      // metric_shape_payload_mismatch — a shape the payload does not back.
+      {
+        content: bend((c) => {
+          const metric = (c.heroMetrics as any)[0];
+          metric.shape = 'ratio';
+          metric.payload = { shape: 'count', value: 4 };
+        }),
+      },
+      // metric_ratio_missing_denominator — "4 of 7" with no 7, in a structured
+      // field where it looks fixed.
+      {
+        content: bend((c) => {
+          const metric = (c.heroMetrics as any)[0];
+          metric.shape = 'ratio';
+          metric.payload = { shape: 'ratio', numerator: 4, denominator: 0 };
+        }),
+      },
+      // metric_members_count_mismatch — more names than the total they sit under.
+      {
+        content: bend((c) => {
+          const metric = (c.heroMetrics as any)[0];
+          metric.shape = 'ratio';
+          metric.payload = {
+            shape: 'ratio', numerator: 1, denominator: 2,
+            members: [{ name: 'a' }, { name: 'b' }, { name: 'c' }],
+          };
+        }),
+      },
+      // metric_collected_sha_mismatch — computed at a commit nobody is reading
+      // about, under a command that therefore does not reproduce the number.
+      {
+        content: bend((c) => {
+          const metric = (c.heroMetrics as any)[0];
+          metric.shape = 'count';
+          metric.payload = { shape: 'count', value: 2 };
+          metric.collected = {
+            collectorKey: 'decision_records', collectedSha: 'f'.repeat(40),
+            reproduceCommand: 'git ls-tree -r --name-only ' + 'f'.repeat(40),
+            outputHash: 'c'.repeat(64), collectedAt: '2026-09-09T00:00:00.000Z',
+          };
+        }),
+      },
     ];
 
     const seen = new Set<string>();

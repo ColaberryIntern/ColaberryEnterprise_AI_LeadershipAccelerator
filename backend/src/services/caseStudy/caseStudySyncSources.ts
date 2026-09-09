@@ -48,6 +48,12 @@
  * to the link functions and is never returned to the conductor, so the conductor
  * cannot log what it never receives.
  */
+import {
+  isCaseStudyMetricCollection,
+  isCaseStudyMetricPayload,
+  isCaseStudyMetricPlain,
+  isCaseStudyMetricShape,
+} from '../../types/caseStudyGuards';
 import CaseStudyModel from '../../models/CaseStudy';
 import CaseStudyMetricModel from '../../models/CaseStudyMetric';
 import CaseStudyArtifactModel from '../../models/CaseStudyArtifact';
@@ -60,10 +66,19 @@ import type {
 } from './caseStudySnapshotInput';
 import type { CaseStudyProjectPlatformSeed } from './caseStudyProjectSource';
 import type {
-  CaseStudyArtifactRef, CaseStudyArtifactSourceType, CaseStudyArtifactStatus,
-  CaseStudyArtifactType, CaseStudyArtifactVisibility, CaseStudyBuilderIdentityMode,
-  CaseStudyBuiltByType, CaseStudyMetricEntry, CaseStudyMetricType,
-  CaseStudyOrganizationIdentityMode, CaseStudyStatus, CaseStudyVerificationClass,
+  CaseStudyArtifactRef,
+  CaseStudyArtifactSourceType,
+  CaseStudyArtifactStatus,
+  CaseStudyArtifactType,
+  CaseStudyArtifactVisibility,
+  CaseStudyBuilderIdentityMode,
+  CaseStudyBuiltByType,
+  CaseStudyMetricCollection,
+  CaseStudyMetricEntry,
+  CaseStudyMetricType,
+  CaseStudyOrganizationIdentityMode,
+  CaseStudyStatus,
+  CaseStudyVerificationClass,
   CaseStudyVerificationMethod,
 } from '../../types/caseStudy';
 import type { CaseStudySnapshotContent } from '../../types/caseStudy';
@@ -208,7 +223,36 @@ export function metricEntryFromRow(row: Record<string, unknown>): CaseStudyMetri
     isHeadline: row.is_headline === true,
     publishable: row.publishable === true,
     measurement: hasContext ? compact({ baseline, sample, methodology, limitations }) : undefined,
+    /*
+     * GUARDED, NOT TRUSTED. These columns are nullable and were nullable on
+     * every row written before shapes existed, so an unreadable or half-written
+     * value must degrade to `undefined` - the legacy path - and never to a
+     * shape the renderer would then try to draw with no numbers.
+     */
+    shape: isCaseStudyMetricShape(row.shape) ? row.shape : undefined,
+    payload: isCaseStudyMetricPayload(row.payload) ? row.payload : undefined,
+    plain: isCaseStudyMetricPlain(row.plain) ? row.plain : undefined,
+    collected: collectionFromRow(row),
   }) as CaseStudyMetricEntry;
+}
+
+/**
+ * PURE. The collection audit trail, or `undefined` when any part is missing.
+ *
+ * ALL OR NOTHING, deliberately. A collector key with no output hash cannot
+ * detect drift, and a reproduce command with no sha does not reproduce
+ * anything. A partial trail is worse than none, because it still looks like
+ * proof.
+ */
+function collectionFromRow(row: Record<string, unknown>): CaseStudyMetricCollection | undefined {
+  const collected = compact({
+    collectorKey: text(row.collector_key),
+    collectedSha: text(row.collected_sha),
+    reproduceCommand: text(row.reproduce_command),
+    outputHash: text(row.output_hash),
+    collectedAt: row.collected_at ? new Date(row.collected_at as string).toISOString() : undefined,
+  });
+  return isCaseStudyMetricCollection(collected) ? collected : undefined;
 }
 
 /**
