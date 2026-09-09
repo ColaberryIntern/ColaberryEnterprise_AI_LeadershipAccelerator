@@ -15,6 +15,7 @@ const ALL_FEATURES: ExplorerGrowthFeature[] = [
   'signalIngest',
   'journeyIntelligence',
   'journeyGovernor',
+  'execution',
   'commercial',
   'aliOutreach',
   'sms',
@@ -38,16 +39,19 @@ describe('resolveExplorerGrowthFlags — default OFF', () => {
     }
   });
 
-  it('covers all ten documented flags', () => {
-    // 9 through EPIC 2; journeyIntelligenceEnabled added by EPIC 3 T000.
-    expect(FLAG_KEYS).toHaveLength(10);
-    expect(Object.keys(resolveExplorerGrowthFlags({}))).toHaveLength(10);
+  it('covers all eleven documented flags', () => {
+    // 9 through EPIC 2; journeyIntelligenceEnabled added by EPIC 3 T000;
+    // executionEnabled by EPIC 6 — the last switch before a learner receives
+    // something, kept separate from journeyGovernor because deciding what WOULD
+    // be sent and actually sending it are different risks.
+    expect(FLAG_KEYS).toHaveLength(11);
+    expect(Object.keys(resolveExplorerGrowthFlags({}))).toHaveLength(11);
   });
 
   // Boundary: the repo convention is a strict `=== 'true'` opt-in. Anything else
   // — including a differently-cased 'TRUE' or a truthy-looking '1' — must stay OFF.
   // A flag that turned on for '1' or 'TRUE' would be an accidental live launch.
-  // Asserted across ALL TEN flags, not just the master: each is read through the
+  // Asserted across ALL ELEVEN flags, not just the master: each is read through the
   // shared isOn() helper today, but that is an implementation detail this test
   // must not depend on — a future per-flag special case has to fail here.
   it.each(['false', 'FALSE', '', '0', '1', 'TRUE', 'True', 'yes', 'on', ' true'])(
@@ -73,6 +77,7 @@ describe('resolveExplorerGrowthFlags — default OFF', () => {
       signalIngestEnabled: 'EXPLORER_SIGNAL_INGEST_ENABLED',
       journeyIntelligenceEnabled: 'EXPLORER_JOURNEY_INTELLIGENCE_ENABLED',
       journeyGovernorEnabled: 'EXPLORER_JOURNEY_GOVERNOR_ENABLED',
+      executionEnabled: 'EXPLORER_EXECUTION_ENABLED',
       commercialEnabled: 'EXPLORER_COMMERCIAL_ENABLED',
       aliOutreachEnabled: 'EXPLORER_ALI_OUTREACH_ENABLED',
       smsEnabled: 'EXPLORER_SMS_ENABLED',

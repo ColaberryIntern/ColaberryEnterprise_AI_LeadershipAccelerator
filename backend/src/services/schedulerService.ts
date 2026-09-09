@@ -44,6 +44,7 @@ import { attachClassNotesForSession } from './sessionClassNotesService';
 import { extractZoomMeetingId, findRecordingInstancesByMeetingId } from './zoomService';
 import { instrumentCronJob } from './cronInstrumentation';
 import { runScheduledRecompute } from './explorerGrowth/explorerProfileService';
+import { runExplorerExecution } from './explorerGrowth/explorerExecutor';
 import { runScheduledGovernor } from './explorerGrowth/governor/runGovernor';
 import { runContentSync } from './explorerGrowth/content/runContentSync';
 import {
@@ -1812,6 +1813,33 @@ export function startScheduler(): void {
       await runScheduledRecompute();
     }).catch((err) => {
       console.error('[Scheduler] ExplorerProfileRecompute failed:', err);
+    });
+  });
+
+  // Explorer Growth OS — execution (EPIC 6).
+  //
+  // 04:20 UTC: THIRTY MINUTES AFTER THE GOVERNOR, for the same reason the
+  // Governor sits thirty minutes after the recompute. Each stage reads what the
+  // previous one wrote, and a decision made at 03:50 must exist before anything
+  // tries to act on it.
+  //
+  // THIS IS THE ONLY JOB IN THE SYSTEM THAT PRODUCES OUTBOUND WORK. Everything
+  // upstream writes data — signals, scores, states, decisions — and all of it is
+  // inert. This queues a ScheduledEmail, and the existing campaign engine sends
+  // it. It sends nothing itself, which is what routes every message through
+  // evaluateSend, the validator and the Explorer fact guard rather than around
+  // them.
+  //
+  // runExplorerExecution checks isExplorerFeatureEnabled('execution') itself and
+  // returns immediately when off, so this is dark until BOTH the master flag and
+  // EXPLORER_EXECUTION_ENABLED are on. Registered in agentRegistrySeed as
+  // ExplorerExecution so it is pausable from Admin > Agents without a redeploy —
+  // which matters more here than anywhere else in the subsystem.
+  cron.schedule('20 4 * * *', () => {
+    instrumentCronJob('ExplorerExecution', async () => {
+      await runExplorerExecution();
+    }).catch((err) => {
+      console.error('[Scheduler] ExplorerExecution failed:', err);
     });
   });
 

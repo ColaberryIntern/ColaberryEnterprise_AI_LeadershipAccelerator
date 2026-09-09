@@ -52,6 +52,17 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'Explorer Growth OS Journey Governor. Decides one action per Explorer per day across section 9.1 priority tiers, writing explorer_journey_decisions with the chosen action AND every suppressed candidate with its reason. DECIDES AND RECORDS ONLY - enqueues nothing and sends nothing; every row is executed:false and execution is a separate epic. Runs 30 minutes after ExplorerProfileRecompute because it reads the scores that job writes. Dark unless both EXPLORER_GROWTH_OS_ENABLED and EXPLORER_JOURNEY_GOVERNOR_ENABLED are on.',
   },
   {
+    agent_name: 'ExplorerExecution',
+    agent_type: 'scheduled_processor',
+    module: 'runExplorerExecution',
+    source_file: 'backend/src/services/explorerGrowth/explorerExecutor.ts',
+    trigger_type: 'cron',
+    schedule: '20 4 * * *',
+    category: 'behavioral',
+    description:
+      'Explorer Growth OS execution (EPIC 6). THE ONLY JOB IN THIS SUBSYSTEM THAT PRODUCES OUTBOUND WORK - everything upstream writes inert data. Turns a fresh, unexecuted SEND_EMAIL decision into a pending ScheduledEmail and records its id back on the decision. SENDS NOTHING ITSELF: the existing campaign engine picks the row up, which is what routes every message through evaluateSend, generation from the composite context, and messageValidatorService where the Explorer fact guard fires - rather than around them. No subject or body is pre-rendered, deliberately, because that would bypass both. Re-checks that the campaign is still active at execution time, since pausing a campaign is how a human stops a send and that has to work on decisions already made. Skips decisions older than 36 hours, which were made against scores and a content selection that were true then. Idempotent - a decision carrying a scheduled_email_id is never queued twice, and executed is marked only after the row exists. Runs 30 minutes after ExplorerGovernorDecide. Dark unless both EXPLORER_GROWTH_OS_ENABLED and EXPLORER_EXECUTION_ENABLED are on.',
+  },
+  {
     agent_name: 'ExplorerProfileRecompute',
     agent_type: 'scheduled_processor',
     module: 'explorerProfileService',

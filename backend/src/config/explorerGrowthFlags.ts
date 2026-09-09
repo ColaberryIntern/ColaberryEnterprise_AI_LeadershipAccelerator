@@ -20,6 +20,7 @@ export type ExplorerGrowthFeature =
   | 'signalIngest'
   | 'journeyIntelligence'
   | 'journeyGovernor'
+  | 'execution'
   | 'commercial'
   | 'aliOutreach'
   | 'sms'
@@ -40,6 +41,17 @@ export interface ExplorerGrowthFlags {
   readonly journeyIntelligenceEnabled: boolean;
   /** Run the Journey Governor decision engine. */
   readonly journeyGovernorEnabled: boolean;
+  /**
+   * EPIC 6. Turn a recorded decision into a real send.
+   *
+   * THE LAST SWITCH BEFORE A LEARNER RECEIVES SOMETHING. Every flag above it
+   * produces data: signals, scores, states, decisions - all inert. This one is
+   * where the system stops observing and starts acting, which is why it is
+   * separate from `journeyGovernor` rather than folded into it. Deciding what
+   * WOULD be sent and actually sending it are different risks and deserve
+   * different switches.
+   */
+  readonly executionEnabled: boolean;
   /** Accelerator / subscription / referral messaging. */
   readonly commercialEnabled: boolean;
   /** Personal outreach from Ali's campaign identity. */
@@ -60,6 +72,7 @@ export const EXPLORER_GROWTH_ENV_KEYS = {
   signalIngestEnabled: 'EXPLORER_SIGNAL_INGEST_ENABLED',
   journeyIntelligenceEnabled: 'EXPLORER_JOURNEY_INTELLIGENCE_ENABLED',
   journeyGovernorEnabled: 'EXPLORER_JOURNEY_GOVERNOR_ENABLED',
+  executionEnabled: 'EXPLORER_EXECUTION_ENABLED',
   commercialEnabled: 'EXPLORER_COMMERCIAL_ENABLED',
   aliOutreachEnabled: 'EXPLORER_ALI_OUTREACH_ENABLED',
   smsEnabled: 'EXPLORER_SMS_ENABLED',
@@ -73,6 +86,7 @@ const FEATURE_FLAG: Record<ExplorerGrowthFeature, keyof ExplorerGrowthFlags> = {
   signalIngest: 'signalIngestEnabled',
   journeyIntelligence: 'journeyIntelligenceEnabled',
   journeyGovernor: 'journeyGovernorEnabled',
+  execution: 'executionEnabled',
   commercial: 'commercialEnabled',
   aliOutreach: 'aliOutreachEnabled',
   sms: 'smsEnabled',
@@ -99,6 +113,7 @@ export function resolveExplorerGrowthFlags(
     signalIngestEnabled: isOn(source[EXPLORER_GROWTH_ENV_KEYS.signalIngestEnabled]),
     journeyIntelligenceEnabled: isOn(source[EXPLORER_GROWTH_ENV_KEYS.journeyIntelligenceEnabled]),
     journeyGovernorEnabled: isOn(source[EXPLORER_GROWTH_ENV_KEYS.journeyGovernorEnabled]),
+    executionEnabled: isOn(source[EXPLORER_GROWTH_ENV_KEYS.executionEnabled]),
     commercialEnabled: isOn(source[EXPLORER_GROWTH_ENV_KEYS.commercialEnabled]),
     aliOutreachEnabled: isOn(source[EXPLORER_GROWTH_ENV_KEYS.aliOutreachEnabled]),
     smsEnabled: isOn(source[EXPLORER_GROWTH_ENV_KEYS.smsEnabled]),
