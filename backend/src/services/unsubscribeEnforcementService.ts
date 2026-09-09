@@ -14,6 +14,7 @@ import { Lead, CampaignLead, ScheduledEmail, UnsubscribeEvent } from '../models'
 import { logActivity } from './activityService';
 import { revokeConsent } from './consentService';
 import { redactForLogs } from '../utils/piiRedaction';
+import { optOutSuppressesGlobally } from './channelSuppression';
 
 // ---------------------------------------------------------------------------
 // STOP keyword detection
@@ -137,17 +138,45 @@ export async function processOptOut(
 ): Promise<{ cancelled: number }> {
   console.log(`[Unsubscribe] Processing opt-out for lead ${leadId} via ${channel}: ${redactForLogs(reason)}`);
 
-  // 1. Update lead status → unsubscribed
-  await Lead.update(
-    { status: 'unsubscribed' } as any,
-    { where: { id: leadId } },
-  );
+  // 1 & 2. Global suppression — ONLY for email and unrecognised channels.
+  //
+  // §35 D-4. These two writes ignored `channel` entirely, so an SMS STOP set
+  // `Lead.status = 'unsubscribed'` and every `CampaignLead` to `dnd`, ending
+  // that person's email too. Someone declining texts has not declined email,
+  // and under CAN-SPAM's opt-out default email is permitted to everyone.
+  //
+  // An sms or voice opt-out is still fully recorded below — the
+  // `unsubscribe_events` row and the per-channel consent revoke — and
+  // `checkLeadSendable(leadId, 'sms')` blocks on it. What no longer happens is
+  // the collateral suppression of a channel they said nothing about.
+  //
+  // Email and any unrecognised value keep today's behaviour exactly: an email
+  // unsubscribe IS the primary meaning of `Lead.status = 'unsubscribed'`.
+  const suppressGlobally = optOutSuppressesGlobally(channel);
 
-  // 2. Update all CampaignLead records → lifecycle_status = 'dnd'
-  await CampaignLead.update(
-    { lifecycle_status: 'dnd' } as any,
-    { where: { lead_id: leadId } },
-  );
+  if (suppressGlobally) {
+    await Lead.update(
+      { status: 'unsubscribed' } as any,
+      { where: { id: leadId } },
+    );
+
+    await CampaignLead.update(
+      { lifecycle_status: 'dnd' } as any,
+      { where: { lead_id: leadId } },
+    );
+  } else {
+    console.log(
+      JSON.stringify({
+        level: 'info',
+        service: 'unsubscribe',
+        event: 'opt_out_scoped_to_channel',
+        outcome: 'success',
+        channel,
+        lead_id: leadId,
+        note: 'global lead status left intact — other channels remain permitted',
+      }),
+    );
+  }
 
   // 3. Cancel all pending/processing scheduled actions for this lead
   const cancelled = await cancelPendingActions(leadId);

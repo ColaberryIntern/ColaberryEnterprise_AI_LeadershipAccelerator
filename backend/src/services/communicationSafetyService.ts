@@ -11,6 +11,7 @@ import { Lead, Campaign, CommunicationLog, UnsubscribeEvent } from '../models';
 import { getTestOverrides, getSetting } from './settingsService';
 import { assertConsentForSend } from './consentService';
 import { checkBrandPreference } from '../modules/communications/brandPreferenceGate';
+import { isSuppressedForChannel, type SuppressibleChannel } from './channelSuppression';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -91,9 +92,20 @@ export function clearTestOverrideCache(): void {
 /**
  * Check if a lead is allowed to receive communications.
  * Returns sendable=false if lead is unsubscribed, DND, or bounced.
+ *
+ * `channel` is OPTIONAL, and omitting it preserves the previous behaviour
+ * EXACTLY: any unsubscribe event blocks. Every caller that predates this
+ * parameter is in that position, so no unreviewed send path changes.
+ *
+ * Naming a channel opts into per-channel suppression (§35 D-4): a NEW sms
+ * opt-out stops blocking email, while an opt-out recorded before the cutoff
+ * still blocks everything, because that is what it meant when it was written
+ * and how it has been enforced since. See `channelSuppression.ts` — that
+ * asymmetry is the safety property, not an inconsistency.
  */
 export async function checkLeadSendable(
   leadId: number,
+  channel?: SuppressibleChannel,
 ): Promise<{ sendable: boolean; reason?: string }> {
   try {
     const lead = await Lead.findByPk(leadId, {
@@ -109,13 +121,23 @@ export async function checkLeadSendable(
       return { sendable: false, reason: `lead_${lead.status}` };
     }
 
-    // Check for recent unsubscribe events (belt-and-suspenders with lead.status)
-    const recentUnsub = await UnsubscribeEvent.findOne({
+    // Unsubscribe events (belt-and-suspenders with lead.status).
+    //
+    // ALL of them, not just the newest. The previous version read only the most
+    // recent row, which was harmless while any row blocked everything — but
+    // once channel matters, "the latest one was sms" must not be allowed to
+    // hide an older global opt-out sitting behind it.
+    const unsubEvents = await UnsubscribeEvent.findAll({
       where: { lead_id: leadId },
+      attributes: ['channel', 'created_at'],
       order: [['created_at', 'DESC']],
     });
-    if (recentUnsub) {
-      return { sendable: false, reason: 'unsubscribe_event_exists' };
+    const suppression = isSuppressedForChannel(
+      unsubEvents as unknown as { channel: string | null; created_at: Date }[],
+      channel,
+    );
+    if (suppression.suppressed) {
+      return { sendable: false, reason: suppression.reason };
     }
 
     return { sendable: true };
