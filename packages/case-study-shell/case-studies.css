@@ -236,9 +236,15 @@
    Colour comes from the host's `--cs-*` mapping, as everywhere else here.
    ========================================================================== */
 
+  /* CAPPED, NOT STRETCHED. With `1fr` a row holding one or two items lets each
+     fill the whole row: the "Keep reading" cards measured 710px on Enterprise
+     and 1024px on AI Flotation against the 368px index card Ali called the
+     right size. `justify-content: start` plus a fixed upper track keeps a card
+     the same object whether the row holds one of them or four. */
 .records-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 23rem));
+  justify-content: start;
   gap: 1.5rem;
   margin: 0;
   padding: 0;
@@ -408,7 +414,13 @@
    appear here. Three at most: an invitation to keep reading, not a second index. */
 .cs-related-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  /* CAPPED, NOT STRETCHED. With `1fr` a row holding one or two items lets each
+     fill the whole row: the "Keep reading" cards measured 710px on Enterprise
+     and 1024px on AI Flotation against the 368px index card Ali called the
+     right size. `justify-content: start` plus a fixed upper track keeps a card
+     the same object whether the row holds one of them or four. */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 23rem));
+  justify-content: start;
   gap: 1.25rem;
   margin: 0;
   padding: 0;
@@ -453,3 +465,46 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* The related card carries the same last two rows as the index card, so the two
+   grids hold one object rather than two that merely resemble each other. */
+.cs-related-body { display: flex; flex-direction: column; gap: .5rem; flex: 1; }
+.cs-related-builder { margin: 0; font-size: .85rem; color: var(--cs-fg-muted); }
+.cs-related-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-top: auto;
+  padding-top: .6rem;
+}
+.cs-related-verify {
+  font-size: .72rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--cs-fg-muted);
+}
+.cs-related-cta { font-size: .9rem; font-weight: 600; color: var(--cs-accent); }
+.cs-related-cta::after { content: ' \2192'; }
+.cs-related-link { display: flex; flex-direction: column; }
+
+/* THE SAME CARD, not a lookalike. Ali, 2026-09-09: "All the cards should be the
+   same size." Same chrome as `.record-card` - border, surface, radius, padding,
+   hover - and the same 4-line clamp on the summary, so an index card and a
+   "Keep reading" card are one object in two places rather than two that happen
+   to resemble each other. Measured before this: 368x541 against 368x427. */
+.cs-related-link {
+  overflow: hidden;
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+.cs-related-link:hover { border-color: var(--cs-accent); transform: translateY(-2px); }
+@media (prefers-reduced-motion: reduce) {
+  .cs-related-link { transition: none; }
+  .cs-related-link:hover { transform: none; }
+}
+.cs-related-link img { border: 0; border-radius: 0; border-bottom: 1px solid var(--cs-line); }
+.cs-related-body { padding: 1.1rem 1.25rem 1.25rem; }
+.cs-related-note { -webkit-line-clamp: 4; }

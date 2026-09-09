@@ -598,10 +598,21 @@
         img.loading = 'lazy';
         a.appendChild(img);
       }
+      /* THE SAME CARD AS THE INDEX, not a smaller cousin. Ali, 2026-09-09:
+         "All the cards should be the same size." Same blocks in the same order
+         - meta, title, standfirst, who built it, verification and the
+         affordance - so the two grids hold one object rather than two that
+         merely resemble each other. */
       var body = el('div', 'cs-related-body');
       if (r.primaryCapability) body.appendChild(el('p', 'cs-related-meta', humanize(r.primaryCapability)));
       body.appendChild(el('h3', 'cs-related-title', r.title));
       if (r.standfirst) body.appendChild(el('p', 'cs-related-note', r.standfirst));
+      var builder = r.builtBy ? humanize(r.builtBy) : r.organizationLabel;
+      if (builder) body.appendChild(el('p', 'cs-related-builder', 'Built by ' + builder));
+      var foot = el('div', 'cs-related-foot');
+      foot.appendChild(el('span', 'cs-related-verify', r.verificationClass || ''));
+      foot.appendChild(el('span', 'cs-related-cta', 'Read the record'));
+      body.appendChild(foot);
       a.appendChild(body);
       li.appendChild(a);
       ul.appendChild(li);

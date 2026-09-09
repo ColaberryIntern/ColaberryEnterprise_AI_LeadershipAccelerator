@@ -511,7 +511,13 @@
 }
 .cbv2-related__list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  /* CAPPED, NOT STRETCHED. With `1fr` a row holding one or two items lets each
+     fill the whole row: the "Keep reading" cards measured 710px on Enterprise
+     and 1024px on AI Flotation against the 368px index card Ali called the
+     right size. `justify-content: start` plus a fixed upper track keeps a card
+     the same object whether the row holds one of them or four. */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 23rem));
+  justify-content: start;
   gap: var(--space-5);
   margin: 0;
   padding: 0;
@@ -561,3 +567,18 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* THE SAME CARD as the /proof grid. Ali, 2026-09-09: "All the cards should be
+   the same size." Chrome and clamp matched to `.cbv2-cs-card`, so a reader
+   meets one object whether it is on the index or at the foot of a record. */
+.cbv2-related__link {
+  overflow: hidden;
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  transition: box-shadow var(--dur-fast) var(--ease-standard);
+}
+.cbv2-related__link:hover { box-shadow: var(--shadow-md); }
+.cbv2-related__media { border-radius: 0; }
+.cbv2-related__body { padding: var(--space-6); }
+.cbv2-related__note { -webkit-line-clamp: 4; }

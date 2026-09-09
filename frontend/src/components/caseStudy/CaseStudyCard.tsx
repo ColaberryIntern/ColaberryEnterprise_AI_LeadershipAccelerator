@@ -1,6 +1,5 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Metric } from '../publicV2/Claim';
 import CaseStudyVerificationBadge from './CaseStudyVerificationBadge';
 import { BUILT_BY_LABELS } from '../../config/caseStudySurfaces';
 import type { PublicCaseStudySummary } from '../../services/caseStudyPublicTypes';
@@ -76,18 +75,6 @@ function contextLine(caseStudy: PublicCaseStudySummary): string {
     .join(' · ');
 }
 
-function TagList({ items, label }: { items: readonly string[]; label: string }): React.ReactElement {
-  return (
-    <ul className="cbv2-cs-tags" aria-label={label}>
-      {items.map((item) => (
-        <li className="cbv2-cs-tag" key={item}>
-          {item}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 export function CaseStudyCard({
   caseStudy,
   href,
@@ -100,13 +87,6 @@ export function CaseStudyCard({
   const proof = metric ? null : proofPointFor(caseStudy);
   const context = contextLine(caseStudy);
   const headline = metric ? 'metric' : proof ? 'proof-point' : 'none';
-
-  // The record badge describes the record. When the headline figure was verified
-  // differently, the figure carries its own badge too, so a discrepancy is shown
-  // rather than smoothed over by whichever badge happened to render first.
-  const metricBadgeDiffers = !!metric
-    && (metric.verificationClass !== caseStudy.verificationClass
-      || metric.verificationMethod !== caseStudy.verificationMethod);
 
   return (
     <article
@@ -139,36 +119,30 @@ export function CaseStudyCard({
         <p className="cbv2-cs-card__standfirst">{caseStudy.standfirst}</p>
       ) : null}
 
-      {metric ? (
-        <div className="cbv2-cs-card__metric">
-          <Metric
-            value={metric.valueDisplay}
-            label={metric.label}
-            evidence={metric.verificationClass}
-            badgeHidden
-          />
-          {metricBadgeDiffers ? (
-            <CaseStudyVerificationBadge
-              verificationClass={metric.verificationClass}
-              verificationMethod={metric.verificationMethod}
-            />
-          ) : null}
-        </div>
-      ) : null}
+      {/*
+        ONE CARD SHAPE ACROSS THREE SITES. Ali, 2026-09-09, looking at /proof
+        beside aiflotation.com/results: "The cards ... are too big. They should
+        be the same size as the ones on colaberry training and ai flotation ...
+        All the cards should be the same size."
 
-      {proof ? (
-        <div className="cbv2-cs-card__proof" data-proof-point="true">
-          <span className="cbv2-cs-card__proof-value">{proof.value}</span>
-          <span className="cbv2-cs-card__proof-label">{proof.label}</span>
-        </div>
-      ) : null}
+        Measured at 1440px before cutting anything: this card was 905px tall
+        against 541 on AI Flotation - and the gap was not styling. It rendered
+        FOUR blocks the others do not: the headline metric, the proof point, and
+        two tag lists whose chips wrapped to four rows. Ten leaf text nodes
+        against six. No amount of CSS makes a card with four extra blocks the
+        same height as one without them.
 
-      {caseStudy.deliverables.length > 0 ? (
-        <TagList items={caseStudy.deliverables} label="Deliverables" />
-      ) : null}
-
-      {caseStudy.stack.length > 0 ? <TagList items={caseStudy.stack} label="Stack" /> : null}
-
+        SO THEY WERE REMOVED FROM THE CARD, and it is worth being exact about
+        where each one still lives, because none of this information is lost:
+          - the headline metric and its verification badge are on the RECORD
+            page, in the measurement band, with the baseline and methodology
+            that make the number checkable - which a card never had room for;
+          - stack and deliverables are the FILTER SIDEBAR immediately beside
+            this grid on /proof, where they are also actionable rather than
+            decorative.
+        The card keeps what identifies a record: cover, capability, title,
+        standfirst, who built it, and its verification class.
+      */}
       <div className="cbv2-cs-card__foot">
         <CaseStudyVerificationBadge
           verificationClass={caseStudy.verificationClass}
