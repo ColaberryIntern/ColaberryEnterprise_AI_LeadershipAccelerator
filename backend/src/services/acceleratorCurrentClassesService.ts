@@ -23,8 +23,13 @@
  */
 import { Op, QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
-import Cohort from '../models/Cohort';
-import LiveSession from '../models/LiveSession';
+// MUST come from '../models', never from '../models/Cohort' directly. The model
+// FILES only define columns; every association is wired in models/index.ts, so
+// a direct import yields a Cohort that has no `program` association and throws
+// "Association with alias program does not exist" the first time this runs.
+// That is a RUNTIME failure only — it typechecks, unit-tests pass, and CI is
+// green, because the include is resolved by Sequelize at query time.
+import { Cohort, LiveSession } from '../models';
 
 /** One cohort reduced to the fields the selection rules actually read. */
 export interface ClassCandidate {

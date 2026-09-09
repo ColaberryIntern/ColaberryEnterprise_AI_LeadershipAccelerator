@@ -210,6 +210,11 @@ function AdminAcceleratorPage() {
   // Delete confirm
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
+  // Which cohort (if any) a program-wide tab was opened FROM. Null means the
+  // tab was reached globally and must not be filtered to a class. Set on the
+  // click, not derived at render — see openProgramTab.
+  const [programScopeCohortId, setProgramScopeCohortId] = useState<string | null>(null);
+
   // Participants tab state
   const [cohortEnrollments, setCohortEnrollments] = useState<EnrollmentInfo[]>([]);
   const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
@@ -759,15 +764,28 @@ function AdminAcceleratorPage() {
   const isDrilldown = DRILLDOWN_TABS.includes(activeTab);
   const isProgramTab = PROGRAM_TABS.includes(activeTab);
 
-  /** Program-wide tab pills, shown on every view so the folded-in surfaces stay
-   *  reachable from the Accelerator home as well as from a drill-down. */
+  /**
+   * Program-wide tab pills, shown on every view so the folded-in surfaces stay
+   * reachable from the Accelerator home as well as from a drill-down.
+   *
+   * The pills are shared by both contexts, so the CLICK is what records which
+   * one you came from. Opening Cert Prep from inside July must land on July;
+   * opening it from the global home must not silently pick a class at all.
+   * Deriving this at render time instead would be wrong — by then the tab has
+   * already changed and the drill-down context is gone.
+   */
+  const openProgramTab = (tab: TabKey) => {
+    setProgramScopeCohortId(isDrilldown && selectedCohortId ? selectedCohortId : null);
+    setActiveTab(tab);
+  };
+
   const programTabPills = (
     <ul className="nav nav-pills mb-0">
       {PROGRAM_TABS.map((tab) => (
         <li key={tab} className="nav-item">
           <button
             className={`nav-link${activeTab === tab ? ' active' : ''}`}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => openProgramTab(tab)}
           >
             {TAB_LABELS[tab]}
           </button>
@@ -922,9 +940,16 @@ function AdminAcceleratorPage() {
             </div>
           )}
         >
-          {activeTab === 'cert-prep' && <AdminCertPrepPage />}
+          {/* `programScopeCohortId` is null when the tab was opened from the
+              global home, and these pages then keep their own unfiltered view.
+              Case Studies has no cohort dimension at all, so it takes nothing. */}
+          {activeTab === 'cert-prep' && (
+            <AdminCertPrepPage initialCohortId={programScopeCohortId ?? undefined} />
+          )}
           {activeTab === 'case-studies' && <AdminCaseStudiesPage />}
-          {activeTab === 'projects' && <AdminProjectOverview />}
+          {activeTab === 'projects' && (
+            <AdminProjectOverview initialCohortId={programScopeCohortId ?? undefined} />
+          )}
         </Suspense>
       )}
 

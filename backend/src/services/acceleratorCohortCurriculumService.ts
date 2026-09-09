@@ -22,10 +22,10 @@
  * yet". Those are different problems with different fixes.
  */
 import { Op } from 'sequelize';
-import Cohort from '../models/Cohort';
-import Enrollment from '../models/Enrollment';
-import TimelineCard from '../models/TimelineCard';
-import TimelineCardProgress from '../models/TimelineCardProgress';
+// From '../models', not the model files: associations (here, Cohort->program)
+// are registered in models/index.ts, and a direct model-file import produces a
+// model with none of them. See the note in acceleratorCurrentClassesService.
+import { Cohort, Enrollment, TimelineCard, TimelineCardProgress } from '../models';
 import { allTypes } from './timeline/typeRegistry';
 import { AppError } from '../utils/AppError';
 
