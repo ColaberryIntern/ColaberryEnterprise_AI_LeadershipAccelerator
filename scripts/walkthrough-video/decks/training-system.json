@@ -1,0 +1,86 @@
+{
+  "slug": "ai-systems-architect-training-system",
+  "output": "training-system-walkthrough.mp4",
+  "slides": [
+    {
+      "kind": "title",
+      "seconds": 6,
+      "title": "From AI Lessons to Verifiable AI Capability",
+      "subtitle": "The AI Systems Architect programme  ·  built by the Colaberry team",
+      "caption": "Course completion is not capability. A record saying someone watched a module answers a question nobody outside the classroom is asking."
+    },
+    {
+      "kind": "title",
+      "seconds": 8,
+      "title": "AI-assisted work makes this harder, not easier.",
+      "subtitle": "When a model can answer almost any exercise, the artefact alone stops being proof.",
+      "caption": "What is needed is evidence a sceptical reader can inspect: which competency, backed by which piece of work, recorded when, and still standing now."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 7,
+      "path": "C:/Users/ali_m/Downloads/r2r-out/shot-today.png",
+      "caption": "The learner command centre. Solid on the skill wheel is what has been verified, not what has been attempted."
+    },
+    {
+      "kind": "diagram",
+      "seconds": 9,
+      "path": "C:/Users/ali_m/Downloads/r2r-out/diagram-training-system-architecture.png",
+      "phases": [
+        "Lesson, carrying a skill map",
+        "Applied build, per learner",
+        "Submission, its own record",
+        "Evidence, append-only",
+        "Competency, recomputed",
+        "Portfolio, behind two gates"
+      ],
+      "caption": "Six steps from a lesson to a portfolio, and it matters which of them are automatic and which are deliberately not."
+    },
+    {
+      "kind": "cards",
+      "seconds": 8,
+      "rows": [
+        ["10", "competencies, each verified separately"],
+        ["4", "evidence bands: applied work 0.35, self-claim 0.20"],
+        ["2", "human gates, both must pass"]
+      ],
+      "accent_index": 1,
+      "caption": "A self-claim and a piece of applied work are not weighted the same, because a claim is not proof."
+    },
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "The evidence ledger has no update and no delete.",
+      "subtitle": "Not an oversight. The absence is the feature.",
+      "caption": "Every write is idempotency-keyed, and a record that can be revised after the fact is a claim rather than evidence."
+    },
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "Competency is a recompute, not an increment.",
+      "subtitle": "Each domain is recalculated from all of a learner's evidence.",
+      "caption": "That makes the operation idempotent by construction: running it twice produces the same state, rather than counting the same work twice."
+    },
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "Publishing is not automatic, and that is the point.",
+      "subtitle": "A human approval, and the learner's own choice of audience.",
+      "caption": "Two independent gates. Collapsing them into one would let approval imply consent, or consent imply approval."
+    },
+    {
+      "kind": "title",
+      "seconds": 8,
+      "title": "What is not finished is on the record too.",
+      "subtitle": "Placement readiness scoring and cohort-scale repository access are still in progress.",
+      "caption": "Updating a competency the instant a submission lands was considered and not pursued. The record says so rather than implying the loop is closed."
+    },
+    {
+      "kind": "title",
+      "seconds": 6,
+      "title": "Read the full record",
+      "subtitle": "Colaberry Enterprise",
+      "caption": "Every claim on the page is pinned to a commit you can open."
+    }
+  ]
+}
