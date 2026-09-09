@@ -21,6 +21,10 @@ import {
   rollUpTiming,
   summariseEvidence,
   summariseVerification,
+  bucketTasks,
+  releaseState,
+  TaskBuckets,
+  ReleaseState,
   groupArtifacts,
   TimingRollup,
   EvidenceSummary,
@@ -51,6 +55,10 @@ export interface ReleaseSummary {
   starts_on: string | null;
   ends_on: string | null;
   timing: TimingRollup;
+  /** Task-state split, for the segmented bar. */
+  buckets: TaskBuckets;
+  /** One-word status for the release strip on a collapsed row. */
+  state: ReleaseState;
 }
 
 /**
@@ -94,18 +102,20 @@ export async function getReleaseSummaries(
     const releases: ReleaseSummary[] = [...byRelease.entries()].map(([key, rows]) => {
       const dates = rows.map((r) => (r.due_on ? String(r.due_on).slice(0, 10) : null))
         .filter((d): d is string => !!d).sort();
+      const buckets = bucketTasks(rows, today);
       return {
         release_key: key,
         display_name: resolveReleaseName(key, {
           [key]: titles.get(`${projectId}::${key}`) ?? '',
         }),
         total: rows.length,
-        complete: rows.filter((r) => r.status === DONE).length,
-        overdue: rows.filter((r) => r.due_on && r.status !== DONE
-          && String(r.due_on).slice(0, 10) < today).length,
+        complete: buckets.done,
+        overdue: buckets.overdue,
         starts_on: dates[0] ?? null,
         ends_on: dates[dates.length - 1] ?? null,
         timing: rollUpTiming(rows),
+        buckets,
+        state: releaseState(buckets),
       };
     }).sort(byStartThenKey);
     out.set(projectId, releases);
@@ -201,16 +211,19 @@ export async function getProjectGantt(projectId: string): Promise<{
       if (landsWhen) break;
     }
 
+    const buckets = bucketTasks(list, today);
     return {
       release_key: key,
       display_name: resolveReleaseName(key, { [key]: titles.get(`${projectId}::${key}`) ?? '' }),
       lands_when: landsWhen,
       total: tasks.length,
-      complete: tasks.filter((t) => t.status === DONE).length,
-      overdue: tasks.filter((t) => t.overdue).length,
+      complete: buckets.done,
+      overdue: buckets.overdue,
       starts_on: dates[0] ?? null,
       ends_on: dates[dates.length - 1] ?? null,
       timing: rollUpTiming(list),
+      buckets,
+      state: releaseState(buckets),
       tasks,
     };
   }).sort(byStartThenKey);

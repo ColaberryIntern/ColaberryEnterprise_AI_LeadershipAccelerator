@@ -6,6 +6,9 @@ import {
   summariseEvidence,
   summariseVerification,
   groupArtifacts,
+  bucketTasks,
+  releaseState,
+  addDays,
 } from '../projectReleaseMeta';
 
 /**
@@ -188,6 +191,99 @@ describe('summariseEvidence', () => {
     const e = summariseEvidence([{ files_created: { unexpected: 'object' }, tests_added: 'oops' }]);
     expect(e.files_created).toBe(0);
     expect(e.tests_added).toBe(0);
+  });
+});
+
+describe('bucketTasks — the segmented bar', () => {
+  const TODAY = '2026-09-09';
+  const t = (status: string, due_on: string | null) => ({ status, due_on });
+
+  it('splits tasks into done, overdue, due-this-week and open', () => {
+    const b = bucketTasks([
+      t('complete', '2026-08-01'),
+      t('not_started', '2026-09-01'),   // overdue
+      t('not_started', '2026-09-12'),   // within 7 days
+      t('not_started', '2026-10-30'),   // beyond
+    ], TODAY);
+    expect(b).toMatchObject({ total: 4, done: 1, overdue: 1, due_this_week: 1, open: 1, undated: 0 });
+  });
+
+  it('counts a completed task as done even when its due date has passed', () => {
+    // Done is done; it must not also appear as overdue or the bar double-counts.
+    const b = bucketTasks([t('complete', '2026-01-01')], TODAY);
+    expect(b).toMatchObject({ done: 1, overdue: 0 });
+  });
+
+  it('keeps undated tasks OUT of the bar proportions', () => {
+    // 67 of 656 production tasks have no due date. Drawing them as a segment
+    // would imply a schedule position they do not have.
+    const b = bucketTasks([t('not_started', null), t('not_started', null)], TODAY);
+    expect(b).toMatchObject({ undated: 2, open: 0, overdue: 0, due_this_week: 0 });
+  });
+
+  describe('the due-soon boundary', () => {
+    it('counts today as due this week, not overdue', () => {
+      expect(bucketTasks([t('not_started', TODAY)], TODAY).due_this_week).toBe(1);
+    });
+    it('counts exactly 7 days out as due this week', () => {
+      expect(bucketTasks([t('not_started', '2026-09-16')], TODAY).due_this_week).toBe(1);
+    });
+    it('counts 8 days out as open', () => {
+      expect(bucketTasks([t('not_started', '2026-09-17')], TODAY).open).toBe(1);
+    });
+    it('counts yesterday as overdue', () => {
+      expect(bucketTasks([t('not_started', '2026-09-08')], TODAY).overdue).toBe(1);
+    });
+  });
+
+  it('every task lands in exactly one bucket', () => {
+    const tasks = [
+      t('complete', '2026-08-01'), t('not_started', '2026-09-01'),
+      t('in_progress', '2026-09-12'), t('blocked', '2026-11-01'), t('not_started', null),
+    ];
+    const b = bucketTasks(tasks, TODAY);
+    expect(b.done + b.overdue + b.due_this_week + b.open + b.undated).toBe(b.total);
+    expect(b.total).toBe(tasks.length);
+  });
+
+  it('handles null input', () => {
+    expect(bucketTasks(null, TODAY).total).toBe(0);
+  });
+});
+
+describe('addDays', () => {
+  it('advances across a month boundary in UTC', () => {
+    expect(addDays('2026-09-28', 7)).toBe('2026-10-05');
+  });
+  it('advances across a year boundary', () => {
+    expect(addDays('2026-12-30', 7)).toBe('2027-01-06');
+  });
+});
+
+describe('releaseState — the release strip', () => {
+  const b = (over: Partial<ReturnType<typeof bucketTasks>>) => ({
+    total: 0, done: 0, overdue: 0, due_this_week: 0, open: 0, undated: 0, ...over,
+  });
+
+  it('is landed when everything is done', () => {
+    expect(releaseState(b({ total: 3, done: 3 }))).toBe('landed');
+  });
+
+  it('is overdue when ANY task is overdue, even if most landed', () => {
+    // The overdue work is the thing needing attention, so it wins over progress.
+    expect(releaseState(b({ total: 6, done: 5, overdue: 1 }))).toBe('overdue');
+  });
+
+  it('is due_soon when work is imminent but nothing is late', () => {
+    expect(releaseState(b({ total: 3, done: 1, due_this_week: 2 }))).toBe('due_soon');
+  });
+
+  it('is open when work remains but none is imminent', () => {
+    expect(releaseState(b({ total: 3, done: 1, open: 2 }))).toBe('open');
+  });
+
+  it('is empty for a release with no tasks', () => {
+    expect(releaseState(b({}))).toBe('empty');
   });
 });
 
