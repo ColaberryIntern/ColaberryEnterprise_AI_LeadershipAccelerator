@@ -38,11 +38,34 @@ interface ContextRow {
   readonly value: string;
 }
 
+/**
+ * Whether `valueDisplay` already says the unit, in which case printing a UNIT
+ * row makes the card say it twice.
+ *
+ * MEASURED, NOT SUSPECTED: 13 of the 14 metrics published across the three live
+ * records do this — "14 decision records" above a row reading UNIT: records,
+ * "6 phases" above UNIT: phases. It is not an authoring slip repeated fourteen
+ * times; a display value that reads as a complete phrase almost always contains
+ * its own noun, which is exactly what §5b of `build-case-study` asks for. So the
+ * card suppresses the redundant row instead of every author remembering to.
+ *
+ * Word-boundary matched, so "records" is caught in "14 decision records" but
+ * "s" would not match anything, and a unit that genuinely adds something —
+ * "41%" with unit "percentage points" — still prints.
+ */
+export function unitAlreadyInValue(valueDisplay: string, unit: string): boolean {
+  if (!unit.trim() || !valueDisplay.trim()) return false;
+  const escaped = unit.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${escaped}\\b`, 'i').test(valueDisplay);
+}
+
 /** Only the fields the record actually carries, in reading order. */
 export function contextRowsFor(metric: PublicCaseStudyMetric): ContextRow[] {
   const rows: ContextRow[] = [];
   if (metric.baseline) rows.push({ term: 'Baseline', value: metric.baseline });
-  if (metric.unit) rows.push({ term: 'Unit', value: metric.unit });
+  if (metric.unit && !unitAlreadyInValue(metric.valueDisplay ?? '', metric.unit)) {
+    rows.push({ term: 'Unit', value: metric.unit });
+  }
   if (metric.sample) rows.push({ term: 'Sample', value: metric.sample });
   if (metric.methodology) rows.push({ term: 'Methodology', value: metric.methodology });
   return rows;

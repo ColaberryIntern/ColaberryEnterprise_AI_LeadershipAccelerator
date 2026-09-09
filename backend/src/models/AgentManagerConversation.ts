@@ -71,7 +71,19 @@ export interface PendingOneOnOneConfirmation {
   detectedAt: string;
 }
 
-export type PendingIntentConfirmation = PendingGoalChangeConfirmation | PendingOneOnOneConfirmation;
+/**
+ * Capability 8, third intent on the generic column — INSTRUCT (a manager
+ * giving a standing directive). `directiveText` is the manager's own
+ * message verbatim, same "no fragile extraction" posture as
+ * PendingOneOnOneConfirmation's agenda — see managerDirectiveIntentService.ts.
+ */
+export interface PendingDirectiveConfirmation {
+  intentType: 'INSTRUCT';
+  directiveText: string;
+  detectedAt: string;
+}
+
+export type PendingIntentConfirmation = PendingGoalChangeConfirmation | PendingOneOnOneConfirmation | PendingDirectiveConfirmation;
 
 export interface AgentManagerConversationAttributes {
   id?: string;
