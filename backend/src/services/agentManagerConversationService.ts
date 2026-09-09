@@ -12,6 +12,9 @@ import {
 import {
   applyConfirmedOneOnOneSchedule, buildOneOnOneConfirmationCardText, detectScheduleOneOnOneIntent, toPendingOneOnOneConfirmation,
 } from './managerOneOnOneIntentService';
+import {
+  applyConfirmedDirective, buildDirectiveConfirmationCardText, detectInstructIntent, toPendingDirectiveConfirmation,
+} from './managerDirectiveIntentService';
 import { detectWorkStatusQuery, buildWorkStatusReply } from './agentWorkStatusIntentService';
 import { detectUncertaintyQuery, buildUncertaintyReply } from './agentUncertaintyIntentService';
 import { detectInterventionIntentQuery, buildInterventionIntentReply } from './agentInterventionIntentService';
@@ -29,13 +32,14 @@ import { detectInterventionIntentQuery, buildInterventionIntentReply } from './a
 // (QUARANTINE_METRIC/RESTORE_METRIC) is now detected and gated behind a real
 // confirmation turn — see managerReliabilityIntentService.ts.
 //
-// Capability 8 (2026-09-08) narrows it by two more, both riding the generic
+// Capability 8 (2026-09-08) narrows it by three more, all riding the generic
 // `pending_intent_confirmation` column instead of a dedicated one:
-// CHANGE_GOAL (managerGoalIntentService.ts) and SCHEDULE
-// (managerOneOnOneIntentService.ts, 1:1 check-ins). See
+// CHANGE_GOAL (managerGoalIntentService.ts), SCHEDULE
+// (managerOneOnOneIntentService.ts, 1:1 check-ins), and INSTRUCT
+// (managerDirectiveIntentService.ts, standing directives). See
 // handlePendingGenericIntentConfirmation/handleNewGenericIntentDetection
 // below for how the column dispatches across intent types. Every other
-// intent (ASK/INSTRUCT/CORRECT/APPROVE/REJECT/COACH/ASSIGN_WORK/
+// intent (ASK/CORRECT/APPROVE/REJECT/COACH/ASSIGN_WORK/
 // REPORT_DATA_ISSUE/...) is still purely conversational, unchanged.
 
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
@@ -141,7 +145,10 @@ function genericIntentCancelText(pending: NonNullable<AgentManagerConversation['
   if (pending.intentType === 'CHANGE_GOAL') {
     return 'Okay, no change made — the goal stays as it was. Let me know if you did want to change that.';
   }
-  return 'Okay, no 1:1 scheduled. Let me know if you did want to set one up.';
+  if (pending.intentType === 'SCHEDULE_ONE_ON_ONE') {
+    return 'Okay, no 1:1 scheduled. Let me know if you did want to set one up.';
+  }
+  return 'Okay, no directive saved. Let me know if you did want to set one.';
 }
 
 /**
@@ -172,7 +179,11 @@ async function handlePendingGenericIntentConfirmation(
       const { summary } = await applyConfirmedGoalChange(agentId, pending, participantEmail, participantOrgMemberId);
       return summary;
     }
-    const { summary } = await applyConfirmedOneOnOneSchedule(agentId, pending, participantEmail, participantOrgMemberId);
+    if (pending.intentType === 'SCHEDULE_ONE_ON_ONE') {
+      const { summary } = await applyConfirmedOneOnOneSchedule(agentId, pending, participantEmail, participantOrgMemberId);
+      return summary;
+    }
+    const { summary } = await applyConfirmedDirective(agentId, pending, participantEmail, participantOrgMemberId);
     return summary;
   }
 
@@ -202,6 +213,12 @@ async function handleNewGenericIntentDetection(
   if (oneOnOneDetected) {
     await conversation.update({ pending_intent_confirmation: toPendingOneOnOneConfirmation(oneOnOneDetected) });
     return buildOneOnOneConfirmationCardText(oneOnOneDetected);
+  }
+
+  const directiveDetected = detectInstructIntent(messageText);
+  if (directiveDetected) {
+    await conversation.update({ pending_intent_confirmation: toPendingDirectiveConfirmation(directiveDetected) });
+    return buildDirectiveConfirmationCardText(directiveDetected);
   }
 
   return null;

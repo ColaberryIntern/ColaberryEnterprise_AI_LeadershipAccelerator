@@ -58,6 +58,15 @@ jest.mock('../agentOneOnOneService', () => ({
   createOneOnOne: (...a: any[]) => mockCreateOneOnOne(...a),
 }));
 
+// INSTRUCT is unrelated to this file's scenarios — mocked wholesale so it
+// never fires on this file's own messages.
+jest.mock('../managerDirectiveIntentService', () => ({
+  detectInstructIntent: jest.fn(() => null),
+  buildDirectiveConfirmationCardText: jest.fn(() => ''),
+  toPendingDirectiveConfirmation: jest.fn(),
+  applyConfirmedDirective: jest.fn(),
+}));
+
 jest.mock('../agentWorkStatusIntentService', () => ({
   detectWorkStatusQuery: jest.fn(() => null),
   buildWorkStatusReply: jest.fn(),
