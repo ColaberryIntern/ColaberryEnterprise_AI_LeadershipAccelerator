@@ -12,6 +12,7 @@ import KitConfigModal from '../../components/admin/KitConfigModal';
 import { CategoryKey } from '../../components/admin/kitConfig/types';
 import CohortManagementTab from './components/CohortManagementTab';
 import ClassDashboardTab from './components/ClassDashboardTab';
+import CurriculumCompletionTab from './components/CurriculumCompletionTab';
 import CurrentClassesDashboard from './components/CurrentClassesDashboard';
 import AdminCommunityRolesPage from './AdminCommunityRolesPage';
 import { resolveAcceleratorNav } from './utils/resolveAcceleratorNav';
@@ -1338,6 +1339,16 @@ function AdminAcceleratorPage() {
 
       {activeTab === 'class-dashboard' && selectedCohortId && (
         <ClassDashboardTab cohortId={selectedCohortId} />
+      )}
+
+      {activeTab === 'curriculum' && selectedCohortId && (
+        /* Completion sits ABOVE the authoring tools, because the first question asked of a
+           curriculum is which parts of it people are finishing. Authoring is what you do
+           after reading the answer. */
+        <div className="mb-4">
+          <CurriculumCompletionTab cohortId={selectedCohortId} />
+          <hr className="my-4" />
+        </div>
       )}
 
       {activeTab === 'curriculum' && (

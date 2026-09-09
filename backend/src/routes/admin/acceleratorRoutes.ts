@@ -13,6 +13,8 @@ import {
   handleGetReadiness, handleComputeReadiness, handleComputeAllReadiness,
   handleGetDashboard,
   handleGetClassDashboard,
+  handleGetCurriculumCompletion,
+  handleGetStudentWeekBreakdown,
   handleCreateEnrollment,
   handleListCohortEnrollments,
   handleSetPortalAccess,
@@ -44,6 +46,8 @@ router.post('/api/admin/accelerator/cohorts/:cohortId/sessions', requireAdmin, h
 router.get('/api/admin/accelerator/cohorts/:cohortId/dashboard', requireAdmin, handleGetDashboard);
 router.get('/api/admin/accelerator/cohorts/:cohortId/class-dashboard', requireAdmin, handleGetClassDashboard);
 router.post('/api/admin/accelerator/cohorts/:cohortId/readiness', requireAdmin, handleComputeAllReadiness);
+router.get('/api/admin/accelerator/cohorts/:cohortId/curriculum-completion', requireAdmin, handleGetCurriculumCompletion);
+router.get('/api/admin/accelerator/cohorts/:cohortId/students/:enrollmentId/week-breakdown', requireAdmin, handleGetStudentWeekBreakdown);
 // Quick-add student: create enrollment + enable portal + send magic link in one call
 router.post('/api/admin/accelerator/quick-add-student', requireAdmin, async (req: Request, res: Response) => {
   try {

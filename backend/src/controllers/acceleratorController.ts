@@ -407,6 +407,31 @@ export async function handleGetClassDashboard(req: Request, res: Response, next:
   } catch (err) { next(err); }
 }
 
+/**
+ * Curriculum completion for a cohort: which cards the class is finishing, grouped the way
+ * the curriculum is ordered, plus where each student sits against the cohort's own week.
+ */
+export async function handleGetCurriculumCompletion(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { getCurriculumCompletion } = await import('../services/curriculumCompletionService');
+    const result = await getCurriculumCompletion(req.params.cohortId as string);
+    if (!result) return res.status(404).json({ error: 'Cohort not found' });
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+/** One student's week-by-week, for the pace drill-down. */
+export async function handleGetStudentWeekBreakdown(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { getStudentWeekBreakdown } = await import('../services/curriculumCompletionService');
+    const result = await getStudentWeekBreakdown(
+      req.params.cohortId as string, req.params.enrollmentId as string,
+    );
+    if (!result) return res.status(404).json({ error: 'Enrollment not found in this cohort' });
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
 // -- Admin Enrollment --
 
 export async function handleCreateEnrollment(req: Request, res: Response, next: NextFunction) {
