@@ -193,13 +193,26 @@ export default function CurriculumCompletionTab({ cohortId }: { cohortId: string
 
   return (
     <div data-testid="curriculum-completion">
-      <div className="mb-2">
-        <h5 className="mb-1">Curriculum completion</h5>
-        <p className="text-muted small mb-0">
-          Mean share of {data.activeStudents} active students completing each section&apos;s
-          cards, in curriculum order. The class is on <strong>week {data.scheduledWeek}</strong>,
-          from {data.deliveredSessions} sessions delivered. Click a week to open its cards.
-        </p>
+      <div className="d-flex justify-content-between align-items-start gap-3 mb-2">
+        <div>
+          <h5 className="mb-1">Curriculum completion</h5>
+          <p className="text-muted small mb-0">
+            Mean share of {data.activeStudents} active students completing each section&apos;s
+            cards, in curriculum order. The class is on <strong>week {data.scheduledWeek}</strong>,
+            from {data.deliveredSessions} sessions delivered. Click a week to open its cards.
+          </p>
+        </div>
+        {/* Carried over from the duplicate curriculum section this view replaced. That
+            section was read-only apart from this one control, and authoring has to stay
+            one click away. */}
+        <a
+          className="btn btn-sm btn-outline-primary text-nowrap"
+          href="/admin/orchestration?tab=composer"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Open Composer
+        </a>
       </div>
 
       {/* Legend. Without it the ramp is decoration; with it every cell is readable. */}
@@ -293,12 +306,19 @@ export default function CurriculumCompletionTab({ cohortId }: { cohortId: string
                   {open && w.sections.flatMap((sec) => sec.cards).map((card) => (
                     <tr key={card.id}>
                       <td className="small" style={{ paddingLeft: 28 }}>
+                        {/* CARDS ARE AUTHORED IN THE COMPOSER. This used to point at
+                            `/admin/curriculum?card=<id>`, which is not a route in
+                            adminRoutes.tsx at all — every card title was a dead link. The
+                            Composer is the real destination, but it reads only `?tab=` and
+                            `?type=`, so it cannot focus a single card yet; the id rides
+                            along so the link starts working the day it can. */}
                         <a
-                          href={`/admin/curriculum?card=${card.id}`}
+                          href={`/admin/orchestration?tab=composer&card=${card.id}`}
                           target="_blank"
                           rel="noreferrer"
                           className={card.published ? undefined : 'text-muted'}
                           onClick={(e) => e.stopPropagation()}
+                          title="Open the Composer — it cannot jump to a single card yet"
                         >
                           {card.title || '(untitled)'}
                         </a>

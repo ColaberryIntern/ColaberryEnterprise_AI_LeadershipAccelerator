@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom';
 import api from '../../utils/api';
 import { useToast } from '../../components/ui/ToastProvider';
 import ConfirmModal from '../../components/ui/ConfirmModal';
-import AdminCurriculumTab from './AdminCurriculumTab';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal } from '../../components/admin/shell/trust';
 import PersonHistoryDrawer from '../../components/admin/PersonHistoryDrawer';
@@ -134,7 +133,7 @@ type TabKey =
 
 const TAB_ORDER: TabKey[] = [
   'cohorts', 'sessions', 'participants', 'class-dashboard', 'curriculum',
-  'cert-prep', 'case-studies', 'projects',
+  'projects', 'cert-prep', 'case-studies',
 ];
 // Cohort-scoped drill-downs, reached from a cohort row rather than from an
 // always-visible top tab bar — "let everything flow through the Cohorts tab."
@@ -146,7 +145,10 @@ const DRILLDOWN_TABS: TabKey[] = ['sessions', 'participants', 'class-dashboard',
 // its existing page component unchanged, including that page's own header,
 // which is why this page suppresses its own PageHeader while one is active
 // rather than stacking two headers on top of each other.
-const PROGRAM_TABS: TabKey[] = ['cert-prep', 'case-studies', 'projects'];
+// Ali, 2026-09-09: "The order should be Projects / Cert Prep / Case Studies." Projects
+// leads because it is where a student's actual build lives; Cert Prep is downstream of
+// having built something, and Case Studies is downstream of both.
+const PROGRAM_TABS: TabKey[] = ['projects', 'cert-prep', 'case-studies'];
 const TAB_LABELS: Record<TabKey, string> = {
   cohorts: 'Cohorts',
   sessions: 'Sessions',
@@ -1341,22 +1343,25 @@ function AdminAcceleratorPage() {
         <ClassDashboardTab cohortId={selectedCohortId} />
       )}
 
+      {/* ONE curriculum section, not two. Ali, 2026-09-09: "Let's remove this 2nd
+          curriculum section."
+
+          `AdminCurriculumTab` used to render underneath the heatmap. It listed the same
+          weeks and the same cards a second time, and it mutated nothing — a read-only
+          duplicate of the view above it, now that the heatmap carries per-section and
+          per-card completion. Its one irreplaceable control was the link into the
+          Composer, which is where curriculum is actually authored, so that link moved
+          onto the heatmap rather than being deleted with the rest.
+
+          The component file stays in the tree. It has no route of its own and no other
+          caller, so nothing else breaks by not rendering it here, and deleting a working
+          component is a bigger decision than the one that was asked for. */}
       {activeTab === 'curriculum' && selectedCohortId && (
-        /* Completion sits ABOVE the authoring tools, because the first question asked of a
-           curriculum is which parts of it people are finishing. Authoring is what you do
-           after reading the answer. */
-        <div className="mb-4">
-          <CurriculumCompletionTab cohortId={selectedCohortId} />
-          <hr className="my-4" />
-        </div>
+        <CurriculumCompletionTab cohortId={selectedCohortId} />
       )}
 
-      {activeTab === 'curriculum' && (
-        <AdminCurriculumTab
-          cohortId={selectedCohortId}
-          enrollments={enrollments.map((e) => ({ id: e.id, full_name: e.full_name, email: e.email, company: e.company }))}
-          showToast={showToast}
-        />
+      {activeTab === 'curriculum' && !selectedCohortId && (
+        <div className="text-muted p-3">Select a cohort to see curriculum completion.</div>
       )}
 
       {/* Class Kit — projector-friendly QR + start-class panel for a session */}
