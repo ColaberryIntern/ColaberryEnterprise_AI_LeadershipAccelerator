@@ -140,11 +140,21 @@ export function StoryHeroFigure({
   if (video) {
     return (
       <figure className="cbv2-story__cover cbv2-story__cover--video">
+          {/* `crossorigin` is what makes the CAPTIONS work on the other two brands. A
+              cross-origin `track` is refused unless the media element is a CORS request,
+              and this file is served from the platform while the page may be
+              training.colaberry.com or aiflotation.com. Without it the track's
+              readyState goes to 3 (ERROR) and the cue list stays empty, while the video
+              plays perfectly and the .vtt returns a healthy 200 — so nothing looks
+              broken except the missing captions. nginx sends
+              `Access-Control-Allow-Origin` on both the .vtt and the .mp4 to match; the
+              attribute and the header are one change, not two. */}
         <video
           className="cbv2-story__walkthrough-player"
           controls
           preload="none"
           playsInline
+          crossOrigin="anonymous"
           poster={video.posterUrl ?? cover?.src ?? undefined}
         >
           <source src={video.url} type="video/mp4" />
