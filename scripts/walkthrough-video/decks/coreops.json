@@ -6,7 +6,7 @@
       "kind": "title",
       "seconds": 6,
       "title": "The AI Proposes, A Verified Human Decides",
-      "subtitle": "CoreOps  ·  a Colaberry learner build",
+      "subtitle": "CoreOps  \u00b7  a Colaberry learner build",
       "caption": "Operations teams do not distrust automation because it is inaccurate. They distrust it because they cannot see what it did."
     },
     {
@@ -47,18 +47,39 @@
       "kind": "cards",
       "seconds": 7,
       "rows": [
-        ["14", "architecture decision records"],
-        ["7", "guardrail modules, 4 with their own tests"],
-        ["132", "commits across 18 days"]
+        [
+          "14",
+          "architecture decision records"
+        ],
+        [
+          "7",
+          "guardrail modules, 4 with their own tests"
+        ],
+        [
+          "132",
+          "commits across 18 days"
+        ]
       ],
       "accent_index": 0,
       "caption": "A system whose central claim is that its choices are provable after the fact has written its choices down."
     },
     {
       "kind": "screenshot",
+      "seconds": 8,
+      "path": "C:/Users/ali_m/Downloads/r2r-out/shot-coreops-datamodel.png",
+      "caption": "The domain model, with every entity named against the requirement that asked for it."
+    },
+    {
+      "kind": "screenshot",
       "seconds": 7,
       "path": "C:/Users/ali_m/Downloads/r2r-out/shot-coreops-traceability.png",
       "caption": "Every requirement traced to the thing that satisfies it, in the system's own command centre."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 7,
+      "path": "C:/Users/ali_m/Downloads/r2r-out/coreops-shots/coreops-users.png",
+      "caption": "Nine operator roles, each taken from the story that names them rather than invented for a persona deck."
     },
     {
       "kind": "title",
@@ -78,7 +99,7 @@
       "kind": "title",
       "seconds": 6,
       "title": "Read the full record",
-      "subtitle": "Colaberry Enterprise  ·  Colaberry Training  ·  AI Flotation",
+      "subtitle": "Colaberry Enterprise  \u00b7  Colaberry Training  \u00b7  AI Flotation",
       "caption": "Every claim on the page is pinned to a commit you can open."
     }
   ]

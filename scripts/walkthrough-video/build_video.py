@@ -86,9 +86,22 @@ def rounded_card(img, box, radius=22, fill=CARD, shadow=True):
     ImageDraw.Draw(img).rounded_rectangle(box, radius, fill=fill + (255,) if len(fill) == 3 else fill)
 
 
+# Whether the sentence is painted INTO the picture.
+#
+# It is off. The reference clip Ali supplied had burned-in captions, so the first cut did
+# too - and then the record also ships a WebVTT track, so the player drew its own captions
+# over the baked ones and every video showed the same sentence twice, offset by a few
+# pixels. Ali: "We have double captions - there should only be one."
+#
+# The track wins, not the burn. Burned-in text cannot be turned off, resized, translated or
+# read by a screen reader; the track can be all four, and it is the one an accessible player
+# expects. Set this True only for a video that will ship with NO track.
+BURN_CAPTIONS = False
+
+
 def caption(img, text, fnt_size=42):
     """The dark translucent sentence box, bottom-centred, exactly as in the reference."""
-    if not text:
+    if not text or not BURN_CAPTIONS:
         return
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
@@ -110,15 +123,20 @@ def slide_title(title, subtitle, cap):
     img = background().convert("RGBA")
     d = ImageDraw.Draw(img)
     fnt = font(F_BOLD, 82)
+    sf = font(F_REG, 40)
     lines = wrap(d, title, fnt, 1420)
-    y = 300
+    # CENTRE THE BLOCK, do not start it at a fixed y. With the caption box gone the lower
+    # third is empty, and a one-line title and a three-line title cannot share a start
+    # position without one of them looking dropped. Measure, then centre what was measured.
+    block_h = len(lines) * 100 + (64 if subtitle else 0)
+    y = (H - block_h) / 2 if not BURN_CAPTIONS else 300
     for line in lines:
         tw = d.textlength(line, font=fnt)
         d.text(((W - tw) / 2, y), line, font=fnt, fill=INK)
         y += 100
-    sf = font(F_REG, 40)
-    tw = d.textlength(subtitle, font=sf)
-    d.text(((W - tw) / 2, y + 24), subtitle, font=sf, fill=MUTED)
+    if subtitle:
+        tw = d.textlength(subtitle, font=sf)
+        d.text(((W - tw) / 2, y + 24), subtitle, font=sf, fill=MUTED)
     caption(img, cap)
     return img
 
@@ -133,7 +151,8 @@ def slide_cards(rows, cap, accent_index=None):
     x = (W - total) / 2
     for i, (big, small) in enumerate(rows):
         is_accent = i == accent_index
-        box = [x, 330, x + cw, 590]
+        top_c = 330 if BURN_CAPTIONS else 410
+        box = [x, top_c, x + cw, top_c + 260]
         rounded_card(img, box, 22, ACCENT if is_accent else CARD)
         d = ImageDraw.Draw(img)
         bf = font(F_BOLD, 74)
@@ -141,10 +160,10 @@ def slide_cards(rows, cap, accent_index=None):
         col = (255, 255, 255) if is_accent else INK
         sub = (255, 235, 220) if is_accent else MUTED
         tw = d.textlength(big, font=bf)
-        d.text((x + (cw - tw) / 2, 380), big, font=bf, fill=col)
+        d.text((x + (cw - tw) / 2, top_c + 50), big, font=bf, fill=col)
         for j, line in enumerate(wrap(d, small, sf, cw - 60)):
             tw = d.textlength(line, font=sf)
-            d.text((x + (cw - tw) / 2, 486 + j * 38), line, font=sf, fill=sub)
+            d.text((x + (cw - tw) / 2, top_c + 156 + j * 38), line, font=sf, fill=sub)
         x += cw + gap
     caption(img, cap)
     return img
@@ -175,12 +194,14 @@ def slide_screenshot(path, cap):
     """
     img = background().convert("RGBA")
     art = Image.open(path).convert("RGBA")
-    max_w, max_h = 1560, 700
+    max_w, max_h = (1560, 700) if BURN_CAPTIONS else (1720, 950)
     scale = min(max_w / art.width, max_h / art.height)
     art = art.resize((int(art.width * scale), int(art.height * scale)), Image.LANCZOS)
     pad = 20
     x = (W - art.width) // 2
-    top = 70
+    # Vertically centred in whatever height is left, so a wide capture and a tall one both
+    # sit in the middle rather than hugging the top.
+    top = max(40, (H - art.height) // 2)
     rounded_card(img, [x - pad, top - pad, x + art.width + pad, top + art.height + pad], 20)
     img.alpha_composite(art, (x, top))
     caption(img, cap)
@@ -200,8 +221,8 @@ def slide_diagram(path, phases, cap):
     art = Image.open(path).convert("RGBA")
     # The card has to finish ABOVE the caption box, which starts at y=842 for two lines.
     # At 880px tall it ran to 960 and the caption sat on top of the last three nodes.
-    art_h = 760
-    top = 30
+    art_h = 760 if BURN_CAPTIONS else 960
+    top = 30 if BURN_CAPTIONS else 55
     scale = art_h / art.height
     art = art.resize((int(art.width * scale), art_h), Image.LANCZOS)
     pad = 20
@@ -213,7 +234,7 @@ def slide_diagram(path, phases, cap):
     nf = font(F_BOLD, 34)
     lf = font(F_REG, 30)
     x = ax + art.width + 140
-    y = 150
+    y = 150 if BURN_CAPTIONS else 255
     for i, name in enumerate(phases):
         d.rounded_rectangle([x, y, x + 62, y + 62], 14, fill=ACCENT)
         num = str(i + 1)
@@ -284,16 +305,21 @@ def main():
     GIF_CROP = tuple(cfg.get("gifCrop", (0, 0, 0, 0))) if cfg.get("gifCrop") else None
     out_name = cfg.get("output", "walkthrough.mp4")
 
-    SEG = os.path.join(deck_dir, "segments")
+    stem = os.path.splitext(os.path.basename(deck_path))[0]
+# Per-deck, not per-directory. All the decks live in decks/, so a single timings.json
+# beside them is SHARED - and the last narration run silently wins. Repo2Reputation was
+# built once with the training system's segment durations that way: same slide count, so
+# nothing errored, every segment just held for the wrong length.
+    SEG = os.path.join(deck_dir, "segments", stem)
     os.makedirs(SEG, exist_ok=True)
-    bg_path = os.path.join(deck_dir, "bg.png")
+    bg_path = os.path.join(deck_dir, stem + "-bg.png")
     background().save(bg_path)
 
     deck = slides
 
     # Durations come from the narration, not from the deck's guesses: a slide that ends
     # before its own sentence does cuts the last word off.
-    timings_path = os.path.join(deck_dir, "timings.json")
+    timings_path = os.path.join(deck_dir, stem + ".timings.json")
     timings = {}
     if os.path.exists(timings_path):
         timings = {t["index"]: t for t in json.load(open(timings_path, encoding="utf-8"))}
@@ -303,7 +329,7 @@ def main():
     for i, s in enumerate(deck):
         seg = os.path.join(SEG, f"{i:02d}.mp4")
         dur = timings[i]["seconds"] if i in timings else s["seconds"]
-        voice = os.path.join(deck_dir, "audio", f"{i:02d}.mp3")
+        voice = os.path.join(deck_dir, "audio", stem, f"{i:02d}.mp3")
         has_voice = os.path.exists(voice)
         # 0.5s of silence before the voice starts, then pad to the full segment length.
         afilter = ["-af", "adelay=500:all=1,apad"]
@@ -352,7 +378,7 @@ def main():
         segments.append(seg)
         print(f"  segment {i:02d} {s['kind']:8s} {dur:>4}s  ok")
 
-    listfile = os.path.join(deck_dir, "concat.txt")
+    listfile = os.path.join(deck_dir, stem + "-concat.txt")
     with open(listfile, "w", encoding="utf-8") as fh:
         for s in segments:
             fh.write(f"file '{s.replace(os.sep, '/')}'\n")

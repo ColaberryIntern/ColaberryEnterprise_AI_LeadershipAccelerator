@@ -21,25 +21,29 @@ Six phases analyse each repository. Every phase records its own status and its o
 Nothing is written about a repository until it has been analysed.
 
 6
-00:00:33.200 --> 00:00:38.400
-One failing agent costs one section of the portfolio, not the whole run.
+00:00:33.200 --> 00:00:38.880
+Select the analysed repositories and generate. The developer writes nothing.
 
 7
-00:00:39.500 --> 00:00:47.840
-Framework detection writes a mandatory override into the prompt. The model phrases the finding; it does not determine it.
+00:00:40.000 --> 00:00:45.200
+One failing agent costs one section of the portfolio, not the whole run.
 
 8
-00:00:48.900 --> 00:00:54.120
-The headline and summary are generated from the code, not typed by the developer.
+00:00:46.300 --> 00:00:54.640
+Framework detection writes a mandatory override into the prompt. The model phrases the finding; it does not determine it.
 
 9
-00:00:55.200 --> 00:01:03.520
-Every figure is counted from the repository at commit 966e5d69, and can be re-derived.
+00:00:55.700 --> 00:01:00.920
+The headline and summary are generated from the code, not typed by the developer.
 
 10
-00:01:04.600 --> 00:01:10.860
-Nothing covers the pipeline, the agents or the endpoints. The record says so itself.
+00:01:02.000 --> 00:01:10.320
+Every figure is counted from the repository at commit 966e5d69, and can be re-derived.
 
 11
-00:01:12.000 --> 00:01:16.140
+00:01:11.400 --> 00:01:17.660
+Nothing covers the pipeline, the agents or the endpoints. The record says so itself.
+
+12
+00:01:18.800 --> 00:01:22.940
 Every claim on the page is pinned to a commit you can open.

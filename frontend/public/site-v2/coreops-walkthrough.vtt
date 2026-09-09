@@ -25,17 +25,25 @@ A policy evaluator decides whether an action is permissible at all, and anything
 A system whose central claim is that its choices are provable after the fact has written its choices down.
 
 7
-00:00:54.100 --> 00:01:00.500
-Every requirement traced to the thing that satisfies it, in the system's own command centre.
+00:00:54.100 --> 00:00:59.710
+The domain model, with every entity named against the requirement that asked for it.
 
 8
-00:01:01.600 --> 00:01:12.250
-One decision record commits to multi-factor authentication on the approving account; another binds approval to a verified identity rather than to a session.
+00:01:02.100 --> 00:01:08.500
+Every requirement traced to the thing that satisfies it, in the system's own command centre.
 
 9
-00:01:13.300 --> 00:01:21.620
-Both are published on the record rather than left out. The system proves who agreed to a change, not that the change was the right one.
+00:01:09.600 --> 00:01:16.530
+Nine operator roles, each taken from the story that names them rather than invented for a persona deck.
 
 10
-00:01:22.700 --> 00:01:26.840
+00:01:17.600 --> 00:01:28.250
+One decision record commits to multi-factor authentication on the approving account; another binds approval to a verified identity rather than to a session.
+
+11
+00:01:29.300 --> 00:01:37.620
+Both are published on the record rather than left out. The system proves who agreed to a change, not that the change was the right one.
+
+12
+00:01:38.700 --> 00:01:42.840
 Every claim on the page is pinned to a commit you can open.
