@@ -399,17 +399,38 @@ export default function JourneySankeyChart({
             zIndex: 1080,
             maxWidth: 260,
             pointerEvents: 'none',
-            background: 'var(--surface-raised, #16181d)',
-            color: 'var(--color-text, #fff)',
-            border: '1px solid var(--color-border, #2c2f36)',
+            /**
+             * FIXED colours, not tokens, and deliberately so.
+             *
+             * This read dark-on-dark in production. The pair was
+             * `background: var(--surface-raised, #16181d)` with
+             * `color: var(--color-text, #fff)`, and the two resolved from
+             * different places: `--surface-raised` is not defined anywhere in this
+             * codebase, so the near-black FALLBACK won, while `--color-text` IS
+             * defined and resolved to the light theme's dark slate. Near-black
+             * background, dark slate text, unreadable.
+             *
+             * A floating tooltip needs guaranteed contrast — it overlays a chart
+             * whose own colours vary — so the pair that must contrast is pinned
+             * here rather than assembled from tokens. Pinning both halves is the
+             * point: the failure was not the dark surface, it was contrast
+             * assembled from two sources that disagreed.
+             */
+            background: '#16181d',
+            color: '#f5f6f8',
+            border: '1px solid #343842',
             borderRadius: 8,
             padding: '9px 11px',
             fontSize: 12,
             boxShadow: '0 8px 30px rgba(0,0,0,.25)',
           }}
         >
-          <strong style={{ display: 'block', marginBottom: 3 }}>{tip.title}</strong>
+          <strong style={{ display: 'block', marginBottom: 3, color: '#ffffff' }}>
+            {tip.title}
+          </strong>
           {tip.lines.map((line) => (
+            // 0.85 opacity on a pinned light foreground still clears 4.5:1 against
+            // #16181d; it is a hierarchy cue, not a contrast risk.
             <div key={line} style={{ opacity: 0.85 }}>
               {line}
             </div>
