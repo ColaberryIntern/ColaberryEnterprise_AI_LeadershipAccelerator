@@ -26,7 +26,7 @@ verified.
 ## Running it
 
 ```bash
-python make_narration.py     # Windows SAPI male voice -> audio/NN.wav + timings.json
+python make_narration.py     # neural voice -> audio/NN.mp3 + timings.json
 python build_video.py        # slides + footage + audio -> repo2reputation-walkthrough.mp4
 python make_vtt.py           # the accessible caption sidecar
 ```
@@ -46,8 +46,39 @@ actually takes to speak, not from the deck's guesses, or a slide ends mid-word.
 
 ## Narration voice
 
-The built-in Windows voice (`Microsoft David Desktop`) was Ali's explicit choice over
-installing a neural TTS. The `walkthrough-video-production` skill's hierarchy is user
-preference → Kokoro → approved cloud → basic OS voices, so this is the bottom tier chosen
-deliberately, not by default. Swapping engines means changing `make_narration.py` only;
-nothing downstream knows how the wav was made.
+`en-US-AndrewNeural`, a Microsoft neural voice, through `edge-tts`.
+
+**Check what is already installed before offering the user a choice.** The first cut used
+the built-in Windows SAPI voice because that was the only engine anybody had checked for,
+and Ali's verdict was blunt: *"voice is horrible."* `edge-tts` was already installed on the
+machine the whole time — so the neural voice needed no install, and the skill's
+provisioning gate never applied. `Microsoft David` is a pre-neural concatenative voice and
+no rate or pitch setting fixes that; the engine has to change.
+
+Swapping narrator means changing `VOICE` in `make_narration.py` and nothing else. The nine
+en-US male voices carry Microsoft's own personality tags — `AndrewNeural` is warm /
+confident / authentic / honest, `ChristopherNeural` reliable / authority, `BrianNeural`
+approachable / casual / sincere. Audition two or three before committing; it takes a
+minute and it is the difference between a record people watch and one they mute.
+
+**What leaves the machine:** the narration text, to Microsoft's Edge TTS endpoint. Here
+that text is the case study's own captions, already published on three public sites. It is
+still a third-party call and worth stating.
+
+**The endpoint is flaky under a burst.** It returns `NoAudioReceived` intermittently —
+eleven segments back to back is exactly that — and it killed the first run on segment 0
+having produced the same sentence successfully seconds earlier. `speak()` has a bounded
+exponential retry. Do not remove it and conclude the input was bad.
+
+## Shipping the file
+
+**`docker cp` into the nginx container is not a deploy.** The video is baked into the
+nginx image from `frontend/public/site-v2/`, so a copied-in file survives only until the
+container is next recreated — and on a box where other sessions deploy, that can be
+minutes. It happened twice here: once losing the screenshots, once silently reverting a
+re-recorded narration to the previous voice while the page still returned 200 and the
+correct byte count *at the moment it was checked*.
+
+Commit the file, merge, then rebuild nginx. When verifying, compare the **byte count or
+md5 against the local file**, not just the status code: the old and new videos both return
+200 and differ only in content.

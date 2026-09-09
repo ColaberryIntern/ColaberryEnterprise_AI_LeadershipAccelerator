@@ -1,66 +1,99 @@
 """
-Generate narration for each deck segment with the built-in Windows male voice.
+Generate narration for each deck segment.
 
-Ali chose the basic OS voice (male) over installing a neural TTS, and captions stay on
-screen as well. The narration text IS the caption text, so what is heard and what is read
-are the same sentence - a caption that paraphrases its own voiceover is a second script to
-keep in sync, and it drifts.
+VOICE: a Microsoft neural voice through `edge-tts`, which was already installed on this
+machine - so nothing is provisioned and the skill's provisioning gate does not apply. It
+replaced the built-in SAPI voice (`Microsoft David Desktop`) after Ali heard it: "voice is
+horrible. Can we have a more human sounding voice". SAPI's David is a pre-neural
+concatenative voice and there is no setting that fixes that; the engine had to change.
 
-Text is written to files and read by PowerShell rather than interpolated into the command
-line: the captions contain apostrophes and commas, and quoting them through a shell is how
-a narration line silently loses half its sentence.
+`en-US-AndrewNeural` is Microsoft's own personality tagging for it - warm, confident,
+authentic, honest - which is the register this particular record is arguing for. Swapping
+narrator means changing VOICE below and nothing else.
+
+WHAT LEAVES THE MACHINE: the narration text, to Microsoft's Edge TTS endpoint. That text is
+the case study's own captions, already published on three public websites, so there is
+nothing here that is not already public. It is still a third-party call and worth knowing.
+
+The narration text IS the caption text, so what is heard and what is read are the same
+sentence - a caption that paraphrases its own voiceover is a second script to keep in sync,
+and it drifts.
 """
+import asyncio
 import json
 import os
 import subprocess
 
+import edge_tts
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 AUDIO = os.path.join(HERE, "audio")
-VOICE = "Microsoft David Desktop"
-RATE = 0
-
-PS = """
-Add-Type -AssemblyName System.Speech
-$s = New-Object System.Speech.Synthesis.SpeechSynthesizer
-$s.SelectVoice('{voice}')
-$s.Rate = {rate}
-$s.SetOutputToWaveFile('{wav}')
-$s.Speak([System.IO.File]::ReadAllText('{txt}'))
-$s.Dispose()
-"""
+VOICE = "en-US-AndrewNeural"
+# Slightly under pace. The default read is brisk for narration that has to land a figure
+# and its denominator in one breath.
+RATE = "-4%"
 
 
-def main():
+async def speak(text, path, attempts=4):
+    """
+    One narration line, with a capped retry.
+
+    The endpoint returns `NoAudioReceived` intermittently under a burst - eleven segments
+    generated back to back is exactly that - and the first run died on segment 0 having
+    just produced the same sentence successfully in an audition seconds earlier. So this is
+    a transient upstream, not bad input, and it gets a bounded exponential backoff rather
+    than a bare call. Failing after four tries is a real failure and stops the run: a deck
+    with a silent segment is worse than no deck.
+    """
+    last = None
+    for attempt in range(attempts):
+        try:
+            await edge_tts.Communicate(text, VOICE, rate=RATE).save(path)
+            if os.path.exists(path) and os.path.getsize(path) > 1000:
+                return
+            last = RuntimeError("wrote an empty file")
+        except Exception as err:  # noqa: BLE001 - the library raises several unrelated types
+            last = err
+        if attempt < attempts - 1:
+            wait = 2 ** attempt
+            print(f"    retry {attempt + 1}/{attempts - 1} in {wait}s ({type(last).__name__})")
+            await asyncio.sleep(wait)
+    raise SystemExit(f"narration failed after {attempts} attempts: {last}")
+
+
+def duration(path):
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path],
+        capture_output=True, text=True).stdout.strip()
+    return float(out)
+
+
+async def main():
     os.makedirs(AUDIO, exist_ok=True)
     deck = json.load(open(os.path.join(HERE, "deck.json"), encoding="utf-8"))
     timings = []
 
     for i, s in enumerate(deck):
         text = s["caption"]
-        txt = os.path.join(AUDIO, f"{i:02d}.txt")
-        wav = os.path.join(AUDIO, f"{i:02d}.wav")
-        with open(txt, "w", encoding="utf-8") as fh:
-            fh.write(text)
-        script = PS.format(voice=VOICE, rate=RATE,
-                           wav=wav.replace("/", "\\"), txt=txt.replace("/", "\\"))
-        p = subprocess.run(["powershell.exe", "-NoProfile", "-Command", script],
-                           capture_output=True, text=True)
-        if p.returncode != 0 or not os.path.exists(wav):
-            raise SystemExit(f"narration {i} failed: {p.stderr[-400:]}")
+        # mp3, not wav: edge-tts emits mp3 and ffmpeg reads it as an input either way, so
+        # converting first would only lose a generation of quality for nothing.
+        path = os.path.join(AUDIO, f"{i:02d}.mp3")
+        await speak(text, path)
+        if not os.path.exists(path) or os.path.getsize(path) < 1000:
+            raise SystemExit(f"narration {i} produced nothing: {path}")
 
-        dur = float(subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "csv=p=0", wav], capture_output=True, text=True).stdout.strip())
+        d = duration(path)
         # A slide must outlast its own sentence. 0.5s before the voice starts and 1.0s
         # after it stops, so a segment never cuts the last word or jumps the moment it ends.
-        seconds = max(s["seconds"], round(dur + 1.5, 1))
-        timings.append({"index": i, "audio_seconds": round(dur, 2), "seconds": seconds})
-        print(f"  {i:02d}  voice {dur:5.2f}s  ->  segment {seconds:5.1f}s   {text[:52]}")
+        seconds = max(s["seconds"], round(d + 1.5, 1))
+        timings.append({"index": i, "audio_seconds": round(d, 2), "seconds": seconds})
+        print(f"  {i:02d}  voice {d:5.2f}s  ->  segment {seconds:5.1f}s   {text[:50]}")
 
     with open(os.path.join(HERE, "timings.json"), "w", encoding="utf-8") as fh:
         json.dump(timings, fh, indent=1)
-    print(f"\ntotal: {sum(t['seconds'] for t in timings):.1f}s across {len(timings)} segments")
+    print(f"\nvoice: {VOICE} at {RATE}")
+    print(f"total: {sum(t['seconds'] for t in timings):.1f}s across {len(timings)} segments")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
