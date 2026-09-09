@@ -15,6 +15,9 @@ import {
 import {
   applyConfirmedDirective, buildDirectiveConfirmationCardText, detectInstructIntent, toPendingDirectiveConfirmation,
 } from './managerDirectiveIntentService';
+import {
+  applyConfirmedAssignWork, buildAssignWorkConfirmationCardText, detectAssignWorkIntent, toPendingAssignWorkConfirmation,
+} from './managerAssignWorkIntentService';
 import { detectWorkStatusQuery, buildWorkStatusReply } from './agentWorkStatusIntentService';
 import { detectUncertaintyQuery, buildUncertaintyReply } from './agentUncertaintyIntentService';
 import { detectInterventionIntentQuery, buildInterventionIntentReply } from './agentInterventionIntentService';
@@ -32,15 +35,17 @@ import { detectInterventionIntentQuery, buildInterventionIntentReply } from './a
 // (QUARANTINE_METRIC/RESTORE_METRIC) is now detected and gated behind a real
 // confirmation turn — see managerReliabilityIntentService.ts.
 //
-// Capability 8 (2026-09-08) narrows it by three more, all riding the generic
-// `pending_intent_confirmation` column instead of a dedicated one:
+// Capability 8 (2026-09-08/09) narrows it by four more, all riding the
+// generic `pending_intent_confirmation` column instead of a dedicated one:
 // CHANGE_GOAL (managerGoalIntentService.ts), SCHEDULE
-// (managerOneOnOneIntentService.ts, 1:1 check-ins), and INSTRUCT
-// (managerDirectiveIntentService.ts, standing directives). See
+// (managerOneOnOneIntentService.ts, 1:1 check-ins), INSTRUCT
+// (managerDirectiveIntentService.ts, standing directives), and ASSIGN_WORK
+// (managerAssignWorkIntentService.ts, real tickets via the Org Chart's own
+// hierarchy-authorized task assignment). See
 // handlePendingGenericIntentConfirmation/handleNewGenericIntentDetection
 // below for how the column dispatches across intent types. Every other
-// intent (ASK/CORRECT/APPROVE/REJECT/COACH/ASSIGN_WORK/
-// REPORT_DATA_ISSUE/...) is still purely conversational, unchanged.
+// intent (ASK/CORRECT/APPROVE/REJECT/COACH/REPORT_DATA_ISSUE/...) is still
+// purely conversational, unchanged.
 
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
 const HISTORY_LIMIT = 20;
@@ -148,7 +153,10 @@ function genericIntentCancelText(pending: NonNullable<AgentManagerConversation['
   if (pending.intentType === 'SCHEDULE_ONE_ON_ONE') {
     return 'Okay, no 1:1 scheduled. Let me know if you did want to set one up.';
   }
-  return 'Okay, no directive saved. Let me know if you did want to set one.';
+  if (pending.intentType === 'INSTRUCT') {
+    return 'Okay, no directive saved. Let me know if you did want to set one.';
+  }
+  return 'Okay, no task assigned. Let me know if you did want to assign one.';
 }
 
 /**
@@ -183,7 +191,11 @@ async function handlePendingGenericIntentConfirmation(
       const { summary } = await applyConfirmedOneOnOneSchedule(agentId, pending, participantEmail, participantOrgMemberId);
       return summary;
     }
-    const { summary } = await applyConfirmedDirective(agentId, pending, participantEmail, participantOrgMemberId);
+    if (pending.intentType === 'INSTRUCT') {
+      const { summary } = await applyConfirmedDirective(agentId, pending, participantEmail, participantOrgMemberId);
+      return summary;
+    }
+    const { summary } = await applyConfirmedAssignWork(agentId, pending, participantEmail, participantOrgMemberId);
     return summary;
   }
 
@@ -219,6 +231,12 @@ async function handleNewGenericIntentDetection(
   if (directiveDetected) {
     await conversation.update({ pending_intent_confirmation: toPendingDirectiveConfirmation(directiveDetected) });
     return buildDirectiveConfirmationCardText(directiveDetected);
+  }
+
+  const assignWorkDetected = detectAssignWorkIntent(messageText);
+  if (assignWorkDetected) {
+    await conversation.update({ pending_intent_confirmation: toPendingAssignWorkConfirmation(assignWorkDetected) });
+    return buildAssignWorkConfirmationCardText(assignWorkDetected);
   }
 
   return null;
