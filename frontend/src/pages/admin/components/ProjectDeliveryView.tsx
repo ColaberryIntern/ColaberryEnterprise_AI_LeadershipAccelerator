@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../../utils/api';
 import { SectionCard, StatCard, StatusBadge } from '../../../components/admin/shell';
 import CaseStudyKpi from './projectDelivery/CaseStudyKpi';
-import BuildEvidencePanel, { EvidenceSummary } from './projectDelivery/BuildEvidencePanel';
+import BuildEvidencePanel, { ProjectEvidence } from './projectDelivery/BuildEvidencePanel';
 import ArtifactsPanel, { ArtifactGroup } from './projectDelivery/ArtifactsPanel';
 import ReleaseRow, {
   ReleaseSummaryLike, TimingRollup, releaseColor, fmtDay as fmtReleaseDay,
@@ -182,7 +182,7 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
   // Evidence and artifacts are fetched on EXPAND, unlike the release bars: they are
   // detail nobody reads from a collapsed row, and both are empty for every project
   // today, so eager-loading them would cost 60 requests to render two empty states.
-  const [evidence, setEvidence] = useState<Record<string, EvidenceSummary>>({});
+  const [evidence, setEvidence] = useState<Record<string, ProjectEvidence>>({});
   const [artifacts, setArtifacts] = useState<Record<string, ArtifactGroup[]>>({});
   const [detailLoading, setDetailLoading] = useState<string | null>(null);
 
@@ -412,6 +412,7 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
                   <div className="fw-semibold small mb-2">Build evidence</div>
                   <BuildEvidencePanel
                     evidence={evidence[r.project_id] ?? null}
+                    repoUrl={r.repo_url}
                     loading={detailLoading === r.project_id && !evidence[r.project_id]}
                   />
                 </div>
