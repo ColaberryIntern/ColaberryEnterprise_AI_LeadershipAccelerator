@@ -84,6 +84,47 @@ export const cardImpressionSchema = z.object({
   card_state: z.string().max(60).optional(),
 }).strict();
 
+// ── Phase 3: the interview ──────────────────────────────────────────────────
+
+/**
+ * One answer. `answer_value` is deliberately a narrow union rather than
+ * `z.any()`: a yes/no must arrive as a real boolean and a choice as a string, so
+ * a client cannot smuggle an object into a JSONB column that the reviewer UI
+ * will later try to render.
+ */
+export const answerSchema = z.object({
+  question_key: z.string().min(1).max(80),
+  answer_text: z.string().max(8000).nullish(),
+  answer_value: z.union([z.boolean(), z.string().max(120)]).nullish(),
+  // `answered` and `skipped` are the applicant's to set. `confirmed` is not — it
+  // is reached only by confirming the summary, and `needs_followup` only by
+  // transcript extraction. Accepting either here would let a client mark an
+  // extracted answer confirmed without the applicant ever seeing it.
+  state: z.enum(['answered', 'skipped']).optional(),
+}).strict();
+
+export const saveAnswersSchema = z.object({
+  answers: z.array(answerSchema).min(1).max(30),
+  is_correction: z.boolean().optional().default(false),
+}).strict();
+
+/**
+ * Scheduling a call. The window is bounded at both ends: a booking in the past is
+ * a mistake, and one 90 days out is not a booking anyone will keep. The route
+ * checks the lower bound against the real clock.
+ */
+export const scheduleCallSchema = z.object({
+  scheduled_for: z.string().datetime(),
+}).strict();
+
+export const confirmSummarySchema = z.object({
+  // The applicant ticking "yes, this is what I said". Required, so confirming is
+  // an act rather than a default.
+  confirmed: z.literal(true),
+}).strict();
+
+export const submitApplicationSchema = z.object({}).strict();
+
 /**
  * Keys that must never be accepted by any internship endpoint.
  *

@@ -16,6 +16,11 @@ import {
   handleSelectInternshipChannel, handleDismissInternshipCard,
   handleInternshipCardImpression, handleInternshipCardOpened,
 } from '../controllers/internshipController';
+import {
+  handleGetInterview, handleSaveAnswers, handleGetSummary, handleConfirmSummary,
+  handleSubmitApplication, handleCallNow, handleScheduleCall, handleCancelCall,
+  handleGetApplicantCompleteness,
+} from '../controllers/internshipInterviewController';
 import { requireBuildEntitlement } from '../middlewares/requireBuildEntitlement';
 import { requireContentEntitlement } from '../middlewares/requireContentEntitlement';
 import { requireOrgManager } from '../middlewares/orgAuth';
@@ -288,6 +293,31 @@ router.post('/api/portal/internship/interview/channel', internshipWriteRateLimit
 router.post('/api/portal/internship/card/dismiss', internshipWriteRateLimiter, requireParticipant, handleDismissInternshipCard);
 router.post('/api/portal/internship/card/impression', internshipBeatRateLimiter, requireParticipant, handleInternshipCardImpression);
 router.post('/api/portal/internship/card/opened', internshipBeatRateLimiter, requireParticipant, handleInternshipCardOpened);
+
+// ── AI Internship interview (both channels) ─────────────────────────────────
+// The call endpoints get their OWN, much tighter bucket: these place real phone
+// calls to a real person, so "prevent call abuse and repeated rapid callbacks"
+// needs a limit measured in calls per hour, not the 30-per-15-minutes the write
+// bucket allows. The service adds a 5-minute per-application cooldown on top,
+// because counting requests is not the same as refusing to dial someone twice.
+const internshipCallRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 6,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many call attempts — please wait before trying again.' },
+});
+
+router.get('/api/portal/internship/interview', requireParticipant, handleGetInterview);
+router.put('/api/portal/internship/interview/answers', internshipWriteRateLimiter, requireParticipant, handleSaveAnswers);
+router.get('/api/portal/internship/interview/summary', requireParticipant, handleGetSummary);
+router.post('/api/portal/internship/interview/summary/confirm', internshipWriteRateLimiter, requireParticipant, handleConfirmSummary);
+router.get('/api/portal/internship/interview/completeness', requireParticipant, handleGetApplicantCompleteness);
+router.post('/api/portal/internship/interview/call', internshipCallRateLimiter, requireParticipant, handleCallNow);
+router.post('/api/portal/internship/interview/call/schedule', internshipCallRateLimiter, requireParticipant, handleScheduleCall);
+router.post('/api/portal/internship/interview/call/cancel', internshipWriteRateLimiter, requireParticipant, handleCancelCall);
+router.post('/api/portal/internship/submit', internshipWriteRateLimiter, requireParticipant, handleSubmitApplication);
+
 
 // Blog 2-minute read gate: continuous-dwell heartbeat + collect (ambient blogs, no card row).
 router.post('/api/portal/runtime/today/blog/:blogId/read', watchBeatRateLimiter, requireParticipant, handleBlogReadBeat);

@@ -94,6 +94,13 @@ export const env = {
   // Unset means resolveAgentId returns nothing and the call is skipped with
   // `no_agent_id` - a visible no-op, never a fallback onto someone else's script.
   synthflowCpnAgentId: process.env.SYNTHFLOW_CPN_AGENT_ID || '',
+  // The AI Internship interviewer's own shell agent. Its own slot for the same
+  // reason CPN has one: the Colaberry agents carry saved training-site and
+  // bootcamp-callback scripts, and an internship applicant expecting a
+  // qualification interview would instead be sold a bootcamp seat. Unset means
+  // resolveAgentId returns nothing and the call is skipped with `no_agent_id` -
+  // a visible no-op, never a fallback onto someone else's script.
+  synthflowInternshipAgentId: process.env.SYNTHFLOW_INTERNSHIP_AGENT_ID || '',
 
   // Admin alert phone (for Cory health monitor voice alerts)
   adminAlertPhone: process.env.ADMIN_ALERT_PHONE || '',
