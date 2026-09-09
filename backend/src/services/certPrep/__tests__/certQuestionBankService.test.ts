@@ -16,6 +16,7 @@ jest.mock('../../../models/CertQuestionRevision', () => ({
   default: { findAll: jest.fn(), findOne: jest.fn(), create: jest.fn() },
 }));
 
+import { Op } from 'sequelize';
 import CertQuestion from '../../../models/CertQuestion';
 import CertQuestionRevision from '../../../models/CertQuestionRevision';
 import {
@@ -25,6 +26,7 @@ import {
   isRevisionServable,
   pickServableRevision,
   loadServableRevisions,
+  loadServedItems,
   validateRevision,
   setReviewStatus,
   RevisionLike,
@@ -277,5 +279,126 @@ describe('setReviewStatus', () => {
   it('returns null for an unknown revision rather than throwing', async () => {
     mockRevFindOne.mockResolvedValue(null);
     await expect(setReviewStatus('nope', 1, 'in_review')).resolves.toBeNull();
+  });
+});
+
+/**
+ * The resume path's trade-off, pinned in both directions.
+ *
+ * `loadServedItems` is what a RESUMED sitting is served from, and it deliberately
+ * behaves differently from the planning path: it keeps serving a pinned revision
+ * that is no longer approved, and it refuses to serve one that has been retired.
+ * Both halves need a test, because a test for only the first would read as
+ * "approval is ignored here" and invite someone to remove the retirement filter
+ * as an inconsistency.
+ */
+describe('loadServedItems — a sitting already in flight', () => {
+  beforeEach(() => {
+    mockQuestionFindAll.mockReset();
+    mockRevFindAll.mockReset();
+    mockQuestionFindAll.mockResolvedValue([]);
+  });
+
+  const served = [{ question_key: 'A1', revision: 1 }, { question_key: 'A2', revision: 1 }];
+
+  it('still serves a pinned revision that is no longer approved', async () => {
+    // The student started before the item was revised; the old revision is now
+    // superseded rather than bad. The paper must not change under them.
+    mockRevFindAll.mockResolvedValue([
+      rev({ question_key: 'A1', revision: 1, review_status: 'draft' }),
+      rev({ question_key: 'A2', revision: 1, review_status: 'draft' }),
+    ]);
+    const items = await loadServedItems(served);
+    expect(items.map((i) => i.question_key)).toEqual(['A1', 'A2']);
+  });
+
+  it('omits an item the revision query did not return, rather than leaving a hole', async () => {
+    // Named for what it actually proves. It was first written as "drops an item
+    // whose pinned revision has been retired" — but the retirement happens in the
+    // WHERE clause, so with the mock returning one row this passed identically
+    // with the filter deleted. It proved the mock, not the code. The retirement
+    // filter itself is proven by the query assertion below; what is worth pinning
+    // here is that a missing row shortens the form instead of producing an
+    // undefined entry in the payload.
+    mockRevFindAll.mockResolvedValue([rev({ question_key: 'A2', revision: 1 })]);
+    const items = await loadServedItems(served);
+    expect(items.map((i) => i.question_key)).toEqual(['A2']);
+    expect(items.every((i) => i && i.question_key)).toBe(true);
+  });
+
+  it('drops an item whose QUESTION IDENTITY has been retired', async () => {
+    // Independent of any single revision's status, so it is checked separately.
+    // Both revisions come back from the revision query; A1's identity is retired.
+    mockRevFindAll.mockResolvedValue([
+      rev({ question_key: 'A1', revision: 1 }),
+      rev({ question_key: 'A2', revision: 1 }),
+    ]);
+    // `is_retired` is supplied because the code READS it rather than assuming
+    // every row the query returned is retired. A mock that omitted it would be
+    // asserting the old, weaker implementation.
+    mockQuestionFindAll.mockResolvedValue([
+      { question_key: 'A1', is_retired: true },
+      { question_key: 'A2', is_retired: false },
+    ]);
+    const items = await loadServedItems(served);
+    expect(items.map((i) => i.question_key)).toEqual(['A2']);
+  });
+
+  it('drops a retired revision even when the query hands one back anyway', async () => {
+    // The WHERE clause narrows for efficiency; the in-memory check decides. This
+    // is the case where they disagree — a mock, a stale replica, or a future
+    // refactor that loses the filter. Without the read, a question retired for
+    // being WRONG would still be served to a student mid-sitting.
+    mockRevFindAll.mockResolvedValue([
+      rev({ question_key: 'A1', revision: 1, review_status: 'retired' }),
+      rev({ question_key: 'A2', revision: 1 }),
+    ]);
+    mockQuestionFindAll.mockResolvedValue([
+      { question_key: 'A1', is_retired: false },
+      { question_key: 'A2', is_retired: false },
+    ]);
+    const items = await loadServedItems(served);
+    expect(items.map((i) => i.question_key)).toEqual(['A2']);
+  });
+
+  it('does not drop a live item just because its identity row came back', async () => {
+    // The regression that broke certPrepRoutes.fence.test.ts: the identity query
+    // returned rows and the code treated all of them as retired, dropping every
+    // question in the sitting. Guards the read, not the query.
+    mockRevFindAll.mockResolvedValue([
+      rev({ question_key: 'A1', revision: 1 }),
+      rev({ question_key: 'A2', revision: 1 }),
+    ]);
+    mockQuestionFindAll.mockResolvedValue([
+      { question_key: 'A1', is_retired: false },
+      { question_key: 'A2', is_retired: false },
+    ]);
+    const items = await loadServedItems(served);
+    expect(items.map((i) => i.question_key)).toEqual(['A1', 'A2']);
+  });
+
+  it('asks the database to exclude retired revisions rather than filtering after', async () => {
+    // Asserting the QUERY, not just the result: a post-filter would pass the
+    // tests above while still pulling retired rows into memory, and the next
+    // refactor would quietly drop it.
+    //
+    // Read through the Op SYMBOLS, not JSON.stringify. The first version of this
+    // test stringified the where clause and asserted it contained 'retired';
+    // Sequelize's operators are symbol keys, which JSON.stringify silently drops,
+    // so it compared against "{\"where\":{}}" and would have passed with the
+    // filter deleted.
+    mockRevFindAll.mockResolvedValue([]);
+    await loadServedItems(served);
+    const where = mockRevFindAll.mock.calls[0][0].where;
+    const clauses = where[Op.and];
+    expect(Array.isArray(clauses)).toBe(true);
+    const statusClause = clauses.find((c: any) => c.review_status);
+    expect(statusClause.review_status[Op.ne]).toBe('retired');
+  });
+
+  it('never queries at all for an empty form', async () => {
+    const items = await loadServedItems([]);
+    expect(items).toEqual([]);
+    expect(mockRevFindAll).not.toHaveBeenCalled();
   });
 });
