@@ -31,11 +31,18 @@ import { visibleStagesForSections } from './personScope';
  *
  * ── STAGES THIS CAN AND CANNOT COMPUTE ──────────────────────────────────────
  *
- * Measured 2026-09-06: `enrollments.status` holds only 'active' (456) and
- * 'withdrawn' (62). There is NO completion status, so `graduate` cannot be
- * computed at all — which is exactly what lifecycle.ts already records. It is
- * therefore never assigned here rather than being approximated from something
- * that looks close.
+ * `lapsed` is the stage this expression was missing, and getting it wrong was
+ * expensive: before 2026-09-09 someone with a WITHDRAWN enrolment read as
+ * `enrolled_student`, so the active-student count included 62 people who had
+ * already left. For a business whose goal is keeping subscriptions active, that
+ * is the one number that must not be flattering.
+ *
+ * `graduate` is never assigned, and that is the business model rather than a
+ * gap: this is a subscription, so there is no completion — someone who stops has
+ * LAPSED, not finished. See lifecycle.ts.
+ *
+ * `active_learner` and `returning_customer` are also never assigned: attendance
+ * is unreliable, and there is no local payments source.
  */
 
 export interface PersonRow {
@@ -85,6 +92,7 @@ const MAX_LIMIT = 200;
  */
 const STAGE_SQL = `
   CASE
+    WHEN e.status = 'withdrawn' THEN 'lapsed'
     WHEN e.email IS NOT NULL THEN 'enrolled_student'
     WHEN l.pipeline_stage IS NOT NULL AND l.pipeline_stage <> 'new_lead' THEN 'applicant'
     ELSE 'lead'

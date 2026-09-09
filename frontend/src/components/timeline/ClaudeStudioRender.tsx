@@ -5,6 +5,7 @@ import { trackEvent } from '../../utils/tracker';
 import {
   parseClaudeStudio, ParsedStudio, StageKey, STAGE_ORDER, STAGE_LABELS,
   loadDraft, saveDraft, clearDraft, StudioDraft, EMPTY_DRAFT,
+  extractPromptFields, fillPrompt, filledCount,
 } from './claudeStudioParse';
 
 /**
@@ -110,7 +111,19 @@ const CSS = `
 .st-steps li{margin:4px 0}
 .st-donetag{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;color:var(--st-green);
   background:var(--st-greenbg);border:1px solid var(--st-greenline);border-radius:20px;padding:2px 9px}
+.st-fill{border:1px solid var(--st-softline);border-radius:13px;background:var(--st-soft);padding:16px 18px;margin:0 0 16px}
+.st-fill h4{font-size:14px;font-weight:800;color:var(--st-ink);margin:0 0 4px}
+.st-fill-p{font-size:12.8px;color:#4a4270;margin:0 0 13px;line-height:1.55}
+.st-fill-row{margin:0 0 11px}
+.st-fill-lbl{display:block;font-size:12.4px;font-weight:700;color:var(--st-ink);margin:0 0 5px}
+.st-fill-used{font-weight:500;color:var(--st-mut);font-size:11.6px}
+.st-render .st-fill input[type=text],.st-render .st-fill textarea{width:100%;padding:9px 11px;border:1px solid var(--st-line);
+  border-radius:8px;font-size:13.6px;color:var(--st-tx);background:#fff;font-family:inherit;line-height:1.5}
+.st-render .st-fill textarea{min-height:64px;resize:vertical}
+.st-fill-count{font-size:12px;font-weight:700;color:var(--st-accent2);margin:2px 0 0}
+.st-fill-done{color:var(--st-green)}
 .st-prompt{margin:0 0 14px}
+.st-unfilled{font-size:12px;color:#6d4520;background:#fff8f2;border:1px solid #f3ddc7;border-radius:8px;padding:7px 10px;margin:0 0 7px}
 .st-plabel{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--st-accent2);margin:0 0 3px}
 .st-kind{font-size:10px;font-weight:800;letter-spacing:.06em;color:#fff;background:var(--st-accent);border-radius:20px;padding:2px 8px;margin-left:7px;text-transform:uppercase}
 .st-why{font-size:12.8px;color:var(--st-mut);margin:0 0 7px}
@@ -175,6 +188,9 @@ const ClaudeStudioRender: React.FC<Props> = ({
   cardId, completed, onSubmitted, onCopied, preview,
 }) => {
   const studio: ParsedStudio | null = useMemo(() => parseClaudeStudio(bodyHtml || ''), [bodyHtml]);
+  // The bracketed fill-ins the authored prompts ask for, deduped across prompts
+  // so one answer feeds every prompt that needs it.
+  const fields = useMemo(() => (studio ? extractPromptFields(studio.prompts) : []), [studio]);
 
   const [draft, setDraft] = useState<StudioDraft>(EMPTY_DRAFT);
   const [copied, setCopied] = useState<Set<number>>(new Set());
@@ -253,6 +269,10 @@ const ClaudeStudioRender: React.FC<Props> = ({
     const stages = has ? draft.stages.filter((s) => s !== key) : [...draft.stages, key];
     persist({ ...draft, stages });
     if (!has) track('stage_completed', { stage: key, done: stages.length, total: stagesTotal });
+  };
+
+  const setField = (key: string, value: string) => {
+    persist({ ...draft, inputs: { ...draft.inputs, [key]: value } });
   };
 
   const toggleCheck = (i: number) => {
@@ -338,7 +358,10 @@ const ClaudeStudioRender: React.FC<Props> = ({
       <style>{CSS}</style>
       <div className="st-inner">
         <span className="st-badge">&#9670; CLAUDE.AI &middot; STUDIO</span>
-        {title && <h2 className="st-title">{title}</h2>}
+        {/* The workspace chrome already prints the card title above this panel;
+            repeating it here showed the same sentence twice on one screen. The
+            drawer has no such header, so it still needs ours. */}
+        {title && variant !== 'workspace' && <h2 className="st-title">{title}</h2>}
 
         {(estMin || points || difficulty) && (
           <ul className="st-meta">
@@ -352,11 +375,14 @@ const ClaudeStudioRender: React.FC<Props> = ({
         {studio.careerAsset && (
           <div className="st-asset"><b>What you walk away with:</b> {studio.careerAsset}</div>
         )}
-        {/* The studio's authored intro wins over the card summary. The summary is
-            a generic one-liner built for the feed tile ("<asset>, built in Claude
-            across four stages…") and it duplicates the asset callout directly
-            above; the intro is the hand-written hook for this specific week. */}
-        {(studio.intro || summary) && <p className="st-sum">{studio.intro || summary}</p>}
+        {/* Deliberately NOT the intro. The classroom tile already prints the
+            intro as the card description, and the scenario below re-states the
+            same job in richer, more concrete terms — so showing it here made the
+            same point three times before the student reached anything to do.
+            The fallback only fires when a body carries no scenario at all. */}
+        {!studio.scenario && (studio.intro || summary) && (
+          <p className="st-sum">{studio.intro || summary}</p>
+        )}
 
         <div className="st-launch">
           <a href={studio.chatUrl} target="_blank" rel="noopener noreferrer" onClick={() => track('launched', { target: 'conversation' })}>Open Claude &rarr;</a>
@@ -430,7 +456,10 @@ const ClaudeStudioRender: React.FC<Props> = ({
           <>
             <h3 className="st-h">Set up your Project</h3>
             <section className="st-block">
-              {block('project').heading && <h4>{block('project').heading}</h4>}
+              {/* `html` is the block's innerHTML and ALREADY contains its <h4> —
+                  rendering `heading` as well printed "Week 2 — Research and
+                  Evidence" twice, one line above itself. Same for the Artifact
+                  block. Reported from production 2026-09-08. */}
               <div dangerouslySetInnerHTML={{ __html: block('project').html }} />
             </section>
           </>
@@ -439,22 +468,68 @@ const ClaudeStudioRender: React.FC<Props> = ({
         {studio.prompts.length > 0 && (
           <>
             <h3 className="st-h">Prompts to start from</h3>
-            {studio.prompts.map((p, i) => (
-              <div className="st-prompt" key={i}>
-                <div className="st-plabel">
-                  {p.label}<span className="st-kind">{p.kind}</span>
-                </div>
-                {p.why && <p className="st-why">{p.why}</p>}
-                <pre className="st-pre">{p.text}</pre>
-                <button
-                  type="button"
-                  className={`st-copy${copied.has(i) ? ' done' : ''}`}
-                  onClick={() => copy(i, p.text)}
-                >
-                  {copied.has(i) ? '✓  Copied — paste it into Claude' : '\u{1F4CB}  Copy prompt'}
-                </button>
+
+            {/* Answer once here and every prompt below fills itself in. Beats
+                asking the student to hand-edit brackets after pasting, which is
+                easy to skip — you end up sending Claude a prompt that literally
+                still says "[describe your role]". */}
+            {fields.length > 0 && !preview && (
+              <div className="st-fill">
+                <h4>Your answers</h4>
+                <p className="st-fill-p">
+                  Fill these in and the prompts below complete themselves, ready to copy. This stays on
+                  your device &mdash; it is not submitted or sent anywhere.
+                </p>
+                {fields.map((f) => {
+                  const id = `st-fill-${cardId || 'p'}-${f.key.replace(/[^a-z0-9]+/gi, '-').slice(0, 40)}`;
+                  const used = f.usedBy.length > 1 ? ` · used in ${f.usedBy.length} prompts` : '';
+                  return (
+                    <div className="st-fill-row" key={f.key}>
+                      <label className="st-fill-lbl" htmlFor={id}>
+                        {f.label}<span className="st-fill-used">{used}</span>
+                      </label>
+                      {f.multiline ? (
+                        <textarea id={id} value={draft.inputs[f.key] || ''} onChange={(e) => setField(f.key, e.target.value)} />
+                      ) : (
+                        <input id={id} type="text" value={draft.inputs[f.key] || ''} onChange={(e) => setField(f.key, e.target.value)} />
+                      )}
+                    </div>
+                  );
+                })}
+                <p className={`st-fill-count${filledCount(fields, draft.inputs) === fields.length ? ' st-fill-done' : ''}`}>
+                  {filledCount(fields, draft.inputs) === fields.length
+                    ? `\u2713 All ${fields.length} answered — the prompts below are ready to copy`
+                    : `${filledCount(fields, draft.inputs)} of ${fields.length} answered`}
+                </p>
               </div>
-            ))}
+            )}
+
+            {studio.prompts.map((p, i) => {
+              const filled = preview ? p.text : fillPrompt(p.text, draft.inputs);
+              const stillBlank = /\[[^\][\n]{2,160}\]/.test(filled);
+              return (
+                <div className="st-prompt" key={i}>
+                  <div className="st-plabel">
+                    {p.label}<span className="st-kind">{p.kind}</span>
+                  </div>
+                  {p.why && <p className="st-why">{p.why}</p>}
+                  {stillBlank && !preview && (
+                    <p className="st-unfilled">
+                      Anything still in [square brackets] is waiting on an answer above. You can copy it
+                      as-is and fill it in inside Claude, but doing it here is quicker.
+                    </p>
+                  )}
+                  <pre className="st-pre">{filled}</pre>
+                  <button
+                    type="button"
+                    className={`st-copy${copied.has(i) ? ' done' : ''}`}
+                    onClick={() => copy(i, filled)}
+                  >
+                    {copied.has(i) ? '✓  Copied — paste it into Claude' : '\u{1F4CB}  Copy prompt'}
+                  </button>
+                </div>
+              );
+            })}
           </>
         )}
 
@@ -462,7 +537,7 @@ const ClaudeStudioRender: React.FC<Props> = ({
           <>
             <h3 className="st-h">What the Artifact must contain</h3>
             <section className="st-block">
-              {block('artifact').heading && <h4>{block('artifact').heading}</h4>}
+              {/* See the Project block above: `html` carries the <h4> already. */}
               <div dangerouslySetInnerHTML={{ __html: block('artifact').html }} />
             </section>
           </>

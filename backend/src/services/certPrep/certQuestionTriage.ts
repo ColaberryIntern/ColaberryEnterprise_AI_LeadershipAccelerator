@@ -80,29 +80,45 @@ export interface TriageInput {
 const SYSTEM = [
   'You review multiple-choice exam questions for a professional certification.',
   '',
-  'Your job is to BREAK the question, not to confirm it. For each item you are given',
-  'the marked answer and the author\'s reasoning. Argue the strongest case you can',
-  'AGAINST the marked answer being the single best choice, then decide whether it',
-  'survives that argument.',
+  'For each item you get the marked answer and the author\'s reasoning. Do two',
+  'things, in order, and keep them separate.',
   '',
-  'The failures that matter most:',
-  '  - a distractor that is also defensible, so the key is one of two good answers',
-  '  - a stem that can be read two ways',
-  '  - anything asserted that is not true, or was true once and is not now',
+  'STEP 1. Argue the strongest case you can AGAINST the marked answer being the',
+  'single best choice. Always do this, for every question.',
+  '',
+  'STEP 2. Then judge your own argument honestly: does it actually DEFEAT the',
+  'marked answer, or is the marked answer still the single best choice despite it?',
+  '',
+  'The second step is the whole job. You can construct an objection to any',
+  'question ever written, so "I found an argument" is not a finding. Report a',
+  'concern only when your argument WINS: when a reasonable expert, having heard',
+  'it, would say the key is wrong or that two options are genuinely as good.',
+  '',
+  'If your argument is speculative, or turns on reading the stem uncharitably, or',
+  'concedes the author\'s point and then objects anyway, it LOSES. Say so.',
+  'Answering "no_concerns" after arguing hard against the answer is the normal,',
+  'expected outcome for a well-written question.',
+  '',
+  'Report a concern only for:',
+  '  - a distractor genuinely as good as the key, not merely arguable',
+  '  - a stem a careful reader would reasonably read two ways',
+  '  - something asserted that is untrue, or was true once and is not now',
   '  - a key that is simply wrong',
   '',
-  'Do NOT flag an item for being short, for style, for difficulty, or for what it',
-  'omits. A question that is merely easy is not a defect.',
+  'Never flag an item for being short, easy, stylistically plain, or for what it',
+  'leaves out. A question that is merely easy is not a defect.',
   '',
   'Respond with JSON only:',
-  '{"verdict":"no_concerns"|"needs_human",',
+  '{"argument_against":"your best case against the answer, one or two sentences",',
+  ' "argument_wins": true|false,',
+  ' "verdict":"no_concerns"|"needs_human",',
   ' "severity":"low"|"medium"|"high"|null,',
   ' "concerns":[{"kind":"defensible_distractor"|"ambiguous_stem"|"factual_error"',
   '              |"answer_disputed"|"outdated"|"other",',
   '              "option":"B"|null,"detail":"one sentence, specific"}]}',
   '',
-  'verdict "no_concerns" means you raised no objection. Use it when your best',
-  'argument against the answer fails. Return an empty concerns array with it.',
+  'argument_wins false REQUIRES verdict "no_concerns" and an empty concerns array.',
+  'argument_wins true REQUIRES verdict "needs_human" and at least one concern.',
 ].join('\n');
 
 function userPrompt(q: TriageInput): string {
@@ -184,6 +200,23 @@ export function parseTriageResponse(raw: string | null | undefined): TriageResul
   // violation rather than passing an empty accusation along.
   if (verdict === 'needs_human' && concerns.length === 0) {
     return { verdict: 'error', severity: null, concerns: [], errorClass: 'ContractViolation' };
+  }
+
+  // THE ARGUMENT MUST WIN, not merely exist.
+  //
+  // v1 of this prompt asked only "argue against, then decide". It flagged 3 of
+  // the first 3 questions on production, with concerns that conceded the
+  // author's point and objected anyway -- "it is still a valid point that ...
+  // could be considered". An objection can be constructed against any question
+  // ever written, so a reviewer that reports its argument rather than its
+  // judgement flags everything, and a report that flags everything is
+  // indistinguishable from no triage at all.
+  //
+  // v2 makes the model state `argument_wins` separately. This is the backstop
+  // for a model that answers the two questions inconsistently: if it says its
+  // own argument loses, the concerns go with it.
+  if (parsed?.argument_wins === false) {
+    return { verdict: 'no_concerns', severity: null, concerns: [] };
   }
 
   // AND THE MIRROR IMAGE, which is the more dangerous of the two.

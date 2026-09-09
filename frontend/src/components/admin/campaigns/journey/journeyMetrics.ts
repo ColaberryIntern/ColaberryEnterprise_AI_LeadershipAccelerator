@@ -214,7 +214,10 @@ export function findFlowMismatch(view: SankeyViewModel): Insight | null {
   if (!worst) return null;
   return {
     kind: 'quality',
-    title: `${affected} node${affected === 1 ? '' : 's'} carry more journeys than distinct leads`,
+    title:
+      affected === 1
+        ? '1 node carries more journeys than distinct leads'
+        : `${affected} nodes carry more journeys than distinct leads`,
     detail:
       'Band thickness counts journeys along a path; the figure under each node counts ' +
       'distinct people. A lead reached on two channels appears in two bands, so the two ' +
@@ -376,6 +379,40 @@ export function findDataWarning(
   return null;
 }
 
+/**
+ * Anonymous traffic that never became a lead.
+ *
+ * This number used to be INSIDE the Site Visitors node, which is what made the
+ * chart claim 382 site visitors against 12 leads. It is a real and useful figure —
+ * it just is not funnel volume, because those people never entered the funnel.
+ *
+ * Reported here instead, where it reads as what it is: the size of the audience
+ * arriving that outreach never converts.
+ */
+export function findAnonymousTraffic(view: SankeyViewModel): Insight | null {
+  const node = view.nodes.find((n) => (n.anonymousCount ?? 0) > 0);
+  if (!node) return null;
+
+  const anon = node.anonymousCount!;
+  const leads = node.value;
+  const total = anon + leads;
+  const pct = safeRate(leads, total);
+
+  return {
+    kind: 'quality',
+    title: `${anon.toLocaleString()} people browsed without becoming leads`,
+    detail:
+      pct === null
+        ? `${anon.toLocaleString()} anonymous visitors arrived in this window and never became leads. They are counted here rather than in ${node.fullName}, because they never entered the funnel.`
+        : `Of ${total.toLocaleString()} people who reached the site, ${pct.toFixed(1)}% became leads. ` +
+          `The other ${anon.toLocaleString()} are not drawn in the flow, because a lead journey cannot ` +
+          'contain people who were never leads.',
+    evidence: `${leads.toLocaleString()} leads ÷ ${total.toLocaleString()} visitors = ${pct === null ? '—' : `${pct.toFixed(1)}%`}`,
+    sufficient: true,
+    focusNodeId: node.id,
+  };
+}
+
 export function deriveInsights(
   data: CampaignGraphData | null | undefined,
   view: SankeyViewModel,
@@ -383,6 +420,7 @@ export function deriveInsights(
   return [
     findLargestLeak(view),
     findBestOpportunity(view),
+    findAnonymousTraffic(view),
     findFlowMismatch(view),
     findDataWarning(data, view),
   ].filter((i): i is Insight => i !== null);

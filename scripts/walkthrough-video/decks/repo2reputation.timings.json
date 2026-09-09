@@ -1,0 +1,62 @@
+[
+ {
+  "index": 0,
+  "audio_seconds": 5.93,
+  "seconds": 7.4
+ },
+ {
+  "index": 1,
+  "audio_seconds": 3.14,
+  "seconds": 5
+ },
+ {
+  "index": 2,
+  "audio_seconds": 5.33,
+  "seconds": 6.8
+ },
+ {
+  "index": 3,
+  "audio_seconds": 6.36,
+  "seconds": 8
+ },
+ {
+  "index": 4,
+  "audio_seconds": 4.01,
+  "seconds": 5.5
+ },
+ {
+  "index": 5,
+  "audio_seconds": 5.28,
+  "seconds": 6.8
+ },
+ {
+  "index": 6,
+  "audio_seconds": 4.8,
+  "seconds": 6.3
+ },
+ {
+  "index": 7,
+  "audio_seconds": 7.94,
+  "seconds": 9.4
+ },
+ {
+  "index": 8,
+  "audio_seconds": 4.82,
+  "seconds": 6.3
+ },
+ {
+  "index": 9,
+  "audio_seconds": 7.92,
+  "seconds": 9.4
+ },
+ {
+  "index": 10,
+  "audio_seconds": 5.86,
+  "seconds": 7.4
+ },
+ {
+  "index": 11,
+  "audio_seconds": 3.74,
+  "seconds": 5.2
+ }
+]

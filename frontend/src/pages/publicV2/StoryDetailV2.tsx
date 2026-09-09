@@ -17,6 +17,7 @@ import { NOT_FOUND_BODY, NOT_FOUND_HEADING } from './storyDetailV2Model';
 import type { DetailState } from './storyDetailV2Model';
 import { storySeoExtras } from './storySeoModel';
 import StoryDetailArticle from './StoryDetailArticle';
+import StoryRelated from './StoryRelated';
 import './storyDetailV2.css';
 /* The picture rules, split out when the page stylesheet passed CLAUDE.md's
    500-line ceiling. A second side-effect import rather than an `@import` from
@@ -288,6 +289,11 @@ function StoryDetailV2(): React.ReactElement {
         onShare={onShare}
         shareState={shareState}
       />
+
+      {/* Last on the page, and fetched on its own so the record never waits on
+          it. Only records published to THIS surface can appear — the filtering
+          is the server's, not this component's. */}
+      <StoryRelated currentSlug={record.slug} />
     </>
   );
 }

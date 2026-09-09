@@ -178,10 +178,29 @@
   box-shadow: var(--shadow-md);
 }
 
+/*
+ * THE SAME PICTURE SHAPE AS THE OTHER TWO BRANDS. Ali, 2026-09-08: "Make the
+ * Card in enterprise the same size as AI flotation and training site."
+ *
+ * Measured at 1440px before changing anything, because the cards themselves
+ * were not the problem: enterprise 444px wide, training 447px — already the
+ * same. The PICTURE was the difference. `height: auto` let every cover render
+ * at whatever proportion its own screenshot happened to be, so one record's
+ * card showed a 2.35:1 letterbox 168px tall while the sibling sites showed
+ * 205px and 278px. A grid whose pictures each pick their own height reads as a
+ * ragged edge rather than a set of comparable objects.
+ *
+ * 16/10 matches the training site's card, the closest sibling by width, and
+ * gives a screenshot more room than 16/9 did. `top`, not centre: these are
+ * pictures of screens, and a screen puts its title bar and first heading at the
+ * top — a centred crop of a tall page throws both away.
+ */
 .cbv2-cs-card__media {
   display: block;
   width: 100%;
-  height: auto;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  object-position: center top;
   border-radius: var(--radius-md);
   background: var(--surface-sunken);
 }
@@ -473,11 +492,241 @@
   overflow-wrap: anywhere;
 }
 
+/*
+ * ONE MUTED PARAGRAPH, NOT A BULLETED LIST. A bulleted list of caveats under a
+ * big number reads as a disclaimer somebody was made to write. A sentence or
+ * two in the footer reads as the author being straight with you, and gets read.
+ */
 .cbv2-cs-measure__limits {
   margin: 0;
-  padding-left: var(--space-5);
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-normal);
+}
+
+/*
+ * TWO COLUMNS ON A WIDE SCREEN, ONE ON A PHONE.
+ *
+ * `minmax(0, 1fr)` rather than `1fr`, because a grid track's default minimum is
+ * `auto`, and a long reproduce command or an unbroken module path would then
+ * push the track wider than its share and scroll the whole page sideways.
+ *
+ * The 800px ceiling is a real bound, not decoration: a card holding 40 members
+ * and a sparkline would otherwise run past a screen height, and the reader
+ * loses the number the rest of it is about. Past the ceiling the member list
+ * scrolls inside the card and the hero figure stays put.
+ */
+.cbv2-cs-measure__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+@media (min-width: 60rem) {
+  .cbv2-cs-measure__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/*
+ * THE LIST SCROLLS, NOT THE CARD. Capping the card and letting it scroll was
+ * the first attempt, and rendering it at 1440 showed why it was wrong: on a
+ * forty-member card the limitations footer and the reproduce command were
+ * pushed below the card's own fold. The caveat is the single thing on a metric
+ * card that must not be hideable, so the member list is what gets bounded and
+ * the footer always sits on screen under it.
+ */
+.cbv2-cs-shape__members,
+.cbv2-cs-shape__chips {
+  /* 18rem, not 22: at 390px every line of prose wraps further and 22 left the
+     worst-case card at 809px, over the 800 ceiling. Measured, not guessed. */
+  max-height: 18rem;
+  overflow-y: auto;
+}
+
+.cbv2-cs-measure__plain {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  margin: 0;
+  font-size: var(--fs-caption);
+}
+
+.cbv2-cs-measure__plain-block .cbv2-cs-measure__value {
+  margin: var(--space-1) 0 0;
+}
+
+.cbv2-cs-measure__foot {
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: var(--border-1) solid var(--border-subtle);
+}
+
+.cbv2-cs-measure__repro summary {
+  font-family: var(--font-mono);
+  font-size: var(--fs-overline);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-wide);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.cbv2-cs-measure__repro code {
+  display: block;
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-subtle);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  /* A command must stay copyable, so it wraps rather than scrolling away. */
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* ------------------------------------------------------- metric shapes --- */
+
+.cbv2-cs-shape {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/*
+ * `role="img"`, not a progress bar. This is a measured proportion, not progress
+ * towards anything, and the fill is drawn once from the payload.
+ */
+/*
+ * The meter is an SVG, not a div with a width percentage, and the reason is a
+ * contract rather than a preference: this module ships ONE styling mechanism,
+ * and `caseStudyStyleContract` fails on any inline style object. A proportion
+ * has to come from data, so it lives in an SVG rect's width attribute, which is
+ * geometry rather than CSS.
+ */
+.cbv2-cs-shape__meter {
+  display: block;
+  width: 100%;
+  height: var(--space-3);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.cbv2-cs-shape__meter-track {
+  fill: var(--surface-subtle);
+}
+
+.cbv2-cs-shape__meter-fill {
+  fill: var(--brand-accent);
+}
+
+.cbv2-cs-shape__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cbv2-cs-shape__chip {
+  padding: var(--space-1) var(--space-3);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--surface-subtle);
+  font-size: var(--fs-caption);
+  color: var(--text-body);
+}
+
+.cbv2-cs-shape__members {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-caption);
+}
+
+.cbv2-cs-shape__member {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  border-bottom: var(--border-1) solid var(--border-subtle);
+}
+
+.cbv2-cs-shape__member-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+}
+
+/*
+ * The status WORD is printed, and colour only reinforces it. A grid that says
+ * covered and bare in green and red alone is unreadable to a reader who cannot
+ * separate the two, and this is exactly the information a sceptic came for.
+ */
+.cbv2-cs-shape__member-status {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--fs-overline);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-wide);
+  color: var(--text-muted);
+}
+
+.cbv2-cs-shape__member[data-status="yes"] .cbv2-cs-shape__member-status {
+  color: var(--brand-accent);
+}
+
+.cbv2-cs-shape__more,
+.cbv2-cs-shape__legend {
+  margin: 0;
+  font-size: var(--fs-caption);
   color: var(--text-muted);
   line-height: var(--lh-normal);
+}
+
+.cbv2-cs-shape__legend-figure {
+  font-family: var(--font-mono);
+  color: var(--text-strong);
+}
+
+.cbv2-cs-shape__span-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+}
+
+.cbv2-cs-shape__span-line {
+  flex: 1 1 auto;
+  height: var(--border-2);
+  min-width: var(--space-5);
+  background: var(--brand-accent);
+}
+
+.cbv2-cs-shape__span-end {
+  flex: none;
+  color: var(--text-body);
+}
+
+.cbv2-cs-shape__spark {
+  display: block;
+  width: 100%;
+  height: 4rem;
+}
+
+.cbv2-cs-shape__spark-line {
+  stroke: var(--brand-accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  /* preserveAspectRatio="none" stretches the stroke; this keeps it even. */
+  vector-effect: non-scaling-stroke;
 }
 
 /* --------------------------------------------------------------- roadmap --- */

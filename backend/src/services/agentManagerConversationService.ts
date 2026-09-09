@@ -6,6 +6,15 @@ import { buildAgentManagerConversationSystemPrompt } from './agentBlueprint/agen
 import {
   applyConfirmedReliabilityChange, buildConfirmationCardText, detectConfirmationReply, detectReliabilityIntent, toPendingConfirmation,
 } from './managerReliabilityIntentService';
+import {
+  applyConfirmedGoalChange, buildGoalConfirmationCardText, detectChangeGoalIntent, toPendingGoalConfirmation,
+} from './managerGoalIntentService';
+import {
+  applyConfirmedOneOnOneSchedule, buildOneOnOneConfirmationCardText, detectScheduleOneOnOneIntent, toPendingOneOnOneConfirmation,
+} from './managerOneOnOneIntentService';
+import {
+  applyConfirmedDirective, buildDirectiveConfirmationCardText, detectInstructIntent, toPendingDirectiveConfirmation,
+} from './managerDirectiveIntentService';
 import { detectWorkStatusQuery, buildWorkStatusReply } from './agentWorkStatusIntentService';
 import { detectUncertaintyQuery, buildUncertaintyReply } from './agentUncertaintyIntentService';
 import { detectInterventionIntentQuery, buildInterventionIntentReply } from './agentInterventionIntentService';
@@ -19,11 +28,19 @@ import { detectInterventionIntentQuery, buildInterventionIntentReply } from './a
 // deferred scope (see AgentManagerMessage.ts's own header comment).
 //
 // Reese Agentic AI Employee mission, Checkpoint B (2026-09-04) narrows that
-// deferral by exactly one real slice: reliability-declaration intent
+// deferral by one real slice: reliability-declaration intent
 // (QUARANTINE_METRIC/RESTORE_METRIC) is now detected and gated behind a real
-// confirmation turn — see managerReliabilityIntentService.ts. Every other
-// intent (ASK/INSTRUCT/CORRECT/APPROVE/COACH/SCHEDULE/...) is still purely
-// conversational, unchanged.
+// confirmation turn — see managerReliabilityIntentService.ts.
+//
+// Capability 8 (2026-09-08) narrows it by three more, all riding the generic
+// `pending_intent_confirmation` column instead of a dedicated one:
+// CHANGE_GOAL (managerGoalIntentService.ts), SCHEDULE
+// (managerOneOnOneIntentService.ts, 1:1 check-ins), and INSTRUCT
+// (managerDirectiveIntentService.ts, standing directives). See
+// handlePendingGenericIntentConfirmation/handleNewGenericIntentDetection
+// below for how the column dispatches across intent types. Every other
+// intent (ASK/CORRECT/APPROVE/REJECT/COACH/ASSIGN_WORK/
+// REPORT_DATA_ISSUE/...) is still purely conversational, unchanged.
 
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
 const HISTORY_LIMIT = 20;
@@ -124,6 +141,89 @@ async function handlePendingOrNewReliabilityIntent(
   return null;
 }
 
+function genericIntentCancelText(pending: NonNullable<AgentManagerConversation['pending_intent_confirmation']>): string {
+  if (pending.intentType === 'CHANGE_GOAL') {
+    return 'Okay, no change made — the goal stays as it was. Let me know if you did want to change that.';
+  }
+  if (pending.intentType === 'SCHEDULE_ONE_ON_ONE') {
+    return 'Okay, no 1:1 scheduled. Let me know if you did want to set one up.';
+  }
+  return 'Okay, no directive saved. Let me know if you did want to set one.';
+}
+
+/**
+ * Reese Agentic AI Employee mission, Capability 8 — handles a PENDING
+ * confirmation on the generic `pending_intent_confirmation` column,
+ * dispatching by `intentType` to whichever intent actually detected it
+ * (CHANGE_GOAL, SCHEDULE_ONE_ON_ONE, ...). Checked AFTER the reliability
+ * handler (which owns its own dedicated column and keeps priority) — a
+ * conversation is never left with two different pending confirmations
+ * competing for the same short "confirm"/"cancel" reply. Returns null only
+ * when nothing is pending; a fresh detection is handleNewGenericIntentDetection's
+ * job below.
+ */
+async function handlePendingGenericIntentConfirmation(
+  agentId: string,
+  conversation: AgentManagerConversation,
+  messageText: string,
+  participantEmail: string,
+  participantOrgMemberId: string | null,
+): Promise<string | null> {
+  const pending = conversation.pending_intent_confirmation;
+  if (!pending) return null;
+
+  const verdict = detectConfirmationReply(messageText);
+  if (verdict === 'confirm') {
+    await conversation.update({ pending_intent_confirmation: null });
+    if (pending.intentType === 'CHANGE_GOAL') {
+      const { summary } = await applyConfirmedGoalChange(agentId, pending, participantEmail, participantOrgMemberId);
+      return summary;
+    }
+    if (pending.intentType === 'SCHEDULE_ONE_ON_ONE') {
+      const { summary } = await applyConfirmedOneOnOneSchedule(agentId, pending, participantEmail, participantOrgMemberId);
+      return summary;
+    }
+    const { summary } = await applyConfirmedDirective(agentId, pending, participantEmail, participantOrgMemberId);
+    return summary;
+  }
+
+  await conversation.update({ pending_intent_confirmation: null });
+  return genericIntentCancelText(pending);
+}
+
+/**
+ * Reese Agentic AI Employee mission, Capability 8 — tries each generic
+ * intent's detector in turn against a FRESH message (no pending confirmation
+ * already in play — that's handlePendingGenericIntentConfirmation's job).
+ * Order is the priority when a message could plausibly match more than one
+ * — CHANGE_GOAL first since it shipped first, SCHEDULE_ONE_ON_ONE next.
+ * Adding a new intent here is the one place future intents plug in.
+ */
+async function handleNewGenericIntentDetection(
+  conversation: AgentManagerConversation,
+  messageText: string,
+): Promise<string | null> {
+  const goalDetected = detectChangeGoalIntent(messageText);
+  if (goalDetected) {
+    await conversation.update({ pending_intent_confirmation: toPendingGoalConfirmation(goalDetected) });
+    return buildGoalConfirmationCardText(goalDetected);
+  }
+
+  const oneOnOneDetected = detectScheduleOneOnOneIntent(messageText);
+  if (oneOnOneDetected) {
+    await conversation.update({ pending_intent_confirmation: toPendingOneOnOneConfirmation(oneOnOneDetected) });
+    return buildOneOnOneConfirmationCardText(oneOnOneDetected);
+  }
+
+  const directiveDetected = detectInstructIntent(messageText);
+  if (directiveDetected) {
+    await conversation.update({ pending_intent_confirmation: toPendingDirectiveConfirmation(directiveDetected) });
+    return buildDirectiveConfirmationCardText(directiveDetected);
+  }
+
+  return null;
+}
+
 /**
  * Reese Agentic AI Employee mission, Checkpoint F — a manager asking about
  * this agent's real workload ("what are you working on" / "what's
@@ -198,6 +298,20 @@ export async function sendManagerMessage(
   const reliabilityReply = await handlePendingOrNewReliabilityIntent(conversation, messageText, participantEmail);
   if (reliabilityReply !== null) {
     return persistAgentReplyAndReturnView(conversation, agentId, reliabilityReply);
+  }
+
+  // Reese Agentic AI Employee mission, Capability 8 — the generic pending-
+  // intent-confirmation column (CHANGE_GOAL, SCHEDULE_ONE_ON_ONE, ...).
+  // Checked right after reliability (same "pending confirmation owns the
+  // next reply" posture) and before every purely-informational query below.
+  const pendingIntentReply = await handlePendingGenericIntentConfirmation(agentId, conversation, messageText, participantEmail, participantOrgMemberId);
+  if (pendingIntentReply !== null) {
+    return persistAgentReplyAndReturnView(conversation, agentId, pendingIntentReply);
+  }
+
+  const newIntentReply = await handleNewGenericIntentDetection(conversation, messageText);
+  if (newIntentReply !== null) {
+    return persistAgentReplyAndReturnView(conversation, agentId, newIntentReply);
   }
 
   const workStatusReply = await handleWorkStatusQuery(agent, messageText);

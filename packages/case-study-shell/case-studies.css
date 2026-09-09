@@ -236,9 +236,15 @@
    Colour comes from the host's `--cs-*` mapping, as everywhere else here.
    ========================================================================== */
 
+  /* CAPPED, NOT STRETCHED. With `1fr` a row holding one or two items lets each
+     fill the whole row: the "Keep reading" cards measured 710px on Enterprise
+     and 1024px on AI Flotation against the 368px index card Ali called the
+     right size. `justify-content: start` plus a fixed upper track keeps a card
+     the same object whether the row holds one of them or four. */
 .records-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 23rem));
+  justify-content: start;
   gap: 1.5rem;
   margin: 0;
   padding: 0;
@@ -276,7 +282,13 @@
      it was told to hold - a 16/9 rule that measured 368x318. Taking the image
      out of flow leaves the box's own height as the only thing to size it from. */
   position: relative;
-  aspect-ratio: 16 / 9;
+  /* 16/10, matching the Enterprise and training cards. All three sites show
+     the same records, so a picture that is a different shape on each one makes
+     one library look like three. Measured 2026-09-08: enterprise 444px wide,
+     training 447px - the cards already agreed, the pictures did not. It also
+     gives a screenshot more room than 16/9 did. (The walkthrough player below
+     stays 16/9: that is the video's own shape, not a card's.) */
+  aspect-ratio: 16 / 10;
   background: var(--cs-bg);
   border-bottom: 1px solid var(--cs-line);
 }
@@ -347,3 +359,152 @@
   font-size: .85rem;
   color: var(--cs-fg-muted);
 }
+
+/* ------------------------------------------------------------ walkthrough --- */
+
+/* The walkthrough player IN THE MASTHEAD, in the slot the cover image otherwise holds.
+
+   It reuses `.cs-cover` for placement so the hero grid is unchanged and a record without a
+   walkthrough is untouched. Only the picture differs: a video needs a fixed 16:9 box
+   rather than an image's intrinsic height, or the masthead reflows the moment the poster
+   loads. */
+.cs-cover--video { display: grid; gap: .6rem; }
+.cs-walkthrough-player {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  /* The poster is a frame of the video, so it fills the box like the video it stands in
+     for rather than being letterboxed inside its own frame. */
+  object-fit: cover;
+  background: #11161a;
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+}
+.cs-walkthrough-note {
+  margin: 0;
+  font-size: .82rem;
+  line-height: 1.5;
+  color: var(--cs-fg-muted);
+}
+
+/* A figure BETWEEN two bands. Full width and unindented on purpose: it belongs
+   to neither neighbour, and anything that visually tucked it under the heading
+   above would make that heading its caption. These replaced a trailing band of
+   three-across thumbnails — the size IS the change. */
+.cs-figure { margin: 0; display: grid; gap: .6rem; }
+.cs-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+}
+.cs-figure figcaption {
+  display: grid;
+  gap: .25rem;
+  font-size: .9rem;
+  color: var(--cs-fg-muted);
+  max-width: 68ch;
+}
+
+/* ---------- KEEP READING: other records on THIS site ---------- */
+/* Ali, 2026-09-08: "show other related project at the end of the Case Study's
+   so they can continue looking through related case studys." The surface is the
+   filter and it is the server's, so a record not published to this brand cannot
+   appear here. Three at most: an invitation to keep reading, not a second index. */
+.cs-related-list {
+  display: grid;
+  /* CAPPED, NOT STRETCHED. With `1fr` a row holding one or two items lets each
+     fill the whole row: the "Keep reading" cards measured 710px on Enterprise
+     and 1024px on AI Flotation against the 368px index card Ali called the
+     right size. `justify-content: start` plus a fixed upper track keeps a card
+     the same object whether the row holds one of them or four. */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 23rem));
+  justify-content: start;
+  gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cs-related-link {
+  display: grid;
+  gap: .6rem;
+  height: 100%;
+  align-content: start;
+  color: inherit;
+  text-decoration: none;
+}
+.cs-related-link img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  object-position: center top;
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+  background: var(--cs-bg);
+}
+.cs-related-link:hover .cs-related-title { text-decoration: underline; }
+.cs-related-link:focus-visible { outline: 2px solid var(--cs-accent); outline-offset: 3px; }
+.cs-related-meta {
+  margin: 0;
+  font-size: .72rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--cs-accent);
+}
+.cs-related-title { margin: 0; font-size: 1rem; line-height: 1.3; }
+.cs-related-note {
+  margin: 0;
+  font-size: .88rem;
+  line-height: 1.5;
+  color: var(--cs-fg-muted);
+  /* Three lines: a standfirst here is a taste of the record, not the record. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* The related card carries the same last two rows as the index card, so the two
+   grids hold one object rather than two that merely resemble each other. */
+.cs-related-body { display: flex; flex-direction: column; gap: .5rem; flex: 1; }
+.cs-related-builder { margin: 0; font-size: .85rem; color: var(--cs-fg-muted); }
+.cs-related-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-top: auto;
+  padding-top: .6rem;
+}
+.cs-related-verify {
+  font-size: .72rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--cs-fg-muted);
+}
+.cs-related-cta { font-size: .9rem; font-weight: 600; color: var(--cs-accent); }
+.cs-related-cta::after { content: ' \2192'; }
+.cs-related-link { display: flex; flex-direction: column; }
+
+/* THE SAME CARD, not a lookalike. Ali, 2026-09-09: "All the cards should be the
+   same size." Same chrome as `.record-card` - border, surface, radius, padding,
+   hover - and the same 4-line clamp on the summary, so an index card and a
+   "Keep reading" card are one object in two places rather than two that happen
+   to resemble each other. Measured before this: 368x541 against 368x427. */
+.cs-related-link {
+  overflow: hidden;
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+.cs-related-link:hover { border-color: var(--cs-accent); transform: translateY(-2px); }
+@media (prefers-reduced-motion: reduce) {
+  .cs-related-link { transition: none; }
+  .cs-related-link:hover { transform: none; }
+}
+.cs-related-link img { border: 0; border-radius: 0; border-bottom: 1px solid var(--cs-line); }
+.cs-related-body { padding: 1.1rem 1.25rem 1.25rem; }
+.cs-related-note { -webkit-line-clamp: 4; }

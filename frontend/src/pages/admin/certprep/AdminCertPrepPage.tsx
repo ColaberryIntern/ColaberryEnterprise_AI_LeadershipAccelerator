@@ -77,10 +77,19 @@ export function bankTrust(health: BankHealth | null, failed: boolean): TrustSign
   };
 }
 
-export default function AdminCertPrepPage() {
+interface CertPrepProps {
+  /** Cohort to open on, when reached from a cohort drill-down on the Accelerator
+   *  page. Undefined when reached globally (the Accelerator home, or this page's
+   *  own route), where defaulting to whichever cohort happens to sort first
+   *  applies a class filter the operator never asked for — and silently answers
+   *  a question about November while they were looking at July. */
+  initialCohortId?: string;
+}
+
+export default function AdminCertPrepPage({ initialCohortId }: CertPrepProps = {}) {
   const [tab, setTab] = useState<TabId>('cohort');
   const [cohorts, setCohorts] = useState<AdminCohort[]>([]);
-  const [cohortId, setCohortId] = useState('');
+  const [cohortId, setCohortId] = useState(initialCohortId ?? '');
   const [health, setHealth] = useState<BankHealth | null>(null);
   const [healthFailed, setHealthFailed] = useState(false);
   const [disabled, setDisabled] = useState(false);

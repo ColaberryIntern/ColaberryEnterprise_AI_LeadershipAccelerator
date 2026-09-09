@@ -175,15 +175,22 @@ describe('resolution and the lifecycle', () => {
     }
   });
 
-  it('unlocks exactly the stages blocked by the enrolment join gap', () => {
-    // Those stages are marked joinable_today: false BECAUSE enrollments has no
-    // person key. Resolution is what removes that specific blocker, so the two
-    // lists must agree — if they drift, either a stage silently stays blocked
-    // after resolution or one claims to be unblocked that never was.
-    for (const stage of RESOLUTION_UNLOCKS) {
-      expect(LIFECYCLE[stage].joinable_today).toBe(false);
-      expect(LIFECYCLE[stage].gap).toBeTruthy();
-    }
+  it('has actually unlocked the stages that the join gap was blocking', () => {
+    // These were joinable_today: false because enrollments had no person key.
+    // The identity layer landed and was backfilled on 2026-09-08, so the blocker
+    // is gone and the flags flipped — which is this list doing its job rather
+    // than drifting.
+    expect(LIFECYCLE.enrolled_student.joinable_today).toBe(true);
+    expect(LIFECYCLE.lapsed.joinable_today).toBe(true);
+  });
+
+  it('leaves a stage blocked only when its blocker was never the join gap', () => {
+    // active_learner is still false, and NOT because of identity: attendance is
+    // unreliable. Resolution could never have fixed that, and conflating the two
+    // reasons would make the remaining gap look like unfinished identity work.
+    expect(RESOLUTION_UNLOCKS).toContain('active_learner');
+    expect(LIFECYCLE.active_learner.joinable_today).toBe(false);
+    expect(LIFECYCLE.active_learner.gap).toMatch(/attendance/i);
   });
 
   it('does not claim to unlock returning_customer', () => {

@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Tuesday, September 8, 2026 at 2:20 PM</div>
-    <div><span class="sid">CC-20260906-q4h7</span><span class="count">11 changes</span></div>
+    <div class="meta">Generated Tuesday, September 8, 2026 at 2:50 PM</div>
+    <div><span class="sid">CC-20260906-q4h7</span><span class="count">12 changes</span></div>
   </header>
   <main>
     
@@ -222,6 +222,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">36 tests across 4 suites; `tsc --noEmit` 0 errors, 0 error lines, unpiped; site harness green across 8 routes x 4 viewports; boundary validator OK, 16 files.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">**Activation surfaced a second, sharper version of the guard defect, and this one would have fired on the first call.** `resolveAgentId` routes by brand, and `cpn` fell through to `env.synthflowCallbackAgentId` - Colaberry&#39;s dedicated callback agent, which carries its own saved training-site script rather than a `{prompt}` shell. A scholarship applicant would have been answered by the bootcamp&#39;s callback line: a person asking a charity for help, spoken to as a sales lead, in a voice that is not ours. CPN now has its own slot with NO fallback, so unset means silence rather than substitution, and a test pins that it skips with `no_agent_id` instead of borrowing. **One manual step removed, one that cannot be.** Routing rules were admin-API-only, so `seedRoutingRules.ts` now ships the CPN rule - narrow by design: seeded by name, never deletes or deactivates, and operator-tuned rules including AI Flotation&#39;s are untouched, because a seeder asserting the full set would silently undo somebody&#39;s 3am tuning. What remains external is `SYNTHFLOW_CPN_AGENT_ID`: somebody must create a shell agent in the Synthflow dashboard and set it on prod. Until then every CPN call skips with `no_agent_id` and none is placed. **The voice door is beside the written interview, not beneath it** - the decision was that voice is an equal path, so it is not a smaller, greyer box under the real one.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">12</span>
+          <h2>**CPN borrows the AI Flotation shell, because a shell is not a voice**</h2>
+          <span class="badge">2026-09-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali: &quot;I&#39;m having a hard time creating new phone numbers. Could you use the same agent we used for the other AI voice agent. Everything is prompt based at run time so it should work the same.&quot; He is right, and it is the architecture `voiceCallPrompt.ts` already describes - &quot;one agent and one phone number can serve several brands&quot;. `resolveAgentId` now returns `synthflowCpnAgentId || synthflowAiFlotationAgentId` for cpn.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">39 tests across 4 suites, 4 of them new on the borrowing rule; site harness green across 8 routes x 4 viewports; boundary validator OK.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The rule is shell-yes, scripted-never, and that distinction is the whole change.** The AI Flotation agent&#39;s saved prompt is literally `{prompt}`, so it holds no opinions and whatever we send at call time IS the call - borrowing it is not borrowing a voice. The Colaberry callback, interest and welcome agents are the opposite: they carry saved scripts, and falling through to one would answer a scholarship applicant as the bootcamp&#39;s callback line. That was the defect fixed the same day, and it stays fixed; four tests pin both halves, including that CPN prefers its own agent the moment one is configured and skips entirely if neither exists. **The cost is the caller ID, and it is disclosed rather than hidden.** The number will be AI Flotation&#39;s, so somebody who asked a scholarship charity to ring them sees a business they have never heard of. `/scholarships/` now says so BEFORE they hand over a number, and the prompt handles &quot;who is this&quot; and &quot;I do not recognise this number&quot; directly, with an explicit instruction not to pretend the number is ours - somebody checking an unknown number and getting a half-truth has good reason to distrust everything after it. **Setting `SYNTHFLOW_CPN_AGENT_ID` later takes over with no code change**, and the disclosure copy is then the only thing to remove.</span></div>
           
         </div>
       </article>

@@ -21,6 +21,7 @@ export const LIFECYCLE_STAGES = [
   'enrolled_student',
   'active_learner',
   'graduate',
+  'lapsed',
   'returning_customer',
 ] as const;
 
@@ -81,11 +82,11 @@ export const LIFECYCLE: Record<LifecycleStage, LifecycleStageDef> = {
     label: 'Enrolled student',
     definition: 'A person with an active enrolment in a cohort.',
     evidence: 'enrollments row with status active',
-    joinable_today: false,
-    gap:
-      'enrollments has NO lead/visitor/person foreign key. The join to acquisition is an ' +
-      'email string match covering 83.4% of enrolments; 86 of 517 match nothing. Until the ' +
-      'identity layer lands, this stage cannot be reliably connected to the stages before it.',
+    // Was false until 2026-09-08. The identity layer landed: enrollments.person_id
+    // exists and is backfilled (517 of 526 rows; the 9 newer ones are picked up by
+    // re-running the idempotent backfill), so this stage now connects to the
+    // stages before it by a real key rather than an email string match.
+    joinable_today: true,
   },
   active_learner: {
     stage: 'active_learner',
@@ -104,9 +105,35 @@ export const LIFECYCLE: Record<LifecycleStage, LifecycleStageDef> = {
     stage: 'graduate',
     label: 'Graduate / alumni',
     definition: 'A student who completed their programme.',
-    evidence: 'enrolment completion record',
+    evidence: "enrollments row with status 'completed' — never set, see below",
+    // NEVER ASSIGNED, AND THAT IS THE BUSINESS MODEL, NOT A GAP.
+    //
+    // Ali, 2026-09-09: "Complete is never. The goal is for this to need us to
+    // improve and help them stay sharp and help them learn. The goal is to keep
+    // the subscription active as long as possible."
+    //
+    // So a graduate is a category error here. This is a subscription, not a
+    // course with an end: staying is success, and "finishing" would be churn
+    // wearing a nicer word. The stage is kept in the vocabulary because the word
+    // will come up, and a reader deserves to find this note rather than assume
+    // graduation is simply unimplemented.
     joinable_today: false,
-    gap: 'Inherits the enrolment join gap.',
+    gap:
+      'Not applicable. This is a subscription: there is no completion, and a person ' +
+      'who stops is LAPSED rather than finished. Nothing should ever assign this stage.',
+  },
+  lapsed: {
+    stage: 'lapsed',
+    label: 'Lapsed',
+    definition:
+      'Someone whose enrolment ended. In a subscription business this is the exit, and it ' +
+      'is the state worth watching: the goal is to keep people out of it.',
+    evidence: "enrollments row with status 'withdrawn'",
+    // The stage the model was missing. Before this, the 62 people who withdrew
+    // were counted as enrolled_student — so the active-student figure included
+    // people who had already left, which is precisely the number a retention
+    // business must not get wrong.
+    joinable_today: true,
   },
   returning_customer: {
     stage: 'returning_customer',

@@ -22,6 +22,41 @@ jest.mock('../../services/managerReliabilityIntentService', () => ({
   applyConfirmedReliabilityChange: jest.fn(),
 }));
 
+// Capability 8 — the same requireActual() above also now executes
+// agentManagerConversationService.ts's new managerGoalIntentService.ts
+// import, which transitively imports agentGoalService.ts ->
+// trustMetricsService.ts -> agentPermissionService.ts -> the full models
+// barrel, crashing this file's own partial model mocks the exact same way
+// the reliability mock above already guards against. Mocked wholesale for
+// the same reason.
+jest.mock('../../services/managerGoalIntentService', () => ({
+  detectChangeGoalIntent: jest.fn(() => null),
+  buildGoalConfirmationCardText: jest.fn(() => ''),
+  toPendingGoalConfirmation: jest.fn(),
+  applyConfirmedGoalChange: jest.fn(),
+}));
+
+// Capability 8's second generic-column intent (SCHEDULE_ONE_ON_ONE) — mocked
+// wholesale for consistency with the goal-intent mock above, even though
+// managerOneOnOneIntentService.ts's own import chain (agentOneOnOneService.ts
+// -> AiAgent/AgentOneOnOne model files directly) does not touch the models
+// barrel the way agentGoalService.ts's chain does.
+jest.mock('../../services/managerOneOnOneIntentService', () => ({
+  detectScheduleOneOnOneIntent: jest.fn(() => null),
+  buildOneOnOneConfirmationCardText: jest.fn(() => ''),
+  toPendingOneOnOneConfirmation: jest.fn(),
+  applyConfirmedOneOnOneSchedule: jest.fn(),
+}));
+
+// Capability 8's third generic-column intent (INSTRUCT) — mocked wholesale
+// for consistency with the other two intent mocks above.
+jest.mock('../../services/managerDirectiveIntentService', () => ({
+  detectInstructIntent: jest.fn(() => null),
+  buildDirectiveConfirmationCardText: jest.fn(() => ''),
+  toPendingDirectiveConfirmation: jest.fn(),
+  applyConfirmedDirective: jest.fn(),
+}));
+
 jest.mock('../../services/agentManagerConversationService', () => {
   const actual = jest.requireActual('../../services/agentManagerConversationService');
   return { ...actual, getConversationHistory: jest.fn(), sendManagerMessage: jest.fn() };

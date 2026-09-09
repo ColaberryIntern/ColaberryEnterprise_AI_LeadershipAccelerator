@@ -1,6 +1,5 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Metric } from '../publicV2/Claim';
 import CaseStudyVerificationBadge from './CaseStudyVerificationBadge';
 import { BUILT_BY_LABELS } from '../../config/caseStudySurfaces';
 import type { PublicCaseStudySummary } from '../../services/caseStudyPublicTypes';
@@ -15,8 +14,13 @@ import './caseStudy.css';
  * rounded-looking placeholder. `headlineMetric` is `null` on the wire precisely
  * so the absence is representable, and `proofPointFor()` below answers it with a
  * fact already on the payload - a capability, a deliverable, a stack entry -
- * rather than with a number. Every string the card prints comes off the record
- * it was handed; `CaseStudyCard.test.tsx` proves it by extracting every digit
+ * rather than with a number.
+ *
+ * THE CARD ITSELF NOW RENDERS NEITHER, since it was cut to one shared height
+ * across every index. `proofPointFor` is kept and tested because it is the
+ * answer any surface needs when a record carries no verified figure.
+ *
+ * Every string the card prints comes off the record it was handed; `CaseStudyCard.test.tsx` proves it by extracting every digit
  * group from the rendered card and asserting each one appears in the payload.
  *
  * WHY THE HREF IS A PROP. The card does not know which surface it is on and
@@ -76,18 +80,6 @@ function contextLine(caseStudy: PublicCaseStudySummary): string {
     .join(' · ');
 }
 
-function TagList({ items, label }: { items: readonly string[]; label: string }): React.ReactElement {
-  return (
-    <ul className="cbv2-cs-tags" aria-label={label}>
-      {items.map((item) => (
-        <li className="cbv2-cs-tag" key={item}>
-          {item}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 export function CaseStudyCard({
   caseStudy,
   href,
@@ -96,23 +88,25 @@ export function CaseStudyCard({
   className,
 }: CaseStudyCardProps): React.ReactElement {
   const Heading = `h${headingLevel}` as 'h2' | 'h3' | 'h4';
-  const metric = caseStudy.headlineMetric;
-  const proof = metric ? null : proofPointFor(caseStudy);
   const context = contextLine(caseStudy);
-  const headline = metric ? 'metric' : proof ? 'proof-point' : 'none';
-
-  // The record badge describes the record. When the headline figure was verified
-  // differently, the figure carries its own badge too, so a discrepancy is shown
-  // rather than smoothed over by whichever badge happened to render first.
-  const metricBadgeDiffers = !!metric
-    && (metric.verificationClass !== caseStudy.verificationClass
-      || metric.verificationMethod !== caseStudy.verificationMethod);
 
   return (
     <article
       className={`cbv2-cs-card${className ? ` ${className}` : ''}`}
       data-case-study={caseStudy.slug}
-      data-headline={headline}
+      /*
+       * `data-headline` USED TO LIVE HERE AND IT WAS A LIE. It reported
+       * "metric" or "proof-point" long after the card stopped rendering either
+       * of them, so a test asserting the attribute passed while the thing it
+       * described was absent from the page. An attribute describing something
+       * the card does not render is worse than no attribute: it is a green
+       * check over a missing feature.
+       *
+       * The card renders no figure at all. The headline metric and its
+       * verification live on the RECORD page, in the measurement band, with the
+       * baseline and methodology that make the number checkable.
+       */
+      data-figure="none"
     >
       {caseStudy.heroImageUrl ? (
         <img
@@ -139,36 +133,32 @@ export function CaseStudyCard({
         <p className="cbv2-cs-card__standfirst">{caseStudy.standfirst}</p>
       ) : null}
 
-      {metric ? (
-        <div className="cbv2-cs-card__metric">
-          <Metric
-            value={metric.valueDisplay}
-            label={metric.label}
-            evidence={metric.verificationClass}
-            badgeHidden
-          />
-          {metricBadgeDiffers ? (
-            <CaseStudyVerificationBadge
-              verificationClass={metric.verificationClass}
-              verificationMethod={metric.verificationMethod}
-            />
-          ) : null}
-        </div>
-      ) : null}
+      {/*
+        ONE CARD SHAPE ACROSS EVERY SITE. Ali, 2026-09-09, comparing the index
+        pages side by side: "The cards ... are too big. They should be the same
+        size as the ones on [the other two sites] ... All the cards should be
+        the same size." The surface names are paraphrased here on purpose: this
+        module must not name a surface, and `caseStudySurfaceNeutrality` fails
+        on any file that does, comments included.
 
-      {proof ? (
-        <div className="cbv2-cs-card__proof" data-proof-point="true">
-          <span className="cbv2-cs-card__proof-value">{proof.value}</span>
-          <span className="cbv2-cs-card__proof-label">{proof.label}</span>
-        </div>
-      ) : null}
+        Measured at 1440px before cutting anything: this card was 905px tall
+        against 541 on the narrower sites, and the gap was not styling. It rendered
+        FOUR blocks the others do not: the headline metric, the proof point, and
+        two tag lists whose chips wrapped to four rows. Ten leaf text nodes
+        against six. No amount of CSS makes a card with four extra blocks the
+        same height as one without them.
 
-      {caseStudy.deliverables.length > 0 ? (
-        <TagList items={caseStudy.deliverables} label="Deliverables" />
-      ) : null}
-
-      {caseStudy.stack.length > 0 ? <TagList items={caseStudy.stack} label="Stack" /> : null}
-
+        SO THEY WERE REMOVED FROM THE CARD, and it is worth being exact about
+        where each one still lives, because none of this information is lost:
+          - the headline metric and its verification badge are on the RECORD
+            page, in the measurement band, with the baseline and methodology
+            that make the number checkable - which a card never had room for;
+          - stack and deliverables are the FILTER SIDEBAR immediately beside
+            this grid on /proof, where they are also actionable rather than
+            decorative.
+        The card keeps what identifies a record: cover, capability, title,
+        standfirst, who built it, and its verification class.
+      */}
       <div className="cbv2-cs-card__foot">
         <CaseStudyVerificationBadge
           verificationClass={caseStudy.verificationClass}

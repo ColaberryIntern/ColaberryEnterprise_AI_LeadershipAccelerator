@@ -32,6 +32,24 @@ jest.mock('../managerReliabilityIntentService', () => ({
   toPendingConfirmation: jest.fn(),
   applyConfirmedReliabilityChange: jest.fn(),
 }));
+jest.mock('../managerGoalIntentService', () => ({
+  detectChangeGoalIntent: jest.fn(() => null),
+  buildGoalConfirmationCardText: jest.fn(() => ''),
+  toPendingGoalConfirmation: jest.fn(),
+  applyConfirmedGoalChange: jest.fn(),
+}));
+jest.mock('../managerOneOnOneIntentService', () => ({
+  detectScheduleOneOnOneIntent: jest.fn(() => null),
+  buildOneOnOneConfirmationCardText: jest.fn(() => ''),
+  toPendingOneOnOneConfirmation: jest.fn(),
+  applyConfirmedOneOnOneSchedule: jest.fn(),
+}));
+jest.mock('../managerDirectiveIntentService', () => ({
+  detectInstructIntent: jest.fn(() => null),
+  buildDirectiveConfirmationCardText: jest.fn(() => ''),
+  toPendingDirectiveConfirmation: jest.fn(),
+  applyConfirmedDirective: jest.fn(),
+}));
 jest.mock('../agentWorkStatusIntentService', () => ({
   detectWorkStatusQuery: jest.fn(() => null),
   buildWorkStatusReply: jest.fn(),

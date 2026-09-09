@@ -106,6 +106,7 @@ import communityModerationRoutes from './admin/communityModerationRoutes';
 import communityMemberRoutes from './admin/communityMemberRoutes';
 import podcastRoutes from './admin/podcastRoutes';
 import studentStoryRoutes from './admin/studentStoryRoutes';
+import internshipAdminRoutes from './admin/internshipRoutes';
 import certPrepAdminRoutes from './admin/certPrepAdminRoutes';
 import checklistRoutes from './admin/checklistRoutes';
 
@@ -271,6 +272,10 @@ router.use(trustRoutes);
 router.use(communityModerationRoutes);
 router.use(communityMemberRoutes);
 router.use(studentStoryRoutes);
+// AI Internship review queue. Its path prefix is registered in
+// mgmtSectionGate's PATH_SECTION under 'internship' — without that row the
+// gate is deny-by-default and Dhee's 'admissions' token 403s on every call.
+router.use(internshipAdminRoutes);
 // Cert Prep instructor surface. Path prefix is registered in mgmtSectionGate's
 // PATH_SECTION under 'program' - without that row the gate is deny-by-default
 // and every scoped mgmt token 403s here while legacy admin passes.

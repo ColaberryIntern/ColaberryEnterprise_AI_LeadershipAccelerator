@@ -307,6 +307,133 @@ export interface CaseStudyMeasurementContext {
   readonly limitations: readonly string[];
 }
 
+/* ─────────────────────────────── metric shapes ──────────────────────────────
+ *
+ * WHY A METRIC NEEDS A SHAPE, AND WHY PROSE WAS NOT ENOUGH.
+ *
+ * `CaseStudyMetricEntry` could hold one scalar and five paragraphs. So a figure
+ * that is really a ratio arrived as the STRING "4 of 7", and the names of the
+ * seven modules it counted lived inside `measurement.methodology`, in a sentence.
+ * The card could not draw a meter because nothing told it there was a
+ * denominator, and a reader could not see which three modules were untested
+ * because that fact was language rather than data.
+ *
+ * The fix is to collect SHAPES, not sentences. A payload carries the structure -
+ * numerator, denominator, members, dates, points - and the renderer draws the
+ * visual that structure implies.
+ *
+ * EVERY FIELD BELOW IS OPTIONAL, and that is load-bearing rather than cautious.
+ * Records published before this existed carry no `shape`, must keep validating,
+ * keep passing the gate on exactly the blockers they pass today, and keep
+ * rendering the definition list they render today. A migration moves them one at
+ * a time, by hand where judgement is needed.
+ *
+ * DERIVED FIGURES ARE NEVER STORED. Commits per day, weeks elapsed, a percentage
+ * from a ratio - the renderer computes those from the payload and labels them as
+ * derived on screen. Storing them would create a second number that can disagree
+ * with the first one after a re-sync.
+ */
+
+/**
+ * The collectors a manifest may register, by key.
+ *
+ * WHY THIS LIST IS CLOSED. A collector runs against a checkout of somebody
+ * else's repository. An open registry would let a manifest name an arbitrary
+ * routine; a frozen tuple means the only code that ever runs is code that was
+ * reviewed here. An unknown key is a manifest error, not an extension point.
+ */
+export const CASE_STUDY_COLLECTOR_KEYS = [
+  'test_files',
+  'modules_with_tests',
+  'decision_records',
+  'commit_span',
+  'commits_per_week',
+] as const;
+export type CaseStudyCollectorKey = typeof CASE_STUDY_COLLECTOR_KEYS[number];
+
+export const CASE_STUDY_METRIC_SHAPES = ['count', 'ratio', 'share', 'span', 'series'] as const;
+export type CaseStudyMetricShape = typeof CASE_STUDY_METRIC_SHAPES[number];
+
+/**
+ * One thing a count or ratio is counting - a module, a decision record, a test.
+ *
+ * NAMING THE MEMBERS IS THE POINT. "4 of 7" tells a reader almost nothing; "4 of
+ * 7, and here are the three that are not" is checkable. `href` is a pinned blob
+ * URL when the member is a file, so the claim can be opened rather than trusted.
+ */
+export interface CaseStudyMetricMember {
+  readonly name: string;
+  /** `demo` and `partial` exist because "tested / untested" is often a lie. */
+  readonly status?: 'yes' | 'no' | 'demo' | 'partial';
+  readonly href?: string;
+}
+
+export type CaseStudyMetricPayload =
+  | { readonly shape: 'count'; readonly value: number; readonly members?: readonly CaseStudyMetricMember[] }
+  | {
+    readonly shape: 'ratio';
+    readonly numerator: number;
+    readonly denominator: number;
+    readonly members?: readonly CaseStudyMetricMember[];
+  }
+  | {
+    readonly shape: 'share';
+    readonly numerator: number;
+    readonly denominator: number;
+    /** What the denominator includes, in words. A share without this is a trap. */
+    readonly denominatorNote?: string;
+  }
+  | {
+    readonly shape: 'span';
+    readonly startDate: IsoDate;
+    readonly endDate: IsoDate;
+    readonly count?: number;
+    readonly countLabel?: string;
+  }
+  | {
+    readonly shape: 'series';
+    readonly points: readonly { readonly date: IsoDate; readonly value: number }[];
+    readonly unit: string;
+  };
+
+/**
+ * Plain-language context, which the public card prefers over the research labels.
+ *
+ * `Baseline / Unit / Sample / Methodology` are the words a researcher uses to
+ * defend a number. These three are the questions a reader actually asks, and
+ * they are deliberately phrased as questions rather than nouns.
+ *
+ * NEVER GENERATED. A collector fills a payload; a person writes these. Generated
+ * plain language is precisely the fabrication this system exists to prevent -
+ * it would read as though somebody had checked when nobody had.
+ */
+export interface CaseStudyMetricPlain {
+  /** "What this counts" */
+  readonly counts: string;
+  /** "Where it came from" */
+  readonly from: string;
+  /** "What it doesn't tell you" */
+  readonly cannotShow: string;
+}
+
+/**
+ * Present only when a COLLECTOR produced the payload, never on a hand-authored
+ * metric. It is the audit trail for a number nobody typed.
+ *
+ * `outputHash` is what makes drift detectable: re-running the collector at the
+ * same commit must produce the same canonical output, and a difference means
+ * either the collector changed or the tree did. Either way a human decides,
+ * rather than the sync silently rewriting a published figure.
+ */
+export interface CaseStudyMetricCollection {
+  readonly collectorKey: string;
+  readonly collectedSha: string;
+  readonly reproduceCommand: string;
+  /** sha256 of the collector's canonical JSON output. Never exposed publicly. */
+  readonly outputHash: string;
+  readonly collectedAt: IsoDateTime;
+}
+
 /** One metric. Used for hero figures and for the measurement section alike. */
 export interface CaseStudyMetricEntry {
   /** Stable key (`case_study_metrics.metric_key`), e.g. `deploy_frequency`. */
@@ -321,6 +448,12 @@ export interface CaseStudyMetricEntry {
   /** Mirrors `case_study_metrics.publishable`, which defaults false. */
   readonly publishable: boolean;
   readonly measurement?: CaseStudyMeasurementContext;
+  /* All four optional: a record written before shapes existed carries none of
+     them and must behave exactly as it does today. See the block above. */
+  readonly shape?: CaseStudyMetricShape;
+  readonly payload?: CaseStudyMetricPayload;
+  readonly plain?: CaseStudyMetricPlain;
+  readonly collected?: CaseStudyMetricCollection;
 }
 
 /** Hero identity: who, what, and under which consent settings. */
@@ -544,6 +677,44 @@ export interface CaseStudySnapshotContent {
   readonly artifacts?: readonly CaseStudyArtifactRef[];
   readonly repositories?: readonly CaseStudyRepositoryRef[];
   readonly taxonomy: CaseStudyTaxonomy;
+  readonly walkthroughVideo?: CaseStudyWalkthroughVideo;
+}
+
+/**
+ * A narrated walkthrough of the delivered system, shown at the TOP of the record.
+ *
+ * IT IS A DEMONSTRATION, NOT EVIDENCE, and the distinction is the whole reason this is its
+ * own field rather than an artifact. `demo` already exists in `CaseStudyArtifactType`, but
+ * putting a video there would have put it in the artifacts carousel, at a screenshot's
+ * aspect ratio, competing for the hero image through `HERO_IMAGE_PRIORITY`. A video that
+ * can win the cover is a video that can stand in for a screenshot of the running system,
+ * which is exactly the substitution the publish rules exist to prevent. Here it cannot:
+ * nothing reads this field when resolving the hero, and it carries no verification class
+ * because it asserts nothing on its own — every claim it narrates is already a metric, a
+ * roadmap line or an evidence row on the same record, and is checked there.
+ *
+ * SELF-HOSTED, NOT EMBEDDED. The platform serves the file, so no third party is handed a
+ * record of who watched a client's delivery. That choice has a CSP consequence worth
+ * knowing: `media-src` must allow the platform origin on every surface that renders this.
+ * Enterprise already sends `media-src 'self' data: blob: https:`; the training site sent no
+ * `media-src` at all and therefore fell back to `default-src 'self'`, so it needed the
+ * platform origin adding before a self-hosted file would play there.
+ */
+export interface CaseStudyWalkthroughVideo {
+  /** The video file itself, served from the platform. */
+  readonly url: string;
+  readonly title: string;
+  /**
+   * WebVTT captions. Separate from the burned-in captions the picture already carries,
+   * because burned-in text cannot be read by a screen reader, resized, translated or
+   * turned off.
+   */
+  readonly captionsUrl?: string;
+  /** Still frame shown before playback, so the slot is never a black rectangle. */
+  readonly posterUrl?: string;
+  readonly durationSeconds?: number;
+  /** How the narration was produced. Stated on the page rather than left to be assumed. */
+  readonly narrationSource?: 'synthetic' | 'human';
 }
 
 /* ─────────────────────────────────────────────────────────── surfaces ────── */

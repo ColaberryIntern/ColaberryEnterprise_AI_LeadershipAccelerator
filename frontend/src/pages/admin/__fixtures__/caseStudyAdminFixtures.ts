@@ -396,7 +396,9 @@ export function projectionFixture(
       baseline: 'approximately 9%', sample: 'four claim queues',
       methodology: 'Counted from the carrier export before and after.',
       limitations: ['One quarter of data.'],
+      shape: null, payload: null, plain: null, reproduceCommand: null,
     }],
+    walkthroughVideo: null,
     situation: {
       heading: 'The situation',
       body: ['Adjusters were triaging by hand.'],
@@ -427,6 +429,7 @@ export function projectionFixture(
         baseline: 'approximately 9%', sample: 'four claim queues',
         methodology: 'Counted from the carrier export before and after.',
         limitations: ['One quarter of data.'],
+        shape: null, payload: null, plain: null, reproduceCommand: null,
       }],
     },
     roadmap: [{ label: 'Second carrier', status: 'in_progress', detail: null }],

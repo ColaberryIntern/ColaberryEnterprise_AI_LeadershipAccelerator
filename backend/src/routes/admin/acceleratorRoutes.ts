@@ -13,6 +13,8 @@ import {
   handleGetReadiness, handleComputeReadiness, handleComputeAllReadiness,
   handleGetDashboard,
   handleGetClassDashboard,
+  handleGetCurriculumCompletion,
+  handleGetStudentWeekBreakdown,
   handleCreateEnrollment,
   handleListCohortEnrollments,
   handleSetPortalAccess,
@@ -29,6 +31,11 @@ import {
   handleAdminGetParticipantProgress,
   handleAdminExportProjectArchitect,
 } from '../../controllers/curriculumController';
+import {
+  handleGetCurrentClasses,
+  handleGetCohortCurriculum,
+  handleGetCohortCurriculumProgress,
+} from '../../controllers/acceleratorDashboardController';
 import { strategyPrepUpload } from '../../config/upload';
 
 const router = Router();
@@ -39,6 +46,8 @@ router.post('/api/admin/accelerator/cohorts/:cohortId/sessions', requireAdmin, h
 router.get('/api/admin/accelerator/cohorts/:cohortId/dashboard', requireAdmin, handleGetDashboard);
 router.get('/api/admin/accelerator/cohorts/:cohortId/class-dashboard', requireAdmin, handleGetClassDashboard);
 router.post('/api/admin/accelerator/cohorts/:cohortId/readiness', requireAdmin, handleComputeAllReadiness);
+router.get('/api/admin/accelerator/cohorts/:cohortId/curriculum-completion', requireAdmin, handleGetCurriculumCompletion);
+router.get('/api/admin/accelerator/cohorts/:cohortId/students/:enrollmentId/week-breakdown', requireAdmin, handleGetStudentWeekBreakdown);
 // Quick-add student: create enrollment + enable portal + send magic link in one call
 router.post('/api/admin/accelerator/quick-add-student', requireAdmin, async (req: Request, res: Response) => {
   try {
@@ -143,7 +152,20 @@ router.post('/api/admin/accelerator/submissions', requireAdmin, handleCreateSubm
 router.patch('/api/admin/accelerator/submissions/:id', requireAdmin, handleUpdateSubmission);
 router.post('/api/admin/accelerator/submissions/:id/upload', requireAdmin, strategyPrepUpload.single('file'), handleUploadSubmission);
 
-// Curriculum Admin
+// "What is teaching right now" snapshot for the Accelerator landing page.
+// Deliberately NOT under /cohorts/:id — it spans every in-flight cohort, and
+// nesting it would imply a cohort scope it does not have.
+router.get('/api/admin/accelerator/current-classes', requireAdmin, handleGetCurrentClasses);
+
+// Timeline-backed curriculum for a cohort. Supersedes /curriculum/modules for
+// DISPLAY: the timeline is where the Composer actually publishes, while
+// curriculum_modules is the pre-Timeline authoring model and is empty for every
+// live cohort. The legacy routes below stay because the lesson-override and
+// lab-response tooling still reads and writes through them.
+router.get('/api/admin/accelerator/cohorts/:cohortId/curriculum/timeline', requireAdmin, handleGetCohortCurriculum);
+router.get('/api/admin/accelerator/cohorts/:cohortId/curriculum/timeline/:enrollmentId', requireAdmin, handleGetCohortCurriculumProgress);
+
+// Curriculum Admin (legacy module model)
 router.get('/api/admin/accelerator/cohorts/:cohortId/curriculum/modules', requireAdmin, handleAdminListModules);
 router.get('/api/admin/accelerator/enrollments/:enrollmentId/curriculum-progress', requireAdmin, handleAdminGetParticipantProgress);
 router.get('/api/admin/accelerator/enrollments/:enrollmentId/project-architect', requireAdmin, handleAdminExportProjectArchitect);

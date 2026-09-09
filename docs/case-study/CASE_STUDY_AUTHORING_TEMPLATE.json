@@ -13,7 +13,6 @@
     "The gate reads STRUCTURED fields. It does not read prose - so anything you write in a",
     "narrative array is on your honour. That gap is a known open finding (V-29)."
   ],
-
   "identity": {
     "title": "Short, concrete, and about the outcome rather than the technology.",
     "standfirst": "One sentence. The problem and what was built to solve it.",
@@ -25,20 +24,32 @@
     "productionStatus": {
       "status": "shipped | in_progress | paused | not_pursued | unknown",
       "_status_note": "CORRECTED. This renders through the same label map as roadmap statuses, so it takes those values. Earlier drafts of this template said 'in_production | pilot | prototype' - none of those have a label and would render blank.",
-      "verification": { "class": "verified", "method": "repo", "evidenceId": "<case_study_evidence id>" }
+      "verification": {
+        "class": "verified",
+        "method": "repo",
+        "evidenceId": "<case_study_evidence id>"
+      }
     }
   },
-
   "taxonomy": {
     "industry": "Workforce development",
     "primaryCapability": "AI architecture training",
-    "capabilities": ["Adaptive learning", "Skill verification"],
-    "stack": ["React", "Express", "PostgreSQL"],
-    "deliverables": ["Learner portal", "Adaptive path engine"],
+    "capabilities": [
+      "Adaptive learning",
+      "Skill verification"
+    ],
+    "stack": [
+      "React",
+      "Express",
+      "PostgreSQL"
+    ],
+    "deliverables": [
+      "Learner portal",
+      "Adaptive path engine"
+    ],
     "builtByType": "colaberry_team | learner | intern | client_team | ai_flotation_team | joint_team",
     "_builtByType_note": "CORRECTED. Earlier drafts offered 'client' and 'partner'; neither is a member of the union and both would be rejected. Note that ai_flotation_team is a real, separate value - which is what lets an AI Flotation surface tell a truthful story about a build it did not do, because attribution travels with the record rather than with the page."
   },
-
   "situation": {
     "_note": "The problem, told so the READER recognises it as theirs. On Enterprise that is a buyer; on Training it is a prospective learner.",
     "narrative": [
@@ -46,11 +57,18 @@
       "Paragraph 2 - why the obvious solutions fail.",
       "Paragraph 3 - the harder version of the problem, the one worth solving."
     ],
-    "constraints": ["A hard requirement the solution had to satisfy."],
-    "goals": ["What success would look like, in the client's terms."],
-    "verification": { "class": "verified", "method": "repo", "evidenceId": "<id>" }
+    "constraints": [
+      "A hard requirement the solution had to satisfy."
+    ],
+    "goals": [
+      "What success would look like, in the client's terms."
+    ],
+    "verification": {
+      "class": "verified",
+      "method": "repo",
+      "evidenceId": "<id>"
+    }
   },
-
   "architecture": {
     "_note": "What was BUILT. The software, not the methodology.",
     "narrative": [
@@ -58,10 +76,20 @@
       "Paragraph 2 - the data or state that makes it work.",
       "Paragraph 3 - a decision that was deliberate, and why."
     ],
-    "stack": ["Auto-filled from the repository; override only to correct it."],
-    "capabilities": ["Adaptive sequencing", "Evidence capture"],
-    "integrations": ["GitHub", "Postgres"],
-    "dataStores": ["PostgreSQL"],
+    "stack": [
+      "Auto-filled from the repository; override only to correct it."
+    ],
+    "capabilities": [
+      "Adaptive sequencing",
+      "Evidence capture"
+    ],
+    "integrations": [
+      "GitHub",
+      "Postgres"
+    ],
+    "dataStores": [
+      "PostgreSQL"
+    ],
     "diagramSource": "flowchart TD\n  A[\"Input\"] --> B[\"Process\"]\n  B --> C[\"Outcome\"]",
     "_diagramSource_rules": [
       "Mermaid source. Rendered client-side, themed to brand.",
@@ -69,7 +97,6 @@
       "Capped at 8000 characters. Keep node labels in double quotes."
     ]
   },
-
   "measurement": {
     "_note": "What CHANGED. Narrative is for qualitative outcomes; metrics are for figures.",
     "narrative": [
@@ -83,7 +110,11 @@
         "valueDisplay": "41% fewer stockouts",
         "isHeadline": true,
         "publishable": true,
-        "verification": { "class": "verified", "method": "client", "evidenceId": "<id>" },
+        "verification": {
+          "class": "verified",
+          "method": "client",
+          "evidenceId": "<id>"
+        },
         "measurement": {
           "baseline": "What it was before, and over what period.",
           "sample": "How much, how many, over what window.",
@@ -92,25 +123,61 @@
             "What this figure does NOT prove. Stating one makes the rest credible."
           ]
         }
+      },
+      {
+        "_note": "A SHAPED metric. If the repository can compute the figure, do not type it: register the collector in the repository's case-study.json and the sync writes value, payload, methodology, limitations, the reproduce command and the evidence row together. Collectors: test_files (share), modules_with_tests (ratio), decision_records (count), commit_span (span), commits_per_week (series).",
+        "key": "modules_with_tests",
+        "label": "Modules with a test file",
+        "valueDisplay": "4 of 7",
+        "shape": "ratio",
+        "payload": {
+          "shape": "ratio",
+          "numerator": 4,
+          "denominator": 7,
+          "members": [
+            {
+              "name": "src/transportSelector.ts",
+              "status": "no"
+            },
+            {
+              "name": "src/abacEvaluator.ts",
+              "status": "yes"
+            }
+          ]
+        },
+        "plain": {
+          "_note": "Written by a PERSON, never by a collector. All three or none: two thirds of an answer reads as more certain than the number is.",
+          "counts": "Source files under guardrails/ that carry a matching test file.",
+          "from": "The repository tree at the pinned commit, matched by filename.",
+          "cannotShow": "Whether those tests assert anything useful."
+        },
+        "isHeadline": false,
+        "publishable": false,
+        "verification": {
+          "class": "verified",
+          "method": "repo"
+        },
+        "_collectedNote": "collected (collectorKey, collectedSha, reproduceCommand, outputHash, collectedAt) is written by the sync and must never be typed by hand. Only reproduceCommand is ever shown to a reader."
       }
     ]
   },
-
   "heroMetrics": [
     "_note: MUST be the same object(s) as the isHeadline entries in measurement.metrics.",
     "_note: A figure in the hero that is absent from measurement disappears from the page entirely."
   ],
-
   "roadmap": [
     {
       "label": "What shipped",
       "status": "shipped | in_progress | paused | not_pursued | unknown",
       "detail": "One or two sentences.",
-      "verification": { "class": "verified", "method": "repo", "evidenceId": "<id>" },
+      "verification": {
+        "class": "verified",
+        "method": "repo",
+        "evidenceId": "<id>"
+      },
       "_note": "status carries done-ness; verification carries whether the STATEMENT is checkable. An item whose verification is 'pending' is DROPPED from the public page - the same rule that drops an unverified metric. Items admitting what is NOT solved are the most credible ones on the page."
     }
   ],
-
   "artifacts": [
     {
       "status": "approved",
@@ -130,14 +197,32 @@
       "_note": "artifactType 'photo' is ATMOSPHERE and can never be evidence. It is ranked below screenshot and architecture for the hero, it renders labelled as atmosphere, and a photo whose title or description claims delivered work is DROPPED entirely. Two publicly-viewable images is the standard; the readiness rubric scores a record down below that."
     }
   ],
-
   "_artifactTypes": [
-    "screenshot", "architecture", "photo", "demo", "deck",
-    "roadmap", "report", "evaluation", "code", "document", "other"
+    "screenshot",
+    "architecture",
+    "photo",
+    "demo",
+    "deck",
+    "roadmap",
+    "report",
+    "evaluation",
+    "code",
+    "document",
+    "other"
   ],
-  "_verificationClasses": ["verified", "anonymized", "illustrative", "pending"],
-  "_verificationMethods": ["repo", "client", "platform", "self", "internal"],
-
+  "_verificationClasses": [
+    "verified",
+    "anonymized",
+    "illustrative",
+    "pending"
+  ],
+  "_verificationMethods": [
+    "repo",
+    "client",
+    "platform",
+    "self",
+    "internal"
+  ],
   "_perSurface": {
     "_note": "Set per PUBLICATION, not on the record. This is how one record reads differently on two sites.",
     "surfaceKey": "enterprise | training | ai-flotation | refactored",

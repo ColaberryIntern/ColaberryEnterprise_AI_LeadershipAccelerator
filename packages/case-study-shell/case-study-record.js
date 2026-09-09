@@ -33,6 +33,7 @@
 (function () {
   'use strict';
 
+
   var root = document.getElementById('cs-record');
   if (!root) return;
 
@@ -123,13 +124,39 @@
 
   /* ------------------------------------------------------------- the bands --- */
 
+  /* See the UNIT row in `metricCard`.
+
+     Word sets rather than a built RegExp: the unit is record data, so escaping
+     it into a pattern is a needless place for a `%` or a `.` to change the
+     meaning of the match. Splitting both sides on non-word characters gives the
+     same whole-word test with nothing to escape. Every word of the unit must
+     appear, so "percentage points" is only redundant when BOTH do. */
+  function unitWords(text) {
+    return String(text || '').toLowerCase().split(/[^a-z0-9%]+/).filter(Boolean);
+  }
+
+  function unitAlreadyInValue(valueDisplay, unit) {
+    var wanted = unitWords(unit);
+    if (!wanted.length) return false;
+    var present = unitWords(valueDisplay);
+    return wanted.every(function (w) { return present.indexOf(w) >= 0; });
+  }
+
   function metricCard(m) {
     var card = el('li', 'cs-metric');
     card.appendChild(el('p', 'cs-metric-value', m.valueDisplay));
     card.appendChild(el('p', 'cs-metric-label', m.label));
     if (m.verificationClass) card.appendChild(el('p', 'cs-verify', m.verificationClass));
+    /* The UNIT row is dropped when `valueDisplay` already says the unit,
+       because otherwise the card says it twice: "14 decision records" above a
+       row reading UNIT: records. MEASURED, not suspected - 13 of the 14 metrics
+       published across the three live records do this, so it is a property of
+       display values that read as complete phrases rather than fourteen
+       separate authoring slips. Word-boundary matched, so a unit that genuinely
+       adds something ("41%" with unit "percentage points") still prints. */
     var rows = [
-      ['Baseline', m.baseline], ['Unit', m.unit],
+      ['Baseline', m.baseline],
+      ['Unit', unitAlreadyInValue(m.valueDisplay, m.unit) ? '' : m.unit],
       ['Sample', m.sample], ['Methodology', m.methodology],
     ].filter(function (r) { return r[1]; });
     if (rows.length) {
@@ -150,6 +177,80 @@
       card.appendChild(limits);
     }
     return card;
+  }
+
+  /* ============================ FIGURES IN THE ARTICLE =======================
+     Ali, 2026-09-08, looking at a record whose three artifacts sat unused in a
+     band at the bottom: "use the artifact pictures within the scope of the
+     article... They would def have to be bigger though."
+
+     A PORT of the Enterprise rules in
+     `frontend/src/pages/publicV2/storyFigurePlacement.ts`, deliberately
+     unchanged, so the same record does not read as two different arguments on
+     two brands.
+
+     BETWEEN SECTIONS, NOT INSIDE THEM. A figure inside "The measurement" is
+     captioned by that heading whether anyone wrote a caption or not; between
+     two sections it belongs to neither and claims only what its own caption
+     says.
+     ======================================================================== */
+
+  var IMAGE_ARTIFACT_TYPES = ['screenshot', 'architecture', 'photo'];
+  var FIGURE_GAP_SECTIONS = ['situation', 'build', 'architecture', 'measurement', 'roadmap', 'contributors'];
+  /* Each of these ends on something the record claims to have proved, and an
+     atmosphere photograph directly beneath one borrows its authority. */
+  var ATMOSPHERE_EXCLUDED_AFTER = ['architecture', 'measurement', 'roadmap', 'contributors'];
+
+  function figureAllowedAfter(a, section) {
+    if (FIGURE_GAP_SECTIONS.indexOf(section) < 0) return false;
+    if (a.presentation === 'atmosphere') return ATMOSPHERE_EXCLUDED_AFTER.indexOf(section) < 0;
+    return true;
+  }
+
+  /* Returns { after: {section: [artifact]}, placed: [url] }.
+     THE CONSTRAINED KIND GOES FIRST: atmosphere can use a subset of the gaps
+     evidence can, so allocating in record order lets an evidence image take the
+     one gap a photograph could have used and strand it. */
+  function placeFigures(artifacts, order, excludeUrl) {
+    var usable = (artifacts || []).filter(function (a) {
+      var url = a.previewUrl || a.url;
+      return a.access === 'open' && url && url !== excludeUrl
+        && IMAGE_ARTIFACT_TYPES.indexOf(a.artifactType) >= 0;
+    });
+    var gaps = (order || []).filter(function (k) { return FIGURE_GAP_SECTIONS.indexOf(k) >= 0; });
+    var after = {}, placed = [], taken = {};
+    if (!usable.length || !gaps.length) return { after: after, placed: placed };
+
+    function assign(a) {
+      for (var i = 0; i < gaps.length; i += 1) {
+        var gap = gaps[i];
+        if (taken[gap]) continue;
+        if (!figureAllowedAfter(a, gap)) continue;
+        taken[gap] = true;
+        after[gap] = (after[gap] || []).concat([a]);
+        placed.push(a.previewUrl || a.url);
+        return;
+      }
+    }
+    usable.forEach(function (a) { if (a.presentation === 'atmosphere') assign(a); });
+    usable.forEach(function (a) { if (a.presentation !== 'atmosphere') assign(a); });
+    return { after: after, placed: placed };
+  }
+
+  /* Full width, and that is the point of the change - these used to be thumbnails
+     three-across in a trailing band. */
+  function figureNode(a) {
+    var fig = el('figure', 'cs-figure');
+    var img = document.createElement('img');
+    img.src = a.previewUrl || a.url;
+    img.alt = a.title;
+    img.loading = 'lazy';
+    fig.appendChild(img);
+    var cap = el('figcaption');
+    if (a.title) cap.appendChild(el('strong', null, a.title));
+    if (a.description) cap.appendChild(el('span', null, a.description));
+    fig.appendChild(cap);
+    return fig;
   }
 
   var BANDS = {
@@ -268,9 +369,18 @@
       ]);
     },
 
-    artifacts: function (c) {
-      var open = (c.artifacts || []).filter(function (a) { return a.access === 'open'; });
-      return section('artifacts', 'Artifacts', [
+    artifacts: function (c, placed) {
+      /* WHAT IS LEFT. A picture already met in the article does not appear
+         again, and the COVER counts as already met - excluding it only from the
+         gaps still let it return here, which is the same repeat one band lower.
+         When everything found a home this band renders nothing, which is right:
+         it exists to show what the reader has not already seen. */
+      var seen = (placed || []).concat(c.heroImageUrl ? [c.heroImageUrl] : []);
+      var open = (c.artifacts || []).filter(function (a) {
+        return a.access === 'open' && seen.indexOf(a.previewUrl || a.url) < 0;
+      });
+      if (!open.length) return null;
+      return section('artifacts', 'More from this project', [
         list(open, function (a) {
           var li = el('li', 'cs-artifact');
           var img = a.previewUrl || a.url;
@@ -328,7 +438,15 @@
     var owner = (c.artifacts || []).filter(function (a) {
       return a.access === 'open' && (a.url === c.heroImageUrl || a.previewUrl === c.heroImageUrl);
     })[0];
-    if (c.heroImageUrl && owner) {
+    /* WHEN THERE IS A WALKTHROUGH, THE PICTURE SLOT IS THE PLAYER. Ali: "shouldn't the
+       video be in the hero section?" - and the band this replaced opened a record with two
+       visuals doing the same job, a screenshot of the product then a film of it, with the
+       reader scrolling past the first to reach the second. The poster falls back to the
+       cover, so the masthead looks unchanged until somebody presses play. */
+    var player = walkthrough(c, c.heroImageUrl && owner ? c.heroImageUrl : null);
+    if (player) {
+      head.appendChild(player);
+    } else if (c.heroImageUrl && owner) {
       var fig = el('figure', 'cs-cover');
       var img = document.createElement('img');
       img.src = c.heroImageUrl;
@@ -359,6 +477,70 @@
     return dl;
   }
 
+
+  /*
+   * THE NARRATED WALKTHROUGH, IN THE MASTHEAD'S PICTURE SLOT.
+   *
+   * A native `video` rather than an embed: the platform serves the file, so no third party
+   * is handed a record of who watched a client's delivery, and this domain sends no CSP at
+   * all so there is nothing to widen either way.
+   *
+   * Not autoplayed and `preload="none"`. It carries narration - a page that starts talking
+   * at a reader is a page they leave - and a several-megabyte file should not be fetched by
+   * every visitor who never presses play.
+   *
+   * The `track` is the accessible copy of captions the picture already carries burned in;
+   * burned-in text cannot be resized, translated, turned off or read by a screen reader.
+   */
+  function walkthrough(c, posterFallback) {
+    var v = c.walkthroughVideo;
+    if (!v || !v.url) return null;
+    var fig = el('figure', 'cs-cover cs-cover--video');
+    var video = document.createElement('video');
+    video.className = 'cs-walkthrough-player';
+    video.setAttribute('controls', '');
+    video.setAttribute('preload', 'none');
+    video.setAttribute('playsinline', '');
+    // Required for the CAPTIONS, not the video. A cross-origin `track` is refused unless
+    // the media element itself is a CORS request, and this page is on another brand's
+    // domain while the file is served from the platform. Without it the track's
+    // readyState goes to 3 (ERROR) and the cue list stays empty while the video plays
+    // fine — nothing looks broken except the missing captions.
+    video.setAttribute('crossorigin', 'anonymous');
+    var poster = v.posterUrl || posterFallback;
+    if (poster) video.setAttribute('poster', poster);
+    var src = document.createElement('source');
+    src.setAttribute('src', v.url);
+    src.setAttribute('type', 'video/mp4');
+    video.appendChild(src);
+    if (v.captionsUrl) {
+      var track = document.createElement('track');
+      track.setAttribute('kind', 'captions');
+      track.setAttribute('srclang', 'en');
+      track.setAttribute('label', 'English');
+      track.setAttribute('src', v.captionsUrl);
+      /* NOT `default`, and that is the whole fix for a doubled read-over.
+         `build_video.py` BURNS the narration into the picture - deliberately, it
+         is what the reference clip does - and this sidecar is the ACCESSIBLE
+         COPY of the same sentences, for a screen reader, a translation or a
+         reader who wants them larger. Marking it `default` made the browser
+         paint those words a second time, in its own black bar, directly over a
+         frame that already said them. Shipped, so it was on two live records.
+         The track stays: it is reachable from the player's CC control and by
+         assistive technology, which is what it was written for. */
+      video.appendChild(track);
+    }
+    fig.appendChild(video);
+    // Labelled, not left to be assumed. An unlabelled synthetic voice is a small
+    // deception, and this system's whole claim is that it does not make those.
+    fig.appendChild(el('figcaption', 'cs-walkthrough-note',
+      v.narrationSource === 'synthetic'
+        ? (v.title || 'Walkthrough') + '. Narrated by a synthetic voice; the figures it '
+          + 'states are the verified metrics recorded below.'
+        : (v.title || 'Walkthrough')));
+    return fig;
+  }
+
   /* ------------------------------------------------------------------ load --- */
 
   function notFound() {
@@ -373,6 +555,81 @@
     back.textContent = 'All published records';
     s.appendChild(back);
     root.appendChild(s);
+  }
+
+  /* ====================== KEEP READING: OTHER RECORDS ========================
+     Ali, 2026-09-08: "show other related project at the end of the Case Study's
+     so they can continue looking through related case studys. This should be at
+     the bottom and only include Case Studys that can be shown on their
+     respective site."
+
+     THE SURFACE IS THE FILTER, and it is the server's, not a guess made here.
+     The same list endpoint the index uses is asked for THIS surface, so a
+     record that is not published to this brand cannot appear - which is the
+     whole of "only Case Studys that can be shown on their respective site".
+
+     Fetched SEPARATELY and appended when it arrives. The record must not wait
+     on it: if this request is slow or fails, the reader still gets the record,
+     and the page simply ends where it used to.
+     ======================================================================== */
+
+  function relatedBand(items, currentSlug) {
+    var others = (items || []).filter(function (r) { return r.slug !== currentSlug; });
+    if (!others.length) return null;
+    /* Three at most. This is an invitation to keep reading, not a second index -
+       the index is one click away and is where a reader goes to browse. */
+    others = others.slice(0, 3);
+
+    var sec = el('section', 'cs-band cs-related');
+    sec.id = 'related';
+    sec.appendChild(el('h2', 'cs-band-title', 'Keep reading'));
+    var ul = el('ul', 'cs-related-list');
+    others.forEach(function (r) {
+      var li = el('li', 'cs-related-item');
+      var a = document.createElement('a');
+      a.className = 'cs-related-link';
+      a.href = INDEX_PATH.replace(/\/+$/, '') + '/' + encodeURIComponent(r.slug) + '/';
+      if (r.heroImageUrl) {
+        var img = document.createElement('img');
+        img.src = r.heroImageUrl;
+        /* Decorative: the title is in the same link, so announcing both would
+           read the record's name twice. */
+        img.alt = '';
+        img.loading = 'lazy';
+        a.appendChild(img);
+      }
+      /* THE SAME CARD AS THE INDEX, not a smaller cousin. Ali, 2026-09-09:
+         "All the cards should be the same size." Same blocks in the same order
+         - meta, title, standfirst, who built it, verification and the
+         affordance - so the two grids hold one object rather than two that
+         merely resemble each other. */
+      var body = el('div', 'cs-related-body');
+      if (r.primaryCapability) body.appendChild(el('p', 'cs-related-meta', humanize(r.primaryCapability)));
+      body.appendChild(el('h3', 'cs-related-title', r.title));
+      if (r.standfirst) body.appendChild(el('p', 'cs-related-note', r.standfirst));
+      var builder = r.builtBy ? humanize(r.builtBy) : r.organizationLabel;
+      if (builder) body.appendChild(el('p', 'cs-related-builder', 'Built by ' + builder));
+      var foot = el('div', 'cs-related-foot');
+      foot.appendChild(el('span', 'cs-related-verify', r.verificationClass || ''));
+      foot.appendChild(el('span', 'cs-related-cta', 'Read the record'));
+      body.appendChild(foot);
+      a.appendChild(body);
+      li.appendChild(a);
+      ul.appendChild(li);
+    });
+    sec.appendChild(ul);
+    return sec;
+  }
+
+  function appendRelated(currentSlug) {
+    fetch(API + '/api/public/case-studies?surface=' + encodeURIComponent(SURFACE) + '&limit=4',
+          { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (body) {
+        var band = body && relatedBand(body.items, currentSlug);
+        if (band) root.appendChild(band);
+      })
+      .catch(function () { /* The record is already on the page. */ });
   }
 
   var slug = slugFromPath();
@@ -404,13 +661,24 @@
       if (f) root.appendChild(f);
 
       var order = (surface && surface.sectionOrder) || [];
+      /* Placed against the order this page will actually render, so a figure
+         can never land after a section the record does not have. */
+      var figures = placeFigures(c.artifacts, order, c.heroImageUrl);
       order.forEach(function (band) {
         if (band === 'hero' || band === 'cta') return;
         var render = BANDS[band];
         if (!render) return;
-        var node = render(c);
-        if (node) root.appendChild(node);
+        var node = render(c, figures.placed);
+        if (!node) return;
+        root.appendChild(node);
+        (figures.after[band] || []).forEach(function (a) {
+          root.appendChild(figureNode(a));
+        });
       });
+
+      /* Last, and asynchronously: the record is already readable, so a slow
+         or failed list request costs the reader nothing. */
+      appendRelated(c.slug);
     })
     .catch(function () { notFound(); });
 })();

@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../../utils/api';
 import { useToast } from '../../components/ui/ToastProvider';
 import ConfirmModal from '../../components/ui/ConfirmModal';
-import AdminCurriculumTab from './AdminCurriculumTab';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal } from '../../components/admin/shell/trust';
 import PersonHistoryDrawer from '../../components/admin/PersonHistoryDrawer';
@@ -12,7 +11,17 @@ import KitConfigModal from '../../components/admin/KitConfigModal';
 import { CategoryKey } from '../../components/admin/kitConfig/types';
 import CohortManagementTab from './components/CohortManagementTab';
 import ClassDashboardTab from './components/ClassDashboardTab';
+import CurriculumCompletionTab from './components/CurriculumCompletionTab';
+import CurrentClassesDashboard from './components/CurrentClassesDashboard';
+import AdminCommunityRolesPage from './AdminCommunityRolesPage';
 import { resolveAcceleratorNav } from './utils/resolveAcceleratorNav';
+
+// Program-wide surfaces embedded as tabs. Lazy so folding three substantial
+// pages into this route does not enlarge the Accelerator's initial bundle for
+// the common case, which is someone opening Cohorts and never leaving it.
+const AdminCertPrepPage = lazy(() => import('./certprep/AdminCertPrepPage'));
+const AdminCaseStudiesPage = lazy(() => import('./AdminCaseStudiesPage'));
+const AdminProjectOverview = lazy(() => import('./AdminProjectOverview'));
 
 interface Cohort {
   id: string;
@@ -118,19 +127,37 @@ interface DashboardData {
 // Submissions folds into the Participants drill-down (per-person view), and
 // Readiness is absorbed into the new Class Dashboard (adds cohort-wide trend
 // indicators the old flat table never had, rather than living alongside it).
-type TabKey = 'cohorts' | 'sessions' | 'participants' | 'class-dashboard' | 'curriculum';
+type TabKey =
+  | 'cohorts' | 'sessions' | 'participants' | 'class-dashboard' | 'curriculum'
+  | 'cert-prep' | 'case-studies' | 'projects';
 
-const TAB_ORDER: TabKey[] = ['cohorts', 'sessions', 'participants', 'class-dashboard', 'curriculum'];
-// Everything except 'cohorts' (the home/landing view) is a cohort-scoped
-// drill-down, rendered via the contextual sub-nav instead of an always-visible
-// top tab bar — "let everything flow through the Cohorts tab."
+const TAB_ORDER: TabKey[] = [
+  'cohorts', 'sessions', 'participants', 'class-dashboard', 'curriculum',
+  'projects', 'cert-prep', 'case-studies',
+];
+// Cohort-scoped drill-downs, reached from a cohort row rather than from an
+// always-visible top tab bar — "let everything flow through the Cohorts tab."
 const DRILLDOWN_TABS: TabKey[] = ['sessions', 'participants', 'class-dashboard', 'curriculum'];
+// Program-wide surfaces folded in from the sidebar on 2026-09-08. They are NOT
+// cohort-scoped — Cert Prep, Case Studies and Projects each span every cohort —
+// so they deliberately do not get the cohort selector or the per-cohort stat
+// cards, and selecting a cohort does not change what they show. Each renders
+// its existing page component unchanged, including that page's own header,
+// which is why this page suppresses its own PageHeader while one is active
+// rather than stacking two headers on top of each other.
+// Ali, 2026-09-09: "The order should be Projects / Cert Prep / Case Studies." Projects
+// leads because it is where a student's actual build lives; Cert Prep is downstream of
+// having built something, and Case Studies is downstream of both.
+const PROGRAM_TABS: TabKey[] = ['projects', 'cert-prep', 'case-studies'];
 const TAB_LABELS: Record<TabKey, string> = {
   cohorts: 'Cohorts',
   sessions: 'Sessions',
   participants: 'Participants',
   'class-dashboard': 'Class Dashboard',
   curriculum: 'Curriculum',
+  'cert-prep': 'Cert Prep',
+  'case-studies': 'Case Studies',
+  projects: 'Projects',
 };
 
 function AdminAcceleratorPage() {
@@ -185,6 +212,11 @@ function AdminAcceleratorPage() {
 
   // Delete confirm
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  // Which cohort (if any) a program-wide tab was opened FROM. Null means the
+  // tab was reached globally and must not be filtered to a class. Set on the
+  // click, not derived at render — see openProgramTab.
+  const [programScopeCohortId, setProgramScopeCohortId] = useState<string | null>(null);
 
   // Participants tab state
   const [cohortEnrollments, setCohortEnrollments] = useState<EnrollmentInfo[]>([]);
@@ -729,8 +761,47 @@ function AdminAcceleratorPage() {
     );
   }
 
+  // Three kinds of view share this route and they need different chrome:
+  // the Cohorts home, a cohort-scoped drill-down, and a program-wide tab that
+  // brings its own page header.
+  const isDrilldown = DRILLDOWN_TABS.includes(activeTab);
+  const isProgramTab = PROGRAM_TABS.includes(activeTab);
+
+  /**
+   * Program-wide tab pills, shown on every view so the folded-in surfaces stay
+   * reachable from the Accelerator home as well as from a drill-down.
+   *
+   * The pills are shared by both contexts, so the CLICK is what records which
+   * one you came from. Opening Cert Prep from inside July must land on July;
+   * opening it from the global home must not silently pick a class at all.
+   * Deriving this at render time instead would be wrong — by then the tab has
+   * already changed and the drill-down context is gone.
+   */
+  const openProgramTab = (tab: TabKey) => {
+    setProgramScopeCohortId(isDrilldown && selectedCohortId ? selectedCohortId : null);
+    setActiveTab(tab);
+  };
+
+  const programTabPills = (
+    <ul className="nav nav-pills mb-0">
+      {PROGRAM_TABS.map((tab) => (
+        <li key={tab} className="nav-item">
+          <button
+            className={`nav-link${activeTab === tab ? ' active' : ''}`}
+            onClick={() => openProgramTab(tab)}
+          >
+            {TAB_LABELS[tab]}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+
   return (
     <>
+      {/* Suppressed on a program tab: those pages render their own PageHeader,
+          and stacking two would give the surface two competing titles. */}
+      {!isProgramTab && (
       <PageHeader
         title="Accelerator"
         icon="graduation-cap-line"
@@ -738,7 +809,7 @@ function AdminAcceleratorPage() {
         breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Accelerator' }]}
         trust={trust}
         actions={
-          activeTab !== 'cohorts' ? (
+          isDrilldown ? (
             <select
               className="form-select form-select-sm"
               style={{ width: 'auto' }}
@@ -753,7 +824,7 @@ function AdminAcceleratorPage() {
           ) : undefined
         }
       >
-        {activeTab !== 'cohorts' && (
+        {isDrilldown && (
           <div className="small text-muted mb-2">
             <i className="ri-stack-line" aria-hidden="true" />{' '}
             Course: <strong>{dashboard?.cohort?.program?.name || 'No parent course set'}</strong>
@@ -764,7 +835,7 @@ function AdminAcceleratorPage() {
             )}
           </div>
         )}
-        {dashboard && activeTab !== 'cohorts' && (
+        {dashboard && isDrilldown && (
           <div className="row g-3">
             <div className="col-6 col-lg-3">
               <StatCard
@@ -805,32 +876,84 @@ function AdminAcceleratorPage() {
           </div>
         )}
       </PageHeader>
+      )}
 
-      {/* Contextual sub-nav — only shown once a cohort drill-down is active.
-          Cohorts itself has no tab bar; it IS the home view. */}
+      {/* Contextual sub-nav. A cohort drill-down gets the cohort-scoped pills;
+          every view gets the program-wide pills, so Cert Prep / Case Studies /
+          Projects are reachable from the home view too now that they no longer
+          have sidebar entries. */}
       {activeTab !== 'cohorts' && (
         <div className="d-flex align-items-center gap-2 mb-4 flex-wrap">
           <button className="btn btn-sm btn-outline-secondary" onClick={() => setActiveTab('cohorts')}>
             <i className="ri-arrow-left-line" aria-hidden="true" /> All Cohorts
           </button>
-          <ul className="nav nav-pills mb-0">
-            {DRILLDOWN_TABS.map((tab) => (
-              <li key={tab} className="nav-item">
-                <button
-                  className={`nav-link${activeTab === tab ? ' active' : ''}`}
-                  onClick={() => setActiveTab(tab)}
-                >
-                  {TAB_LABELS[tab]}
-                </button>
-              </li>
-            ))}
-          </ul>
+          {isDrilldown && (
+            <ul className="nav nav-pills mb-0">
+              {DRILLDOWN_TABS.map((tab) => (
+                <li key={tab} className="nav-item">
+                  <button
+                    className={`nav-link${activeTab === tab ? ' active' : ''}`}
+                    onClick={() => setActiveTab(tab)}
+                  >
+                    {TAB_LABELS[tab]}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {programTabPills}
         </div>
       )}
 
       {/* Tab Content */}
       {activeTab === 'cohorts' && (
-        <CohortManagementTab onCohortsChanged={loadCohorts} />
+        <>
+          {/* Above the cohort table on purpose: "which classes are running and
+              how are they doing" is the first question this page should answer,
+              and the table alone never answered it. */}
+          <CurrentClassesDashboard
+            onOpenCohort={(cohortId, tab) => {
+              setSelectedCohortId(cohortId);
+              setActiveTab(tab as TabKey);
+            }}
+          />
+
+          <div className="d-flex justify-content-end mb-3">{programTabPills}</div>
+
+          <CohortManagementTab onCohortsChanged={loadCohorts} />
+
+          {/* Community Roles, folded in from the sidebar (2026-09-08). It sits
+              directly under Cohorts because promoting someone to Mentor or Staff
+              is a decision about the people in these cohorts, not a separate
+              administrative domain. The page component is embedded unchanged and
+              its own route stays live. */}
+          <div className="mt-4">
+            <AdminCommunityRolesPage embedded />
+          </div>
+        </>
+      )}
+
+      {isProgramTab && (
+        <Suspense
+          fallback={(
+            <div className="text-center py-5">
+              <div className="spinner-border text-primary" role="status">
+                <span className="visually-hidden">Loading…</span>
+              </div>
+            </div>
+          )}
+        >
+          {/* `programScopeCohortId` is null when the tab was opened from the
+              global home, and these pages then keep their own unfiltered view.
+              Case Studies has no cohort dimension at all, so it takes nothing. */}
+          {activeTab === 'cert-prep' && (
+            <AdminCertPrepPage initialCohortId={programScopeCohortId ?? undefined} />
+          )}
+          {activeTab === 'case-studies' && <AdminCaseStudiesPage />}
+          {activeTab === 'projects' && (
+            <AdminProjectOverview initialCohortId={programScopeCohortId ?? undefined} />
+          )}
+        </Suspense>
       )}
 
       {activeTab === 'sessions' && (
@@ -1220,12 +1343,25 @@ function AdminAcceleratorPage() {
         <ClassDashboardTab cohortId={selectedCohortId} />
       )}
 
-      {activeTab === 'curriculum' && (
-        <AdminCurriculumTab
-          cohortId={selectedCohortId}
-          enrollments={enrollments.map((e) => ({ id: e.id, full_name: e.full_name, email: e.email, company: e.company }))}
-          showToast={showToast}
-        />
+      {/* ONE curriculum section, not two. Ali, 2026-09-09: "Let's remove this 2nd
+          curriculum section."
+
+          `AdminCurriculumTab` used to render underneath the heatmap. It listed the same
+          weeks and the same cards a second time, and it mutated nothing — a read-only
+          duplicate of the view above it, now that the heatmap carries per-section and
+          per-card completion. Its one irreplaceable control was the link into the
+          Composer, which is where curriculum is actually authored, so that link moved
+          onto the heatmap rather than being deleted with the rest.
+
+          The component file stays in the tree. It has no route of its own and no other
+          caller, so nothing else breaks by not rendering it here, and deleting a working
+          component is a bigger decision than the one that was asked for. */}
+      {activeTab === 'curriculum' && selectedCohortId && (
+        <CurriculumCompletionTab cohortId={selectedCohortId} />
+      )}
+
+      {activeTab === 'curriculum' && !selectedCohortId && (
+        <div className="text-muted p-3">Select a cohort to see curriculum completion.</div>
       )}
 
       {/* Class Kit — projector-friendly QR + start-class panel for a session */}

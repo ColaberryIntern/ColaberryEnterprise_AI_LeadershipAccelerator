@@ -65,6 +65,7 @@ import { ensureSbpSchema } from './db/ensureSbpSchema';
 import { ensureCertPrepSchema } from './db/ensureCertPrepSchema';
 import { ensureProjectArchiveSchema } from './db/ensureProjectArchiveSchema';
 import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
+import { ensureInternshipSchema } from './db/ensureInternshipSchema';
 import { ensureOauthTokenVaultSchema } from './db/ensureOauthTokenVaultSchema';
 import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
 import { ensureAgentAttachmentSchema } from './db/ensureAgentAttachmentSchema';
@@ -90,6 +91,7 @@ import { ensureMetricReliabilityRecordSchema } from './db/ensureMetricReliabilit
 import { ensureStudentAssessmentSchema } from './db/ensureStudentAssessmentSchema';
 import { ensureChecklistInstanceSchema } from './db/ensureChecklistInstanceSchema';
 import { ensureAgentManagerConversationReliabilitySchema } from './db/ensureAgentManagerConversationReliabilitySchema';
+import { ensureAgentManagerConversationIntentSchema } from './db/ensureAgentManagerConversationIntentSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureCaseStudySchema, assertCaseStudySchema } from './db/ensureCaseStudySchema';
 import {
@@ -2604,6 +2606,12 @@ async function start(): Promise<void> {
   // useless without the UNIQUE indexes this creates, which is why it is
   // ensured at boot alongside its siblings rather than by the send script.
   await ensureEmailSendLedgerSchema();
+  // AI Internship: application lifecycle, two-channel interview, decisions,
+  // documents, and `cohort_memberships` — the secondary membership that lets an
+  // intern join the internship cohort WITHOUT disturbing the class cohort in
+  // enrollments.cohort_id (docs/AI_INTERNSHIP_DISCOVERY.md §3.2). Ensured after
+  // enrollments/cohorts exist, since every table here hangs off one of them.
+  await ensureInternshipSchema();
   // Durable store for provider-rotated OAuth refresh tokens (MS Graph/Hotmail).
   // Without it every rotation is discarded and the deployment drifts toward a
   // dead credential that only an interactive re-consent can recover.
@@ -2755,6 +2763,10 @@ async function start(): Promise<void> {
   // on the existing agent_manager_conversations table. Additive, idempotent,
   // no flag.
   await ensureAgentManagerConversationReliabilitySchema();
+  // Reese Agentic AI Employee mission, Capability 8 — the generic pending-
+  // intent-confirmation workflow's one new column (pending_intent_confirmation)
+  // on the same table. Additive, idempotent, no flag.
+  await ensureAgentManagerConversationIntentSchema();
   // AI Workforce Reset, Phase D.1 "Inventory" — department/scope (Ali signed off on
   // abac-design.md's own recommendations wholesale, 2026-08-24). Additive, idempotent, no flag.
   await ensureAiAgentDepartmentScopeSchema();

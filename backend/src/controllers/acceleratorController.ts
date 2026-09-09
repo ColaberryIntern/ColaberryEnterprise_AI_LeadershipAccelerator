@@ -407,6 +407,44 @@ export async function handleGetClassDashboard(req: Request, res: Response, next:
   } catch (err) { next(err); }
 }
 
+/**
+ * Curriculum completion for a cohort: which cards the class is finishing, grouped the way
+ * the curriculum is ordered, plus where each student sits against the cohort's own week.
+ */
+export async function handleGetCurriculumCompletion(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { getCurriculumCompletion } = await import('../services/curriculumCompletionService');
+    const result = await getCurriculumCompletion(req.params.cohortId as string);
+    if (!result) return res.status(404).json({ error: 'Cohort not found' });
+
+    // `?view=pace` drops the per-card tree and returns the pace figures alone.
+    //
+    // The two consumers want opposite halves of this payload. The Curriculum tab wants the
+    // week/section/card tree; the Class Dashboard's pace panel wants four counts and a
+    // student list. Measured against the July 2026 cohort those are 280.2 KB and 8.2 KB —
+    // the tree is 1,293 cards and 97% of the bytes. The Class Dashboard is the landing view
+    // for a cohort, so serving it the tree would put a quarter-megabyte on the first screen
+    // every admin opens, to render four numbers.
+    if (String(req.query.view) === 'pace') {
+      const { weeks, ...pace } = result;
+      return res.json(pace);
+    }
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+/** One student's week-by-week, for the pace drill-down. */
+export async function handleGetStudentWeekBreakdown(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { getStudentWeekBreakdown } = await import('../services/curriculumCompletionService');
+    const result = await getStudentWeekBreakdown(
+      req.params.cohortId as string, req.params.enrollmentId as string,
+    );
+    if (!result) return res.status(404).json({ error: 'Enrollment not found in this cohort' });
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
 // -- Admin Enrollment --
 
 export async function handleCreateEnrollment(req: Request, res: Response, next: NextFunction) {

@@ -167,6 +167,32 @@ retarget them without a deploy.
 
 ---
 
+## Guided prompt inputs
+
+Authored prompts carry bracketed fill-ins — `[paste the complaint verbatim]`,
+`[describe option A]`. The card turns each one into a labelled field in a **Your answers**
+panel above the prompts. Typing an answer fills **every** prompt that uses that placeholder,
+live, and Copy hands over the finished text.
+
+- Placeholders are deduped by exact text, so one answer feeds several prompts; the label says
+  *"used in N prompts"* when it does.
+- Long or paste-style fill-ins get a textarea, short ones a single-line input
+  (`extractPromptFields` decides, from length and words like *paste*, *describe*, *list*).
+- An **unanswered placeholder is left visible** rather than blanked. A silent gap reads as
+  finished and quietly asks Claude to work from nothing; `[describe option A]` is honest about
+  what is missing. A note above the prompt says so.
+- A one-character bracket (`[1]`, `[a]`) is treated as a footnote marker, not a fill-in.
+- **These answers never leave the browser.** They live in the local draft alongside the rest of
+  the student's in-progress work, are not part of the submission payload, and never appear in an
+  analytics event. The panel says this on the card.
+- Instructor preview shows the authored prompt with its placeholders intact and no input panel.
+
+Why it works this way: the first version expected the student to copy the prompt and hand-edit
+the brackets inside Claude. That is easy to skip, and the failure is silent — you end up sending
+a prompt that still literally says `[describe your role]`.
+
+---
+
 ## Analytics
 
 The renderer emits events through the existing `frontend/src/utils/tracker.ts` layer, which
@@ -223,6 +249,28 @@ cd frontend && CI=true ../node_modules/.bin/react-scripts test --watchAll=false 
 All four suites run without a database and are therefore inside the CI gate.
 
 ---
+
+## Status
+
+**Live on production since 2026-09-08**, 13 cards seeded on `accelerator_prod` under program
+`92b98a72`. Verified in the live database (not from the seed's own output): 13 cards / weeks
+0-12 / all published / no duplicates / re-run gives `0 created, 13 updated` / 4 stages, 3
+prompts and the `data-claude-studio="1"` marker on all 13 / `data-cert-active` = 0 for weeks
+0-6 and 1 for 7-12.
+
+Three defects were found by a human opening the card in a browser, and **none of them by any
+automated check** — worth remembering when the next type ships:
+
+1. **The card title printed twice** in the workspace (chrome header + the renderer's own `<h2>`).
+2. **The intro landed three times** on the way in (tile description → card body → restated by
+   the scenario). The body no longer prints it when a scenario exists.
+3. **Block headings printed twice** on Project and Artifact — `ParsedBlock.html` is innerHTML
+   and already contains the `<h4>`, which was also rendered separately. The render proof counted
+   structure correctly the whole time and was blind to it; it now flags any `<h4>` text
+   appearing more than once, self-tested by injecting a duplicate.
+
+The guided prompt inputs (above) also came from that session: the first version expected students
+to hand-edit `[bracketed]` placeholders after pasting.
 
 ## Known deferred work
 

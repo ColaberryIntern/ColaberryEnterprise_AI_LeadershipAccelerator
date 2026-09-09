@@ -37,12 +37,42 @@ describe('lifecycle vocabulary', () => {
     }
   });
 
-  it('records that enrolment cannot yet be joined to acquisition', () => {
-    // This is a fact about the schema, not a preference. enrollments carries no
-    // lead/visitor/person foreign key. If someone adds one and flips this flag,
-    // this test should be updated deliberately — not discovered by a wrong chart.
-    expect(LIFECYCLE.enrolled_student.joinable_today).toBe(false);
+  it('records that enrolment CAN now be joined to acquisition', () => {
+    // This flipped on 2026-09-08, deliberately: the identity layer landed, so
+    // enrollments.person_id exists and is backfilled and the stage connects to
+    // the ones before it by a real key rather than an email string match.
+    //
+    // The original test said "if someone adds the key and flips this flag, update
+    // this test deliberately rather than discovering it via a wrong chart." This
+    // is that deliberate update.
+    expect(LIFECYCLE.enrolled_student.joinable_today).toBe(true);
+    expect(LIFECYCLE.lapsed.joinable_today).toBe(true);
+  });
+
+  it('never assigns graduate, because completion is not part of this business', () => {
+    // Ali, 2026-09-09: "Complete is never. The goal is to keep the subscription
+    // active as long as possible." A graduate is a category error here, so the
+    // stage stays in the vocabulary with a note rather than being quietly absent
+    // and read as unimplemented.
+    expect(LIFECYCLE.graduate.joinable_today).toBe(false);
+    expect(LIFECYCLE.graduate.gap).toMatch(/subscription/i);
+    expect(LIFECYCLE.graduate.gap).toMatch(/LAPSED/);
+  });
+
+  it('treats lapsing as the state worth watching', () => {
+    // The exit, not the finish line. Getting this wrong counted 62 people who
+    // had left as active students.
+    expect(LIFECYCLE.lapsed.evidence).toMatch(/withdrawn/);
+    expect(LIFECYCLE.lapsed.definition).toMatch(/subscription/i);
+  });
+
+  it('still cannot join the two stages with no trustworthy source', () => {
+    // active_learner needs attendance, which is flagged unreliable.
+    // returning_customer needs payments, which are not in this database.
+    // Neither was fixed by the identity layer, and saying so keeps the two
+    // reasons distinct.
     expect(LIFECYCLE.active_learner.joinable_today).toBe(false);
+    expect(LIFECYCLE.returning_customer.joinable_today).toBe(false);
   });
 
   it('partitions stages into joinable and unjoinable with nothing lost', () => {

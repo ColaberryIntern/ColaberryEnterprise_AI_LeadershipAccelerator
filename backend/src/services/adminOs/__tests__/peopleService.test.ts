@@ -134,6 +134,12 @@ describe('people roster', () => {
     expect(sql).toContain("'enrolled_student'");
     expect(sql).toContain("'applicant'");
     expect(sql).toContain("'lead'");
+    // 'lapsed' is assigned, and 'graduate' is NOT. Complete is never in a
+    // subscription business; someone who stops has lapsed. Before this, a
+    // withdrawn enrolment read as enrolled_student and inflated the active count
+    // by 62 people.
+    expect(sql).toContain("THEN 'lapsed'");
+    expect(sql).toContain("e.status = 'withdrawn'");
     expect(sql).not.toContain("THEN 'graduate'");
     expect(sql).not.toContain("THEN 'active_learner'");
     expect(sql).not.toContain("THEN 'returning_customer'");

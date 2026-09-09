@@ -33,6 +33,9 @@ import {
 import { normalizeFacetList } from './caseStudyFilterService';
 import {
   assertNever,
+  isCaseStudyMetricPayload,
+  isCaseStudyMetricPlain,
+  isCaseStudyMetricShape,
   isCaseStudyVerificationMethod,
   isPublicVerificationClass,
 } from '../../types/caseStudyGuards';
@@ -40,6 +43,7 @@ import type {
   CaseStudyArtifactRef,
   CaseStudyContributor,
   CaseStudyMetricEntry,
+  CaseStudyMetricShape,
   CaseStudyRepositoryRef,
   CaseStudyRoadmapItem,
   CaseStudySnapshotContent,
@@ -51,6 +55,7 @@ import type {
 import type {
   PublicCaseStudyArchitecture,
   PublicCaseStudyArtifact,
+  PublicCaseStudyDetail,
   PublicCaseStudyContributor,
   PublicCaseStudyMeasurement,
   PublicCaseStudyMetric,
@@ -164,7 +169,33 @@ export function projectMetric(metric: CaseStudyMetricEntry): PublicCaseStudyMetr
     sample: text(ctx?.sample) || null,
     methodology: text(ctx?.methodology) || null,
     limitations: lines(ctx?.limitations),
+    /*
+     * SHAPE AND PAYLOAD CROSS TOGETHER OR NOT AT ALL. A shape with no matching
+     * payload would tell the renderer to draw a meter it has no numbers for,
+     * so the guard runs here rather than trusting whatever was stored: a record
+     * written before the guards existed, or hand-edited in the admin, must
+     * degrade to the plain definition list, not to a broken chart.
+     */
+    shape: shapedPair(metric),
+    payload: isCaseStudyMetricPayload(metric.payload) ? metric.payload : null,
+    plain: isCaseStudyMetricPlain(metric.plain) ? metric.plain : null,
+    /*
+     * The command crosses; the hash and the timestamp do not. A reader can act
+     * on "run this and you get the same number". A sha256 of the collector
+     * output tells them nothing and invites reading a hash as proof.
+     */
+    reproduceCommand: text(metric.collected?.reproduceCommand) || null,
   };
+}
+
+/**
+ * The shape, but only when the payload actually backs it and agrees with it.
+ * Returns null on any disagreement, which is the renderer's signal to fall back.
+ */
+function shapedPair(metric: CaseStudyMetricEntry): CaseStudyMetricShape | null {
+  if (!isCaseStudyMetricShape(metric.shape)) return null;
+  if (!isCaseStudyMetricPayload(metric.payload)) return null;
+  return metric.payload.shape === metric.shape ? metric.shape : null;
 }
 
 export const projectMetrics = (metrics: readonly CaseStudyMetricEntry[]): PublicCaseStudyMetric[] =>
@@ -227,6 +258,36 @@ export function projectDiagramSource(value: unknown): string | null {
   if (source.length > MAX_DIAGRAM_SOURCE_CHARS) return null;
   if (source.includes('<')) return null;
   return source;
+}
+
+/**
+ * The narrated walkthrough, or null.
+ *
+ * Every URL goes through `safeHttpUrl` for the same reason the artifact URLs do: these are
+ * admin-editable and land in `src` attributes, so a `javascript:` value would be stored
+ * XSS. A walkthrough with no playable `url` is dropped whole rather than rendered as an
+ * empty player with a caption track attached to nothing.
+ */
+export function projectWalkthroughVideo(
+  content: CaseStudySnapshotContent,
+): PublicCaseStudyDetail['walkthroughVideo'] {
+  const v = content?.walkthroughVideo;
+  if (!v) return null;
+  const url = safeHttpUrl(v.url);
+  const title = text(v.title);
+  if (!url || !title) return null;
+  const duration = typeof v.durationSeconds === 'number'
+    && Number.isFinite(v.durationSeconds) && v.durationSeconds > 0
+    ? Math.round(v.durationSeconds) : null;
+  return {
+    url,
+    title,
+    captionsUrl: safeHttpUrl(v.captionsUrl),
+    posterUrl: safeHttpUrl(v.posterUrl),
+    durationSeconds: duration,
+    narrationSource: v.narrationSource === 'synthetic' || v.narrationSource === 'human'
+      ? v.narrationSource : null,
+  };
 }
 
 export function projectArchitecture(

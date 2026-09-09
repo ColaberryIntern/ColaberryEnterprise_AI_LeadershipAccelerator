@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import api from '../../utils/api';
 import AdminPreviewStackPanel from '../../components/admin/AdminPreviewStackPanel';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import ProjectDeliveryView from './components/ProjectDeliveryView';
 import { TrustSignal } from '../../components/admin/shell/trust';
 
 interface CohortProjectStats {
@@ -29,7 +30,16 @@ const PHASE_COLORS: Record<string, string> = {
 const maturityColor = (pct: number) =>
   pct >= 70 ? 'var(--status-success)' : pct >= 30 ? 'var(--status-warning)' : 'var(--status-danger)';
 
-function AdminProjectOverview() {
+interface ProjectOverviewProps {
+  /** Cohort to open expanded, when reached from a cohort drill-down on the
+   *  Accelerator page. Undefined when reached globally, where the page stays an
+   *  all-cohort roll-up and applies no class filter. */
+  initialCohortId?: string;
+}
+
+function AdminProjectOverview({ initialCohortId }: ProjectOverviewProps = {}) {
+  // Delivery leads; the legacy cohort roll-up stays reachable rather than deleted.
+  const [view, setView] = useState<'delivery' | 'cohorts'>('delivery');
   const [stats, setStats] = useState<CohortProjectStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +47,7 @@ function AdminProjectOverview() {
   const [addForm, setAddForm] = useState({ full_name: '', email: '', company: '', title: '', phone: '' });
   const [adding, setAdding] = useState(false);
   const [addResult, setAddResult] = useState<{ success?: boolean; message?: string; error?: string } | null>(null);
-  const [expandedCohort, setExpandedCohort] = useState<string | null>(null);
+  const [expandedCohort, setExpandedCohort] = useState<string | null>(initialCohortId ?? null);
   const [cohortStudents, setCohortStudents] = useState<any[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [selectedProject, setSelectedProject] = useState<any>(null);
@@ -49,6 +59,22 @@ function AdminProjectOverview() {
       .catch(err => setError(err.response?.data?.error || 'Failed to load project overview'))
       .finally(() => setLoading(false));
   }, []);
+
+  // The row's own expand handler fetches on CLICK, so a cohort expanded from
+  // `initialCohortId` would render an open, permanently empty row. This does the
+  // same fetch once for that case. Deliberately not merged into the click
+  // handler: that one also collapses, and reusing it here would need a
+  // synthetic event.
+  useEffect(() => {
+    if (!initialCohortId) return;
+    let cancelled = false;
+    setLoadingStudents(true);
+    api.get(`/api/admin/projects/cohort/${initialCohortId}/students`)
+      .then(res => { if (!cancelled) setCohortStudents(res.data.students || []); })
+      .catch(() => { if (!cancelled) setCohortStudents([]); })
+      .finally(() => { if (!cancelled) setLoadingStudents(false); });
+    return () => { cancelled = true; };
+  }, [initialCohortId]);
 
   // Per-page trust signal — derived from project-overview coverage.
   const trust: TrustSignal = useMemo(() => {
@@ -126,7 +152,27 @@ function AdminProjectOverview() {
         </div>
       </PageHeader>
 
-      {loading && (
+      {/* Delivery is the primary view: it answers "what has each student built,
+          and which builds are close to being a case study", which is what this
+          page is for. The original cohort roll-up is kept behind the second tab
+          rather than deleted — it owns the roster, portal-access toggles and the
+          add-student flow, none of which the delivery view replaces. */}
+      <ul className="nav nav-pills mb-3">
+        <li className="nav-item">
+          <button className={`nav-link${view === 'delivery' ? ' active' : ''}`} onClick={() => setView('delivery')}>
+            Delivery &amp; Timeline
+          </button>
+        </li>
+        <li className="nav-item">
+          <button className={`nav-link${view === 'cohorts' ? ' active' : ''}`} onClick={() => setView('cohorts')}>
+            Cohort Roster
+          </button>
+        </li>
+      </ul>
+
+      {view === 'delivery' && <ProjectDeliveryView cohortId={initialCohortId} />}
+
+      {view === 'cohorts' && loading && (
         <div className="text-center py-5">
           <div className="spinner-border text-primary" role="status">
             <span className="visually-hidden">Loading...</span>
@@ -134,9 +180,9 @@ function AdminProjectOverview() {
         </div>
       )}
 
-      {!loading && error && <div className="alert alert-danger">{error}</div>}
+      {view === 'cohorts' && !loading && error && <div className="alert alert-danger">{error}</div>}
 
-      {!loading && !error && (
+      {view === 'cohorts' && !loading && !error && (
         <>
           {/* Add Student Modal */}
           {showAddModal && (
@@ -339,6 +385,25 @@ function AdminProjectOverview() {
                                               <td style={{ paddingLeft: 24 }}>
                                                 <div className="fw-medium">{s.full_name}</div>
                                                 <div className="text-muted" style={{ fontSize: 10 }}>{s.email}{s.company ? ` · ${s.company}` : ''}</div>
+                                                {/* The Command Center is the student's own GitHub Pages site, built by
+                                                    STORY-000 at the root of their repo. It is a public URL, so it opens
+                                                    from here — it is not a local-only thing. Absent until they publish
+                                                    Pages, which is why this renders only when the URL exists rather
+                                                    than showing a dead button for everyone else. */}
+                                                {s.command_center_url && (
+                                                  <a
+                                                    href={s.command_center_url}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="d-inline-flex align-items-center gap-1 mt-1"
+                                                    style={{ fontSize: 10 }}
+                                                    title={s.command_center_url}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                  >
+                                                    <i className="ri-dashboard-3-line" aria-hidden="true" />
+                                                    Command Center
+                                                  </a>
+                                                )}
                                               </td>
                                               <td>{s.organization_name || <span className="text-muted">Not set</span>}</td>
                                               <td className="text-center">

@@ -1,0 +1,49 @@
+WEBVTT
+
+1
+00:00:00.500 --> 00:00:09.590
+Course completion is not capability. A record saying someone watched a module answers a question nobody outside the classroom is asking.
+
+2
+00:00:10.700 --> 00:00:20.460
+What is needed is evidence a sceptical reader can inspect: which competency, backed by which piece of work, recorded when, and still standing now.
+
+3
+00:00:21.600 --> 00:00:28.260
+The learner command centre. Solid on the skill wheel is what has been verified, not what has been attempted.
+
+4
+00:00:29.400 --> 00:00:36.350
+Six steps from a lesson to a portfolio, and it matters which of them are automatic and which are deliberately not.
+
+5
+00:00:38.400 --> 00:00:46.860
+The applied build a learner receives: what done means, which requirement it fulfils, and the repository that stays theirs.
+
+6
+00:00:48.000 --> 00:00:55.020
+A self-claim and a piece of applied work are not weighted the same, because a claim is not proof.
+
+7
+00:00:56.100 --> 00:01:03.100
+The build plan written into the learner's own repository, each sync carrying a correlation id.
+
+8
+00:01:04.200 --> 00:01:12.180
+Every write is idempotency-keyed, and a record that can be revised after the fact is a claim rather than evidence.
+
+9
+00:01:13.300 --> 00:01:22.650
+That makes the operation idempotent by construction: running it twice produces the same state, rather than counting the same work twice.
+
+10
+00:01:23.800 --> 00:01:31.660
+Two independent gates. Collapsing them into one would let approval imply consent, or consent imply approval.
+
+11
+00:01:32.800 --> 00:01:42.460
+Updating a competency the instant a submission lands was considered and not pursued. The record says so rather than implying the loop is closed.
+
+12
+00:01:43.600 --> 00:01:47.740
+Every claim on the page is pinned to a commit you can open.

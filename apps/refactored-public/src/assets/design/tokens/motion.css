@@ -1,13 +1,11 @@
-/* Motion — Instrumental: fast and exact; nothing decorative. Shared by both variants.
-   fast → hover/press/toggles · base → menus/toasts/accordions · slow → modals/view changes.
-   Exits run at fast with the exit curve. Never hand-pick durations. Keyframes + utilities live in css/motion.css. */
-:root{
-  --motion-fast:90ms; /* @kind other */
-  --motion-base:160ms; /* @kind other */
-  --motion-slow:240ms; /* @kind other */
-  --ease:cubic-bezier(0.2,0,0,1); /* @kind other */
-  --ease-enter:cubic-bezier(0,0,0.2,1); /* @kind other */
-  --ease-exit:cubic-bezier(0.3,0,1,1); /* @kind other */
-  --enter-distance:6px;
-  --press-scale:0.99; /* @kind other */
+/* Motion tokens. Instrumental only — motion here marks a state change, it never
+   decorates. Everything respects prefers-reduced-motion at the base layer. */
+:root {
+  --ease: cubic-bezier(0.2, 0, 0.1, 1);
+  --dur-fast: 120ms;
+  --dur: 200ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur: 0ms; }
 }

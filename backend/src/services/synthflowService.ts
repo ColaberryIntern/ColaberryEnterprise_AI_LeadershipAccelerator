@@ -22,7 +22,7 @@ async function emitFailureEvent(params: Parameters<typeof import('./aiEventServi
 interface VoiceCallParams {
   name: string;
   phone: string;
-  callType: 'welcome' | 'interest' | 'callback';
+  callType: 'welcome' | 'interest' | 'callback' | 'internship_interview';
   /**
    * Which brand is calling. Absent means the Colaberry bootcamp agents, which is what
    * every existing caller means and why this is optional rather than required.
@@ -71,14 +71,38 @@ interface SynthflowResponse {
  * charity for help, spoken to as a sales lead. So an unconfigured slot returns empty and the
  * caller skips deterministically rather than dialling with somebody else's voice.
  */
-export function resolveAgentId(params: { callType: 'welcome' | 'interest' | 'callback'; brandSlug?: string }): string {
+export function resolveAgentId(params: { callType: 'welcome' | 'interest' | 'callback' | 'internship_interview'; brandSlug?: string }): string {
+  // AI Internship interview. FIRST and unconditional: an applicant expecting a
+  // qualification interview must never reach an agent carrying a bootcamp sales
+  // script. Unset returns '' and the caller skips with `no_agent_id`.
+  if (params.callType === 'internship_interview' || params.brandSlug === 'colaberry-internship') {
+    return env.synthflowInternshipAgentId;
+  }
   if (params.brandSlug === 'ai-flotation') return env.synthflowAiFlotationAgentId;
 
-  // OpportunityLift. Its OWN agent, and no fallback: the generic callback agent below
-  // carries Colaberry's saved training-site script, so falling through to it would have
-  // answered a scholarship applicant as the bootcamp's callback line. An unset slot
-  // returns '' here, which `triggerVoiceCall` turns into a `no_agent_id` skip.
-  if (params.brandSlug === 'cpn') return env.synthflowCpnAgentId;
+  // OpportunityLift. Its own slot when configured, otherwise it BORROWS THE AI
+  // FLOTATION SHELL - and the distinction between those two fallbacks is the whole
+  // point of this branch.
+  //
+  // The Colaberry agents below carry their own saved scripts. Falling through to one
+  // of those would answer a scholarship applicant as the bootcamp's callback line: a
+  // person asking a charity for help, spoken to as a sales lead. That was the defect,
+  // and it stays fixed - CPN never reaches them.
+  //
+  // The AI Flotation agent is different in kind. Its saved prompt is literally
+  // `{prompt}`, so it has no opinions of its own and whatever we send at call time
+  // IS the call. Borrowing a shell is not borrowing a voice. That is the architecture
+  // voiceCallPrompt.ts describes: "one agent and one phone number can serve several
+  // brands, the instructions can change without touching a vendor dashboard."
+  //
+  // Ali, 2026-09-08, asked for this explicitly while phone-number provisioning is
+  // blocked, and it is safe precisely because the shell holds no script. The cost is
+  // real and not hidden: the CALLER ID is AI Flotation's number, so the prompt opens
+  // by saying who it is calling for and /scholarships/ warns that the number may not
+  // look like ours. Set SYNTHFLOW_CPN_AGENT_ID to take that cost away.
+  if (params.brandSlug === 'cpn') {
+    return env.synthflowCpnAgentId || env.synthflowAiFlotationAgentId;
+  }
 
   // 'callback' (inbound "call me now") uses its own dedicated agent so it never
   // conflates with Maya's proactive interest calls. Falls back to the interest

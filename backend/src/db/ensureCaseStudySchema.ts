@@ -217,9 +217,36 @@ export const CASE_STUDY_STATEMENTS: string[] = [
      verified_at TIMESTAMPTZ,
      is_headline BOOLEAN NOT NULL DEFAULT false,
      publishable BOOLEAN NOT NULL DEFAULT false,
+     shape VARCHAR(20),
+     payload JSONB,
+     plain JSONB,
+     collector_key VARCHAR(60),
+     collected_sha VARCHAR(64),
+     reproduce_command TEXT,
+     output_hash VARCHAR(64),
+     collected_at TIMESTAMPTZ,
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
    )`,
+  // The eight shaped-metric columns again, as ALTERs, and NOT redundantly: the
+  // CREATE above is a no-op on every database that already has this table, so
+  // without these an existing deployment would report them missing on every
+  // boot forever while Sequelize kept selecting them. The header at the bottom
+  // of this file says exactly that; this is the case it was written for.
+  //
+  // All nullable, no backfill, nothing altered or dropped. A metric row written
+  // before shapes existed keeps loading, gating and rendering as it did.
+  `ALTER TABLE case_study_metrics ADD COLUMN IF NOT EXISTS shape VARCHAR(20)`,
+  `ALTER TABLE case_study_metrics ADD COLUMN IF NOT EXISTS payload JSONB`,
+  `ALTER TABLE case_study_metrics ADD COLUMN IF NOT EXISTS plain JSONB`,
+  `ALTER TABLE case_study_metrics ADD COLUMN IF NOT EXISTS collector_key VARCHAR(60)`,
+  `ALTER TABLE case_study_metrics ADD COLUMN IF NOT EXISTS collected_sha VARCHAR(64)`,
+  `ALTER TABLE case_study_metrics ADD COLUMN IF NOT EXISTS reproduce_command TEXT`,
+  `ALTER TABLE case_study_metrics ADD COLUMN IF NOT EXISTS output_hash VARCHAR(64)`,
+  `ALTER TABLE case_study_metrics ADD COLUMN IF NOT EXISTS collected_at TIMESTAMPTZ`,
+  // Partial: almost every row is hand-authored and carries no collector, and the
+  // only query needing this asks which metrics a sync has to recompute.
+  `CREATE INDEX IF NOT EXISTS idx_cs_metrics_collector ON case_study_metrics (case_study_id, collector_key) WHERE collector_key IS NOT NULL`,
   `CREATE INDEX IF NOT EXISTS idx_cs_metrics_case_publishable ON case_study_metrics (case_study_id, publishable)`,
   `CREATE INDEX IF NOT EXISTS idx_cs_metrics_verification_class ON case_study_metrics (verification_class)`,
   // ONE row per (case study, metric key). This is a correctness constraint, not a

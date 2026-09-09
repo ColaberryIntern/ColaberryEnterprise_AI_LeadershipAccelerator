@@ -22,6 +22,7 @@ const PortalProgressPage = lazy(() => import('../pages/portal/PortalProgressPage
 const TodayShell = lazy(() => import('../pages/portal/today/TodayShell'));
 const SettingsPage = lazy(() => import('../pages/portal/settings/SettingsPage'));
 const PathPage = lazy(() => import('../pages/portal/path/PathPage'));
+const InternshipPage = lazy(() => import('../pages/portal/internship/InternshipPage'));
 const SchedulePage = lazy(() => import('../pages/portal/schedule/SchedulePage'));
 const EventsPage = lazy(() => import('../pages/portal/events/EventsPage'));
 const PointsPage = lazy(() => import('../pages/portal/points/PointsPage'));
@@ -63,6 +64,7 @@ const portalRoutes = (
       <Route path="/portal/mgmt-enter" element={<PortalMgmtEnterPage />} />
       <Route path="/portal/settings" element={<SettingsPage />} />
       <Route path="/portal/path" element={<PathPage />} />
+      <Route path="/portal/internship" element={<InternshipPage />} />
       <Route path="/portal/schedule" element={<SchedulePage />} />
       {/* Public event list (CCPP Registration-labelled events). Ungated like
           Schedule — these are open-to-the-community events, not paid content. */}

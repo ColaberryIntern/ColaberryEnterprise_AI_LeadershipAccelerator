@@ -79,6 +79,31 @@ export interface AcquisitionPanel {
   leadScoreMax: number;
 }
 
+/**
+ * Data & trust — the brief's last profile section, and the one this whole
+ * workstream has been arguing for.
+ *
+ * It answers "how much of this should you believe": which source records
+ * resolve to this person, how they were matched, whether consent was recorded,
+ * how fresh the data is, and — most usefully — what CANNOT be computed for them
+ * and why. A gap stated is a gap a reader can act on; a gap left blank reads as
+ * a zero.
+ */
+export interface TrustPanel {
+  /** Source records that resolve to this person. */
+  leadIds: number[];
+  enrollmentIds: string[];
+  /** How identity was established. Email is the only automatic method. */
+  matchMethod: 'exact_email' | 'none';
+  /** False for the 86 enrolments with no acquisition record. */
+  tracedToLead: boolean;
+  consentRecorded: boolean | null;
+  /** Most recent activity we hold, from the timeline. */
+  lastActivity: string | null;
+  /** What we cannot say about this person, and why. Never rendered as zero. */
+  gaps: Array<{ field: string; reason: string }>;
+}
+
 export interface AppointmentRow {
   kind: 'appointment' | 'strategy_call';
   title: string | null;
@@ -162,6 +187,7 @@ export interface PersonProfile {
    * shown, and explained rather than silently missing.
    */
   intentSuppressedReason?: string;
+  trust?: TrustPanel;
   journey?: JourneySummary;
   /** One ordered history across every domain the caller may see. */
   timeline?: TimelineEvent[];
@@ -234,6 +260,7 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
             COALESCE(e.company, l.company) AS company,
             COALESCE(e.title, l.title) AS title,
             (CASE
+               WHEN e.status = 'withdrawn' THEN 'lapsed'
                WHEN e.email IS NOT NULL THEN 'enrolled_student'
                WHEN l.pipeline_stage IS NOT NULL AND l.pipeline_stage <> 'new_lead' THEN 'applicant'
                ELSE 'lead'
@@ -246,7 +273,12 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
      ) l
      FULL OUTER JOIN (
        SELECT lower(btrim(email)) AS email, max(full_name) AS name, max(company) AS company,
-              max(title) AS title
+              max(title) AS title,
+              -- Most advanced status wins, so one completed enrolment makes the
+              -- person a graduate even if they also hold an active one.
+              -- Any ACTIVE enrolment outranks a withdrawn one: someone who left a
+              -- cohort and re-enrolled is current, not lapsed.
+              MAX(CASE WHEN status::text = 'active' THEN 'active' ELSE 'withdrawn' END) AS status
        FROM enrollments WHERE lower(btrim(email)) = :email GROUP BY lower(btrim(email))
      ) e ON e.email = l.email`,
     { type: QueryTypes.SELECT, replacements: { email } },
@@ -450,6 +482,58 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
   });
 
   profile.journey = await buildJourney(email, leadIds, enrollmentIds, query.sections, profile.timeline);
+
+  // ── Data & trust ──────────────────────────────────────────────────────────
+  //
+  // The gaps are derived from what the lifecycle contract already records as
+  // unjoinable, plus what is genuinely absent for THIS person — so the list is
+  // specific rather than a generic disclaimer nobody reads.
+  const gaps: Array<{ field: string; reason: string }> = [];
+  if (leadIds.length === 0) {
+    gaps.push({
+      field: 'Acquisition history',
+      reason: 'No lead record. This person enrolled without ever being captured as a lead, '
+        + 'so there is nothing recorded about how they found us.',
+    });
+  }
+  if (profile.acquisition && profile.acquisition.consentContact === null) {
+    gaps.push({
+      field: 'Contact consent',
+      reason: 'Never recorded. This is not the same as consent being refused.',
+    });
+  }
+  // Corrected 2026-09-08. The earlier wording said no completion state existed —
+  // it does: 'completed' is a value in enum_enrollments_status and the stage
+  // expression now reads it. The real gap is that NOTHING SETS IT.
+  gaps.push({
+    field: 'Graduation',
+    reason: 'Computable but never set. enrollments.status supports "completed", and this profile '
+      + 'reads it, but no enrolment has ever carried it (464 active, 62 withdrawn, 0 completed as '
+      + 'of 2026-09-08). Nothing marks a student complete when their cohort ends, so an empty '
+      + 'graduate count means "not recorded", not "did not graduate".',
+  });
+  gaps.push({
+    field: 'Placement and employment',
+    reason: 'Not tracked anywhere in this database, so outcomes beyond graduation cannot be '
+      + 'reported at all.',
+  });
+  if (enrollmentIds.length > 0) {
+    gaps.push({
+      field: 'Lifetime revenue',
+      reason: 'No local payments table. Transactions live in PaySimple and are not yet joined, '
+        + 'so per-person revenue is unavailable rather than zero.',
+    });
+  }
+
+  profile.trust = {
+    leadIds,
+    enrollmentIds,
+    matchMethod: leadIds.length > 0 && enrollmentIds.length > 0 ? 'exact_email' : 'none',
+    tracedToLead: profile.tracedToLead,
+    consentRecorded: profile.acquisition?.consentContact ?? null,
+    lastActivity: profile.journey.lastActivity,
+    gaps,
+  };
 
   // The KPI has to obey the same rule as the field, or the header contradicts
   // the panel below it — which is worse than showing the number in both places.

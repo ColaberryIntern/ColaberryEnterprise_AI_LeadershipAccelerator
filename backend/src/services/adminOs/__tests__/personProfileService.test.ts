@@ -246,6 +246,56 @@ describe('person profile', () => {
     expect(profile!.acquisition!.leadScoreMax).toBe(105);
   });
 
+  // ── Data & trust: gaps are stated, never left blank ──────────────────────
+
+  it('names the acquisition gap for a person with no lead', async () => {
+    // The 86. A blank acquisition panel reads as "nothing happened"; the gap
+    // says "this person was never captured as a lead", which is actionable.
+    query.mockReset();
+    query.mockResolvedValueOnce([{ ...IDENTITY, traced: false }]);
+    query.mockResolvedValue([]);
+
+    const profile = await getPersonProfile({
+      email: 'someone@example.com',
+      sections: sectionsFor('owner'),
+      visibleEnrollmentIds: null,
+    });
+
+    const fields = profile!.trust!.gaps.map((g) => g.field);
+    expect(fields).toContain('Acquisition history');
+    expect(profile!.trust!.tracedToLead).toBe(false);
+    expect(profile!.trust!.matchMethod).toBe('none');
+  });
+
+  it('says graduation is computable but never set, not that it is impossible', async () => {
+    // Corrected 2026-09-08. I had reported that no completion status existed;
+    // 'completed' IS a value in enum_enrollments_status and the stage expression
+    // reads it. The real gap is that nothing ever sets it — a process gap, not a
+    // schema one — and the two call for different fixes.
+    const profile = await getPersonProfile({
+      email: 'someone@example.com',
+      sections: sectionsFor('owner'),
+      visibleEnrollmentIds: null,
+    });
+    const grad = profile!.trust!.gaps.find((g) => g.field === 'Graduation');
+    expect(grad).toBeDefined();
+    expect(grad!.reason).toMatch(/never set/i);
+    expect(grad!.reason).toMatch(/not "did not graduate"/);
+    // Placement is genuinely untracked, and stays a separate, harder gap.
+    expect(profile!.trust!.gaps.some((g) => g.field === 'Placement and employment')).toBe(true);
+  });
+
+  it('reports source record ids so any figure can be traced back', async () => {
+    const profile = await getPersonProfile({
+      email: 'someone@example.com',
+      sections: sectionsFor('owner'),
+      visibleEnrollmentIds: null,
+    });
+    expect(profile!.trust).toBeDefined();
+    expect(Array.isArray(profile!.trust!.leadIds)).toBe(true);
+    expect(Array.isArray(profile!.trust!.enrollmentIds)).toBe(true);
+  });
+
   // ── The timeline, which the first version omitted entirely ───────────────
 
   it('gates timeline domains by section, like the panels', async () => {

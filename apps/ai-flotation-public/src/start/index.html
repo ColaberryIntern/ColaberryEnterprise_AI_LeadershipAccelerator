@@ -528,6 +528,20 @@
           pollPreview(token, 0);
         }
 
+        /*
+         * The other form, asking for the write-up to start.
+         *
+         * "Call me now" lives in its own IIFE - deliberately, since the two forms share
+         * nothing but the API base. That meant it could not see `startPreview`, and calling
+         * it threw on EVERY call request; the throw was caught by the handler meant for a
+         * failed submission, so a visitor whose call was already being placed was told to
+         * try again. This is the one thing the two scopes now share, and it is one-way.
+         */
+        document.addEventListener('flotation:preview-token', function (e) {
+          var token = e && e.detail && e.detail.token;
+          if (token) startPreview(token);
+        });
+
         function pollPreview(token, attempt) {
           if (attempt >= PREVIEW_MAX_ATTEMPTS) {
             showPreviewStatus('We are still working on your write-up. Reload this page to check again.');
@@ -1144,13 +1158,34 @@
               status.textContent = 'Asked. Your phone should ring shortly — if it does not, we still have your details and will be in touch.';
               status.setAttribute('data-state', 'ok');
               form.reset();
-              // Same snake_case wire format as the written form above. This line has been
-              // wrong since the write-up panel shipped: the token was always undefined, so
-              // the panel never opened by itself and only ever worked from a ?token= link.
+              // Same snake_case wire format as the written form above.
+              //
+              // `startPreview` lives in the OTHER IIFE, so calling it from here threw
+              // "startPreview is not defined" on every single call request. The throw landed
+              // in the .catch below, which exists for a FAILED submission - so a visitor
+              // whose call was already on its way was told "please try again", and a second
+              // press meant a second lead and a second phone call.
+              //
+              // An event rather than a shared global: the two forms were deliberately kept
+              // in separate scopes, and this keeps them there while letting one tell the
+              // other that a token exists.
               var callPayloadId = (result.body && (result.body.raw_payload_id || result.body.rawPayloadId)) || null;
-              if (callPayloadId) startPreview(callPayloadId);
+              if (callPayloadId) {
+                try {
+                  document.dispatchEvent(
+                    new CustomEvent('flotation:preview-token', { detail: { token: callPayloadId } }),
+                  );
+                } catch (e) {
+                  // The write-up is a bonus on this path; the call is the promise. Never let
+                  // this cost the visitor a correct success message.
+                  if (window.console && console.warn) console.warn('[callme] preview kick-off failed', e);
+                }
+              }
             })
             .catch(function (err) {
+              // Only reachable for a submission that actually failed: everything after the
+              // success message is now guarded, so a bug in the write-up hand-off can no
+              // longer be reported to a visitor as a failed request.
               fail((err && err.message ? err.message : 'Something went wrong.') + ' Your details are still here — please try again.');
             })
             .finally(function () {

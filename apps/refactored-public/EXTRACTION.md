@@ -1,97 +1,39 @@
-# EXTRACTION.md — Refactored.ai
+# Extracting refactored-public
 
-What must travel with this application if it is ever lifted out of the ecosystem
-repository. Source code is the easy half; the database rows below are the half teams
-forget, and an app whose `lead_sources.slug` nobody remembers becomes un-extractable.
+What would have to move with this app if it were lifted into its own repository.
 
-## App-owned source
+## Code it depends on
 
-```
-apps/refactored-public/
-├── package.json
-├── brand.config.js
-├── build.js
-├── src/index.html
-└── EXTRACTION.md
-```
-
-## Workspace dependencies
-
-| Package | Why |
-|---|---|
-| `packages/app-build` | static build (copy + token substitution + tracker inline) |
-| `packages/brand-system` | brand config contract and its validator |
-| `packages/tracking-sdk` | v2 tracker, inlined into `dist/assets/` at build time |
-
-No dependency on `apps/*`, `frontend/*` or `backend/*`. Enforced by
-`scripts/validate-app-boundaries.js`.
-
-## Backend API contracts consumed
-
-| Endpoint | Use |
-|---|---|
-| `POST /api/ingest?source=refactored&entry=<entry>` | lead capture |
-| `POST /api/t/event` | pageview, cta_click, form_start, form_submit |
-| `POST /api/t/identify` | signed `jx` cross-domain journey token |
-
-## Environment
-
-| Variable | Default | Notes |
+| Dependency | What for | On extraction |
 |---|---|---|
-| `PLATFORM_API_BASE` | `https://enterprise.colaberry.ai` | moves to the neutral tracking host with no code change |
+| `packages/app-build` | The whole build: copy, token substitution, asset fingerprinting | Vendor it, or replace with any static toolchain |
+| `packages/brand-system` | Validates `brand.config.js` | Vendor, or drop and validate inline |
+| `packages/tracking-sdk` | `track-v2.js`, inlined into `dist/assets/` at build time | Ships *with* the app already, so an extracted copy keeps working |
 
-## Database rows this app depends on
+`scripts/validate-app-boundaries.js` enforces that this list stays short: an app may
+import from `packages/*` and nothing else. Not from `frontend/`, not from `backend/`, not
+from another app.
 
-**Tenant**
+## Runtime services it calls
 
-| slug |
-|---|
-| `refactored` |
+Only the platform HTTP API, and only by URL — never by import.
 
-**Brand**
-
-| tenant | slug |
+| Call | Used by |
 |---|---|
-| `refactored` | `refactored` |
+| `POST /api/leads/ingest?source=refactored&entry=platform_interest` | The contact form |
+| Tracker endpoints in `track-v2.js` | Pageviews and CTA events |
+| `/login`, `/signup` on `platformApiBase` | Workspace handoff links |
 
-**Lead source**
+`platformApiBase` is a single config value. Repointing it at a different origin is the
+whole of the work required to move the app off this platform's host.
 
-| slug | notes |
-|---|---|
-| `refactored` | must carry `tenant_id` + `brand_id`; `slug` is the stable identifier the tracker sends |
+## What stays behind
 
-**Entry points**
+- `backend/src/services/pageCategoryMaps.ts` — behavioural categorisation of these routes
+- `backend/src/seeds/seedLeadSources.ts` — the `refactored` source and its entry points
+- `nginx/refactored-preview.conf` — hosting, which an extracted app would replace anyway
 
-| slug | entry_type | relationship_type |
-|---|---|---|
-| `platform_interest` | form | `platform_prospect` |
-| _(none yet)_ | | |
+## What is not portable
 
-**Brand domains**
-
-| hostname | purpose |
-|---|---|
-| `refactored.ai` | web |
-
-**Sender profile**
-
-Seeded as `draft`. Promotion to `active` requires the domain health check to pass;
-until then `assertCanSendLive` blocks live sends for this brand.
-
-## Deployment assumptions
-
-- Static hosting. `npm run build` emits `dist/` with no server-side runtime.
-- The shared platform backend is deployed **once** for the whole ecosystem. Extracting
-  this app does not mean extracting a backend.
-- DNS is not pointed by the foundation project. The domain's `activation_state` tracks
-  readiness; nothing here fakes DNS success.
-
-## Tests required after extraction
-
-1. `npm run build` succeeds with no workspace `node_modules` present.
-2. `npm run validate:boundaries` passes.
-3. A form submission creates one canonical `Lead` and one `LeadTenantContext` for
-   `refactored`/`refactored`.
-4. Submitting an email that already exists under another brand does **not** create a
-   second canonical lead.
-5. An operator of another tenant cannot read this brand's leads (expect 404).
+Nothing. The app has no dependencies, no bundler, no framework and no build step beyond
+copying files and substituting six tokens.

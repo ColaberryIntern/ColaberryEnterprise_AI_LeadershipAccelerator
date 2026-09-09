@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Contact — Refactored.ai</title>
+    <meta name="description" content="Tell us what you are trying to do and the right person will reply." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;600;700&display=swap" />
+    <link rel="stylesheet" href="/assets/site.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="masthead">
+      <div class="wrap bar">
+        <a class="logo" href="/">
+          <svg class="mark" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="2" y="3" width="20" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
+            <path d="M6 9l3 3-3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M12.5 15h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          Refactored<span class="muted">.ai</span>
+        </a>
+        <span class="spacer"></span>
+        <nav class="nav nav-desktop" aria-label="Main">
+          <a href="/platform/">Platform</a>
+          <a href="/ai-workforce/">AI workforce</a>
+          <a href="/software-factory/">Software Factory</a>
+          <a href="/learning/">Learning</a>
+          <a href="/trust-before-intelligence/">Trust</a>
+          <a href="/about/">About</a>
+          <a class="btn btn-ghost" href="{{brand.platformApiBase}}/login" data-track="workspace_handoff">Continue to workspace</a>
+        </nav>
+        <details class="nav-toggle">
+          <summary aria-label="Open menu">Menu</summary>
+          <nav class="nav" aria-label="Main, mobile">
+          <a href="/platform/">Platform</a>
+          <a href="/ai-workforce/">AI workforce</a>
+          <a href="/software-factory/">Software Factory</a>
+          <a href="/learning/">Learning</a>
+          <a href="/trust-before-intelligence/">Trust</a>
+          <a href="/about/">About</a>
+          <a href="/contact/">Contact</a>
+          <a class="btn btn-ghost" href="{{brand.platformApiBase}}/login" data-track="workspace_handoff">Continue to workspace</a>
+          </nav>
+        </details>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <div class="wrap wrap-narrow stack stack-s">
+          <p class="eyebrow">Contact</p>
+          <h1>Tell us what you are trying to do.</h1>
+          <p class="sub">A person reads these. Say what you want to happen and we will route it to whoever can actually answer.</p>
+        </div>
+      </section>
+      <section class="section" aria-labelledby="form-h">
+        <div class="wrap wrap-narrow stack stack-m">
+          <h2 id="form-h" class="visually-hidden">Contact form</h2>
+
+          <!--
+            The form posts to the canonical lead-ingest endpoint with this brand's source
+            slug and a seeded entry slug. Both are stable names, never identifiers: naming
+            a source grants no access to it.
+
+            Nothing here promises an automatic confirmation email. Mandrill reports DKIM,
+            SPF and signing all valid for this domain, so one could be sent - but a form
+            whose success depends on mail delivery is a form that fails silently when mail
+            fails, so the success state is rendered from the response instead.
+          -->
+          <form id="contact" class="stack stack-m" novalidate>
+            <div class="field">
+              <label for="name">Name</label>
+              <input id="name" name="name" type="text" autocomplete="name" required />
+            </div>
+            <div class="field">
+              <label for="email">Email</label>
+              <input id="email" name="email" type="email" autocomplete="email" required />
+            </div>
+            <div class="field">
+              <label for="company">Organisation <span class="hint">(optional)</span></label>
+              <input id="company" name="company" type="text" autocomplete="organization" />
+            </div>
+            <div class="field">
+              <label for="message">What are you trying to do?</label>
+              <textarea id="message" name="message" rows="5" required></textarea>
+            </div>
+            <p class="hint">
+              We use this to reply to you. See the <a href="/privacy/">privacy notice</a>
+              for what we keep and for how long.
+            </p>
+            <div>
+              <button class="btn btn-primary" type="submit" data-track="form_submit">Send</button>
+            </div>
+            <p class="form-status" role="status" aria-live="polite" hidden></p>
+          </form>
+        </div>
+      </section>
+
+      <script>
+        /*
+         * Submit handling, deliberately small.
+         *
+         * Double submission is prevented by disabling the control for the duration of the
+         * request rather than by a flag, so the button's own state tells the truth about
+         * what is happening. Errors are reported in the page, never in an alert() the
+         * screen reader will not announce.
+         */
+        (function () {
+          var form = document.getElementById('contact');
+          if (!form) return;
+          var status = form.querySelector('.form-status');
+          var submit = form.querySelector('button[type="submit"]');
+          var started = false;
+
+          form.addEventListener('input', function () {
+            if (started) return;
+            started = true;
+            try { if (window.refactoredTrack) window.refactoredTrack('form_start', {}); } catch (e) { void e; }
+          }, { once: false });
+
+          form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            if (submit.disabled) return;
+
+            if (!form.checkValidity()) {
+              status.hidden = false;
+              status.dataset.state = 'error';
+              status.textContent = 'Please add your name, a valid email address and a short message.';
+              return;
+            }
+
+            submit.disabled = true;
+            var original = submit.textContent;
+            submit.textContent = 'Sending…';
+            status.hidden = true;
+
+            var payload = {};
+            new FormData(form).forEach(function (value, key) { payload[key] = value; });
+            payload.page_url = window.location.href;
+
+            fetch('{{brand.platformApiBase}}/api/leads/ingest?source={{brand.sourceSlug}}&entry=platform_interest', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            })
+              .then(function (res) {
+                if (!res.ok) throw new Error('ingest failed: ' + res.status);
+                form.reset();
+                status.hidden = false;
+                status.dataset.state = 'ok';
+                status.textContent = 'Thanks. That reached us and someone will reply.';
+              })
+              .catch(function () {
+                status.hidden = false;
+                status.dataset.state = 'error';
+                status.innerHTML = 'That did not send. Please email <a href="mailto:{{brand.supportEmail}}">{{brand.supportEmail}}</a> and we will pick it up.';
+              })
+              .finally(function () {
+                submit.disabled = false;
+                submit.textContent = original;
+              });
+          });
+        })();
+      </script>
+
+    </main>
+
+    <footer class="foot">
+      <div class="wrap grid grid-3">
+        <div class="stack stack-xs">
+          <h4>Platform</h4>
+          <a href="/platform/">How it fits together</a>
+          <a href="/ai-workforce/">AI workforce</a>
+          <a href="/software-factory/">Software Factory</a>
+          <a href="/learning/">Learning</a>
+        </div>
+        <div class="stack stack-xs">
+          <h4>Company</h4>
+          <a href="/about/">About</a>
+          <a href="/trust-before-intelligence/">Trust Before Intelligence</a>
+          <a href="/contact/">Contact</a>
+        </div>
+        <div class="stack stack-xs">
+          <h4>Legal</h4>
+          <a href="/privacy/">Privacy</a>
+          <a href="/terms/">Terms</a>
+          <p class="hint">Questions: <a href="mailto:{{brand.supportEmail}}">{{brand.supportEmail}}</a></p>
+        </div>
+      </div>
+    </footer>
+
+    <script src="/assets/track-v2.js" data-site="{{brand.sourceSlug}}" data-api="{{brand.platformApiBase}}" defer></script>
+    <script src="/assets/ui.js" defer></script>
+  </body>
+</html>

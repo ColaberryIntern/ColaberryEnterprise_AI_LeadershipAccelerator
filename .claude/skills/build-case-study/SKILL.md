@@ -143,6 +143,15 @@ The description must let another person re-derive the number:
 the sync (`caseStudyRepoProvenanceWriter`). It is not the right anchor for a claim about
 a specific change — pin evidence to the subject commit yourself.
 
+**A COLLECTED METRIC ALREADY HAS ITS EVIDENCE. Do not write one by hand.** When a
+manifest registers a collector (§5), the sync creates the `case_study_evidence` row
+itself, pinned to the commit the figure was computed at, with the reproduce command in
+the description. Writing a second row by hand gives the record two pieces of evidence for
+one number that can then disagree, and the gate blocks a figure whose commit does not
+match the one the record is pinned to (`metric_collected_sha_mismatch`).
+
+The hand-written block above is for figures the repository cannot compute.
+
 ---
 
 ## 5. Metrics — work the whole candidate list
@@ -152,8 +161,40 @@ record. Eight candidates had been listed in the brief; seven were never attempte
 
 **Build a candidate table and fill every row.** No candidate silently skipped:
 
-| Candidate | Built | Value | Evidence | Reason if not |
-|---|:--:|---|---|---|
+| Candidate | Shape | Collector | Built | Value | Evidence | Reason if not |
+|---|---|---|:--:|---|---|---|
+
+**If the repository can compute it, you do not type it.** Register the collector in the
+manifest and let the sync produce the figure, the methodology, the limitations and the
+reproduce command together, pinned to a commit. A number you typed is a number somebody
+has to trust; a number the repository computed is one they can re-derive.
+
+The five collectors, and the shape each produces:
+
+| `collector` | Shape | What it counts |
+|---|---|---|
+| `test_files` | share | Test files as a share of source files. |
+| `modules_with_tests` | ratio | Named modules that have a test file, out of all of them. |
+| `decision_records` | count | Decision records committed to the repository. |
+| `commit_span` | span | First to last commit date, and how many commits fall inside. |
+| `commits_per_week` | series | Commits per calendar week across that span. |
+
+Register one in the repository's `case-study.json`:
+
+```json
+{ "outcomes": [
+  { "key": "modules_with_tests", "label": "Modules with a test file",
+    "collector": "modules_with_tests" }
+] }
+```
+
+`value_display` becomes optional once `collector` is set. Leave it out. A collector that
+cannot compute its figure creates **no metric at all** rather than a zero, so a missing
+card is the honest answer and not something to fill in by hand.
+
+For anything the repository cannot compute, keep writing metrics by hand and give them a
+`shape` and a `payload` yourself where one fits. A hand-written ratio still renders a
+meter and still names its members; it just does not come with a reproduce command.
 
 Prefer **repository-verifiable** metrics — they need no production read and a reader can
 reproduce them. Strong ones: schedule interval, files changed, lines added, test files,
@@ -169,6 +210,110 @@ method, `verifiedAt`, real `evidenceId`, `publishable`, explicit headline decisi
 
 **Never invent a figure to fill a card.** An honest gap — `0`, `not built` — is a
 stronger fact than a manufactured one.
+
+### 5a. At least one metric must COMPARE, not just COUNT
+
+Sort every candidate into two kinds before writing any of them:
+
+| | What it says | From the live CoreOps record |
+|---|---|---|
+| **Change** | it is different now, and here is what it was | *7 modules · 4 with tests* — baseline: "A policy comment, which is what an unenforced boundary looks like." |
+| **Scale** | how much of a thing there is | *46 test files* — baseline: "n/a — this sizes the test surface rather than comparing it." |
+
+Scale metrics are legitimate and easy to verify, which is exactly why a record drifts
+into being **all** of them. Four counts of the repository's own contents is an inventory,
+not a result, and a reader who wanted to know whether the work mattered leaves without
+an answer.
+
+**Ship at least one change metric, or say in the measurement narrative why the record
+has none.** A build with no before-state is a real situation — greenfield work has
+nothing to compare against — and naming that is stronger than dressing four inventories
+up as outcomes.
+
+**`baseline: "n/a"` is the tell.** When you write it you have just built a scale metric.
+That is fine once; if it is true of every card, the set is wrong.
+
+### 5b. Plain language: the three answers every figure owes a reader
+
+A shaped metric renders three short blocks under its picture, and they are written by a
+person. **A collector never writes these.** It can count files; it cannot tell you what
+the count means to somebody who did not build the thing.
+
+| Block | The question it answers | Write it as |
+|---|---|---|
+| **What this counts** | what is actually in the number | one sentence naming the unit and the boundary |
+| **Where it came from** | why anyone should believe it | the source, and the moment it was taken |
+| **What it doesn't tell you** | what a reader must not conclude | the honest limit of the figure |
+
+From the live CoreOps record:
+
+> **What this counts** Source files under `guardrails/` that carry a matching test file.
+> **Where it came from** The repository tree at the pinned commit, by filename.
+> **What it doesn't tell you** Whether those tests assert anything useful.
+
+**All three or none.** The API sends a complete set or nothing, and the gate warns on a
+shaped metric with no `plain`. The reason is not tidiness: a figure that says what it
+counts and where it came from, but not what it cannot show, is the exact shape of an
+overclaim. Two thirds of an answer reads as more certain than the number is.
+
+Three rules that have already produced weak blocks:
+
+- **Write to the reader, not to the reviewer.** "Test files are identified by name" is a
+  note to yourself. "A file named after a module may test almost none of it" is the
+  sentence that earns trust.
+- **The third block is not a hedge.** It is the specific thing this number cannot
+  establish. "Results may vary" says nothing; "this counts files, not coverage" says
+  exactly what a sceptic was about to ask.
+- **Plain language replaces the definition list, it does not sit beside it.** A card with
+  `plain` renders the three blocks instead of BASELINE / UNIT / SAMPLE / METHODOLOGY. If
+  the methodology paragraph carries something the three blocks do not, it belongs in
+  "Where it came from", not in a second list underneath.
+
+### 5c. Write each field for the card it renders into
+
+The reader never sees the object. They see, in this order:
+
+```
+  <valueDisplay>                ← large, carries the whole claim
+  <label>                       ← the sentence under it
+  <verificationClass>           ← "verified"
+  BASELINE     <baseline>       ← labelled rows, in this order
+  UNIT         <unit>
+  SAMPLE       <sample>
+  METHODOLOGY  <methodology>
+  LIMITATIONS  every entry, in full
+```
+
+Four consequences, each of which has already produced a weak card:
+
+- **`valueDisplay` is the entire headline.** It must read as a complete phrase on its
+  own — *"14 decision records"*, not *"14"*. Nothing else renders beside it.
+- **`unit` is metadata, and the card decides whether to print it.** Write `valueDisplay`
+  as the complete phrase and set `unit` to the bare token. The renderer suppresses the
+  UNIT row when the value already says that word, so *"14 decision records"* no longer
+  sits above a row reading UNIT: records. **You do not have to trade one against the
+  other.** A unit that adds something the value does not say — `41%` with unit
+  `percentage points` — still prints, which is the case the rule exists to protect.
+
+  Measured, not guessed: **13 of the 14 metrics published across the three live records
+  repeated their unit.** That is what makes it a rendering decision rather than fourteen
+  separate authoring slips.
+- **`methodology` is the card's body.** It is the longest text in the card and the only
+  place a sceptical reader can check your working. A single clause leaves the card
+  visibly empty; write the paragraph that lets someone reproduce the number.
+- **Every `limitation` is printed, in full, verbatim** — nothing truncates them. Write
+  them as sentences addressed to the reader, not as internal caveats. *"A file count is
+  not coverage, and 46 of 292 says nothing about which 46"* does more for the record's
+  credibility than the metric above it does.
+
+### 5d. The headline decision is public
+
+`isHeadline: true` selects `headlineMetric` in the **summary** projection — the payload
+every index card and every brand surface reads. It is not an internal ranking. It is the
+one number chosen to represent the whole record to somebody who has not opened it.
+
+Pick the metric that best answers *"did this work?"*. That is usually a change metric,
+and it is almost never the largest number.
 
 ---
 
@@ -305,8 +450,13 @@ of the tab that was captured first.
    pipeline, an agent or a service with no interface of its own.
 3. **A rendered architecture diagram** — `scripts/renderCaseStudyDiagram.js` turns the
    record's own `diagramSource` into a PNG.
-4. **A rendered metric chart** — `scripts/renderCaseStudyMetricChart.js` draws measured
-   values with the reproduce command printed underneath.
+4. **A rendered metric chart, for UNSHAPED metrics only**:
+   `scripts/renderCaseStudyMetricChart.js` draws measured values with the reproduce
+   command printed underneath. **A shaped metric already draws itself.** The card renders
+   a meter, a chip grid, a date bar or a sparkline from the payload, live and in the
+   reader's theme, so rendering a second static picture of the same numbers puts two
+   charts of one figure on the page and gives the reader a version that cannot update.
+   Reach for this tier only when a figure has no shape.
 5. **A photograph of the actual work or the actual people**, where one exists and
    consent allows.
 
@@ -440,9 +590,173 @@ risk is horizontal overflow.
 - [ ] The cover appears in the masthead, at a size that can be read
 - [ ] No band has a void larger than a card beside its content
 - [ ] Every metric card's methodology paragraph has a readable measure, not ~40 characters
+- [ ] **At least one metric compares** — not every baseline is `n/a` (§5a)
+- [ ] **No card says its unit twice** — read `valueDisplay` and the UNIT row together (§5b)
+- [ ] **Every limitation reads as a sentence to the reader** — they render in full (§5b)
+- [ ] **The headline metric is the one that answers "did this work?"** (§5c)
 - [ ] `pageScrollW === viewportW` at 1440 **and** 390
 - [ ] Diagrams are in the architecture section, not standing in for a picture
 - [ ] `problems[]` is empty
+
+---
+
+## 8c. The walkthrough video — EVERY record gets one
+
+**A record without a narrated walkthrough is not finished.** Ali, after the first one
+shipped: *"go ahead and create for the other case study and also harden the Case study
+skill to include these videos on every case study creation."*
+
+It is roughly 80 seconds, 1080p, and it sits in the **masthead's picture slot** on all
+three surfaces — not in a band underneath. That was tried and it opened a record with two
+visuals doing the same job: the cover screenshot, then a film of the same product, with
+the reader scrolling past the first to reach the second.
+
+Toolchain: `scripts/walkthrough-video/`. Read its README before starting; it carries the
+failures below with the commands attached.
+
+```bash
+python make_narration.py --deck <dir>/deck.json   # neural voice -> audio/ + timings.json
+python build_video.py    --deck <dir>/deck.json   # slides + footage + audio -> mp4
+python make_vtt.py       --deck <dir>/deck.json   # the accessible caption sidecar
+```
+
+`make_narration.py` runs FIRST. Segment durations come from how long each sentence
+actually takes to speak, not from the deck's guesses, or a slide ends mid-word.
+
+### The captions exist TWICE, on purpose — and only one of them may be shown
+
+`build_video.py` **burns the narration into the picture**. `make_vtt.py` writes the same
+sentences again as a `.vtt` sidecar. Both are deliberate and neither is redundant: a
+burned-in caption cannot be read by a screen reader, resized, translated or turned off,
+and a `track` element needs a real file.
+
+**So the player must NOT mark that track `default`.** It shipped that way and put two
+read-overs on the same frame on two live records — the burned-in grey box, and the
+browser painting the identical words underneath it in its own black bar. The track stays
+attached, reachable from the CC control and to assistive technology, which is the job it
+was written for.
+
+It is also worth knowing that `crossorigin="anonymous"` on the `<video>` is load-bearing
+for the captions and nothing else: a cross-origin `track` is refused without it, the
+track's `readyState` goes to 3 and the cue list stays empty while the video plays
+perfectly. Nothing looks broken except the missing captions.
+
+**Check it on the rendered page, not in the markup.** The two layers are only obviously
+two layers when you look at a frame:
+
+```js
+// captions the browser is painting — should be 0 showing, with the cues still there
+[...document.querySelector('video').textTracks].map(t => ({ mode: t.mode, cues: t.cues?.length }))
+```
+
+And to see what is burned in, pull the file rather than trusting the player, which will
+not have buffered anything under `preload="none"`:
+
+```bash
+ffmpeg -ss 8 -i walkthrough.mp4 -frames:v 1 -y frame.png
+```
+
+### Every figure it narrates is already a metric on the record
+
+The video is a **second surface for the same claims**, never a place for new ones. If a
+number is spoken or printed on a card, it is a published metric on the record underneath,
+with its methodology, denominator and limitations. A figure that exists only in the video
+is an unverified claim that happens to be made of pixels and audio — the exact thing the
+publish gate exists to stop, arriving through a door the gate does not watch.
+
+Write the deck AFTER the metrics are authored, and take the numbers from the projection
+rather than from your notes.
+
+### What it is made of, in order of preference
+
+1. **The project's own demo recording**, if it committed one. Cropped to the application
+   window, held at its real rate — a 1.3fps timelapse shown as slow stills is honest;
+   interpolating it into motion the source never had is not.
+2. **Its real screenshots**, the same ones the record already publishes as artifacts.
+3. **Its own architecture diagram**, rendered from `diagramSource`.
+4. **Typographic slides** carrying the record's own sentences.
+
+Nothing is generated, staged or restaged. There is no fifth option.
+
+### CHECK EVERY FRAME FOR PEOPLE
+
+A learner's demo recording is usually a recording of **their own profile**, and it will
+contain their name, their photograph and their personal email address. The Repo2Reputation
+recording did, from frame 60 onwards.
+
+Choose footage windows that land only on placeholder-state frames, then **open the highest
+frame index you actually used and look at it**. Re-do this for every subject; it is not a
+property of the tool, it is a property of the recording.
+
+### The voice
+
+**Check what is already installed before offering anybody a trade-off.** The first cut
+shipped with the built-in Windows SAPI voice, presented as "the option that needs no
+install", and Ali's verdict was `voice is horrible`. `edge-tts` — Microsoft's neural voices
+— had been installed on the machine the whole time, so the provisioning gate that made SAPI
+look like the only free choice never applied.
+
+Default to `en-US-AndrewNeural`. Audition two or three first; it takes a minute. Their
+personality tags differ and the register matters. **The narration text is the caption text**
+— what is heard and what is read are the same sentence, or you are maintaining two scripts
+and they will drift.
+
+The endpoint returns `NoAudioReceived` intermittently under a burst. That is transient, not
+bad input; the retry is already in `speak()`, so do not remove it and conclude otherwise.
+
+### It is NOT an artifact
+
+`demo` exists in `CaseStudyArtifactType` and attaching it there is the obvious move. Do not.
+It would put a video in the artifacts carousel at a screenshot's aspect ratio **and make it
+a hero candidate through `HERO_IMAGE_PRIORITY`** — and a video that can win the cover is a
+video that can stand in for a screenshot of the running system.
+
+It is its own top-level snapshot section:
+
+```js
+applyHumanOverride({ path: 'walkthroughVideo', value: {
+  url, title, captionsUrl, posterUrl, durationSeconds, narrationSource: 'synthetic',
+}})
+```
+
+`narrationSource: 'synthetic'` makes the page say so. An unlabelled synthetic voice is a
+small deception and this system's whole claim is that it does not make those.
+
+### Three ways this fails silently, all of which shipped
+
+- **`ffmpeg -ss` into an animated GIF.** Seeks to 1s and 11.5s worked; a seek to 30s
+  produced a segment with **no picture at all** and exit code 0. Pull frames by index with
+  Pillow instead.
+- **The concat demuxer drops unreadable segments and still exits 0.** `ffprobe` the
+  finished file and compare against the intended length. **Short** means a segment was
+  dropped; **long** means one overran its trim. Never compute the duration.
+- **A cross-origin caption track is refused.** The `.vtt` and `.mp4` are served from the
+  platform while two of the three pages are on other domains, so both need
+  `Access-Control-Allow-Origin` **and** the player needs `crossorigin="anonymous"`. Miss
+  it and the video plays perfectly, the `.vtt` returns `200 text/vtt`, and the captions
+  simply never appear. `HTMLTrackElement.readyState` **3 is ERROR, 2 is LOADED** — it was
+  misread once and reported as working.
+
+### `docker cp` is not a deploy
+
+The video is baked into the nginx image from `frontend/public/site-v2/`. A copied-in file
+survives only until the container is next recreated, which on a box where other sessions
+deploy can be **nine minutes**. It silently reverted a re-recorded narration to the
+previous voice while the URL still returned 200 and the right byte count at the moment it
+was checked.
+
+Commit the file, merge, rebuild nginx. Verify with **md5 against the local file**, not a
+status code: two different videos both return 200.
+
+### Done means
+
+- [ ] Every figure spoken or shown is a published metric on the same record
+- [ ] Every frame used has been checked for a person's name, face or email
+- [ ] `ffprobe` duration matches intended, within a second
+- [ ] The caption track reports `readyState: 2` and a **non-zero cue count** on all three
+      surfaces, not just the same-origin one
+- [ ] The player renders in the masthead and above the fold on all three
+- [ ] The file was verified live by md5, after an nginx rebuild
 
 ---
 
@@ -489,13 +803,25 @@ resting state** for an unpublished draft.
 
 - Override survival: re-sync and confirm each section held. Should report `unchanged`.
 - `backend/node_modules/.bin/tsc --noEmit` — never bare `npx tsc` (resolves 4.9.5).
-- `npx jest src/services/caseStudy src/routes/admin src/scripts`.
+- `npx jest src/services/caseStudy src/types src/routes/admin src/scripts`.
+- **Every shaped metric agrees with itself.** The gate blocks four disagreements, and
+  each is worth checking before you get there: a payload that does not match its declared
+  shape, a ratio or share with no denominator, a member list longer than the total it is
+  counted against, and a figure computed at a commit the record is not pinned to.
+- **Every shaped metric has its three plain-language answers.** The readiness report
+  warns (`metric_plain_missing`) and costs no points, so nothing forces this. Write them
+  anyway; the picture makes a reader more confident, which is exactly when the third
+  block matters.
+- **Every collected metric has exactly one evidence row**, written by the sync. Two rows
+  for one figure can disagree.
 - Regression: other records unchanged, public index count, `/case-studies` and
   `/demo-day` redirects.
 
 **Report denominators, never impressions.** Not "the detail page renders" but:
 sections authored X of X · candidates investigated X of X · metrics verified X of X ·
-artifacts X · images X · timeline entries X · prefixes X.
+**metrics that compare X of X (§5a)** · metrics computed by a collector X of X ·
+shaped metrics with plain language X of X · artifacts X · images X · timeline entries X ·
+prefixes X · walkthrough video X seconds, cues loading on X of 3 surfaces.
 
 **Never say complete, production-ready or published without evidence for each claim.**
 
@@ -511,6 +837,7 @@ artifacts X · images X · timeline entries X · prefixes X.
 | contributors | **0** | 2 |
 | artifacts | 3 | 2 |
 | **images** | **3** | **0** ← the live gap |
+| **walkthrough video** | added later | added later |
 | metrics with methodology + limitations | 4 of 4 | 6 of 6 |
 
 The tickets record scores higher on rigour and lower on pictures. Both patterns are

@@ -141,7 +141,12 @@ export const DOMAINS: readonly DomainDef[] = [
     // 'lead_ingestion' is here because Admissions was granted person rows on
     // 2026-09-05. Without it the scope would grant the rows and the domain would
     // never render — the roster would exist and be unreachable.
-    ownSections: ['leads', 'revenue', 'students', 'program', 'career_review', 'lead_ingestion'],
+    // 'internship' joins them for the same reason: an internship application is
+    // person-level data (resume, phone, interview answers), and Admissions holds
+    // both it and 'lead_ingestion'. Omitting it would leave the section granting
+    // the API while the domain never rendered — the mirror image of the
+    // lead_ingestion note above.
+    ownSections: ['leads', 'revenue', 'students', 'program', 'career_review', 'lead_ingestion', 'internship'],
   },
   {
     key: 'operations',

@@ -4,6 +4,9 @@ import { Cohort, Enrollment } from '../../models';
 import Project from '../../models/Project';
 import ProjectArtifact from '../../models/ProjectArtifact';
 import { resolveProjectRepos } from '../../services/projectRepoResolver';
+import {
+  getProjectDelivery, getProjectGantt, getProjectEvidence, getProjectArtifacts,
+} from '../../services/projectDeliveryService';
 import { Op } from 'sequelize';
 import { sequelize } from '../../config/database';
 
@@ -141,6 +144,13 @@ router.get('/api/admin/projects/cohort/:cohortId/students', requireAdmin, async 
         organization_name: project ? (project as any).organization_name : null,
         github_repo_url: project ? (project as any).github_repo_url : null,
         github_connected: project ? !!(project as any).github_repo_url : false,
+        // The Command Center is a GitHub Pages site at the root of the student's own repo,
+        // so it is a public URL and an admin can open it. It is NOT a top-level column —
+        // `setCommandCenterUrl` writes it inside the `project_variables` JSON blob, which is
+        // why a search of `projects` columns finds nothing. 11 of 43 live projects have one.
+        command_center_url: project
+          ? (((project as any).project_variables || {}).command_center_url ?? null)
+          : null,
         requirements_loaded: project ? !!(project as any).requirements_document : false,
         maturity_score: project ? (project as any).maturity_score : null,
         target_mode: project ? (project as any).target_mode : null,
@@ -289,6 +299,87 @@ router.post('/api/admin/projects/:id/import', requireAdmin, async (req: Request,
     res.json(result);
   } catch (err: any) {
     console.error('[AdminProjectOverview] POST /import error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/projects/delivery[?cohort_id=]
+ * Every project with its build numbers, ranked by case-study readiness.
+ * The cohort filter is OPTIONAL by design: the Accelerator page scopes this to
+ * the cohort a drill-down came from, while the global view stays unfiltered.
+ */
+router.get('/api/admin/projects/delivery', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const cohortId = typeof req.query.cohort_id === 'string' && req.query.cohort_id
+      ? req.query.cohort_id
+      : undefined;
+    res.json({ projects: await getProjectDelivery({ cohortId }) });
+  } catch (err: any) {
+    console.error('[AdminProjectOverview] GET /delivery error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** A malformed id must fail at the boundary with 400, not reach Postgres and come
+ *  back as a 500 with a driver message in it (CLAUDE.md Contract Enforcement Layer:
+ *  reject malformed input before it touches business logic). */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function validProjectId(req: Request, res: Response): string | null {
+  const id = String(req.params.projectId ?? '');
+  if (!UUID_RE.test(id)) {
+    res.status(400).json({ error: 'projectId must be a UUID' });
+    return null;
+  }
+  return id;
+}
+
+/**
+ * GET /api/admin/projects/:projectId/gantt
+ * One project's tasks grouped into its release spine, with the readable release
+ * name, its definition of done and its on-time story.
+ */
+router.get('/api/admin/projects/:projectId/gantt', requireAdmin, async (req: Request, res: Response) => {
+  const id = validProjectId(req, res);
+  if (!id) return;
+  try {
+    res.json(await getProjectGantt(id));
+  } catch (err: any) {
+    console.error('[AdminProjectOverview] GET /gantt error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/projects/:projectId/evidence
+ * What the build actually produced, from build_manifests. Returns
+ * `has_evidence: false` when nothing has been recorded — which is every visible
+ * project today, because all 178 manifests belong to the platform's own project or
+ * to a withdrawn test enrollment.
+ */
+router.get('/api/admin/projects/:projectId/evidence', requireAdmin, async (req: Request, res: Response) => {
+  const id = validProjectId(req, res);
+  if (!id) return;
+  try {
+    res.json(await getProjectEvidence(id));
+  } catch (err: any) {
+    console.error('[AdminProjectOverview] GET /evidence error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/projects/:projectId/artifacts
+ * Artifacts grouped by document with version history. Stored as submission content
+ * rather than files, so no download URL is offered.
+ */
+router.get('/api/admin/projects/:projectId/artifacts', requireAdmin, async (req: Request, res: Response) => {
+  const id = validProjectId(req, res);
+  if (!id) return;
+  try {
+    res.json({ artifacts: await getProjectArtifacts(id) });
+  } catch (err: any) {
+    console.error('[AdminProjectOverview] GET /artifacts error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
