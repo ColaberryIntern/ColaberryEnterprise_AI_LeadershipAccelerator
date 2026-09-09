@@ -101,11 +101,38 @@ export interface CurrentClassStats {
   avg_attendance: number | null;
   /** Active students whose attendance has fallen below ATTENDANCE_RISK_FLOOR. */
   at_risk_count: number;
-  submissions_pending: number;
+  /** Null when the count could not be computed — distinct from 0, which is a
+   *  claim that the review queue is empty. */
+  submissions_pending: number | null;
 }
 
 /** Below this attendance percentage a student is surfaced as at risk. */
 export const ATTENDANCE_RISK_FLOOR = 60;
+
+/**
+ * The members of `enum_enrollments_status`, verified against production.
+ *
+ * Pinned here because Postgres REJECTS a comparison against a literal that is
+ * not a member of the enum — `status NOT IN ('withdrawn','cancelled')` does not
+ * quietly match nothing, it raises `invalid input value for enum` and 500s the
+ * whole endpoint. A typo is an outage, not a wrong number, so the exclusion list
+ * below is checked against this one in tests.
+ */
+export const ENROLLMENT_STATUSES = ['active', 'completed', 'withdrawn', 'suspended'] as const;
+
+/**
+ * Statuses that mean "no longer a student in this class".
+ *
+ * Only `withdrawn`, matching `cohortService.getCohortDependents`, which uses the
+ * same rule. `suspended` is deliberately NOT excluded: suspension is routine and
+ * transient on this platform (the CCPP dashboard re-suspends nightly), so
+ * treating it as "gone" would undercount live classes on any given morning.
+ */
+export const DEPARTED_ENROLLMENT_STATUSES = ['withdrawn'] as const;
+
+/** `assignment_submissions.status` values that mean "a human still owes this a
+ *  review" — as opposed to `reviewed` / `flagged`, which have been looked at. */
+export const AWAITING_REVIEW_STATUSES = ['pending', 'submitted'] as const;
 
 /**
  * One query per concern rather than one wide join: the session aggregate and
@@ -153,9 +180,16 @@ async function loadEnrollmentRollups(cohortIds: string[]): Promise<Map<string, {
                                AND attendance_score < :floor)           AS at_risk
        FROM enrollments
       WHERE cohort_id IN (:ids)
-        AND status NOT IN ('withdrawn', 'cancelled')
+        AND status NOT IN (:departed)
       GROUP BY cohort_id`,
-    { replacements: { ids: cohortIds, floor: ATTENDANCE_RISK_FLOOR }, type: QueryTypes.SELECT }
+    {
+      replacements: {
+        ids: cohortIds,
+        floor: ATTENDANCE_RISK_FLOOR,
+        departed: [...DEPARTED_ENROLLMENT_STATUSES],
+      },
+      type: QueryTypes.SELECT,
+    }
   );
   const num = (v: string | null) => (v == null ? null : Math.round(Number(v) * 10) / 10);
   return new Map(rows.map((r) => [r.cohort_id, {
@@ -166,23 +200,44 @@ async function loadEnrollmentRollups(cohortIds: string[]): Promise<Map<string, {
   }]));
 }
 
-async function loadPendingSubmissions(cohortIds: string[]): Promise<Map<string, number>> {
+/**
+ * Submissions still awaiting a human review, per cohort.
+ *
+ * The table is `assignment_submissions`. An earlier version of this queried a
+ * table called `submissions`, which does not exist — and because the failure was
+ * swallowed silently, every cohort reported "0 awaiting review" as though the
+ * queue were empty. A metric that cannot be computed must not render as a
+ * reassuring zero, so the failure is now LOGGED with an error class, and the
+ * caller distinguishes "none pending" from "could not tell" via a null.
+ */
+async function loadPendingSubmissions(cohortIds: string[]): Promise<Map<string, number> | null> {
   if (!cohortIds.length) return new Map();
   try {
     const rows = await sequelize.query<{ cohort_id: string; pending: string }>(
       `SELECT e.cohort_id, COUNT(*) AS pending
-         FROM submissions s
+         FROM assignment_submissions s
          JOIN enrollments e ON e.id = s.enrollment_id
         WHERE e.cohort_id IN (:ids)
-          AND s.status IN ('submitted', 'pending', 'in_review')
+          AND s.status IN (:awaiting)
         GROUP BY e.cohort_id`,
-      { replacements: { ids: cohortIds }, type: QueryTypes.SELECT }
+      {
+        replacements: { ids: cohortIds, awaiting: [...AWAITING_REVIEW_STATUSES] },
+        type: QueryTypes.SELECT,
+      }
     );
     return new Map(rows.map((r) => [r.cohort_id, Number(r.pending)]));
-  } catch {
-    // Fail soft: a missing/renamed submissions table must not blank the whole
-    // dashboard. The card renders without a pending count rather than 500ing.
-    return new Map();
+  } catch (err: any) {
+    // Fail soft on the METRIC, loudly in the log: one unavailable count must not
+    // blank a dashboard that is otherwise correct, but it must not pass for zero.
+    console.error(JSON.stringify({
+      level: 'error',
+      service: 'accelerator-current-classes',
+      event: 'pending_submissions_query_failed',
+      outcome: 'partial',
+      error_class: err?.name || 'QueryError',
+      context: { message: err?.message },
+    }));
+    return null;
   }
 }
 
@@ -284,7 +339,7 @@ export async function getCurrentClassesSnapshot(now: Date = new Date()): Promise
       avg_readiness: e?.avgReadiness ?? null,
       avg_attendance: e?.avgAttendance ?? null,
       at_risk_count: e?.atRisk ?? 0,
-      submissions_pending: pending.get(c.id) ?? 0,
+      submissions_pending: pending ? (pending.get(c.id) ?? 0) : null,
     };
   });
 
