@@ -6,6 +6,7 @@
 
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
+import { buildExplorerFactSet } from './explorerGrowth/explorerFactResolver';
 
 export interface CompositeContext {
   /**
@@ -89,6 +90,8 @@ export async function buildCompositeContext(
     tempHistory,
     cohortRows,
     bookingClicks,
+    explorerProfileRows,
+    quotableCohortRows,
   ] = await Promise.all([
     // 1. Lead record
     sequelize.query(`
@@ -149,6 +152,27 @@ export async function buildCompositeContext(
       WHERE lead_id = :leadId
       AND event_type IN ('booking_modal_opened', 'booking_date_selected', 'booking_submitted', 'calendly_opened')
     `, { replacements: { leadId }, type: QueryTypes.SELECT }),
+
+    // 8. Is this lead an Explorer? Decides whether the fact guard applies.
+    //
+    // DELIBERATELY NOT EVERY LEAD. `context.explorer` present means every date,
+    // price and seat count in the generated copy must be grounded, and absent
+    // means the guard does not apply. Populating it for all leads would switch
+    // fact-checking on for every campaign in the system at once, and existing
+    // copy that names a figure would start failing to send. Explorer sends are
+    // the scope that was reviewed for it.
+    sequelize.query(`
+      SELECT 1 FROM explorer_journey_profiles WHERE lead_id = :leadId LIMIT 1
+    `, { replacements: { leadId }, type: QueryTypes.SELECT }).catch(() => []),
+
+    // 9. Every open, not-yet-started cohort — for the fact set, which needs to
+    // pick among them rather than trust a LIMIT 1.
+    sequelize.query(`
+      SELECT name, status, start_date, max_seats, seats_taken
+      FROM cohorts
+      WHERE status = 'open' AND start_date > NOW()
+      ORDER BY start_date ASC
+    `, { type: QueryTypes.SELECT }).catch(() => []),
   ]);
 
   // Parse results
@@ -159,6 +183,18 @@ export async function buildCompositeContext(
   const temp = (tempHistory as any[])?.[0];
   const cohort = (cohortRows as any)[0];
   const bookingCount = parseInt((bookingClicks as any)[0]?.cnt || '0', 10);
+
+  // Explorer fact set (plan §11.3) — present ONLY for Explorers, because its
+  // presence is what turns the send-time fact guard on.
+  //
+  // Built even when it resolves to nothing. An empty set is not the same as an
+  // absent one: absent means "not an Explorer, guard off", empty means "Explorer
+  // with no quotable facts, so any date or price in the copy is ungrounded and
+  // the message is refused". §11.3's "no cohort ⇒ cancel", expressed as data.
+  const isExplorer = ((explorerProfileRows as any[]) ?? []).length > 0;
+  const explorerFacts = isExplorer
+    ? buildExplorerFactSet((quotableCohortRows as any[]) ?? [], new Date())
+    : undefined;
 
   // Get step goal from sequence
   let stepGoal = '';
@@ -263,6 +299,7 @@ export async function buildCompositeContext(
   }));
 
   return {
+    explorer: explorerFacts,
     lead: {
       name: lead.name || '',
       firstName: (lead.name || '').split(' ')[0],
