@@ -19,6 +19,12 @@ export const SECTION_KEYS = [
   'students',                              // support-only surface
   'leads',                                 // lead-queue subset of the Revenue group
   'career_review',                         // portfolio publication review queue (admins + mentors)
+  // AI Internship application review. Like 'students', this is a surface rather
+  // than a normal nav group. It is its own key rather than folding into
+  // 'program' because the queue carries an applicant's resume, phone number and
+  // interview transcript — reviewing an internship application is a materially
+  // wider grant than editing curriculum, and the two should not travel together.
+  'internship',
 ] as const;
 export type SectionKey = typeof SECTION_KEYS[number];
 
@@ -47,7 +53,11 @@ export const MGMT_ROLE_DEFS: Record<MgmtRole, MgmtRoleDef> = {
   // narrower slice of that same group, carved out for the sales rep role).
   revenue: { role: 'revenue', label: 'Revenue', sections: ['dashboard', 'revenue', 'leads'] },
   // Admissions → the Lead Ingestion group (placeholder scope until assigned).
-  admissions: { role: 'admissions', label: 'Admissions', sections: ['dashboard', 'lead_ingestion'] },
+  // Admissions → lead intake, plus the AI Internship application queue. Dhee
+  // manages the internship end to end (AI_INTERNSHIP_SPEC.md: "the portal
+  // REPLACES the email intake entirely … managed by Dhee"), and 'admissions' is
+  // the narrowest existing role that fits, so she does not need 'admin' to do it.
+  admissions: { role: 'admissions', label: 'Admissions', sections: ['dashboard', 'lead_ingestion', 'internship'] },
   // Support → NO normal admin nav; only the read-only student-story surface.
   support: { role: 'support', label: 'Support', sections: ['students'] },
   // Community Organizer → no management-portal data section of its own (v1).
