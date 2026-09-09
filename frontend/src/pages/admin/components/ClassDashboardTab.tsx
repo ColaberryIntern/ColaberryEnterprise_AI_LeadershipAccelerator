@@ -5,6 +5,7 @@ import {
 import api from '../../../utils/api';
 import { useToast } from '../../../components/ui/ToastProvider';
 import { SectionCard, StatCard, StatusBadge } from '../../../components/admin/shell';
+import StudentPacePanel from './StudentPacePanel';
 
 type TrendDirection = 'up' | 'down' | 'flat';
 
@@ -228,6 +229,12 @@ export default function ClassDashboardTab({ cohortId }: Props) {
           </table>
         </div>
       </SectionCard>
+
+      {/* Movement, directly under the roster it re-sorts. The scores above answer "how is
+          this class doing"; this answers "who is pulling away and who is stalling", which
+          the attendance and readiness columns cannot show — a student can attend every
+          session and still complete nothing. */}
+      <StudentPacePanel cohortId={cohortId} />
     </>
   );
 }
