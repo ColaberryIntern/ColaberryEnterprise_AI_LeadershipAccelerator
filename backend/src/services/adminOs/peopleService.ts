@@ -31,15 +31,17 @@ import { visibleStagesForSections } from './personScope';
  *
  * ── STAGES THIS CAN AND CANNOT COMPUTE ──────────────────────────────────────
  *
- * `graduate` IS computable: 'completed' is a real value in
- * enum_enrollments_status and this expression reads it. But measured 2026-09-08,
- * ZERO enrolments carry it — 464 active, 62 withdrawn, 0 completed. Nothing
- * marks a student complete when their cohort ends, so this branch is correct and
- * currently matches nobody. That is a process gap, and the profile's trust panel
- * says so rather than letting an empty graduate count read as "nobody
- * graduated".
+ * `lapsed` is the stage this expression was missing, and getting it wrong was
+ * expensive: before 2026-09-09 someone with a WITHDRAWN enrolment read as
+ * `enrolled_student`, so the active-student count included 62 people who had
+ * already left. For a business whose goal is keeping subscriptions active, that
+ * is the one number that must not be flattering.
  *
- * `active_learner` and `returning_customer` are still never assigned: attendance
+ * `graduate` is never assigned, and that is the business model rather than a
+ * gap: this is a subscription, so there is no completion — someone who stops has
+ * LAPSED, not finished. See lifecycle.ts.
+ *
+ * `active_learner` and `returning_customer` are also never assigned: attendance
  * is unreliable, and there is no local payments source.
  */
 
@@ -90,7 +92,7 @@ const MAX_LIMIT = 200;
  */
 const STAGE_SQL = `
   CASE
-    WHEN e.status = 'completed' THEN 'graduate'
+    WHEN e.status = 'withdrawn' THEN 'lapsed'
     WHEN e.email IS NOT NULL THEN 'enrolled_student'
     WHEN l.pipeline_stage IS NOT NULL AND l.pipeline_stage <> 'new_lead' THEN 'applicant'
     ELSE 'lead'

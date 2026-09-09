@@ -181,7 +181,7 @@ describe('resolution and the lifecycle', () => {
     // is gone and the flags flipped — which is this list doing its job rather
     // than drifting.
     expect(LIFECYCLE.enrolled_student.joinable_today).toBe(true);
-    expect(LIFECYCLE.graduate.joinable_today).toBe(true);
+    expect(LIFECYCLE.lapsed.joinable_today).toBe(true);
   });
 
   it('leaves a stage blocked only when its blocker was never the join gap', () => {
