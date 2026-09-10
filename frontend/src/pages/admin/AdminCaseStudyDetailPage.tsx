@@ -17,6 +17,7 @@ import { useCaseStudyPreviewLens } from './useCaseStudyPreviewLens';
 import { useCaseStudyStudio } from './useCaseStudyStudio';
 import { useCaseStudyMeasurement } from './useCaseStudyMeasurement';
 import CaseStudyMeasuredMetricsPanel from '../../components/admin/caseStudy/CaseStudyMeasuredMetricsPanel';
+import CaseStudyHeroVideoPanel from '../../components/admin/caseStudy/CaseStudyHeroVideoPanel';
 
 /**
  * AdminCaseStudyDetailPage — the Story Studio, seven tabs over one record.
@@ -284,6 +285,10 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
 
         {tab === 'visuals' ? (
           <>
+            {/* First in the tab because it is the first thing on the published page. */}
+            <CaseStudyHeroVideoPanel
+              video={desk.view.walkthroughVideo} busy={busy} onApplyOverride={desk.override}
+            />
             <CaseStudyVisualsPanel
               artifacts={studio.artifacts}
               charts={studio.charts}

@@ -701,9 +701,32 @@ export interface CaseStudySnapshotContent {
  * platform origin adding before a self-hosted file would play there.
  */
 export interface CaseStudyWalkthroughVideo {
-  /** The video file itself, served from the platform. */
-  readonly url: string;
+  /**
+   * The video file itself, served from the platform.
+   *
+   * OPTIONAL ONLY WHEN `embedUrl` IS SET. An operator-chosen YouTube or Vimeo video has no
+   * file here — it plays from the provider — so one of the two must be present and the
+   * projection refuses a record carrying neither.
+   */
+  readonly url?: string;
   readonly title: string;
+  /**
+   * An operator's own video, replacing the generated walkthrough in the hero.
+   *
+   * Ali, 2026-09-10: "replace the default video with a video of my own from youtube or
+   * vimeo... would automatically replace the hero video".
+   *
+   * It is a SEPARATE FIELD rather than a different value in `url` because the two play
+   * through different elements — a file is a `<video>` with a caption track, an embed is an
+   * `<iframe>` owned by the provider — and a renderer must be able to tell which it has
+   * without sniffing the string. `videoEmbed.parseVideoEmbed` produces this; nothing else
+   * should write it, because its value lands in a frame `src` on three public brands.
+   */
+  readonly embedUrl?: string;
+  /** Which provider `embedUrl` belongs to. Absent for a platform-hosted file. */
+  readonly provider?: 'youtube' | 'vimeo';
+  /** The provider's own watch page, for a "watch on YouTube" affordance. */
+  readonly watchUrl?: string;
   /**
    * WebVTT captions. Separate from the burned-in captions the picture already carries,
    * because burned-in text cannot be read by a screen reader, resized, translated or

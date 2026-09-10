@@ -31,6 +31,7 @@ import {
   describesDeliveredWork,
 } from './caseStudyArtifactPresentation';
 import { normalizeFacetList } from './caseStudyFilterService';
+import { parseVideoEmbed } from './videoEmbed';
 import {
   assertNever,
   isCaseStudyMetricPayload,
@@ -273,20 +274,41 @@ export function projectWalkthroughVideo(
 ): PublicCaseStudyDetail['walkthroughVideo'] {
   const v = content?.walkthroughVideo;
   if (!v) return null;
-  const url = safeHttpUrl(v.url);
   const title = text(v.title);
-  if (!url || !title) return null;
+  if (!title) return null;
+
+  /**
+   * AN OPERATOR'S OWN VIDEO WINS THE HERO.
+   *
+   * The embed is re-parsed here rather than trusted from storage. `embedUrl` reaches an
+   * `<iframe src>` on three public brands, and a snapshot is a JSON blob that a bad import,
+   * a hand-edited override or an older writer could have put anything into. Re-parsing means
+   * the allowlist is enforced at the moment of publication, not only at the moment of entry,
+   * and a value that no longer passes degrades to the generated file rather than shipping.
+   */
+  const embed = parseVideoEmbed(v.embedUrl);
+  const url = safeHttpUrl(v.url);
+  if (!embed && !url) return null;
+
   const duration = typeof v.durationSeconds === 'number'
     && Number.isFinite(v.durationSeconds) && v.durationSeconds > 0
     ? Math.round(v.durationSeconds) : null;
+
   return {
-    url,
+    // The file is dropped when an embed wins, so no renderer can show both.
+    url: embed ? null : url,
     title,
-    captionsUrl: safeHttpUrl(v.captionsUrl),
-    posterUrl: safeHttpUrl(v.posterUrl),
-    durationSeconds: duration,
-    narrationSource: v.narrationSource === 'synthetic' || v.narrationSource === 'human'
-      ? v.narrationSource : null,
+    // Captions, poster and duration describe the GENERATED file. They are meaningless for a
+    // provider embed — the provider supplies its own poster and its own captions — and
+    // carrying them across would caption someone else's video with our narration.
+    captionsUrl: embed ? null : safeHttpUrl(v.captionsUrl),
+    posterUrl: embed ? null : safeHttpUrl(v.posterUrl),
+    durationSeconds: embed ? null : duration,
+    narrationSource: embed || !(v.narrationSource === 'synthetic' || v.narrationSource === 'human')
+      ? null : v.narrationSource,
+    embedUrl: embed ? embed.embedUrl : null,
+    provider: embed ? embed.provider : null,
+    watchUrl: embed ? embed.watchUrl : null,
   };
 }
 
