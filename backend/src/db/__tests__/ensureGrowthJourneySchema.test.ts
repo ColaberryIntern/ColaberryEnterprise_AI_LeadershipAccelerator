@@ -4,6 +4,7 @@ import { GROWTH_JOURNEY_STATEMENTS } from '../ensureGrowthJourneySchema';
 import { JourneyProgram } from '../../models/JourneyProgram';
 import { JourneyPath } from '../../models/JourneyPath';
 import { BrandOfferPolicy } from '../../models/BrandOfferPolicy';
+import Brand from '../../models/Brand';
 import {
   OfferFamily,
   OFFER_FAMILIES,
@@ -36,22 +37,158 @@ const serverSource = fs.readFileSync(
 );
 
 describe('the schema is additive, and provably so', () => {
-  it('creates only, with IF NOT EXISTS on every statement', () => {
+  it('every statement carries IF NOT EXISTS', () => {
     for (const s of GROWTH_JOURNEY_STATEMENTS) {
       expect(s).toMatch(/IF NOT EXISTS/i);
-      expect(s).toMatch(/^\s*CREATE/i);
     }
+  });
+
+  it('is all CREATE except exactly ONE additive ALTER', () => {
+    // T203 needs a column on `brands`, which this run does not own, so the
+    // no-ALTER rule narrowed rather than vanished. The count is pinned at one:
+    // a second ALTER appearing here is a decision somebody should have to make
+    // deliberately, not a line that slides in.
+    const alters = GROWTH_JOURNEY_STATEMENTS.filter((s) => /^\s*ALTER/i.test(s));
+    const creates = GROWTH_JOURNEY_STATEMENTS.filter((s) => /^\s*CREATE/i.test(s));
+
+    expect(alters).toHaveLength(1);
+    expect(creates).toHaveLength(GROWTH_JOURNEY_STATEMENTS.length - 1);
+    expect(alters[0]).toMatch(/ALTER\s+TABLE\s+brands\s+ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS/i);
   });
 
   it('contains no DROP', () => {
     expect(SQL).not.toMatch(/\bDROP\b/i);
   });
 
-  it('contains no ALTER', () => {
-    // Not even an additive ALTER. Every column this run needs is on a table it
-    // creates itself; an ALTER here would mean it is reaching into someone
-    // else's table.
-    expect(SQL).not.toMatch(/\bALTER\b/i);
+  it('alters nothing except by ADDING one nullable column', () => {
+    // AN ALLOWLIST, NOT A BLOCKLIST, and that change came from being caught.
+    // The first version of this test excluded the reshaping forms BY NAME -
+    // ALTER COLUMN, DROP COLUMN, SET DATA TYPE, SET NOT NULL, ADD CONSTRAINT,
+    // DROP CONSTRAINT - and an independent review then walked three statements
+    // straight past it: an appended `ADD UNIQUE (slug)`, an appended
+    // `ADD CHECK (slug <> '')`, and a `DEFAULT gen_random_uuid()` clause. None
+    // of the three is spelled like anything on the list.
+    //
+    // A blocklist can only refuse what somebody thought of. This is the AD-1
+    // hard stop being loosened, so the rule is inverted: every ALTER must match
+    // the whole permitted shape end to end. Anything appended to it, and
+    // anything extra inside it, fails - including forms nobody has thought of.
+    // STRUCTURALLY strict, WHITESPACE tolerant - and that split came from a
+    // control that failed. The first version matched literal single spaces
+    // between tokens, so a semantically identical statement with one extra
+    // space was rejected. That brittleness matters more than it looks: the
+    // next person to reformat this DDL would see a red test with no real
+    // defect behind it, and the obvious way to make it green again is to
+    // loosen the pattern - which is how a rule like this decays back into the
+    // blocklist it replaced.
+    const PERMITTED =
+      /^\s*ALTER\s+TABLE\s+\w+\s+ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+\w+\s+UUID\s+REFERENCES\s+\w+\s*\(\s*id\s*\)\s+ON\s+DELETE\s+SET\s+NULL\s*$/i;
+
+    const alters = GROWTH_JOURNEY_STATEMENTS.filter((x) => /\bALTER\b/i.test(x));
+    expect(alters).toHaveLength(1);
+    for (const statement of alters) expect(statement).toMatch(PERMITTED);
+  });
+
+  it('refuses every reshaping form by name as well, including the unnamed-constraint ones', () => {
+    // Kept BESIDE the allowlist rather than replaced by it, for two reasons: a
+    // named refusal tells the next person WHY, and this one also covers a CREATE
+    // statement that tried to smuggle one of these in, which the ALTER-shaped
+    // allowlist above would never inspect.
+    //
+    // `ADD UNIQUE`, `ADD CHECK`, `ADD PRIMARY KEY` and `ADD FOREIGN KEY` are the
+    // unnamed constraint forms. Excluding only `ADD CONSTRAINT` missed all four,
+    // because Postgres does not require you to name a constraint to add one.
+    for (const form of [
+      /ALTER\s+COLUMN/i,
+      /DROP\s+COLUMN/i,
+      /SET\s+DATA\s+TYPE/i,
+      /SET\s+NOT\s+NULL/i,
+      /DROP\s+DEFAULT/i,
+      /ADD\s+CONSTRAINT/i,
+      /DROP\s+CONSTRAINT/i,
+      /ADD\s+UNIQUE/i,
+      /ADD\s+CHECK/i,
+      /ADD\s+PRIMARY\s+KEY/i,
+      /ADD\s+FOREIGN\s+KEY/i,
+    ]) {
+      expect(SQL).not.toMatch(form);
+    }
+  });
+
+  it('creates no index on a table this run does not own', () => {
+    // Y1, and it PREDATES this task: the original T201/T202 block - CREATE-only,
+    // IF NOT EXISTS, no ALTER - passed this too, so the hole has been open since
+    // the first commit of this run.
+    //
+    //   CREATE UNIQUE INDEX IF NOT EXISTS brands_slug_uniq ON brands (slug)
+    //
+    // That statement is CREATE-leading, carries IF NOT EXISTS, contains no
+    // ALTER, and is spelled like none of the named refusals above - because a
+    // unique constraint does not have to be written `ADD UNIQUE`. Yet it
+    // reshapes `brands`, which `ensureMultiTenantSchema` owns, takes a
+    // write-blocking lock, and fails outright if duplicate slugs already exist.
+    //
+    // ADDITIVE IS ABOUT WHAT A STATEMENT DOES, NOT WHAT IT STARTS WITH. Every
+    // index this module creates must therefore name a table this module
+    // created.
+    const RUN_OWNED = ['brand_offer_policies', 'journey_paths', 'journey_programs', 'offer_families'];
+
+    const indexed = [
+      ...SQL.matchAll(/CREATE\s+(?:UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\s+\w+\s+ON\s+(\w+)/gi),
+    ].map((m) => m[1]);
+
+    // Non-vacuity, two ways: the parse must find every index statement present,
+    // and there must be some. A regex that silently matched nothing would
+    // otherwise satisfy the loop below.
+    const indexStatements = GROWTH_JOURNEY_STATEMENTS.filter((s) => /CREATE\s+(?:UNIQUE\s+)?INDEX/i.test(s));
+    expect(indexed).toHaveLength(indexStatements.length);
+    expect(indexed.length).toBeGreaterThan(4);
+
+    for (const table of indexed) expect(RUN_OWNED).toContain(table);
+  });
+
+  it('the only table this run touches without creating it is brands, by ADD COLUMN alone', () => {
+    // States the boundary positively, so the next person adding a statement can
+    // see the whole rule in one place rather than inferring it from refusals.
+    const created = [...SQL.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/gi)].map((m) => m[1]);
+    const altered = [...SQL.matchAll(/ALTER\s+TABLE\s+(\w+)/gi)].map((m) => m[1]);
+    expect(altered).toEqual(['brands']);
+    expect(created).not.toContain('brands');
+  });
+
+  it('carries no literal control byte where an escape was meant', () => {
+    // 0x08 is what a shell heredoc writes when the source said `\b`. It sits
+    // inside a regex looking exactly like a word boundary and silently disables
+    // the pattern - which is how the DEFAULT guard below shipped inert and
+    // passed 35 of 35. The repo rule is never to write source through a
+    // heredoc; this is the assertion that notices when it happened anyway.
+    const source = fs.readFileSync(path.join(__dirname, 'ensureGrowthJourneySchema.test.ts'), 'utf8');
+    for (const ch of ['\u0007', '\u0008', '\u000b', '\u000c', '\u001b']) {
+      expect(source).not.toContain(ch);
+    }
+  });
+
+  it('the added column is NULLABLE and carries no DEFAULT', () => {
+    // A NOT NULL or defaulted column would rewrite every existing `brands` row
+    // - which is a migration with a table lock, not an additive ensure step.
+    const alter = GROWTH_JOURNEY_STATEMENTS.find((s) => /\bALTER\b/i.test(s))!;
+    expect(alter).not.toMatch(/\bNOT NULL\b/i);
+    // `\bDEFAULT\b`, not `/DEFAULT/`: the column is CALLED
+    // `default_journey_program_id`, so the bare pattern matched the column name
+    // itself - the same substring trap as `toContain('id')` matching `tenant_id`.
+    expect(alter).not.toMatch(/\bDEFAULT\b/i);
+  });
+
+  it('the brands column CLEARS rather than cascades when a program is deleted', () => {
+    // ON DELETE CASCADE here would mean deleting a journey programme deleted
+    // its brand, and every lead, domain and policy hanging off it.
+    const alter = GROWTH_JOURNEY_STATEMENTS.find((s) => /\bALTER\b/i.test(s))!;
+    // `\s+` at every seam, same reasoning as the allowlist: these can only
+    // produce a FALSE POSITIVE, never let a defect through - and a red test
+    // with no defect behind it is what tempts the next person to loosen the
+    // rule until it stops refusing anything.
+    expect(alter).toMatch(/REFERENCES\s+journey_programs\s*\(\s*id\s*\)\s+ON\s+DELETE\s+SET\s+NULL/i);
+    expect(alter).not.toMatch(/ON DELETE CASCADE/i);
   });
 
   it('contains no RENAME and no TRUNCATE', () => {
@@ -148,6 +285,28 @@ describe('boot ordering — the criterion that would fail silently', () => {
     expect(ensure).toBeGreaterThan(-1);
     expect(seed).toBeGreaterThan(-1);
     expect(seed).toBeGreaterThan(ensure);
+  });
+
+  it('seeds journey programs AFTER the tables AND after the offer policy', () => {
+    // T212. The table dependency is the hard one - `journey_programs` and
+    // `journey_paths` must exist - and, as with the policy seed, getting it
+    // wrong is not a crash: every write is individually caught, so it would
+    // surface as warnings and an empty registry, which then makes every brand
+    // default resolve nothing. Safe, silent, and wrong.
+    //
+    // The policy ordering is not a database dependency (paths are derived from
+    // compile-time definitions, not from policy ROWS) but it is asserted anyway
+    // so the two steps stay readable in the order that shows section 4
+    // governing section 5.
+    const ensure = serverSource.indexOf('await ensureGrowthJourneySchema()');
+    const policy = serverSource.indexOf('await seedBrandOfferPolicy()');
+    const programs = serverSource.indexOf('await seedJourneyPrograms()');
+
+    expect(ensure).toBeGreaterThan(-1);
+    expect(policy).toBeGreaterThan(-1);
+    expect(programs).toBeGreaterThan(-1);
+    expect(programs).toBeGreaterThan(ensure);
+    expect(programs).toBeGreaterThan(policy);
   });
 
   it('registers it after the Explorer ensure step too, not beside it', () => {
@@ -284,6 +443,36 @@ describe('the models match the SQL, in both directions', () => {
     expect(Object.keys(JourneyPath.getAttributes()).sort()).toEqual(
       [...EXPECTED_PATH_COLUMNS].sort(),
     );
+  });
+
+  it('every column the DDL ADDS to an existing table is declared on its model', () => {
+    // The bug this exists to prevent actually happened in this repo, on the
+    // tenancy columns: the DDL added them, every service read and wrote them,
+    // and no model declared them - so Sequelize, which only ever touches
+    // attributes a model knows about, silently returned undefined and dropped
+    // every write. Green tests throughout.
+    // `ensureMultiTenantSchema.modelParity.test.ts` carries the full account;
+    // that test parses only ITS OWN statement list, so this module needs its own.
+    const rx = /ALTER\s+TABLE\s+(\w+)\s+ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+(\w+)/gi;
+    const added = [...SQL.matchAll(rx)].map((m) => ({ table: m[1], column: m[2] }));
+
+    // Non-vacuity: an empty parse would satisfy the loop below.
+    expect(added).toEqual([{ table: 'brands', column: 'default_journey_program_id' }]);
+
+    const byTable: Record<string, string[]> = {
+      brands: Object.keys(Brand.getAttributes()),
+    };
+    for (const { table, column } of added) {
+      expect(byTable[table]).toBeDefined();
+      expect(byTable[table]).toContain(column);
+    }
+  });
+
+  it('the added brands column points at journey_programs on the MODEL too', () => {
+    const attr = Brand.getAttributes().default_journey_program_id;
+    expect(attr).toBeDefined();
+    expect((attr.references as { model: string }).model).toBe('journey_programs');
+    expect(attr.allowNull).toBe(true);
   });
 
   it('the models declare the foreign keys, not only the SQL', () => {

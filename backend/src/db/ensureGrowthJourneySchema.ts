@@ -158,6 +158,32 @@ export const GROWTH_JOURNEY_STATEMENTS: readonly string[] = [
      ON brand_offer_policies (brand_id, offer_family)`,
   `CREATE INDEX IF NOT EXISTS idx_brand_offer_policies_tenant ON brand_offer_policies (tenant_id)`,
   `CREATE INDEX IF NOT EXISTS idx_brand_offer_policies_decision ON brand_offer_policies (decision)`,
+
+  // ── T203 ──────────────────────────────────────────────────────────────────
+  // THE ONE STATEMENT IN THIS MODULE THAT REACHES INTO SOMEONE ELSE'S TABLE.
+  //
+  // Every other statement here creates a table this run owns. This one adds a
+  // column to `brands`, which `ensureMultiTenantSchema` owns, and it is the
+  // narrowest form that exists: `ADD COLUMN IF NOT EXISTS`, nullable, no
+  // default, no backfill. Existing rows are untouched and every existing query
+  // keeps working, because nothing selects a column it does not know about.
+  //
+  // WHY ON `brands` AND NOT `brand_domains`. `resolvePublicContext` resolves a
+  // brand by TWO paths — an explicit source slug through `lead_sources`, and a
+  // hostname through `brand_domains`. The slug path never touches a
+  // `brand_domains` row, so a column there could structurally serve only half
+  // the callers. Both paths return a brand, which makes `brands` the only
+  // workable key.
+  //
+  // ON DELETE SET NULL, not CASCADE. Deleting a journey program must clear the
+  // pointer, never delete the brand. CASCADE here would mean removing a
+  // programme took its brand — and every lead, domain and policy hanging off it
+  // — with it.
+  //
+  // Placed last so `journey_programs` exists before the foreign key names it.
+  `ALTER TABLE brands
+     ADD COLUMN IF NOT EXISTS default_journey_program_id UUID
+     REFERENCES journey_programs(id) ON DELETE SET NULL`,
 ];
 
 export async function ensureGrowthJourneySchema(): Promise<void> {

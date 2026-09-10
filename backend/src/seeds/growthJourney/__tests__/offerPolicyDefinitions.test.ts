@@ -3,6 +3,7 @@ import * as path from 'path';
 import {
   BRAND_OFFER_POLICIES,
   INERT_ON_CREATE,
+  allowedFamiliesFor,
   familiesNamedInPolicy,
   familiesWithNoBrand,
 } from '../offerPolicyDefinitions';
@@ -58,6 +59,53 @@ describe('the catalog matches §4', () => {
     // seeding gap, and it should be a visible decision rather than a silent
     // orphan.
     expect(familiesWithNoBrand()).toEqual([]);
+  });
+});
+
+describe('deny outranks allow HERE too, not only in the resolver', () => {
+  // WHY AN INJECTED TABLE. The four real brands' allow and deny sets are
+  // DISJOINT, so subtracting the denials changes nothing and a mutation that
+  // deleted the subtraction survived every test in this file. That is the same
+  // unpinned-invariant finding an independent review made about
+  // `allowedOfferFamilies` one layer down - and this is the THIRD place the
+  // rule is implemented, after `resolveOfferEligibility` and that one.
+  //
+  // A contradictory pair cannot be expressed in the real definitions, so the
+  // rule can only be pinned by passing a table that contains one. The function
+  // under test is the real one; only its input is substituted.
+  const CONTRADICTORY = [
+    {
+      tenant_slug: 't',
+      brand_slug: 'b',
+      decision: 'allow' as const,
+      offer_families: ['ai_consulting', 'business_training'] as const,
+      notes: 'a stray grant somebody added later',
+    },
+    {
+      tenant_slug: 't',
+      brand_slug: 'b',
+      decision: 'deny' as const,
+      offer_families: ['business_training'] as const,
+      notes: 'the deny that must win',
+    },
+  ];
+
+  it('subtracts a denied family even when it is also explicitly allowed', () => {
+    expect(allowedFamiliesFor('t', 'b', CONTRADICTORY)).toEqual(['ai_consulting']);
+  });
+
+  it('the injected table is actually reaching the function', () => {
+    // Non-vacuity: if the parameter were ignored and the real table used, this
+    // would return CPN's families rather than an empty list.
+    expect(allowedFamiliesFor('nobody', 'nobody', CONTRADICTORY)).toEqual([]);
+    expect(allowedFamiliesFor('t', 'b', CONTRADICTORY).length).toBeGreaterThan(0);
+  });
+
+  it('defaults to the real policy when no table is passed', () => {
+    expect(allowedFamiliesFor('cpn', 'cpn')).toEqual([
+      'learner_free_training',
+      'learner_community_subscription',
+    ]);
   });
 });
 

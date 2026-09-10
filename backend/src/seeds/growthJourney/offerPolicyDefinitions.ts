@@ -156,6 +156,46 @@ export const BRAND_OFFER_POLICIES: readonly BrandOfferPolicyDefinition[] = [
 ];
 
 /**
+ * The families one brand is allowed, with its denials subtracted (T212).
+ *
+ * The same three rules `offerEligibility.ts` applies at runtime, applied here to
+ * the DEFINITIONS — so the journey paths a brand gets seeded cannot disagree
+ * with what the resolver will later permit. Deriving them instead of listing
+ * them again is the point: a family added to a brand's policy shows up as a path
+ * without anybody remembering to add it twice.
+ *
+ * THE POLICY TABLE IS INJECTABLE, and that is not test scaffolding for its own
+ * sake. The four brands' allow and deny sets are DISJOINT today, so subtracting
+ * the denials changes nothing and a mutation that deleted the subtraction
+ * survived every test — the same unpinned-invariant finding an independent
+ * review made about `allowedOfferFamilies`, one layer down, which I failed to
+ * carry forward to this function. A contradictory pair cannot be expressed in
+ * the real definitions, so the only way to pin the rule is to pass a table that
+ * contains one. `lookupEntrySite` in `orgAccountType.ts` is the repo precedent:
+ * export with an injectable table so the test exercises real code.
+ */
+export function allowedFamiliesFor(
+  tenantSlug: string,
+  brandSlug: string,
+  table: readonly BrandOfferPolicyDefinition[] = BRAND_OFFER_POLICIES,
+): OfferFamilySlug[] {
+  const forBrand = table.filter(
+    (d) => d.tenant_slug === tenantSlug && d.brand_slug === brandSlug,
+  );
+  const denied = new Set(
+    forBrand.filter((d) => d.decision === 'deny').flatMap((d) => [...d.offer_families]),
+  );
+  const allowed = forBrand
+    .filter((d) => d.decision === 'allow')
+    .flatMap((d) => [...d.offer_families])
+    .filter((f) => !denied.has(f));
+
+  // Deduplicated and ordered by the catalog, so the seed's path priority is
+  // stable across runs rather than following definition order.
+  return OFFER_FAMILIES.filter((f) => allowed.includes(f));
+}
+
+/**
  * Every family named anywhere in the policy above.
  *
  * Used by the contract test to prove the policy names nothing outside §4's

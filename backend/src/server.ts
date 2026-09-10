@@ -3043,6 +3043,40 @@ async function start(): Promise<void> {
     console.warn('[GrowthJourney] offer policy seed failed (non-fatal):', err?.message);
   }
 
+  // Growth Journey OS T212: §5's four journey programs, their paths, and each
+  // brand's default pointer.
+  //
+  // AFTER the policy seed above, and that order is meaningful even though it is
+  // not a database dependency: a programme's paths are DERIVED from the same
+  // brand-offer policy definitions, so reading the two steps in this order is
+  // how the next person sees that §4 governs §5 rather than the reverse.
+  //
+  // EVERY PROGRAMME IS SEEDED `draft`, so `resolveDefaultJourney` returns
+  // `program_not_active` for every brand until a human activates one. That is
+  // the intended resting state, not an unfinished one: T201 made `draft` the
+  // default precisely so a programme seeded by mistake cannot be resolved as a
+  // brand's default, and T203 enforces it. This step builds the structure and
+  // stops. Turning a journey on stays a decision.
+  //
+  // Nothing here can send anything - these rows describe structure, and a path
+  // existing does not mean an offer may be made: T202's eligibility gate is a
+  // separate check at the moment of use.
+  try {
+    const { seedJourneyPrograms } = await import('./seeds/growthJourney/seedJourneyPrograms');
+    const programs = await seedJourneyPrograms();
+    console.log(
+      `[GrowthJourney] journey programs seeded: ${programs.programs_created} created, ` +
+        `${programs.paths_created} paths created, ${programs.defaults_set} brand defaults set` +
+        (programs.defaults_left_alone
+          ? `, ${programs.defaults_left_alone} defaults left as an operator set them`
+          : '') +
+        (programs.skipped_brands.length ? `, brands absent: ${programs.skipped_brands.join(',')}` : '') +
+        (programs.failed.length ? `, failed: ${programs.failed.length}` : ''),
+    );
+  } catch (err: any) {
+    console.warn('[GrowthJourney] journey program seed failed (non-fatal):', err?.message);
+  }
+
   // Intelligence OS: ensure tables exist and start autonomous discovery
   try { await ensureIntelligenceTables(); } catch (err: any) { console.warn('[Intelligence] ensure tables failed (non-fatal):', err?.message); }
   setTimeout(() => {
