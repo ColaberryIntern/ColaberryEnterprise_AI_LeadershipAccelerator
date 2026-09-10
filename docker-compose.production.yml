@@ -26,6 +26,17 @@ services:
       retries: 5
 
   backend:
+    # Registry image built by .github/workflows/build-images.yml on every push to
+    # main. `build:` is deliberately KEPT alongside it: with both present, Compose
+    # names the locally-built image the same thing, so `up -d --build` behaves
+    # exactly as it always has, while `pull && up -d` now works too. That makes this
+    # change additive and reversible rather than a cutover.
+    #
+    # The package is PUBLIC because the repository is, so the prod host needs no
+    # registry credential to pull it. Verified 2026-09-10: an anonymous client can
+    # fetch the manifest (HTTP 200). Nothing secret is baked in — .dockerignore
+    # excludes .env, .env.local and .env.production.
+    image: ghcr.io/colaberryintern/accelerator-backend:main
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -93,6 +104,7 @@ services:
       - "3001"
 
   intelligence:
+    image: ghcr.io/colaberryintern/accelerator-intelligence:main
     build:
       context: ./intelligence/ai_engine
       dockerfile: Dockerfile
@@ -113,6 +125,7 @@ services:
       - "5000"
 
   nginx:
+    image: ghcr.io/colaberryintern/accelerator-nginx:main
     build:
       context: .
       dockerfile: nginx/Dockerfile
