@@ -29,6 +29,7 @@ import capeGovernanceRoutes from './routes/admin/capeGovernanceRoutes';
 import communityRoomsRoutes from './routes/communityRoomsRoutes';
 import alumniReferralRoutes from './routes/alumniReferralRoutes';
 import qrRedirectRoutes from './routes/qrRedirectRoutes';
+import trackedLinkRedirectRoutes from './routes/trackedLinkRedirectRoutes';
 import v1Routes from './routes/v1Routes';
 import advisorRoutes from './routes/advisorRoutes';
 import showcaseArtifactRoutes from './routes/showcaseArtifactRoutes';
@@ -107,6 +108,11 @@ import { ensureMultiTenantSchema } from './db/ensureMultiTenantSchema';
 import { ensureRefactoredDeliverySchema } from './db/ensureRefactoredDeliverySchema';
 import { ensureCareerPublicationSchema } from './db/ensureCareerPublicationSchema';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
+import { ensureMarketingTrackingSchema } from './db/ensureMarketingTrackingSchema';
+import { ensureMarketingCampaignSchema } from './db/ensureMarketingCampaignSchema';
+import { ensureContentOsSchema } from './db/ensureContentOsSchema';
+import { ensurePublishingSchema } from './db/ensurePublishingSchema';
+import { ensureMarketingAttributionSchema } from './db/ensureMarketingAttributionSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapstoneSchema } from './db/ensureCapstoneSchema';
 import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
@@ -183,6 +189,17 @@ app.use(publicPortfolioRoutes);
 app.use(advisorRoutes);
 app.use(alumniReferralRoutes);
 app.use(qrRedirectRoutes);
+// Marketing Operations - the public tracked-link redirect, GET /r/:shortCode.
+//
+// Mounted HERE, beside the QR redirect and after leadRoutes, because routers registered
+// later sit behind the broad auth guard (leadRoutes.ts documents that ordering). A visitor
+// clicking a link in a social post has no session, so a guarded mount would 401 every real
+// click and the failure would look like the link being broken rather than misplaced.
+//
+// It re-validates its destination against the brand-domain allowlist on every request and
+// issues nothing at all if that fails - see the route's header for why validating only at
+// creation time is not sufficient.
+app.use(trackedLinkRedirectRoutes);
 app.use(v1Routes);
 
 // PUBLIC API routes — MUST stay mounted BEFORE adminRoutes. adminRoutes is mounted
@@ -2526,6 +2543,47 @@ async function start(): Promise<void> {
   // (idempotent DDL, additive only). Scheduled by ticketService.ts's done-hook,
   // processed by schedulerService.ts's daily cron.
   await ensureOutcomeMeasurementsSchema();
+  // Marketing Operations — tracked links and click capture: 2 new tables
+  // (tracked_links, link_clicks), idempotent DDL, additive only.
+  //
+  // Runs AFTER ensureMultiTenantSchema because tracked_links.tenant_id is NOT NULL and
+  // the brands/tenants it scopes to must exist first on a fresh database. It carries no
+  // foreign keys, so this ordering is about a coherent fresh-boot rather than a
+  // constraint — but a preview stack or CI database built in the other order would
+  // create links pointing at tenants that do not exist yet.
+  await ensureMarketingTrackingSchema();
+  // Marketing Operations — campaign planning + taxonomy columns on the EXISTING campaigns
+  // table (funnel stage, owner/approver, planned window, canonical utm slug, typed goals,
+  // parent rollup, archival). Additive only; nothing NOT NULL, no backfill.
+  //
+  // Ordering is load-bearing: its unique index is on `(tenant_id, utm_campaign_slug)`, and
+  // `campaigns.tenant_id` is itself added by ensureMultiTenantSchema() above. On a fresh
+  // database built in the other order the index creation would fail — and because these
+  // loops only warn, it would fail SILENTLY, leaving slug collisions possible in production.
+  await ensureMarketingCampaignSchema();
+  // Marketing Operations - Content OS: 7 new tables (content items, platform variants, the
+  // media library and its join, versioned templates, and a REAL content approval gate with
+  // an append-only event trail). Additive only.
+  //
+  // Runs AFTER ensureMarketingCampaignSchema because content_items.campaign_id points at
+  // campaigns, and after ensureMultiTenantSchema for tenant_id/brand_id. Those two columns
+  // are bare UUIDs with no FK, so this ordering is about a coherent fresh boot rather than a
+  // constraint - but a preview stack or CI database built in the other order would create
+  // content rows referring to campaigns and tenants that do not exist yet.
+  await ensureContentOsSchema();
+  // Marketing Operations - publishing queue: 3 new tables (jobs with a REAL publish_at,
+  // external publication receipts, and an append-only redacted provider event stream).
+  //
+  // Runs AFTER ensureContentOsSchema: publishing_jobs carries real FKs to content_items and
+  // content_variants, so unlike the earlier orderings in this subsystem this one is a genuine
+  // constraint, not just fresh-boot coherence. Built in the wrong order the CREATE TABLE
+  // fails - and because the loop only warns, it fails silently.
+  await ensurePublishingSchema();
+  // Marketing Operations - the attribution fields that were being validated and discarded:
+  // utm_term and utm_content (packed into strapi_attribution JSONB, unqueryable) and the four
+  // platform click IDs (absent from the codebase entirely). Additive columns on the LIVE
+  // visitor_sessions table; nothing NOT NULL, no backfill.
+  await ensureMarketingAttributionSchema();
   // CAPE (Colaberry Adaptive Path Engine) Phase 0-1 — skill ontology, evidence-band
   // weights, append-only skill-evidence ledger, derived skill state (idempotent DDL,
   // additive only, parallel to the existing XP/promotion tables).

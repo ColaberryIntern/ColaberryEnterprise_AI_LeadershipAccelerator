@@ -50,8 +50,16 @@ export interface EnsureLeadContextResult {
   updated: boolean;
 }
 
-/** Fields that may only ever be written once. Named explicitly so the rule is greppable. */
-const FIRST_TOUCH_FIELDS = [
+/**
+ * Fields that may only ever be written once. Named explicitly so the rule is greppable.
+ *
+ * EXPORTED so the doctrine is assertable from a test, not merely greppable. The failure this
+ * guards is silent in both directions: adding a field here freezes something that should keep
+ * updating, and removing one lets a later touch overwrite a lead's true origin — quietly
+ * rewriting where a customer came from, with no error anywhere. A rule that nothing can check
+ * is a rule that changes by accident.
+ */
+export const FIRST_TOUCH_FIELDS = [
   'first_source_id',
   'first_entry_point_id',
   'first_visitor_id',
