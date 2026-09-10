@@ -20,7 +20,12 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-accelerator}"]
+      # -d is REQUIRED. Without it libpq defaults the database to the USERNAME,
+      # so this probed a database called "accelerator" that has never existed.
+      # pg_isready still reported "accepting connections" (the postmaster answers
+      # either way), so the healthcheck passed while Postgres logged a FATAL every
+      # 5 seconds: 16,960 a day, 53% of everything it logged. Measured 2026-09-10.
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-accelerator} -d ${DB_NAME:-accelerator_prod}"]
       interval: 5s
       timeout: 5s
       retries: 5
