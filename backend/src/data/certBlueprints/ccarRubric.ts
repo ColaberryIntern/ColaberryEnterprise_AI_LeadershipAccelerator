@@ -131,6 +131,28 @@ export const SCENARIO_MARKERS: readonly string[] = [
  * The true scenario-framing rate is therefore 147/150, not the 132/150 the
  * detector reports. Quote the measured number, and quote this note beside it.
  */
+
+/**
+ * The same 18 keys, as data rather than prose.
+ *
+ * The list above was a comment, which meant nothing could act on it. The sweep
+ * then measured 18 items as below their ceiling and would have spent a model call
+ * on each — and since scenario framing is their only missing dimension, the only
+ * way a candidate could score higher is by inserting a phrase from the marker
+ * list. That is tuning good text to satisfy a proxy, which is exactly what the
+ * detector's own header refuses to do.
+ *
+ * So the exemption is now checkable. A tool that needs to know "can this item
+ * reach six?" reads this; a human deciding whether the exemption still holds
+ * reads the note above it. Both are the same eighteen keys, in one file.
+ */
+export const SCENARIO_FALSE_NEGATIVES: readonly string[] = [
+  'CCARF-D1-06', 'CCARF-D1-08', 'CCARF-D1-14', 'CCARF-D1-16',
+  'CCARF-D1-22', 'CCARF-D1-24', 'CCARF-D1-28', 'CCARF-D1-30',
+  'CCARF-D2-04', 'CCARF-D2-07', 'CCARF-D2-08', 'CCARF-D2-10',
+  'CCARF-D2-11', 'CCARF-D2-16', 'CCARF-D2-17', 'CCARF-D2-18',
+  'CCARF-D2-22', 'CCARF-D2-24',
+];
 export const OBSERVED_QUANTITY = /\b\d+(\.\d+)?\s?%|\bin \d+ of \d+\b|\b\d+ of the \d+\b|\b(from|to) (two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d+) (seconds?|minutes?|hours?)\b|\b\d+ (seconds?|minutes?|hours?|days?|dollars?)\b|\b(each|every|per) (week|day|month|run|conversation|sitting)\b|\b(quadruples?|triples?|doubles?|halved?)\b/i;
 
 export type RubricDimension =

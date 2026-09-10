@@ -47,7 +47,7 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { scoreItem } from '../services/certPrep/certQuestionRubric';
-import { improveItem, ImproverItem } from '../services/certPrep/certQuestionImprover';
+import { improveItem, ImproverItem, achievableScore, unachievableDimensions } from '../services/certPrep/certQuestionImprover';
 import { createDraftRevision, setReviewStatus } from '../services/certPrep/certQuestionBankService';
 
 const args = process.argv.slice(2);
@@ -214,10 +214,16 @@ async function main(): Promise<void> {
   for (const row of queue) {
     const start = toImproverItem(row);
     const startScore = scoreItem(start);
+    // The target is what this item CAN reach, not a flat six. A multi-select item
+    // can never meet `option_count`; aiming at six would spend a model call on it
+    // every run and then report it as a failure.
+    const ceiling = achievableScore(start, startScore.of);
+    const blocked = unachievableDimensions(start);
 
-    if (startScore.met === startScore.of) {
+    if (startScore.met >= ceiling) {
       outcomes.push({ key: row.question_key, before: startScore.met, after: startScore.met, rounds: 0, action: 'skipped' });
-      log(`${row.question_key.padEnd(14)} ${startScore.met}/${startScore.of}  already meets`);
+      log(`${row.question_key.padEnd(14)} ${startScore.met}/${startScore.of}  already meets`
+        + `${blocked.length > 0 ? `  [ceiling ${ceiling}/${startScore.of}: ${blocked.join(', ')} cannot change]` : ''}`);
       continue;
     }
 
@@ -272,9 +278,9 @@ async function main(): Promise<void> {
   }
 
   log('');
-  const meets = outcomes.filter((o) => o.after === 6).length;
+  const meets = outcomes.filter((o) => o.action === 'skipped' || o.after === 6).length;
   log(`RESULT: ${meets}/${outcomes.length} at 6/6`);
-  const stalled = outcomes.filter((o) => o.after < 6);
+  const stalled = outcomes.filter((o) => o.action !== 'skipped' && o.after < 6);
   if (stalled.length > 0) {
     log(`STALLED (${stalled.length}): ${stalled.map((s) => `${s.key}@${s.after}/6`).join(', ')}`);
     log('  These need replacement or a human rewrite. Nothing was approved for them.');
@@ -298,7 +304,20 @@ async function main(): Promise<void> {
   }
 }
 
+/**
+ * Let in-flight instrumentation finish before the connection goes away.
+ *
+ * The first live run ended with `ConnectionManager.getConnection was called after
+ * the connection manager was closed` — `getInstrumentedOpenAI` writes its cost
+ * and token rows to `ai_events` asynchronously, and the script closed sequelize
+ * out from under the last write. The run still produced correct output, which is
+ * what makes it easy to miss: the only casualty was the telemetry for the most
+ * expensive part of the job.
+ */
+const settleTelemetry = (): Promise<void> => new Promise((r) => { setTimeout(r, 2000); });
+
 main()
+  .then(settleTelemetry)
   .then(() => sequelize.close())
   .catch(async (err) => {
     console.error('sweepCertQuestionRubric failed:', err instanceof Error ? err.message : err);
