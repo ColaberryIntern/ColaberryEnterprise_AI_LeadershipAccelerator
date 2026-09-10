@@ -1,6 +1,7 @@
 import type OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { scoreItem, RubricItem, RubricScore } from './certQuestionRubric';
+import { RubricDimension, SCENARIO_FALSE_NEGATIVES } from '../../data/certBlueprints/ccarRubric';
 import { REFERENCE, RUBRIC } from '../../data/certBlueprints/ccarRubric';
 
 /**
@@ -138,6 +139,42 @@ export function buildImprovePrompt(item: ImproverItem, score: RubricScore): stri
 }
 
 /**
+ * Dimensions this item can NEVER meet, given what a rewrite is allowed to change.
+ *
+ * WHY THIS EXISTS. The first live sweep spent a model call on `CCARF-A2` and
+ * reported it stalled at 5/6. A2 is multi-select by design: `option_count` is
+ * defined as four options AND single select, and `checkInvariants` forbids
+ * changing how many answers are correct. So the improver is structurally
+ * incapable of fixing that dimension, and a sweep aiming at a flat 6/6 would
+ * re-spend on it on every run, for ever, and call the result a failure.
+ *
+ * A target an item cannot reach is not a standard, it is a bug in the check.
+ * The ceiling is what this item could achieve if every fixable dimension were
+ * fixed, and that is what the sweep aims at.
+ */
+export function unachievableDimensions(item: ImproverItem): RubricDimension[] {
+  const out: RubricDimension[] = [];
+  // `option_count` requires exactly one correct answer, and the number of
+  // correct answers is an invariant. See the multi-select note in
+  // `ccarFoundationsItems.ts` for why those three items stay as they are.
+  if (item.correct_keys.length !== 1) out.push('option_count');
+  // These eighteen stems DO open with an observation, in words the detector's
+  // marker list does not enumerate. They were hand-checked one by one and are
+  // recorded in `ccarRubric.ts`. Their only missing dimension is scenario
+  // framing, so the sole way a rewrite could score higher is by inserting a
+  // marker phrase — changing text that is already right to satisfy a proxy. The
+  // detector is the thing that is wrong here, and a sweep must not "fix" a
+  // question to make a known-imperfect measurement happy.
+  if (SCENARIO_FALSE_NEGATIVES.includes(item.question_key)) out.push('scenario_framing');
+  return out;
+}
+
+/** The highest score this item can reach without violating an invariant. */
+export function achievableScore(item: ImproverItem, of: number): number {
+  return of - unachievableDimensions(item).length;
+}
+
+/**
  * The invariant check, run on the candidate before its score is even considered.
  *
  * Deliberately structural rather than semantic. We cannot verify that the model
@@ -198,7 +235,10 @@ function parseCandidate(raw: string, before: ImproverItem): ImproverItem {
  */
 export async function improveItem(item: ImproverItem): Promise<ImproveOutcome> {
   const before = scoreItem(item);
-  if (before.met === before.of) return { status: 'already_meets', before };
+  // Measured against what this item CAN reach, not a flat six. See
+  // `unachievableDimensions`: a multi-select item can never meet `option_count`,
+  // and aiming at six would re-spend on it on every run.
+  if (before.met >= achievableScore(item, before.of)) return { status: 'already_meets', before };
 
   let lastErr: any = null;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
