@@ -11,6 +11,8 @@ import path from 'path';
 import { SIGNED_DOC_DIR } from '../../config/upload';
 import { documentsFor, outstandingRequirements, verifyDocument } from '../../services/internship/internshipDocumentService';
 import { activate, activeInternView, buildChecklist } from '../../services/internship/internshipActivationService';
+import { commitConversion, planConversion } from '../../services/internship/internshipConversionService';
+import { internshipKpis, internshipProfileSection } from '../../services/internship/internshipTrackingService';
 
 /**
  * Admin — AI Internship applications.
@@ -333,6 +335,112 @@ router.post('/api/admin/internship/applications/:id/activate', requireSection('i
       context: { message: err?.message, application_id: String(req.params.id) },
     }));
     res.status(500).json({ error: 'Could not activate.' });
+  }
+});
+
+// ── Phase 7: tracking, KPIs, and existing-intern conversion ─────────────────
+
+/** GET /api/admin/internship/kpis */
+router.get('/api/admin/internship/kpis', requireSection('internship'), async (_req: Request, res: Response) => {
+  try {
+    res.json({ kpis: await internshipKpis() });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_kpis_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not load the KPIs.' });
+  }
+});
+
+/** GET /api/admin/internship/profile/:enrollmentId */
+router.get('/api/admin/internship/profile/:enrollmentId', requireSection('internship'), async (req: Request, res: Response) => {
+  try {
+    res.json(await internshipProfileSection(String(req.params.enrollmentId)));
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_profile_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not load the internship profile.' });
+  }
+});
+
+const internSchema = z.object({
+  email: z.string().email().max(255),
+  full_name: z.string().max(255).nullish(),
+  started_on: z.string().max(20).nullish(),
+  interview_grandfathered: z.boolean().optional(),
+  documents_already_verified: z.boolean().optional(),
+  notes: z.string().max(1000).nullish(),
+}).strict();
+
+const conversionPlanSchema = z.object({
+  interns: z.array(internSchema).min(1).max(200),
+}).strict();
+
+/**
+ * POST /api/admin/internship/conversion/plan
+ *
+ * THE DRY RUN. Writes nothing and sends nothing — `planConversion` contains no
+ * write statement at all, which is the guarantee rather than a flag it honours.
+ */
+router.post('/api/admin/internship/conversion/plan', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = conversionPlanSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid roster.', issues: parsed.error.issues });
+    return;
+  }
+  try {
+    res.json(await planConversion({ interns: parsed.data.interns }));
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_conversion_plan_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not build the conversion plan.' });
+  }
+});
+
+/**
+ * POST /api/admin/internship/conversion/commit
+ *
+ * Re-plans from the submitted roster and commits THAT, rather than trusting a plan
+ * posted back by the browser. A plan is a read of the database at a moment in
+ * time; accepting one from a client would let a stale or edited plan decide who
+ * gets added to the cohort.
+ *
+ * `confirm: true` is required so a commit cannot be a mis-click on the dry run.
+ */
+const conversionCommitSchema = conversionPlanSchema.extend({
+  confirm: z.literal(true),
+}).strict();
+
+router.post('/api/admin/internship/conversion/commit', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = conversionCommitSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid request.', issues: parsed.error.issues });
+    return;
+  }
+  const actorId = String((req.admin as any)?.email ?? (req.admin as any)?.sub ?? 'unknown-admin');
+  try {
+    const plan = await planConversion({ interns: parsed.data.interns });
+    const report = await commitConversion({ plan, actorId });
+    res.json({ plan_summary: plan.summary, ...report });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_conversion_commit_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not commit the conversion.' });
   }
 });
 
