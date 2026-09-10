@@ -31,9 +31,30 @@ function bandForReadiness(slug: string | null | undefined): string {
   return READINESS_BAND[slug] || humanizeLevel(slug);
 }
 /** "Evidence: 0 < 3" → "Evidence — 0 of 3". Leaves anything else untouched. */
-function formatGap(g: string): string {
-  const m = g.match(/^(.+?):\s*(\d+)\s*<\s*(\d+)\s*$/);
-  return m ? `${m[1].trim()} — ${m[2]} of ${m[3]}` : g;
+// The server states a gap as its GATE KEY ("attendance: 0 < 1"). A gate key
+// names the column it was checked against, not the thing a student would go
+// and do, so it is translated here rather than shown raw.
+const GAP_LABELS: Record<string, string> = {
+  evidence: 'Pieces of verified evidence',
+  artifacts: 'Artifacts published',
+  github: 'GitHub commits or pull requests',
+  evaluations: 'Instructor or peer reviews',
+  implementation: 'Implementations delivered',
+  attendance: 'Live classes attended',
+};
+
+export function formatGap(g: string): string {
+  if (/^ai_approval/.test(g)) return 'AI review of your work — pending';
+  // Counts are integers, but a competency gap is a confidence like 0.35, so
+  // the number pattern has to admit a decimal or the line falls through raw.
+  const m = g.match(/^(.+?):\s*([\d.]+)\s*<\s*([\d.]+)\s*$/);
+  if (!m) return g;
+  const key = m[1].trim();
+  const label = GAP_LABELS[key]
+    || (key.startsWith('competency ')
+      ? key.slice('competency '.length).replace(/_/g, ' ') + ' confidence'
+      : key);
+  return `${label} — ${m[2]} of ${m[3]}`;
 }
 
 /**

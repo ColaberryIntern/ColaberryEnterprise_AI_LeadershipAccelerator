@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { StoryVerificationState } from './useStoryVerification';
 
 /**
@@ -74,8 +75,23 @@ const StoryCompletionPanel: React.FC<StoryCompletionPanelProps> = ({
           {/* Points appear only when there are points. The award is a share of
               the capstone's 800 XP budget and fails closed at 0 if the config
               row is missing, so "+0 XP" would announce an award that did not
-              happen. */}
-          {verif.xpAwarded > 0 && <span className="rt-verified-xp">+{verif.xpAwarded} XP</span>}
+              happen.
+
+              THE BADGE IS A LINK because this number lands in a DIFFERENT ledger
+              from the points total in the header. Builder XP is the build track;
+              the header total is the engagement economy, and it correctly does
+              not move when a story is verified. Shown side by side with nothing
+              connecting them, that reads as an award that vanished, and it was
+              reported as one. The badge now goes to the page that holds it. */}
+          {verif.xpAwarded > 0 && (
+            <Link
+              className="rt-verified-xp"
+              to="/portal/points"
+              title="Builder XP, tracked separately from your points total. See it and what unlocks your next band."
+            >
+              +{verif.xpAwarded} XP
+            </Link>
+          )}
         </div>
       )}
 
