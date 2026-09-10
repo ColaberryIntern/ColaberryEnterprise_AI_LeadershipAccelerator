@@ -240,6 +240,48 @@ export interface ProfileContextPanel {
   githubRepos: Array<{ repoUrl: string | null; language: string | null; fileCount: number | null; lastSyncAt: string | null }>;
 }
 
+export interface CommunicationOutcome { outcome: string; at: string | null; channel: string | null }
+
+export interface CommunicationMessage {
+  id: string;
+  direction: 'inbound' | 'outbound';
+  channel: string | null;
+  subject: string | null;
+  body: string | null;
+  sentAt: string | null;
+  scheduledFor: string | null;
+  status: string | null;
+  aiGenerated: boolean;
+  stepIndex: number | null;
+  toAddress: string | null;
+  source: string;
+  outcomes: CommunicationOutcome[];
+}
+
+export interface CommunicationThread {
+  campaignId: string | null;
+  campaignName: string;
+  campaignStatus: string | null;
+  enrollmentStatus: string | null;
+  stepIndex: number | null;
+  totalSteps: number | null;
+  enrolledAt: string | null;
+  lastActivityAt: string | null;
+  touchpoints: number | null;
+  responses: number | null;
+  messages: CommunicationMessage[];
+}
+
+export interface CommunicationsPanel {
+  threads: CommunicationThread[];
+  totalMessages: number;
+  totalCampaigns: number;
+  totalOutcomes: number;
+  inboundCount: number;
+  /** True when the message cap was hit, so the UI can say so. */
+  truncated: boolean;
+}
+
 export interface Profile {
   email: string; name: string | null; stage: string; tracedToLead: boolean;
   company: string | null; title: string | null;
@@ -254,6 +296,7 @@ export interface Profile {
   work?: WorkPanel | null;
   account?: AccountPanel | null;
   billingDetail?: BillingDetailPanel | null;
+  communications?: CommunicationsPanel | null;
   skills?: SkillsPanel | null;
   mentor?: MentorPanel | null;
   content?: ContentPanel | null;

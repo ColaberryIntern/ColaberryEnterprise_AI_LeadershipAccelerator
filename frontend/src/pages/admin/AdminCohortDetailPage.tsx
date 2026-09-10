@@ -263,7 +263,7 @@ function AdminCohortDetailPage() {
                 participants.map((p) => (
                   <tr key={p.id}>
                     <td className="fw-medium">
-                      <PersonLink name={p.full_name} email={p.email} />
+                      <PersonLink tab="class" name={p.full_name} email={p.email} />
                     </td>
                     <td>
                       <a href={`mailto:${p.email}`}>{p.email}</a>
