@@ -204,9 +204,19 @@ export const INTAKE_QUESTIONS_JSON_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['id', 'question', 'why', 'placeholder', 'suggestions', 'kind'],
+        required: ['id', 'question', 'why', 'placeholder', 'suggestions', 'kind', 'angle'],
         properties: {
           id: { type: 'string', description: 'short snake_case key, e.g. primary_users' },
+          /*
+           * WHICH ANGLE THIS QUESTION IS. Required, because the answer is filed
+           * against a truth dimension later and the alternative is guessing from
+           * the wording. A misfiled answer is worse than an unfiled one: it puts a
+           * student's words under a heading they did not mean.
+           */
+          angle: {
+            type: 'string',
+            description: 'the angle name from the priority list, e.g. THE TOOLS',
+          },
           kind: {
             type: 'string',
             enum: ['text', 'single', 'multi'],
