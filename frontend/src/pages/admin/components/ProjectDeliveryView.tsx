@@ -89,6 +89,46 @@ interface Gantt {
   totals: { tasks: number; complete: number; overdue: number; undated: number };
 }
 
+/**
+ * One outbound link on a project row, rendered as a chip so it reads as something to click.
+ *
+ * Returns null when there is no URL: a row without a Command Center shows nothing rather
+ * than a disabled-looking icon, because a greyed chip invites a click that cannot work.
+ */
+function LinkChip({
+  href, icon, label, accent = false,
+}: { href: string | null; icon: string; label: string; accent?: boolean }) {
+  if (!href) return null;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      title={`${label} — ${href}`}
+      aria-label={`Open the ${label}`}
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 20,
+        height: 20,
+        marginLeft: 6,
+        borderRadius: 5,
+        verticalAlign: 'text-bottom',
+        border: '0.5px solid var(--border-subtle)',
+        background: accent ? 'var(--status-info-bg, #eff6ff)' : 'var(--surface-sunken)',
+        color: accent ? 'var(--status-info, #2f6fc8)' : 'var(--text-muted)',
+        fontSize: 12,
+        lineHeight: 1,
+        textDecoration: 'none',
+      }}
+    >
+      <i className={icon} aria-hidden="true" />
+    </a>
+  );
+}
+
 interface Props {
   /** Scope to one cohort when opened from a drill-down; undefined = all cohorts. */
   cohortId?: string;
@@ -257,27 +297,24 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
                 <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
                   {r.student_name || '—'}{r.cohort_name ? ` · ${r.cohort_name}` : ''}
                 </span>
-                {/* Kept from the Command Center work: both are public URLs the platform
-                    already stores, and each renders only when detected so a row never
-                    shows a link that goes nowhere. */}
-                {r.command_center_url && (
-                  <a href={r.command_center_url} target="_blank" rel="noreferrer"
-                    title={`Command Center — ${r.command_center_url}`}
-                    aria-label="Open the Command Center"
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ marginLeft: 6, lineHeight: 1 }}>
-                    <i className="ri-dashboard-3-line" aria-hidden="true" />
-                  </a>
-                )}
-                {r.repo_url && (
-                  <a href={r.repo_url} target="_blank" rel="noreferrer"
-                    title={`Repository — ${r.repo_url}`}
-                    aria-label="Open the repository"
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ marginLeft: 6, lineHeight: 1 }}>
-                    <i className="ri-github-fill" aria-hidden="true" />
-                  </a>
-                )}
+                {/* Both are public URLs the platform already stores, and each renders only
+                    when detected so a row never shows a link that goes nowhere.
+
+                    THEY ARE CHIPS, NOT BARE GLYPHS. As two unlabelled icons sitting side by
+                    side in muted text they read as decoration — the operator's report was
+                    "we are still missing the icon links", on a page that was already
+                    rendering them. The Command Center carries the accent colour because it
+                    is the live thing the student built; the repository stays muted because
+                    it is the source behind it. Only 11 of 30 rows have a Command Center, so
+                    its presence has to be legible at a glance rather than inferred from
+                    which of two similar shapes came first. */}
+                <LinkChip
+                  href={r.command_center_url}
+                  icon="ri-dashboard-3-line"
+                  label="Command Center"
+                  accent
+                />
+                <LinkChip href={r.repo_url} icon="ri-github-fill" label="Repository" />
               </div>
 
               <div>
