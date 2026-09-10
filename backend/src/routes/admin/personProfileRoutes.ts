@@ -4,6 +4,7 @@ import { requireAdmin, adminAllowedSections } from '../../middlewares/authMiddle
 import { getPersonProfile } from '../../services/adminOs/personProfileService';
 import { hasAnyPersonScope } from '../../services/adminOs/personScope';
 import { visibleEnrollmentIds } from '../../services/career/careerMentorScopeService';
+import { resolveRefToEmail } from '../../services/adminOs/personRef';
 
 /**
  * One person's 360° profile.
@@ -16,15 +17,25 @@ import { visibleEnrollmentIds } from '../../services/career/careerMentorScopeSer
  */
 const router = Router();
 
+/**
+ * Either an email or a ref.
+ *
+ * `ref` accepts `lead:123` and `enrollment:<uuid>` as well as an address, so any
+ * admin surface can link to the 360 with whatever identifier its rows carry —
+ * most hold a lead id and no email. See services/adminOs/personRef.ts.
+ *
+ * Both are bounded because both reach a query. 320 is the RFC maximum for an
+ * address, and every ref shape is shorter than that.
+ */
 const querySchema = z.object({
-  // Bounded because it reaches a query. 320 is the RFC maximum for an address.
-  email: z.string().trim().min(3).max(320),
-});
+  email: z.string().trim().min(3).max(320).optional(),
+  ref: z.string().trim().min(1).max(320).optional(),
+}).refine((v) => !!(v.email || v.ref), { message: 'An email or ref is required.' });
 
 router.get('/api/admin/people/profile', requireAdmin, async (req: Request, res: Response) => {
   const parsed = querySchema.safeParse(req.query);
   if (!parsed.success) {
-    res.status(400).json({ error: 'An email is required.' });
+    res.status(400).json({ error: 'An email or ref is required.' });
     return;
   }
 
@@ -35,6 +46,16 @@ router.get('/api/admin/people/profile', requireAdmin, async (req: Request, res: 
   }
 
   try {
+    // Resolve the ref BEFORE the scope checks, so an unresolvable id is a 404
+    // rather than a confusing 403 — and so the resolved address is what every
+    // scope check below actually runs against.
+    const email = parsed.data.email
+      ?? await resolveRefToEmail(parsed.data.ref);
+    if (!email) {
+      res.status(404).json({ error: 'No such person, or not visible to your role.' });
+      return;
+    }
+
     // The second narrowing. `null` means no per-record filter (an admin); `[]`
     // means a mentor with no grants, who must see nothing. Passing them through
     // distinctly is what stops a mentor reading every learner on the platform.
@@ -47,7 +68,7 @@ router.get('/api/admin/people/profile', requireAdmin, async (req: Request, res: 
     });
 
     const profile = await getPersonProfile({
-      email: parsed.data.email,
+      email,
       sections,
       visibleEnrollmentIds: scopedEnrollments,
     });

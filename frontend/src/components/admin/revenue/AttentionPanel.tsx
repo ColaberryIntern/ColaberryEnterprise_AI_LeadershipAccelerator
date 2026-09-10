@@ -4,6 +4,7 @@ import { SectionCard, StatusBadge } from '../shell';
 import { AttentionRow } from '../../../services/subscriptionAnalyticsApi';
 import { fmtDate } from './format';
 import PlanTag from './PlanTag';
+import PersonLink from '../../../components/admin/person/PersonLink';
 
 interface Props {
   rows: AttentionRow[];
@@ -47,7 +48,10 @@ export default function AttentionPanel({ rows }: Props) {
             {rows.map((r) => (
               <tr key={`${r.kind}-${r.enrollment_id}`}>
                 <td>
-                  <div className="fw-medium">{r.payer_name}</div>
+                  <div className="fw-medium">
+                    <PersonLink name={r.payer_name} email={r.payer_email}
+                      enrollmentId={r.enrollment_id} />
+                  </div>
                   <div className="small text-muted"><code>{r.payer_email}</code></div>
                 </td>
                 <td><PlanTag plan={r.plan} /></td>

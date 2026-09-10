@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { TenureRosterRow } from '../../../services/subscriptionAnalyticsApi';
 import { money, fmtDate } from './format';
 import PlanTag from './PlanTag';
+import PersonLink from '../../../components/admin/person/PersonLink';
 
 interface Props {
   title: string;
@@ -107,7 +108,10 @@ export default function MemberRosterModal({ title, subtitle, fetcher, onClose }:
                     ) : filtered.map((r) => (
                       <tr key={r.enrollment_id}>
                         <td>
-                          <div className="fw-medium">{r.payer_name}</div>
+                          <div className="fw-medium">
+                            <PersonLink name={r.payer_name} email={r.payer_email}
+                              enrollmentId={r.enrollment_id} />
+                          </div>
                           <div className="small text-muted"><code>{r.payer_email}</code></div>
                         </td>
                         <td><PlanTag plan={r.plan} /></td>

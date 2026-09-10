@@ -4,6 +4,7 @@ import api from '../../utils/api';
 import Pagination from '../../components/ui/Pagination';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal } from '../../components/admin/shell/trust';
+import { personPath } from '../../adminOs/personLink';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -310,7 +311,7 @@ export default function AdminOpportunitiesPage() {
                     return (
                       <tr key={row.id}>
                         <td>
-                          <Link to={`/admin/leads/${row.lead.id}`} className="text-decoration-none fw-medium">
+                          <Link to={personPath({ leadId: row.lead.id }) ?? '/admin/people'} className="text-decoration-none fw-medium">
                             {row.lead.name}
                           </Link>
                           <div className="text-muted" style={{ fontSize: '0.75rem' }}>{row.lead.company}</div>
@@ -430,7 +431,7 @@ export default function AdminOpportunitiesPage() {
                     <SectionCard className="h-100">
                       <div className="d-flex justify-content-between align-items-start mb-2">
                         <div>
-                          <Link to={`/admin/leads/${row.lead.id}`} className="fw-bold text-decoration-none">
+                          <Link to={personPath({ leadId: row.lead.id }) ?? '/admin/people'} className="fw-bold text-decoration-none">
                             {row.lead.name}
                           </Link>
                           <div className="text-muted small">{row.lead.company} &middot; {PIPELINE_LABELS[row.lead.pipeline_stage] || row.lead.pipeline_stage}</div>

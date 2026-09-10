@@ -17,7 +17,7 @@ export interface RevenueTransaction {
   refundable: boolean;
   counted: boolean;
   enrollment_id: string | null; // -> student profile (/admin/accelerator?enrollment=)
-  lead_id: number | null; // -> lead profile (/admin/leads/:id)
+  lead_id: number | null; // -> the 360 profile, via personPath({ leadId })
 }
 
 export interface RevenueSummary {

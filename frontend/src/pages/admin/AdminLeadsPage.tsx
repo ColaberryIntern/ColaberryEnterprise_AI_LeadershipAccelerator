@@ -10,6 +10,8 @@ import Pagination from '../../components/ui/Pagination';
 import useDebounce from '../../hooks/useDebounce';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal, TrustLevel } from '../../components/admin/shell/trust';
+import { personPath } from '../../adminOs/personLink';
+import PersonLink from '../../components/admin/person/PersonLink';
 
 interface LeadStats {
   total: number;
@@ -664,7 +666,10 @@ function AdminLeadsPage() {
                         />
                       </td>
                       <td className="fw-medium">
-                        {lead.name}
+                        {/* The name is the link. It was plain text, so the only way
+                            into a lead was the View button at the far right of a
+                            very wide row. */}
+                        <PersonLink name={lead.name} email={lead.email} leadId={lead.id} />
                         {lead.executive_briefing_score != null && lead.executive_briefing_score > 7 && (
                           <span className="badge bg-danger ms-2" style={{ fontSize: '0.65rem', verticalAlign: 'middle' }}>High Intent Exec</span>
                         )}
@@ -719,7 +724,7 @@ function AdminLeadsPage() {
                       <td className="text-nowrap small">{formatDate(lead.created_at)}</td>
                       <td>
                         <Link
-                          to={`/admin/leads/${lead.id}`}
+                          to={personPath({ leadId: lead.id }) ?? '/admin/people'}
                           className="btn btn-outline-primary btn-sm"
                         >
                           View
