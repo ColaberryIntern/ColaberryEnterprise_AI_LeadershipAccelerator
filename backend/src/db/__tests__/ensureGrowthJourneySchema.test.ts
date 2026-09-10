@@ -2,7 +2,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { GROWTH_JOURNEY_STATEMENTS } from '../ensureGrowthJourneySchema';
 import { JourneyProgram } from '../../models/JourneyProgram';
-import { JourneyPath, OFFER_FAMILIES, LEARNER_OFFER_FAMILIES } from '../../models/JourneyPath';
+import { JourneyPath } from '../../models/JourneyPath';
+import { BrandOfferPolicy } from '../../models/BrandOfferPolicy';
+import {
+  OfferFamily,
+  OFFER_FAMILIES,
+  LEARNER_OFFER_FAMILIES,
+} from '../../models/OfferFamily';
 
 /**
  * T201 — the shared Growth Journey foundation schema.
@@ -58,9 +64,18 @@ describe('the schema is additive, and provably so', () => {
     expect(SQL).not.toMatch(/explorer_/i);
   });
 
-  it('creates exactly the two tables Phase 1 owns', () => {
+  it('creates exactly the four tables Phase 1 owns so far', () => {
+    // An explicit list rather than a count. T203 adds a column to `brands` and
+    // T205 adds `growth_journey_enrollments`, so this list will grow again -
+    // the assertion exists to catch a table nobody meant to add, and a count
+    // would not distinguish the two.
     const tables = [...SQL.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/gi)].map((m) => m[1]);
-    expect(tables.sort()).toEqual(['journey_paths', 'journey_programs']);
+    expect(tables.sort()).toEqual([
+      'brand_offer_policies',
+      'journey_paths',
+      'journey_programs',
+      'offer_families',
+    ]);
   });
 });
 
@@ -71,6 +86,27 @@ describe('the foreign keys point at the multi-tenant tables', () => {
     )!;
     expect(programs).toMatch(/tenant_id UUID NOT NULL REFERENCES tenants\(id\)/i);
     expect(programs).toMatch(/brand_id UUID NOT NULL REFERENCES brands\(id\)/i);
+  });
+
+  it('brand_offer_policies references tenants and brands', () => {
+    const policies = GROWTH_JOURNEY_STATEMENTS.find((s) =>
+      /CREATE TABLE IF NOT EXISTS brand_offer_policies/i.test(s),
+    )!;
+    expect(policies).toMatch(/tenant_id UUID NOT NULL REFERENCES tenants\(id\)/i);
+    expect(policies).toMatch(/brand_id UUID NOT NULL REFERENCES brands\(id\)/i);
+  });
+
+  it('scopes the offer-family catalog slug GLOBALLY, unlike brands', () => {
+    // brands.slug is unique per tenant. The offer vocabulary is deliberately
+    // shared, because comparing what different brands may offer is the point of
+    // the policy table - a per-tenant catalog would make ai_consulting a
+    // different thing per tenant and the comparison meaningless.
+    expect(SQL).toMatch(/offer_families_slug_unique[\s\S]*?\(slug\)/i);
+    expect(SQL).not.toMatch(/offer_families_slug_unique[\s\S]*?\(tenant_id, slug\)/i);
+  });
+
+  it('allows one policy per brand per offer family', () => {
+    expect(SQL).toMatch(/brand_offer_policies_brand_family_unique[\s\S]*?\(brand_id, offer_family\)/i);
   });
 
   it('journey_paths references journey_programs', () => {
@@ -100,6 +136,18 @@ describe('boot ordering — the criterion that would fail silently', () => {
     expect(multi).toBeGreaterThan(-1);
     expect(journey).toBeGreaterThan(-1);
     expect(journey).toBeGreaterThan(multi);
+  });
+
+  it('seeds the offer policy AFTER the tables it writes to are ensured', () => {
+    // T202. Seeding first is not a crash - every write is individually caught -
+    // so it would surface as warnings and an EMPTY policy table, which then
+    // denies every brand every family because the resolver fails closed. Safe,
+    // silent, and wrong.
+    const ensure = serverSource.indexOf('await ensureGrowthJourneySchema()');
+    const seed = serverSource.indexOf('await seedBrandOfferPolicy()');
+    expect(ensure).toBeGreaterThan(-1);
+    expect(seed).toBeGreaterThan(-1);
+    expect(seed).toBeGreaterThan(ensure);
   });
 
   it('registers it after the Explorer ensure step too, not beside it', () => {
@@ -151,6 +199,37 @@ const EXPECTED_PATH_COLUMNS = [
   'updated_at',
 ];
 
+const EXPECTED_OFFER_FAMILY_COLUMNS = [
+  'id',
+  'slug',
+  'name',
+  'status',
+  'description',
+  'metadata',
+  'created_at',
+  'updated_at',
+];
+
+const EXPECTED_POLICY_COLUMNS = [
+  'id',
+  'tenant_id',
+  'brand_id',
+  'offer_family',
+  'decision',
+  'status',
+  'effective_from',
+  'effective_to',
+  'approved_landing_pages',
+  'approved_claims',
+  'content_collections',
+  'approved_ctas',
+  'conversion_events',
+  'required_approvals',
+  'notes',
+  'created_at',
+  'updated_at',
+];
+
 /** Column names actually declared by a CREATE TABLE statement. */
 function columnsDeclaredIn(table: string): string[] {
   const sqlBlock = GROWTH_JOURNEY_STATEMENTS.find((s) =>
@@ -177,6 +256,12 @@ describe('the models match the SQL, in both directions', () => {
       EXPECTED_PROGRAM_COLUMNS.length,
     );
     expect(columnsDeclaredIn('journey_paths').length).toBe(EXPECTED_PATH_COLUMNS.length);
+    expect(columnsDeclaredIn('offer_families').length).toBe(
+      EXPECTED_OFFER_FAMILY_COLUMNS.length,
+    );
+    expect(columnsDeclaredIn('brand_offer_policies').length).toBe(
+      EXPECTED_POLICY_COLUMNS.length,
+    );
   });
 
   it('journey_programs: SQL declares exactly the expected columns', () => {
@@ -211,6 +296,62 @@ describe('the models match the SQL, in both directions', () => {
     expect(
       (JourneyPath.getAttributes().program_id.references as { model: string }).model,
     ).toBe('journey_programs');
+  });
+
+  it('offer_families: SQL and model agree on the same expected set', () => {
+    expect(columnsDeclaredIn('offer_families').sort()).toEqual(
+      [...EXPECTED_OFFER_FAMILY_COLUMNS].sort(),
+    );
+    expect(Object.keys(OfferFamily.getAttributes()).sort()).toEqual(
+      [...EXPECTED_OFFER_FAMILY_COLUMNS].sort(),
+    );
+  });
+
+  it('brand_offer_policies: SQL and model agree on the same expected set', () => {
+    expect(columnsDeclaredIn('brand_offer_policies').sort()).toEqual(
+      [...EXPECTED_POLICY_COLUMNS].sort(),
+    );
+    expect(Object.keys(BrandOfferPolicy.getAttributes()).sort()).toEqual(
+      [...EXPECTED_POLICY_COLUMNS].sort(),
+    );
+  });
+
+  it('brand_offer_policies carries all EIGHT attributes §4:278 requires', () => {
+    // Named individually. Cycle 2 of the plan enumerated six and dropped the
+    // last two, so a set comparison against a list I wrote is not enough - each
+    // one is asserted by name.
+    const cols = columnsDeclaredIn('brand_offer_policies');
+    expect(cols).toContain('status');
+    expect(cols).toContain('effective_from');
+    expect(cols).toContain('effective_to');
+    expect(cols).toContain('approved_landing_pages');
+    expect(cols).toContain('approved_claims');
+    expect(cols).toContain('content_collections');
+    expect(cols).toContain('approved_ctas');
+    expect(cols).toContain('conversion_events');
+    expect(cols).toContain('required_approvals');
+  });
+
+  it('every approved-content column defaults to an empty array, never null', () => {
+    // A caller reading the list must never have to distinguish "nothing
+    // approved" from "column not set" - one of those two readings eventually
+    // gets treated as unrestricted.
+    const policies = GROWTH_JOURNEY_STATEMENTS.find((s) =>
+      /CREATE TABLE IF NOT EXISTS brand_offer_policies/i.test(s),
+    )!;
+    for (const col of [
+      'approved_landing_pages',
+      'approved_claims',
+      'content_collections',
+      'approved_ctas',
+      'conversion_events',
+      'required_approvals',
+    ]) {
+      // `\\[` and not `\[`: inside a template literal `\[` collapses to `[`,
+      // which makes the pattern an EMPTY CHARACTER CLASS that matches nothing —
+      // so this assertion failed against DDL that was already correct.
+      expect(policies).toMatch(new RegExp(`${col} JSONB NOT NULL DEFAULT '\\[\\]'::jsonb`));
+    }
   });
 
   it('defaults a new program to draft, not active', () => {

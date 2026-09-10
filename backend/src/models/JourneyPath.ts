@@ -1,5 +1,6 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
+import type { OfferFamilySlug } from './OfferFamily';
 
 /**
  * JourneyPath — one offer family inside one journey program.
@@ -21,52 +22,25 @@ import { sequelize } from '../config/database';
  * is deliberate: a bad value should fail a test, not require a migration.
  */
 
-/** §4's eleven offer families (`request.md:264-276`). */
-export type OfferFamily =
-  | 'learner_free_training'
-  | 'learner_paid_training'
-  | 'learner_community_subscription'
-  | 'learner_certification'
-  | 'learner_internship'
-  | 'business_training'
-  | 'ai_consulting'
-  | 'workflow_automation'
-  | 'application_build'
-  | 'ai_project'
-  | 'paid_discovery';
-
-export const OFFER_FAMILIES: readonly OfferFamily[] = [
-  'learner_free_training',
-  'learner_paid_training',
-  'learner_community_subscription',
-  'learner_certification',
-  'learner_internship',
-  'business_training',
-  'ai_consulting',
-  'workflow_automation',
-  'application_build',
-  'ai_project',
-  'paid_discovery',
-];
-
 /**
- * The five families AI Flotation may never be offered (§4:287).
+ * THE FAMILY LIST MOVED, in T202, and this is deliberately not a re-export.
  *
- * Exported so the policy seed and its contract test share one list rather than
- * each carrying a copy that can drift. `business_training` plus every
- * `learner_*` family — six in total with training, which is the count an
- * earlier draft of the plan got wrong by naming only four.
+ * `OfferFamilySlug`, `OFFER_FAMILIES` and `LEARNER_OFFER_FAMILIES` now live in
+ * `models/OfferFamily.ts` alongside the catalog table that governs them. T201
+ * declared them here because this was the first file that needed them; keeping a
+ * copy — or an alias — would leave two names for one vocabulary, and the drift
+ * shows up later as a family that resolves in one place and not another, which
+ * reads as a policy bug rather than a duplicated constant.
+ *
+ * Import from `./OfferFamily`.
  */
-export const LEARNER_OFFER_FAMILIES: readonly OfferFamily[] = OFFER_FAMILIES.filter(
-  (f) => f.startsWith('learner_'),
-);
 
 export type JourneyPathStatus = 'draft' | 'active' | 'paused' | 'retired';
 
 export interface JourneyPathAttributes {
   id?: string;
   program_id: string;
-  offer_family: OfferFamily;
+  offer_family: OfferFamilySlug;
   name: string;
   status?: JourneyPathStatus;
   /**
@@ -85,7 +59,7 @@ export interface JourneyPathAttributes {
 export class JourneyPath extends Model<JourneyPathAttributes> implements JourneyPathAttributes {
   declare id: string;
   declare program_id: string;
-  declare offer_family: OfferFamily;
+  declare offer_family: OfferFamilySlug;
   declare name: string;
   declare status: JourneyPathStatus;
   declare priority: number;

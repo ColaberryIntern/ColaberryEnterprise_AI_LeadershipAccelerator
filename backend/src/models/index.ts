@@ -415,6 +415,8 @@ import Brand from './Brand';
 import BrandDomain from './BrandDomain';
 import JourneyProgram from './JourneyProgram';
 import JourneyPath from './JourneyPath';
+import OfferFamily from './OfferFamily';
+import BrandOfferPolicy from './BrandOfferPolicy';
 import SenderProfile from './SenderProfile';
 import PlatformIdentity from './PlatformIdentity';
 import PlatformIdentityLink from './PlatformIdentityLink';
@@ -1557,6 +1559,8 @@ export {
   BrandDomain,
   JourneyProgram,
   JourneyPath,
+  OfferFamily,
+  BrandOfferPolicy,
   SenderProfile,
   PlatformIdentity,
   PlatformIdentityLink,

@@ -3013,6 +3013,36 @@ async function start(): Promise<void> {
     console.error('[Seed] Campaign seeding failed:', err?.message)
   );
 
+  // Growth Journey OS T202: §4's offer catalog and brand-offer policy.
+  //
+  // AWAITED, not backgrounded like the campaign seed above: this is local
+  // database work with no external API call, so there is nothing slow to keep
+  // off the boot path. Wrapped because `start()` is called bare with
+  // `app.listen()` as its last statement — an uncontained throw here would stop
+  // the backend binding its port.
+  //
+  // MUST RUN AFTER `ensureGrowthJourneySchema()` (line ~2521), which creates the
+  // two tables it writes to. Seeding first is not a crash: every write is
+  // individually caught, so it would surface as a handful of warnings and an
+  // empty policy table — which then DENIES every brand every family, because
+  // the resolver fails closed. Silent and safe, but wrong.
+  //
+  // Unflagged deliberately. An empty table denies everything; seeding is what
+  // makes §4's intent true, and the denies land before the allows. Nothing
+  // reads the table yet.
+  try {
+    const { seedBrandOfferPolicy } = await import('./seeds/growthJourney/seedBrandOfferPolicy');
+    const policy = await seedBrandOfferPolicy();
+    console.log(
+      `[GrowthJourney] offer policy seeded: ${policy.families_created} families created, ` +
+        `${policy.policies_created} policies created, ${policy.policies_updated} denies restored` +
+        (policy.skipped_brands.length ? `, brands absent: ${policy.skipped_brands.join(',')}` : '') +
+        (policy.failed.length ? `, failed: ${policy.failed.length}` : ''),
+    );
+  } catch (err: any) {
+    console.warn('[GrowthJourney] offer policy seed failed (non-fatal):', err?.message);
+  }
+
   // Intelligence OS: ensure tables exist and start autonomous discovery
   try { await ensureIntelligenceTables(); } catch (err: any) { console.warn('[Intelligence] ensure tables failed (non-fatal):', err?.message); }
   setTimeout(() => {

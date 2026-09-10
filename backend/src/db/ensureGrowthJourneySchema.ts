@@ -91,6 +91,73 @@ export const GROWTH_JOURNEY_STATEMENTS: readonly string[] = [
   `CREATE UNIQUE INDEX IF NOT EXISTS journey_paths_program_family_unique
      ON journey_paths (program_id, offer_family)`,
   `CREATE INDEX IF NOT EXISTS idx_journey_paths_status ON journey_paths (status)`,
+
+  // ── T202 ──────────────────────────────────────────────────────────────────
+  // The governed offer catalog. §4's first line is "Offers are not free-text AI
+  // inventions", and this table is what makes that enforceable: a family has to
+  // exist here before a policy row or a path can name it.
+  //
+  // `slug` is unique GLOBALLY, not per tenant — unlike `brands.slug`, which is
+  // per-tenant. The vocabulary is deliberately shared: the whole point of §4's
+  // policy table is to compare what different brands may offer, and a
+  // tenant-scoped catalog would make `ai_consulting` a different thing for each
+  // tenant and the comparison meaningless.
+  `CREATE TABLE IF NOT EXISTS offer_families (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     slug VARCHAR(64) NOT NULL,
+     name VARCHAR(255) NOT NULL,
+     status VARCHAR(20) NOT NULL DEFAULT 'active',
+     description TEXT,
+     metadata JSONB,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS offer_families_slug_unique ON offer_families (slug)`,
+
+  // §4's brand-offer eligibility mapping, carrying all eight attributes §4:278
+  // requires: status, effective dates, approved landing pages, approved claims,
+  // content collections, CTAs, conversion events and required approvals.
+  //
+  // `decision` is the enforcement primitive and the reason this is not just a
+  // join table. Absence of a row already denies (the resolver fails closed), so
+  // an `allow` row is a grant. An explicit `deny` row exists for the case §4:287
+  // calls out by name — AI Flotation must never be offered business training or
+  // any learner programme, even when the classifier, the content tags or the
+  // caller are wrong — and a deny OUTRANKS an allow, so a later stray grant
+  // cannot open it.
+  //
+  // No CHECK constraint on `decision` or `status`, matching `offer_family`'s
+  // reasoning in `journey_paths`: the permitted values are asserted by contract
+  // tests, where they are visible and mutation-checked, rather than by DDL that
+  // needs a migration to correct.
+  `CREATE TABLE IF NOT EXISTS brand_offer_policies (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+     brand_id UUID NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+     offer_family VARCHAR(64) NOT NULL,
+     decision VARCHAR(10) NOT NULL,
+     status VARCHAR(20) NOT NULL DEFAULT 'active',
+     effective_from TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     effective_to TIMESTAMPTZ,
+     approved_landing_pages JSONB NOT NULL DEFAULT '[]'::jsonb,
+     approved_claims JSONB NOT NULL DEFAULT '[]'::jsonb,
+     content_collections JSONB NOT NULL DEFAULT '[]'::jsonb,
+     approved_ctas JSONB NOT NULL DEFAULT '[]'::jsonb,
+     conversion_events JSONB NOT NULL DEFAULT '[]'::jsonb,
+     required_approvals JSONB NOT NULL DEFAULT '[]'::jsonb,
+     notes TEXT,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+
+  // One policy per brand per offer family. The uniqueness is what lets the
+  // resolver read a single row and decide, rather than reconciling a set of
+  // overlapping grants — and it is the database, not application code, that
+  // keeps a concurrent seed from creating a second contradictory row.
+  `CREATE UNIQUE INDEX IF NOT EXISTS brand_offer_policies_brand_family_unique
+     ON brand_offer_policies (brand_id, offer_family)`,
+  `CREATE INDEX IF NOT EXISTS idx_brand_offer_policies_tenant ON brand_offer_policies (tenant_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_brand_offer_policies_decision ON brand_offer_policies (decision)`,
 ];
 
 export async function ensureGrowthJourneySchema(): Promise<void> {
