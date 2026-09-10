@@ -1,0 +1,110 @@
+import { sequelize } from '../config/database';
+
+/**
+ * Growth Journey OS — shared foundation schema (Phase 1, T201).
+ *
+ * Same idempotent raw-SQL pattern as `ensureExplorerGrowthSchema.ts` and
+ * `ensureMultiTenantSchema.ts`: every statement is `CREATE ... IF NOT EXISTS`
+ * in its own try/catch, so a partial database self-heals and re-running boot is
+ * a no-op. `sync({alter:true})` is not an option on a 215-model production
+ * graph — see `ensureWorkLedgerSchema.ts`'s header for that history.
+ *
+ * ADDITIVE ONLY. Creates two tables and their indexes. Never alters, renames or
+ * drops an existing column, table or constraint. That is not a style
+ * preference: AD-1 settled that Explorer Growth is extended beside rather than
+ * reshaped, and a rename anywhere in `explorer_*` is a hard stop for this run.
+ *
+ * MUST BE CALLED AFTER `ensureMultiTenantSchema()`, and this ordering is
+ * load-bearing rather than cosmetic. That function is what creates `brands`
+ * (`ensureMultiTenantSchema.ts:61`); it runs at `server.ts:2506`, while the
+ * Explorer ensure step runs at 2444. A foreign key to `brands(id)` registered
+ * beside the Explorer step would reference a table that does not exist yet, and
+ * because each statement is individually caught, the failure would be a
+ * console warning at boot rather than a crash — a missing table nobody notices
+ * until a query needs it.
+ *
+ * Columns must match these models EXACTLY:
+ *   backend/src/models/JourneyProgram.ts
+ *   backend/src/models/JourneyPath.ts
+ * This module's own test parses the column names out of the CREATE TABLE
+ * statements and asserts SET EQUALITY against a literal expected list, then
+ * asserts the models map that same set. Drift on either side fails a test
+ * rather than a live query.
+ *
+ * That comparison must stay a set equality in both directions. The first
+ * version of the test looped `expect(sqlBlock).toContain(col)` over the model's
+ * attributes, which passed while a SQL-only column existed, and passed with the
+ * `id UUID PRIMARY KEY` line deleted — `toContain('id')` matches the `id`
+ * inside `tenant_id`. Both mutations now fail.
+ */
+
+/** Exported so the test can assert on the SQL without executing it. */
+export const GROWTH_JOURNEY_STATEMENTS: readonly string[] = [
+  // A journey program belongs to exactly one brand. `tenant_id` is carried
+  // alongside `brand_id` — denormalised deliberately, matching `brand_domains`
+  // — so a tenant-scoped query never needs to join through brands, which is
+  // what `tenantScopeWhere` expects to filter on.
+  `CREATE TABLE IF NOT EXISTS journey_programs (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+     brand_id UUID NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+     slug VARCHAR(64) NOT NULL,
+     name VARCHAR(255) NOT NULL,
+     kind VARCHAR(32) NOT NULL,
+     status VARCHAR(20) NOT NULL DEFAULT 'draft',
+     description TEXT,
+     metadata JSONB,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+
+  // Unique per BRAND, not per tenant and not globally: the `colaberry` tenant
+  // holds both `colaberry-training` and `colaberry-enterprise`, and each may
+  // legitimately run a program called `learner`. Scoping to tenant would make
+  // those collide.
+  `CREATE UNIQUE INDEX IF NOT EXISTS journey_programs_brand_slug_unique
+     ON journey_programs (brand_id, slug)`,
+  `CREATE INDEX IF NOT EXISTS idx_journey_programs_tenant ON journey_programs (tenant_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_journey_programs_status ON journey_programs (status)`,
+
+  // A path is one offer family within a program. `offer_family` is a plain
+  // VARCHAR rather than an enum: §4 lists eleven families today and the set is
+  // expected to grow, and a Postgres enum cannot have a value removed. The
+  // permitted set is enforced by T202's policy table and its contract test,
+  // where the assertion is visible and mutation-checked.
+  `CREATE TABLE IF NOT EXISTS journey_paths (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     program_id UUID NOT NULL REFERENCES journey_programs(id) ON DELETE CASCADE,
+     offer_family VARCHAR(64) NOT NULL,
+     name VARCHAR(255) NOT NULL,
+     status VARCHAR(20) NOT NULL DEFAULT 'draft',
+     priority INTEGER NOT NULL DEFAULT 0,
+     metadata JSONB,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+
+  // One path per offer family per program. Two `consulting` paths inside one
+  // program is a seeding bug, and the database is where that gets caught rather
+  // than in an application-level "have we already added this?" check that loses
+  // to a concurrent seed.
+  `CREATE UNIQUE INDEX IF NOT EXISTS journey_paths_program_family_unique
+     ON journey_paths (program_id, offer_family)`,
+  `CREATE INDEX IF NOT EXISTS idx_journey_paths_status ON journey_paths (status)`,
+];
+
+export async function ensureGrowthJourneySchema(): Promise<void> {
+  for (const statement of GROWTH_JOURNEY_STATEMENTS) {
+    try {
+      await sequelize.query(statement);
+    } catch (err: unknown) {
+      // Warn and continue, matching the sibling ensure modules. A single failed
+      // statement must not abort boot, and re-running is a no-op, so the next
+      // boot repairs it.
+      console.warn(
+        '[ensureGrowthJourneySchema] statement failed:',
+        (err as { message?: string })?.message,
+      );
+    }
+  }
+}

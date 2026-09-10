@@ -104,6 +104,7 @@ import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
 import { ensureOrgAccountSchema } from './db/ensureOrgAccountSchema';
 import { ensureMultiTenantSchema } from './db/ensureMultiTenantSchema';
+import { ensureGrowthJourneySchema } from './db/ensureGrowthJourneySchema';
 import { ensureRefactoredDeliverySchema } from './db/ensureRefactoredDeliverySchema';
 import { ensureCareerPublicationSchema } from './db/ensureCareerPublicationSchema';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
@@ -2504,6 +2505,20 @@ async function start(): Promise<void> {
   // were reversed. Additive only; no NOT NULL, no backfill (backfills are separate
   // explicitly-invoked scripts, never boot work).
   await ensureMultiTenantSchema();
+  // Growth Journey OS — Phase 1: journey_programs and journey_paths, the shared
+  // framework Explorer Growth becomes the first program on.
+  //
+  // MUST run after ensureMultiTenantSchema, and this ordering is load-bearing rather
+  // than tidy: journey_programs carries foreign keys to tenants(id) and brands(id), and
+  // ensureMultiTenantSchema is what creates both. Registering it beside
+  // ensureExplorerGrowthSchema (line 2444) would reference tables that do not exist yet
+  // — and because each statement is individually caught, that failure surfaces as a
+  // console warning at boot, not a crash. The tables would simply be absent until
+  // something queried them.
+  //
+  // Additive only. Creates two tables; alters nothing. Nothing reads them until the
+  // Growth Journey flags are set, which they are not.
+  await ensureGrowthJourneySchema();
   // Refactored AI Delivery OS — Gate 1: 7 delivery tables (engagements, projects, the
   // student-project bridge, project membership, contracts, the decision ledger and the
   // append-only event stream), plus the ESC-1 relaxation of
