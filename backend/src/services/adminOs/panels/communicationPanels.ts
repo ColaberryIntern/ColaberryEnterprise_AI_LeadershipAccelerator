@@ -107,6 +107,26 @@ interface OutcomeRow {
   outcome: string; channel: string | null; created_at: string | null;
 }
 
+/**
+ * A timestamp as milliseconds, whatever shape the driver handed back.
+ *
+ * These fields are TYPED as `string | null`, and at runtime Sequelize returns
+ * Date objects for timestamp columns. Sorting them with `localeCompare` threw
+ * `TypeError: bt.localeCompare is not a function` and took the whole profile
+ * endpoint down with a 500 — for every person who had any message at all.
+ *
+ * Nothing caught it: tsc believed the declared type, the unit tests mock
+ * `sequelize.query` so they never see a Date, and verifying the SQL against
+ * production exercised the query but not this sort. Compare numerically and
+ * the shape stops mattering.
+ */
+function millis(value: string | Date | null | undefined): number {
+  if (!value) return 0;
+  const d = value instanceof Date ? value : new Date(String(value));
+  const n = d.getTime();
+  return Number.isNaN(n) ? 0 : n;
+}
+
 export async function loadCommunications(leadIds: number[]): Promise<CommunicationsPanel | null> {
   if (leadIds.length === 0) return null;
   const replacements = { leadIds, cap: MESSAGE_CAP };
@@ -263,19 +283,13 @@ export async function loadCommunications(leadIds: number[]): Promise<Communicati
 
   const ordered = Array.from(threads.values());
   for (const t of ordered) {
-    t.messages.sort((a, b) => {
-      const at = a.sentAt ?? a.scheduledFor ?? '';
-      const bt = b.sentAt ?? b.scheduledFor ?? '';
-      return bt.localeCompare(at);
-    });
+    t.messages.sort((a, b) => millis(b.sentAt ?? b.scheduledFor) - millis(a.sentAt ?? a.scheduledFor));
   }
   // Threads with recent traffic first; the campaign-less thread sinks unless it
   // is genuinely the most recent thing that happened.
-  ordered.sort((a, b) => {
-    const at = a.messages[0]?.sentAt ?? a.lastActivityAt ?? a.enrolledAt ?? '';
-    const bt = b.messages[0]?.sentAt ?? b.lastActivityAt ?? b.enrolledAt ?? '';
-    return bt.localeCompare(at);
-  });
+  ordered.sort((a, b) =>
+    millis(b.messages[0]?.sentAt ?? b.lastActivityAt ?? b.enrolledAt)
+    - millis(a.messages[0]?.sentAt ?? a.lastActivityAt ?? a.enrolledAt));
 
   return {
     threads: ordered,
