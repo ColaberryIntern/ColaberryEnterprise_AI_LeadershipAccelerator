@@ -101,6 +101,13 @@ export const env = {
   // resolveAgentId returns nothing and the call is skipped with `no_agent_id` -
   // a visible no-op, never a fallback onto someone else's script.
   synthflowInternshipAgentId: process.env.SYNTHFLOW_INTERNSHIP_AGENT_ID || '',
+  /*
+   * Project discovery, for the student build interview. Unset means no call is
+   * placed and the student is offered chat instead - never a borrowed agent.
+   * Creating the agent in Synthflow is an operator action; the code is complete
+   * and fails closed without it.
+   */
+  synthflowProjectDiscoveryAgentId: process.env.SYNTHFLOW_PROJECT_DISCOVERY_AGENT_ID || '',
 
   // Admin alert phone (for Cory health monitor voice alerts)
   adminAlertPhone: process.env.ADMIN_ALERT_PHONE || '',
