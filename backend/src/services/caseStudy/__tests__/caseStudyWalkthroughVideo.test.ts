@@ -46,9 +46,14 @@ describe('the walkthrough video reaches the page whole, or not at all', () => {
       url: VIDEO, title: 'How it works', captionsUrl: VTT, posterUrl: POSTER,
       durationSeconds: 82, narrationSource: 'synthetic',
     }));
+    // The three embed keys are part of the shape now that an operator can supply their own
+    // video, and they are NULL here on purpose: this is the generated walkthrough, and the
+    // assertion stays exact so a future change cannot quietly add a field to a public
+    // projection without a test noticing.
     expect(v).toEqual({
       url: VIDEO, title: 'How it works', captionsUrl: VTT, posterUrl: POSTER,
       durationSeconds: 82, narrationSource: 'synthetic',
+      embedUrl: null, provider: null, watchUrl: null,
     });
   });
 
