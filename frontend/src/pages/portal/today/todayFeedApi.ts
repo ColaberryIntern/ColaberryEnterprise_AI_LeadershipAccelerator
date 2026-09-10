@@ -26,6 +26,14 @@ export interface TodayFeedItem {
   points?: { learning?: number; builder?: number; community?: number } | null;
   interacted: boolean;
   author?: { name: string; avatar_url: string | null; level: number } | null;
+  // Community-post items (`ref` = `community:<postId>`) have NO card_id — they
+  // are a post, not a curriculum card. These carry the post's own identity and
+  // its server-resolved ritual label so the client opens the post's discussion
+  // thread rather than falling back to the ref as a card id.
+  community_post_id?: string | null;
+  student_label?: string | null;
+  like_count?: number | null;
+  comment_count?: number | null;
 }
 
 export interface TodayPage {
