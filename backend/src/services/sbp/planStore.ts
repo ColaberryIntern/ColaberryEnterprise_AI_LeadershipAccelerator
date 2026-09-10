@@ -33,6 +33,15 @@ export interface StoredPlan {
   model: string | null;
   attempts: number | null;
   correlation_id: string | null;
+  /**
+   * Which revision of the confirmed truth this plan was built from.
+   *
+   * NULL on every plan generated before this existed, permanently. That is the
+   * truthful answer rather than a gap to backfill: we do not know which truth
+   * those plans came from, and inventing one would be the fabricated provenance
+   * the whole truth contract exists to prevent.
+   */
+  truth_revision: number | null;
   published_at: string | null;
   created_at: string;
 }
@@ -50,6 +59,15 @@ interface PlanRow {
   model: string | null;
   attempts: number | null;
   correlation_id: string | null;
+  /**
+   * Which revision of the confirmed truth this plan was built from.
+   *
+   * NULL on every plan generated before this existed, permanently. That is the
+   * truthful answer rather than a gap to backfill: we do not know which truth
+   * those plans came from, and inventing one would be the fabricated provenance
+   * the whole truth contract exists to prevent.
+   */
+  truth_revision: number | null;
   published_at: string | null;
   created_at: string;
 }
@@ -66,6 +84,7 @@ const toStored = (r: PlanRow): StoredPlan => ({
   model: r.model,
   attempts: r.attempts,
   correlation_id: r.correlation_id,
+  truth_revision: r.truth_revision ?? null,
   published_at: r.published_at,
   created_at: r.created_at,
 });
@@ -88,16 +107,20 @@ export class PlanStoreError extends Error {
 export async function savePlanDraft(
   projectId: string,
   plan: BuildPlan,
-  meta: { gate: GateResult; model?: string; attempts?: number; correlationId?: string },
+  meta: {
+    gate: GateResult; model?: string; attempts?: number; correlationId?: string;
+    /** The confirmed truth revision this plan was generated from, when known. */
+    truthRevision?: number | null;
+  },
 ): Promise<StoredPlan> {
   const sha = hashPlan(plan);
   const rows = await sequelize.query<PlanRow>(
     `INSERT INTO build_plans
-       (project_id, version, status, plan_json, plan_sha256, gate_ok, gate_violations, model, attempts, correlation_id)
+       (project_id, version, status, plan_json, plan_sha256, gate_ok, gate_violations, model, attempts, correlation_id, truth_revision)
      VALUES (
        :projectId,
        (SELECT COALESCE(MAX(version), 0) + 1 FROM build_plans WHERE project_id = :projectId),
-       'draft', CAST(:planJson AS jsonb), :sha, :gateOk, CAST(:violations AS jsonb), :model, :attempts, :correlationId
+       'draft', CAST(:planJson AS jsonb), :sha, :gateOk, CAST(:violations AS jsonb), :model, :attempts, :correlationId, :truthRevision
      )
      RETURNING *`,
     {
@@ -111,6 +134,7 @@ export async function savePlanDraft(
         model: meta.model ?? null,
         attempts: meta.attempts ?? null,
         correlationId: meta.correlationId ?? null,
+        truthRevision: meta.truthRevision ?? null,
       },
     },
   );
