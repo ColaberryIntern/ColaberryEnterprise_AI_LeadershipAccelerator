@@ -41,6 +41,44 @@ jobs:
           npm install --no-audit --no-fund
           npx tsc --noEmit
 
+  # THE GAP THIS CLOSES. Until this job existed CI ran `tsc` and a build against the
+  # frontend and no TEST at all, so every assertion in `frontend/src/**/__tests__` was
+  # enforced only on whichever machine last happened to run it. A red frontend suite could
+  # therefore sit in main indefinitely, and one did: `storyDetailV2Contract` has six
+  # failures nobody was told about.
+  #
+  # CI=true is what makes react-scripts run once and exit instead of entering watch mode,
+  # and it is also what promotes warnings to errors — the same reason `frontend-build`
+  # sets it explicitly rather than relying on the runner.
+  frontend-tests:
+    name: Frontend unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: react-scripts test
+        working-directory: frontend
+        env:
+          CI: 'true'
+        run: |
+          npm install --no-audit --no-fund
+          # WHAT IS EXCLUDED, AND WHY — one line per suite, mirroring the rule in
+          # backend/jest.ci.config.ts. Turning this job on revealed 7 red suites beyond the
+          # one already known, so the choice was: leave the frontend unenforced, or enforce
+          # the 192 suites that pass and NAME the rest as debt. Named debt wins; an
+          # unenforced test file is worth nothing at all.
+          #
+          # testEnv/ is NOT a failure. It holds jest helpers that live under __tests__ and
+          # contain no test, so jest fails them for being empty. Excluding the directory is
+          # the correct config, not a concession.
+          #
+          # MAINTENANCE: nothing joins this list without a reason beside it. Every entry
+          # below is a real red suite in main, not a flaky one, and each shrinks the list
+          # when fixed.
+          npx react-scripts test --watchAll=false             --testPathIgnorePatterns               "/testEnv/"               "src/pages/publicV2/__tests__/storyDetailV2Contract.test.ts"               "src/components/publicV2/__tests__/linkIntegrity.test.tsx"               "src/config/__tests__/claimsRegistry.test.ts"               "src/pages/admin/__tests__/caseStudyRenderedPreview.test.tsx"               "src/pages/portal/settings/__tests__/SubscriptionSection.lapsed.test.tsx"               "src/pages/publicV2/__tests__/HomeV2.test.tsx"               "src/pages/publicV2/__tests__/PlatformV2.test.tsx"
+
   # A typecheck is NOT a build. On 2026-08-15 commit 2f0a72dd left main
   # unbuildable for hours with every check green: an eslint-disable comment in a
   # .ts file named `react-hooks/exhaustive-deps`, a rule CRA does not register
