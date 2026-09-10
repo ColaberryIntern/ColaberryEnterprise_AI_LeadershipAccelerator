@@ -128,6 +128,9 @@ interface Outcome {
   key: string;
   before: number;
   after: number;
+  /** What this item CAN reach. Stored, not re-derived: the summary and the
+   *  approval step must agree, and they disagreed when both guessed. */
+  ceiling: number;
   rounds: number;
   action: 'skipped' | 'improved' | 'stalled' | 'failed';
   detail?: string;
@@ -221,7 +224,7 @@ async function main(): Promise<void> {
     const blocked = unachievableDimensions(start);
 
     if (startScore.met >= ceiling) {
-      outcomes.push({ key: row.question_key, before: startScore.met, after: startScore.met, rounds: 0, action: 'skipped' });
+      outcomes.push({ key: row.question_key, before: startScore.met, after: startScore.met, ceiling, rounds: 0, action: 'skipped' });
       log(`${row.question_key.padEnd(14)} ${startScore.met}/${startScore.of}  already meets`
         + `${blocked.length > 0 ? `  [ceiling ${ceiling}/${startScore.of}: ${blocked.join(', ')} cannot change]` : ''}`);
       continue;
@@ -236,7 +239,7 @@ async function main(): Promise<void> {
     // a skipped item instead of writing a revision with an empty explanation.
     if (improved && write && !result.item.rationale?.trim()) {
       log(`${row.question_key.padEnd(14)} SKIPPED: improved candidate had no rationale`);
-      outcomes.push({ key: row.question_key, before: result.before, after: result.after, rounds: result.rounds, action: 'failed', detail: 'no rationale' });
+      outcomes.push({ key: row.question_key, before: result.before, after: result.after, ceiling, rounds: result.rounds, action: 'failed', detail: 'no rationale' });
       continue;
     }
 
@@ -267,6 +270,7 @@ async function main(): Promise<void> {
       key: row.question_key,
       before: result.before,
       after: result.after,
+      ceiling,
       rounds: result.rounds,
       action: improved ? action : (result.stalledReason ? action : 'stalled'),
       detail: result.stalledReason,
@@ -278,9 +282,27 @@ async function main(): Promise<void> {
   }
 
   log('');
-  const meets = outcomes.filter((o) => o.action === 'skipped' || o.after === 6).length;
-  log(`RESULT: ${meets}/${outcomes.length} at 6/6`);
-  const stalled = outcomes.filter((o) => o.action !== 'skipped' && o.after < 6);
+  /**
+   * Say what is true, not what is convenient.
+   *
+   * This line first read `RESULT: 150/150 at 6/6` after the ceiling change,
+   * because it counted every skipped item as a six. Twenty-one of them are at
+   * 5/6 — correctly, at their ceiling — so the summary overstated the bank to
+   * the one person relying on it. A run that reports better than reality is
+   * worse than one that reports nothing, because it ends the investigation.
+   *
+   * The two numbers are therefore reported separately: how many reached the top
+   * of the rubric, and how many are as good as they are permitted to get.
+   */
+  const perfect = outcomes.filter((o) => o.after === 6).length;
+  const atCeiling = outcomes.filter((o) => o.after >= o.ceiling).length;
+  const cappedBelowSix = atCeiling - perfect;
+  log(`RESULT: ${atCeiling}/${outcomes.length} at their ceiling`);
+  log(`        ${perfect} at 6/6`
+    + (cappedBelowSix > 0
+      ? `, ${cappedBelowSix} capped below six by a dimension no rewrite can change`
+      : ''));
+  const stalled = outcomes.filter((o) => o.after < o.ceiling);
   if (stalled.length > 0) {
     log(`STALLED (${stalled.length}): ${stalled.map((s) => `${s.key}@${s.after}/6`).join(', ')}`);
     log('  These need replacement or a human rewrite. Nothing was approved for them.');
@@ -288,9 +310,19 @@ async function main(): Promise<void> {
 
   if (approveAs) {
     log('');
-    log(`Approving ${meets} item(s) at 6/6 as ${approveAs}`);
+    /**
+     * Approve everything AT ITS CEILING, not everything at six.
+     *
+     * This filtered on `after === 6` while the line above it announced the
+     * ceiling count — so it would have said "approving 150" and approved 129,
+     * silently leaving the 21 capped items unapproved. An item held below six by
+     * a dimension no rewrite can change is as good as it is allowed to be, and
+     * refusing to approve it is refusing to approve the bank.
+     */
+    const approvable = outcomes.filter((x) => x.after >= x.ceiling);
+    log(`Approving ${approvable.length} item(s) at their ceiling as ${approveAs}`);
     let approved = 0;
-    for (const o of outcomes.filter((x) => x.after === 6)) {
+    for (const o of approvable) {
       const latest = await sequelize.query<{ revision: number }>(
         'SELECT MAX(revision) AS revision FROM cert_question_revisions WHERE question_key = :k',
         { replacements: { k: o.key }, type: QueryTypes.SELECT },
