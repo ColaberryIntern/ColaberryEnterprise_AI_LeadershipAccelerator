@@ -124,6 +124,80 @@ export function rollUpTiming(
 }
 
 /* ------------------------------------------------------------------ */
+/*  Task state buckets — the segmented bar                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The four states the compact dashboard's segmented bar draws, plus undated.
+ *
+ * `due_this_week` is the one that does not exist anywhere else in this codebase
+ * and is the reason this function exists: an operator scanning thirty rows needs
+ * to see what is ABOUT to slip, not only what already has. Seven days is the
+ * window because the programme runs on weekly releases.
+ *
+ * `undated` is counted but deliberately kept OUT of the bar's proportions —
+ * 67 of 656 tasks in production carry no due date, and rendering them as a fifth
+ * segment would imply a schedule position they do not have. They are reported as
+ * a separate caption instead.
+ */
+export interface TaskBuckets {
+  total: number;
+  done: number;
+  overdue: number;
+  due_this_week: number;
+  open: number;
+  undated: number;
+}
+
+export const DUE_SOON_DAYS = 7;
+
+export function bucketTasks(
+  tasks: Array<{ status?: string | null; due_on?: string | null }> | null | undefined,
+  today: string
+): TaskBuckets {
+  const b: TaskBuckets = { total: 0, done: 0, overdue: 0, due_this_week: 0, open: 0, undated: 0 };
+  if (!Array.isArray(tasks)) return b;
+
+  const horizon = addDays(today, DUE_SOON_DAYS);
+
+  for (const t of tasks) {
+    b.total += 1;
+    if (t.status === DONE) { b.done += 1; continue; }
+    const due = t.due_on ? String(t.due_on).slice(0, 10) : null;
+    if (!due) { b.undated += 1; continue; }
+    if (due < today) b.overdue += 1;
+    else if (due <= horizon) b.due_this_week += 1;
+    else b.open += 1;
+  }
+  return b;
+}
+
+/** `YYYY-MM-DD` plus n days, in UTC. */
+export function addDays(iso: string, n: number): string {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  const t = Date.UTC(y, m - 1, d) + n * 86400000;
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+export type ReleaseState = 'landed' | 'overdue' | 'due_soon' | 'open' | 'empty';
+
+/**
+ * One release reduced to a single status, for the small strip of segments that
+ * summarises a project's whole spine on a collapsed row.
+ *
+ * Order matters: a release with ANY overdue task reads as overdue even if most of
+ * it landed, because the overdue work is the thing needing attention. Fully
+ * complete wins only when nothing is outstanding.
+ */
+export function releaseState(b: TaskBuckets): ReleaseState {
+  if (b.total === 0) return 'empty';
+  if (b.overdue > 0) return 'overdue';
+  if (b.done === b.total) return 'landed';
+  if (b.due_this_week > 0) return 'due_soon';
+  return 'open';
+}
+
+/* ------------------------------------------------------------------ */
 /*  Build evidence                                                     */
 /* ------------------------------------------------------------------ */
 

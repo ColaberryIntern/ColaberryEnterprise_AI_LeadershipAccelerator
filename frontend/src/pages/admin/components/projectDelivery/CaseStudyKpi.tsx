@@ -33,6 +33,10 @@ interface Props {
   /** Published case studies are no longer candidates and say so instead of scoring. */
   alreadyCaseStudy?: boolean;
   compact?: boolean;
+  /** When given, the pill becomes a button that opens the readiness breakdown. The
+   *  tooltip stays either way — hovering is still the fastest read, and the click is
+   *  for when you want to copy the gaps into a message. */
+  onOpen?: () => void;
 }
 
 function tone(score: number): { bg: string; fg: string; border: string } {
@@ -60,7 +64,9 @@ export function readinessBreakdown(r: Readiness): string {
   ].join('\n');
 }
 
-export default function CaseStudyKpi({ readiness, alreadyCaseStudy = false, compact = false }: Props) {
+export default function CaseStudyKpi({
+  readiness, alreadyCaseStudy = false, compact = false, onOpen,
+}: Props) {
   if (alreadyCaseStudy) {
     return (
       <span
@@ -75,18 +81,43 @@ export default function CaseStudyKpi({ readiness, alreadyCaseStudy = false, comp
 
   const t = tone(readiness.score);
   const breakdown = readinessBreakdown(readiness);
-
-  return (
-    <span
-      className="d-inline-flex align-items-center gap-1 rounded-pill px-2 py-1"
-      style={{ background: t.bg, color: t.fg, border: `1px solid ${t.border}`, whiteSpace: 'nowrap' }}
-      title={breakdown}
-      aria-label={`Case Study readiness ${readiness.score} out of 100`}
-    >
+  const inner = (
+    <>
       <i className="ri-award-line" aria-hidden="true" />
       {!compact && <span style={{ fontSize: 11, fontWeight: 600 }}>Case Study</span>}
       <span style={{ fontWeight: 700 }}>{readiness.score}</span>
       <span style={{ fontSize: 11, opacity: 0.75 }}>/100</span>
+    </>
+  );
+  const skin: React.CSSProperties = {
+    background: t.bg, color: t.fg, border: `1px solid ${t.border}`, whiteSpace: 'nowrap',
+  };
+
+  // A real <button> when it does something, so it is keyboard-reachable and announced as
+  // actionable. `stopPropagation` keeps the click off the row's expand toggle underneath.
+  if (onOpen) {
+    return (
+      <button
+        type="button"
+        className="d-inline-flex align-items-center gap-1 rounded-pill px-2 py-1 border-0"
+        style={{ ...skin, cursor: 'pointer' }}
+        title={`${breakdown}\n\nClick for the full breakdown and a message to send.`}
+        aria-label={`Case Study readiness ${readiness.score} out of 100 — open the breakdown`}
+        onClick={(e) => { e.stopPropagation(); onOpen(); }}
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  return (
+    <span
+      className="d-inline-flex align-items-center gap-1 rounded-pill px-2 py-1"
+      style={skin}
+      title={breakdown}
+      aria-label={`Case Study readiness ${readiness.score} out of 100`}
+    >
+      {inner}
     </span>
   );
 }

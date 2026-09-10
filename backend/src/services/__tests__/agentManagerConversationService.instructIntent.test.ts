@@ -65,6 +65,16 @@ jest.mock('../managerDirectiveService', () => ({
   createDirective: (...a: any[]) => mockCreateDirective(...a),
 }));
 
+// ASSIGN_WORK is unrelated to this file — mocked wholesale so it never
+// fires on this file's own messages, same reasoning as the CHANGE_GOAL/
+// SCHEDULE_ONE_ON_ONE mocks above.
+jest.mock('../managerAssignWorkIntentService', () => ({
+  detectAssignWorkIntent: jest.fn(() => null),
+  buildAssignWorkConfirmationCardText: jest.fn(() => ''),
+  toPendingAssignWorkConfirmation: jest.fn(),
+  applyConfirmedAssignWork: jest.fn(),
+}));
+
 jest.mock('../agentWorkStatusIntentService', () => ({
   detectWorkStatusQuery: jest.fn(() => null),
   buildWorkStatusReply: jest.fn(),

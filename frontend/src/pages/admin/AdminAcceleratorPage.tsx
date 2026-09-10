@@ -15,6 +15,7 @@ import CurriculumCompletionTab from './components/CurriculumCompletionTab';
 import CurrentClassesDashboard from './components/CurrentClassesDashboard';
 import AdminCommunityRolesPage from './AdminCommunityRolesPage';
 import { resolveAcceleratorNav } from './utils/resolveAcceleratorNav';
+import PersonLink from '../../components/admin/person/PersonLink';
 
 // Program-wide surfaces embedded as tabs. Lazy so folding three substantial
 // pages into this route does not enlarge the Accelerator's initial bundle for
@@ -1113,12 +1114,13 @@ function AdminAcceleratorPage() {
                       return (
                       <tr key={e.id}>
                         <td className="fw-medium">
+                          <PersonLink name={e.full_name} email={e.email} enrollmentId={e.id} />
                           <button
-                            className="btn btn-link p-0 fw-medium text-start text-decoration-none align-baseline"
+                            className="btn btn-link p-0 ms-2 align-baseline text-muted"
                             onClick={() => setHistoryTarget({ id: e.id, name: e.full_name })}
-                            title="View full history & activity"
+                            title="Quick history drawer (the 360 profile has more)"
                           >
-                            {e.full_name}
+                            <i className="ri-history-line" />
                           </button>
                           {e.company && e.company !== 'Prospect' && (
                             <div className="text-muted small fw-normal">{e.company}</div>
@@ -1236,7 +1238,9 @@ function AdminAcceleratorPage() {
                             const record = attendanceRecords.find((r) => r.enrollment_id === e.id);
                             return (
                               <tr key={e.id}>
-                                <td className="fw-medium">{e.full_name}</td>
+                                <td className="fw-medium">
+                                  <PersonLink name={e.full_name} email={e.email} enrollmentId={e.id} />
+                                </td>
                                 <td>{e.company}</td>
                                 <td>
                                   <select

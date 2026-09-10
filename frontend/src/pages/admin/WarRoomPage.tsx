@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import api from '../../utils/api';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal } from '../../components/admin/shell/trust';
+import { personPath } from '../../adminOs/personLink';
 
 const POLL_INTERVAL = 10000;
 
@@ -496,7 +497,7 @@ export default function WarRoomPage() {
                                       {a.created_at ? new Date(a.created_at).toLocaleString() : '-'}
                                     </div>
                                     {a.lead_id && (
-                                      <a href={`/admin/leads/${a.lead_id}`} className="btn btn-sm btn-outline-primary mt-2" style={{ fontSize: 10 }}>
+                                      <a href={personPath({ leadId: a.lead_id }) ?? '/admin/people'} className="btn btn-sm btn-outline-primary mt-2" style={{ fontSize: 10 }}>
                                         View Lead
                                       </a>
                                     )}

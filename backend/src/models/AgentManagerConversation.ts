@@ -83,7 +83,30 @@ export interface PendingDirectiveConfirmation {
   detectedAt: string;
 }
 
-export type PendingIntentConfirmation = PendingGoalChangeConfirmation | PendingOneOnOneConfirmation | PendingDirectiveConfirmation;
+/**
+ * Capability 8, fourth intent on the generic column — ASSIGN_WORK (a manager
+ * handing this agent a specific task). Unlike the first three, the real
+ * backing write (orgChartTaskAssignmentService.assignTaskToAgent()) requires
+ * a real client-generated idempotency key, so `idempotencyKey` is minted
+ * once at detection time and carried on the pending record — the same key
+ * is replayed at confirm time rather than a second one being generated,
+ * which is what actually makes the write idempotent end to end. `title` is
+ * the manager's own message verbatim, same "no fragile extraction" posture
+ * as PendingOneOnOneConfirmation/PendingDirectiveConfirmation — see
+ * managerAssignWorkIntentService.ts.
+ */
+export interface PendingAssignWorkConfirmation {
+  intentType: 'ASSIGN_WORK';
+  title: string;
+  idempotencyKey: string;
+  detectedAt: string;
+}
+
+export type PendingIntentConfirmation =
+  | PendingGoalChangeConfirmation
+  | PendingOneOnOneConfirmation
+  | PendingDirectiveConfirmation
+  | PendingAssignWorkConfirmation;
 
 export interface AgentManagerConversationAttributes {
   id?: string;

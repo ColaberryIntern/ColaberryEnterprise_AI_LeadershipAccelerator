@@ -56,6 +56,12 @@ jest.mock('../../services/managerDirectiveIntentService', () => ({
   toPendingDirectiveConfirmation: jest.fn(),
   applyConfirmedDirective: jest.fn(),
 }));
+jest.mock('../../services/managerAssignWorkIntentService', () => ({
+  detectAssignWorkIntent: jest.fn(() => null),
+  buildAssignWorkConfirmationCardText: jest.fn(() => ''),
+  toPendingAssignWorkConfirmation: jest.fn(),
+  applyConfirmedAssignWork: jest.fn(),
+}));
 
 jest.mock('../../services/agentManagerConversationService', () => {
   const actual = jest.requireActual('../../services/agentManagerConversationService');

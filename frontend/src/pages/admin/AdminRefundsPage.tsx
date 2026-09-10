@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { lookupPayment, issueRefund, listRefunds, PaymentLookup, RefundRow } from '../../services/refundApi';
+import PersonLink from '../../components/admin/person/PersonLink';
 
 const money = (cents: number): string => `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmtDate = (iso: string): string => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -116,7 +117,7 @@ export default function AdminRefundsPage() {
         {lookup && (
           <div className="mt-3 border-top pt-3">
             <div className="row g-3">
-              <div className="col-md-3"><div className="small text-muted">Payer</div><div className="fw-semibold">{lookup.name || '—'}</div><div className="small text-muted">{lookup.email || 'no email on file'}</div></div>
+              <div className="col-md-3"><div className="small text-muted">Payer</div><div className="fw-semibold"><PersonLink name={lookup.name} email={lookup.email} /></div><div className="small text-muted">{lookup.email || 'no email on file'}</div></div>
               <div className="col-md-2"><div className="small text-muted">Amount</div><div className="fw-semibold">{money(lookup.amount_cents)}</div></div>
               <div className="col-md-2"><div className="small text-muted">Status</div><div><StatusBadge label={lookup.status} tone="neutral" /></div></div>
               <div className="col-md-2"><div className="small text-muted">Refundable</div><div className="fw-semibold">{money(lookup.refundable_cents)}</div></div>
@@ -155,7 +156,16 @@ export default function AdminRefundsPage() {
               ) : refunds.map((r) => (
                 <tr key={r.id}>
                   <td className="small text-muted">{fmtDate(r.created_at)}</td>
-                  <td>{r.customer_email || '—'}</td>
+                  <td>
+                    <PersonLink
+                      name={r.customer_name}
+                      email={r.customer_email}
+                      enrollmentId={r.enrollment_id}
+                    />
+                    {r.customer_name && r.customer_email && (
+                      <div className="small text-muted">{r.customer_email}</div>
+                    )}
+                  </td>
                   <td className="small"><code>{r.paysimple_payment_id}</code></td>
                   <td className="fw-semibold">{money(r.amount_cents)}</td>
                   <td className="small">{r.method}</td>

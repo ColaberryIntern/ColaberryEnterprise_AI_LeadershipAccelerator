@@ -135,3 +135,50 @@
     text-align: center;
   }
 }
+
+/* ── Active-intern command card (Phase 6) ─────────────────────────────────────
+ * Shares the .te-intern base with the recruiting card but never pulses: this one
+ * belongs to someone already in, and nagging them daily about their own job would
+ * be noise. See InternshipCommandCard's header.
+ */
+
+.te-intern__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 16px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line, #e5e7eb);
+}
+
+.te-intern__facts > div { min-width: 0; }
+
+.te-intern__facts dt {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted, #6b7280);
+  margin: 0 0 2px;
+}
+
+.te-intern__facts dd {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--strong, #111827);
+  margin: 0;
+}
+
+.te-intern__warn {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(180, 83, 9, 0.08);
+  border: 1px solid rgba(180, 83, 9, 0.2);
+  color: #92400e;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* The CTA is a Link here rather than a button, so it needs the same treatment. */
+a.te-intern__cta { text-align: center; text-decoration: none; }

@@ -24,6 +24,9 @@ import {
 import {
   handleGetInternshipDocuments, handleDownloadInternshipDocument, handleUploadSignedDocument,
 } from '../controllers/internshipDocumentController';
+import {
+  handleGetInternshipOnboarding, handleRecordAcknowledgement,
+} from '../controllers/internshipActivationController';
 import { requireBuildEntitlement } from '../middlewares/requireBuildEntitlement';
 import { requireContentEntitlement } from '../middlewares/requireContentEntitlement';
 import { requireOrgManager } from '../middlewares/orgAuth';
@@ -325,6 +328,13 @@ router.post('/api/portal/internship/submit', internshipWriteRateLimiter, require
 // — its OWN multer instance accepting only PDF or a clear image, deliberately
 // narrower than the shared document uploader (see config/upload.ts).
 router.get('/api/portal/internship/documents', requireParticipant, handleGetInternshipDocuments);
+
+// AI Internship activation. NOTE there is no participant route that activates
+// anyone — activation is reviewer/system only, so a student cannot put themselves
+// in the cohort by calling an endpoint.
+router.get('/api/portal/internship/onboarding', requireParticipant, handleGetInternshipOnboarding);
+router.post('/api/portal/internship/acknowledgements', internshipWriteRateLimiter, requireParticipant, handleRecordAcknowledgement);
+
 router.get('/api/portal/internship/documents/:documentId/download', requireParticipant, handleDownloadInternshipDocument);
 router.post(
   '/api/portal/internship/documents/:documentType/signed',

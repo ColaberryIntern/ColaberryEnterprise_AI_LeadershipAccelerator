@@ -244,6 +244,67 @@ export async function uploadSignedInternshipDocument(
   return data;
 }
 
+// ── Activation and onboarding ───────────────────────────────────────────────
+
+export interface ChecklistStep {
+  key: string;
+  order: number;
+  label: string;
+  detail: string;
+  actor: 'student' | 'colaberry';
+  blocking_activation: boolean;
+  complete: boolean;
+  waiting_on: string | null;
+}
+
+export interface MembershipCheck {
+  requires_subscription: boolean;
+  has_active_subscription: boolean;
+  has_active_comp: boolean;
+  ok: boolean;
+}
+
+export interface OnboardingView {
+  state: string;
+  is_active: boolean;
+  cohort_id: string | null;
+  joined_at: string | null;
+  week: number | null;
+  minimum_weekly_hours: number;
+  max_active_projects: number;
+  required_meetings: Array<{ day: string; kind: string }>;
+  checklist: ChecklistStep[];
+  progress: { done: number; total: number };
+  next_action: ChecklistStep | null;
+  membership: MembershipCheck;
+}
+
+export type RequirementKey = 'claude_code_account' | 'own_api_key_with_billing' | 'never_share_credentials';
+export type AcknowledgementState =
+  | 'acknowledged_requirement'
+  | 'self_attested_ready'
+  | 'setup_verified_without_secret_collection';
+
+export async function fetchInternshipOnboarding(): Promise<OnboardingView> {
+  const { data } = await portalApi.get<OnboardingView>('/api/portal/internship/onboarding');
+  return data;
+}
+
+/**
+ * Record a tool-readiness acknowledgement.
+ *
+ * Note there is NO key parameter and no field for one. `verification_method` says
+ * HOW it was checked, never what was seen.
+ */
+export async function recordInternshipAcknowledgement(body: {
+  requirement_key: RequirementKey;
+  state: AcknowledgementState;
+  verification_method?: string | null;
+}): Promise<OnboardingView> {
+  const { data } = await portalApi.post<OnboardingView>('/api/portal/internship/acknowledgements', body);
+  return data;
+}
+
 export async function dismissInternshipCard(days = 14): Promise<void> {
   await portalApi.post('/api/portal/internship/card/dismiss', { days });
 }

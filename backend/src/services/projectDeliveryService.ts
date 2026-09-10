@@ -27,6 +27,7 @@ import { sequelize } from '../config/database';
 // who counts as enrolled.
 import { DEPARTED_ENROLLMENT_STATUSES } from './acceleratorCurrentClassesService';
 import { getReleaseSummaries, ReleaseSummary } from './projectDeliveryDetail';
+import { TaskBuckets } from './projectReleaseMeta';
 
 /** Task statuses that count as finished. The others are not_started, in_progress, blocked. */
 export const DONE_TASK_STATUSES = ['complete'] as const;
@@ -69,6 +70,14 @@ export interface ProjectRow {
   maturity_score: number | null;
   has_repo: boolean;
   repo_url: string | null;
+  /** Which store answered: 'connection' (the record), 'project_column' (legacy
+   *  fallback), or 'none'. Carried so the count still depending on the abandoned
+   *  column stays visible rather than being silently absorbed. */
+  repo_source: 'connection' | 'project_column' | 'none';
+  /** The student's Command Center — a GitHub Pages site at the root of their own repo.
+   *  Stored inside `projects.project_variables`, NOT as a column, which is why a schema
+   *  search for `command_center_url` finds nothing. Null until they publish Pages. */
+  command_center_url: string | null;
   has_exec_summary: boolean;
   artifacts: number;
   tasks_total: number;
@@ -83,6 +92,9 @@ export interface ProjectRow {
    *  coloured bars without a per-project timeline fetch. Batched into two queries for
    *  all projects — see getReleaseSummaries. */
   releases: ReleaseSummary[];
+  /** Task-state split across the whole project, summed from its releases so the
+   *  segmented bar and the release strip cannot disagree. */
+  buckets: TaskBuckets;
 }
 
 /**
@@ -184,11 +196,41 @@ export async function getProjectDelivery(opts: { cohortId?: string } = {}): Prom
             co.name             AS cohort_name,
             p.project_stage     AS stage,
             p.maturity_score,
-            p.github_repo_url   AS repo_url,
+            -- THE REPO IS IN github_connections, NOT projects.github_repo_url.
+            --
+            -- This read p.github_repo_url alone and therefore tagged "no repo" on
+            -- every single project on the board. Measured on production the day this
+            -- was fixed: of 28 live projects, 22 have a repo via a connection and
+            -- ZERO have the project column populated. It is not a stale column, it is
+            -- an abandoned one — projectRepoResolver.ts documents the same finding
+            -- from 2026-08-20 and exists precisely so callers stop asking the wrong
+            -- table.
+            --
+            -- Precedence mirrors decideRepoPointer: a connection carrying a
+            -- non-blank repo_url wins, then the legacy column, then no repo. Blank is
+            -- not an answer — a connection with no repo_url is a student who
+            -- authorised GitHub and never picked a repo, and counting it would claim
+            -- a repository that does not exist. github_connections holds at most
+            -- one such row per project (partial unique index
+            -- github_connections_unique_project, verified max 1 in production), so
+            -- this join cannot fan the result out.
+            COALESCE(
+              NULLIF(btrim(gc.repo_url), ''),
+              NULLIF(btrim(p.github_repo_url), '')
+            )                   AS repo_url,
+            CASE
+              WHEN NULLIF(btrim(gc.repo_url), '') IS NOT NULL THEN 'connection'
+              WHEN NULLIF(btrim(p.github_repo_url), '') IS NOT NULL THEN 'project_column'
+              ELSE 'none'
+            END                 AS repo_source,
+            p.project_variables->>'command_center_url' AS command_center_url,
             (p.executive_summary IS NOT NULL AND p.executive_summary <> '') AS has_exec_summary
        FROM projects p
        LEFT JOIN enrollments e ON e.id = p.enrollment_id
        LEFT JOIN cohorts co    ON co.id = e.cohort_id
+       LEFT JOIN github_connections gc
+              ON gc.project_id = p.id
+             AND NULLIF(btrim(gc.repo_url), '') IS NOT NULL
       -- Two exclusions, both found by ranking this list against production and
       -- seeing test fixtures outrank real student work.
       --   * withdrawn enrollments: every E2E/demo fixture on prod sits on one
@@ -248,6 +290,7 @@ export async function getProjectDelivery(opts: { cohortId?: string } = {}): Prom
     const complete = t ? Number(t.complete) : 0;
     const artifacts = arts.get(r.project_id) ?? 0;
     const has_repo = !!(r.repo_url && String(r.repo_url).trim());
+    const projectReleases = releasesByProject.get(r.project_id) ?? [];
     const stage: ProjectStage = PROJECT_STAGES.includes(r.stage) ? r.stage : 'discovery';
 
     return {
@@ -262,6 +305,8 @@ export async function getProjectDelivery(opts: { cohortId?: string } = {}): Prom
       maturity_score: r.maturity_score,
       has_repo,
       repo_url: has_repo ? r.repo_url : null,
+      repo_source: has_repo ? (r.repo_source as 'connection' | 'project_column') : 'none',
+      command_center_url: r.command_center_url || null,
       has_exec_summary: !!r.has_exec_summary,
       artifacts,
       tasks_total: total,
@@ -271,7 +316,15 @@ export async function getProjectDelivery(opts: { cohortId?: string } = {}): Prom
       starts_on: t?.starts_on ?? null,
       ends_on: t?.ends_on ?? null,
       already_case_study: caseStudies.has(r.project_id),
-      releases: releasesByProject.get(r.project_id) ?? [],
+      releases: projectReleases,
+      buckets: projectReleases.reduce((acc, rel) => ({
+        total: acc.total + rel.buckets.total,
+        done: acc.done + rel.buckets.done,
+        overdue: acc.overdue + rel.buckets.overdue,
+        due_this_week: acc.due_this_week + rel.buckets.due_this_week,
+        open: acc.open + rel.buckets.open,
+        undated: acc.undated + rel.buckets.undated,
+      }), { total: 0, done: 0, overdue: 0, due_this_week: 0, open: 0, undated: 0 }),
       readiness: computeReadiness({
         tasks_total: total,
         tasks_complete: complete,

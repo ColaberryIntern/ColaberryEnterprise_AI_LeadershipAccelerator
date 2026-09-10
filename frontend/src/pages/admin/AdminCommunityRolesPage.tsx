@@ -6,6 +6,7 @@ import {
   setCommunityMemberMgmtRole,
   AdminCommunityMember, CommunityMemberRole, MgmtRole, MGMT_ROLES, MGMT_ROLE_LABEL,
 } from '../../services/communityAdminApi';
+import PersonLink from '../../components/admin/person/PersonLink';
 
 const ROLES: CommunityMemberRole[] = ['student', 'mentor', 'staff'];
 const ROLE_LABEL: Record<CommunityMemberRole, string> = { student: 'Member', mentor: 'Mentor', staff: 'Staff' };
@@ -192,7 +193,10 @@ export default function AdminCommunityRolesPage({ embedded = false }: Props = {}
               <tbody>
                 {members.map((m) => (
                   <tr key={m.id}>
-                    <td className="fw-semibold">{m.display_name}</td>
+                    <td className="fw-semibold">
+                      <PersonLink name={m.display_name} email={m.email}
+                        enrollmentId={m.enrollment_id} />
+                    </td>
                     <td className="text-muted small">{m.email ?? '—'}</td>
                     {/* Business account vs individual. Nothing in this roster
                         distinguished the two before, so a company's manager and

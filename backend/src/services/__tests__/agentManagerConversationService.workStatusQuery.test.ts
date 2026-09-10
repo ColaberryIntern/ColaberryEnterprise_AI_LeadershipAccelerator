@@ -54,6 +54,12 @@ jest.mock('../managerDirectiveIntentService', () => ({
   toPendingDirectiveConfirmation: jest.fn(),
   applyConfirmedDirective: jest.fn(),
 }));
+jest.mock('../managerAssignWorkIntentService', () => ({
+  detectAssignWorkIntent: jest.fn(() => null),
+  buildAssignWorkConfirmationCardText: jest.fn(() => ''),
+  toPendingAssignWorkConfirmation: jest.fn(),
+  applyConfirmedAssignWork: jest.fn(),
+}));
 jest.mock('../agentUncertaintyIntentService', () => ({
   detectUncertaintyQuery: jest.fn(() => false),
   buildUncertaintyReply: jest.fn(),

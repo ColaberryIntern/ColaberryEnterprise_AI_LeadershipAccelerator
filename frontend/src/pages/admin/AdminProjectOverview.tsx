@@ -4,6 +4,7 @@ import AdminPreviewStackPanel from '../../components/admin/AdminPreviewStackPane
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import ProjectDeliveryView from './components/ProjectDeliveryView';
 import { TrustSignal } from '../../components/admin/shell/trust';
+import PersonLink from '../../components/admin/person/PersonLink';
 
 interface CohortProjectStats {
   cohort_id: string;
@@ -383,7 +384,9 @@ function AdminProjectOverview({ initialCohortId }: ProjectOverviewProps = {}) {
                                                 } catch {} finally { setLoadingProject(false); }
                                               }}>
                                               <td style={{ paddingLeft: 24 }}>
-                                                <div className="fw-medium">{s.full_name}</div>
+                                                <div className="fw-medium">
+                                                  <PersonLink name={s.full_name} email={s.email} stopPropagation />
+                                                </div>
                                                 <div className="text-muted" style={{ fontSize: 10 }}>{s.email}{s.company ? ` · ${s.company}` : ''}</div>
                                                 {/* The Command Center is the student's own GitHub Pages site, built by
                                                     STORY-000 at the root of their repo. It is a public URL, so it opens

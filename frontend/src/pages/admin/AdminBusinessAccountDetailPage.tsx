@@ -11,6 +11,8 @@ import {
   getViewAsUrl,
   OrgDetailResponse,
 } from '../../services/adminOrgApi';
+import { personPath } from '../../adminOs/personLink';
+import PersonLink from '../../components/admin/person/PersonLink';
 
 /**
  * AdminBusinessAccountDetailPage — one company, everything staff needs.
@@ -306,7 +308,11 @@ function AdminBusinessAccountDetailPage(): React.ReactElement {
                       <tr key={m.id}>
                         <td>
                           <div className="fw-bold">{m.full_name || m.email}</div>
-                          {m.full_name && <div className="small text-muted">{m.email}</div>}
+                          {m.full_name && (
+                            <div className="small text-muted">
+                              <PersonLink name={m.email} email={m.email} className="text-muted text-decoration-none" />
+                            </div>
+                          )}
                         </td>
                         <td>
                           <StatusBadge
@@ -502,7 +508,7 @@ function AdminBusinessAccountDetailPage(): React.ReactElement {
               <dl className="mb-0 small">
                 <dt className="text-muted">Lead</dt>
                 <dd>
-                  <Link to={`/admin/leads/${lead.id}`}>#{lead.id}</Link>
+                  <Link to={personPath({ leadId: lead.id }) ?? '/admin/people'}>#{lead.id}</Link>
                 </dd>
                 <dt className="text-muted">Email</dt>
                 <dd>{lead.email}</dd>

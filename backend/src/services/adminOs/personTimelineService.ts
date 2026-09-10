@@ -27,6 +27,18 @@ import { sequelize } from '../../config/database';
  * A source with no person key, or with zero rows, is not queried — an empty
  * branch in a UNION costs a scan and returns nothing.
  *
+ * ── THE 2026-09-09 AUDIT ────────────────────────────────────────────────────
+ *
+ * A sweep of all 163 person-keyed tables found 60 holding rows for three sample
+ * learners, against the 14 this file read. The programme's own record of what a
+ * learner DID was absent: attendance, curriculum completion, assessments,
+ * mentor conversations, artifacts, reflections, subscriptions and community
+ * posts are all added below.
+ *
+ * That audit is now a repeatable procedure rather than a one-off — see the
+ * `person-360` skill, which carries the query and the full source registry so
+ * a table added next quarter shows up as a gap instead of silently missing.
+ *
  * ── DOMAIN GATING ───────────────────────────────────────────────────────────
  *
  * Each event carries a domain, and a branch is only included when the caller's
@@ -185,6 +197,83 @@ const BRANCHES: Branch[] = [
     sql: `SELECT sse.created_at AS occurred_at, 'learning' AS domain, 'student_skill_evidence' AS source,
                  'skill_evidence' AS type, NULL AS summary
           FROM student_skill_evidence sse WHERE sse.enrollment_id IN (:enrollmentIds)`,
+  },
+  // ── Added 2026-09-09 ──────────────────────────────────────────────────────
+  //
+  // The audit of every person-keyed table found the programme's own record of
+  // what a learner did was missing entirely. timeline_card_progress alone holds
+  // more rows for three people than every branch above it combined.
+  {
+    domain: 'learning', key: 'enrollment',
+    sql: `SELECT ar.created_at AS occurred_at, 'learning' AS domain, 'attendance_records' AS source,
+                 'class_' || ar.status::text AS type,
+                 COALESCE(ls.title, 'Live session') ||
+                   CASE WHEN ar.duration_minutes IS NOT NULL
+                        THEN ' · ' || ar.duration_minutes::text || ' min' ELSE '' END AS summary
+          FROM attendance_records ar
+          LEFT JOIN live_sessions ls ON ls.id = ar.session_id
+          WHERE ar.enrollment_id IN (:enrollmentIds)`,
+  },
+  {
+    domain: 'learning', key: 'enrollment',
+    sql: `SELECT tcp.completed_at AS occurred_at, 'learning' AS domain, 'timeline_card_progress' AS source,
+                 'card_completed' AS type,
+                 COALESCE(tc.title, 'Curriculum card') ||
+                   CASE WHEN tc.week IS NOT NULL THEN ' · week ' || tc.week::text ELSE '' END AS summary
+          FROM timeline_card_progress tcp
+          LEFT JOIN timeline_cards tc ON tc.id = tcp.card_id
+          WHERE tcp.enrollment_id IN (:enrollmentIds) AND tcp.completed_at IS NOT NULL`,
+  },
+  {
+    domain: 'learning', key: 'enrollment',
+    sql: `SELECT raa.submitted_at AS occurred_at, 'learning' AS domain, 'runtime_assessment_attempts' AS source,
+                 CASE WHEN raa.passed THEN 'assessment_passed' ELSE 'assessment_attempted' END AS type,
+                 COALESCE(raa.kind, 'assessment') ||
+                   CASE WHEN raa.score IS NOT NULL
+                        THEN ' · ' || ROUND(raa.score::numeric, 1)::text ELSE '' END AS summary
+          FROM runtime_assessment_attempts raa
+          WHERE raa.enrollment_id IN (:enrollmentIds) AND raa.submitted_at IS NOT NULL`,
+  },
+  {
+    domain: 'learning', key: 'enrollment',
+    sql: `SELECT rmt.created_at AS occurred_at, 'learning' AS domain, 'runtime_mentor_turns' AS source,
+                 'mentor_' || COALESCE(rmt.mode, 'turn') AS type,
+                 left(rmt.question, 140) AS summary
+          FROM runtime_mentor_turns rmt WHERE rmt.enrollment_id IN (:enrollmentIds)`,
+  },
+  {
+    domain: 'learning', key: 'enrollment',
+    sql: `SELECT rpa.created_at AS occurred_at, 'learning' AS domain, 'runtime_portfolio_artifacts' AS source,
+                 'artifact_' || COALESCE(rpa.kind, 'created') AS type, rpa.title AS summary
+          FROM runtime_portfolio_artifacts rpa WHERE rpa.enrollment_id IN (:enrollmentIds)`,
+  },
+  {
+    domain: 'learning', key: 'enrollment',
+    sql: `SELECT re.created_at AS occurred_at, 'learning' AS domain, 'reflection_entries' AS source,
+                 'reflection' AS type,
+                 CASE WHEN re.week IS NOT NULL THEN 'week ' || re.week::text ELSE 'reflection' END ||
+                   CASE WHEN re.readiness IS NOT NULL
+                        THEN ' · readiness ' || re.readiness::text ELSE '' END AS summary
+          FROM reflection_entries re WHERE re.enrollment_id IN (:enrollmentIds)`,
+  },
+  {
+    domain: 'commerce', key: 'enrollment',
+    sql: `SELECT s.created_at AS occurred_at, 'commerce' AS domain, 'subscriptions' AS source,
+                 'subscription_' || COALESCE(s.status, 'recorded') AS type,
+                 COALESCE(s.plan, 'plan') ||
+                   CASE WHEN s.amount_cents IS NOT NULL
+                        THEN ' · $' || ROUND(s.amount_cents/100.0, 2)::text ELSE '' END AS summary
+          FROM subscriptions s WHERE s.enrollment_id IN (:enrollmentIds)`,
+  },
+  {
+    domain: 'community', key: 'enrollment',
+    sql: `SELECT cp.created_at AS occurred_at, 'community' AS domain, 'community_posts' AS source,
+                 'post_' || COALESCE(cp.category, 'published') AS type,
+                 left(cp.body, 140) AS summary
+          FROM community_posts cp
+          WHERE cp.member_id IN (
+            SELECT cm.id FROM community_members cm WHERE cm.enrollment_id IN (:enrollmentIds)
+          )`,
   },
 ];
 
