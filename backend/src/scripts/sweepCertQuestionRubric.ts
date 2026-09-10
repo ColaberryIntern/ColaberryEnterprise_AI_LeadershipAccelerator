@@ -278,8 +278,26 @@ async function main(): Promise<void> {
   }
 
   log('');
-  const meets = outcomes.filter((o) => o.action === 'skipped' || o.after === 6).length;
-  log(`RESULT: ${meets}/${outcomes.length} at 6/6`);
+  /**
+   * Say what is true, not what is convenient.
+   *
+   * This line first read `RESULT: 150/150 at 6/6` after the ceiling change,
+   * because it counted every skipped item as a six. Twenty-one of them are at
+   * 5/6 — correctly, at their ceiling — so the summary overstated the bank to
+   * the one person relying on it. A run that reports better than reality is
+   * worse than one that reports nothing, because it ends the investigation.
+   *
+   * The two numbers are therefore reported separately: how many reached the top
+   * of the rubric, and how many are as good as they are permitted to get.
+   */
+  const perfect = outcomes.filter((o) => o.after === 6).length;
+  const atCeiling = outcomes.filter((o) => o.action === 'skipped' || o.after === 6).length;
+  const cappedBelowSix = atCeiling - perfect;
+  log(`RESULT: ${atCeiling}/${outcomes.length} at their ceiling`);
+  log(`        ${perfect} at 6/6`
+    + (cappedBelowSix > 0
+      ? `, ${cappedBelowSix} capped below six by a dimension no rewrite can change`
+      : ''));
   const stalled = outcomes.filter((o) => o.action !== 'skipped' && o.after < 6);
   if (stalled.length > 0) {
     log(`STALLED (${stalled.length}): ${stalled.map((s) => `${s.key}@${s.after}/6`).join(', ')}`);
