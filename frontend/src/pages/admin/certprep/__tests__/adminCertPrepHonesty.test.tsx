@@ -17,6 +17,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import CertBankPanel from '../CertBankPanel';
+import { rubricTone } from '../RubricBadge';
 import { QuestionCard, isFixtureReviewer } from '../CertReviewPanel';
 import { EvidenceRow } from '../CertEvidenceReviewPanel';
 import { bankTrust } from '../AdminCertPrepPage';
@@ -332,5 +333,43 @@ describe('rubric score in the review queue', () => {
     const html = card(revision());
     expect(html).toContain('To bound what it can read');
     expect(html).not.toContain('Rubric');
+  });
+});
+
+// ── the colour has to mean the same thing on every screen ────────────────────
+
+describe('rubric badge bands', () => {
+  it('is green ONLY when every dimension is met', () => {
+    // The reference meets all six. "Close" is not "matches", and a green 5/6
+    // would tell a reviewer the item already looks like the real exam.
+    expect(rubricTone(6, 6)).toBe('success');
+    expect(rubricTone(5, 6)).toBe('warning');
+  });
+
+  it('is red for a question that does not resemble the exam', () => {
+    // A definitional stem with label options scores 1-2. That was the whole
+    // bank before the rewrite, and it should not read as a minor shortfall.
+    expect(rubricTone(1, 6)).toBe('danger');
+    expect(rubricTone(3, 6)).toBe('danger');
+  });
+
+  it('does not divide by a zero denominator', () => {
+    expect(rubricTone(0, 0)).toBe('danger');
+  });
+
+  it('shows the bank summary once the backend sends one', () => {
+    const html = renderToStaticMarkup(
+      <CertBankPanel health={health({ rubric: { scored: 150, fully_meets: 129, median_met: 6, of: 6 } })} />,
+    );
+    expect(html).toContain('129');
+    expect(html).toContain('match the published exam shape');
+    expect(html).toMatch(/Advisory/);
+  });
+
+  it('renders the bank panel unchanged when the backend sends no rubric', () => {
+    // An older backend, or the two halves of a deploy landing apart.
+    const html = renderToStaticMarkup(<CertBankPanel health={health()} />);
+    expect(html).not.toContain('match the published exam shape');
+    expect(html).toContain('Questions');
   });
 });

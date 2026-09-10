@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { SectionCard, StatusBadge } from '../../../components/admin/shell';
+import { RubricBadge, rubricTone } from './RubricBadge';
 import {
   fetchReviewQueue, setQuestionStatus, QuestionRevision, ReviewStatus, RubricScore,
 } from '../../../services/certPrepAdminApi';
@@ -77,16 +78,16 @@ const DIMENSION_LABEL: Record<string, string> = {
 export function RubricSummary({ rubric }: { rubric: RubricScore }) {
   const complete = rubric.met === rubric.of;
   const missed = rubric.dimensions.filter((d) => d.verdict !== 'meets');
+  const tone = rubricTone(rubric.met, rubric.of);
+  const rail = tone === 'success' ? '#198754' : tone === 'warning' ? '#ffc107' : '#dc3545';
 
   return (
-    <div className="border-start border-3 ps-3 mb-3" style={{ borderColor: complete ? '#198754' : '#ffc107' }}>
+    <div className="border-start border-3 ps-3 mb-3" style={{ borderColor: rail }}>
       <div className="d-flex align-items-center gap-2 mb-1">
-        <span className="fw-semibold">
-          Rubric {rubric.met}/{rubric.of}
-        </span>
-        <span className={`badge ${complete ? 'text-bg-success' : 'text-bg-warning'}`}>
-          {complete ? 'Matches the published shape' : `${missed.length} to fix`}
-        </span>
+        <RubricBadge met={rubric.met} of={rubric.of} />
+        {!complete && (
+          <span className="text-muted small">{missed.length} to fix</span>
+        )}
       </div>
 
       {missed.length > 0 && (

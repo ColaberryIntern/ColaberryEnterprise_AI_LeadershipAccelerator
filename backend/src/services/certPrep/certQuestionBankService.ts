@@ -127,8 +127,16 @@ export function isRevisionServable(revision: ServabilityFields, now: Date = new 
  * Choose which revision of a question to serve: the highest-numbered servable one.
  * Returns null when every revision is draft, in review, retired or out of window —
  * the caller must then omit the question, never fall back to an unapproved row.
+ *
+ * Constrained to the servability fields plus `revision`, which is all it reads.
+ * A caller holding a partial row — a drift check selecting a handful of columns —
+ * must be able to ask "which revision would a student get?" without inventing a
+ * stem and a difficulty to satisfy the compiler. Every full-row caller still fits.
  */
-export function pickServableRevision<T extends RevisionLike>(revisions: T[], now: Date = new Date()): T | null {
+export function pickServableRevision<T extends ServabilityFields & { revision: number }>(
+  revisions: T[],
+  now: Date = new Date(),
+): T | null {
   const servable = revisions.filter((r) => isRevisionServable(r, now));
   if (servable.length === 0) return null;
   return servable.reduce((best, r) => (r.revision > best.revision ? r : best));
