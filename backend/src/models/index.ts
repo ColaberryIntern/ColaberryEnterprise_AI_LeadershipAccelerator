@@ -435,6 +435,7 @@ import InternshipInterviewSession from './InternshipInterviewSession';
 import InternshipInterviewResponse from './InternshipInterviewResponse';
 import InternshipDecision from './InternshipDecision';
 import InternshipDocument from './InternshipDocument';
+import InternshipRequirementAcknowledgement from './InternshipRequirementAcknowledgement';
 import CareerMentorScope from './CareerMentorScope';
 import DeliveryProjectSourceLink from './DeliveryProjectSourceLink';
 import DeliveryProjectMember from './DeliveryProjectMember';
@@ -1588,6 +1589,7 @@ export {
   InternshipInterviewSession, InternshipInterviewResponse,
   InternshipDecision,
   InternshipDocument,
+  InternshipRequirementAcknowledgement,
   CareerMentorScope,
   DeliveryProjectMember,
   DeliveryClientSigninToken,
