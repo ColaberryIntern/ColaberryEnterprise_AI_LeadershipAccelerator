@@ -373,3 +373,48 @@ describe('rubric badge bands', () => {
     expect(html).toContain('Questions');
   });
 });
+
+/**
+ * A filtered queue must say it is filtered.
+ *
+ * After the approval run the draft queue held 149 rows and not one was the
+ * current version of anything. Hiding them is right; hiding them silently is
+ * not — a filtered queue and an empty one look identical, and the reader cannot
+ * tell which they have. Worse, the reason for hiding matters: approving a
+ * superseded revision makes older text servable again.
+ */
+describe('review queue superseded notice', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const src: string = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'CertReviewPanel.tsx'), 'utf8',
+  );
+
+  it('reports how many revisions it hid', () => {
+    expect(src).toMatch(/superseded revision\{hidden === 1 \? '' : 's'\} hidden/);
+  });
+
+  it('says why they are hidden, in terms of what a student gets', () => {
+    expect(src).toContain('newer version, which is what students are served');
+  });
+
+  it('offers a way to see them rather than pretending they do not exist', () => {
+    expect(src).toMatch(/Show them/);
+    expect(src).toMatch(/setShowSuperseded\(true\)/);
+  });
+
+  it('warns what approving a superseded revision would do', () => {
+    // The specific harm: the serving path takes the highest APPROVED revision,
+    // so approving an old one republishes pre-rewrite text. That is how
+    // CCARF-A1 ended up serving its old stem.
+    expect(src).toMatch(/Approving one makes older text servable/);
+  });
+
+  it('asks the server for the superseded rows rather than filtering locally', () => {
+    // A local filter would still fetch 200 rows and silently drop them, and the
+    // count would be whatever the page limit happened to allow.
+    const api: string = require('fs').readFileSync(
+      require('path').join(__dirname, '..', '..', '..', '..', 'services', 'certPrepAdminApi.ts'), 'utf8',
+    );
+    expect(api).toMatch(/include_superseded/);
+  });
+});

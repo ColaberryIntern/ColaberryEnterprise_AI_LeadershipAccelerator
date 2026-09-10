@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { SectionCard, StatusBadge } from '../../../components/admin/shell';
 import { RubricBadge, rubricTone } from './RubricBadge';
 import {
-  fetchReviewQueue, setQuestionStatus, QuestionRevision, ReviewStatus, RubricScore,
+  fetchReviewQueueWithMeta, setQuestionStatus, QuestionRevision, ReviewStatus, RubricScore,
 } from '../../../services/certPrepAdminApi';
 
 /**
@@ -208,17 +208,19 @@ export function QuestionCard({ q, onMoved }: { q: QuestionRevision; onMoved: () 
 export default function CertReviewPanel({ onChanged }: { onChanged?: () => void }) {
   const [status, setStatus] = useState<ReviewStatus>('draft');
   const [rows, setRows] = useState<QuestionRevision[]>([]);
+  const [hidden, setHidden] = useState(0);
+  const [showSuperseded, setShowSuperseded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    return fetchReviewQueue(status)
-      .then(setRows)
+    return fetchReviewQueueWithMeta(status, showSuperseded)
+      .then((q) => { setRows(q.questions); setHidden(q.supersededHidden); })
       .catch(() => setError('Could not load the review queue.'))
       .finally(() => setLoading(false));
-  }, [status]);
+  }, [status, showSuperseded]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -247,6 +249,39 @@ export default function CertReviewPanel({ onChanged }: { onChanged?: () => void 
     >
       {error && <div className="alert alert-danger">{error}</div>}
       {loading && <p className="text-muted mb-0">Loading…</p>}
+
+      {/*
+        Say what is not being shown. A filtered queue and an empty one look
+        identical otherwise, and the reader has no way to tell which they have.
+      */}
+      {!loading && hidden > 0 && (
+        <p className="small text-muted mb-3">
+          <i className="ri-eye-off-line me-1" aria-hidden="true" />
+          {hidden} superseded revision{hidden === 1 ? '' : 's'} hidden — each has an approved
+          newer version, which is what students are served.{' '}
+          <button
+            type="button"
+            className="btn btn-link btn-sm p-0 align-baseline"
+            onClick={() => setShowSuperseded(true)}
+          >
+            Show them
+          </button>
+        </p>
+      )}
+      {!loading && showSuperseded && (
+        <p className="small text-muted mb-3">
+          <i className="ri-alert-line me-1" aria-hidden="true" />
+          Showing superseded revisions. <strong>Approving one makes older text servable
+          again</strong>, because the serving path takes the highest approved revision.{' '}
+          <button
+            type="button"
+            className="btn btn-link btn-sm p-0 align-baseline"
+            onClick={() => setShowSuperseded(false)}
+          >
+            Hide them
+          </button>
+        </p>
+      )}
       {!loading && rows.length === 0 && (
         <p className="text-muted mb-0">Nothing in <strong>{status.replace('_', ' ')}</strong>.</p>
       )}
