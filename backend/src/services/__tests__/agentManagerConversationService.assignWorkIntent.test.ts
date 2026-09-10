@@ -66,6 +66,17 @@ jest.mock('../managerDirectiveIntentService', () => ({
   toPendingDirectiveConfirmation: jest.fn(),
   applyConfirmedDirective: jest.fn(),
 }));
+jest.mock('../managerApprovalDecisionIntentService', () => ({
+  detectApproveIntent: jest.fn(() => null),
+  detectRejectIntent: jest.fn(() => null),
+  resolvePendingApprovalTarget: jest.fn(),
+  buildApproveConfirmationCardText: jest.fn(() => ''),
+  buildRejectConfirmationCardText: jest.fn(() => ''),
+  toPendingApproveConfirmation: jest.fn(),
+  toPendingRejectConfirmation: jest.fn(),
+  applyConfirmedApprove: jest.fn(),
+  applyConfirmedReject: jest.fn(),
+}));
 
 // Mocked wholesale, never jest.requireActual — the real module imports
 // { Ticket } from models/index.ts, the full Sequelize association-setup

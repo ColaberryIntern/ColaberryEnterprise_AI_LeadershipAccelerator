@@ -77,6 +77,17 @@ jest.mock('../managerAssignWorkIntentService', () => ({
   toPendingAssignWorkConfirmation: jest.fn(),
   applyConfirmedAssignWork: jest.fn(),
 }));
+jest.mock('../managerApprovalDecisionIntentService', () => ({
+  detectApproveIntent: jest.fn(() => null),
+  detectRejectIntent: jest.fn(() => null),
+  resolvePendingApprovalTarget: jest.fn(),
+  buildApproveConfirmationCardText: jest.fn(() => ''),
+  buildRejectConfirmationCardText: jest.fn(() => ''),
+  toPendingApproveConfirmation: jest.fn(),
+  toPendingRejectConfirmation: jest.fn(),
+  applyConfirmedApprove: jest.fn(),
+  applyConfirmedReject: jest.fn(),
+}));
 // Same isolation reasoning as managerReliabilityIntentService above —
 // agentWorkStatusIntentService.ts imports Ticket/AdminUser model classes
 // directly; mocked wholesale here since this file only needs "not a
