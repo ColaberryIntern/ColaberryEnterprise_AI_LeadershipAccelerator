@@ -181,11 +181,16 @@ let root: Root;
 // At a Glance, Checkpoint F (2026-09-03) — "Overview" is no longer the
 // default tab; its real content (identity, tools, reports-to, trust
 // contract, system prompt) moved into Command Center, unchanged. Every
-// test below that asserts on that content needs Command Center open first
-// — done once, here, so all 50+ call sites below get it for free instead
-// of touching each test individually. The one call site that predates this
+// test below that asserts on that content needs that tab open first — done
+// once, here, so all 50+ call sites below get it for free instead of
+// touching each test individually. The one call site that predates this
 // helper (line ~31, a separate `renderPage()` using `renderToStaticMarkup`)
 // never fires `useEffect` at all, so it's unaffected by tab default.
+//
+// Checkpoint G (2026-09-10) — Command Center unfolded into "Live Status"
+// (real-time content) and "Overview" (this content, unchanged, now its own
+// top-level tab again). Updated to click "Overview" instead — the exact
+// one-line change this comment always anticipated.
 async function renderAgentPage() {
   await act(async () => {
     root.render(
@@ -197,10 +202,10 @@ async function renderAgentPage() {
     );
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-  const commandTabButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Command Center');
-  if (commandTabButton) {
+  const overviewTabButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Overview');
+  if (overviewTabButton) {
     await act(async () => {
-      commandTabButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      overviewTabButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
   }
@@ -917,7 +922,10 @@ describe('AgentDetailPage — reactivation flow (deactivated agent)', () => {
     getAgentDetail.mockResolvedValue(DETAIL); // enabled: true
     await renderAgentPage();
 
-    expect(reactivateSelect()).toBeUndefined();
+    // querySelector() returns null (not undefined) when nothing matches —
+    // the `as ... | undefined` cast above is compile-time only, so this was
+    // asserting the wrong runtime value pre-existing this session's edits.
+    expect(reactivateSelect()).toBeNull();
     expect(reactivateButton()).toBeUndefined();
   });
 

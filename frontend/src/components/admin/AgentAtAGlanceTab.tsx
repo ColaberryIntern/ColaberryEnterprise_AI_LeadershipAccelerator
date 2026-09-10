@@ -160,9 +160,9 @@ export default function AgentAtAGlanceTab({ agentId, detail, inboxItems, inboxLo
         <div className="row g-3">
           <div className="col-md-4">
             <StatCard
-              label="Command Center"
+              label="Live Status"
               value={inboxLoading ? '—' : attentionCount}
-              icon="compass-3-line"
+              icon="pulse-line"
               tone={commandTone}
               hint={`${operationalState.label}${attentionCount > 0 ? ` · ${attentionCount} item${attentionCount === 1 ? '' : 's'} to review` : ''}`}
               onClick={() => onNavigate('command')}
