@@ -180,7 +180,11 @@ export async function internshipProfileSection(enrollmentId: string): Promise<In
     AttendanceRecord.findAll({ where: { enrollment_id: enrollmentId }, attributes: ['status', 'created_at'] }),
     CertReadinessSnapshot.findOne({
       where: { enrollment_id: enrollmentId },
-      order: [['created_at', 'DESC']],
+      // `computed_at`, NOT `created_at` — this model sets `timestamps: false`
+      // and has no created_at column. Ordering by it threw
+      // "column CertReadinessSnapshot.created_at does not exist" and 500'd the
+      // whole profile section; caught by the end-to-end journey.
+      order: [['computed_at', 'DESC']],
     }),
   ]);
 
@@ -256,7 +260,7 @@ export async function internshipProfileSection(enrollmentId: string): Promise<In
     metrics.push(reliable(
       'cert_readiness', 'Certification readiness',
       (certSnapshot as any).overall_state ?? 'unknown',
-      'cert_readiness_snapshots', (certSnapshot as any).created_at,
+      'cert_readiness_snapshots', (certSnapshot as any).computed_at,
     ));
   }
 
