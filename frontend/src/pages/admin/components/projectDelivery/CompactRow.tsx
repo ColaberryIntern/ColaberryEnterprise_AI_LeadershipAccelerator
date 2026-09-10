@@ -137,12 +137,38 @@ export function Legend() {
           {label}
         </span>
       ))}
+      {/* The row icons, named. They were already rendering and were still reported missing,
+          which is what an unlabelled glyph earns. Naming them here costs one line and makes
+          the difference between "some rows have a squiggle" and "that row has a live site". */}
+      <span style={{ color: 'var(--text-muted)' }}>
+        <i className="ri-dashboard-3-line" aria-hidden="true" style={{ color: 'var(--status-info, #2f6fc8)', marginRight: 4 }} />
+        Command Center
+      </span>
+      <span style={{ color: 'var(--text-muted)' }}>
+        <i className="ri-github-fill" aria-hidden="true" style={{ marginRight: 4 }} />
+        repository
+      </span>
     </div>
   );
 }
 
 /** The row grid, shared by the header and every project row so the columns line up. */
-export const ROW_GRID = '20px minmax(0,1.6fr) 120px 96px 44px 52px';
+/**
+ * The row grid.
+ *
+ * TWO FLEXIBLE COLUMNS, NOT ONE. Project was previously the only `fr` track, so on a wide
+ * screen it absorbed every spare pixel and left a blank band between the student's name and
+ * the Tasks column — the "big gap in the middle". Releases now takes a share of the slack,
+ * and that width is not decoration: `ReleaseStrip` segments are `flex: 1`, so a wider column
+ * draws a longer, more readable release spine.
+ *
+ * CASE IS 92px BECAUSE THE PILL IS. At 52px the readiness pill overflowed and the enclosing
+ * card clips with `overflow: hidden`, so the score rendered as "60 /10" — a number that is
+ * wrong rather than merely cramped. The pill is also rendered `compact` in this row: the
+ * column header already says "Case", so repeating "Case Study" inside every cell was what
+ * made it too wide in the first place.
+ */
+export const ROW_GRID = '20px minmax(220px,1.2fr) 120px minmax(120px,1fr) 44px 92px';
 
 export function RowShell({
   children, header = false, active = false, onClick,
