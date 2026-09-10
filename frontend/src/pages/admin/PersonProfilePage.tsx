@@ -238,11 +238,6 @@ export default function PersonProfilePage() {
                 Schedule appointment
               </button>
             )}
-            {acq?.leadId && (
-              <Link className="btn btn-sm btn-outline-secondary" to={`/admin/leads/${acq.leadId}`}>
-                Lead record
-              </Link>
-            )}
           </div>
         }
       >
