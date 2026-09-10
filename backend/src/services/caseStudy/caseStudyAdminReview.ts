@@ -346,7 +346,7 @@ export async function applyHumanOverride(input: unknown): Promise<ApplyOverrideR
         log('case_study.override_republish', 'partial', correlationId, {
           case_study_id: data.caseStudyId, snapshot_id: persisted.snapshotId,
           surface_key: surfaceKey,
-          error_class: err instanceof CaseStudyAdminError ? err.code : 'PublishRefused',
+          error_class: err instanceof CaseStudyAdminError ? err.error_class : 'PublishRefused',
         });
       }
     }
@@ -366,12 +366,17 @@ export async function applyHumanOverride(input: unknown): Promise<ApplyOverrideR
 
 /** Surfaces this record is CURRENTLY published to. Unpublished rows are excluded: the pin
  *  survives an unpublish, so reading rows alone would republish a withdrawn brand. */
-async function liveSurfaceKeys(caseStudyId: string): Promise<string[]> {
+async function liveSurfaceKeys(caseStudyId: string): Promise<CaseStudySurfaceKey[]> {
   const rows = await CaseStudyPublication.findAll({
     where: { case_study_id: caseStudyId, status: 'published' },
     attributes: ['surface_key'],
   });
-  return rows.map((r) => String((r as unknown as { surface_key: string }).surface_key));
+  // Narrowed against the union rather than cast to it: a surface_key the contract does not
+  // know is a row this code should skip, not one it should hand to the publisher.
+  return rows
+    .map((r) => String((r as unknown as { surface_key: string }).surface_key))
+    .filter((k): k is CaseStudySurfaceKey =>
+      (CASE_STUDY_SURFACE_KEYS as readonly string[]).includes(k));
 }
 
 /**
