@@ -107,3 +107,16 @@ Weaknesses found by running it, and what was done. Add to this every time.
 
 - *(2026-09-09, v1)* Built. Improver refuses candidates that change the answer
   shape; sweep is dry-run by default; `--approve-as` refuses without `--write`.
+- *(2026-09-09)* **CI caught a type error a local typecheck had reported clean.**
+  The candidate's `rationale` is `string | null` and `DraftRevisionInput.rationale`
+  is a required `string`. The local run had been killed by a timeout before
+  writing anything, and a **0-line output file was read as 0 errors**. Two fixes:
+  `checkInvariants` now refuses a candidate with no rationale — the rubric scores
+  whether wrong options are explained, so a rewrite that drops it is not an
+  improvement — and the sweep guards the write site rather than casting, so a
+  relaxed invariant reports a skipped item instead of writing a revision with an
+  empty explanation. **Verify with a sentinel** (`echo "__TSC_EXIT=$?__"` appended
+  to the output) so a truncated run cannot look like a passing one.
+- *(2026-09-09)* `/tmp` is shared across concurrent Claude sessions on this
+  machine; an output file came back holding a different session's test run. Write
+  run artifacts to the session scratchpad, never a bare `/tmp` name.

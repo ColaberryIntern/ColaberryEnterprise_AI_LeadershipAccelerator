@@ -203,6 +203,16 @@ async function main(): Promise<void> {
     const result = await improveUntilMeets(start, MAX_ROUNDS);
     const improved = result.after > result.before;
 
+    // Narrowed rather than cast. `checkInvariants` already refuses a candidate
+    // without a rationale, so this cannot fire — which is exactly why it is here
+    // rather than an `as string`: if the invariant is ever relaxed, this reports
+    // a skipped item instead of writing a revision with an empty explanation.
+    if (improved && write && !result.item.rationale?.trim()) {
+      log(`${row.question_key.padEnd(14)} SKIPPED: improved candidate had no rationale`);
+      outcomes.push({ key: row.question_key, before: result.before, after: result.after, rounds: result.rounds, action: 'failed', detail: 'no rationale' });
+      continue;
+    }
+
     if (improved && write) {
       await createDraftRevision({
         question_key: row.question_key,
@@ -215,7 +225,7 @@ async function main(): Promise<void> {
         options: result.item.options,
         correct_keys: result.item.correct_keys,
         select_count: result.item.correct_keys.length,
-        rationale: result.item.rationale ?? undefined,
+        rationale: result.item.rationale as string,
         distractor_rationales: result.item.distractor_rationales ?? undefined,
         difficulty: (row.difficulty ?? 'medium') as any,
         author: 'colaberry',

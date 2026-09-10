@@ -161,6 +161,11 @@ export function checkInvariants(before: ImproverItem, after: ImproverItem): stri
     if (!o.text || !o.text.trim()) return `option ${o.key} is empty`;
   }
   if (!after.stem || !after.stem.trim()) return 'stem is empty';
+  // The rationale is REQUIRED by `DraftRevisionInput` and by the rubric, which
+  // scores whether every wrong option is explained. A candidate without one
+  // cannot be persisted, so refusing it here is better than discovering it at
+  // the write site with a half-finished sweep.
+  if (!after.rationale || !after.rationale.trim()) return 'rationale is empty';
   const wrong = after.options.filter((o) => !after.correct_keys.includes(o.key));
   for (const o of wrong) {
     if (!after.distractor_rationales?.[o.key]?.trim()) {

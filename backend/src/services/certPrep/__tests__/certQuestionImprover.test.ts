@@ -61,6 +61,14 @@ describe('invariants — a rewrite must not become a different question', () => 
     expect(checkInvariants(item(), after)).toMatch(/no rationale for wrong option D/);
   });
 
+  it('refuses a candidate that dropped the rationale', () => {
+    // `DraftRevisionInput.rationale` is required and the rubric scores whether
+    // wrong options are explained, so a candidate without one cannot be written.
+    // CI caught this as a type error after a local typecheck I had misread.
+    expect(checkInvariants(item(), item({ rationale: null }))).toMatch(/rationale is empty/);
+    expect(checkInvariants(item(), item({ rationale: '   ' }))).toMatch(/rationale is empty/);
+  });
+
   it('accepts a genuine rewrite that keeps the shape', () => {
     const after = item({
       stem: 'Monitoring shows the orchestrator context stays flat as researchers are added.',
