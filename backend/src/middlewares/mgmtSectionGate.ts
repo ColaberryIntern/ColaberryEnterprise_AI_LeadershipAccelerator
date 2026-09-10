@@ -26,6 +26,14 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   ['/api/admin/opportunities', 'revenue'], ['/api/admin/leads', 'revenue'], ['/api/admin/funnel', 'revenue'],
   ['/api/admin/campaigns', 'campaigns'], ['/api/admin/communications', 'campaigns'],
   ['/api/admin/marketing', 'campaigns'], ['/api/admin/visitors', 'campaigns'],
+  // Brand administration (brands, their domains, sender profiles, send readiness).
+  //
+  // Classified the day the routes landed, not later, because THIS GATE IS
+  // DENY-BY-DEFAULT for a scoped role: an unmapped path reaches the final
+  // `res.status(403)` below with no row explaining why. Brand admin governs the
+  // sending identity behind campaigns and communications, both already 'campaigns',
+  // so it belongs to the same section rather than a new key.
+  ['/api/admin/brands', 'campaigns'],
   // Explorer Growth OS Command Center (spec §27; §1381 assigns it
   // `section: 'campaigns'` explicitly, so no new section key is needed).
   //
