@@ -46,6 +46,13 @@ export interface IntakeQuestion {
    * a response cached before choices existed still parses as free text.
    */
   kind?: 'text' | 'single' | 'multi';
+  /**
+   * The angle this question came from, used to file the answer against a truth
+   * dimension. Optional on the TYPE so a plan generated before angles existed
+   * still parses; an answer without one is filed as unmapped rather than
+   * guessed at.
+   */
+  angle?: string;
 }
 
 /** One angle the description already answered, and the phrase that answered it. */
