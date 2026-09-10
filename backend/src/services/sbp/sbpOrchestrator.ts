@@ -120,6 +120,42 @@ export interface StartBuildInput {
  * Idempotent on `projectId`: re-submitting updates the intake rather than
  * stacking, and a build already generating is not started twice.
  */
+/**
+ * Which revision of the confirmed truth a plan is about to be built from.
+ *
+ * BOUNDED, and that bound is not decoration. The first version of this read the
+ * revision inline and unbounded, which put a database round trip into the
+ * generation path with nothing stopping it taking as long as it liked. The
+ * auto-publish suite caught it immediately by timing out, and the same shape in
+ * production would have been every student's build waiting on a lookup that is
+ * nice to have.
+ *
+ * A plan with an unknown basis is worse than one with a known basis and far
+ * better than a build that hangs, so every failure here - slow, thrown, or
+ * missing - records `null`, which already means "we do not know".
+ */
+const TRUTH_REVISION_TIMEOUT_MS = 2_000;
+
+async function readTruthRevision(projectId: string): Promise<number | null> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    const lookup = (async () => {
+      const { loadIntakeTruthAtRevision } = await import('./intakeTruthStore');
+      return (await loadIntakeTruthAtRevision(projectId))?.revision ?? null;
+    })();
+    const bound = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), TRUTH_REVISION_TIMEOUT_MS);
+      // Never hold the process open for a value we are willing to lose.
+      timer.unref?.();
+    });
+    return await Promise.race([lookup, bound]);
+  } catch {
+    return null;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export async function startBuild(input: StartBuildInput): Promise<{ projectId: string; correlationId: string; status: BuildStatus }> {
   const correlationId = randomUUID();
 
@@ -219,7 +255,21 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
       });
     }
 
-    const draft = await savePlanDraft(input.projectId, scoped.plan, { gate, model, attempts, correlationId });
+    /*
+     * WHICH TRUTH THIS PLAN CAME FROM. Read at save time rather than passed in,
+     * so the recorded revision is the one that existed when the plan was
+     * written - not the one that existed when generation started, which can be
+     * minutes earlier and a correction behind.
+     *
+     * A failure to read it records null rather than failing the build. A plan
+     * with an unknown basis is worse than one with a known basis and better
+     * than no plan at all, and null already means "we do not know".
+     */
+    const truthRevision = await readTruthRevision(input.projectId);
+
+    const draft = await savePlanDraft(input.projectId, scoped.plan, {
+      gate, model, attempts, correlationId, truthRevision,
+    });
     await setStatus(input.projectId, publishable ? 'drafted' : 'gate_failed');
 
     log('sbp_build_generated', correlationId, gate.ok ? 'success' : 'partial', {
