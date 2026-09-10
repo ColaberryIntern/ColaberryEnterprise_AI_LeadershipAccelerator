@@ -28,8 +28,12 @@ const mockGet = api.get as jest.Mock;
 let container: HTMLDivElement;
 let root: Root;
 
+// CoreOps as production actually holds it: 28 tasks, 22 done, and 10 of those 22
+// carry no due date. So `undated` (INCOMPLETE and unscheduled) is 0 while `no_date`
+// (unscheduled, complete or not) is 10. The five exclusive buckets sum to `total`;
+// `no_date` deliberately sits outside that sum.
 const buckets = (over: Record<string, number> = {}) => ({
-  total: 28, done: 22, overdue: 3, due_this_week: 1, open: 2, undated: 13, ...over,
+  total: 28, done: 22, overdue: 3, due_this_week: 1, open: 2, undated: 0, no_date: 10, ...over,
 });
 
 const project = (over: Record<string, unknown> = {}) => ({
@@ -52,8 +56,8 @@ const project = (over: Record<string, unknown> = {}) => ({
   readiness: { score: 31, ready: false, components: [], gaps: ['no repo', 'no artifacts'] },
   buckets: buckets(),
   releases: [
-    { release_key: 'r0', display_name: 'Release 0 · Initial Setup', total: 3, complete: 3, overdue: 0, starts_on: '2026-08-20', ends_on: '2026-08-28', state: 'landed', buckets: buckets({ total: 3, done: 3, overdue: 0, due_this_week: 0, open: 0, undated: 0 }) },
-    { release_key: 'r1', display_name: 'Release 1 · AI Analysis', total: 2, complete: 0, overdue: 2, starts_on: '2026-08-28', ends_on: '2026-09-06', state: 'overdue', buckets: buckets({ total: 2, done: 0, overdue: 2, due_this_week: 0, open: 0, undated: 0 }) },
+    { release_key: 'r0', display_name: 'Release 0 · Initial Setup', total: 3, complete: 3, overdue: 0, starts_on: '2026-08-20', ends_on: '2026-08-28', state: 'landed', buckets: buckets({ total: 3, done: 3, overdue: 0, due_this_week: 0, open: 0, undated: 0, no_date: 0 }) },
+    { release_key: 'r1', display_name: 'Release 1 · AI Analysis', total: 2, complete: 0, overdue: 2, starts_on: '2026-08-28', ends_on: '2026-09-06', state: 'overdue', buckets: buckets({ total: 2, done: 0, overdue: 2, due_this_week: 0, open: 0, undated: 0, no_date: 0 }) },
   ],
   ...over,
 });
@@ -92,12 +96,15 @@ describe('compact portfolio row — visible without expanding', () => {
     expect(bar!.getAttribute('aria-label')).toContain('3 overdue');
   });
 
-  it('shows the done/total count and flags undated tasks separately', async () => {
-    // Undated tasks are excluded from the bar's proportions, so the caption is the
-    // only place they are reported. Losing it would hide 13 tasks.
+  it('shows the done/total count and flags unscheduled tasks separately', async () => {
+    // The caption is the only place unscheduled tasks are reported, and it must key
+    // on `no_date`, not `undated`. On production EVERY task lacking a due date is
+    // already complete, so `undated` is 0 portfolio-wide — a caption keyed on it
+    // would never render and 37 unscheduled tasks would go unreported. This fixture
+    // is that exact shape: undated 0, no_date 10.
     await renderView();
     expect(container.textContent).toContain('22/28');
-    expect(container.textContent).toContain('13 undated');
+    expect(container.textContent).toContain('10 undated');
   });
 
   it('fires NO /gantt request before the row is expanded', async () => {
@@ -152,7 +159,7 @@ describe('compact portfolio row — visible without expanding', () => {
 
   it('renders a project with no releases without crashing', async () => {
     mockGet.mockResolvedValue({
-      data: { projects: [project({ releases: [], buckets: buckets({ total: 0, done: 0, overdue: 0, due_this_week: 0, open: 0, undated: 0 }) })] },
+      data: { projects: [project({ releases: [], buckets: buckets({ total: 0, done: 0, overdue: 0, due_this_week: 0, open: 0, undated: 0, no_date: 0 }) })] },
     });
     await renderView();
     expect(container.textContent).toContain('no releases');

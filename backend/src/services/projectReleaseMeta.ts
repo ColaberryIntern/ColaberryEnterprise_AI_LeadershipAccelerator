@@ -146,7 +146,17 @@ export interface TaskBuckets {
   overdue: number;
   due_this_week: number;
   open: number;
+  /** INCOMPLETE tasks with no due date. Mutually exclusive with the four above, so
+   *  the five always sum to `total` and nothing is dropped from the bar. */
   undated: number;
+  /** ALL tasks with no due date, complete or not. OVERLAPS the buckets above and is
+   *  deliberately not part of the sum: it answers a different question — how much of
+   *  this plan carries no schedule at all.
+   *
+   *  Both are needed. In production every undated task happens to be complete
+   *  (37 of 629, all done), so `undated` is 0 everywhere and a caption keyed on it
+   *  would never appear, hiding the fact that 37 tasks were never scheduled. */
+  no_date: number;
 }
 
 export const DUE_SOON_DAYS = 7;
@@ -155,13 +165,17 @@ export function bucketTasks(
   tasks: Array<{ status?: string | null; due_on?: string | null }> | null | undefined,
   today: string
 ): TaskBuckets {
-  const b: TaskBuckets = { total: 0, done: 0, overdue: 0, due_this_week: 0, open: 0, undated: 0 };
+  const b: TaskBuckets = {
+    total: 0, done: 0, overdue: 0, due_this_week: 0, open: 0, undated: 0, no_date: 0,
+  };
   if (!Array.isArray(tasks)) return b;
 
   const horizon = addDays(today, DUE_SOON_DAYS);
 
   for (const t of tasks) {
     b.total += 1;
+    const hasDate = !!t.due_on;
+    if (!hasDate) b.no_date += 1;
     if (t.status === DONE) { b.done += 1; continue; }
     const due = t.due_on ? String(t.due_on).slice(0, 10) : null;
     if (!due) { b.undated += 1; continue; }
