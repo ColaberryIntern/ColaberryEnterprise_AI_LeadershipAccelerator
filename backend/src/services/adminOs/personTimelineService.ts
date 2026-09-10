@@ -116,11 +116,17 @@ const BRANCHES: Branch[] = [
   },
   {
     domain: 'acquisition', key: 'lead',
-    sql: `SELECT pe.created_at AS occurred_at, 'acquisition' AS domain, 'page_events' AS source,
-                 pe.event_type AS type,
-                 COALESCE(NULLIF(pe.page_path,''), NULLIF(pe.page_url,''), '') AS summary
+    // Grouped per MINUTE, not per row: three views of '/' seven seconds apart
+    // are three real events but read as three duplicate lines. The count says
+    // what happened without repeating the line.
+    sql: `SELECT max(pe.created_at) AS occurred_at, 'acquisition' AS domain,
+                 'page_events' AS source, pe.event_type AS type,
+                 COALESCE(NULLIF(pe.page_path,''), NULLIF(pe.page_url,''), '(no path)') ||
+                   CASE WHEN COUNT(*) > 1 THEN ' ×' || COUNT(*)::text ELSE '' END AS summary
           FROM page_events pe
-          WHERE pe.lead_id IN (:leadIds) AND pe.event_type <> 'heartbeat'`,
+          WHERE pe.lead_id IN (:leadIds) AND pe.event_type <> 'heartbeat'
+          GROUP BY date_trunc('minute', pe.created_at), pe.event_type,
+                   COALESCE(NULLIF(pe.page_path,''), NULLIF(pe.page_url,''), '(no path)')`,
   },
   {
     domain: 'acquisition', key: 'lead',
@@ -159,9 +165,17 @@ const BRANCHES: Branch[] = [
   },
   {
     domain: 'communication', key: 'lead',
-    sql: `SELECT io.created_at AS occurred_at, 'communication' AS domain, 'interaction_outcomes' AS source,
-                 io.outcome AS type, io.channel AS summary
-          FROM interaction_outcomes io WHERE io.lead_id IN (:leadIds)`,
+    // Joined to the email it refers to. The summary was `io.channel` -- literally
+    // the word "email" -- so two opens THREE DAYS APART rendered as identical
+    // lines. They were never duplicates; the summary just said nothing.
+    sql: `SELECT io.created_at AS occurred_at, 'communication' AS domain,
+                 'interaction_outcomes' AS source, io.outcome AS type,
+                 COALESCE(se.subject,
+                          io.channel || CASE WHEN io.step_index IS NOT NULL
+                            THEN ' · step ' || io.step_index::text ELSE '' END) AS summary
+          FROM interaction_outcomes io
+          LEFT JOIN scheduled_emails se ON se.id = io.scheduled_email_id
+          WHERE io.lead_id IN (:leadIds)`,
   },
   {
     domain: 'communication', key: 'lead',
