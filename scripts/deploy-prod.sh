@@ -68,6 +68,22 @@ DIRTY_ALLOW="${DIRTY_ALLOW:-}"
 # Long enough to queue behind a real build, short enough to fail rather than hang
 # forever if a lock is somehow orphaned.
 LOCK_WAIT="${LOCK_WAIT:-600}"
+
+# build | registry.
+#
+# `registry` pulls the images CI already built instead of building on this host.
+# That matters because building here is the largest recurring memory spike on a
+# box that also runs five Postgres instances: the kernel journal recorded 344 OOM
+# kills, and the 2026-09-08 cascade opens with "docker-buildx invoked oom-killer".
+#
+# It stays OPT-IN rather than becoming the default, because the build path has
+# years of mileage and this one has a single proven run (2026-09-10, all three
+# services, digests verified against origin/main). Flip the default once it has
+# earned it.
+DEPLOY_MODE="${DEPLOY_MODE:-build}"
+# Where CI publishes. Public packages, so no registry credential is needed here.
+REGISTRY_PREFIX="${REGISTRY_PREFIX:-ghcr.io/colaberryintern/accelerator-}"
+
 SERVICES=("$@")
 if [ ${#SERVICES[@]} -eq 0 ]; then
   SERVICES=(backend nginx)
@@ -124,17 +140,58 @@ MAIN_SHA="$(git rev-parse origin/main)"
 if [ "$HEAD_SHA" != "$MAIN_SHA" ] && [ "$ALLOW_DETACHED_HEAD" != "1" ]; then
   fail "HEAD ($HEAD_SHA) is not origin/main ($MAIN_SHA). Refusing to build."
 fi
-log "building $HEAD_SHA"
-
-# ---------------------------------------------------------------------------
-# The build. NOT piped — a pipe makes $? the exit code of the pipe's last
-# command, which has already reported a build failure as success in this repo.
-# ---------------------------------------------------------------------------
 BUILD_LOG="$(mktemp /tmp/deploy-XXXXXX.log)"
-set +e
-docker compose $COMPOSE_ARGS up -d --build --no-deps "${SERVICES[@]}" >"$BUILD_LOG" 2>&1
-BUILD_EXIT=$?
-set -e
+
+if [ "$DEPLOY_MODE" = "registry" ]; then
+  # -------------------------------------------------------------------------
+  # THE GUARD THAT MAKES THIS SAFE. `:main` is a moving tag. If CI has not yet
+  # finished publishing for THIS commit, pulling `:main` deploys an OLDER build
+  # while every other check in this script still passes — HEAD matches
+  # origin/main, the tree is clean, the containers come up. Nothing would look
+  # wrong. So the digest behind `:main` must equal the digest behind the tag for
+  # this exact commit, or we refuse.
+  # -------------------------------------------------------------------------
+  log "registry mode: verifying published images match $HEAD_SHA"
+  for svc in "${SERVICES[@]}"; do
+    IMAGE="${REGISTRY_PREFIX}${svc}"
+    D_MOVING="$(docker manifest inspect "${IMAGE}:main" 2>/dev/null | sha256sum | awk '{print $1}')"
+    D_PINNED="$(docker manifest inspect "${IMAGE}:sha-${HEAD_SHA}" 2>/dev/null | sha256sum | awk '{print $1}')"
+    if [ -z "$D_PINNED" ]; then
+      fail "no image ${IMAGE}:sha-${HEAD_SHA}. CI has not published this commit yet — wait for the Build images workflow, or use the default build mode."
+    fi
+    if [ "$D_MOVING" != "$D_PINNED" ]; then
+      fail "${IMAGE}:main does not match sha-${HEAD_SHA}. Pulling :main would deploy a different commit."
+    fi
+    log "  $svc: :main matches sha-${HEAD_SHA}"
+  done
+
+  log "pulling images for $HEAD_SHA"
+  set +e
+  docker compose $COMPOSE_ARGS pull "${SERVICES[@]}" >"$BUILD_LOG" 2>&1
+  BUILD_EXIT=$?
+  set -e
+  if [ "$BUILD_EXIT" -ne 0 ]; then
+    tail -n 20 "$BUILD_LOG"
+    fail "docker compose pull failed (exit $BUILD_EXIT) — full log at $BUILD_LOG"
+  fi
+
+  log "recreating containers from pulled images"
+  set +e
+  docker compose $COMPOSE_ARGS up -d --no-deps "${SERVICES[@]}" >>"$BUILD_LOG" 2>&1
+  BUILD_EXIT=$?
+  set -e
+else
+  log "building $HEAD_SHA"
+
+  # -------------------------------------------------------------------------
+  # The build. NOT piped — a pipe makes $? the exit code of the pipe's last
+  # command, which has already reported a build failure as success in this repo.
+  # -------------------------------------------------------------------------
+  set +e
+  docker compose $COMPOSE_ARGS up -d --build --no-deps "${SERVICES[@]}" >"$BUILD_LOG" 2>&1
+  BUILD_EXIT=$?
+  set -e
+fi
 
 tail -n 20 "$BUILD_LOG"
 
