@@ -78,9 +78,26 @@ LOCK_WAIT="${LOCK_WAIT:-600}"
 #
 # It stays OPT-IN rather than becoming the default, because the build path has
 # years of mileage and this one has a single proven run (2026-09-10, all three
-# services, digests verified against origin/main). Flip the default once it has
-# earned it.
+# services, digests verified against origin/main).
+#
+# DECISION, Ali, 2026-09-10: leave it opt-in and flip the default after it has
+# more runs behind it. "More runs" is deliberately not left to memory — every
+# successful registry deploy appends a line to REGISTRY_DEPLOY_LOG below, so the
+# bar is checkable rather than felt:
+#
+#   THE BAR: flip DEPLOY_MODE's default to `registry` once that log shows at
+#   least 5 successful registry deploys spanning at least 14 days. Until then a
+#   deploy that does not pass DEPLOY_MODE=registry still builds on the host.
+#
+# The 2026-09-10 run is deliberately NOT seeded into that log: it happened before
+# this recording existed, and back-writing a line for it would be inventing
+# evidence. The count therefore starts at zero and the real bar is six runs.
+#
+# Check it with: wc -l < /var/log/colaberry-registry-deploys.log
 DEPLOY_MODE="${DEPLOY_MODE:-build}"
+# Durable record of registry-mode deploys. Only successful ones are recorded, so
+# the count means "this path worked", not "this path was attempted".
+REGISTRY_DEPLOY_LOG="${REGISTRY_DEPLOY_LOG:-/var/log/colaberry-registry-deploys.log}"
 # Where CI publishes. Public packages, so no registry credential is needed here.
 REGISTRY_PREFIX="${REGISTRY_PREFIX:-ghcr.io/colaberryintern/accelerator-}"
 
@@ -228,6 +245,16 @@ done
 [ "$BAD" -eq 0 ] || fail "one or more services are not running. Production may be degraded."
 
 log "all requested services are running"
+
+# Recorded only here, AFTER the running-state check, so the count cannot include
+# a deploy that pulled cleanly and then failed to come up. Never allowed to fail
+# the deploy: an unwritable log is a bookkeeping problem, not a production one.
+if [ "$DEPLOY_MODE" = "registry" ]; then
+  printf '%s %s services=%s
+' "$(date -u +%FT%TZ)" "$HEAD_SHA" "${SERVICES[*]}"     >>"$REGISTRY_DEPLOY_LOG" 2>/dev/null || log "note: could not write $REGISTRY_DEPLOY_LOG"
+  RUNS="$(wc -l <"$REGISTRY_DEPLOY_LOG" 2>/dev/null || echo '?')"
+  log "registry-mode deploys recorded: $RUNS (default flips at 5 spanning 14 days)"
+fi
 log "NOTE: this proves the containers are up, not that the app is healthy."
 log "Verify the surface through the real hostname — localhost does not match"
 log "server_name and falls through to a default block that 404s /api."
