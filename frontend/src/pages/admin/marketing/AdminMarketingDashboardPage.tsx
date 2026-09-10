@@ -5,6 +5,8 @@ import {
 import api from '../../../utils/api';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../../components/admin/shell';
 import { TrustSignal } from '../../../components/admin/shell/trust';
+import { deriveMarketingTrust, MarketingDataState } from './marketingTrust';
+import { formatMoneyOrUnavailable, formatRatioOrUnavailable, formatSpend } from './marketingFormat';
 
 const MarketingFunnelGraph = lazy(() => import('../../../components/admin/marketing/MarketingFunnelGraph'));
 const OpenclawTab = lazy(() => import('../../../components/admin/intelligence/tabs/OpenclawTab'));
@@ -21,15 +23,24 @@ interface CampaignMetric {
   enrollments_count: number;
   high_intent_pct: number;
   conversion_rate: number;
-  total_revenue: number;
-  revenue_per_visitor: number;
-  revenue_per_lead: number;
   visitor_to_lead_pct: number;
   lead_to_call_pct: number;
   call_to_enroll_pct: number;
   campaign_type: string | null;
-  platform: string | null;
-  creative: string | null;
+  /**
+   * Metrics the server says it cannot compute, with reasons. Revenue used to live on this
+   * interface as a plain number; the server derived it from a hardcoded $4,500 price times an
+   * enrollment count, so a campaign that had collected nothing still reported revenue.
+   * The server now declines to answer, and this is where it says why.
+   */
+  unavailable: UnavailableMetric[];
+}
+
+/** A figure that cannot be computed, and the reason. Never rendered as 0. */
+interface UnavailableMetric {
+  key: string;
+  name: string;
+  reason: string;
 }
 
 interface RegisteredCampaign {
@@ -52,6 +63,38 @@ interface RegisteredCampaign {
   created_at: string;
 }
 
+/**
+ * Mirrors the backend `CampaignROIReport` FIELD FOR FIELD.
+ *
+ * Counts are required and money is nullable, which is exactly the backend contract - not a
+ * defensive guess at it. The first version of this interface marked the counts optional, and
+ * TypeScript immediately produced 11 `possibly undefined` errors at call sites that had been
+ * dereferencing them unguarded for as long as the state was `useState<any>`. Those errors were
+ * the type system reporting the truth about the OLD code, not a problem with the new type - and
+ * they are the clearest evidence available that `any` at this boundary was hiding real work.
+ *
+ * Kept aligned with the backend rather than loosened, so a future divergence fails the build
+ * here instead of rendering something wrong.
+ */
+interface CampaignROI {
+  campaign_id: string;
+  campaign_name: string;
+  channel: string | null;
+  visitors: number;
+  leads: number;
+  engaged: number;
+  enrollments: number;
+  /** null = not computable, NOT zero. */
+  revenue: number | null;
+  budget_spent: number;
+  budget_cap: number | null;
+  roi: number | null;
+  cost_per_lead: number | null;
+  cost_per_enrollment: number | null;
+  approval_status: string;
+  unavailable: UnavailableMetric[];
+}
+
 interface ChannelROI {
   channel: string;
   campaign_count: number;
@@ -60,11 +103,13 @@ interface ChannelROI {
   total_visitors: number;
   total_leads: number;
   total_enrollments: number;
-  total_revenue: number;
-  roi: number;
+  /** null = not knowable, NOT zero. Spend is never written and revenue has no source. */
+  total_revenue: number | null;
+  roi: number | null;
+  unavailable: UnavailableMetric[];
 }
 
-type SortKey = keyof CampaignMetric;
+type SortKey = Exclude<keyof CampaignMetric, 'unavailable'>;
 
 // Funnel segment colors drawn from the shared chart palette (brand tokens).
 const FUNNEL_COLORS = ['var(--chart-1)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-7)'];
@@ -363,7 +408,13 @@ function CampaignDetailModal({ campaign: c, onClose, onEdit, onRefresh }: {
   onEdit: () => void;
   onRefresh: () => void;
 }) {
-  const [roi, setRoi] = useState<any>(null);
+  /**
+   * Typed rather than `any`. The $0 defect above type-checked cleanly precisely because this
+   * was `any`: the backend field became `number | null` and nothing here objected. `any` at a
+   * boundary does not just skip a check, it disables the one mechanism that would have caught
+   * a producer changing under its consumer.
+   */
+  const [roi, setRoi] = useState<CampaignROI | null>(null);
   const [roiLoading, setRoiLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
@@ -460,10 +511,13 @@ function CampaignDetailModal({ campaign: c, onClose, onEdit, onRefresh }: {
                       { label: 'Identified', value: (roi.leads || 0).toLocaleString(), tooltip: 'Visitors matched to a known lead' },
                       { label: 'Engaged', value: (roi.engaged || 0).toLocaleString(), tooltip: 'Visitors with 30s+ on page, 50%+ scroll, or CTA click' },
                       { label: 'Enrolled', value: (roi.enrollments || 0).toLocaleString(), tooltip: 'Visitors who completed enrollment' },
-                      { label: 'Revenue', value: fmt$(roi.revenue || 0), tooltip: 'Total revenue from enrolled visitors' },
-                      { label: 'ROI', value: roi.roi != null ? `${(roi.roi * 100).toFixed(0)}%` : '\u2014', tooltip: 'Return on investment: (revenue - spend) / spend' },
-                      { label: 'Cost/Lead', value: roi.cost_per_lead ? fmt$(roi.cost_per_lead) : '\u2014', tooltip: 'Budget spent divided by number of identified leads' },
-                      { label: 'Cost/Enroll', value: roi.cost_per_enrollment ? fmt$(roi.cost_per_enrollment) : '\u2014', tooltip: 'Budget spent divided by number of enrollments' },
+                      // `fmt$(roi.revenue || 0)` used to live here and rendered a confident $0 for a
+                      // value the backend had just been changed to report as null. `null || 0` is 0,
+                      // so the one field this whole change was about was the one that kept lying.
+                      { label: 'Revenue', value: formatMoneyOrUnavailable(roi.revenue).text, tooltip: roi.revenue === null ? 'No payment data is joined to campaigns, so revenue cannot be computed' : 'Total revenue from enrolled visitors' },
+                      { label: 'ROI', value: formatRatioOrUnavailable(roi.roi).text, tooltip: 'Return on investment: (revenue - spend) / spend' },
+                      { label: 'Cost/Lead', value: formatMoneyOrUnavailable(roi.cost_per_lead).text, tooltip: 'Budget spent divided by number of identified leads' },
+                      { label: 'Cost/Enroll', value: formatMoneyOrUnavailable(roi.cost_per_enrollment).text, tooltip: 'Budget spent divided by number of enrollments' },
                     ].map(kpi => (
                       <div className="col-4 col-md-3" key={kpi.label}>
                         <div className="card border-0 bg-light" title={kpi.tooltip}>
@@ -518,7 +572,10 @@ function CampaignDetailModal({ campaign: c, onClose, onEdit, onRefresh }: {
                       : '\u2014'
                   } />
                   <DetailRow label="Budget Cap" value={c.budget_cap != null ? fmt$(Number(c.budget_cap)) : '\u2014'} />
-                  <DetailRow label="Budget Spent" value={fmt$(Number(c.budget_spent || 0))} />
+                  {/* Nothing in the codebase ever increments budget_spent - it is set to 0 at
+                      creation and never touched - so a rendered $0 is the default being read as a
+                      measurement of zero spend. See metricRegistry 'marketing.ad_spend'. */}
+                  <DetailRow label="Budget Spent" value={formatSpend(c.budget_spent).text} />
                   <DetailRow label="Target CPL" value={c.cost_per_lead_target != null ? fmt$(Number(c.cost_per_lead_target)) : '\u2014'} />
                   <DetailRow label="Expected ROI" value={c.expected_roi != null ? `${c.expected_roi}x` : '\u2014'} />
                 </div>
@@ -688,16 +745,25 @@ function CampaignLinkRegistryTab() {
                 </div>
                 <div className="d-flex justify-content-between small">
                   <span className="text-muted">Spend</span>
-                  <span className="fw-medium">{fmt$(ch.total_budget_spent)}</span>
+                  <span className={`fw-medium ${formatSpend(ch.total_budget_spent).unavailable ? 'text-muted fst-italic fw-normal' : ''}`}>
+                    {formatSpend(ch.total_budget_spent).text}
+                  </span>
                 </div>
                 <div className="d-flex justify-content-between small">
                   <span className="text-muted">Revenue</span>
-                  <span className="fw-medium">{fmt$(ch.total_revenue)}</span>
+                  <span
+                    className={`fw-medium ${ch.total_revenue === null ? 'text-muted fst-italic' : ''}`}
+                    title={ch.total_revenue === null ? (ch.unavailable?.[0]?.reason || 'Not computable') : undefined}
+                  >
+                    {formatMoneyOrUnavailable(ch.total_revenue).text}
+                  </span>
                 </div>
                 <div className="d-flex justify-content-between small">
                   <span className="text-muted">ROI</span>
-                  <span className={`fw-bold ${ch.roi > 0 ? 'text-success' : ch.roi < 0 ? 'text-danger' : ''}`}>
-                    {ch.roi > 0 ? '+' : ''}{(ch.roi * 100).toFixed(0)}%
+                  <span className={`fw-bold ${ch.roi === null ? 'text-muted fst-italic fw-normal' : ch.roi > 0 ? 'text-success' : ch.roi < 0 ? 'text-danger' : ''}`}>
+                    {ch.roi === null
+                      ? 'Unavailable'
+                      : `${ch.roi > 0 ? '+' : ''}${(ch.roi * 100).toFixed(0)}%`}
                   </span>
                 </div>
               </SectionCard>
@@ -849,7 +915,7 @@ function CampaignLinkRegistryTab() {
 
 // ─── Revenue Intelligence Tab (Original Content) ────────────────────────────
 
-function RevenueIntelligenceTab() {
+function RevenueIntelligenceTab({ onDataState }: { onDataState?: (s: MarketingDataState) => void }) {
   const [campaigns, setCampaigns] = useState<CampaignMetric[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -882,14 +948,27 @@ function RevenueIntelligenceTab() {
       if (startDate) params.start = startDate;
       if (endDate) params.end = endDate;
       const res = await api.get('/api/admin/marketing/campaigns', { params });
-      setCampaigns(res.data.campaigns || []);
+      const rows: CampaignMetric[] = res.data.campaigns || [];
+      setCampaigns(rows);
+      // Report the REAL fetch time and the server's own unavailable list to the page badge.
+      // Reported here rather than during render so the badge cannot claim freshness for a
+      // render that fetched nothing.
+      onDataState?.({
+        loading: false,
+        error: false,
+        unavailable: rows[0]?.unavailable ?? [],
+        fetchedAt: new Date().toISOString(),
+      });
     } catch {
       setError('Failed to load campaign data');
       setCampaigns([]);
+      // A failed fetch must degrade the badge. The previous implementation left it reading
+      // 'live' with a just-now timestamp after a 500.
+      onDataState?.({ loading: false, error: true, unavailable: undefined, fetchedAt: null });
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate]);
+  }, [startDate, endDate, onDataState]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -912,16 +991,21 @@ function RevenueIntelligenceTab() {
         highIntent: acc.highIntent + c.high_intent_count,
         strategyCalls: acc.strategyCalls + c.strategy_calls,
         enrollments: acc.enrollments + c.enrollments_count,
-        revenue: acc.revenue + c.total_revenue,
       }),
-      { visitors: 0, leads: 0, highIntent: 0, strategyCalls: 0, enrollments: 0, revenue: 0 }
+      { visitors: 0, leads: 0, highIntent: 0, strategyCalls: 0, enrollments: 0 }
     );
   }, [campaigns]);
 
   const avgIntentPct = totals.visitors > 0 ? Math.round((totals.highIntent / totals.visitors) * 100) : 0;
   const overallConversion = totals.visitors > 0 ? Math.round((totals.enrollments / totals.visitors) * 10000) / 100 : 0;
 
-  const hasMetadata = useMemo(() => campaigns.some(c => c.campaign_type || c.platform || c.creative), [campaigns]);
+  // platform and creative are gone: the server used to select `NULL AS platform, NULL AS
+  // creative`, so these columns rendered an em dash on every row of every campaign forever
+  // while looking like a dimension that simply had no data yet.
+  const hasMetadata = useMemo(() => campaigns.some(c => c.campaign_type), [campaigns]);
+
+  /** What the server says it cannot compute. Same list for every row; read it once. */
+  const unavailable = useMemo<UnavailableMetric[]>(() => campaigns[0]?.unavailable ?? [], [campaigns]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -960,7 +1044,10 @@ function RevenueIntelligenceTab() {
     { label: 'Total Visitors', value: totals.visitors.toLocaleString(), icon: 'group-line', tone: 'info' },
     { label: 'Total Leads', value: totals.leads.toLocaleString(), icon: 'user-add-line', tone: 'success' },
     { label: 'High Intent %', value: `${avgIntentPct}%`, icon: 'fire-line', tone: 'primary' },
-    { label: 'Total Revenue', value: fmt$(totals.revenue), icon: 'money-dollar-circle-line', tone: 'success' },
+    // NOT `fmt$(0)`. A revenue KPI reading "$0" in a success-green card states that the
+    // campaigns earned nothing; the truth is that no payment data is joined to campaigns at
+    // all. The card says so instead.
+    { label: 'Total Revenue', value: 'Unavailable', icon: 'money-dollar-circle-line', tone: 'neutral' },
     { label: 'Enrollments', value: totals.enrollments.toLocaleString(), icon: 'graduation-cap-line', tone: 'primary' },
     { label: 'Conversion Rate', value: `${overallConversion}%`, icon: 'percent-line', tone: overallConversion >= 5 ? 'success' : overallConversion >= 2 ? 'warning' : 'danger' },
   ];
@@ -1061,6 +1148,25 @@ function RevenueIntelligenceTab() {
         </div>
       )}
 
+      {/* Why the money figures are blank - stated, not implied by an empty cell. */}
+      {unavailable.length > 0 && (
+        <div className="alert alert-secondary d-flex gap-2 mb-4" role="note">
+          <i className="ri-information-line mt-1" aria-hidden="true" />
+          <div className="small">
+            <div className="fw-semibold mb-1">
+              {unavailable.length} metric{unavailable.length === 1 ? '' : 's'} on this page cannot be computed
+            </div>
+            <ul className="mb-0 ps-3">
+              {unavailable.map((u) => (
+                <li key={u.key}>
+                  <span className="fw-medium">{u.name}:</span> {u.reason}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
       {/* Campaign Performance Table */}
       <SectionCard
         title="Campaign Performance"
@@ -1087,16 +1193,11 @@ function RevenueIntelligenceTab() {
                   <tr>
                     <SortTh k="campaign_id">Campaign</SortTh>
                     {hasMetadata && <SortTh k="campaign_type">Type</SortTh>}
-                    {hasMetadata && <SortTh k="platform">Platform</SortTh>}
-                    {hasMetadata && <SortTh k="creative">Creative</SortTh>}
                     <SortTh k="visitors_count">Visitors</SortTh>
                     <SortTh k="high_intent_pct">Intent %</SortTh>
                     <SortTh k="leads_count">Leads</SortTh>
                     <SortTh k="strategy_calls">Calls</SortTh>
                     <SortTh k="enrollments_count">Enrolled</SortTh>
-                    <SortTh k="total_revenue">Revenue</SortTh>
-                    <SortTh k="revenue_per_visitor"><span title="Revenue per visitor">Rev/Visitor</span></SortTh>
-                    <SortTh k="revenue_per_lead"><span title="Revenue per lead">Rev/Lead</span></SortTh>
                     <SortTh k="visitor_to_lead_pct"><span title="Visitor to Lead conversion rate">Visitor{'\u2192'}Lead %</span></SortTh>
                     <SortTh k="lead_to_call_pct"><span title="Lead to Strategy Call conversion rate">Lead{'\u2192'}Call %</span></SortTh>
                     <SortTh k="call_to_enroll_pct"><span title="Strategy Call to Enrollment conversion rate">Call{'\u2192'}Enroll %</span></SortTh>
@@ -1110,8 +1211,6 @@ function RevenueIntelligenceTab() {
                         {c.campaign_name || c.campaign_id}
                       </td>
                       {hasMetadata && <td className="text-muted">{c.campaign_type || '\u2014'}</td>}
-                      {hasMetadata && <td className="text-muted">{c.platform || '\u2014'}</td>}
-                      {hasMetadata && <td className="text-muted">{c.creative || '\u2014'}</td>}
                       <td>{c.visitors_count.toLocaleString()}</td>
                       <td>
                         <StatusBadge label={`${c.high_intent_pct}%`} tone={intentTone(c.high_intent_pct)} />
@@ -1121,9 +1220,6 @@ function RevenueIntelligenceTab() {
                         {c.strategy_calls}
                       </td>
                       <td>{c.enrollments_count}</td>
-                      <td className="fw-semibold">{fmt$(c.total_revenue)}</td>
-                      <td>{fmt$(c.revenue_per_visitor)}</td>
-                      <td>{fmt$(c.revenue_per_lead)}</td>
                       <td>{c.visitor_to_lead_pct}%</td>
                       <td>{c.lead_to_call_pct}%</td>
                       <td>{c.call_to_enroll_pct}%</td>
@@ -1155,21 +1251,14 @@ function RevenueIntelligenceTab() {
 function AdminMarketingDashboardPage() {
   const [activeTab, setActiveTab] = useState<'funnel' | 'revenue' | 'registry' | 'outreach'>('funnel');
 
-  /* ---------- per-page trust signal ---------- */
-  const trust: TrustSignal = useMemo(() => ({
-    level: 'live',
-    source: 'marketing',
-    updatedAt: new Date().toISOString(),
-    summary: 'Live marketing funnel, revenue intelligence, campaign registry, and AI outreach.',
-    href: '/admin/trust',
-    pillars: [
-      {
-        name: 'Freshness',
-        status: 'live',
-        evidence: [{ label: 'Source', value: 'marketing' }],
-      },
-    ],
-  }), []);
+  /* ---------- per-page trust signal ----------
+   * Derived from the data the page actually received. This was previously a literal
+   * `level: 'live'` with `updatedAt: new Date()` inside an empty-dependency useMemo, which
+   * reported the component's MOUNT TIME as the data's freshness and read "live" even when the
+   * fetch had failed. See marketingTrust.ts for the full account. */
+  const [dataState, setDataState] = useState<MarketingDataState>({});
+  const handleDataState = useCallback((next: MarketingDataState) => setDataState(next), []);
+  const trust: TrustSignal = useMemo(() => deriveMarketingTrust(dataState), [dataState]);
 
   return (
     <>
@@ -1230,7 +1319,7 @@ function AdminMarketingDashboardPage() {
           </Suspense>
         </div>
       )}
-      {activeTab === 'revenue' && <RevenueIntelligenceTab />}
+      {activeTab === 'revenue' && <RevenueIntelligenceTab onDataState={handleDataState} />}
       {activeTab === 'registry' && <CampaignLinkRegistryTab />}
       {activeTab === 'outreach' && (
         <Suspense fallback={

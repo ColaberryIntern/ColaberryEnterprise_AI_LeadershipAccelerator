@@ -1,8 +1,45 @@
 import { sequelize } from '../config/database';
 import { QueryTypes } from 'sequelize';
 import { logAgentExecution } from './governanceService';
+import { mayComputeWith, getMetric } from './adminOs/metricRegistry';
 
-const PRICE_PER_ENROLLMENT = 4500;
+/**
+ * MARKETING ANALYTICS - what this service will and will not claim to know.
+ *
+ * Every figure here is gated on the metric registry. The registry's own header describes the
+ * failure this guards: "a missing field became 0, a 500 became 'no data', a NULL column became
+ * 'Direct'". This file previously did all three.
+ *
+ * WHAT WAS REMOVED AND WHY:
+ *
+ * 1. REVENUE. This service used to compute `total_revenue = enrollments x 4500` from a
+ *    hardcoded constant and present it on a tab labelled "Revenue Intelligence". That number was
+ *    an assumption wearing a measurement's clothes, and it was wrong three ways at once: the
+ *    price is not 4500 (the current offer is $149/mo), an enrollment is not a payment, and the
+ *    operating rule for this business is that revenue means app-originated checkout ONLY. A
+ *    campaign with ten enrollments and zero collected dollars reported $45,000.
+ *
+ *    It is now reported as `unavailable` with the reason attached, because "we do not have
+ *    payment data joined to campaigns" is a true and useful statement, and "$45,000" is not.
+ *
+ * 2. platform / creative. The query selected `NULL AS platform, NULL AS creative` - declaring
+ *    two dimensions it never populated. Every row came back null, so any consumer grouping by
+ *    platform got one bucket holding everything, labelled as though it were a finding. A
+ *    dimension we cannot populate is removed from the contract rather than served empty.
+ *
+ * WHAT WAS DELIBERATELY LEFT ALONE: `visitors_count` is GREATEST(site visitors, email clickers),
+ * which is not a count of any real population. It is registered as `invalid` rather than
+ * silently corrected, because changing it changes numbers people have been reading for months.
+ * See metricRegistry 'marketing.campaign_visitors' and
+ * docs/marketing/ESCALATION-002-fabricated-metrics.md. Escalated, not patched.
+ */
+
+/** A figure the registry says we cannot honestly report, and the reason. */
+export interface UnavailableMetric {
+  key: string;
+  name: string;
+  reason: string;
+}
 
 export interface CampaignMetric {
   campaign_id: string;
@@ -13,16 +50,46 @@ export interface CampaignMetric {
   enrollments_count: number;
   high_intent_pct: number;
   conversion_rate: number;
-  total_revenue: number;
-  revenue_per_visitor: number;
-  revenue_per_lead: number;
   visitor_to_lead_pct: number;
   lead_to_call_pct: number;
   call_to_enroll_pct: number;
   campaign_type: string | null;
-  platform: string | null;
-  creative: string | null;
+  /**
+   * Metrics that CANNOT be computed, with the reason - never a zero standing in for one.
+   * Callers must render these as an explicit unavailable state and must not feed them to a
+   * health score, an average, or an AI narrative.
+   */
+  unavailable: UnavailableMetric[];
 }
+
+/**
+ * The metrics this surface would like to show and the registry forbids computing.
+ *
+ * Derived by ASKING the registry, not by hand-listing - so when an ad-spend connector lands and
+ * `marketing.roas` flips to trusted, this list shrinks on its own. A hand-written list would
+ * keep saying "unavailable" after the data arrived, which is the same class of lie in the
+ * opposite direction.
+ */
+const REVENUE_METRIC_KEYS = ['marketing.roas', 'marketing.ad_spend', 'marketing.cost_per_lead'] as const;
+
+function buildUnavailable(): UnavailableMetric[] {
+  const out: UnavailableMetric[] = [];
+  for (const key of REVENUE_METRIC_KEYS) {
+    if (mayComputeWith(key)) continue; // trusted now - the caller may compute it for real
+    const def = getMetric(key);
+    out.push({
+      key,
+      name: def?.name ?? key,
+      // A registered metric always carries a reason when it is not trusted (the registry's own
+      // test enforces that). The fallback exists only so an unregistered key cannot produce an
+      // empty explanation, which would read as "no reason" rather than "not registered".
+      reason: def?.statusReason ?? 'Not registered in the metric registry.',
+    });
+  }
+  return out;
+}
+
+
 
 export async function getCampaignMetrics(filters?: {
   start?: string;
@@ -70,9 +137,7 @@ export async function getCampaignMetrics(filters?: {
       COALESCE(ce.meetings, 0)::int AS strategy_calls,
       COALESCE(ce.total_opens, 0)::int AS total_opens,
       COALESCE(ce.total_clicks, 0)::int AS total_clicks,
-      COUNT(DISTINCT e.id)::int AS enrollments_count,
-      NULL AS platform,
-      NULL AS creative
+      COUNT(DISTINCT e.id)::int AS enrollments_count
     FROM campaigns c
     LEFT JOIN campaign_engagement ce ON ce.campaign_id = c.id
     LEFT JOIN visitor_data vd ON vd.campaign_id = c.id::text
@@ -92,6 +157,13 @@ export async function getCampaignMetrics(filters?: {
     type: QueryTypes.SELECT,
   }) as any[];
 
+  // Computed per call, NOT memoised at module load. The comment on buildUnavailable claims
+  // this list "shrinks on its own" once a metric flips to trusted; with a module-level constant
+  // that was true only after a process restart, which makes the claim misleading in exactly the
+  // way this file exists to avoid. campaignLinkService already recomputes per call; this now
+  // matches it. The cost is a five-element array per request.
+  const unavailable_ = buildUnavailable();
+
   const result = rows.map((row) => {
     const visitors = Number(row.visitors_count) || 0;
     const highIntent = Number(row.high_intent_count) || 0;
@@ -100,7 +172,6 @@ export async function getCampaignMetrics(filters?: {
     const clicks = Number(row.clicks_count) || 0;
     const strategyCalls = Number(row.strategy_calls) || 0;
     const enrollments = Number(row.enrollments_count) || 0;
-    const totalRevenue = enrollments * PRICE_PER_ENROLLMENT;
 
     return {
       campaign_id: row.campaign_id,
@@ -119,15 +190,11 @@ export async function getCampaignMetrics(filters?: {
       click_rate: leads > 0 ? Math.round((clicks / leads) * 10000) / 100 : 0,
       high_intent_pct: visitors > 0 ? Math.round((highIntent / visitors) * 100) : 0,
       conversion_rate: leads > 0 ? Math.round((enrollments / leads) * 10000) / 100 : 0,
-      total_revenue: totalRevenue,
-      revenue_per_visitor: visitors > 0 ? Math.round(totalRevenue / visitors) : 0,
-      revenue_per_lead: leads > 0 ? Math.round(totalRevenue / leads) : 0,
       visitor_to_lead_pct: visitors > 0 ? Math.round((leads / visitors) * 10000) / 100 : 0,
       lead_to_call_pct: leads > 0 ? Math.round((strategyCalls / leads) * 10000) / 100 : 0,
       call_to_enroll_pct: strategyCalls > 0 ? Math.round((enrollments / strategyCalls) * 10000) / 100 : 0,
       campaign_type: row.campaign_type || null,
-      platform: row.platform || null,
-      creative: row.creative || null,
+      unavailable: unavailable_,
     };
   });
 
