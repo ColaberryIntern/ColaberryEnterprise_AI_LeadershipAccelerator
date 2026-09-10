@@ -27,3 +27,19 @@ export const updateReportSubscriptionInputSchema = z.object({
   enabled: z.boolean().optional(),
 });
 export type UpdateReportSubscriptionInput = z.infer<typeof updateReportSubscriptionInputSchema>;
+
+// Checkpoint G (2026-09-10) — Ali: "you can schedule a report but have no
+// idea what it even looks like." Preview takes contentScope as a
+// comma-separated query string (?contentScope=cost,activity) since it's a
+// GET with no body, not the create/update forms' JSON array — the same
+// closed enum either way, so a stray query value 400s exactly like a bad
+// array item would.
+export const reportPreviewQuerySchema = z.object({
+  contentScope: z
+    .string()
+    .trim()
+    .min(1)
+    .transform((s) => s.split(',').map((v) => v.trim()))
+    .pipe(z.array(z.enum(AGENT_REPORT_CONTENT_SECTIONS)).min(1)),
+});
+export type ReportPreviewQuery = z.infer<typeof reportPreviewQuerySchema>;
