@@ -314,7 +314,24 @@ export async function applyHumanOverride(input: unknown): Promise<ApplyOverrideR
   const republishBlocked: { surfaceKey: string; reason: string }[] = [];
   let approved = false;
 
-  if (persisted.outcome === 'created') {
+  /**
+   * NOT GATED ON `created`, and that gate was a bug.
+   *
+   * `persistCaseStudySnapshot` reports `unchanged` when the content hashes to a version that
+   * already exists — which is exactly what an operator saving the same value twice produces.
+   * Gating on `created` meant the second save approved nothing and published nothing, while
+   * the note still said "Saved". Observed on production 2026-09-10: a YouTube link saved in
+   * the morning sat as draft v52 all day, and saving it again reported success and changed
+   * nothing, because there was nothing new to create.
+   *
+   * The operator's intent is "make this the record", not "make this a version". So the
+   * latest snapshot is approved and the live surfaces are repointed whether or not this
+   * particular click wrote a new row. Both operations are idempotent by design —
+   * `approveSnapshot` writes nothing and reports `unchanged` for an already-approved
+   * version, and `publishCaseStudy` short-circuits when the same snapshot is already pinned
+   * to that surface — so doing this on every save costs a no-op, not a duplicate.
+   */
+  {
     await approveSnapshot({
       caseStudyId: data.caseStudyId,
       snapshotId: persisted.snapshotId,

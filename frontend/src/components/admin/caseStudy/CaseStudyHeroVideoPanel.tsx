@@ -106,9 +106,20 @@ export default function CaseStudyHeroVideoPanel({ video, busy, onApplyOverride }
             <span className="badge bg-primary me-2">
               {current?.provider === 'vimeo' ? 'Vimeo' : 'YouTube'}
             </span>
-            {current?.watchUrl && (
-              <a href={current.watchUrl} target="_blank" rel="noreferrer">{current.watchUrl}</a>
-            )}
+            {/* SHOW THE LINK THAT IS ACTUALLY STORED.
+                This used to render `watchUrl`, which the SNAPSHOT never carries — it is
+                derived by the public projection, not saved. So a record with a video showed
+                a bare "YouTube" badge and nothing else, and the panel read as though the
+                save had not taken. `embedUrl` is what was written, so it is what is shown,
+                falling back to watchUrl on records that happen to carry one. */}
+            <a
+              href={current?.watchUrl || current?.embedUrl || undefined}
+              target="_blank"
+              rel="noreferrer"
+              className="text-break"
+            >
+              {current?.watchUrl || current?.embedUrl}
+            </a>
           </>
         ) : hasGenerated ? (
           <span className="badge bg-secondary">Generated walkthrough</span>
