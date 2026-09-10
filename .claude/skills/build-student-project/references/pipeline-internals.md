@@ -116,6 +116,7 @@ written. It has now: **178 tasks carry `verified_at`.**
 | `skillInference.ts` | pure | The ten architecture skills, inferred from what was COMMITTED |
 | `scheduleForEnrollment.ts` | I/O | Real cohort dates for one student's build |
 | `intakeTruth.ts` | pure | The intake, as project truth. Maps each answer to an `UnderstandingItem` **by its angle**, never by reading the question wording, because a misfiled answer puts a student's words under a heading they did not mean. Only ever writes FACT on `source_message`; an unrecognised angle is reported unmapped rather than filed somewhere plausible |
+| `intakeTruthStore.ts` | I/O | Persists that truth as a `project_understandings` row keyed `(student_intake, projectId)`. **No new column**: `lead_id` is nullable and that pair is already UNIQUE, so a student project needs no migration against a table AI Flotation and CPN also read, and re-running intake updates one row instead of creating a second understanding. Refuses outright when an item carries a human confirmation - see H-13, platform-generated is not platform-owned |
 | `projectNaming.ts` | pure | The one place that decides what a student's project is CALLED |
 
 **Why this table exists at all.** On 2026-09-09 the runbook named 34 of 64 modules, and a
