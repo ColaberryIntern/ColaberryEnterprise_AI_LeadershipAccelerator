@@ -400,4 +400,65 @@ async function readManifestPaths(repo: { owner: string; repo: string }): Promise
   }
 }
 
+/* ── the confirmation gate ──────────────────────────────────────────────────
+ *
+ * Before a plan is generated, the student sees what was understood and can fix
+ * it. Both routes are scoped exactly like every other build route: a
+ * participant token, and `requireOwnedProject` on the project id. Reading
+ * another student's understanding is reading their business.
+ */
+
+// What we think we heard, grouped so a person can tell a fact from an inference.
+router.get('/api/portal/sbp/intake/:projectId/review', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const projectId = z.string().uuid().parse(req.params.projectId);
+    await requireOwnedProject(req, projectId);
+
+    const { loadIntakeTruth } = await import('../services/sbp/intakeTruthStore');
+    const { buildIntakeReview } = await import('../services/sbp/intakeReview');
+    const items = await loadIntakeTruth(projectId);
+
+    // null means the intake never ran; [] means it ran and found nothing
+    // quotable. A caller that conflates them cannot tell a student who skipped
+    // every question from one who never started, so the wire keeps them apart.
+    if (items === null) return res.status(404).json({ error: 'No intake for this project' });
+
+    res.json({ project_id: projectId, ...buildIntakeReview(items) });
+  } catch (e) { fail(res, e, next); }
+});
+
+const correctionSchema = z.object({
+  index: z.number().int().min(0).max(500),
+  // `null` confirms the existing wording unchanged, which is a real action and
+  // is recorded as one. Absent means the same thing.
+  value: z.string().max(2000).nullable().optional(),
+});
+
+router.post('/api/portal/sbp/intake/:projectId/corrections', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const projectId = z.string().uuid().parse(req.params.projectId);
+    await requireOwnedProject(req, projectId);
+    const body = correctionSchema.parse(req.body ?? {});
+
+    const { loadIntakeTruth, saveCorrectedTruth } = await import('../services/sbp/intakeTruthStore');
+    const { applyCorrection, buildIntakeReview } = await import('../services/sbp/intakeReview');
+
+    const items = await loadIntakeTruth(projectId);
+    if (items === null) return res.status(404).json({ error: 'No intake for this project' });
+
+    const applied = applyCorrection(items, body);
+    if (!applied.ok) {
+      // 422, not 400: the request was well-formed and the content was refused.
+      // `empty_value` is a deletion wearing an edit's clothes and needs its own
+      // action, not a silent guess about which was meant.
+      return res.status(422).json({ error: applied.reason });
+    }
+
+    await saveCorrectedTruth(projectId, applied.items);
+    res.json({ project_id: projectId, ...buildIntakeReview(applied.items) });
+  } catch (e) { fail(res, e, next); }
+});
+
 export default router;
