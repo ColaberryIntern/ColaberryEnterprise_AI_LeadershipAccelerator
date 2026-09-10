@@ -28,6 +28,40 @@ load-bearing throughout this runbook, and the status box below records both sepa
 
 ## Status — what is true right now
 
+> **Re-measured against production on 2026-09-09.** Everything in the table below
+> this note was written on 2026-08-14 and describes a box at `4078338f`. Production
+> is now at `251b627e4`, six weeks and several hundred commits later, and **four of
+> the claims in that table are no longer true.** They are kept, struck through in
+> the wording, because the reason each was true is still the reason to check it.
+
+| Claim as of 2026-08-14 | Measured 2026-09-09 |
+|---|---|
+| "Repo provisioning **has never run in production**" | **37 repositories connected, 32 carrying a file tree.** Every module that reads a student repo now has something to read |
+| "0 tasks carry `verified_at`. Wired ≠ run" | **178 tasks verified.** The loop has run, against real repositories |
+| "None of PRs #1461/#1462/#1463 is running on the live box" | All of them are. Production is far past `4078338f` |
+| "`plan_unpublished` 10 → 0" | **3 plans still sit at `draft`**, created 2026-08-10, 08-11 and 08-14. All three predate auto-publish, which fires only on new generations, so they were never going to be rescued by it |
+
+Two things that were checked and are **not** wrong today:
+
+- **Active-project drift is at zero.** 11 enrollments point at a project with no
+  published plan, but **none of those students has a published plan on a different
+  project**, so this is not the `activeProjectDrift` failure. It is 11 students whose
+  active project never got a plan, which is a different problem with a different fix.
+  The first count said 11 and looked alarming; the second query said 0 and was right.
+  That is the same lens-widening lesson as the publish incident below, in the other
+  direction.
+- The document set, the gate, the repair loop and the schedule behave as described.
+
+**How these were measured**, so the next reader can re-run them rather than trust this:
+
+```sql
+SELECT (SELECT count(*) FROM github_connections)                                  AS repos_connected,
+       (SELECT count(*) FROM github_connections WHERE file_tree_json IS NOT NULL) AS repos_with_tree,
+       (SELECT count(*) FROM build_plans WHERE status = 'published')              AS published,
+       (SELECT count(*) FROM build_plans WHERE status = 'draft')                  AS still_draft,
+       (SELECT count(*) FROM student_tasks WHERE verified_at IS NOT NULL)         AS tasks_verified;
+```
+
 | | State | Effect on this runbook |
 |---|---|---|
 | **PR #1463** build-verification loop | **merged into main 2026-08-14** | `markTaskVerifiedComplete` finally has a caller. New column `student_tasks.verification_json`, new `sbp/verification/` subtree, and `.colaberry/progress.json` is now **co-owned and merged**, not overwritten — see "What #1463 changed" below |
@@ -582,7 +616,23 @@ deployed.
 | Agent scoping failure kills the build | `scopeAgents` returns the plan unchanged on upstream/malformed/placeholder |
 | A non-existent column reaches production | `ACTIVE_PROJECT_COLUMNS` asserted against the real `Enrollment` model, statically, with no database |
 | Unbounded external calls | 240s decompose / 45s intake / 20s GitHub, all with capped retries; `boundedQueue` at concurrency 3 |
-| One cohort rush OOMs the box | `SBP_PROVISION_CONCURRENCY` + `SBP_PROVISION_MAX_DEPTH`, `QueueFull` → 503 |
+| One cohort rush OOMs the box | `SBP_PROVISION_CONCURRENCY` + `SBP_PROVISION_MAX_DEPTH`, `QueueFull` → 503 |
+
+#### The second wave — what landed in the six weeks after PR #1463
+
+Everything above was true on 2026-08-13. The rows below were bought between then
+and 2026-09-09, each by a real student losing real time. They are separated only
+so you can see which lessons are recent; they are enforced exactly as hard.
+
+| Failure | The guard |
+|---|---|
+| The platform overwrites a `plan.json` the student hand-edited | `fileOwnership` — `plan.json` is platform-GENERATED, not platform-OWNED. It is replaced **only while provably unedited**; `progress.json` is co-owned and merged; `profile.json` is student-owned and seeded once. Enforced in `repoWriter` at the moment of write |
+| A student builds in one project and watches another | `activeProjectDrift` — `makeActiveProject` catches its own failure into a log line, so publish-time failure is silent. This detects the divergence and the portal says so |
+| One enrollment with two repositories is scored off an arbitrary one | `repoWriteAccess` — `getConnection` was a `findOne` with no ordering, so Postgres row order decided which repository counted. Reading one arbitrarily is not a smaller answer, it is a random one |
+| A student who built everything in their repo sees an empty portfolio | `capabilityRepoReader` — reads `github_connections.file_tree_json` rather than the upload mirror, which only ever carried `.md`, `.txt` and `.csv` |
+| A file tree is read as evidence of quality | `repoSignals` is PURE and reports STRUCTURE only. A `Dockerfile` means a Dockerfile exists; it does not mean the image builds. Every field is phrased as an observation so the narrative layer cannot upgrade it into a claim |
+| A lab renames a path the portfolio looks for | `buildLabContract` — labs live in the database as authored cards, so nothing in CI could fail when one drifted. `scripts/auditBuildLabs.ts` runs the same pure checker against production that the unit tests run against fixtures |
+| A student producing real work cannot find where to connect a repo | `repoConnect` front door — the only connect surface rendered inside a project workspace, and six of the eight students with real work and no repo **had no project**. One of them had 17 submitted artifacts |
 
 ### Prevented only by someone remembering — the useful half
 
