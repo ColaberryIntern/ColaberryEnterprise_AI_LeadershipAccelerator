@@ -33,6 +33,10 @@ function routesOf(method: string): Map<string, string[]> {
 
 const GUARDED_GETS = [
   '/api/admin/projects/delivery',
+  // Returns student names, emails and payment status for people with no project.
+  // More personal data than the delivery list, so it is named here explicitly
+  // rather than relying only on the catch-all below.
+  '/api/admin/projects/without-project',
   '/api/admin/projects/:projectId/gantt',
   '/api/admin/projects/:projectId/evidence',
   '/api/admin/projects/:projectId/artifacts',
