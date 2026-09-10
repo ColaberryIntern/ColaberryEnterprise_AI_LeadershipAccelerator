@@ -84,6 +84,28 @@ function toMessageView(row: AgentManagerMessage): ConversationMessageView {
   return { id: row.id, role: row.role, content: row.content, createdAt: row.created_at };
 }
 
+/**
+ * Real bug fix, found during Capability 8's own end-to-end smoke test: the
+ * three call sites below all needed "the most recent HISTORY_LIMIT messages,
+ * oldest first" — but two of them queried `ORDER BY created_at ASC LIMIT
+ * HISTORY_LIMIT`, which returns the OLDEST messages, not the newest. Once a
+ * real conversation passed HISTORY_LIMIT (20) total messages, the returned
+ * view silently froze on the first 20 forever — including never showing the
+ * reply that had just been generated. Fetching DESC (newest first) with the
+ * limit, then reversing back to chronological order, is the only query that
+ * actually means "most recent N, oldest first" — the one call site that
+ * already did this correctly (the LLM context fetch) is the pattern this
+ * extracts.
+ */
+async function fetchRecentMessagesChronological(conversationId: string): Promise<AgentManagerMessage[]> {
+  const rows = await AgentManagerMessage.findAll({
+    where: { conversation_id: conversationId },
+    order: [['created_at', 'DESC']],
+    limit: HISTORY_LIMIT,
+  });
+  return rows.slice().reverse();
+}
+
 /** Authorization (is the caller allowed to talk to this agent) is the route
  * layer's job (requireAgentManagerOrAdmin) — same convention as every other
  * service in this mission. Trusts it already happened. */
@@ -107,11 +129,7 @@ export async function getConversationHistory(agentId: string, participantEmail: 
   if (!agent) return null;
 
   const conversation = await getOrCreateConversation(agentId, participantEmail, null);
-  const rows = await AgentManagerMessage.findAll({
-    where: { conversation_id: conversation.id },
-    order: [['created_at', 'ASC']],
-    limit: HISTORY_LIMIT,
-  });
+  const rows = await fetchRecentMessagesChronological(conversation.id);
   return { conversationId: conversation.id, agentId, messages: rows.map(toMessageView) };
 }
 
@@ -323,11 +341,7 @@ async function persistAgentReplyAndReturnView(
   replyText: string,
 ): Promise<ConversationView> {
   await AgentManagerMessage.create({ conversation_id: conversation.id, role: 'agent', content: replyText });
-  const rows = await AgentManagerMessage.findAll({
-    where: { conversation_id: conversation.id },
-    order: [['created_at', 'ASC']],
-    limit: HISTORY_LIMIT,
-  });
+  const rows = await fetchRecentMessagesChronological(conversation.id);
   return { conversationId: conversation.id, agentId, messages: rows.map(toMessageView) };
 }
 
@@ -389,12 +403,7 @@ export async function sendManagerMessage(
     return persistAgentReplyAndReturnView(conversation, agentId, interventionIntentReply);
   }
 
-  const recent = await AgentManagerMessage.findAll({
-    where: { conversation_id: conversation.id },
-    order: [['created_at', 'DESC']],
-    limit: HISTORY_LIMIT,
-  });
-  const ordered = recent.slice().reverse();
+  const ordered = await fetchRecentMessagesChronological(conversation.id);
 
   const systemPrompt = await buildAgentManagerConversationSystemPrompt(agentId, agent.agent_name, agent.system_prompt);
   const openai = getInstrumentedOpenAI({ workflow_id: 'agent_manager_conversation', agent_id: agentId });

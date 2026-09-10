@@ -137,7 +137,45 @@ export function StoryHeroFigure({
   video: PublicCaseStudyDetail['walkthroughVideo'];
   cover: { src: string; alt: string } | null;
 }): React.ReactElement | null {
-  if (video) {
+  /**
+   * AN OPERATOR'S OWN VIDEO PLAYS THROUGH AN IFRAME, not this `<video>`.
+   *
+   * It has to be checked before the file branch, because the projection sets `url` to null
+   * when an embed wins — falling through would render a `<video>` with no source, which
+   * shows as an empty black box rather than as an error.
+   *
+   * Nothing from the generated video comes with it. No caption `track`: our WebVTT is the
+   * narration script for OUR footage. No `crossorigin`: we are not reading these bytes. No
+   * synthetic-voice note: that would claim a machine narrated a video a human recorded.
+   */
+  if (video?.embedUrl) {
+    return (
+      <figure className="cbv2-story__cover cbv2-story__cover--video cbv2-story__cover--embed">
+        <iframe
+          className="cbv2-story__walkthrough-embed"
+          src={video.embedUrl}
+          title={video.title}
+          loading="lazy"
+          referrerPolicy="strict-origin-when-cross-origin"
+          allow="accelerometer; clipboard-write; encrypted-media; picture-in-picture; fullscreen"
+          allowFullScreen
+        />
+        <figcaption className="cbv2-story__walkthrough-note">
+          {video.title}
+          {video.watchUrl ? (
+            <>
+              {' '}
+              <a href={video.watchUrl} target="_blank" rel="noopener noreferrer">
+                {video.provider === 'vimeo' ? 'Watch on Vimeo' : 'Watch on YouTube'}
+              </a>
+            </>
+          ) : null}
+        </figcaption>
+      </figure>
+    );
+  }
+
+  if (video?.url) {
     return (
       <figure className="cbv2-story__cover cbv2-story__cover--video">
           {/* `crossorigin` is what makes the CAPTIONS work on the other two brands. A

@@ -2,6 +2,7 @@ import { getPointsSummary } from './pointsService';
 import { getStreak } from './streakService';
 import { getProgressionSummary } from './progression/progressionService';
 import { getPromotionStatus } from './progression/promotionService';
+import { classifyError } from '../utils/errorClassifier';
 
 /**
  * Points drill-down — unifies the THREE independent progress systems into one
@@ -35,6 +36,28 @@ export interface DrilldownView {
   } | null;
 }
 
+/**
+ * A lens that fails is NOT the same as a lens a student has not unlocked.
+ *
+ * Both used to be swallowed by a bare `catch {}`, so a student sitting on
+ * 1,600 builder XP could be shown "0 XP" under the words "Skill XP starts
+ * flowing once your curriculum begins" and nothing anywhere recorded that a
+ * call had thrown. The lens still degrades to null, because the engagement
+ * lens must always render; what changes is that the failure leaves a trace.
+ */
+function logLensFailure(lens: string, enrollmentId: string, err: unknown): void {
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level: 'error',
+    service: 'points-drilldown',
+    event: lens + '_lens_failed',
+    outcome: 'failure',
+    error_class: classifyError(err),
+    error: (err as any)?.message ?? String(err),
+    enrollment_id: enrollmentId,
+  }));
+}
+
 export async function getPointsDrilldown(enrollmentId: string): Promise<DrilldownView> {
   const [summary, streak] = await Promise.all([
     getPointsSummary(enrollmentId),
@@ -56,7 +79,11 @@ export async function getPointsDrilldown(enrollmentId: string): Promise<Drilldow
       community: prog.xp.community,
       total: prog.xp.learning + prog.xp.builder + prog.xp.community,
     };
-  } catch { /* progression not provisioned — omit this lens */ }
+  } catch (err) {
+    // Degrades to null (the lens is optional) but never silently: see
+    // logLensFailure. A student's real XP reading 0 is a defect, not a state.
+    logLensFailure('skill_xp', enrollmentId, err);
+  }
 
   let readiness: DrilldownView['readiness'] = null;
   try {
@@ -74,7 +101,11 @@ export async function getPointsDrilldown(enrollmentId: string): Promise<Drilldow
       at_max: st.at_max,
       gaps: st.gaps,
     };
-  } catch { /* progression not provisioned — omit this lens */ }
+  } catch (err) {
+    // Degrades to null (the lens is optional) but never silently: see
+    // logLensFailure. A student's real XP reading 0 is a defect, not a state.
+    logLensFailure('readiness', enrollmentId, err);
+  }
 
   return {
     engagement: {

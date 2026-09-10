@@ -185,9 +185,10 @@ a.rt-btn{text-decoration:none}
 .rt-verified-t{font-weight:700;font-size:14px;color:var(--leaf-deep)}
 .rt-verified-s{font-size:12.5px;color:var(--muted);line-height:1.5}
 .rt-verified-s code{font-family:var(--mono);font-size:11.5px}
-.rt-verified-xp{margin-left:auto;flex:none;font-family:var(--mono);font-size:13px;font-weight:700;
+.rt-verified-xp{margin-left:auto;flex:none;font-family:var(--mono);font-size:13px;font-weight:700;text-decoration:none;
   color:var(--leaf-deep);background:var(--paper);border:1px solid var(--leaf);border-radius:999px;
   padding:5px 12px;animation:rt-pop .4s cubic-bezier(.2,1.5,.4,1) .16s both}
+.rt-verified-xp:hover,.rt-verified-xp:focus-visible{background:var(--leaf);color:var(--paper);text-decoration:none}
 
 /* ── WEBHOOK SETUP ───────────────────────────────────────────────────────────
    A three-step checklist that borrows the checkmark language of .rt-acc

@@ -55,9 +55,40 @@ function step(n: number, title: string): void {
   console.log(`\n── ${n}. ${title} ${'─'.repeat(Math.max(0, 58 - title.length))}`);
 }
 
+/**
+ * Databases this script must NEVER touch.
+ *
+ * It calls `sequelize.sync()` and creates a fake student, a comp subscription and
+ * a cohort. Against a production database that is not a test, it is damage — and
+ * an ungated sync on this model graph is its own documented failure mode.
+ *
+ * The guard is a NAME check because the realistic mistake is running it with the
+ * ambient DATABASE_URL still pointing at prod: `docker exec accelerator-backend
+ * node dist/scripts/...` inherits the container's env, and the container's env is
+ * prod. An opt-in flag would not have helped, because the person making that
+ * mistake believes they already opted in.
+ */
+const FORBIDDEN_DATABASES = ['accelerator_prod', 'accelerator_dev1'];
+
+function assertSafeDatabase(url: string): void {
+  const name = (url.split('/').pop() || '').split('?')[0];
+  if (FORBIDDEN_DATABASES.includes(name)) {
+    console.error(`REFUSING TO RUN against "${name}".`);
+    console.error('This script calls sequelize.sync() and creates test data.');
+    console.error('Point DATABASE_URL at a throwaway database and run it again.');
+    process.exit(2);
+  }
+  if (!name) {
+    console.error('REFUSING TO RUN: no database name in DATABASE_URL.');
+    process.exit(2);
+  }
+}
+
 async function main(): Promise<void> {
   console.log('AI Internship — end-to-end journey');
-  console.log(`database: ${(process.env.DATABASE_URL || '').replace(/:[^:@]*@/, ':***@')}`);
+  const dbUrl = process.env.DATABASE_URL || '';
+  assertSafeDatabase(dbUrl);
+  console.log(`database: ${dbUrl.replace(/:[^:@]*@/, ':***@')}`);
 
   // Import AFTER the env is in place so config/database reads the right URL.
   const { default: Cohort } = await import('../models/Cohort');
