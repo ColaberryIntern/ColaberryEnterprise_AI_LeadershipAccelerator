@@ -12,7 +12,7 @@ import { AgentOneOnOne } from '../../../services/agentOneOnOneApi';
 // AI Agent Dashboard redesign, Checkpoint F: At a Glance (2026-09-03) —
 // pins the real, conditional tone/KPI computation per tile (never a
 // fabricated indicator) and that clicking a tile calls onNavigate with the
-// real target tab. Command Center's tile reuses deriveOperationalState()/
+// real target tab. Live Status's tile reuses deriveOperationalState()/
 // deriveAttentionItems() verbatim — this file trusts those already-tested
 // pure functions and only checks the tile renders their real output.
 
@@ -107,10 +107,10 @@ async function renderTab(overrides: Partial<{ detail: AgentDetail; inboxItems: M
   return onNavigate;
 }
 
-describe('AgentAtAGlanceTab — Command Center tile', () => {
+describe('AgentAtAGlanceTab — Live Status tile', () => {
   it('shows the real operational-state label with no attention items when nothing is pending', async () => {
     await renderTab();
-    expect(container.textContent).toContain('Command Center');
+    expect(container.textContent).toContain('Live Status');
     // trigger_type on_demand + no live presence chain + no ticket activity -> Unknown
     expect(container.textContent).toContain('Unknown');
   });
@@ -203,7 +203,7 @@ describe('AgentAtAGlanceTab — navigation', () => {
       const btn = buttons.find((b) => b.textContent?.includes(label));
       btn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     };
-    clickByLabel('Command Center');
+    clickByLabel('Live Status');
     clickByLabel('Work & Decisions');
     clickByLabel('Talk');
     clickByLabel('Reports');
