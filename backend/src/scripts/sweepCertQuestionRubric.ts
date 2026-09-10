@@ -81,6 +81,26 @@ interface Row {
 
 const log = (line: string): void => { console.log(line); };
 
+/**
+ * The one query this script runs, exported so a test can check its columns
+ * against the schema without a database.
+ *
+ * `track_id` and `scenario_family` live on the IDENTITY, not on the revision.
+ * The first live run of this script died on `column "track_id" does not exist`
+ * because it selected them from `cert_question_revisions`. Both tables are
+ * needed and the join is not optional.
+ *
+ * Retired identities are excluded: a question somebody deliberately took out of
+ * circulation should not be improved, re-drafted and offered back for approval.
+ */
+export const BANK_QUERY = `SELECT r.question_key, r.revision, q.track_id, r.blueprint_version,
+            r.domain_id, r.objective_id, q.scenario_family, r.difficulty, r.stem,
+            r.options, r.correct_keys, r.select_count, r.rationale,
+            r.distractor_rationales, r.review_status
+       FROM cert_question_revisions r
+       JOIN cert_questions q ON q.question_key = r.question_key
+      WHERE q.is_retired = false`;
+
 /** The latest revision of each question — the version the team has decided on. */
 export function latestPerKey(rows: Row[]): Row[] {
   const out = new Map<string, Row>();
@@ -169,13 +189,14 @@ async function main(): Promise<void> {
     return;
   }
 
-  const rows = await sequelize.query<Row>(
-    `SELECT question_key, revision, track_id, blueprint_version, domain_id, objective_id,
-            scenario_family, difficulty, stem, options, correct_keys, select_count,
-            rationale, distractor_rationales, review_status
-       FROM cert_question_revisions`,
-    { type: QueryTypes.SELECT },
-  );
+  // `track_id` and `scenario_family` live on the IDENTITY, not on the revision.
+  // The first live run of this script failed on `column "track_id" does not
+  // exist` because it selected them from `cert_question_revisions`. Both tables
+  // are needed and the join is not optional.
+  //
+  // Retired identities are excluded: a question somebody deliberately took out of
+  // circulation should not be improved, re-drafted and offered back for approval.
+  const rows = await sequelize.query<Row>(BANK_QUERY, { type: QueryTypes.SELECT });
 
   let queue = latestPerKey(rows);
   if (onlyKey) queue = queue.filter((r) => r.question_key === onlyKey);

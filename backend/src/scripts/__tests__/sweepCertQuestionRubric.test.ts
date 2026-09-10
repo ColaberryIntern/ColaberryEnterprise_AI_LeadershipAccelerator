@@ -131,3 +131,76 @@ describe('improveUntilMeets — when to try again and when to stop', () => {
     expect(out.rounds).toBe(0);
   });
 });
+
+/**
+ * Every column the sweep selects must actually exist, checked against the schema.
+ *
+ * WHY THIS TEST EXISTS. The first live run of this script died on
+ * `column "track_id" does not exist` — it selected `track_id` and
+ * `scenario_family` from `cert_question_revisions`, where they have never lived.
+ * Nothing caught it: `tsc` cannot see inside a SQL string, the unit tests mocked
+ * the query away, and CI has no database. It took a deploy and a production run.
+ *
+ * So the columns are checked against the CREATE TABLE statements in
+ * `ensureCertPrepSchema.ts`, which is the file the database is actually built
+ * from. This catches the whole class before deploy rather than this one instance.
+ */
+describe('BANK_QUERY columns exist in the schema', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const fsMod = require('fs');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const pathMod = require('path');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { BANK_QUERY } = require('../sweepCertQuestionRubric');
+
+  const schema: string = fsMod.readFileSync(
+    pathMod.join(__dirname, '..', '..', 'db', 'ensureCertPrepSchema.ts'), 'utf8',
+  );
+
+  /**
+   * Column names declared in one CREATE TABLE block.
+   *
+   * Scanned line by line rather than matched with a multiline regex. The regex
+   * version silently found nothing — the file has CRLF endings and the column
+   * lines contain their own parentheses (`VARCHAR(60)`, `gen_random_uuid()`),
+   * both of which a `\(...\)` pattern has to be written very carefully to
+   * survive. A line scan has neither problem and is readable.
+   */
+  const columnsOf = (table: string): Set<string> => {
+    const lines = schema.split('\n').map((l) => l.replace(/\r$/, ''));
+    const start = lines.findIndex((l) => l.includes(`CREATE TABLE IF NOT EXISTS ${table} (`));
+    if (start < 0) throw new Error(`no CREATE TABLE found for ${table}`);
+    const cols = new Set<string>();
+    for (let i = start + 1; i < lines.length; i += 1) {
+      const line = lines[i].trim();
+      if (line.startsWith(')')) break;
+      const c = line.match(/^([a-z_]+)\s+[A-Z]/);
+      if (c) cols.add(c[1]);
+    }
+    return cols;
+  };
+
+  const revisionCols = columnsOf('cert_question_revisions');
+  const questionCols = columnsOf('cert_questions');
+
+  it('found real column lists to check against', () => {
+    // Guards the guard: a regex that matched nothing would make every assertion
+    // below vacuous, which is the failure mode of a test that parses source.
+    expect(revisionCols.size).toBeGreaterThan(10);
+    expect(questionCols.size).toBeGreaterThan(5);
+    expect(questionCols.has('track_id')).toBe(true);
+    expect(revisionCols.has('track_id')).toBe(false);
+  });
+
+  it('every r.<column> exists on cert_question_revisions', () => {
+    const referenced = [...String(BANK_QUERY).matchAll(/\br\.([a-z_]+)/g)].map((m) => m[1]);
+    expect(referenced.length).toBeGreaterThan(5);
+    expect(referenced.filter((c) => !revisionCols.has(c))).toEqual([]);
+  });
+
+  it('every q.<column> exists on cert_questions', () => {
+    const referenced = [...String(BANK_QUERY).matchAll(/\bq\.([a-z_]+)/g)].map((m) => m[1]);
+    expect(referenced.length).toBeGreaterThan(2);
+    expect(referenced.filter((c) => !questionCols.has(c))).toEqual([]);
+  });
+});

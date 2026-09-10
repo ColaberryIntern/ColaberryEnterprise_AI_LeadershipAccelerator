@@ -120,3 +120,18 @@ Weaknesses found by running it, and what was done. Add to this every time.
 - *(2026-09-09)* `/tmp` is shared across concurrent Claude sessions on this
   machine; an output file came back holding a different session's test run. Write
   run artifacts to the session scratchpad, never a bare `/tmp` name.
+- *(2026-09-10)* **The first live run died instantly: `column "track_id" does not
+  exist`.** `track_id` and `scenario_family` live on `cert_questions`, the
+  identity, not on `cert_question_revisions`. Nothing caught it before production:
+  `tsc` cannot see inside a SQL string, the unit tests mocked the query away, and
+  CI has no database. Fixed with the join, and the query is now exported as
+  `BANK_QUERY` with a test that checks **every `r.` and `q.` column against the
+  CREATE TABLE statements in `ensureCertPrepSchema.ts`** — the file the database
+  is actually built from. Mutation-checked: reintroducing `r.track_id` turns it
+  red. The sweep also now excludes retired identities, because a question somebody
+  deliberately withdrew should not be improved and offered back for approval.
+- *(2026-09-10)* **Do not write source containing backslashes through a shell
+  heredoc.** Building the schema parser that way put a literal CR and a real
+  newline where `` and `
+` were meant, producing an unterminated regex. Use
+  the Edit tool, or build the escapes with `chr()`.
