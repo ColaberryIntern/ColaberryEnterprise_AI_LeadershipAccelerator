@@ -421,12 +421,17 @@ export interface PublicCaseStudyDetail {
    * metric, a roadmap line or an evidence row on the same record.
    */
   readonly walkthroughVideo: {
-    readonly url: string;
+    /** Null when the hero is an operator's YouTube/Vimeo embed rather than our file. */
+    readonly url: string | null;
     readonly title: string;
     readonly captionsUrl: string | null;
     readonly posterUrl: string | null;
     readonly durationSeconds: number | null;
     readonly narrationSource: string | null;
+    /** Set when the operator chose their own video; the renderer frames this instead. */
+    readonly embedUrl: string | null;
+    readonly provider: 'youtube' | 'vimeo' | null;
+    readonly watchUrl: string | null;
   } | null;
   readonly situation: PublicCaseStudySituation | null;
   readonly timeline: readonly PublicCaseStudyTimelineEntry[];
