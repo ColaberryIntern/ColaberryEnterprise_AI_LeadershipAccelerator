@@ -22,6 +22,7 @@ import CommunityMember from '../../models/CommunityMember';
 import LiveSession from '../../models/LiveSession';
 import AttendanceRecord from '../../models/AttendanceRecord';
 import { resolveCohortId } from '../communityService';
+import { ritualStudentLabel } from '../runtime/communityRituals';
 import { env } from '../../config/env';
 import type { TodayFeedItem } from './todayFeedComposer';
 import { getTypeExposureMap } from './feedTypeExposureService';
@@ -151,20 +152,42 @@ function communityMedia(mediaUrls: unknown): { video: FeedVideo | null; image: s
 
 type CommunityPostFields = {
   id?: string; body: string; media_urls?: unknown;
+  week?: number | null; ritual_meta?: { ritual?: string } | null;
+  like_count?: number | null; comment_count?: number | null;
   member?: { display_name?: string | null; avatar_url?: string | null; level?: number | null } | null;
 };
+
+type CommunityDynamicFields = Pick<
+  TodayFeedItem,
+  'title' | 'description' | 'image' | 'video' | 'author' | 'student_label' | 'week' | 'like_count' | 'comment_count'
+>;
 
 // The DYNAMIC fields of a community card — derived from the LIVE post. Shared by
 // compose-time (communityItem) and serve-time (rehydrateCommunityItems) so media,
 // author, and text always reflect the current post, never a stale snapshot.
-export function communityFieldsFromPost(p: CommunityPostFields): Pick<TodayFeedItem, 'title' | 'description' | 'image' | 'video' | 'author'> {
+//
+// `student_label` is derived here rather than left to the client: a ritual post
+// belongs to the week's Community Ritual ("Skill Drop", "Cohort Wins"), and the
+// client's only other option is to title-case the type slug, which is how every
+// one of these tiles came to read "Community Discussion". Deriving it at
+// serve-time also repairs the FROZEN snapshots already sitting in
+// today_feed_impressions without a backfill.
+export function communityFieldsFromPost(p: CommunityPostFields): CommunityDynamicFields {
   const body = (p.body || '').trim();
   const title = body.length > 80 ? `${body.slice(0, 77)}…` : body;
   const { video, image } = communityMedia(p.media_urls);
   const author = p.member
     ? { name: p.member.display_name || 'Member', avatar_url: p.member.avatar_url ?? null, level: p.member.level ?? 1 }
     : null;
-  return { title: title || 'Community post', description: body || null, image, video, author };
+  const week = typeof p.week === 'number' ? p.week : null;
+  const student_label = p.ritual_meta
+    ? ritualStudentLabel('community_discussion', week, 'Community Post')
+    : 'Community Post';
+  return {
+    title: title || 'Community post', description: body || null, image, video, author,
+    student_label, week,
+    like_count: p.like_count ?? 0, comment_count: p.comment_count ?? 0,
+  };
 }
 
 function communityItem(p: CommunityPostFields & { id: string }): TodayFeedItem {
@@ -184,11 +207,21 @@ function communityItem(p: CommunityPostFields & { id: string }): TodayFeedItem {
     video: f.video,
     blog: null,
     content: null,
+    // Deliberately null, even though a ritual post knows its week. `week` on a
+    // feed item is not just a label: isPrecedenceImpression() reads it to decide
+    // whether a placed impression counts toward the anchored or the variety
+    // cadence tier, so stamping it here would silently re-tier every community
+    // post in every student's feed. The week reaches the student through the
+    // ritual label and the post body instead.
     week: null,
     estimated_time: null,
     status: null,
     interacted: false,
     author: f.author,
+    community_post_id: p.id,
+    student_label: f.student_label,
+    like_count: f.like_count,
+    comment_count: f.comment_count,
   };
 }
 
@@ -210,10 +243,20 @@ export async function rehydrateCommunityItems(items: TodayFeedItem[]): Promise<v
     });
     const byId = new Map(posts.map((p) => { const plain = p.get({ plain: true }) as any; return [plain.id as string, plain]; }));
     for (const it of community) {
-      const post = byId.get(it.ref.slice('community:'.length));
+      const postId = it.ref.slice('community:'.length);
+      const post = byId.get(postId);
       if (!post) continue;
       const f = communityFieldsFromPost(post);
       it.title = f.title; it.description = f.description; it.image = f.image; it.video = f.video; it.author = f.author;
+      // Identity + label repair for frozen snapshots: rows placed before the
+      // post carried its own id kept `card_id: null` and a slug-derived label,
+      // so the client opened `community:<uuid>` as a card. Re-stamping here
+      // fixes every existing impression on the next serve — no backfill.
+      it.community_post_id = postId;
+      it.student_label = f.student_label;
+      it.like_count = f.like_count; it.comment_count = f.comment_count;
+      // `week` is left exactly as placed — see communityItem() for why a community
+      // item must not acquire one.
     }
   } catch (err: any) {
     console.warn('[todayAnchoredSources] community rehydrate failed:', err?.message?.split('\n')[0]);
