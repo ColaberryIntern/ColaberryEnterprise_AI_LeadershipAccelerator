@@ -88,6 +88,24 @@ describe('communityFieldsFromPost', () => {
     expect(plain.week).toBeNull();
   });
 
+  it('never leaves a text-only post without artwork', () => {
+    // The blank teal slab in the feed: community items only ever took `image`
+    // from media_urls, so a text post rendered as an empty tile.
+    const f = communityFieldsFromPost(mkPost({ media_urls: [] }));
+    expect(f.image).toBe('/thumbnails/curriculum-types/community_discussion.jpg');
+  });
+
+  it('lets the post’s own media win over the ritual banner', () => {
+    const f = communityFieldsFromPost(mkPost({ media_urls: ['https://cdn.example.com/shot.png'] }));
+    expect(f.image).toBe('https://cdn.example.com/shot.png');
+  });
+
+  it('leaves a video post imageless — the player is the visual', () => {
+    const f = communityFieldsFromPost(mkPost({ media_urls: ['https://youtu.be/dQw4w9WgXcQ'] }));
+    expect(f.video).not.toBeNull();
+    expect(f.image).toBeNull();
+  });
+
   it('carries the engagement counts the tile renders, defaulting to 0', () => {
     expect(communityFieldsFromPost(mkPost()).comment_count).toBe(2);
     expect(communityFieldsFromPost(mkPost()).like_count).toBe(4);

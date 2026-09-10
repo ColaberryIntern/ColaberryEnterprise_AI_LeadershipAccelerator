@@ -217,7 +217,8 @@ export const runtimeApi = {
   // Community Rituals: read the week's ritual + cohort wall, post/edit my answer, cheer a classmate's.
   ritualWall: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/peer-wins`).then((r) => r.data as RitualWall),
   postRitual: (cardId: string, values: RitualValues) =>
-    portalApi.post(`/api/portal/runtime/cards/${cardId}/peer-wins`, { values }).then((r) => r.data as { post: RitualTile; created: boolean }),
+    portalApi.post(`/api/portal/runtime/cards/${cardId}/peer-wins`, { values })
+      .then((r) => r.data as { post: RitualTile; created: boolean; points_awarded: number }),
   cheerRitual: (cardId: string, postId: string) =>
     portalApi.post(`/api/portal/runtime/cards/${cardId}/peer-wins/${postId}/cheer`, {}).then((r) => r.data as { liked: boolean; like_count: number }),
   assessment: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/assessment`).then((r) => r.data as AssessmentView),

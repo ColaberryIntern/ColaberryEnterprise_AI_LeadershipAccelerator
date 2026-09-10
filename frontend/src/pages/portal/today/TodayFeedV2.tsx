@@ -69,6 +69,11 @@ export function adapt(item: TodayFeedItem): TimelineFeedCard {
     community_post_id: item.community_post_id ?? null,
     comment_count: item.comment_count ?? null,
     like_count: item.like_count ?? null,
+    // Set only for project-task items. Their destination is the project
+    // workspace, so the tile navigates there rather than opening a drawer whose
+    // card id (`project:<uuid>`) no card endpoint can resolve.
+    project_id: item.project_id ?? null,
+    project_task_id: item.project_task_id ?? null,
   };
 }
 

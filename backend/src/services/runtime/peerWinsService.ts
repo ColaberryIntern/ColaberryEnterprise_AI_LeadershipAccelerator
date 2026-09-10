@@ -21,8 +21,9 @@ import TimelineCard from '../../models/TimelineCard';
 import { getOrCreateMember, resolveCohortId, createPost } from '../communityService';
 import {
   ritualForWeek, publicRitual, PublicRitual, RitualConfig, RitualValues,
-  normalizeValues, composeBody, headlineOf, linkField, isHttp,
+  normalizeValues, composeBody, headlineOf, linkField, isHttp, valueToText,
 } from './communityRituals';
+import { checkPost } from '../community/contributionQuality';
 
 export interface RitualTileMember { id: string; name: string; avatar_url: string | null; level: number; initials: string }
 
@@ -132,10 +133,28 @@ export async function getRitualWall(enrollmentId: string, cardId: string): Promi
  *  post per (member, card). First post awards points (via createPost); an edit does not. */
 export async function submitRitualPost(
   enrollmentId: string, cardId: string, rawValues: RitualValues,
-): Promise<{ post: RitualTile; created: boolean }> {
+): Promise<{ post: RitualTile; created: boolean; points_awarded: number }> {
   const card = await loadCard(cardId);
   const ritual = ritualForWeek(card.week);
   const values = normalizeValues(ritual, rawValues);
+
+  // Thoughtfulness gate, applied to the student's OWN words. Deliberately not
+  // applied to composeBody's output: that prepends "🏆 Cohort Wins · Week 5" and
+  // a label per field, which would let a one-word answer clear a word floor on
+  // scaffolding the student never wrote.
+  const answered = ritual.fields
+    .filter((f) => f.kind !== 'link')
+    .map((f) => valueToText(values[f.key]))
+    .filter(Boolean)
+    .join(' ');
+  const quality = checkPost(answered);
+  if (!quality.ok) {
+    throw Object.assign(
+      new Error(`Add a little more detail — about ${quality.needed - quality.words} more words and this posts.`),
+      { status: 400 },
+    );
+  }
+
   const member = await getOrCreateMember(enrollmentId);
 
   const body = composeBody(ritual, values);
@@ -156,7 +175,9 @@ export async function submitRitualPost(
     const tileMember: RitualTileMember = {
       id: member.id, name: member.display_name, avatar_url: member.avatar_url, level: member.level, initials: initialsFor(member.display_name),
     };
-    return { post: toTile(existing as any, ritual, tileMember, liked.length > 0, true), created: false };
+    // An edit re-posts nothing: the award fired on the first submit and this
+    // path deliberately does not re-award, so the client must celebrate 0.
+    return { post: toTile(existing as any, ritual, tileMember, liked.length > 0, true), created: false, points_awarded: 0 };
   }
 
   const item = await createPost(enrollmentId, {
@@ -174,5 +195,6 @@ export async function submitRitualPost(
       ritual, tileMember, false, true,
     ),
     created: true,
+    points_awarded: item.points_awarded ?? 0,
   };
 }

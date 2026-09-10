@@ -390,7 +390,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
               ? <GeneratingReader />
               : <div className="tld-note" style={{ margin: 20 }}>This build station has not been generated yet.</div>
         ) : isCommunityPost ? (
-          <CommunityThreadPanel postId={card.community_post_id as string} fallbackLabel={card.student_label} preview={preview} />
+          <CommunityThreadPanel postId={card.community_post_id as string} fallbackLabel={card.student_label} preview={preview} variant="drawer" />
         ) : isPeerWins ? (
           <PeerWinsPanel cardId={card.id} preview={preview} />
         ) : isReflection ? (

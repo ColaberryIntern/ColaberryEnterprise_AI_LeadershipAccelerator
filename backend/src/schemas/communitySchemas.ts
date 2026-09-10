@@ -1,7 +1,15 @@
 import { z } from 'zod';
+import { checkReply, checkPost, MIN_REPLY_WORDS, MIN_POST_WORDS } from '../services/community/contributionQuality';
 
 export const CreatePostSchema = z.object({
-  body: z.string().min(1, 'Post body cannot be empty').max(10000),
+  // Free-text community posts. Ritual posts do NOT come through this route —
+  // they are gated in peerWinsService against the student's OWN answers rather
+  // than the composed body, whose heading and field labels would otherwise pad
+  // a one-word answer past the bar.
+  body: z.string().min(1, 'Post body cannot be empty').max(10000)
+    .refine((b) => checkPost(b).ok, {
+      message: `Posts need at least ${MIN_POST_WORDS} words — give the cohort something they can use.`,
+    }),
   category: z.string().min(1).max(100).optional(),
   // http(s) URL (pasted link / YouTube) OR an uploaded community-media path.
   media_urls: z.array(
@@ -59,7 +67,14 @@ export const NotificationIdParamSchema = z.object({
 });
 
 export const CreateCommentSchema = z.object({
-  body: z.string().min(1, 'Comment body cannot be empty').max(5000),
+  // A reply must be a real contribution, not a one-word point claim. The rule
+  // lives in contributionQuality so the composer can enforce the SAME bar live
+  // as the student types; this is the authority, since a client-only gate is
+  // decoration. See MIN_REPLY_WORDS for why the floor is words, not characters.
+  body: z.string().min(1, 'Comment body cannot be empty').max(5000)
+    .refine((b) => checkReply(b).ok, {
+      message: `Replies need at least ${MIN_REPLY_WORDS} words — say what you tried, asked, or noticed.`,
+    }),
   parent_comment_id: z.string().uuid().optional(),
 });
 

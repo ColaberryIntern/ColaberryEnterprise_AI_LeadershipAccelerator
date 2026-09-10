@@ -58,6 +58,36 @@ export interface RitualConfig {
   beforeAfter?: [string, string];
 }
 
+/**
+ * The banner art a ritual post shows on the Today feed.
+ *
+ * Community post items never fell back to any artwork at all — `image` came
+ * only from the post's own media_urls — so a text-only ritual post rendered as
+ * a blank slab. Worse, all twelve rituals share the single `community_discussion`
+ * slug, so the ordinary per-type thumbnail would give Skill Drop, Hot Take and
+ * Cohort Wins the SAME picture.
+ *
+ * This resolves art PER RITUAL, falling back to the shared community_discussion
+ * banner for any week whose own art has not been produced yet. That fallback is
+ * the point: dropping in `skill_drop.jpg` later is a one-file change with no
+ * code edit, and until then nothing renders blank.
+ *
+ * Art lives at frontend/public/thumbnails/curriculum-types/<name>.jpg and is
+ * served by the frontend build — same convention as every other type thumbnail.
+ */
+const RITUAL_ART_BASE = '/thumbnails/curriculum-types';
+const SHARED_RITUAL_ART = `${RITUAL_ART_BASE}/community_discussion.jpg`;
+
+/** Rituals with their own produced artwork. Add a key here when its jpg lands. */
+const RITUAL_ART: Record<string, string> = {
+  // e.g. skill_drop: `${RITUAL_ART_BASE}/ritual_skill_drop.jpg`,
+};
+
+export function ritualArt(week: number | null | undefined): string {
+  const r = ritualForWeek(week);
+  return RITUAL_ART[r.key] || SHARED_RITUAL_ART;
+}
+
 const TEAL = '#367895', DEEPTEAL = '#2E6A86', GREEN = '#5BA63C', GOLD = '#E8920C', CORAL = '#D97757';
 
 export const RITUALS: Record<number, RitualConfig> = {

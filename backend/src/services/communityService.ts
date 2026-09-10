@@ -115,11 +115,14 @@ async function clampCommunityAward(enrollmentId: string, proposed: number): Prom
 // creation (gate OFF) and on the first peer like (gate ON), so whichever path
 // grants the reward, it is identical. Best-effort throughout (never fails the
 // post/like).
-async function awardPostReward(enrollmentId: string, memberId: string, postId: string): Promise<void> {
+/** Returns the points that ACTUALLY landed (post-clamp) so the caller can show
+ *  and celebrate the real number rather than the nominal one. */
+async function awardPostReward(enrollmentId: string, memberId: string, postId: string): Promise<number> {
   await awardContributionPoints(memberId, POINTS_PER_POST);
   const points = await clampCommunityAward(enrollmentId, POINTS_PER_POST);
   await award(enrollmentId, { eventType: 'community_post', eventKey: `community_post:${postId}`, points }).catch(() => {});
   await awardCommunityXp(enrollmentId, POINTS_PER_POST, `cxp:post:${postId}`, 'community:post').catch(() => {});
+  return points;
 }
 
 function log(level: 'info' | 'warn' | 'error', event: string, ctx: Record<string, unknown>): void {
@@ -158,6 +161,9 @@ export interface PostFeedItem {
   member: { id: string; display_name: string; avatar_url: string | null; level: number };
   // Up to 3 most-recent distinct commenters (avatar stack on the card).
   recent_commenters: { id: string; display_name: string; avatar_url: string | null }[];
+  /** Points this post actually earned, AFTER the daily community clamp. Present
+   *  only on a create response, so the composer can celebrate the real number. */
+  points_awarded?: number;
 }
 
 // Cursor-based feed pagination (Phase 4 #4). The cursor is an opaque, ordering-
@@ -347,8 +353,9 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
   // ON, the +5 is WITHHELD at creation — a spam post that no peer engages with
   // earns nothing — and released on the first peer like instead (see
   // toggleLike). Flag OFF ⇒ the reward fires on creation exactly as before.
+  let pointsAwarded = 0;
   if (!env.communityPostQualityGateEnabled) {
-    await awardPostReward(enrollmentId, member.id, post.id);
+    pointsAwarded = await awardPostReward(enrollmentId, member.id, post.id);
   }
 
   log('info', 'post_created', {
@@ -374,6 +381,7 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
     created_at: post.created_at,
     member: { id: member.id, display_name: member.display_name, avatar_url: member.avatar_url, level: authorLevel },
     recent_commenters: [],
+    points_awarded: pointsAwarded,
   };
 }
 
@@ -619,6 +627,11 @@ export interface CommentItem {
   created_at: Date;
   member: { id: string; display_name: string; avatar_url: string | null };
   replies: CommentItem[];
+  /** Points this reply actually earned, AFTER the daily community clamp. Only
+   *  present on the create response — the client shows and celebrates this
+   *  number rather than a hardcoded one, so a clamped award never gets
+   *  advertised as full value. */
+  points_awarded?: number;
 }
 
 // One level deep only (comment -> reply), per BUILD_SPEC §7 / the CommunityComment
@@ -699,6 +712,7 @@ export async function createComment(
     created_at: comment.created_at,
     member: { id: member.id, display_name: member.display_name, avatar_url: member.avatar_url },
     replies: [],
+    points_awarded: commentPoints,
   };
 }
 

@@ -44,6 +44,9 @@ export interface CommunityComment {
   created_at: string;
   member: CommunityPostMember;
   replies: CommunityComment[];
+  /** Points this reply actually earned, post daily-cap clamp. Present only on
+   *  the create response — celebrate THIS, never a hardcoded value. */
+  points_awarded?: number;
 }
 
 export type CommunityMemberRole = 'student' | 'mentor' | 'staff';

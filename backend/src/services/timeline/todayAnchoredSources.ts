@@ -22,7 +22,7 @@ import CommunityMember from '../../models/CommunityMember';
 import LiveSession from '../../models/LiveSession';
 import AttendanceRecord from '../../models/AttendanceRecord';
 import { resolveCohortId } from '../communityService';
-import { ritualStudentLabel } from '../runtime/communityRituals';
+import { ritualStudentLabel, ritualArt } from '../runtime/communityRituals';
 import { env } from '../../config/env';
 import type { TodayFeedItem } from './todayFeedComposer';
 import { getTypeExposureMap } from './feedTypeExposureService';
@@ -112,7 +112,10 @@ export async function rehydrateCardItems(items: TodayFeedItem[]): Promise<void> 
   }
 }
 
-function projectItem(t: { id: string; title: string | null; description: string | null; status: string; release_key: string | null }): TodayFeedItem {
+function projectItem(
+  t: { id: string; title: string | null; description: string | null; status: string; release_key: string | null },
+  projectId: string,
+): TodayFeedItem {
   return {
     position: 0,
     kind: 'anchored',
@@ -121,6 +124,13 @@ function projectItem(t: { id: string; title: string | null; description: string 
     type: 'project_task',
     render_band: resolveType('project_task')?.render_band ?? 'task',
     card_id: null,
+    // A project task is not a curriculum card either — same defect class as the
+    // community items above. It has a real destination of its own (the project
+    // workspace, /portal/projects/workspace/:projectId/:taskId), so it carries
+    // both ids and the client navigates there instead of opening a card drawer
+    // that can only ever show a title and a dead "Enter workspace" button.
+    project_id: projectId,
+    project_task_id: t.id,
     title: t.title ?? null,
     subtitle: t.release_key ?? null,
     description: t.description ?? null,
@@ -183,8 +193,13 @@ export function communityFieldsFromPost(p: CommunityPostFields): CommunityDynami
   const student_label = p.ritual_meta
     ? ritualStudentLabel('community_discussion', week, 'Community Post')
     : 'Community Post';
+  // A text-only post carried no art at all and rendered as a blank slab in the
+  // feed. Its own media always wins; otherwise fall back to the week's ritual
+  // banner (see ritualArt) so the timeline never shows an empty tile. A video
+  // post keeps a null image — the player is the visual.
+  const art = image || (video ? null : ritualArt(week));
   return {
-    title: title || 'Community post', description: body || null, image, video, author,
+    title: title || 'Community post', description: body || null, image: art, video, author,
     student_label, week,
     like_count: p.like_count ?? 0, comment_count: p.comment_count ?? 0,
   };
@@ -439,7 +454,7 @@ async function projectCandidates(enrollmentId: string, placedRefs: Set<string>):
       .flatMap((l) => l.tasks)
       .filter((t) => t.status !== 'complete' && !placedRefs.has(`project:${t.id}`))
       .slice(0, CANDIDATE_CAP)
-      .map(projectItem);
+      .map((t) => projectItem(t, tree.id));
   } catch (err: any) {
     console.warn('[todayAnchoredSources] project failed:', err?.message?.split('\n')[0]);
     return [];

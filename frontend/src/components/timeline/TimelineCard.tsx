@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { parseVideoUrl, videoThumbnail, isAudioUrl } from '../../utils/videoEmbed';
 import VideoEmbed from './VideoEmbed';
 import CardComments from './CardComments';
@@ -62,6 +63,11 @@ export interface TimelineFeedCard {
   community_post_id?: string | null;
   comment_count?: number | null;   // community posts: replies on the thread
   like_count?: number | null;      // community posts: cheers on the post
+  // Project-task items ONLY. When set, `id` is the `project:<uuid>` feed ref and
+  // the tile must navigate to /portal/projects/workspace/:project_id/:project_task_id
+  // rather than open the card drawer.
+  project_id?: string | null;
+  project_task_id?: string | null;
 }
 
 export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone' | 'setuplab' | 'timemachine';
@@ -261,6 +267,14 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   // so every card-scoped affordance on this tile has to route to the post's own
   // endpoints instead — see community_post_id on TimelineFeedCard.
   const isCommunityPost = !!card.community_post_id;
+
+  // A project task belongs in the project workspace, which is a real page with
+  // the build context, the repo state and the AI mentor. The card drawer could
+  // only ever show its title and a broken "Enter workspace" button.
+  const projectHref = card.project_id && card.project_task_id
+    ? `/portal/projects/workspace/${card.project_id}/${card.project_task_id}`
+    : null;
+  const navigate = useNavigate();
 
   // Viewport autoplay: a media card (video OR podcast audio) starts playing while
   // it is in view and stops when scrolled away — so only what you're looking at
@@ -521,8 +535,16 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
             Stops the tile's own inline preview first — same reason as "Open" below —
             so an unmuted tile doesn't keep playing underneath the drawer's own player.
             A community post has no workspace: `card.id` is its feed ref, not a card. */}
-        {onWorkspace && !locked && !isCommunityPost && (
-          <button type="button" className="cmt" onClick={() => { setPlayingInline(false); onWorkspace(card); }}>
+        {(onWorkspace || projectHref) && !locked && !isCommunityPost && (
+          <button
+            type="button"
+            className="cmt"
+            onClick={() => {
+              setPlayingInline(false);
+              if (projectHref) { navigate(projectHref); return; }
+              onWorkspace?.(card);
+            }}
+          >
             <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M8 20h8M12 17v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Workspace
           </button>
         )}
@@ -537,8 +559,16 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
               <button
                 type="button"
                 className={`fc-cta ${pts > 0 || v.kind === 'lab' ? 'cherry' : 'berry'}`}
-                onClick={() => { setPlayingInline(false); onOpen?.(card); }}
-                title={pts > 0 ? `Open to collect +${pts} pts` : undefined}
+                onClick={() => {
+                  setPlayingInline(false);
+                  // Project tasks go to their workspace, not the drawer. Routed
+                  // rather than location.assign so the portal shell, auth and
+                  // feed state survive — a full reload here would cost the
+                  // student their scroll position and re-fetch everything.
+                  if (projectHref) { navigate(projectHref); return; }
+                  onOpen?.(card);
+                }}
+                title={projectHref ? 'Open this task in your project workspace' : pts > 0 ? `Open to collect +${pts} pts` : undefined}
               >
                 {pts > 0
                   ? <><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Collect +{pts} pts</>
