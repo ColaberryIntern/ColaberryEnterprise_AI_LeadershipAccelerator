@@ -41,6 +41,47 @@ jobs:
           npm install --no-audit --no-fund
           npx tsc --noEmit
 
+  # THE GAP THIS CLOSES. Until this job existed CI ran `tsc` and a build against the
+  # frontend and no TEST at all, so every assertion in `frontend/src/**/__tests__` was
+  # enforced only on whichever machine last happened to run it. A red frontend suite could
+  # therefore sit in main indefinitely, and one did: `storyDetailV2Contract` has six
+  # failures nobody was told about.
+  #
+  # CI=true is what makes react-scripts run once and exit instead of entering watch mode,
+  # and it is also what promotes warnings to errors — the same reason `frontend-build`
+  # sets it explicitly rather than relying on the runner.
+  frontend-tests:
+    name: Frontend unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: react-scripts test
+        working-directory: frontend
+        env:
+          CI: 'true'
+        run: |
+          npm install --no-audit --no-fund
+          # ONE EXCLUSION, WITH ITS REASON, mirroring backend/jest.ci.config.ts.
+          #
+          # `storyDetailV2Contract` asserts three structural facts that are currently false
+          # in main, none of them caused by the tests themselves:
+          #   * components/caseStudy ships 11 files against a contract naming 10
+          #     (CaseStudyMetricShape.tsx was added without updating the list)
+          #   * storyDetailV2Sections.tsx is 421 lines against its own < 300 rule
+          #   * storyDetailV2.css is 584 lines against CLAUDE.md's 500-line hard ceiling
+          #
+          # Enabling the job with this suite in would make main red on arrival, which is
+          # how a useful gate gets switched back off. Excluding it enforces every OTHER
+          # frontend test from today, and leaves the six failures as a NAMED debt rather
+          # than an invisible one.
+          #
+          # MAINTENANCE: this list must never grow without a reason written beside it. It
+          # shrinks to zero when the three facts above are fixed, and then the flag goes.
+          npx react-scripts test --watchAll=false             --testPathIgnorePatterns "src/pages/publicV2/__tests__/storyDetailV2Contract.test.ts"
+
   # A typecheck is NOT a build. On 2026-08-15 commit 2f0a72dd left main
   # unbuildable for hours with every check green: an eslint-disable comment in a
   # .ts file named `react-hooks/exhaustive-deps`, a rule CRA does not register
