@@ -57,6 +57,13 @@ export interface TimelineEvent {
   source: string;
   type: string;
   summary: string | null;
+  /**
+   * How many identical events this row stands for. 1 for an ordinary event.
+   *
+   * A reader should never see the same line twice; when a source genuinely
+   * records something N times in one second, the row says so instead.
+   */
+  occurrences: number;
 }
 
 export interface TimelineQuery {
@@ -193,10 +200,28 @@ const BRANCHES: Branch[] = [
           FROM student_points_events sp WHERE sp.enrollment_id IN (:enrollmentIds)`,
   },
   {
+    // ── COLLAPSED PER CARD, NOT PER ROW ─────────────────────────────────────
+    //
+    // Completing ONE card writes a row per (skill × band) — measured at 7-8
+    // rows landing within the same second, all carrying the same source_ref.
+    // Emitted one-per-row with a NULL summary, that rendered as eight identical
+    // lines and buried the card completion they belonged to (Ali, 2026-09-09:
+    // "Remove all the duplicates from the Activity Timeline").
+    //
+    // They were never duplicates — each credits a different skill. The defect
+    // was throwing that away and then showing the husk eight times. Grouped by
+    // the card, the whole fan-out becomes one line that says which skills it
+    // credited.
     domain: 'learning', key: 'enrollment',
-    sql: `SELECT sse.created_at AS occurred_at, 'learning' AS domain, 'student_skill_evidence' AS source,
-                 'skill_evidence' AS type, NULL AS summary
-          FROM student_skill_evidence sse WHERE sse.enrollment_id IN (:enrollmentIds)`,
+    sql: `SELECT max(sse.created_at) AS occurred_at, 'learning' AS domain,
+                 'student_skill_evidence' AS source, 'skill_evidence' AS type,
+                 string_agg(DISTINCT sse.skill_id, ', ' ORDER BY sse.skill_id) ||
+                   ' (+' || round(COALESCE(SUM(sse.credit), 0))::text || ')' AS summary
+          FROM student_skill_evidence sse
+          WHERE sse.enrollment_id IN (:enrollmentIds)
+          -- COALESCE so a row with no source_ref stands alone rather than being
+          -- lumped in with every other unattributed row.
+          GROUP BY sse.enrollment_id, COALESCE(sse.source_ref, sse.id::text)`,
   },
   // ── Added 2026-09-09 ──────────────────────────────────────────────────────
   //
@@ -302,14 +327,31 @@ export async function getPersonTimeline(query: TimelineQuery): Promise<TimelineE
   if (query.leadIds.length) replacements.leadIds = query.leadIds;
   if (query.enrollmentIds.length) replacements.enrollmentIds = query.enrollmentIds;
 
+  // ── IDENTICAL EVENTS COLLAPSE INTO ONE ROW WITH A COUNT ───────────────────
+  //
+  // A general safeguard, not a fix for one source. Any branch that emits rows
+  // indistinguishable to a reader — same second, same domain, same type, same
+  // summary — is collapsed and carries `occurrences` instead of repeating.
+  //
+  // Grouped on the SECOND rather than the exact instant, because a fan-out
+  // writes its rows milliseconds apart; grouping on the raw timestamp would
+  // leave them looking like duplicates while technically being distinct.
+  //
+  // Anything with a different summary survives as its own row: two xp_events in
+  // the same second reading 'community:survey' and 'learning:survey' are two
+  // real facts and stay two lines.
   const rows = await sequelize.query<{
-    occurred_at: string; domain: EventDomain; source: string; type: string; summary: string | null;
+    occurred_at: string; domain: EventDomain; source: string;
+    type: string; summary: string | null; occurrences: number;
   }>(
-    `SELECT occurred_at, domain, source, type, summary FROM (
+    `SELECT max(occurred_at) AS occurred_at, domain, source, type, summary,
+            COUNT(*)::int AS occurrences
+     FROM (
        ${usable.map((b) => b.sql).join('\n       UNION ALL\n       ')}
      ) t
      WHERE occurred_at IS NOT NULL
-     ORDER BY occurred_at DESC
+     GROUP BY date_trunc('second', occurred_at), domain, source, type, summary
+     ORDER BY max(occurred_at) DESC
      LIMIT :limit`,
     { type: QueryTypes.SELECT, replacements },
   );
@@ -320,5 +362,6 @@ export async function getPersonTimeline(query: TimelineQuery): Promise<TimelineE
     source: r.source,
     type: r.type,
     summary: r.summary,
+    occurrences: Number(r.occurrences ?? 1),
   }));
 }
