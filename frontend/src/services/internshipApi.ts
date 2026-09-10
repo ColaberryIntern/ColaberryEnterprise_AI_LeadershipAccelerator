@@ -172,6 +172,139 @@ export async function cancelInternshipCall(): Promise<{ cancelled: boolean }> {
   return data;
 }
 
+// ── The offer-letter package ────────────────────────────────────────────────
+
+export interface OfferDocument {
+  id: string;
+  document_type: string;
+  title: string;
+  document_public_id: string;
+  revision: number;
+  byte_size: number;
+  requires_signature: boolean;
+  why: string;
+}
+
+export interface DocumentRequirement {
+  document_type: string;
+  title: string;
+  requires_signature: boolean;
+  generated: boolean;
+  latest_upload_revision: number | null;
+  verified: boolean;
+  correction_requested: boolean;
+  rejection_reason: string | null;
+}
+
+export interface DocumentsView {
+  state: string;
+  documents: OfferDocument[];
+  requirements: DocumentRequirement[];
+  all_verified: boolean;
+}
+
+export async function fetchInternshipDocuments(): Promise<DocumentsView> {
+  const { data } = await portalApi.get<DocumentsView>('/api/portal/internship/documents');
+  return data;
+}
+
+/**
+ * Download a generated document.
+ *
+ * Fetched as a blob through the authed client rather than linked directly: the
+ * endpoint requires the participant JWT, so a plain <a href> would 401. The object
+ * URL is revoked immediately after the click to avoid leaking it for the page's
+ * lifetime.
+ */
+export async function downloadInternshipDocument(documentId: string, filename: string): Promise<void> {
+  const res = await portalApi.get(`/api/portal/internship/documents/${documentId}/download`, {
+    responseType: 'blob',
+  });
+  const url = window.URL.createObjectURL(res.data as Blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function uploadSignedInternshipDocument(
+  documentType: string,
+  file: File,
+): Promise<{ document_id: string; revision: number; state: string }> {
+  const form = new FormData();
+  form.append('document', file);
+  const { data } = await portalApi.post(
+    `/api/portal/internship/documents/${documentType}/signed`,
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  );
+  return data;
+}
+
+// ── Activation and onboarding ───────────────────────────────────────────────
+
+export interface ChecklistStep {
+  key: string;
+  order: number;
+  label: string;
+  detail: string;
+  actor: 'student' | 'colaberry';
+  blocking_activation: boolean;
+  complete: boolean;
+  waiting_on: string | null;
+}
+
+export interface MembershipCheck {
+  requires_subscription: boolean;
+  has_active_subscription: boolean;
+  has_active_comp: boolean;
+  ok: boolean;
+}
+
+export interface OnboardingView {
+  state: string;
+  is_active: boolean;
+  cohort_id: string | null;
+  joined_at: string | null;
+  week: number | null;
+  minimum_weekly_hours: number;
+  max_active_projects: number;
+  required_meetings: Array<{ day: string; kind: string }>;
+  checklist: ChecklistStep[];
+  progress: { done: number; total: number };
+  next_action: ChecklistStep | null;
+  membership: MembershipCheck;
+}
+
+export type RequirementKey = 'claude_code_account' | 'own_api_key_with_billing' | 'never_share_credentials';
+export type AcknowledgementState =
+  | 'acknowledged_requirement'
+  | 'self_attested_ready'
+  | 'setup_verified_without_secret_collection';
+
+export async function fetchInternshipOnboarding(): Promise<OnboardingView> {
+  const { data } = await portalApi.get<OnboardingView>('/api/portal/internship/onboarding');
+  return data;
+}
+
+/**
+ * Record a tool-readiness acknowledgement.
+ *
+ * Note there is NO key parameter and no field for one. `verification_method` says
+ * HOW it was checked, never what was seen.
+ */
+export async function recordInternshipAcknowledgement(body: {
+  requirement_key: RequirementKey;
+  state: AcknowledgementState;
+  verification_method?: string | null;
+}): Promise<OnboardingView> {
+  const { data } = await portalApi.post<OnboardingView>('/api/portal/internship/acknowledgements', body);
+  return data;
+}
+
 export async function dismissInternshipCard(days = 14): Promise<void> {
   await portalApi.post('/api/portal/internship/card/dismiss', { days });
 }

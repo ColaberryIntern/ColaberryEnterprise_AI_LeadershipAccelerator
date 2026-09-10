@@ -3,7 +3,9 @@ import { createRoot, Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
 import { MemoryRouter } from 'react-router-dom';
 import CaseStudyKpi, { readinessBreakdown, Readiness } from '../CaseStudyKpi';
-import BuildEvidencePanel, { EvidenceSummary } from '../BuildEvidencePanel';
+import BuildEvidencePanel, {
+  EvidenceSummary, VerificationSummary, ProjectEvidence,
+} from '../BuildEvidencePanel';
 import ArtifactsPanel from '../ArtifactsPanel';
 import ReleaseRow from '../ReleaseRow';
 
@@ -78,18 +80,25 @@ describe('CaseStudyKpi — the defect fix', () => {
   });
 });
 
-describe('BuildEvidencePanel — the empty state is the live case', () => {
-  const empty: EvidenceSummary = {
+describe('BuildEvidencePanel — repo verification is the real source', () => {
+  const noManifests: EvidenceSummary = {
     has_evidence: false, manifests: 0, files_created: 0, files_modified: 0,
     apis_added: 0, ui_components_added: 0, tests_added: 0, database_changes: 0,
     last_execution_at: null,
   };
+  const noVerification: VerificationSummary = {
+    has_verification: false, tasks_with_verification: 0, verified_tasks: 0,
+    in_progress_tasks: 0, commits: 0, latest_commit_sha: null, latest_commit_at: null,
+    last_checked_at: null, criteria_passed: 0, criteria_total: 0,
+    outstanding: [], outstanding_count: 0,
+  };
+  const empty: ProjectEvidence = { source: 'none', verification: noVerification, manifests: noManifests };
 
-  it('names the cause and renders NO numeric zeros', async () => {
+  it('names the cause and renders NO numeric zeros when nothing is recorded', async () => {
     // Zeros would assert "they built nothing". The truth is "nothing was recorded".
     await render(<BuildEvidencePanel evidence={empty} />);
     expect(container.querySelector('[data-testid="evidence-empty"]')).not.toBeNull();
-    expect(container.textContent).toContain('No build telemetry recorded');
+    expect(container.textContent).toContain('No build evidence recorded');
     expect(container.textContent).not.toMatch(/\b0\b/);
   });
 
@@ -98,12 +107,48 @@ describe('BuildEvidencePanel — the empty state is the live case', () => {
     expect(container.querySelector('[data-testid="evidence-empty"]')).not.toBeNull();
   });
 
-  it('renders the counts once evidence exists', async () => {
+  it('renders repo verification — commits and criteria, not manifest counts', async () => {
     await render(<BuildEvidencePanel evidence={{
-      ...empty, has_evidence: true, manifests: 2, files_created: 14,
-      apis_added: 3, tests_added: 9, last_execution_at: '2026-08-01T10:00:00.000Z',
+      source: 'repo_verification',
+      manifests: noManifests,
+      verification: {
+        ...noVerification, has_verification: true, tasks_with_verification: 5,
+        verified_tasks: 3, in_progress_tasks: 2, commits: 4,
+        latest_commit_sha: 'b55c1179827f3bed3b174e795e72ceaff770d6fe',
+        latest_commit_at: '2026-08-18T13:36:23Z', last_checked_at: '2026-09-08T08:36:37Z',
+        criteria_passed: 9, criteria_total: 15,
+        outstanding: ['Log every issue with a timestamp.'], outstanding_count: 1,
+      },
     }} />);
-    expect(container.querySelector('[data-testid="evidence-summary"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="evidence-verification"]')).not.toBeNull();
+    expect(container.textContent).toContain('Tasks verified');
+    expect(container.textContent).toContain('Commits matched');
+    expect(container.textContent).toContain('b55c117'); // short sha
+    expect(container.textContent).toContain('60% of acceptance criteria passing');
+    expect(container.textContent).toContain('1 outstanding criterion');
+  });
+
+  it('links the commit when the project has a repo, and does not when it does not', async () => {
+    const ev: ProjectEvidence = {
+      source: 'repo_verification', manifests: noManifests,
+      verification: { ...noVerification, has_verification: true, commits: 1,
+        latest_commit_sha: 'abc1234def5678', criteria_total: 0 },
+    };
+    await render(<BuildEvidencePanel evidence={ev} repoUrl="https://github.com/acme/thing" />);
+    const a = container.querySelector('a[href]')!;
+    expect(a.getAttribute('href')).toBe('https://github.com/acme/thing/commit/abc1234def5678');
+
+    await render(<BuildEvidencePanel evidence={ev} />);
+    expect(container.querySelector('a[href]')).toBeNull();
+    expect(container.textContent).toContain('abc1234');
+  });
+
+  it('still renders manifest counts when that is the only source', async () => {
+    await render(<BuildEvidencePanel evidence={{
+      source: 'build_manifests', verification: noVerification,
+      manifests: { ...noManifests, has_evidence: true, manifests: 2, files_created: 14, tests_added: 9 },
+    }} />);
+    expect(container.querySelector('[data-testid="evidence-manifests"]')).not.toBeNull();
     expect(container.textContent).toContain('14');
     expect(container.textContent).toContain('Files created');
   });

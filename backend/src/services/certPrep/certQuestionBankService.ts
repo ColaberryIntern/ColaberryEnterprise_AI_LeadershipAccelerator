@@ -104,7 +104,19 @@ export function scoreSelection(correctKeys: string[] | undefined, selectedKeys: 
 }
 
 /** True when a revision is approved and inside its active window. */
-export function isRevisionServable(revision: RevisionLike, now: Date = new Date()): boolean {
+/**
+ * The three fields servability actually depends on.
+ *
+ * Narrower than `RevisionLike` on purpose. This predicate reads only the review
+ * status and the active window, and demanding a full revision to ask a question
+ * about three fields forced callers holding a partial row -- a drift check
+ * selecting a handful of columns, say -- to invent a stem and a difficulty to
+ * satisfy the compiler. Every existing caller passes a superset, so narrowing
+ * the requirement breaks nothing.
+ */
+export type ServabilityFields = Pick<RevisionLike, 'review_status' | 'active_from' | 'active_to'>;
+
+export function isRevisionServable(revision: ServabilityFields, now: Date = new Date()): boolean {
   if (revision.review_status !== 'approved') return false;
   if (revision.active_from && new Date(revision.active_from) > now) return false;
   if (revision.active_to && new Date(revision.active_to) <= now) return false;
@@ -115,8 +127,16 @@ export function isRevisionServable(revision: RevisionLike, now: Date = new Date(
  * Choose which revision of a question to serve: the highest-numbered servable one.
  * Returns null when every revision is draft, in review, retired or out of window —
  * the caller must then omit the question, never fall back to an unapproved row.
+ *
+ * Constrained to the servability fields plus `revision`, which is all it reads.
+ * A caller holding a partial row — a drift check selecting a handful of columns —
+ * must be able to ask "which revision would a student get?" without inventing a
+ * stem and a difficulty to satisfy the compiler. Every full-row caller still fits.
  */
-export function pickServableRevision<T extends RevisionLike>(revisions: T[], now: Date = new Date()): T | null {
+export function pickServableRevision<T extends ServabilityFields & { revision: number }>(
+  revisions: T[],
+  now: Date = new Date(),
+): T | null {
   const servable = revisions.filter((r) => isRevisionServable(r, now));
   if (servable.length === 0) return null;
   return servable.reduce((best, r) => (r.revision > best.revision ? r : best));
@@ -186,6 +206,32 @@ export async function loadServableRevisions(
  * Takes the session's stored form ([{question_key, revision}]) and returns the
  * items as the student saw them — pinned to the recorded revision, so a question
  * approved-then-revised mid-session does not change underneath them.
+ *
+ * THE PIN DELIBERATELY OUTLIVES APPROVAL, AND DELIBERATELY DOES NOT OUTLIVE
+ * RETIREMENT. This function does not require the pinned revision to still be
+ * `approved`, and that is the point: approval moves on. A question is revised,
+ * the new draft waits for a reviewer, and the old revision stops being the
+ * servable one — none of which is a reason to change the paper in front of a
+ * student who is halfway through it.
+ *
+ * Retirement is the opposite kind of signal. `is_retired` on the identity and
+ * `review_status = 'retired'` on the revision both mean "this must not be served
+ * again", which is what you set when an item turns out to be WRONG. Continuing
+ * to serve it because a sitting started before somebody noticed is not integrity,
+ * it is scoring a student against a question already known to be bad. So both
+ * retirement signals are honoured here and approval is not.
+ *
+ * A dropped item simply does not appear in the returned payload. The caller
+ * already handles a form shorter than requested — `cert_sessions.total_count` is
+ * computed from what was actually served — so a sitting shortened by a
+ * retirement scores against the questions that remain rather than counting the
+ * removed one wrong.
+ *
+ * Before 2026-09-09 this function applied neither filter, and nothing recorded
+ * which behaviour was intended. It was found by reviewing the E2E suite against
+ * the item rubric: the E2E resume check (F4) asserts that a resumed sitting
+ * returns what was already answered, and passes whether or not the pinned
+ * revisions are still fit to serve.
  */
 export async function loadServedItems(
   served: { question_key: string; revision: number }[],
@@ -193,14 +239,37 @@ export async function loadServedItems(
   if (served.length === 0) return [];
   const rows = await CertQuestionRevision.findAll({
     where: {
-      [Op.or]: served.map((s) => ({ question_key: s.question_key, revision: s.revision })),
+      [Op.and]: [
+        { [Op.or]: served.map((s) => ({ question_key: s.question_key, revision: s.revision })) },
+        { review_status: { [Op.ne]: 'retired' } },
+      ],
     },
   });
+  // The identity can be retired independently of any single revision, so it is
+  // fetched separately rather than inferred from the revision's status.
+  //
+  // NOTE THE SHAPE: this asks for the rows and READS `is_retired` off them. It
+  // does not ask the database for `is_retired: true` and then treat everything
+  // returned as retired. The first version did exactly that, and it dropped every
+  // question in `certPrepRoutes.fence.test.ts` — whose mock returns its one row
+  // regardless of the WHERE, so a filter that lives only in the query means the
+  // code cannot tell a retired item from a live one. A predicate whose whole
+  // meaning sits in a WHERE clause is a predicate you cannot test and cannot see.
+  const identities = await CertQuestion.findAll({
+    where: { question_key: { [Op.in]: served.map((s) => s.question_key) } },
+    attributes: ['question_key', 'is_retired'],
+  });
+  const retired = new Set(identities.filter((q) => q.is_retired).map((q) => q.question_key));
+
   const index = new Map(rows.map((r) => [`${r.question_key}#${r.revision}`, r]));
   const items: SafeQuestionItem[] = [];
   for (const s of served) {
+    if (retired.has(s.question_key)) continue;
     const row = index.get(`${s.question_key}#${s.revision}`);
-    if (row) items.push(toSafeItem(row));
+    // Re-checked in memory for the same reason as above: the WHERE narrows the
+    // result set for efficiency, this decides. If the two ever disagree, the one
+    // that reads the actual value wins.
+    if (row && row.review_status !== 'retired') items.push(toSafeItem(row));
   }
   return items;
 }

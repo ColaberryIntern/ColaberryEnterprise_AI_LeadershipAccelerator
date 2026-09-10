@@ -115,3 +115,46 @@ describe('computeReadiness', () => {
     expect([...DONE_TASK_STATUSES]).toEqual(['complete']);
   });
 });
+
+/**
+ * WHERE THE REPO COMES FROM. This is a source-text assertion, not a behavioural one,
+ * and that is deliberate.
+ *
+ * The defect it guards cannot be caught by testing `computeReadiness`: that function was
+ * always correct, it was being handed `has_repo: false` for every project because the query
+ * above it read `projects.github_repo_url` — a column nothing writes. On production the day
+ * this was fixed, 22 of 28 live projects had a repo through `github_connections` and ZERO
+ * had the project column set, so the board tagged "no repo" on every row including students
+ * who had spent days fighting with their repository.
+ *
+ * `projectRepoResolver.ts` had already found and documented this in August and exists so
+ * callers stop asking the wrong table. The delivery query was written asking it anyway.
+ * Nothing but reading the SQL catches that, so the SQL is what is asserted.
+ */
+describe('the delivery query resolves repos from the connection table', () => {
+  const source = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'projectDeliveryService.ts'), 'utf8'
+  );
+
+  it('joins github_connections', () => {
+    expect(source).toMatch(/LEFT JOIN github_connections/);
+  });
+
+  it('prefers the connection over the legacy project column', () => {
+    // COALESCE order IS the precedence rule, and it must match decideRepoPointer.
+    const coalesce = source.slice(source.indexOf('COALESCE('), source.indexOf('AS repo_url'));
+    expect(coalesce.indexOf('gc.repo_url')).toBeGreaterThan(-1);
+    expect(coalesce.indexOf('gc.repo_url')).toBeLessThan(coalesce.indexOf('p.github_repo_url'));
+  });
+
+  it('treats a blank repo_url as no answer', () => {
+    // A connection row with no repo_url is a student who authorised GitHub and never
+    // picked a repo. Counting it would claim a repository that does not exist.
+    expect(source).toMatch(/NULLIF\(btrim\(gc\.repo_url\), ''\)/);
+  });
+
+  it('never reads the abandoned column on its own', () => {
+    // The regression itself: `p.github_repo_url AS repo_url` with no COALESCE.
+    expect(source).not.toMatch(/p\.github_repo_url\s+AS\s+repo_url/);
+  });
+});

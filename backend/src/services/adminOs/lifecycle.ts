@@ -21,6 +21,7 @@ export const LIFECYCLE_STAGES = [
   'enrolled_student',
   'active_learner',
   'graduate',
+  'lapsed',
   'returning_customer',
 ] as const;
 
@@ -104,17 +105,34 @@ export const LIFECYCLE: Record<LifecycleStage, LifecycleStageDef> = {
     stage: 'graduate',
     label: 'Graduate / alumni',
     definition: 'A student who completed their programme.',
-    evidence: "enrollments row with status 'completed'",
-    // The JOIN gap is closed, and 'completed' is a real value in
-    // enum_enrollments_status. So this stage is computable — but measured
-    // 2026-09-08, ZERO enrolments carry it: 464 active, 62 withdrawn, 0
-    // completed, 0 suspended.
+    evidence: "enrollments row with status 'completed' — never set, see below",
+    // NEVER ASSIGNED, AND THAT IS THE BUSINESS MODEL, NOT A GAP.
     //
-    // That is a process gap, not a schema one, and the distinction matters:
-    // nothing marks a student complete when their cohort ends. Until something
-    // does, this stage computes correctly and returns nobody — which is why the
-    // profile states it as a gap rather than letting an empty graduate count
-    // read as "nobody graduated".
+    // Ali, 2026-09-09: "Complete is never. The goal is for this to need us to
+    // improve and help them stay sharp and help them learn. The goal is to keep
+    // the subscription active as long as possible."
+    //
+    // So a graduate is a category error here. This is a subscription, not a
+    // course with an end: staying is success, and "finishing" would be churn
+    // wearing a nicer word. The stage is kept in the vocabulary because the word
+    // will come up, and a reader deserves to find this note rather than assume
+    // graduation is simply unimplemented.
+    joinable_today: false,
+    gap:
+      'Not applicable. This is a subscription: there is no completion, and a person ' +
+      'who stops is LAPSED rather than finished. Nothing should ever assign this stage.',
+  },
+  lapsed: {
+    stage: 'lapsed',
+    label: 'Lapsed',
+    definition:
+      'Someone whose enrolment ended. In a subscription business this is the exit, and it ' +
+      'is the state worth watching: the goal is to keep people out of it.',
+    evidence: "enrollments row with status 'withdrawn'",
+    // The stage the model was missing. Before this, the 62 people who withdrew
+    // were counted as enrolled_student — so the active-student figure included
+    // people who had already left, which is precisely the number a retention
+    // business must not get wrong.
     joinable_today: true,
   },
   returning_customer: {

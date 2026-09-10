@@ -46,7 +46,24 @@ describe('lifecycle vocabulary', () => {
     // this test deliberately rather than discovering it via a wrong chart." This
     // is that deliberate update.
     expect(LIFECYCLE.enrolled_student.joinable_today).toBe(true);
-    expect(LIFECYCLE.graduate.joinable_today).toBe(true);
+    expect(LIFECYCLE.lapsed.joinable_today).toBe(true);
+  });
+
+  it('never assigns graduate, because completion is not part of this business', () => {
+    // Ali, 2026-09-09: "Complete is never. The goal is to keep the subscription
+    // active as long as possible." A graduate is a category error here, so the
+    // stage stays in the vocabulary with a note rather than being quietly absent
+    // and read as unimplemented.
+    expect(LIFECYCLE.graduate.joinable_today).toBe(false);
+    expect(LIFECYCLE.graduate.gap).toMatch(/subscription/i);
+    expect(LIFECYCLE.graduate.gap).toMatch(/LAPSED/);
+  });
+
+  it('treats lapsing as the state worth watching', () => {
+    // The exit, not the finish line. Getting this wrong counted 62 people who
+    // had left as active students.
+    expect(LIFECYCLE.lapsed.evidence).toMatch(/withdrawn/);
+    expect(LIFECYCLE.lapsed.definition).toMatch(/subscription/i);
   });
 
   it('still cannot join the two stages with no trustworthy source', () => {

@@ -4,7 +4,11 @@ import {
   classifyTiming,
   rollUpTiming,
   summariseEvidence,
+  summariseVerification,
   groupArtifacts,
+  bucketTasks,
+  releaseState,
+  addDays,
 } from '../projectReleaseMeta';
 
 /**
@@ -187,6 +191,227 @@ describe('summariseEvidence', () => {
     const e = summariseEvidence([{ files_created: { unexpected: 'object' }, tests_added: 'oops' }]);
     expect(e.files_created).toBe(0);
     expect(e.tests_added).toBe(0);
+  });
+});
+
+describe('bucketTasks — the segmented bar', () => {
+  const TODAY = '2026-09-09';
+  const t = (status: string, due_on: string | null) => ({ status, due_on });
+
+  it('splits tasks into done, overdue, due-this-week and open', () => {
+    const b = bucketTasks([
+      t('complete', '2026-08-01'),
+      t('not_started', '2026-09-01'),   // overdue
+      t('not_started', '2026-09-12'),   // within 7 days
+      t('not_started', '2026-10-30'),   // beyond
+    ], TODAY);
+    expect(b).toMatchObject({ total: 4, done: 1, overdue: 1, due_this_week: 1, open: 1, undated: 0 });
+  });
+
+  it('counts a completed task as done even when its due date has passed', () => {
+    // Done is done; it must not also appear as overdue or the bar double-counts.
+    const b = bucketTasks([t('complete', '2026-01-01')], TODAY);
+    expect(b).toMatchObject({ done: 1, overdue: 0 });
+  });
+
+  it('keeps undated tasks OUT of the bar proportions', () => {
+    // 67 of 656 production tasks have no due date. Drawing them as a segment
+    // would imply a schedule position they do not have.
+    const b = bucketTasks([t('not_started', null), t('not_started', null)], TODAY);
+    expect(b).toMatchObject({ undated: 2, open: 0, overdue: 0, due_this_week: 0 });
+  });
+
+  describe('the due-soon boundary', () => {
+    it('counts today as due this week, not overdue', () => {
+      expect(bucketTasks([t('not_started', TODAY)], TODAY).due_this_week).toBe(1);
+    });
+    it('counts exactly 7 days out as due this week', () => {
+      expect(bucketTasks([t('not_started', '2026-09-16')], TODAY).due_this_week).toBe(1);
+    });
+    it('counts 8 days out as open', () => {
+      expect(bucketTasks([t('not_started', '2026-09-17')], TODAY).open).toBe(1);
+    });
+    it('counts yesterday as overdue', () => {
+      expect(bucketTasks([t('not_started', '2026-09-08')], TODAY).overdue).toBe(1);
+    });
+  });
+
+  it('every task lands in exactly one bucket', () => {
+    const tasks = [
+      t('complete', '2026-08-01'), t('not_started', '2026-09-01'),
+      t('in_progress', '2026-09-12'), t('blocked', '2026-11-01'), t('not_started', null),
+    ];
+    const b = bucketTasks(tasks, TODAY);
+    expect(b.done + b.overdue + b.due_this_week + b.open + b.undated).toBe(b.total);
+    expect(b.total).toBe(tasks.length);
+  });
+
+  describe('undated vs no_date - two measures, deliberately', () => {
+    it('counts a COMPLETE task with no date as no_date but NOT undated', () => {
+      // This is the whole reason both exist. In production every task lacking a due
+      // date is already complete (37 of 629), so a caption keyed on `undated` would
+      // never render and the operator would never learn that 37 tasks were never
+      // scheduled.
+      const b = bucketTasks([t('complete', null)], TODAY);
+      expect(b.done).toBe(1);
+      expect(b.undated).toBe(0);
+      expect(b.no_date).toBe(1);
+    });
+
+    it('counts an INCOMPLETE task with no date as both undated and no_date', () => {
+      const b = bucketTasks([t('not_started', null)], TODAY);
+      expect(b.undated).toBe(1);
+      expect(b.no_date).toBe(1);
+    });
+
+    it('keeps the five exclusive buckets summing to total, with no_date OUTSIDE the sum', () => {
+      const b = bucketTasks([
+        t('complete', null),        // done + no_date
+        t('complete', '2026-08-01'),// done
+        t('not_started', null),     // undated + no_date
+        t('not_started', '2026-09-01'), // overdue
+      ], TODAY);
+      expect(b.done + b.overdue + b.due_this_week + b.open + b.undated).toBe(b.total);
+      expect(b.no_date).toBe(2);
+      // no_date deliberately exceeds `undated`; it is an overlapping annotation.
+      expect(b.no_date).toBeGreaterThan(b.undated);
+    });
+
+    it('reports no_date 0 when every task carries a date', () => {
+      const b = bucketTasks([t('complete', '2026-08-01'), t('not_started', '2026-09-30')], TODAY);
+      expect(b.no_date).toBe(0);
+    });
+  });
+
+  it('handles null input', () => {
+    expect(bucketTasks(null, TODAY).total).toBe(0);
+  });
+});
+
+describe('addDays', () => {
+  it('advances across a month boundary in UTC', () => {
+    expect(addDays('2026-09-28', 7)).toBe('2026-10-05');
+  });
+  it('advances across a year boundary', () => {
+    expect(addDays('2026-12-30', 7)).toBe('2027-01-06');
+  });
+});
+
+describe('releaseState — the release strip', () => {
+  const b = (over: Partial<ReturnType<typeof bucketTasks>>) => ({
+    total: 0, done: 0, overdue: 0, due_this_week: 0, open: 0, undated: 0, ...over,
+  });
+
+  it('is landed when everything is done', () => {
+    expect(releaseState(b({ total: 3, done: 3 }))).toBe('landed');
+  });
+
+  it('is overdue when ANY task is overdue, even if most landed', () => {
+    // The overdue work is the thing needing attention, so it wins over progress.
+    expect(releaseState(b({ total: 6, done: 5, overdue: 1 }))).toBe('overdue');
+  });
+
+  it('is due_soon when work is imminent but nothing is late', () => {
+    expect(releaseState(b({ total: 3, done: 1, due_this_week: 2 }))).toBe('due_soon');
+  });
+
+  it('is open when work remains but none is imminent', () => {
+    expect(releaseState(b({ total: 3, done: 1, open: 2 }))).toBe('open');
+  });
+
+  it('is empty for a release with no tasks', () => {
+    expect(releaseState(b({}))).toBe('empty');
+  });
+});
+
+describe('summariseVerification', () => {
+  const verified = (over: Record<string, unknown> = {}) => ({
+    verification_json: {
+      state: 'verified', reasons: [], commit_at: '2026-08-18T13:36:23Z',
+      checked_at: '2026-09-08T08:36:37.478Z',
+      commit_sha: 'b55c1179827f3bed3b174e795e72ceaff770d6fe',
+      outstanding: [], criteria_total: 3, criteria_passed: 3, ...over,
+    },
+  });
+
+  it('reports nothing for no rows', () => {
+    const s = summariseVerification([]);
+    expect(s.has_verification).toBe(false);
+    expect(s.commits).toBe(0);
+    expect(s.outstanding_count).toBe(0);
+  });
+
+  it('handles null and undefined without throwing', () => {
+    expect(summariseVerification(null).has_verification).toBe(false);
+    expect(summariseVerification(undefined).has_verification).toBe(false);
+  });
+
+  it('counts verified and in-progress tasks separately', () => {
+    const s = summariseVerification([
+      verified(),
+      verified({ state: 'in_progress', criteria_passed: 0, commit_sha: null }),
+    ]);
+    expect(s.tasks_with_verification).toBe(2);
+    expect(s.verified_tasks).toBe(1);
+    expect(s.in_progress_tasks).toBe(1);
+  });
+
+  it('counts DISTINCT commits — one commit closing three tasks is one commit', () => {
+    const s = summariseVerification([verified(), verified(), verified()]);
+    expect(s.commits).toBe(1);
+  });
+
+  it('picks the newest commit as latest', () => {
+    const s = summariseVerification([
+      verified({ commit_sha: 'aaa', commit_at: '2026-08-01T00:00:00Z' }),
+      verified({ commit_sha: 'bbb', commit_at: '2026-08-20T00:00:00Z' }),
+    ]);
+    expect(s.commits).toBe(2);
+    expect(s.latest_commit_sha).toBe('bbb');
+    expect(s.latest_commit_at).toBe('2026-08-20T00:00:00Z');
+  });
+
+  it('sums acceptance criteria across tasks', () => {
+    const s = summariseVerification([
+      verified({ criteria_passed: 3, criteria_total: 3 }),
+      verified({ criteria_passed: 0, criteria_total: 4 }),
+    ]);
+    expect(s.criteria_passed).toBe(3);
+    expect(s.criteria_total).toBe(7);
+  });
+
+  it('deduplicates outstanding criteria — the same blocker across tasks is one item', () => {
+    const s = summariseVerification([
+      verified({ state: 'in_progress', outstanding: ['Log every issue with a timestamp.', 'Handle missing data.'] }),
+      verified({ state: 'in_progress', outstanding: ['Log every issue with a timestamp.'] }),
+    ]);
+    expect(s.outstanding).toEqual(['Log every issue with a timestamp.', 'Handle missing data.']);
+    expect(s.outstanding_count).toBe(2);
+  });
+
+  it('treats a missing criteria count as 0, never NaN', () => {
+    // Every field in verification_json is optional; NaN would reach the UI.
+    const s = summariseVerification([{ verification_json: { state: 'verified' } }]);
+    expect(s.criteria_total).toBe(0);
+    expect(Number.isNaN(s.criteria_total)).toBe(false);
+    expect(s.has_verification).toBe(true);
+  });
+
+  it('skips rows whose verification_json is absent or malformed', () => {
+    const s = summariseVerification([
+      { verification_json: null },
+      { verification_json: 'not an object' },
+      verified(),
+    ]);
+    expect(s.tasks_with_verification).toBe(1);
+  });
+
+  it('tracks the most recent check time across rows', () => {
+    const s = summariseVerification([
+      verified({ checked_at: '2026-09-01T00:00:00Z' }),
+      verified({ checked_at: '2026-09-09T16:04:44Z' }),
+    ]);
+    expect(s.last_checked_at).toBe('2026-09-09T16:04:44Z');
   });
 });
 

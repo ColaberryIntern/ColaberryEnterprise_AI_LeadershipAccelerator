@@ -4,6 +4,7 @@ import {
   fetchCohortReadiness, fetchCohortWeakness, fetchNotStarted,
   CohortReadinessRow, DomainWeakness, NotStartedStudent,
 } from '../../../services/certPrepAdminApi';
+import PersonLink from '../../../components/admin/person/PersonLink';
 
 /**
  * CertCohortPanel — the operational view: who is ready, where the cohort is
@@ -42,6 +43,24 @@ const STATE_LABEL: Record<string, string> = {
 
 /** Order for triage, not for ranking: unmeasured first, they need the attention. */
 const STATE_ORDER = ['not_measured', 'building', 'approaching', 'sustained'];
+
+/**
+ * Has this student actually started practising?
+ *
+ * Ali, 2026-09-09: "People should not show up on the cert prep until they have started
+ * practicing and here is where I should see all the things they can do, their attempts,
+ * improvement etc."
+ *
+ * The bar is a single answered question, not a computed score. A student can have answered
+ * fifty questions and still read `not_measured`, because the readiness job runs on a
+ * schedule and `computed_at` is null until it does — filtering on state would hide the very
+ * people who are working. `answered_total` is the thing the student did.
+ *
+ * The July 2026 cohort has 57 rows, every one of them at zero, which is why the table was 57
+ * lines of "Not measured" and told an instructor nothing. Those students are not lost: the
+ * "Never started" card counts them and the panel below names them.
+ */
+export const hasStartedPractising = (r: CohortReadinessRow): boolean => (r.answered_total ?? 0) > 0;
 
 export function sortForTriage(rows: CohortReadinessRow[]): CohortReadinessRow[] {
   return [...rows].sort((a, b) => {
@@ -82,6 +101,9 @@ export default function CertCohortPanel({
 
   const measured = rows.filter((r) => r.overall_state !== 'not_measured').length;
   const sustained = rows.filter((r) => r.overall_state === 'sustained').length;
+  /** The table's population. Everyone else is counted, not listed — see hasStartedPractising. */
+  const practising = rows.filter(hasStartedPractising);
+  const attempts = rows.reduce((sum, r) => sum + (r.answered_total ?? 0), 0);
 
   if (!cohortId) {
     return <SectionCard><p className="text-muted mb-0">Select a cohort to see readiness.</p></SectionCard>;
@@ -90,9 +112,9 @@ export default function CertCohortPanel({
   return (
     <>
       <div className="row g-3 mb-3">
-        <div className="col-6 col-lg-3"><StatCard label="Students" value={rows.length} icon="group-line" /></div>
-        <div className="col-6 col-lg-3"><StatCard label="Measured" value={measured} hint={`${rows.length - measured} not measured`} icon="ruler-line" /></div>
-        <div className="col-6 col-lg-3"><StatCard label="Sustained" value={sustained} tone="success" icon="shield-check-line" /></div>
+        <div className="col-6 col-lg-3"><StatCard label="Practising" value={practising.length} hint={`of ${rows.length} enrolled`} icon="group-line" /></div>
+        <div className="col-6 col-lg-3"><StatCard label="Attempts" value={attempts} hint="questions answered" icon="question-answer-line" /></div>
+        <div className="col-6 col-lg-3"><StatCard label="Measured" value={measured} hint={`${sustained} sustained`} tone={measured > 0 ? 'success' : 'neutral'} icon="ruler-line" /></div>
         <div className="col-6 col-lg-3"><StatCard label="Never started" value={notStarted.length} tone={notStarted.length > 0 ? 'warning' : 'neutral'} icon="user-unfollow-line" /></div>
       </div>
 
@@ -100,7 +122,7 @@ export default function CertCohortPanel({
 
       <SectionCard
         title="Readiness"
-        subtitle="Colaberry readiness estimate — not a prediction of the Anthropic exam"
+        subtitle="Students who have started practising. Colaberry readiness estimate — not a prediction of the Anthropic exam"
         icon="dashboard-3-line"
       >
         <div className="table-responsive">
@@ -121,7 +143,20 @@ export default function CertCohortPanel({
               {!loading && rows.length === 0 && (
                 <tr><td colSpan={7} className="text-muted">No students in this cohort.</td></tr>
               )}
-              {sortForTriage(rows).map((r) => {
+              {/* An empty table here is a real state, not a broken one: everybody is
+                  enrolled and nobody has answered a question yet. Saying which of those two
+                  it is beats a blank body, and beats the 57 rows of "Not measured" that
+                  used to fill it. */}
+              {!loading && rows.length > 0 && practising.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="text-muted">
+                    None of the {rows.length} students in this cohort has answered a question
+                    yet, so there is no readiness to estimate. They are listed under
+                    &ldquo;Past the start week, never started&rdquo; below.
+                  </td>
+                </tr>
+              )}
+              {sortForTriage(practising).map((r) => {
                 const unmeasured = r.overall_state === 'not_measured' || r.overall_scaled === null;
                 const provisional = !unmeasured && (r.sample_confidence ?? 0) < LOW_CONFIDENCE;
                 return (
@@ -197,7 +232,7 @@ export default function CertCohortPanel({
               <ul className="list-unstyled mb-0">
                 {notStarted.map((s) => (
                   <li key={s.enrollment_id} className="py-1 border-bottom">
-                    {s.full_name ?? s.email ?? s.enrollment_id}
+                    <PersonLink name={s.full_name} email={s.email} enrollmentId={s.enrollment_id} />
                     {s.full_name && s.email && <div className="small text-muted">{s.email}</div>}
                   </li>
                 ))}

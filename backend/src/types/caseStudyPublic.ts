@@ -382,12 +382,17 @@ export interface PublicCaseStudyDetail {
    * record, checked there.
    */
   readonly walkthroughVideo: {
-    readonly url: string;
+    /** Null when the hero is a provider embed rather than a platform-hosted file. */
+    readonly url: string | null;
     readonly title: string;
     readonly captionsUrl: string | null;
     readonly posterUrl: string | null;
     readonly durationSeconds: number | null;
     readonly narrationSource: string | null;
+    /** Set when the operator chose their own video; renderers frame this instead. */
+    readonly embedUrl: string | null;
+    readonly provider: 'youtube' | 'vimeo' | null;
+    readonly watchUrl: string | null;
   } | null;
   readonly architecture: PublicCaseStudyArchitecture | null;
   readonly measurement: PublicCaseStudyMeasurement | null;

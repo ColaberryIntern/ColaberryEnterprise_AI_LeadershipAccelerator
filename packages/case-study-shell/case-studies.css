@@ -380,6 +380,19 @@
   border: 1px solid var(--cs-line);
   border-radius: var(--cs-radius, 10px);
 }
+/* An operator's own YouTube or Vimeo video. Same box as the generated player so the hero
+   does not change shape depending on which one a record carries. No `object-fit`: the
+   provider letterboxes inside its own frame, and cropping an iframe would cut the player
+   controls off. */
+.cs-walkthrough-embed {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+  background: #11161a;
+}
+.cs-cover--embed .cs-walkthrough-note a { margin-left: .25rem; }
 .cs-walkthrough-note {
   margin: 0;
   font-size: .82rem;

@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom';
 import api from '../../utils/api';
 import { useToast } from '../../components/ui/ToastProvider';
 import ConfirmModal from '../../components/ui/ConfirmModal';
-import AdminCurriculumTab from './AdminCurriculumTab';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal } from '../../components/admin/shell/trust';
 import PersonHistoryDrawer from '../../components/admin/PersonHistoryDrawer';
@@ -16,6 +15,7 @@ import CurriculumCompletionTab from './components/CurriculumCompletionTab';
 import CurrentClassesDashboard from './components/CurrentClassesDashboard';
 import AdminCommunityRolesPage from './AdminCommunityRolesPage';
 import { resolveAcceleratorNav } from './utils/resolveAcceleratorNav';
+import PersonLink from '../../components/admin/person/PersonLink';
 
 // Program-wide surfaces embedded as tabs. Lazy so folding three substantial
 // pages into this route does not enlarge the Accelerator's initial bundle for
@@ -134,7 +134,7 @@ type TabKey =
 
 const TAB_ORDER: TabKey[] = [
   'cohorts', 'sessions', 'participants', 'class-dashboard', 'curriculum',
-  'cert-prep', 'case-studies', 'projects',
+  'projects', 'cert-prep', 'case-studies',
 ];
 // Cohort-scoped drill-downs, reached from a cohort row rather than from an
 // always-visible top tab bar — "let everything flow through the Cohorts tab."
@@ -146,16 +146,25 @@ const DRILLDOWN_TABS: TabKey[] = ['sessions', 'participants', 'class-dashboard',
 // its existing page component unchanged, including that page's own header,
 // which is why this page suppresses its own PageHeader while one is active
 // rather than stacking two headers on top of each other.
-const PROGRAM_TABS: TabKey[] = ['cert-prep', 'case-studies', 'projects'];
+// Ali, 2026-09-09: "The order should be Projects / Cert Prep / Case Studies." Projects
+// leads because it is where a student's actual build lives; Cert Prep is downstream of
+// having built something, and Case Studies is downstream of both.
+const PROGRAM_TABS: TabKey[] = ['projects', 'cert-prep', 'case-studies'];
+// Ali, 2026-09-10: "For Projects cert prep and casestudies - let's use emoji's."
+// Only the three program-wide tabs carry one, because they render as their own
+// group in the tab bar — emoji on some of the cohort drill-down tabs and not
+// others would read as a rendering fault rather than a distinction. The emoji is
+// part of the label rather than a separate element so it travels with the string
+// wherever the label is used (tab bar, aria labels, tests).
 const TAB_LABELS: Record<TabKey, string> = {
   cohorts: 'Cohorts',
   sessions: 'Sessions',
   participants: 'Participants',
   'class-dashboard': 'Class Dashboard',
   curriculum: 'Curriculum',
-  'cert-prep': 'Cert Prep',
-  'case-studies': 'Case Studies',
-  projects: 'Projects',
+  projects: '🚀 Projects',
+  'cert-prep': '🎓 Cert Prep',
+  'case-studies': '🏆 Case Studies',
 };
 
 function AdminAcceleratorPage() {
@@ -1111,12 +1120,13 @@ function AdminAcceleratorPage() {
                       return (
                       <tr key={e.id}>
                         <td className="fw-medium">
+                          <PersonLink name={e.full_name} email={e.email} enrollmentId={e.id} />
                           <button
-                            className="btn btn-link p-0 fw-medium text-start text-decoration-none align-baseline"
+                            className="btn btn-link p-0 ms-2 align-baseline text-muted"
                             onClick={() => setHistoryTarget({ id: e.id, name: e.full_name })}
-                            title="View full history & activity"
+                            title="Quick history drawer (the 360 profile has more)"
                           >
-                            {e.full_name}
+                            <i className="ri-history-line" />
                           </button>
                           {e.company && e.company !== 'Prospect' && (
                             <div className="text-muted small fw-normal">{e.company}</div>
@@ -1234,7 +1244,9 @@ function AdminAcceleratorPage() {
                             const record = attendanceRecords.find((r) => r.enrollment_id === e.id);
                             return (
                               <tr key={e.id}>
-                                <td className="fw-medium">{e.full_name}</td>
+                                <td className="fw-medium">
+                                  <PersonLink name={e.full_name} email={e.email} enrollmentId={e.id} />
+                                </td>
                                 <td>{e.company}</td>
                                 <td>
                                   <select
@@ -1341,22 +1353,25 @@ function AdminAcceleratorPage() {
         <ClassDashboardTab cohortId={selectedCohortId} />
       )}
 
+      {/* ONE curriculum section, not two. Ali, 2026-09-09: "Let's remove this 2nd
+          curriculum section."
+
+          `AdminCurriculumTab` used to render underneath the heatmap. It listed the same
+          weeks and the same cards a second time, and it mutated nothing — a read-only
+          duplicate of the view above it, now that the heatmap carries per-section and
+          per-card completion. Its one irreplaceable control was the link into the
+          Composer, which is where curriculum is actually authored, so that link moved
+          onto the heatmap rather than being deleted with the rest.
+
+          The component file stays in the tree. It has no route of its own and no other
+          caller, so nothing else breaks by not rendering it here, and deleting a working
+          component is a bigger decision than the one that was asked for. */}
       {activeTab === 'curriculum' && selectedCohortId && (
-        /* Completion sits ABOVE the authoring tools, because the first question asked of a
-           curriculum is which parts of it people are finishing. Authoring is what you do
-           after reading the answer. */
-        <div className="mb-4">
-          <CurriculumCompletionTab cohortId={selectedCohortId} />
-          <hr className="my-4" />
-        </div>
+        <CurriculumCompletionTab cohortId={selectedCohortId} />
       )}
 
-      {activeTab === 'curriculum' && (
-        <AdminCurriculumTab
-          cohortId={selectedCohortId}
-          enrollments={enrollments.map((e) => ({ id: e.id, full_name: e.full_name, email: e.email, company: e.company }))}
-          showToast={showToast}
-        />
+      {activeTab === 'curriculum' && !selectedCohortId && (
+        <div className="text-muted p-3">Select a cohort to see curriculum completion.</div>
       )}
 
       {/* Class Kit — projector-friendly QR + start-class panel for a session */}

@@ -15,6 +15,15 @@ import ScheduleAppointmentModal from '../../components/admin/ScheduleAppointment
 import LeadPipelineBar from '../../components/admin/lead/LeadPipelineBar';
 import LeadStatusNotes from '../../components/admin/lead/LeadStatusNotes';
 import LeadStrategyPrep from '../../components/admin/lead/LeadStrategyPrep';
+// The programme panels an audit of every person-keyed table added on 2026-09-09.
+// Each is its own module: the page was already 934 lines before they arrived.
+import ClassActivityTab from '../../components/admin/person/ClassActivityTab';
+import WorkTab from '../../components/admin/person/WorkTab';
+import AccountTab from '../../components/admin/person/AccountTab';
+import GrowthTab from '../../components/admin/person/GrowthTab';
+import { Field, Unknown, fmtDate, fmtDateTime } from '../../components/admin/person/primitives';
+import type { Journey, Profile, TempEntry, TimelineEvent, VisitorData } from '../../adminOs/personTypes';
+import { refForApi } from '../../adminOs/personLink';
 
 /**
  * The canonical 360° person profile.
@@ -34,108 +43,20 @@ import LeadStrategyPrep from '../../components/admin/lead/LeadStrategyPrep';
  * component cannot widen access.
  */
 
-interface AcquisitionPanel {
-  phone: string | null; role: string | null; companySize: string | null;
-  industry: string | null; linkedinUrl: string | null;
-  source: string | null; formType: string | null; utmSource: string | null;
-  utmCampaign: string | null; pageUrl: string | null; interestArea: string | null;
-  message: string | null; firstSeen: string | null;
-  pipelineStage: string | null; leadScore: number | null; temperature: string | null;
-  temperatureUpdatedAt: string | null; qualificationLevel: string | null;
-  interestLevel: string | null; maturityScore: number | null;
-  status: string | null; assignedAdmin: string | null; lastContactedAt: string | null;
-  notes: string | null; consentContact: boolean | null;
-  evaluating90Days: boolean | null; createdAt: string | null;
-  leadId: number | null; leadScoreMax: number;
-}
-
-interface VisitorData {
-  id?: string;
-  intent_score?: number;
-  intent_level?: string;
-  total_sessions?: number;
-  total_pageviews?: number;
-  first_seen_at?: string;
-  last_seen_at?: string;
-  device_type?: string;
-  behavioral_signals?: Array<{ signal_type?: string } | string>;
-  sessions?: Array<{
-    started_at?: string; duration_seconds?: number; pageview_count?: number;
-    entry_page?: string; exit_page?: string;
-  }>;
-}
-
-interface TempEntry {
-  from_temperature?: string; to_temperature?: string;
-  changed_by?: string; lead_score?: number; created_at?: string;
-}
-
-interface AppointmentRow {
-  kind: string; title: string | null; scheduledAt: string | null;
-  status: string | null; notes: string | null; meetLink: string | null;
-}
-
-interface AutomationRow {
-  type: string; status: string | null; detail: string | null; createdAt: string | null;
-}
-
-interface LearningRow {
-  enrollmentId: string; cohortId: string | null; status: string | null;
-  tier: string | null; enrollmentType: string | null; enrolledAt: string | null;
-}
-
-interface BillingRow {
-  enrollmentId: string; paymentStatus: string | null;
-  paymentMethod: string | null; amountPaid: number | null;
-}
-
-interface TimelineEvent {
-  occurredAt: string; domain: string; source: string; type: string; summary: string | null;
-}
-
-interface TrustPanel {
-  leadIds: number[];
-  enrollmentIds: string[];
-  matchMethod: string;
-  tracedToLead: boolean;
-  consentRecorded: boolean | null;
-  lastActivity: string | null;
-  gaps: Array<{ field: string; reason: string }>;
-}
-
-interface Journey {
-  firstTouch: string | null; lastActivity: string | null; daysKnown: number | null;
-  sessions: number; pageEvents: number; campaigns: number; emailsSent: number;
-  enrollments: number; intentScore: number | null;
-}
-
-interface Profile {
-  email: string; name: string | null; stage: string; tracedToLead: boolean;
-  company: string | null; title: string | null;
-  acquisition?: AcquisitionPanel | null;
-  learning?: LearningRow[];
-  billing?: BillingRow[];
-  engagement?: { sessions: number; firstSeen: string | null; lastSeen: string | null; sites: string[] } | null;
-  appointments?: AppointmentRow[];
-  automation?: AutomationRow[];
-  intentSuppressedReason?: string;
-  trust?: TrustPanel;
-  journey?: Journey;
-  timeline?: TimelineEvent[];
-  timelineDomains?: string[];
-  withheldPanels: string[];
-}
 
 const STAGE_LABEL: Record<string, string> = {
   anonymous_visitor: 'Anonymous visitor', identified_visitor: 'Identified visitor',
   lead: 'Lead', applicant: 'Applicant', enrolled_student: 'Enrolled',
-  active_learner: 'Active learner', graduate: 'Graduate', returning_customer: 'Returning customer',
+  active_learner: 'Active learner', graduate: 'Graduate', lapsed: 'Lapsed',
+  returning_customer: 'Returning customer',
 };
 
 const STAGE_TONE: Record<string, 'info' | 'warning' | 'success' | 'neutral'> = {
   anonymous_visitor: 'neutral', identified_visitor: 'neutral', lead: 'info',
   applicant: 'warning', enrolled_student: 'success', active_learner: 'success',
-  graduate: 'success', returning_customer: 'success',
+  // Lapsed is the state the business exists to prevent, so it reads as a
+  // warning rather than a neutral end-state.
+  graduate: 'success', lapsed: 'warning', returning_customer: 'success',
 };
 
 const TEMPERATURE_TONE: Record<string, string> = { hot: 'danger', warm: 'warning', cold: 'secondary' };
@@ -145,30 +66,16 @@ const DOMAIN_TONE: Record<string, string> = {
   commerce: 'success', learning: 'warning', community: 'dark',
 };
 
-/** Absent, stated. Never an empty cell, and never a zero standing in for unknown. */
-const Unknown = () => <span className="text-muted small">Not recorded</span>;
-
-function Field({ label, value, wide }: { label: string; value: React.ReactNode; wide?: boolean }) {
-  const empty = value === null || value === undefined || value === '';
-  return (
-    <div className={wide ? 'col-12 mb-3' : 'col-6 col-lg-4 mb-3'}>
-      <div className="text-muted text-uppercase mb-1" style={{ letterSpacing: '.05em', fontSize: '.7rem' }}>
-        {label}
-      </div>
-      <div className={empty ? '' : 'fw-medium'}>{empty ? <Unknown /> : value}</div>
-    </div>
-  );
-}
-
-const fmtDate = (v: string | null | undefined) =>
-  (v ? new Date(v).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : null);
-const fmtDateTime = (v: string | null | undefined) => (v ? new Date(v).toLocaleString() : null);
-
-type TabKey = 'timeline' | 'journey' | 'acquisition' | 'notes' | 'strategy' | 'engagement' | 'learning' | 'billing' | 'activity' | 'trust';
+type TabKey = 'timeline' | 'journey' | 'acquisition' | 'notes' | 'strategy'
+  | 'class' | 'work' | 'account' | 'growth'
+  | 'engagement' | 'learning' | 'billing' | 'activity' | 'trust';
 
 export default function PersonProfilePage() {
-  const { email: rawEmail } = useParams<{ email: string }>();
-  const email = rawEmail ? decodeURIComponent(rawEmail) : '';
+  // A REF, not necessarily an email. Admin surfaces link with whatever they
+  // hold — `lead:123` and `enrollment:<uuid>` are resolved by the API — so the
+  // route segment is opaque here and `profile.email` is the resolved identity.
+  const { ref: rawRef } = useParams<{ ref: string }>();
+  const personRef = refForApi(rawRef);
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -192,7 +99,7 @@ export default function PersonProfilePage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get(`/api/admin/people/profile?email=${encodeURIComponent(email)}`);
+      const res = await api.get(`/api/admin/people/profile?ref=${encodeURIComponent(personRef)}`);
       setProfile(res.data);
     } catch (err) {
       setProfile(null);
@@ -205,7 +112,7 @@ export default function PersonProfilePage() {
     } finally {
       setLoading(false);
     }
-  }, [email]);
+  }, [personRef]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -249,8 +156,36 @@ export default function PersonProfilePage() {
         count: (profile.appointments?.length ?? 0) + (profile.automation?.length ?? 0),
       });
     }
-    if (profile.learning !== undefined) t.push({ key: 'learning', label: 'Programme', count: profile.learning.length });
-    if (profile.billing !== undefined) t.push({ key: 'billing', label: 'Billing', count: profile.billing.length });
+    if (profile.learning !== undefined) t.push({ key: 'learning', label: 'Enrolments', count: profile.learning.length });
+    // The programme surfaces, added 2026-09-09. Each appears only when the API
+    // sent its panel, so a caller without the programme sections never sees the
+    // tab — the same rule every other tab here follows.
+    if (profile.classActivity || profile.curriculum) {
+      t.push({
+        key: 'class',
+        label: 'Class & curriculum',
+        count: profile.curriculum?.completed ?? undefined,
+      });
+    }
+    if (profile.work) {
+      t.push({
+        key: 'work',
+        label: 'Projects & portfolio',
+        count: profile.work.projects.length + profile.work.caseStudies.length
+          + profile.work.capstones.length,
+      });
+    }
+    if (profile.account || profile.billingDetail) {
+      t.push({
+        key: 'account',
+        label: 'Account & subscription',
+        count: profile.billingDetail?.subscriptions.length ?? undefined,
+      });
+    }
+    if (profile.skills || profile.mentor || profile.content || profile.community || profile.profileContext) {
+      t.push({ key: 'growth', label: 'Skills & context' });
+    }
+    if (profile.billing !== undefined) t.push({ key: 'billing', label: 'Payment record', count: profile.billing.length });
     if (profile.engagement !== undefined) t.push({ key: 'activity', label: 'Site activity' });
     // Last, because it is about the data rather than the person — but present
     // for everyone, because "how much of this should I believe" always applies.
@@ -267,11 +202,11 @@ export default function PersonProfilePage() {
   return (
     <div className="container-fluid py-4">
       <PageHeader
-        title={profile?.name || email}
+        title={profile?.name || profile?.email || personRef}
         subtitle={
           profile && (profile.title || profile.company)
             ? [profile.title, profile.company].filter(Boolean).join(' · ')
-            : profile?.email || email
+            : profile?.email || personRef
         }
         icon="user-3-line"
         breadcrumb={[
@@ -352,6 +287,20 @@ export default function PersonProfilePage() {
               <div className="col-6 col-md-4 col-xl-2">
                 <StatCard label="Enrolments" value={profile.journey.enrollments}
                   icon="graduation-cap-line" tone="success" />
+              </div>
+            )}
+            {/* What they DID, beside what they were sent. An acquisition-only
+                header made a heavy learner look like a quiet lead. */}
+            {profile.journey.cardsCompleted > 0 && (
+              <div className="col-6 col-md-4 col-xl-2">
+                <StatCard label="Cards completed" value={profile.journey.cardsCompleted}
+                  icon="book-open-line" tone="success" />
+              </div>
+            )}
+            {profile.journey.sessionsAttended > 0 && (
+              <div className="col-6 col-md-4 col-xl-2">
+                <StatCard label="Classes attended" value={profile.journey.sessionsAttended}
+                  icon="calendar-check-line" tone="success" />
               </div>
             )}
           </div>
@@ -449,6 +398,14 @@ export default function PersonProfilePage() {
                             </td>
                             <td>
                               <span className="fw-medium">{e.type}</span>
+                              {/* A collapsed fan-out. The reader sees one line and how
+                                  many times it happened, never the same line repeated. */}
+                              {e.occurrences > 1 && (
+                                <span className="badge bg-secondary-subtle text-secondary-emphasis ms-2"
+                                  title={`${e.occurrences} identical events in the same second`}>
+                                  ×{e.occurrences}
+                                </span>
+                              )}
                               {e.summary && <div className="text-muted small">{e.summary}</div>}
                             </td>
                             {/* Source-labelled, so any row traces back to its table. */}
@@ -688,6 +645,26 @@ export default function PersonProfilePage() {
 
           {/* ── Strategy prep ────────────────────────────────────────────── */}
           {tab === 'strategy' && acq?.leadId && <LeadStrategyPrep leadId={acq.leadId} />}
+
+          {tab === 'class' && (
+            <ClassActivityTab classActivity={profile.classActivity} curriculum={profile.curriculum} />
+          )}
+
+          {tab === 'work' && <WorkTab work={profile.work} />}
+
+          {tab === 'account' && (
+            <AccountTab account={profile.account} billing={profile.billingDetail} />
+          )}
+
+          {tab === 'growth' && (
+            <GrowthTab
+              skills={profile.skills}
+              mentor={profile.mentor}
+              content={profile.content}
+              community={profile.community}
+              context={profile.profileContext}
+            />
+          )}
 
           {/* ── Appointments & automation ────────────────────────────────── */}
           {tab === 'engagement' && (

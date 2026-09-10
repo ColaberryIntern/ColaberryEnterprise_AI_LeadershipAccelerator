@@ -15,6 +15,13 @@ import {
 import {
   applyConfirmedDirective, buildDirectiveConfirmationCardText, detectInstructIntent, toPendingDirectiveConfirmation,
 } from './managerDirectiveIntentService';
+import {
+  applyConfirmedAssignWork, buildAssignWorkConfirmationCardText, detectAssignWorkIntent, toPendingAssignWorkConfirmation,
+} from './managerAssignWorkIntentService';
+import {
+  applyConfirmedApprove, applyConfirmedReject, buildApproveConfirmationCardText, buildRejectConfirmationCardText,
+  detectApproveIntent, detectRejectIntent, resolvePendingApprovalTarget, toPendingApproveConfirmation, toPendingRejectConfirmation,
+} from './managerApprovalDecisionIntentService';
 import { detectWorkStatusQuery, buildWorkStatusReply } from './agentWorkStatusIntentService';
 import { detectUncertaintyQuery, buildUncertaintyReply } from './agentUncertaintyIntentService';
 import { detectInterventionIntentQuery, buildInterventionIntentReply } from './agentInterventionIntentService';
@@ -32,15 +39,20 @@ import { detectInterventionIntentQuery, buildInterventionIntentReply } from './a
 // (QUARANTINE_METRIC/RESTORE_METRIC) is now detected and gated behind a real
 // confirmation turn — see managerReliabilityIntentService.ts.
 //
-// Capability 8 (2026-09-08) narrows it by three more, all riding the generic
-// `pending_intent_confirmation` column instead of a dedicated one:
+// Capability 8 (2026-09-08/09/10) narrows it by six more, all riding the
+// generic `pending_intent_confirmation` column instead of a dedicated one:
 // CHANGE_GOAL (managerGoalIntentService.ts), SCHEDULE
-// (managerOneOnOneIntentService.ts, 1:1 check-ins), and INSTRUCT
-// (managerDirectiveIntentService.ts, standing directives). See
+// (managerOneOnOneIntentService.ts, 1:1 check-ins), INSTRUCT
+// (managerDirectiveIntentService.ts, standing directives), ASSIGN_WORK
+// (managerAssignWorkIntentService.ts, real tickets via the Org Chart's own
+// hierarchy-authorized task assignment), and APPROVE/REJECT
+// (managerApprovalDecisionIntentService.ts, real decisions on a pending
+// ProposedAgentAction — the same object and the same executor the Manager
+// Inbox UI's own approve/reject buttons already use). See
 // handlePendingGenericIntentConfirmation/handleNewGenericIntentDetection
 // below for how the column dispatches across intent types. Every other
-// intent (ASK/CORRECT/APPROVE/REJECT/COACH/ASSIGN_WORK/
-// REPORT_DATA_ISSUE/...) is still purely conversational, unchanged.
+// intent (ASK/CORRECT/COACH/REPORT_DATA_ISSUE/...) is still purely
+// conversational, unchanged.
 
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
 const HISTORY_LIMIT = 20;
@@ -72,6 +84,28 @@ function toMessageView(row: AgentManagerMessage): ConversationMessageView {
   return { id: row.id, role: row.role, content: row.content, createdAt: row.created_at };
 }
 
+/**
+ * Real bug fix, found during Capability 8's own end-to-end smoke test: the
+ * three call sites below all needed "the most recent HISTORY_LIMIT messages,
+ * oldest first" — but two of them queried `ORDER BY created_at ASC LIMIT
+ * HISTORY_LIMIT`, which returns the OLDEST messages, not the newest. Once a
+ * real conversation passed HISTORY_LIMIT (20) total messages, the returned
+ * view silently froze on the first 20 forever — including never showing the
+ * reply that had just been generated. Fetching DESC (newest first) with the
+ * limit, then reversing back to chronological order, is the only query that
+ * actually means "most recent N, oldest first" — the one call site that
+ * already did this correctly (the LLM context fetch) is the pattern this
+ * extracts.
+ */
+async function fetchRecentMessagesChronological(conversationId: string): Promise<AgentManagerMessage[]> {
+  const rows = await AgentManagerMessage.findAll({
+    where: { conversation_id: conversationId },
+    order: [['created_at', 'DESC']],
+    limit: HISTORY_LIMIT,
+  });
+  return rows.slice().reverse();
+}
+
 /** Authorization (is the caller allowed to talk to this agent) is the route
  * layer's job (requireAgentManagerOrAdmin) — same convention as every other
  * service in this mission. Trusts it already happened. */
@@ -95,11 +129,7 @@ export async function getConversationHistory(agentId: string, participantEmail: 
   if (!agent) return null;
 
   const conversation = await getOrCreateConversation(agentId, participantEmail, null);
-  const rows = await AgentManagerMessage.findAll({
-    where: { conversation_id: conversation.id },
-    order: [['created_at', 'ASC']],
-    limit: HISTORY_LIMIT,
-  });
+  const rows = await fetchRecentMessagesChronological(conversation.id);
   return { conversationId: conversation.id, agentId, messages: rows.map(toMessageView) };
 }
 
@@ -148,7 +178,16 @@ function genericIntentCancelText(pending: NonNullable<AgentManagerConversation['
   if (pending.intentType === 'SCHEDULE_ONE_ON_ONE') {
     return 'Okay, no 1:1 scheduled. Let me know if you did want to set one up.';
   }
-  return 'Okay, no directive saved. Let me know if you did want to set one.';
+  if (pending.intentType === 'INSTRUCT') {
+    return 'Okay, no directive saved. Let me know if you did want to set one.';
+  }
+  if (pending.intentType === 'ASSIGN_WORK') {
+    return 'Okay, no task assigned. Let me know if you did want to assign one.';
+  }
+  if (pending.intentType === 'APPROVE') {
+    return 'Okay, nothing approved. Let me know if you did want to approve it.';
+  }
+  return 'Okay, nothing rejected. Let me know if you did want to reject it.';
 }
 
 /**
@@ -183,7 +222,19 @@ async function handlePendingGenericIntentConfirmation(
       const { summary } = await applyConfirmedOneOnOneSchedule(agentId, pending, participantEmail, participantOrgMemberId);
       return summary;
     }
-    const { summary } = await applyConfirmedDirective(agentId, pending, participantEmail, participantOrgMemberId);
+    if (pending.intentType === 'INSTRUCT') {
+      const { summary } = await applyConfirmedDirective(agentId, pending, participantEmail, participantOrgMemberId);
+      return summary;
+    }
+    if (pending.intentType === 'ASSIGN_WORK') {
+      const { summary } = await applyConfirmedAssignWork(agentId, pending, participantEmail, participantOrgMemberId);
+      return summary;
+    }
+    if (pending.intentType === 'APPROVE') {
+      const { summary } = await applyConfirmedApprove(pending, participantEmail);
+      return summary;
+    }
+    const { summary } = await applyConfirmedReject(pending, participantEmail);
     return summary;
   }
 
@@ -219,6 +270,33 @@ async function handleNewGenericIntentDetection(
   if (directiveDetected) {
     await conversation.update({ pending_intent_confirmation: toPendingDirectiveConfirmation(directiveDetected) });
     return buildDirectiveConfirmationCardText(directiveDetected);
+  }
+
+  const assignWorkDetected = detectAssignWorkIntent(messageText);
+  if (assignWorkDetected) {
+    await conversation.update({ pending_intent_confirmation: toPendingAssignWorkConfirmation(assignWorkDetected) });
+    return buildAssignWorkConfirmationCardText(assignWorkDetected);
+  }
+
+  // APPROVE/REJECT are the one pair where "which proposal" never appears in
+  // the manager's own message text — resolvePendingApprovalTarget() is a
+  // real DB read, unlike every detector above, and 'none'/'ambiguous' are
+  // honest outcomes surfaced directly rather than ever guessing which
+  // pending proposal was meant.
+  if (detectApproveIntent(messageText)) {
+    const target = await resolvePendingApprovalTarget(conversation.agent_id);
+    if (target === 'none') return "There's nothing pending for me to approve right now.";
+    if (target === 'ambiguous') return "You have more than one pending item — head to the Manager Inbox to pick the right one.";
+    await conversation.update({ pending_intent_confirmation: toPendingApproveConfirmation(target) });
+    return buildApproveConfirmationCardText(target);
+  }
+
+  if (detectRejectIntent(messageText)) {
+    const target = await resolvePendingApprovalTarget(conversation.agent_id);
+    if (target === 'none') return "There's nothing pending for me to reject right now.";
+    if (target === 'ambiguous') return "You have more than one pending item — head to the Manager Inbox to pick the right one.";
+    await conversation.update({ pending_intent_confirmation: toPendingRejectConfirmation(target) });
+    return buildRejectConfirmationCardText(target);
   }
 
   return null;
@@ -263,11 +341,7 @@ async function persistAgentReplyAndReturnView(
   replyText: string,
 ): Promise<ConversationView> {
   await AgentManagerMessage.create({ conversation_id: conversation.id, role: 'agent', content: replyText });
-  const rows = await AgentManagerMessage.findAll({
-    where: { conversation_id: conversation.id },
-    order: [['created_at', 'ASC']],
-    limit: HISTORY_LIMIT,
-  });
+  const rows = await fetchRecentMessagesChronological(conversation.id);
   return { conversationId: conversation.id, agentId, messages: rows.map(toMessageView) };
 }
 
@@ -329,12 +403,7 @@ export async function sendManagerMessage(
     return persistAgentReplyAndReturnView(conversation, agentId, interventionIntentReply);
   }
 
-  const recent = await AgentManagerMessage.findAll({
-    where: { conversation_id: conversation.id },
-    order: [['created_at', 'DESC']],
-    limit: HISTORY_LIMIT,
-  });
-  const ordered = recent.slice().reverse();
+  const ordered = await fetchRecentMessagesChronological(conversation.id);
 
   const systemPrompt = await buildAgentManagerConversationSystemPrompt(agentId, agent.agent_name, agent.system_prompt);
   const openai = getInstrumentedOpenAI({ workflow_id: 'agent_manager_conversation', agent_id: agentId });

@@ -71,6 +71,23 @@ jest.mock('../managerDirectiveIntentService', () => ({
   toPendingDirectiveConfirmation: jest.fn(),
   applyConfirmedDirective: jest.fn(),
 }));
+jest.mock('../managerAssignWorkIntentService', () => ({
+  detectAssignWorkIntent: jest.fn(() => null),
+  buildAssignWorkConfirmationCardText: jest.fn(() => ''),
+  toPendingAssignWorkConfirmation: jest.fn(),
+  applyConfirmedAssignWork: jest.fn(),
+}));
+jest.mock('../managerApprovalDecisionIntentService', () => ({
+  detectApproveIntent: jest.fn(() => null),
+  detectRejectIntent: jest.fn(() => null),
+  resolvePendingApprovalTarget: jest.fn(),
+  buildApproveConfirmationCardText: jest.fn(() => ''),
+  buildRejectConfirmationCardText: jest.fn(() => ''),
+  toPendingApproveConfirmation: jest.fn(),
+  toPendingRejectConfirmation: jest.fn(),
+  applyConfirmedApprove: jest.fn(),
+  applyConfirmedReject: jest.fn(),
+}));
 
 jest.mock('../agentWorkStatusIntentService', () => ({
   detectWorkStatusQuery: jest.fn(() => null),

@@ -144,6 +144,13 @@ router.get('/api/admin/projects/cohort/:cohortId/students', requireAdmin, async 
         organization_name: project ? (project as any).organization_name : null,
         github_repo_url: project ? (project as any).github_repo_url : null,
         github_connected: project ? !!(project as any).github_repo_url : false,
+        // The Command Center is a GitHub Pages site at the root of the student's own repo,
+        // so it is a public URL and an admin can open it. It is NOT a top-level column —
+        // `setCommandCenterUrl` writes it inside the `project_variables` JSON blob, which is
+        // why a search of `projects` columns finds nothing. 11 of 43 live projects have one.
+        command_center_url: project
+          ? (((project as any).project_variables || {}).command_center_url ?? null)
+          : null,
         requirements_loaded: project ? !!(project as any).requirements_document : false,
         maturity_score: project ? (project as any).maturity_score : null,
         target_mode: project ? (project as any).target_mode : null,

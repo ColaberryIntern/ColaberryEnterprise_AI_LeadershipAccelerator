@@ -99,7 +99,11 @@ const adminRoutes = (
       <Route element={<AdminLayout />}>
         <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
         <Route path="/admin/people" element={<PeoplePage />} />
-        <Route path="/admin/people/:email" element={<PersonProfilePage />} />
+        {/* `:ref` rather than `:email`: admin surfaces link with whatever identifier
+            their rows carry, and most carry a lead id and no address. The segment
+            accepts an email, `lead:123` or `enrollment:<uuid>`, all resolved
+            server-side. Existing /admin/people/<email> links are unchanged. */}
+        <Route path="/admin/people/:ref" element={<PersonProfilePage />} />
         {/* Portfolio review. INSIDE ProtectedRoute and AdminLayout: it first shipped
             beside /admin/login, outside the auth guard entirely, so the page was
             publicly loadable (the API still 401d, so no data leaked, but the surface

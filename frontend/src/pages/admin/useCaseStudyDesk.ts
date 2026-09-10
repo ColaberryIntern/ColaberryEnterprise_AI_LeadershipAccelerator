@@ -94,7 +94,7 @@ export interface CaseStudyDeskState {
   metrics: ReturnType<typeof readSnapshot>['heroMetrics'];
   provenanceVersions: ProvenanceVersionOption[];
   load: () => Promise<void>;
-  override: (path: string, value: string, note?: string) => void;
+  override: (path: string, value: unknown, note?: string) => void;
   setRawPanelOpen: (open: boolean) => void;
   onSync: () => Promise<void>;
   onPublish: (surfaceKey?: CaseStudySurfaceKey) => Promise<void>;
@@ -195,7 +195,7 @@ export function useCaseStudyDesk(id: string): CaseStudyDeskState {
    * touches, and it always produces a NEW snapshot version that has to be
    * approved before it counts, so no panel gets to write directly.
    */
-  const override = useCallback((path: string, value: string, note?: string): void => {
+  const override = useCallback((path: string, value: unknown, note?: string): void => {
     void act(
       'this override',
       () => applyCaseStudyOverride(id, { path, value, ...(note ? { note } : {}) }),

@@ -27,6 +27,18 @@ import { sequelize } from '../../config/database';
  * A source with no person key, or with zero rows, is not queried — an empty
  * branch in a UNION costs a scan and returns nothing.
  *
+ * ── THE 2026-09-09 AUDIT ────────────────────────────────────────────────────
+ *
+ * A sweep of all 163 person-keyed tables found 60 holding rows for three sample
+ * learners, against the 14 this file read. The programme's own record of what a
+ * learner DID was absent: attendance, curriculum completion, assessments,
+ * mentor conversations, artifacts, reflections, subscriptions and community
+ * posts are all added below.
+ *
+ * That audit is now a repeatable procedure rather than a one-off — see the
+ * `person-360` skill, which carries the query and the full source registry so
+ * a table added next quarter shows up as a gap instead of silently missing.
+ *
  * ── DOMAIN GATING ───────────────────────────────────────────────────────────
  *
  * Each event carries a domain, and a branch is only included when the caller's
@@ -45,6 +57,13 @@ export interface TimelineEvent {
   source: string;
   type: string;
   summary: string | null;
+  /**
+   * How many identical events this row stands for. 1 for an ordinary event.
+   *
+   * A reader should never see the same line twice; when a source genuinely
+   * records something N times in one second, the row says so instead.
+   */
+  occurrences: number;
 }
 
 export interface TimelineQuery {
@@ -97,11 +116,17 @@ const BRANCHES: Branch[] = [
   },
   {
     domain: 'acquisition', key: 'lead',
-    sql: `SELECT pe.created_at AS occurred_at, 'acquisition' AS domain, 'page_events' AS source,
-                 pe.event_type AS type,
-                 COALESCE(NULLIF(pe.page_path,''), NULLIF(pe.page_url,''), '') AS summary
+    // Grouped per MINUTE, not per row: three views of '/' seven seconds apart
+    // are three real events but read as three duplicate lines. The count says
+    // what happened without repeating the line.
+    sql: `SELECT max(pe.created_at) AS occurred_at, 'acquisition' AS domain,
+                 'page_events' AS source, pe.event_type AS type,
+                 COALESCE(NULLIF(pe.page_path,''), NULLIF(pe.page_url,''), '(no path)') ||
+                   CASE WHEN COUNT(*) > 1 THEN ' ×' || COUNT(*)::text ELSE '' END AS summary
           FROM page_events pe
-          WHERE pe.lead_id IN (:leadIds) AND pe.event_type <> 'heartbeat'`,
+          WHERE pe.lead_id IN (:leadIds) AND pe.event_type <> 'heartbeat'
+          GROUP BY date_trunc('minute', pe.created_at), pe.event_type,
+                   COALESCE(NULLIF(pe.page_path,''), NULLIF(pe.page_url,''), '(no path)')`,
   },
   {
     domain: 'acquisition', key: 'lead',
@@ -140,9 +165,17 @@ const BRANCHES: Branch[] = [
   },
   {
     domain: 'communication', key: 'lead',
-    sql: `SELECT io.created_at AS occurred_at, 'communication' AS domain, 'interaction_outcomes' AS source,
-                 io.outcome AS type, io.channel AS summary
-          FROM interaction_outcomes io WHERE io.lead_id IN (:leadIds)`,
+    // Joined to the email it refers to. The summary was `io.channel` -- literally
+    // the word "email" -- so two opens THREE DAYS APART rendered as identical
+    // lines. They were never duplicates; the summary just said nothing.
+    sql: `SELECT io.created_at AS occurred_at, 'communication' AS domain,
+                 'interaction_outcomes' AS source, io.outcome AS type,
+                 COALESCE(se.subject,
+                          io.channel || CASE WHEN io.step_index IS NOT NULL
+                            THEN ' · step ' || io.step_index::text ELSE '' END) AS summary
+          FROM interaction_outcomes io
+          LEFT JOIN scheduled_emails se ON se.id = io.scheduled_email_id
+          WHERE io.lead_id IN (:leadIds)`,
   },
   {
     domain: 'communication', key: 'lead',
@@ -181,10 +214,105 @@ const BRANCHES: Branch[] = [
           FROM student_points_events sp WHERE sp.enrollment_id IN (:enrollmentIds)`,
   },
   {
+    // ── COLLAPSED PER CARD, NOT PER ROW ─────────────────────────────────────
+    //
+    // Completing ONE card writes a row per (skill × band) — measured at 7-8
+    // rows landing within the same second, all carrying the same source_ref.
+    // Emitted one-per-row with a NULL summary, that rendered as eight identical
+    // lines and buried the card completion they belonged to (Ali, 2026-09-09:
+    // "Remove all the duplicates from the Activity Timeline").
+    //
+    // They were never duplicates — each credits a different skill. The defect
+    // was throwing that away and then showing the husk eight times. Grouped by
+    // the card, the whole fan-out becomes one line that says which skills it
+    // credited.
     domain: 'learning', key: 'enrollment',
-    sql: `SELECT sse.created_at AS occurred_at, 'learning' AS domain, 'student_skill_evidence' AS source,
-                 'skill_evidence' AS type, NULL AS summary
-          FROM student_skill_evidence sse WHERE sse.enrollment_id IN (:enrollmentIds)`,
+    sql: `SELECT max(sse.created_at) AS occurred_at, 'learning' AS domain,
+                 'student_skill_evidence' AS source, 'skill_evidence' AS type,
+                 string_agg(DISTINCT sse.skill_id, ', ' ORDER BY sse.skill_id) ||
+                   ' (+' || round(COALESCE(SUM(sse.credit), 0))::text || ')' AS summary
+          FROM student_skill_evidence sse
+          WHERE sse.enrollment_id IN (:enrollmentIds)
+          -- COALESCE so a row with no source_ref stands alone rather than being
+          -- lumped in with every other unattributed row.
+          GROUP BY sse.enrollment_id, COALESCE(sse.source_ref, sse.id::text)`,
+  },
+  // ── Added 2026-09-09 ──────────────────────────────────────────────────────
+  //
+  // The audit of every person-keyed table found the programme's own record of
+  // what a learner did was missing entirely. timeline_card_progress alone holds
+  // more rows for three people than every branch above it combined.
+  {
+    domain: 'learning', key: 'enrollment',
+    sql: `SELECT ar.created_at AS occurred_at, 'learning' AS domain, 'attendance_records' AS source,
+                 'class_' || ar.status::text AS type,
+                 COALESCE(ls.title, 'Live session') ||
+                   CASE WHEN ar.duration_minutes IS NOT NULL
+                        THEN ' · ' || ar.duration_minutes::text || ' min' ELSE '' END AS summary
+          FROM attendance_records ar
+          LEFT JOIN live_sessions ls ON ls.id = ar.session_id
+          WHERE ar.enrollment_id IN (:enrollmentIds)`,
+  },
+  {
+    domain: 'learning', key: 'enrollment',
+    sql: `SELECT tcp.completed_at AS occurred_at, 'learning' AS domain, 'timeline_card_progress' AS source,
+                 'card_completed' AS type,
+                 COALESCE(tc.title, 'Curriculum card') ||
+                   CASE WHEN tc.week IS NOT NULL THEN ' · week ' || tc.week::text ELSE '' END AS summary
+          FROM timeline_card_progress tcp
+          LEFT JOIN timeline_cards tc ON tc.id = tcp.card_id
+          WHERE tcp.enrollment_id IN (:enrollmentIds) AND tcp.completed_at IS NOT NULL`,
+  },
+  {
+    domain: 'learning', key: 'enrollment',
+    sql: `SELECT raa.submitted_at AS occurred_at, 'learning' AS domain, 'runtime_assessment_attempts' AS source,
+                 CASE WHEN raa.passed THEN 'assessment_passed' ELSE 'assessment_attempted' END AS type,
+                 COALESCE(raa.kind, 'assessment') ||
+                   CASE WHEN raa.score IS NOT NULL
+                        THEN ' · ' || ROUND(raa.score::numeric, 1)::text ELSE '' END AS summary
+          FROM runtime_assessment_attempts raa
+          WHERE raa.enrollment_id IN (:enrollmentIds) AND raa.submitted_at IS NOT NULL`,
+  },
+  {
+    domain: 'learning', key: 'enrollment',
+    sql: `SELECT rmt.created_at AS occurred_at, 'learning' AS domain, 'runtime_mentor_turns' AS source,
+                 'mentor_' || COALESCE(rmt.mode, 'turn') AS type,
+                 left(rmt.question, 140) AS summary
+          FROM runtime_mentor_turns rmt WHERE rmt.enrollment_id IN (:enrollmentIds)`,
+  },
+  {
+    domain: 'learning', key: 'enrollment',
+    sql: `SELECT rpa.created_at AS occurred_at, 'learning' AS domain, 'runtime_portfolio_artifacts' AS source,
+                 'artifact_' || COALESCE(rpa.kind, 'created') AS type, rpa.title AS summary
+          FROM runtime_portfolio_artifacts rpa WHERE rpa.enrollment_id IN (:enrollmentIds)`,
+  },
+  {
+    domain: 'learning', key: 'enrollment',
+    sql: `SELECT re.created_at AS occurred_at, 'learning' AS domain, 'reflection_entries' AS source,
+                 'reflection' AS type,
+                 CASE WHEN re.week IS NOT NULL THEN 'week ' || re.week::text ELSE 'reflection' END ||
+                   CASE WHEN re.readiness IS NOT NULL
+                        THEN ' · readiness ' || re.readiness::text ELSE '' END AS summary
+          FROM reflection_entries re WHERE re.enrollment_id IN (:enrollmentIds)`,
+  },
+  {
+    domain: 'commerce', key: 'enrollment',
+    sql: `SELECT s.created_at AS occurred_at, 'commerce' AS domain, 'subscriptions' AS source,
+                 'subscription_' || COALESCE(s.status, 'recorded') AS type,
+                 COALESCE(s.plan, 'plan') ||
+                   CASE WHEN s.amount_cents IS NOT NULL
+                        THEN ' · $' || ROUND(s.amount_cents/100.0, 2)::text ELSE '' END AS summary
+          FROM subscriptions s WHERE s.enrollment_id IN (:enrollmentIds)`,
+  },
+  {
+    domain: 'community', key: 'enrollment',
+    sql: `SELECT cp.created_at AS occurred_at, 'community' AS domain, 'community_posts' AS source,
+                 'post_' || COALESCE(cp.category, 'published') AS type,
+                 left(cp.body, 140) AS summary
+          FROM community_posts cp
+          WHERE cp.member_id IN (
+            SELECT cm.id FROM community_members cm WHERE cm.enrollment_id IN (:enrollmentIds)
+          )`,
   },
 ];
 
@@ -213,14 +341,31 @@ export async function getPersonTimeline(query: TimelineQuery): Promise<TimelineE
   if (query.leadIds.length) replacements.leadIds = query.leadIds;
   if (query.enrollmentIds.length) replacements.enrollmentIds = query.enrollmentIds;
 
+  // ── IDENTICAL EVENTS COLLAPSE INTO ONE ROW WITH A COUNT ───────────────────
+  //
+  // A general safeguard, not a fix for one source. Any branch that emits rows
+  // indistinguishable to a reader — same second, same domain, same type, same
+  // summary — is collapsed and carries `occurrences` instead of repeating.
+  //
+  // Grouped on the SECOND rather than the exact instant, because a fan-out
+  // writes its rows milliseconds apart; grouping on the raw timestamp would
+  // leave them looking like duplicates while technically being distinct.
+  //
+  // Anything with a different summary survives as its own row: two xp_events in
+  // the same second reading 'community:survey' and 'learning:survey' are two
+  // real facts and stay two lines.
   const rows = await sequelize.query<{
-    occurred_at: string; domain: EventDomain; source: string; type: string; summary: string | null;
+    occurred_at: string; domain: EventDomain; source: string;
+    type: string; summary: string | null; occurrences: number;
   }>(
-    `SELECT occurred_at, domain, source, type, summary FROM (
+    `SELECT max(occurred_at) AS occurred_at, domain, source, type, summary,
+            COUNT(*)::int AS occurrences
+     FROM (
        ${usable.map((b) => b.sql).join('\n       UNION ALL\n       ')}
      ) t
      WHERE occurred_at IS NOT NULL
-     ORDER BY occurred_at DESC
+     GROUP BY date_trunc('second', occurred_at), domain, source, type, summary
+     ORDER BY max(occurred_at) DESC
      LIMIT :limit`,
     { type: QueryTypes.SELECT, replacements },
   );
@@ -231,5 +376,6 @@ export async function getPersonTimeline(query: TimelineQuery): Promise<TimelineE
     source: r.source,
     type: r.type,
     summary: r.summary,
+    occurrences: Number(r.occurrences ?? 1),
   }));
 }

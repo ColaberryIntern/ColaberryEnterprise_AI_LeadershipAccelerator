@@ -83,7 +83,59 @@ export interface PendingDirectiveConfirmation {
   detectedAt: string;
 }
 
-export type PendingIntentConfirmation = PendingGoalChangeConfirmation | PendingOneOnOneConfirmation | PendingDirectiveConfirmation;
+/**
+ * Capability 8, fourth intent on the generic column — ASSIGN_WORK (a manager
+ * handing this agent a specific task). Unlike the first three, the real
+ * backing write (orgChartTaskAssignmentService.assignTaskToAgent()) requires
+ * a real client-generated idempotency key, so `idempotencyKey` is minted
+ * once at detection time and carried on the pending record — the same key
+ * is replayed at confirm time rather than a second one being generated,
+ * which is what actually makes the write idempotent end to end. `title` is
+ * the manager's own message verbatim, same "no fragile extraction" posture
+ * as PendingOneOnOneConfirmation/PendingDirectiveConfirmation — see
+ * managerAssignWorkIntentService.ts.
+ */
+export interface PendingAssignWorkConfirmation {
+  intentType: 'ASSIGN_WORK';
+  title: string;
+  idempotencyKey: string;
+  detectedAt: string;
+}
+
+/**
+ * Capability 8, fifth and sixth intents on the generic column — APPROVE and
+ * REJECT (a manager deciding on a pending `ProposedAgentAction`, the same
+ * real object the Manager Inbox UI's own approve/reject buttons act on).
+ * Genuinely different shape from the first four: "which proposal" is never
+ * in the manager's own message text, so it's resolved against real pending
+ * state (see managerApprovalDecisionIntentService.ts's
+ * resolvePendingApprovalTarget()) BEFORE a confirmation card is ever built —
+ * conservative, proceeding only when exactly one pending proposal exists for
+ * this agent. `proposalId`/`reason` are carried forward so the confirm turn
+ * never has to re-resolve (and can't silently pick up a DIFFERENT proposal
+ * that became the sole pending item in between the two turns).
+ */
+export interface PendingApproveConfirmation {
+  intentType: 'APPROVE';
+  proposalId: string;
+  reason: string;
+  detectedAt: string;
+}
+
+export interface PendingRejectConfirmation {
+  intentType: 'REJECT';
+  proposalId: string;
+  reason: string;
+  detectedAt: string;
+}
+
+export type PendingIntentConfirmation =
+  | PendingGoalChangeConfirmation
+  | PendingOneOnOneConfirmation
+  | PendingDirectiveConfirmation
+  | PendingAssignWorkConfirmation
+  | PendingApproveConfirmation
+  | PendingRejectConfirmation;
 
 export interface AgentManagerConversationAttributes {
   id?: string;

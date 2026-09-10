@@ -38,7 +38,7 @@ const SECTION_STAGES: Record<string, readonly LifecycleStage[]> = {
   // admissions one.
   lead_ingestion: [
     'anonymous_visitor', 'identified_visitor', 'lead', 'applicant',
-    'enrolled_student', 'active_learner', 'graduate',
+    'enrolled_student', 'active_learner', 'graduate', 'lapsed',
   ],
   // Revenue sees anyone who has or could have a billing relationship.
   //
@@ -47,13 +47,15 @@ const SECTION_STAGES: Record<string, readonly LifecycleStage[]> = {
   // the stage between them, so a person currently mid-programme would vanish from
   // a revenue roster and reappear on graduation. A stage set must be contiguous
   // in LIFECYCLE_ORDER for exactly this reason, and a test enforces it.
-  revenue: ['lead', 'applicant', 'enrolled_student', 'active_learner', 'graduate', 'returning_customer'],
+  revenue: ['lead', 'applicant', 'enrolled_student', 'active_learner', 'graduate', 'lapsed', 'returning_customer'],
   // The Support student-story surface: enrolled people only, never prospects.
-  students: ['enrolled_student', 'active_learner', 'graduate'],
+  // 'lapsed' included: someone who withdrew is still a person Support deals with,
+  // and excluding them would hide churn from the people closest to it.
+  students: ['enrolled_student', 'active_learner', 'graduate', 'lapsed'],
   // Program/curriculum management sees the people in the programme.
-  program: ['enrolled_student', 'active_learner', 'graduate'],
+  program: ['enrolled_student', 'active_learner', 'graduate', 'lapsed'],
   // Portfolio review sees learners — and is narrowed AGAIN per mentor.
-  career_review: ['enrolled_student', 'active_learner', 'graduate'],
+  career_review: ['enrolled_student', 'active_learner', 'graduate', 'lapsed'],
 };
 
 /**

@@ -5,6 +5,7 @@ import TemperatureBadge from '../../components/TemperatureBadge';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal, TrustLevel } from '../../components/admin/shell/trust';
 import { PIPELINE_STAGES } from '../../constants';
+import { personPath } from '../../adminOs/personLink';
 
 interface PipelineLead {
   id: number;
@@ -278,7 +279,7 @@ function AdminPipelinePage() {
                       <div className="d-flex justify-content-between align-items-start mb-1">
                         <span className="d-flex align-items-center gap-1">
                           <Link
-                            to={`/admin/leads/${lead.id}`}
+                            to={personPath({ leadId: lead.id }) ?? '/admin/people'}
                             className="fw-bold text-decoration-none small"
                             style={{ lineHeight: 1.2, color: 'var(--text-strong)' }}
                           >

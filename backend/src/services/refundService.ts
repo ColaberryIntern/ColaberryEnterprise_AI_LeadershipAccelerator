@@ -1,4 +1,4 @@
-import { Op } from 'sequelize';
+import { Op, QueryTypes } from 'sequelize';
 import { Refund, Enrollment } from '../models';
 import { env } from '../config/env';
 import {
@@ -173,6 +173,51 @@ export async function issueRefund(input: {
   }
 }
 
-export async function listRefunds(limit = 100): Promise<Refund[]> {
-  return Refund.findAll({ order: [['created_at', 'DESC']], limit: Math.min(limit, 500) });
+/** A refund row plus who the payer actually is. */
+export interface RefundListRow {
+  id: string;
+  enrollment_id: string | null;
+  paysimple_payment_id: string;
+  amount_cents: number;
+  method: string;
+  status: string;
+  customer_email: string | null;
+  /** Resolved from the enrolment, else the lead. Null when neither knows them. */
+  customer_name: string | null;
+  voided_credit_cents: number;
+  issued_by: string | null;
+  error: string | null;
+  created_at: Date;
+}
+
+/**
+ * The refunds ledger, with the payer named.
+ *
+ * The Payer column showed a bare email address, which is the one thing on this
+ * page a reader cannot act on: it names a transaction, not a person. The name
+ * comes from the enrolment when the refund resolved one, and from the lead
+ * otherwise — the same precedence the 360 profile uses.
+ *
+ * Written as a raw query rather than a Sequelize include because the name lives
+ * in two different tables reached by two different keys, and because spreading a
+ * model instance to attach a computed field silently drops every column.
+ */
+export async function listRefunds(limit = 100): Promise<RefundListRow[]> {
+  const rows = await Refund.sequelize!.query<RefundListRow>(
+    `SELECT r.id, r.enrollment_id, r.paysimple_payment_id, r.amount_cents,
+            r.method, r.status, r.customer_email,
+            COALESCE(e.full_name, l.name) AS customer_name,
+            r.voided_credit_cents, r.issued_by, r.error, r.created_at
+     FROM refunds r
+     LEFT JOIN enrollments e ON e.id = r.enrollment_id
+     LEFT JOIN LATERAL (
+       SELECT name FROM leads
+       WHERE lower(btrim(email)) = lower(btrim(r.customer_email))
+       ORDER BY created_at ASC LIMIT 1
+     ) l ON r.customer_email IS NOT NULL
+     ORDER BY r.created_at DESC
+     LIMIT :limit`,
+    { type: QueryTypes.SELECT, replacements: { limit: Math.min(limit, 500) } },
+  );
+  return rows;
 }
