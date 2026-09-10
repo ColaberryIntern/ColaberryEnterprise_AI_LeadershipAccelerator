@@ -246,6 +246,43 @@ describe('bucketTasks — the segmented bar', () => {
     expect(b.total).toBe(tasks.length);
   });
 
+  describe('undated vs no_date - two measures, deliberately', () => {
+    it('counts a COMPLETE task with no date as no_date but NOT undated', () => {
+      // This is the whole reason both exist. In production every task lacking a due
+      // date is already complete (37 of 629), so a caption keyed on `undated` would
+      // never render and the operator would never learn that 37 tasks were never
+      // scheduled.
+      const b = bucketTasks([t('complete', null)], TODAY);
+      expect(b.done).toBe(1);
+      expect(b.undated).toBe(0);
+      expect(b.no_date).toBe(1);
+    });
+
+    it('counts an INCOMPLETE task with no date as both undated and no_date', () => {
+      const b = bucketTasks([t('not_started', null)], TODAY);
+      expect(b.undated).toBe(1);
+      expect(b.no_date).toBe(1);
+    });
+
+    it('keeps the five exclusive buckets summing to total, with no_date OUTSIDE the sum', () => {
+      const b = bucketTasks([
+        t('complete', null),        // done + no_date
+        t('complete', '2026-08-01'),// done
+        t('not_started', null),     // undated + no_date
+        t('not_started', '2026-09-01'), // overdue
+      ], TODAY);
+      expect(b.done + b.overdue + b.due_this_week + b.open + b.undated).toBe(b.total);
+      expect(b.no_date).toBe(2);
+      // no_date deliberately exceeds `undated`; it is an overlapping annotation.
+      expect(b.no_date).toBeGreaterThan(b.undated);
+    });
+
+    it('reports no_date 0 when every task carries a date', () => {
+      const b = bucketTasks([t('complete', '2026-08-01'), t('not_started', '2026-09-30')], TODAY);
+      expect(b.no_date).toBe(0);
+    });
+  });
+
   it('handles null input', () => {
     expect(bucketTasks(null, TODAY).total).toBe(0);
   });

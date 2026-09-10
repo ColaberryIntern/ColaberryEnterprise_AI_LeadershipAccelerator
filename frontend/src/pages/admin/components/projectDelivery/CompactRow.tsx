@@ -26,7 +26,12 @@ export interface TaskBuckets {
   overdue: number;
   due_this_week: number;
   open: number;
+  /** Incomplete and unscheduled. Part of the five that sum to `total`. */
   undated: number;
+  /** All unscheduled tasks, complete or not. Overlaps the buckets; used for the
+   *  caption, because in production every undated task is already complete and a
+   *  caption keyed on `undated` would never appear. */
+  no_date: number;
 }
 
 export type ReleaseState = 'landed' | 'overdue' | 'due_soon' | 'open' | 'empty';

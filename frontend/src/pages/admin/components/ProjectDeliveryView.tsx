@@ -320,7 +320,7 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
               <div>
                 <SegBar buckets={b} />
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
-                  {b.done}/{b.total}{b.undated > 0 ? ` · ${b.undated} undated` : ''}
+                  {b.done}/{b.total}{b.no_date > 0 ? ` · ${b.no_date} undated` : ''}
                 </div>
               </div>
 

@@ -324,7 +324,8 @@ export async function getProjectDelivery(opts: { cohortId?: string } = {}): Prom
         due_this_week: acc.due_this_week + rel.buckets.due_this_week,
         open: acc.open + rel.buckets.open,
         undated: acc.undated + rel.buckets.undated,
-      }), { total: 0, done: 0, overdue: 0, due_this_week: 0, open: 0, undated: 0 }),
+        no_date: acc.no_date + rel.buckets.no_date,
+      }), { total: 0, done: 0, overdue: 0, due_this_week: 0, open: 0, undated: 0, no_date: 0 }),
       readiness: computeReadiness({
         tasks_total: total,
         tasks_complete: complete,
