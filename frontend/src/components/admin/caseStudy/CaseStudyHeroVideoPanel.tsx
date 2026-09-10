@@ -21,13 +21,15 @@ import { SectionCard } from '../shell';
  */
 
 export interface HeroVideoState {
-  /** The generated walkthrough, when the record has one. */
+  /** The generated walkthrough, when the record still has one. */
   readonly url?: string | null;
   readonly title?: string | null;
   /** Set when an operator has already chosen their own video. */
   readonly embedUrl?: string | null;
   readonly provider?: string | null;
   readonly watchUrl?: string | null;
+  /** The section exactly as stored, so an edit changes one key and keeps the rest. */
+  readonly raw?: Record<string, unknown>;
 }
 
 interface Props {
@@ -72,9 +74,14 @@ export default function CaseStudyHeroVideoPanel({ video, busy, onApplyOverride }
     onApplyOverride(
       'walkthroughVideo',
       {
-        // The parser fills provider/embedUrl/watchUrl server-side from this. Sending only
-        // what an operator actually supplied keeps this panel from being a second place
-        // where embed URLs are constructed.
+        // MERGED, NOT REPLACED. Writing this path replaces the whole section, so sending
+        // only {embedUrl, title} deleted the generated file, its captions and its poster —
+        // and with them any way back to the walkthrough. Spreading what is stored keeps
+        // every field this panel does not own.
+        //
+        // The parser fills provider/embedUrl/watchUrl server-side, so the raw pasted link
+        // is all that is sent: this panel is not a second place where embed URLs are built.
+        ...(current?.raw ?? {}),
         embedUrl: url.trim(),
         title: title.trim() || current?.title || 'Walkthrough',
       },
@@ -84,12 +91,14 @@ export default function CaseStudyHeroVideoPanel({ video, busy, onApplyOverride }
     setTitle('');
   };
 
+  /** Remove the operator's video. Everything else in the section is kept, so a record whose
+   *  generated walkthrough is still stored goes straight back to it. */
   const restore = () => {
-    if (!hasGenerated) return;
+    const { embedUrl, provider, watchUrl, ...keep } = (current?.raw ?? {}) as Record<string, unknown>;
     onApplyOverride(
       'walkthroughVideo',
-      { url: current?.url, title: current?.title || 'Walkthrough' },
-      'Hero video restored to the generated walkthrough',
+      keep,
+      'Operator video removed from the hero',
     );
   };
 
@@ -100,7 +109,7 @@ export default function CaseStudyHeroVideoPanel({ video, busy, onApplyOverride }
       subtitle="The video at the top of the published record. Paste a YouTube or Vimeo link to use your own instead of the generated walkthrough."
     >
       <div className="mb-3 small">
-        <span className="text-muted me-2">Currently showing:</span>
+        <span className="text-muted me-2">On this record:</span>
         {usingCustom ? (
           <>
             <span className="badge bg-primary me-2">
@@ -170,18 +179,20 @@ export default function CaseStudyHeroVideoPanel({ video, busy, onApplyOverride }
       )}
       {detected && (
         <p className="small text-muted mt-2 mb-0">
-          Detected <strong>{detected === 'vimeo' ? 'Vimeo' : 'YouTube'}</strong>. Saving creates
-          a new snapshot version, which has to be approved before it reaches the public record.
+          Detected <strong>{detected === 'vimeo' ? 'Vimeo' : 'YouTube'}</strong>. Saving approves
+          the change and pushes it to every surface this record is published on.
         </p>
       )}
 
-      {usingCustom && hasGenerated && (
+      {usingCustom && (
         <div className="mt-3 pt-3 border-top">
           <button className="btn btn-sm btn-outline-secondary" onClick={restore} disabled={busy}>
-            Restore the generated walkthrough
+            {hasGenerated ? 'Restore the generated walkthrough' : 'Remove this video'}
           </button>
           <span className="small text-muted ms-2">
-            Puts the platform&apos;s narrated video back in the hero.
+            {hasGenerated
+              ? 'Puts the platform’s narrated video back in the hero.'
+              : 'This record no longer stores a generated walkthrough, so the hero will have no video until one is added.'}
           </span>
         </div>
       )}
