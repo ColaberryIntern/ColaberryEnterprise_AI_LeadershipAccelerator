@@ -71,7 +71,21 @@ interface SynthflowResponse {
  * charity for help, spoken to as a sales lead. So an unconfigured slot returns empty and the
  * caller skips deterministically rather than dialling with somebody else's voice.
  */
-export function resolveAgentId(params: { callType: 'welcome' | 'interest' | 'callback' | 'internship_interview'; brandSlug?: string }): string {
+export function resolveAgentId(params: { callType: 'welcome' | 'interest' | 'callback' | 'internship_interview' | 'project_discovery'; brandSlug?: string }): string {
+  /*
+   * Project discovery. FIRST, for the same reason the internship slot is first:
+   * a student expecting to be asked about the system they are building must never
+   * reach an agent carrying a sales script. This is an architecture interview, and
+   * a saved lead-capture prompt would drift from application truth the moment
+   * either changed.
+   *
+   * NO FALLBACK, deliberately - not even to the AI Flotation shell. That shell is
+   * safe to borrow because its saved prompt is literally `{prompt}`, but borrowing
+   * it here would put a student's project call on AI Flotation's caller ID, and a
+   * student who did not ask to hear from a delivery company would be right to
+   * treat that as a cold call. Unset returns '' and the caller offers chat.
+   */
+  if (params.callType === 'project_discovery') return env.synthflowProjectDiscoveryAgentId;
   // AI Internship interview. FIRST and unconditional: an applicant expecting a
   // qualification interview must never reach an agent carrying a bootcamp sales
   // script. Unset returns '' and the caller skips with `no_agent_id`.
