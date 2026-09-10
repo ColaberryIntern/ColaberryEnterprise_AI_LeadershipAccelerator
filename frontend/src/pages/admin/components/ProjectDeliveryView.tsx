@@ -5,6 +5,10 @@ import CaseStudyKpi from './projectDelivery/CaseStudyKpi';
 import CaseStudyReadinessModal from './projectDelivery/CaseStudyReadinessModal';
 import BuildEvidencePanel, { ProjectEvidence } from './projectDelivery/BuildEvidencePanel';
 import ArtifactsPanel, { ArtifactGroup } from './projectDelivery/ArtifactsPanel';
+import LinkChip from './projectDelivery/LinkChip';
+import {
+  RiskPill, SortToggle, sortRows, countAttention, RiskAssessment, SortMode,
+} from './projectDelivery/RiskControls';
 import {
   SegBar, ReleaseStrip, StatePill, Pill, Legend, RowShell, EvidenceLine, RELEASE_GRID,
   TaskBuckets, ReleaseState,
@@ -63,6 +67,7 @@ interface ProjectRow {
   ends_on: string | null;
   already_case_study: boolean;
   readiness: Readiness;
+  risk?: RiskAssessment | null;
   /** The release spine, delivered with the LIST so a collapsed row can draw its
    *  coloured bars immediately. Measured at 11ms for all 30 projects in two batched
    *  queries — the reason this is eager rather than fetched per expand. */
@@ -89,46 +94,6 @@ interface Gantt {
   totals: { tasks: number; complete: number; overdue: number; undated: number };
 }
 
-/**
- * One outbound link on a project row, rendered as a chip so it reads as something to click.
- *
- * Returns null when there is no URL: a row without a Command Center shows nothing rather
- * than a disabled-looking icon, because a greyed chip invites a click that cannot work.
- */
-function LinkChip({
-  href, icon, label, accent = false,
-}: { href: string | null; icon: string; label: string; accent?: boolean }) {
-  if (!href) return null;
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      title={`${label} — ${href}`}
-      aria-label={`Open the ${label}`}
-      onClick={(e) => e.stopPropagation()}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 20,
-        height: 20,
-        marginLeft: 6,
-        borderRadius: 5,
-        verticalAlign: 'text-bottom',
-        border: '0.5px solid var(--border-subtle)',
-        background: accent ? 'var(--status-info-bg, #eff6ff)' : 'var(--surface-sunken)',
-        color: accent ? 'var(--status-info, #2f6fc8)' : 'var(--text-muted)',
-        fontSize: 12,
-        lineHeight: 1,
-        textDecoration: 'none',
-      }}
-    >
-      <i className={icon} aria-hidden="true" />
-    </a>
-  );
-}
-
 interface Props {
   /** Scope to one cohort when opened from a drill-down; undefined = all cohorts. */
   cohortId?: string;
@@ -142,6 +107,9 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
   const [gantt, setGantt] = useState<Record<string, Gantt>>({});
   const [ganttLoading, setGanttLoading] = useState<string | null>(null);
   const [onlyOverdue, setOnlyOverdue] = useState(false);
+  // Which question the list is answering. Readiness is the default because the
+  // page's job is case-study conversion; attention is the inversion of it.
+  const [sortMode, setSortMode] = useState<SortMode>('readiness');
   // Evidence and artifacts are fetched on EXPAND, unlike the release bars: they are
   // detail nobody reads from a collapsed row, and both are empty for every project
   // today, so eager-loading them would cost 60 requests to render two empty states.
@@ -203,8 +171,8 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
   };
 
   const visible = useMemo(
-    () => (onlyOverdue ? rows.filter((r) => r.tasks_overdue > 0) : rows),
-    [rows, onlyOverdue]
+    () => sortRows(onlyOverdue ? rows.filter((r) => r.tasks_overdue > 0) : rows, sortMode),
+    [rows, onlyOverdue, sortMode]
   );
 
   const totals = useMemo(() => ({
@@ -241,7 +209,9 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
       subtitle="Every student build on one timeline, ranked by how close it is to being a case study. Each row names what is still missing."
       icon="rocket-2-line"
       actions={
-        <div className="d-flex gap-2 align-items-center">
+        <div className="d-flex gap-2 align-items-center flex-wrap">
+          <SortToggle mode={sortMode} onChange={setSortMode}
+            attentionCount={countAttention(rows)} />
           <div className="form-check form-switch mb-0">
             <input className="form-check-input" type="checkbox" id="only-overdue"
               checked={onlyOverdue} onChange={(e) => setOnlyOverdue(e.target.checked)} />
@@ -297,6 +267,7 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
                 <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
                   {r.student_name || '—'}{r.cohort_name ? ` · ${r.cohort_name}` : ''}
                 </span>
+                <RiskPill risk={r.risk} />
                 {/* Both are public URLs the platform already stores, and each renders only
                     when detected so a row never shows a link that goes nowhere.
 

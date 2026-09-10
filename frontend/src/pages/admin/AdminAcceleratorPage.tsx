@@ -150,15 +150,21 @@ const DRILLDOWN_TABS: TabKey[] = ['sessions', 'participants', 'class-dashboard',
 // leads because it is where a student's actual build lives; Cert Prep is downstream of
 // having built something, and Case Studies is downstream of both.
 const PROGRAM_TABS: TabKey[] = ['projects', 'cert-prep', 'case-studies'];
+// Ali, 2026-09-10: "For Projects cert prep and casestudies - let's use emoji's."
+// Only the three program-wide tabs carry one, because they render as their own
+// group in the tab bar — emoji on some of the cohort drill-down tabs and not
+// others would read as a rendering fault rather than a distinction. The emoji is
+// part of the label rather than a separate element so it travels with the string
+// wherever the label is used (tab bar, aria labels, tests).
 const TAB_LABELS: Record<TabKey, string> = {
   cohorts: 'Cohorts',
   sessions: 'Sessions',
   participants: 'Participants',
   'class-dashboard': 'Class Dashboard',
   curriculum: 'Curriculum',
-  'cert-prep': 'Cert Prep',
-  'case-studies': 'Case Studies',
-  projects: 'Projects',
+  projects: '🚀 Projects',
+  'cert-prep': '🎓 Cert Prep',
+  'case-studies': '🏆 Case Studies',
 };
 
 function AdminAcceleratorPage() {

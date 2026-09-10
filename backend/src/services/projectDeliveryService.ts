@@ -28,6 +28,7 @@ import { sequelize } from '../config/database';
 import { DEPARTED_ENROLLMENT_STATUSES } from './acceleratorCurrentClassesService';
 import { getReleaseSummaries, ReleaseSummary } from './projectDeliveryDetail';
 import { TaskBuckets } from './projectReleaseMeta';
+import { assessPortfolio, RiskAssessment } from './projectRiskModel';
 
 /** Task statuses that count as finished. The others are not_started, in_progress, blocked. */
 export const DONE_TASK_STATUSES = ['complete'] as const;
@@ -87,7 +88,14 @@ export interface ProjectRow {
   starts_on: string | null;
   ends_on: string | null;
   already_case_study: boolean;
+  /** True when the student themselves has this set as their active project.
+   *  Distinguishes a real build from a spare row they have moved off. */
+  is_active_project: boolean;
   readiness: ProjectReadiness;
+  /** Who needs help, as opposed to which project is closest to shipping. Computed
+   *  across the whole portfolio because "has this student built anything" cannot
+   *  be answered from one row — see projectRiskModel.ts. */
+  risk: RiskAssessment;
   /** The release spine, included in the LIST payload so the collapsed row can draw
    *  coloured bars without a per-project timeline fetch. Batched into two queries for
    *  all projects — see getReleaseSummaries. */
@@ -193,6 +201,7 @@ export async function getProjectDelivery(opts: { cohortId?: string } = {}): Prom
             e.full_name         AS student_name,
             e.email             AS student_email,
             e.cohort_id,
+            e.active_project_id,
             co.name             AS cohort_name,
             p.project_stage     AS stage,
             p.maturity_score,
@@ -284,7 +293,8 @@ export async function getProjectDelivery(opts: { cohortId?: string } = {}): Prom
   // lets a collapsed row render its release colours without the operator clicking.
   const releasesByProject = await getReleaseSummaries(ids);
 
-  const out: ProjectRow[] = rows.map((r) => {
+  // Risk needs the whole portfolio, so rows are built first and assessed after.
+  const base: Omit<ProjectRow, 'risk'>[] = rows.map((r) => {
     const t = tasks.get(r.project_id);
     const total = t ? Number(t.total) : 0;
     const complete = t ? Number(t.complete) : 0;
@@ -316,6 +326,7 @@ export async function getProjectDelivery(opts: { cohortId?: string } = {}): Prom
       starts_on: t?.starts_on ?? null,
       ends_on: t?.ends_on ?? null,
       already_case_study: caseStudies.has(r.project_id),
+      is_active_project: !!r.active_project_id && r.active_project_id === r.project_id,
       releases: projectReleases,
       buckets: projectReleases.reduce((acc, rel) => ({
         total: acc.total + rel.buckets.total,
@@ -337,8 +348,30 @@ export async function getProjectDelivery(opts: { cohortId?: string } = {}): Prom
     };
   });
 
+  // One pass over every project together — a student's spare rows can only be
+  // told apart from a student in trouble by looking at all of their projects.
+  const risks = assessPortfolio(base.map((r) => ({
+    project_id: r.project_id,
+    student_email: r.student_email,
+    student_name: r.student_name,
+    tasks_total: r.tasks_total,
+    tasks_complete: r.tasks_complete,
+    tasks_overdue: r.tasks_overdue,
+    already_case_study: r.already_case_study,
+    is_active_project: r.is_active_project,
+  })));
+
+  const out: ProjectRow[] = base.map((r) => ({
+    ...r,
+    risk: risks.get(r.project_id) ?? {
+      state: 'no_plan' as const, attention: 0, reason: 'Not assessed',
+      owner_projects: 1, owner_complete: 0,
+    },
+  }));
+
   // Closest to case-study ready first; a project already published drops to the
-  // bottom, since it is no longer a candidate.
+  // bottom, since it is no longer a candidate. The needs-attention ordering is a
+  // client-side toggle over this same payload, not a second request.
   return out.sort((a, b) => {
     if (a.already_case_study !== b.already_case_study) return a.already_case_study ? 1 : -1;
     return b.readiness.score - a.readiness.score;
