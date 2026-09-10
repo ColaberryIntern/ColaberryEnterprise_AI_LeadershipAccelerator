@@ -27,6 +27,7 @@ import { sequelize } from '../config/database';
 // who counts as enrolled.
 import { DEPARTED_ENROLLMENT_STATUSES } from './acceleratorCurrentClassesService';
 import { getReleaseSummaries, ReleaseSummary } from './projectDeliveryDetail';
+import { TaskBuckets } from './projectReleaseMeta';
 
 /** Task statuses that count as finished. The others are not_started, in_progress, blocked. */
 export const DONE_TASK_STATUSES = ['complete'] as const;
@@ -87,6 +88,9 @@ export interface ProjectRow {
    *  coloured bars without a per-project timeline fetch. Batched into two queries for
    *  all projects — see getReleaseSummaries. */
   releases: ReleaseSummary[];
+  /** Task-state split across the whole project, summed from its releases so the
+   *  segmented bar and the release strip cannot disagree. */
+  buckets: TaskBuckets;
 }
 
 /**
@@ -253,6 +257,7 @@ export async function getProjectDelivery(opts: { cohortId?: string } = {}): Prom
     const complete = t ? Number(t.complete) : 0;
     const artifacts = arts.get(r.project_id) ?? 0;
     const has_repo = !!(r.repo_url && String(r.repo_url).trim());
+    const projectReleases = releasesByProject.get(r.project_id) ?? [];
     const stage: ProjectStage = PROJECT_STAGES.includes(r.stage) ? r.stage : 'discovery';
 
     return {
@@ -277,7 +282,15 @@ export async function getProjectDelivery(opts: { cohortId?: string } = {}): Prom
       starts_on: t?.starts_on ?? null,
       ends_on: t?.ends_on ?? null,
       already_case_study: caseStudies.has(r.project_id),
-      releases: releasesByProject.get(r.project_id) ?? [],
+      releases: projectReleases,
+      buckets: projectReleases.reduce((acc, rel) => ({
+        total: acc.total + rel.buckets.total,
+        done: acc.done + rel.buckets.done,
+        overdue: acc.overdue + rel.buckets.overdue,
+        due_this_week: acc.due_this_week + rel.buckets.due_this_week,
+        open: acc.open + rel.buckets.open,
+        undated: acc.undated + rel.buckets.undated,
+      }), { total: 0, done: 0, overdue: 0, due_this_week: 0, open: 0, undated: 0 }),
       readiness: computeReadiness({
         tasks_total: total,
         tasks_complete: complete,
