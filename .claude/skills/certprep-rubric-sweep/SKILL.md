@@ -166,6 +166,14 @@ Weaknesses found by running it, and what was done. Add to this every time.
   top of the rubric, and how many are as good as they are permitted to get. A test
   pins both, including one asserting the old wording cannot return. Note what
   happened here: a tool built to catch checks that overstate, overstating.
+- *(2026-09-10)* **The approval step would have approved 129 while announcing
+  150.** It filtered on `after === 6` where the log line above it printed the
+  ceiling count, so the 21 capped items would have been silently left unapproved
+  — leaving the bank short of the exact thing that was asked for, and saying
+  otherwise. Caught by reading the code before running it, not by running it. The
+  ceiling is now stored on each outcome rather than re-derived in two places,
+  because the summary and the approval disagreed precisely because each guessed
+  separately. **Before a run that writes, read what it will actually select.**
 - *(2026-09-10)* **Do not write source containing backslashes through a shell
   heredoc.** Building the schema parser that way put a literal CR and a real
   newline where `` and `
