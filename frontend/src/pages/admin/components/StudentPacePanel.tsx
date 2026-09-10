@@ -172,7 +172,7 @@ export default function StudentPacePanel({ cohortId }: { cohortId: string }) {
                 onClick={() => { void openStudent(s); }}
                 style={{ cursor: 'pointer' }}
               >
-                <td><PersonLink name={s.name} enrollmentId={s.enrollmentId} stopPropagation /></td>
+                <td><PersonLink tab="class" name={s.name} enrollmentId={s.enrollmentId} stopPropagation /></td>
                 <td><StatusBadge label={BAND_META[s.band].label} tone={BAND_META[s.band].tone} /></td>
                 <td>{s.weeksCompleted}</td>
                 <td className={s.delta < 0 ? 'text-danger' : 'text-success'}>

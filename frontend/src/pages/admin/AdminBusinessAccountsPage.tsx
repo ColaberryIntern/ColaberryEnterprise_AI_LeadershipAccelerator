@@ -226,7 +226,7 @@ function AdminBusinessAccountsPage(): React.ReactElement {
                     </td>
                     <td>
                       {org.lead_id ? (
-                        <Link to={personPath({ leadId: org.lead_id }) ?? '/admin/people'}>#{org.lead_id}</Link>
+                        <Link to={personPath({ leadId: org.lead_id }, 'account') ?? '/admin/people'}>#{org.lead_id}</Link>
                       ) : (
                         <span
                           className="text-muted small"
