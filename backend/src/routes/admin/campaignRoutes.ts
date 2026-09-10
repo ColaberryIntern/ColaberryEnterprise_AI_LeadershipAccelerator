@@ -122,9 +122,10 @@ router.patch('/api/admin/campaigns/:id/mode', requireAdmin, async (req: Request,
     const { Campaign } = await import('../../models');
     const campaign = await Campaign.findByPk(req.params.id as string);
     if (!campaign) { res.status(404).json({ error: 'Campaign not found' }); return; }
-    (campaign as any).mode_override = mode || null;
+    // Typed write, no cast — see the note in autonomousRequirementExpansionService.
+    campaign.mode_override = mode || null;
     await campaign.save();
-    res.json({ id: campaign.id, mode_override: (campaign as any).mode_override });
+    res.json({ id: campaign.id, mode_override: campaign.mode_override });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 

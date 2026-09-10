@@ -139,6 +139,12 @@ export async function updateCampaign(id: string, updates: Record<string, any>) {
     'settings', 'goals', 'gtm_notes', 'evolution_config',
     'channel', 'destination_path', 'objective', 'budget_cap',
     'cost_per_lead_target', 'expected_roi', 'status',
+    // Planning fields. `funnel_stage` was added to the table and the model but appeared in
+    // NO allowlist and no service, so the column existed and nothing could ever write it -
+    // a schema change with no way to reach it. Validated as an enum at the controller
+    // boundary before it gets here; this allowlist is what stops a raw PATCH body writing
+    // an arbitrary string into a column the ranking logic will later branch on.
+    'funnel_stage',
     // Ownership. Reachable only through the controller, which resolves and
     // validates the brand first — the allowlist is what stops a raw PATCH body
     // writing an arbitrary brand_id straight to the column.
