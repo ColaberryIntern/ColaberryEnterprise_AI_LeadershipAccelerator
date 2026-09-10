@@ -40,7 +40,8 @@ import { ensureTraceId } from '../../utils/requestContext';
 import { hashCanonical } from '../../utils/canonicalHash';
 import { applyOverrides } from './caseStudySnapshotOverrides';
 import { persistCaseStudySnapshot } from './caseStudySnapshotStore';
-import { evaluateCaseStudyPublication } from './caseStudyPublicationService';
+import { evaluateCaseStudyPublication, publishCaseStudy } from './caseStudyPublicationService';
+import CaseStudyPublication from '../../models/CaseStudyPublication';
 import { scoreCaseStudyReadiness } from './caseStudyReadinessService';
 import type { CaseStudyReadinessReport } from './caseStudyReadinessService';
 import {
@@ -62,6 +63,15 @@ export interface ApplyOverrideResult {
   readonly contentHash: string;
   /** The path, echoed back so the UI can confirm what it edited. */
   readonly path: string;
+  /** True when the edit was approved in the same act - see `applyHumanOverride`. */
+  readonly approved: boolean;
+  /**
+   * Surfaces whose live page now renders this edit, and surfaces the publish gate
+   * refused. A refusal is NOT a failure of the edit: the snapshot is written and
+   * approved either way, the gate simply will not let it reach that brand yet.
+   */
+  readonly republished: readonly string[];
+  readonly republishBlocked: readonly { readonly surfaceKey: string; readonly reason: string }[];
 }
 
 export interface ApproveSnapshotResult {
@@ -275,13 +285,93 @@ export async function applyHumanOverride(input: unknown): Promise<ApplyOverrideR
       version: persisted.version, path: data.path,
     });
 
+  /**
+   * A HUMAN EDIT IS ALREADY THE HUMAN ACT. Ali, 2026-09-10: "We are in the admin screen -
+   * we are the approvers. Updating here should automatically make the change on the site."
+   *
+   * Spec §17 separates draft from approval because SYNC writes drafts — a machine proposes,
+   * a person signs. An override has no machine in it: the person typing the value is the
+   * person who would have clicked Approve, and asking them to sign their own sentence twice
+   * records no extra judgement. So the version is approved here, stamped with the same actor,
+   * and every property approval carries is unchanged: one approved version at a time, the
+   * previous one superseded, an approver named on the row.
+   *
+   * AND THE PIN IS MOVED, because approval alone changes nothing a reader sees.
+   * `published_snapshot_id` is pinned per surface, so a newly approved version is invisible
+   * until a publication points at it — which is the actual reason an edit "did not show up
+   * on the site".
+   *
+   * THE GATE IS NOT SKIPPED. `publishCaseStudy` re-runs `evaluateCaseStudyPublishGate` on
+   * every call, so consent withdrawn between two edits, an unverified figure or a banned
+   * claim still refuses the surface. What changes is the number of clicks, never what is
+   * allowed to reach a public brand.
+   *
+   * ONLY SURFACES ALREADY LIVE are touched. This republishes; it never publishes something
+   * for the first time. A record that was not on a brand before an edit is not put there by
+   * one.
+   */
+  const republished: string[] = [];
+  const republishBlocked: { surfaceKey: string; reason: string }[] = [];
+  let approved = false;
+
+  if (persisted.outcome === 'created') {
+    await approveSnapshot({
+      caseStudyId: data.caseStudyId,
+      snapshotId: persisted.snapshotId,
+      actor: data.actor,
+      correlationId,
+    });
+    approved = true;
+
+    const live = await liveSurfaceKeys(data.caseStudyId);
+    for (const surfaceKey of live) {
+      try {
+        // eslint-disable-next-line no-await-in-loop -- a record has at most four surfaces,
+        // and publishing them concurrently would race on the same case_studies row.
+        await publishCaseStudy({
+          caseStudyId: data.caseStudyId,
+          surfaceKey,
+          snapshotId: persisted.snapshotId,
+          actor: data.actor,
+          correlationId,
+        });
+        republished.push(surfaceKey);
+      } catch (err) {
+        // A gate refusal is reported, never thrown: the edit itself succeeded, and losing
+        // it because one brand is not currently publishable would be the worse outcome.
+        republishBlocked.push({
+          surfaceKey,
+          reason: err instanceof Error ? err.message : 'The publish gate refused this surface.',
+        });
+        log('case_study.override_republish', 'partial', correlationId, {
+          case_study_id: data.caseStudyId, snapshot_id: persisted.snapshotId,
+          surface_key: surfaceKey,
+          error_class: err instanceof CaseStudyAdminError ? err.code : 'PublishRefused',
+        });
+      }
+    }
+  }
+
   return {
     outcome: persisted.outcome,
     snapshotId: persisted.snapshotId,
     version: persisted.version,
     contentHash: persisted.contentHash,
     path: data.path,
+    approved,
+    republished,
+    republishBlocked,
   };
+}
+
+/** Surfaces this record is CURRENTLY published to. Unpublished rows are excluded: the pin
+ *  survives an unpublish, so reading rows alone would republish a withdrawn brand. */
+async function liveSurfaceKeys(caseStudyId: string): Promise<string[]> {
+  const rows = await CaseStudyPublication.findAll({
+    where: { case_study_id: caseStudyId, status: 'published' },
+    attributes: ['surface_key'],
+  });
+  return rows.map((r) => String((r as unknown as { surface_key: string }).surface_key));
 }
 
 /**

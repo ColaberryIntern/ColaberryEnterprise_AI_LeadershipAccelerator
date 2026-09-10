@@ -273,6 +273,14 @@ export interface ApplyOverrideResult {
   readonly version: number;
   readonly contentHash: string;
   readonly path: string;
+  /** True when the edit was approved in the same act — an admin edit is already the
+   *  human act the approval step exists to record. */
+  readonly approved: boolean;
+  /** Surfaces whose live page now renders this edit. */
+  readonly republished: readonly string[];
+  /** Surfaces the publish gate refused. The edit is saved and approved regardless; these
+   *  are the surfaces where the public page has NOT changed, and why. */
+  readonly republishBlocked: readonly { readonly surfaceKey: string; readonly reason: string }[];
 }
 
 export interface ApproveSnapshotResult {
