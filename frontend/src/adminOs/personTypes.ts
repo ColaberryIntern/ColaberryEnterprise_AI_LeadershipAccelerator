@@ -68,6 +68,8 @@ export interface BillingRow {
 
 export interface TimelineEvent {
   occurredAt: string; domain: string; source: string; type: string; summary: string | null;
+  /** How many identical events this row stands for. 1 for an ordinary event. */
+  occurrences: number;
 }
 
 export interface TrustPanel {

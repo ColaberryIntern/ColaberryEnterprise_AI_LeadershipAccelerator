@@ -398,6 +398,14 @@ export default function PersonProfilePage() {
                             </td>
                             <td>
                               <span className="fw-medium">{e.type}</span>
+                              {/* A collapsed fan-out. The reader sees one line and how
+                                  many times it happened, never the same line repeated. */}
+                              {e.occurrences > 1 && (
+                                <span className="badge bg-secondary-subtle text-secondary-emphasis ms-2"
+                                  title={`${e.occurrences} identical events in the same second`}>
+                                  ×{e.occurrences}
+                                </span>
+                              )}
                               {e.summary && <div className="text-muted small">{e.summary}</div>}
                             </td>
                             {/* Source-labelled, so any row traces back to its table. */}
