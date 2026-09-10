@@ -5,6 +5,7 @@ import { ManagerDirective, listDirectives } from '../../services/managerDirectiv
 import { ReportSubscription, listReportSubscriptions } from '../../services/agentReportSubscriptionApi';
 import { AgentGoal, listGoals } from '../../services/agentGoalApi';
 import { AgentOneOnOne, listOneOnOnes } from '../../services/agentOneOnOneApi';
+import { AgentRoleCharter, getAgentRoleCharter } from '../../services/agentRoleCharterApi';
 import { SectionCard, StatCard } from './shell';
 import { timeAgo } from './shell/trust';
 import { deriveOperationalState } from '../../utils/agentOperationalState';
@@ -48,23 +49,28 @@ export default function AgentAtAGlanceTab({ agentId, detail, inboxItems, inboxLo
   const [subscriptions, setSubscriptions] = useState<ReportSubscription[] | null>(null);
   const [goals, setGoals] = useState<AgentGoal[] | null>(null);
   const [oneOnOnes, setOneOnOnes] = useState<AgentOneOnOne[] | null>(null);
+  // undefined = still loading; null = loaded, genuinely no charter written yet
+  // (the honest empty state — never fabricated); the object = a real charter.
+  const [charter, setCharter] = useState<AgentRoleCharter | null | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [d, s, g, o] = await Promise.allSettled([
+      const [d, s, g, o, c] = await Promise.allSettled([
         listDirectives(agentId),
         listReportSubscriptions(agentId),
         listGoals(agentId),
         listOneOnOnes(agentId),
+        getAgentRoleCharter(agentId),
       ]);
       if (cancelled) return;
       if (d.status === 'fulfilled') setDirectives(d.value);
       if (s.status === 'fulfilled') setSubscriptions(s.value);
       if (g.status === 'fulfilled') setGoals(g.value);
       if (o.status === 'fulfilled') setOneOnOnes(o.value);
-      if ([d, s, g, o].some((r) => r.status === 'rejected')) {
+      if (c.status === 'fulfilled') setCharter(c.value.charter);
+      if ([d, s, g, o, c].some((r) => r.status === 'rejected')) {
         setLoadError('Some summary data could not be loaded — the tiles below reflect what did load.');
       }
     })();
@@ -139,6 +145,19 @@ export default function AgentAtAGlanceTab({ agentId, detail, inboxItems, inboxLo
     : activeGoals.length === 0
       ? (lastHeldAt ? `No goals set · last 1:1 ${timeAgo(lastHeldAt)}` : 'No goals set, no 1:1 held yet')
       : `${lastHeldAt ? `last 1:1 ${timeAgo(lastHeldAt)}` : oneOnOneOverdue ? '1:1 check-in overdue' : ''}`;
+
+  // Role Charter — unlike every other tile here, an honest-empty state is a
+  // real gap, not a neutral non-event (see build-platform-agent skill's own
+  // "6 manager-authored tables" section: a charter is what tells a HUMAN
+  // what this agent is actually for). Tone reflects that: 'warning' when
+  // empty, not 'neutral'.
+  const charterTone: StatTone = charter === undefined ? 'neutral' : charter ? 'success' : 'warning';
+  const charterValue = charter === undefined ? '—' : charter ? 'Written' : 'Not written';
+  const charterHint = charter === undefined
+    ? 'Loading…'
+    : charter
+      ? `"${charter.roleTitle}"`
+      : 'No charter written yet — click to add one';
 
   // Trust & Control
   const weakestDimension = detail.goals.length
@@ -216,6 +235,16 @@ export default function AgentAtAGlanceTab({ agentId, detail, inboxItems, inboxLo
               icon="shield-check-line"
               tone={trustTone}
               hint={weakestDimension ? `${weakestDimension.label} (${weakestDimension.score}/5) is the lowest dimension` : 'GOALS™ score not yet computed'}
+              onClick={() => onNavigate('trust')}
+            />
+          </div>
+          <div className="col-md-4">
+            <StatCard
+              label="Role Charter"
+              value={charterValue}
+              icon="briefcase-4-line"
+              tone={charterTone}
+              hint={charterHint}
               onClick={() => onNavigate('trust')}
             />
           </div>
