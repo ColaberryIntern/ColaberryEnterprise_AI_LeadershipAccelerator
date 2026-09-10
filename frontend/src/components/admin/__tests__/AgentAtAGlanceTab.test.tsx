@@ -254,6 +254,9 @@ describe('AgentAtAGlanceTab — navigation', () => {
     expect(onNavigate).toHaveBeenCalledWith('reports');
     expect(onNavigate).toHaveBeenCalledWith('performance');
     expect(onNavigate).toHaveBeenCalledWith('trust');
+    // Checkpoint H (2026-09-10) — Role Charter moved to Overview's Identity
+    // sub-tab, so its tile now navigates to 'overview', not 'trust'.
+    expect(onNavigate).toHaveBeenCalledWith('overview');
   });
 });
 
