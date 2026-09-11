@@ -234,15 +234,37 @@ export default function CaseStudyVisualsPanel({
                 </ul>
               ) : null}
 
-              <button
-                type="button"
-                className="btn btn-sm btn-outline-secondary"
-                data-testid={`cs-chart-approval-${resolution.chart.id}`}
-                disabled={busy}
-                onClick={() => onSetChartApproval(resolution.chart.id, !resolution.chart.approved)}
-              >
-                {resolution.chart.approved ? 'Withdraw approval' : 'Approve chart'}
-              </button>
+              {/* A CHART THAT RESOLVES NOTHING CANNOT BE APPROVED.
+                  Ali, 2026-09-10: "why are we suggested charts that don't even pass the
+                  basic of smell test. If it doesn't show the chart, why even show here."
+
+                  Approving one of these buys nothing — the renderer resolves every figure
+                  from `case_study_metrics` at render time, so an approved chart naming a key
+                  the record does not carry still draws nothing on the page. Offering the
+                  button implied the opposite: that approval was the thing standing between
+                  this chart and a picture.
+
+                  It stays LISTED rather than hidden. These are real rows somebody created,
+                  and a chart that silently disappeared would be edited again and again by
+                  someone wondering where it went. What it needs is deleting or repointing at
+                  a metric that exists, and saying so is more use than a dead button. */}
+              {resolution.resolved.length === 0 && !resolution.chart.approved ? (
+                <p className="small text-muted mb-0" data-testid={`cs-chart-unapprovable-${resolution.chart.id}`}>
+                  Nothing to approve: this chart names no metric this record carries, so it
+                  would draw nothing whether approved or not. Point it at an existing metric,
+                  or delete it.
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  data-testid={`cs-chart-approval-${resolution.chart.id}`}
+                  disabled={busy}
+                  onClick={() => onSetChartApproval(resolution.chart.id, !resolution.chart.approved)}
+                >
+                  {resolution.chart.approved ? 'Withdraw approval' : 'Approve chart'}
+                </button>
+              )}
             </div>
           ))
         )}

@@ -55,9 +55,40 @@ function step(n: number, title: string): void {
   console.log(`\n── ${n}. ${title} ${'─'.repeat(Math.max(0, 58 - title.length))}`);
 }
 
+/**
+ * Databases this script must NEVER touch.
+ *
+ * It calls `sequelize.sync()` and creates a fake student, a comp subscription and
+ * a cohort. Against a production database that is not a test, it is damage — and
+ * an ungated sync on this model graph is its own documented failure mode.
+ *
+ * The guard is a NAME check because the realistic mistake is running it with the
+ * ambient DATABASE_URL still pointing at prod: `docker exec accelerator-backend
+ * node dist/scripts/...` inherits the container's env, and the container's env is
+ * prod. An opt-in flag would not have helped, because the person making that
+ * mistake believes they already opted in.
+ */
+const FORBIDDEN_DATABASES = ['accelerator_prod', 'accelerator_dev1'];
+
+function assertSafeDatabase(url: string): void {
+  const name = (url.split('/').pop() || '').split('?')[0];
+  if (FORBIDDEN_DATABASES.includes(name)) {
+    console.error(`REFUSING TO RUN against "${name}".`);
+    console.error('This script calls sequelize.sync() and creates test data.');
+    console.error('Point DATABASE_URL at a throwaway database and run it again.');
+    process.exit(2);
+  }
+  if (!name) {
+    console.error('REFUSING TO RUN: no database name in DATABASE_URL.');
+    process.exit(2);
+  }
+}
+
 async function main(): Promise<void> {
   console.log('AI Internship — end-to-end journey');
-  console.log(`database: ${(process.env.DATABASE_URL || '').replace(/:[^:@]*@/, ':***@')}`);
+  const dbUrl = process.env.DATABASE_URL || '';
+  assertSafeDatabase(dbUrl);
+  console.log(`database: ${dbUrl.replace(/:[^:@]*@/, ':***@')}`);
 
   // Import AFTER the env is in place so config/database reads the right URL.
   const { default: Cohort } = await import('../models/Cohort');
@@ -67,6 +98,7 @@ async function main(): Promise<void> {
   const { default: InternshipDocument } = await import('../models/InternshipDocument');
   const { default: InternshipStatusEvent } = await import('../models/InternshipStatusEvent');
   const { ensureInternshipSchema } = await import('../db/ensureInternshipSchema');
+  const { ensureEmailSendLedgerSchema } = await import('../db/ensureEmailSendLedgerSchema');
 
   const appSvc = await import('../services/internship/internshipApplicationService');
   const interviewSvc = await import('../services/internship/internshipInterviewService');
@@ -80,10 +112,28 @@ async function main(): Promise<void> {
   const eligibility = await import('../services/internship/internshipEligibility');
 
   step(0, 'Schema');
-  // sync() creates the core model tables; ensureInternshipSchema adds the
-  // internship DDL exactly as it does at boot.
-  await sequelize.sync();
+  // ORDER MATTERS, AND GETTING IT WRONG HID A PRODUCTION BUG.
+  //
+  // ensureInternshipSchema() runs FIRST so the internship tables come from the
+  // real DDL — exactly as they do at boot, where no global sync() runs at all.
+  // sequelize.sync() then uses CREATE TABLE IF NOT EXISTS, so it fills in the
+  // core model tables and leaves the internship ones untouched.
+  //
+  // The original order was reversed. sync() built the internship tables from the
+  // MODELS, ensureInternshipSchema's CREATE TABLE IF NOT EXISTS then did nothing,
+  // and the journey tested a schema production does not have. It passed 57/57
+  // while prod could not insert a single interview session, because the DDL had
+  // question_set_id NOT NULL and the model had it nullable.
+  //
+  // The email ledger has no Sequelize model, so sync() cannot create it either.
+  // Boot runs ensureEmailSendLedgerSchema() before ensureInternshipSchema(), and
+  // so does this. Without it, the decision step's sendOnce() threw
+  // `relation "email_send_ledger" does not exist`, the decision service swallowed
+  // that into outcome 'error', and the check below — which then only asserted
+  // "attempted" — passed anyway. Proven on the prod scratch run of 2026-09-11.
+  await ensureEmailSendLedgerSchema();
   await ensureInternshipSchema();
+  await sequelize.sync();
   // QueryTypes.SELECT, NOT the bare `[rows] = await query()` destructure. On these
   // catalog queries Sequelize returns the ROWS at the outer level, so destructuring
   // hands back the FIRST ROW and `.length` becomes the column count. That read as
@@ -227,9 +277,29 @@ async function main(): Promise<void> {
   });
   await application.reload();
   check('a reviewer CAN approve', approved.ok === true, application.state);
-  check('email was attempted and reported honestly',
-    approved.ok === true && approved.email.attempted === true,
-    approved.ok === true ? String(approved.email.outcome) : '');
+  // The outcome must be one the LEDGER produced — 'sent', 'skipped' or 'failed'
+  // all mean the attempt was recorded and a retry cannot double-send. 'error'
+  // means sendOnce() threw before writing anything, which is the one outcome that
+  // breaks idempotency; 'no_recipient' means the applicant has no address at all.
+  // The earlier version of this check accepted every one of them.
+  const emailOutcome = approved.ok === true ? String(approved.email.outcome) : '';
+  check('email was attempted and the LEDGER recorded the outcome',
+    approved.ok === true
+      && approved.email.attempted === true
+      && ['sent', 'skipped', 'failed'].includes(emailOutcome),
+    emailOutcome);
+  // And the row itself — not the service's word for it. With no credentials the
+  // transport fails and the ledger says so; with credentials it says 'sent'.
+  const ledgerRows = await sequelize.query<{ status: string; error_class: string | null }>(
+    `SELECT status, error_class FROM email_send_ledger WHERE recipient = :recipient`,
+    { type: QueryTypes.SELECT, replacements: { recipient: 'ada.e2e@example.com' } },
+  );
+  check('exactly one ledger row exists for the decision email',
+    ledgerRows.length === 1,
+    `${ledgerRows.length} rows`);
+  check('the ledger row carries a terminal status',
+    ledgerRows.length === 1 && ['sent', 'failed'].includes(ledgerRows[0].status),
+    ledgerRows[0] ? `${ledgerRows[0].status}${ledgerRows[0].error_class ? ` / ${ledgerRows[0].error_class}` : ''}` : 'no row');
 
   step(8, 'Offer letter');
   const pack = await docSvc.generatePackage({

@@ -1,6 +1,9 @@
 import fs from 'fs';
 import path from 'path';
-import { checkInvariants, buildImprovePrompt, ImproverItem } from '../certQuestionImprover';
+import {
+  checkInvariants, buildImprovePrompt, ImproverItem,
+  unachievableDimensions, achievableScore,
+} from '../certQuestionImprover';
 import { scoreItem } from '../certQuestionRubric';
 
 /**
@@ -118,5 +121,59 @@ describe('structural guarantee — this module cannot approve or persist', () =>
     expect(src).not.toMatch(/setReviewStatus/);
     expect(src).not.toMatch(/CertQuestionRevision/);
     expect(src).not.toMatch(/sequelize/);
+  });
+});
+
+describe('the achievable ceiling — never aim at a target an item cannot reach', () => {
+  it('says a single-select item can reach all six', () => {
+    expect(unachievableDimensions(item())).toEqual([]);
+    expect(achievableScore(item(), 6)).toBe(6);
+  });
+
+  it('says a MULTI-SELECT item can never meet option_count', () => {
+    // CCARF-A2 is multi-select by design. `option_count` is defined as four
+    // options AND single select, and checkInvariants forbids changing how many
+    // answers are correct - so no rewrite can ever fix it.
+    const multi = item({ correct_keys: ['A', 'B'] });
+    expect(unachievableDimensions(multi)).toEqual(['option_count']);
+    expect(achievableScore(multi, 6)).toBe(5);
+  });
+
+  it('is what stops the sweep re-spending on A2 on every single run', () => {
+    // The first live sweep burned a model call on A2 and reported it stalled at
+    // 5/6. Aiming at a flat six would repeat that for ever and call a structural
+    // property of the item a failure.
+    const multi = item({ correct_keys: ['A', 'B'] });
+    expect(achievableScore(multi, 6)).toBeLessThan(6);
+  });
+});
+
+describe('the documented scenario false negatives are exempt, not rewritten', () => {
+  it('exempts a key on the hand-checked list', () => {
+    // These eighteen stems DO open with an observation, in words the detector's
+    // marker list does not enumerate. Their only missing dimension is scenario
+    // framing, so the only way a rewrite scores higher is by inserting a marker
+    // phrase - changing correct text to satisfy a proxy.
+    const exempt = item({ question_key: 'CCARF-D2-07' });
+    expect(unachievableDimensions(exempt)).toContain('scenario_framing');
+    expect(achievableScore(exempt, 6)).toBe(5);
+  });
+
+  it('does not exempt a key that is not on the list', () => {
+    // The guard that keeps the exemption honest: it must be the eighteen, not
+    // "anything the detector happens to dislike".
+    expect(unachievableDimensions(item({ question_key: 'CCARF-D5-01' }))).toEqual([]);
+  });
+
+  it('stacks with multi-select, because an item can be blocked twice', () => {
+    const both = item({ question_key: 'CCARF-D2-07', correct_keys: ['A', 'B'] });
+    expect(unachievableDimensions(both).sort()).toEqual(['option_count', 'scenario_framing']);
+    expect(achievableScore(both, 6)).toBe(4);
+  });
+
+  it('keeps the list and the prose in the same file', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { SCENARIO_FALSE_NEGATIVES } = require('../../../data/certBlueprints/ccarRubric');
+    expect(SCENARIO_FALSE_NEGATIVES).toHaveLength(18);
   });
 });

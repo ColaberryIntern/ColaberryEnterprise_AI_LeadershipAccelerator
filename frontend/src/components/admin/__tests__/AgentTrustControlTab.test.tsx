@@ -10,16 +10,12 @@ import { ManagerDirective } from '../../../services/managerDirectiveApi';
 // (2026-09-03) — pins the honest governed-memory gate (a pending proposal
 // shows Approve/Reject; approved/rejected never do) and the consolidated
 // Directives view (revoke here, no create control — creation stays in
-// Talk's Ask/Direct composer). AgentCharterTab is mocked: it's a real,
-// already-existing, unchanged component reused wholesale here — its own
-// behavior isn't in scope for this test file.
-
-jest.mock('../AgentCharterTab', () => ({
-  __esModule: true,
-  default: ({ agentName }: { agentId: string; agentName: string }) => (
-    <div data-testid="charter-stub">Charter stub for {agentName}</div>
-  ),
-}));
+// Talk's Ask/Direct composer).
+//
+// Overview sub-tabs (2026-09-10) — Charter moved out of this tab entirely
+// (now lives on Overview's Identity sub-tab, see AgentOverviewTab.tsx), so
+// the AgentCharterTab mock and its "Charter reuse" describe block below are
+// gone; `agentName` is no longer a prop of this component.
 
 jest.mock('../../../services/agentMemoryProposalApi', () => ({
   listMemoryProposals: jest.fn(),
@@ -117,7 +113,7 @@ afterEach(() => {
 
 async function renderTab() {
   await act(async () => {
-    root.render(<AgentTrustControlTab agentId="agent-1" agentName="CoryStrategicAgent" detail={DETAIL} />);
+    root.render(<AgentTrustControlTab agentId="agent-1" detail={DETAIL} />);
     await new Promise((r) => setTimeout(r, 0));
   });
 }
@@ -138,13 +134,6 @@ describe('AgentTrustControlTab — GOALS score', () => {
     expect(declaredBadges.length).toBe(2);
     const liveBadges = Array.from(container.querySelectorAll('.admin-status-badge')).filter((b) => b.textContent?.includes('Live'));
     expect(liveBadges.length).toBe(3);
-  });
-});
-
-describe('AgentTrustControlTab — Charter reuse', () => {
-  it('renders the existing Charter component unchanged', async () => {
-    await renderTab();
-    expect(container.querySelector('[data-testid="charter-stub"]')?.textContent).toContain('CoryStrategicAgent');
   });
 });
 
@@ -245,7 +234,7 @@ describe('AgentTrustControlTab — Architecture drawer', () => {
       agent: { ...DETAIL.agent, max_runs_per_hour: null, max_writes_per_execution: null, max_proposals_per_run: null },
     };
     await act(async () => {
-      root.render(<AgentTrustControlTab agentId="agent-1" agentName="CoryStrategicAgent" detail={nullLimitsDetail} />);
+      root.render(<AgentTrustControlTab agentId="agent-1" detail={nullLimitsDetail} />);
       await new Promise((r) => setTimeout(r, 0));
     });
     const expandButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Expand')!;

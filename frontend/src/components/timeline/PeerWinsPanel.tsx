@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { runtimeApi, PublicRitual, RitualTile, RitualField, RitualValues } from '../../pages/portal/runtime/runtimeApi';
+import CommunityThreadPanel from './CommunityThreadPanel';
 
 /**
  * PeerWinsPanel — the bespoke, self-contained Community Ritual experience for the
@@ -67,9 +68,24 @@ const PeerWinsPanel: React.FC<Props> = ({ cardId, preview }) => {
   const [justPosted, setJustPosted] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [copied, setCopied] = useState<string | null>(null);
+  // One level of navigation inside the panel: the wall, or one classmate's
+  // thread. Kept here rather than opening a second drawer so the way back is a
+  // single obvious control and the wall's loaded state survives the round trip.
+  const [thread, setThread] = useState<{ id: string; name: string } | null>(null);
 
   const load = React.useCallback(async () => {
     if (preview) { setLoading(false); return; }
+    // The wall is card-scoped. A Today-feed community POST reaches the drawer
+    // with its feed ref (`community:<uuid>`) as the id, and sending that to a
+    // card endpoint 500s on the uuid cast. Refuse it here rather than asking:
+    // CardDetailBody routes those to CommunityThreadPanel, so arriving with one
+    // means the routing regressed, and a clear message beats a blank panel.
+    if (cardId.includes(':')) {
+      setLoading(false);
+      setError('This is a community post, not a weekly ritual card. Open it from the Community feed.');
+      return;
+    }
+    setLoading(true); setError('');
     try {
       const v = await runtimeApi.ritualWall(cardId);
       setRitual(v.ritual); setWall(v.wall); setMyPost(v.my_post); setSplit(v.split); setTopic(v.title);
@@ -191,18 +207,33 @@ const PeerWinsPanel: React.FC<Props> = ({ cardId, preview }) => {
       .pw-cheer.on{background:color-mix(in srgb,var(--pw-gold) 13%,transparent);border-color:var(--pw-gold);color:var(--pw-gold)}
       .pw-cheer:disabled{cursor:default;opacity:.8}
       .pw-cheer .em{font-size:14px;line-height:1}
+      .pw-reply{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--pw-line);border-radius:999px;padding:5px 11px;font-size:12px;font-weight:700;color:var(--pw-muted);background:var(--pw-panel);cursor:pointer}
+      .pw-reply:hover{border-color:var(--pw-accent);color:var(--pw-accent)}
+      .pw-reply:disabled{cursor:default;opacity:.55}
+      .pw-reply .em{font-size:13px;line-height:1}
+      .pw-back{display:inline-flex;align-items:center;gap:7px;background:none;border:none;padding:0;margin-bottom:14px;font-size:12.5px;font-weight:750;color:var(--pw-accent);cursor:pointer}
       .pw-more{font-size:11px;color:var(--pw-muted);margin-left:auto}
       .pw-empty{text-align:center;padding:26px 14px;border:1.5px dashed var(--pw-line);border-radius:16px;color:var(--pw-muted)}
       .pw-empty .big{font-size:30px;margin-bottom:8px}
       .pw-empty h4{font-size:15px;font-weight:750;color:var(--pw-ink);margin:0 0 4px}
       .pw-empty p{font-size:13px;margin:0;line-height:1.5}
       .pw-load{padding:28px 10px;text-align:center;color:var(--pw-muted);font-size:13.5px}
+      .pw-retry{margin-top:12px;border:1px solid var(--pw-line);background:var(--pw-panel);color:var(--pw-ink);border-radius:10px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer}
+      .pw-retry:hover{border-color:var(--pw-accent);color:var(--pw-accent)}
       @media (prefers-reduced-motion:reduce){*{transition:none!important}}
     `}</style>
   );
 
   if (loading) return <div className="pw">{styleBlock}<div className="pw-load">Loading this week’s ritual…</div></div>;
-  if (!ritual) return <div className="pw">{styleBlock}<div className="pw-empty"><p>{error || 'This ritual isn’t ready yet.'}</p></div></div>;
+  // Never a dead end: a failed load offers the way back in, not just an apology.
+  if (!ritual) return (
+    <div className="pw">{styleBlock}
+      <div className="pw-empty">
+        <p>{error || 'This ritual isn’t ready yet.'}</p>
+        <button type="button" className="pw-retry" onClick={load}>Try again</button>
+      </div>
+    </div>
+  );
 
   const accentStyle = { ['--pw-accent' as any]: ritual.accent } as React.CSSProperties;
   const listField = ritual.fields.find((f) => f.kind === 'list');
@@ -294,14 +325,31 @@ const PeerWinsPanel: React.FC<Props> = ({ cardId, preview }) => {
           <button type="button" className={`pw-cheer${t.viewer_has_liked ? ' on' : ''}`} disabled={preview || t.is_mine} onClick={() => cheer(t)} aria-pressed={t.viewer_has_liked}>
             <span className="em">{ritual.reaction.emoji}</span>{t.like_count > 0 ? t.like_count : ritual.reaction.label}
           </button>
-          {ritual.variant === 'qa' && <span className="pw-more">answer in comments</span>}
-          {hasExtra && ritual.variant !== 'qa' && <span className="pw-more">{isOpen ? 'Hide' : 'Read'}</span>}
+          {/* The wall could only ever applaud. Every tile IS a community post, so
+              its own reply thread is one tap away — that is where "answer in
+              comments" was always pointing, with nothing behind it. */}
+          <button type="button" className="pw-reply" disabled={preview} onClick={() => setThread({ id: t.id, name: t.is_mine ? 'your post' : t.member.name })}>
+            <span className="em">💬</span>{ritual.variant === 'qa' ? 'Answer' : 'Reply'}
+          </button>
+          {hasExtra && <span className="pw-more">{isOpen ? 'Hide' : 'Read'}</span>}
         </div>
       </article>
     );
   };
 
   const total = split ? split.counts.reduce((a, b) => a + b, 0) : 0;
+
+  if (thread) {
+    return (
+      <div className="pw" style={accentStyle}>
+        {styleBlock}
+        <button type="button" className="pw-back" onClick={() => { setThread(null); load(); }}>
+          ← Back to the wall
+        </button>
+        <CommunityThreadPanel postId={thread.id} fallbackLabel={`${ritual.icon} ${ritual.name} · Week ${ritual.week}`} />
+      </div>
+    );
+  }
 
   return (
     <div className="pw" style={accentStyle}>

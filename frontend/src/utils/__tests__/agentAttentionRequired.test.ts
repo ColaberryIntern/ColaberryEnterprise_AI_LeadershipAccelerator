@@ -80,7 +80,7 @@ describe('deriveAttentionItems', () => {
     expect(approvalItem?.severity).toBe('medium');
   });
 
-  it('never fabricates a goal-at-risk or report-failure item — Command Center does not fetch that data yet', () => {
+  it('never fabricates a goal-at-risk or report-failure item — Live Status does not fetch that data yet', () => {
     const items = deriveAttentionItems(makeDetail(), []);
     expect(items.some((i) => /goal/i.test(i.title))).toBe(false);
     expect(items.some((i) => /report/i.test(i.title))).toBe(false);

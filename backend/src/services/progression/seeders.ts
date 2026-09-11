@@ -33,16 +33,36 @@ interface LevelSeed {
   requires_ai_approval: boolean;
 }
 
+/**
+ * ATTENDANCE IS NO LONGER A PROMOTION GATE (min_attendance: 0 at every rank).
+ *
+ * The ladder used to require one present-marked class per rank, rising to eight
+ * for architect. Measured against production, that gated the whole build track
+ * on a signal that barely exists: 178 present rows across 32 people, against 469
+ * active enrollments. Thirty of them had ever been marked present.
+ *
+ * The effect was not theoretical. Eight people sat at rank 0 with every other
+ * gate cleared and attendance the only thing unmet, one of them holding 29
+ * pieces of validated evidence and 16 GitHub commits against thresholds of 3
+ * and 0. They were not told why, because the gap line named a database column.
+ *
+ * Every other gate on this ladder measures shipped work. Attendance measured
+ * turning up to a live session, and it was the only one whose collection was
+ * broken. It is still recorded and still worth reading; it no longer decides
+ * whether someone advances. If attendance capture is fixed and the program
+ * decides presence should count again, raise these deliberately rather than by
+ * inheriting the old ladder.
+ */
 export const BUILDER_LEVELS: LevelSeed[] = [
   { slug: 'builder', rank: 0, label: 'Builder', required_competencies: [], min_evidence: 0, min_artifacts: 0, min_github: 0, min_evaluations: 0, min_implementation: 0, min_attendance: 0, requires_ai_approval: false },
-  { slug: 'junior_builder', rank: 1, label: 'Junior Builder', required_competencies: [], min_evidence: 3, min_artifacts: 0, min_github: 0, min_evaluations: 0, min_implementation: 1, min_attendance: 1, requires_ai_approval: false },
-  { slug: 'practitioner', rank: 2, label: 'Practitioner', required_competencies: [{ domain_id: 'prompt_engineering', min_confidence: 0.4 }], min_evidence: 6, min_artifacts: 2, min_github: 2, min_evaluations: 0, min_implementation: 2, min_attendance: 2, requires_ai_approval: false },
-  { slug: 'developer', rank: 3, label: 'Developer', required_competencies: [{ domain_id: 'prompt_engineering', min_confidence: 0.5 }, { domain_id: 'architecture', min_confidence: 0.4 }], min_evidence: 10, min_artifacts: 3, min_github: 4, min_evaluations: 1, min_implementation: 3, min_attendance: 3, requires_ai_approval: false },
-  { slug: 'senior_developer', rank: 4, label: 'Senior Developer', required_competencies: [{ domain_id: 'prompt_engineering', min_confidence: 0.6 }, { domain_id: 'architecture', min_confidence: 0.5 }, { domain_id: 'testing', min_confidence: 0.4 }], min_evidence: 15, min_artifacts: 5, min_github: 6, min_evaluations: 2, min_implementation: 5, min_attendance: 4, requires_ai_approval: false },
-  { slug: 'engineer', rank: 5, label: 'Engineer', required_competencies: [{ domain_id: 'prompt_engineering', min_confidence: 0.65 }, { domain_id: 'architecture', min_confidence: 0.6 }, { domain_id: 'testing', min_confidence: 0.5 }, { domain_id: 'deployment', min_confidence: 0.4 }], min_evidence: 22, min_artifacts: 7, min_github: 10, min_evaluations: 3, min_implementation: 7, min_attendance: 5, requires_ai_approval: true },
-  { slug: 'senior_engineer', rank: 6, label: 'Senior Engineer', required_competencies: [{ domain_id: 'architecture', min_confidence: 0.65 }, { domain_id: 'testing', min_confidence: 0.6 }, { domain_id: 'deployment', min_confidence: 0.5 }, { domain_id: 'github', min_confidence: 0.5 }], min_evidence: 30, min_artifacts: 10, min_github: 15, min_evaluations: 4, min_implementation: 10, min_attendance: 6, requires_ai_approval: true },
-  { slug: 'architect_candidate', rank: 7, label: 'Architect Candidate', required_competencies: [{ domain_id: 'architecture', min_confidence: 0.7 }, { domain_id: 'communication', min_confidence: 0.6 }, { domain_id: 'leadership', min_confidence: 0.5 }, { domain_id: 'security', min_confidence: 0.5 }], min_evidence: 40, min_artifacts: 14, min_github: 20, min_evaluations: 6, min_implementation: 14, min_attendance: 7, requires_ai_approval: true },
-  { slug: 'architect', rank: 8, label: 'Architect', required_competencies: [{ domain_id: 'architecture', min_confidence: 0.75 }, { domain_id: 'prompt_engineering', min_confidence: 0.7 }, { domain_id: 'leadership', min_confidence: 0.65 }, { domain_id: 'communication', min_confidence: 0.65 }, { domain_id: 'security', min_confidence: 0.6 }, { domain_id: 'documentation', min_confidence: 0.6 }], min_evidence: 55, min_artifacts: 20, min_github: 28, min_evaluations: 8, min_implementation: 18, min_attendance: 8, requires_ai_approval: true },
+  { slug: 'junior_builder', rank: 1, label: 'Junior Builder', required_competencies: [], min_evidence: 3, min_artifacts: 0, min_github: 0, min_evaluations: 0, min_implementation: 1, min_attendance: 0, requires_ai_approval: false },
+  { slug: 'practitioner', rank: 2, label: 'Practitioner', required_competencies: [{ domain_id: 'prompt_engineering', min_confidence: 0.4 }], min_evidence: 6, min_artifacts: 2, min_github: 2, min_evaluations: 0, min_implementation: 2, min_attendance: 0, requires_ai_approval: false },
+  { slug: 'developer', rank: 3, label: 'Developer', required_competencies: [{ domain_id: 'prompt_engineering', min_confidence: 0.5 }, { domain_id: 'architecture', min_confidence: 0.4 }], min_evidence: 10, min_artifacts: 3, min_github: 4, min_evaluations: 1, min_implementation: 3, min_attendance: 0, requires_ai_approval: false },
+  { slug: 'senior_developer', rank: 4, label: 'Senior Developer', required_competencies: [{ domain_id: 'prompt_engineering', min_confidence: 0.6 }, { domain_id: 'architecture', min_confidence: 0.5 }, { domain_id: 'testing', min_confidence: 0.4 }], min_evidence: 15, min_artifacts: 5, min_github: 6, min_evaluations: 2, min_implementation: 5, min_attendance: 0, requires_ai_approval: false },
+  { slug: 'engineer', rank: 5, label: 'Engineer', required_competencies: [{ domain_id: 'prompt_engineering', min_confidence: 0.65 }, { domain_id: 'architecture', min_confidence: 0.6 }, { domain_id: 'testing', min_confidence: 0.5 }, { domain_id: 'deployment', min_confidence: 0.4 }], min_evidence: 22, min_artifacts: 7, min_github: 10, min_evaluations: 3, min_implementation: 7, min_attendance: 0, requires_ai_approval: true },
+  { slug: 'senior_engineer', rank: 6, label: 'Senior Engineer', required_competencies: [{ domain_id: 'architecture', min_confidence: 0.65 }, { domain_id: 'testing', min_confidence: 0.6 }, { domain_id: 'deployment', min_confidence: 0.5 }, { domain_id: 'github', min_confidence: 0.5 }], min_evidence: 30, min_artifacts: 10, min_github: 15, min_evaluations: 4, min_implementation: 10, min_attendance: 0, requires_ai_approval: true },
+  { slug: 'architect_candidate', rank: 7, label: 'Architect Candidate', required_competencies: [{ domain_id: 'architecture', min_confidence: 0.7 }, { domain_id: 'communication', min_confidence: 0.6 }, { domain_id: 'leadership', min_confidence: 0.5 }, { domain_id: 'security', min_confidence: 0.5 }], min_evidence: 40, min_artifacts: 14, min_github: 20, min_evaluations: 6, min_implementation: 14, min_attendance: 0, requires_ai_approval: true },
+  { slug: 'architect', rank: 8, label: 'Architect', required_competencies: [{ domain_id: 'architecture', min_confidence: 0.75 }, { domain_id: 'prompt_engineering', min_confidence: 0.7 }, { domain_id: 'leadership', min_confidence: 0.65 }, { domain_id: 'communication', min_confidence: 0.65 }, { domain_id: 'security', min_confidence: 0.6 }, { domain_id: 'documentation', min_confidence: 0.6 }], min_evidence: 55, min_artifacts: 20, min_github: 28, min_evaluations: 8, min_implementation: 18, min_attendance: 0, requires_ai_approval: true },
 ];
 
 export async function seedCompetencyDomains(): Promise<number> {

@@ -6,20 +6,29 @@ import { Tone } from './shell/StatusBadge';
 import { timeAgo } from './shell/trust';
 import { deriveOperationalState, OperationalState } from '../../utils/agentOperationalState';
 import { deriveAttentionItems, deriveRecentOutcome, AttentionSeverity } from '../../utils/agentAttentionRequired';
-import AgentOverviewTab from './AgentOverviewTab';
 
-// AI Workforce Management, Checkpoint A (2026-09-01) — the Command Center
-// tab: "is this agent healthy, what's it working on, what needs me." Every
-// value here comes from the same GET /api/admin/agents/:id payload
-// AgentOverviewTab already renders, plus the real per-agent Manager Inbox
+// AI Workforce Management, Checkpoint A (2026-09-01) — originally built as
+// "Command Center": "is this agent healthy, what's it working on, what
+// needs me." Every value here comes from the same GET /api/admin/agents/:id
+// payload AgentOverviewTab renders, plus the real per-agent Manager Inbox
 // (GET /api/admin/agents/:id/inbox) — no new backend endpoint, no new write
-// capability. See docs design review agentDashboardRedesignV2.html for the
-// full 5-section vision; this checkpoint builds Command Center only.
+// capability.
+//
+// Split from Command Center, Checkpoint G (2026-09-10) — Ali, on Reese's own
+// page: "The command center is too big and can be broken out into more
+// tabs." This file keeps the real-time half (operational state, attention
+// required, current work, recent outcome, the stat row) and is renamed to
+// match what it actually is now that the reference/identity content (moved
+// to AgentDetailPage.tsx as its own "Overview" tab, unfolding the Checkpoint
+// F fold in the same reversible way Checkpoint F folded it) no longer lives
+// here. Same data, same props, same tab key ('command') — only the label,
+// file name, and component name changed, so At a Glance's own click-through
+// target (AgentAtAGlanceTab.tsx's onNavigate('command')) needed no change.
 //
 // Deliberately absent from this slice (see agentAttentionRequired.ts's own
 // header comment): goal-at-risk and report-delivery-failure items, since
-// Command Center doesn't fetch AgentGoal or AgentReportRun yet. Those land
-// with Checkpoint D.
+// this tab doesn't fetch AgentGoal or AgentReportRun yet. Those land with
+// Checkpoint D.
 
 interface Props {
   detail: AgentDetail;
@@ -53,7 +62,7 @@ const SEVERITY_ICON: Record<AttentionSeverity, string> = {
   none: 'checkbox-circle-line',
 };
 
-export default function AgentCommandCenterTab({ detail, inboxItems, inboxLoading, inboxError }: Props) {
+export default function AgentLiveStatusTab({ detail, inboxItems, inboxLoading, inboxError }: Props) {
   const operationalState = deriveOperationalState(detail, inboxItems.length);
   const recentOutcome = deriveRecentOutcome(detail);
   const attentionItems = inboxLoading || inboxError ? [] : deriveAttentionItems(detail, inboxItems);
@@ -171,12 +180,6 @@ export default function AgentCommandCenterTab({ detail, inboxItems, inboxLoading
           />
         </div>
       </div>
-
-      {/* At a Glance, Checkpoint F (2026-09-03) — Overview's own identity/
-          tools/reports-to/system-prompt content, unchanged, relocated here
-          as supporting context below Command Center's own real-time status.
-          "At a Glance" is now the default tab; this is where Overview lives. */}
-      <AgentOverviewTab detail={detail} />
     </>
   );
 }

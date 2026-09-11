@@ -385,7 +385,7 @@ function AdminProjectOverview({ initialCohortId }: ProjectOverviewProps = {}) {
                                               }}>
                                               <td style={{ paddingLeft: 24 }}>
                                                 <div className="fw-medium">
-                                                  <PersonLink name={s.full_name} email={s.email} stopPropagation />
+                                                  <PersonLink tab="work" name={s.full_name} email={s.email} stopPropagation />
                                                 </div>
                                                 <div className="text-muted" style={{ fontSize: 10 }}>{s.email}{s.company ? ` · ${s.company}` : ''}</div>
                                                 {/* The Command Center is the student's own GitHub Pages site, built by

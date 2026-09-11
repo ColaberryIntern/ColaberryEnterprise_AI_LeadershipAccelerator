@@ -50,13 +50,21 @@ describe('the DDL it declares', () => {
     }
   });
 
-  it('is additive only — no DROP, no TRUNCATE, no DELETE, no destructive ALTER', async () => {
+  it('destroys nothing — no dropped table, column, index or data', async () => {
     await ensureInternshipSchema();
     for (const sql of ddlIssued()) {
-      expect(sql).not.toMatch(/\bDROP\b/i);
+      // Named forms, not a bare /\bDROP\b/, because `ALTER COLUMN x DROP NOT
+      // NULL` contains the word while destroying nothing — it RELAXES a
+      // constraint, which is how an already-deployed database repairs itself.
+      // The bare-word version of this check failed on exactly that statement,
+      // and taking it at its word would have pushed the repair out of boot.
+      expect(sql).not.toMatch(/DROP\s+(TABLE|COLUMN|INDEX|DATABASE|SCHEMA|CONSTRAINT|VIEW)/i);
       expect(sql).not.toMatch(/\bTRUNCATE\b/i);
       expect(sql).not.toMatch(/\bDELETE\b/i);
       expect(sql).not.toMatch(/ALTER\s+TABLE\s+\w+\s+(DROP|RENAME)/i);
+      // The mirror image of the repair: tightening a column on a live table
+      // fails the moment one existing row holds NULL.
+      expect(sql).not.toMatch(/SET\s+NOT\s+NULL/i);
     }
   });
 
@@ -69,9 +77,15 @@ describe('the DDL it declares', () => {
     }
   });
 
-  it('every statement is IF NOT EXISTS, so a re-run is a no-op', async () => {
+  it('every statement is a no-op on re-run', async () => {
     await ensureInternshipSchema();
     for (const sql of ddlIssued()) {
+      // CREATE statements say so explicitly. The one ALTER is idempotent by
+      // nature — dropping a NOT NULL that is already dropped changes nothing —
+      // and Postgres has no IF NOT EXISTS form for it. It exists to repair
+      // databases built before question_set_id was made nullable.
+      const idempotentAlter = /ALTER COLUMN \w+ DROP NOT NULL/i.test(sql);
+      if (idempotentAlter) continue;
       expect(sql).toMatch(/IF NOT EXISTS/i);
     }
   });

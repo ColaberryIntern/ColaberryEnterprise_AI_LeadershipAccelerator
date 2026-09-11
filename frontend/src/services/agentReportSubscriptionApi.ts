@@ -75,3 +75,20 @@ export async function getReportRuns(agentId: string): Promise<ReportRunHistory> 
   const res = await api.get<ReportRunHistory>(`/api/admin/agents/${agentId}/report-runs`);
   return res.data;
 }
+
+export interface ReportPreview {
+  subject: string;
+  html: string;
+  text: string;
+}
+
+// Checkpoint G (2026-09-10) — real, on-demand rendering of exactly the
+// sections a manager is about to subscribe to, via the same code path the
+// real cron delivery uses (renderReportContent()) — no email sent, no
+// AgentReportRun row written.
+export async function getReportPreview(agentId: string, contentScope: ReportContentSection[]): Promise<ReportPreview> {
+  const res = await api.get<ReportPreview>(`/api/admin/agents/${agentId}/report-preview`, {
+    params: { contentScope: contentScope.join(',') },
+  });
+  return res.data;
+}

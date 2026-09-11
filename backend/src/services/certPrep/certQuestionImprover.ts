@@ -1,6 +1,7 @@
 import type OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { scoreItem, RubricItem, RubricScore } from './certQuestionRubric';
+import { RubricDimension, SCENARIO_FALSE_NEGATIVES } from '../../data/certBlueprints/ccarRubric';
 import { REFERENCE, RUBRIC } from '../../data/certBlueprints/ccarRubric';
 
 /**
@@ -138,6 +139,42 @@ export function buildImprovePrompt(item: ImproverItem, score: RubricScore): stri
 }
 
 /**
+ * Dimensions this item can NEVER meet, given what a rewrite is allowed to change.
+ *
+ * WHY THIS EXISTS. The first live sweep spent a model call on `CCARF-A2` and
+ * reported it stalled at 5/6. A2 is multi-select by design: `option_count` is
+ * defined as four options AND single select, and `checkInvariants` forbids
+ * changing how many answers are correct. So the improver is structurally
+ * incapable of fixing that dimension, and a sweep aiming at a flat 6/6 would
+ * re-spend on it on every run, for ever, and call the result a failure.
+ *
+ * A target an item cannot reach is not a standard, it is a bug in the check.
+ * The ceiling is what this item could achieve if every fixable dimension were
+ * fixed, and that is what the sweep aims at.
+ */
+export function unachievableDimensions(item: ImproverItem): RubricDimension[] {
+  const out: RubricDimension[] = [];
+  // `option_count` requires exactly one correct answer, and the number of
+  // correct answers is an invariant. See the multi-select note in
+  // `ccarFoundationsItems.ts` for why those three items stay as they are.
+  if (item.correct_keys.length !== 1) out.push('option_count');
+  // These eighteen stems DO open with an observation, in words the detector's
+  // marker list does not enumerate. They were hand-checked one by one and are
+  // recorded in `ccarRubric.ts`. Their only missing dimension is scenario
+  // framing, so the sole way a rewrite could score higher is by inserting a
+  // marker phrase — changing text that is already right to satisfy a proxy. The
+  // detector is the thing that is wrong here, and a sweep must not "fix" a
+  // question to make a known-imperfect measurement happy.
+  if (SCENARIO_FALSE_NEGATIVES.includes(item.question_key)) out.push('scenario_framing');
+  return out;
+}
+
+/** The highest score this item can reach without violating an invariant. */
+export function achievableScore(item: ImproverItem, of: number): number {
+  return of - unachievableDimensions(item).length;
+}
+
+/**
  * The invariant check, run on the candidate before its score is even considered.
  *
  * Deliberately structural rather than semantic. We cannot verify that the model
@@ -190,6 +227,130 @@ function parseCandidate(raw: string, before: ImproverItem): ImproverItem {
 }
 
 /**
+ * Write a BRAND NEW item for a given objective and scenario.
+ *
+ * Same contract as `improveItem`: proposes, never writes, never approves. The
+ * caller scores it, decides whether it is good enough, and persists it as a
+ * draft if so.
+ *
+ * WHY GENERATION AND IMPROVEMENT SHARE THIS FILE. They share the thing that
+ * matters — the rubric decides, not the model — and they share `checkInvariants`
+ * for everything except the "did the answer change" comparisons, which have no
+ * meaning when there is no previous version. Splitting them would have produced
+ * two prompts describing the same target shape, and they would have drifted.
+ *
+ * WHAT IT IS NOT ALLOWED TO DO. The prompt forbids inventing a product, a
+ * version number, a price or a date, for the same reason the improver does: an
+ * exam item that asserts a fact about the world is wrong the moment the world
+ * moves, and nothing downstream re-checks it.
+ */
+export async function generateItem(spec: {
+  question_key: string;
+  domain_id: string;
+  domain_label: string;
+  objective_id: string;
+  objective_label: string;
+  scenario_id: string;
+  scenario_label: string;
+  scenario_summary: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  avoidStems: string[];
+}): Promise<
+  | { status: 'generated'; item: ImproverItem; score: RubricScore }
+  | { status: 'invariant_violated'; reason: string }
+  | { status: 'failed'; error_class: string; message: string }
+> {
+  const prompt = [
+    'Write ONE multiple-choice item for a professional certification exam.',
+    '',
+    `DOMAIN: ${spec.domain_id} — ${spec.domain_label}`,
+    `OBJECTIVE (this is what the question must test): ${spec.objective_id} — ${spec.objective_label}`,
+    `SCENARIO (the world it is set in): ${spec.scenario_id} — ${spec.scenario_label}`,
+    `  ${spec.scenario_summary}`,
+    `DIFFICULTY: ${spec.difficulty}`,
+    '',
+    'SHAPE, measured from the published sample items:',
+    `- stem ${REFERENCE.stemWords.min}-${REFERENCE.stemWords.max} words, aim for ${REFERENCE.stemWords.target}`,
+    `- exactly ${REFERENCE.optionCount} options, exactly ONE correct`,
+    `- each option ${REFERENCE.optionWords.min}-${REFERENCE.optionWords.max} words, aim for ${REFERENCE.optionWords.target}`,
+    '- the stem opens by reporting something OBSERVED — a measured rate, a log line,',
+    '  a user complaint, an intermittent failure — and says WHO observed it, before it',
+    '  asks anything. Never a definitional stem.',
+    '- every option is a complete course of action, not a label',
+    '- at least one wrong option must be genuinely defensible: a competent person',
+    '  should have to think. An item whose distractors nobody would pick measures',
+    '  nothing.',
+    '- the rationale explains why the key wins; every wrong option gets its own',
+    '  one-line explanation of why it loses',
+    '',
+    'HARD RULES:',
+    '- do not invent a product, a version number, a price or a date',
+    '- do not reproduce or paraphrase any existing certification question',
+    '- the question must be answerable from the objective above, not from trivia',
+    '',
+    spec.avoidStems.length > 0
+      ? `DO NOT REPEAT these existing questions in this objective:
+${spec.avoidStems.map((s) => `- ${s}`).join('\n')}`
+      : '',
+    '',
+    'Return ONLY JSON: {"stem": string, "options": [{"key":"A","text":string}, ...],',
+    '"correct_keys": [string], "rationale": string, "distractor_rationales": {key: string}}',
+  ].filter(Boolean).join('\n');
+
+  let lastErr: any = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const res = await openai().chat.completions.create({
+        model: IMPROVER_MODEL,
+        temperature: 0.7,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: 'You write certification exam items. You return only JSON.' },
+          { role: 'user', content: prompt },
+        ],
+      });
+      const parsed = JSON.parse(res.choices?.[0]?.message?.content ?? '{}');
+      const item: ImproverItem = {
+        question_key: spec.question_key,
+        domain_id: spec.domain_id,
+        objective_id: spec.objective_id,
+        stem: String(parsed.stem ?? ''),
+        options: Array.isArray(parsed.options)
+          ? parsed.options.map((o: any) => ({ key: String(o.key), text: String(o.text ?? '') }))
+          : [],
+        correct_keys: Array.isArray(parsed.correct_keys) ? parsed.correct_keys.map(String) : [],
+        rationale: parsed.rationale ? String(parsed.rationale) : null,
+        distractor_rationales: parsed.distractor_rationales ?? null,
+        difficulty: spec.difficulty,
+        scenario_family: spec.scenario_id,
+      };
+
+      // A generated item has no "before", so the shape rules are checked against
+      // itself: four options, exactly one correct, nothing empty, every wrong
+      // option explained.
+      const violation = checkInvariants(item, item)
+        ?? (item.options.length !== REFERENCE.optionCount
+          ? `expected ${REFERENCE.optionCount} options, got ${item.options.length}`
+          : null)
+        ?? (item.correct_keys.length !== 1
+          ? `expected exactly one correct answer, got ${item.correct_keys.length}`
+          : null);
+      if (violation) return { status: 'invariant_violated', reason: violation };
+
+      return { status: 'generated', item, score: scoreItem(item) };
+    } catch (err: any) {
+      lastErr = err;
+      if (!isRetryable(err) || attempt === MAX_ATTEMPTS) break;
+    }
+  }
+  return {
+    status: 'failed',
+    error_class: errorClass(lastErr),
+    message: String(lastErr?.message ?? 'unknown'),
+  };
+}
+
+/**
  * Propose one improved version of an item. Never writes; never approves.
  *
  * Returns `no_better` rather than the candidate when the rubric does not improve.
@@ -198,7 +359,10 @@ function parseCandidate(raw: string, before: ImproverItem): ImproverItem {
  */
 export async function improveItem(item: ImproverItem): Promise<ImproveOutcome> {
   const before = scoreItem(item);
-  if (before.met === before.of) return { status: 'already_meets', before };
+  // Measured against what this item CAN reach, not a flat six. See
+  // `unachievableDimensions`: a multi-select item can never meet `option_count`,
+  // and aiming at six would re-spend on it on every run.
+  if (before.met >= achievableScore(item, before.of)) return { status: 'already_meets', before };
 
   let lastErr: any = null;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {

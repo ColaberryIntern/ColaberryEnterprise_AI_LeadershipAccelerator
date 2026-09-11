@@ -159,19 +159,29 @@ grep -n "NULL AS summary" backend/src/services/adminOs/personTimelineService.ts
 Any hit is a defect. A branch with nothing worth summarising does not belong in
 the timeline.
 
-**2c. Confirm the reader sees no repeats.** After any timeline change, run the
-profile for a heavy learner and check no two adjacent rows are identical:
+**2c. Confirm the reader sees no repeats — and measure it correctly.**
+
+The test is **not** "no two adjacent rows look alike". Two GitHub-commit awards
+two hours apart carry the same summary and are two real events; the timestamp
+column tells them apart, and merging them would repeat the original defect of
+discarding what distinguishes rows.
+
+The test is **rows a reader cannot tell apart**: same second, same type, same
+summary, and therefore nothing on screen to separate them.
 
 ```sql
+-- Rows that would render indistinguishably. Anything > 1 is a defect.
 SELECT occurred_at, source, type, summary, COUNT(*) AS occurrences
 FROM ( <the branch union> ) t
 GROUP BY date_trunc('second', occurred_at), domain, source, type, summary
-HAVING COUNT(*) > 3
+HAVING COUNT(*) > 1
 ORDER BY COUNT(*) DESC LIMIT 10;
 ```
 
-A high `occurrences` is not automatically wrong — but it must be a real repeat,
-not a fan-out whose detail was discarded.
+In the live check, the metric to drive to zero is **same-second identical rows**.
+Adjacent rows minutes or hours apart with equal summaries are legitimate — judge
+those by asking whether the summary carries what the reader needs, not by
+counting them.
 
 ---
 

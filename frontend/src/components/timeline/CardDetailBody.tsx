@@ -7,6 +7,7 @@ import { parseVideoUrl, videoThumbnail } from '../../utils/videoEmbed';
 import { runtimeApi } from '../../pages/portal/runtime/runtimeApi';
 import CardSurveyExperience from './CardSurveyExperience';
 import PeerWinsPanel from './PeerWinsPanel';
+import CommunityThreadPanel from './CommunityThreadPanel';
 import AssessmentPanel from '../../pages/portal/runtime/AssessmentPanel';
 import { toTitleCase } from '../../utils/titleCase';
 import { useReaderProgress } from './useReaderProgress';
@@ -269,6 +270,10 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   const isArchitectMindset = card.render_band === 'architect_mindset';   // The Architect Time Machine: cinematic decision simulation (bespoke renderer)
   const isBuildArtifacts = card.render_band === 'build_artifacts';   // Build Artifact(s) Lab: pick artifact + project, build station
   const isPeerWins = card.render_band === 'peer_wins';   // Community Discussion → Cohort Wins grid (post a win + cheer classmates)
+  // A Today-feed community POST, not a curriculum card: `card.id` is the feed ref
+  // (`community:<uuid>`), which no card-scoped endpoint can resolve. It opens its
+  // own discussion thread, and the card-scoped footer actions stay off.
+  const isCommunityPost = !!card.community_post_id;
   const isReflection = card.render_band === 'reflection';   // Week in Review: per-student recap + strategic-signal capture (bespoke renderer)
   const blog = card.type === 'blog' ? card.blog || null : null;   // fixed or auto-matched post
   // Media/external cards carry their own authored title casing; only curriculum
@@ -384,6 +389,8 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
             : generating
               ? <GeneratingReader />
               : <div className="tld-note" style={{ margin: 20 }}>This build station has not been generated yet.</div>
+        ) : isCommunityPost ? (
+          <CommunityThreadPanel postId={card.community_post_id as string} fallbackLabel={card.student_label} preview={preview} />
         ) : isPeerWins ? (
           <PeerWinsPanel cardId={card.id} preview={preview} />
         ) : isReflection ? (
@@ -648,10 +655,13 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                 {/* Survey completes in-body via its own Submit; the workspace link
                     stays as a quiet secondary, not the primary CTA. */}
                 {/* Architect Time Machine renders its own "Enter the Time Machine" CTA in-panel (drawer variant). */}
-                {onEnterWorkspace && !isArchitectMindset && <button type="button" className={`tl-btn ${(isVideo && source) || isSurvey || isReader || isDeepDive || isPeerWins || isReflection || !!blog || dwellGated ? 'ghost' : 'primary'}`} onClick={onEnterWorkspace}>Enter workspace →</button>}
+                {/* A community post has no workspace and nothing to complete — both
+                    actions address a card id it does not have. The thread is the
+                    whole destination, so the drawer closes on Close alone. */}
+                {onEnterWorkspace && !isArchitectMindset && !isCommunityPost && <button type="button" className={`tl-btn ${(isVideo && source) || isSurvey || isReader || isDeepDive || isPeerWins || isReflection || !!blog || dwellGated ? 'ghost' : 'primary'}`} onClick={onEnterWorkspace}>Enter workspace →</button>}
                 {/* Peer Wins: posting is optional, so completion stays a plain Mark
                     complete here (and in the workspace bar) — never gated on posting. */}
-                {isPeerWins && completeSafely && (
+                {isPeerWins && !isCommunityPost && completeSafely && (
                   <button type="button" className="tl-btn primary" onClick={completeSafely}>Mark complete</button>
                 )}
                 {/* Self Study: the Mark Complete button only appears once every section

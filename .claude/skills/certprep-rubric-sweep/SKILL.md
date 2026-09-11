@@ -130,6 +130,50 @@ Weaknesses found by running it, and what was done. Add to this every time.
   is actually built from. Mutation-checked: reintroducing `r.track_id` turns it
   red. The sweep also now excludes retired identities, because a question somebody
   deliberately withdrew should not be improved and offered back for approval.
+- *(2026-09-10)* **The first completed run spent a model call on a question no
+  rewrite can ever fix.** `CCARF-A2` is multi-select by design; `option_count` is
+  defined as four options AND single select, and `checkInvariants` forbids
+  changing how many answers are correct. Aiming at a flat 6/6 would re-spend on it
+  every run and report a structural property of the item as a failure. Added
+  `unachievableDimensions` / `achievableScore`: the sweep now targets what each
+  item CAN reach and says so in the log (`ceiling 5/6: option_count cannot
+  change`). **A target an item cannot reach is not a standard, it is a bug in the
+  check.** Mutation-checked.
+- *(2026-09-10)* **The run ended by losing its own cost telemetry.**
+  `ConnectionManager.getConnection was called after the connection manager was
+  closed` — `getInstrumentedOpenAI` writes `ai_events` rows asynchronously and the
+  script closed sequelize out from under the last write. The output was correct,
+  which is what makes it easy to miss: the only casualty was the accounting for
+  the most expensive part of the job. The script now settles telemetry before
+  closing the connection.
+- *(2026-09-10)* **Scoring the whole bank read-only, before spending anything,
+  showed the sweep was about to rewrite 18 questions that are already correct.**
+  Distribution across all 150: 129 at 6/6, 21 at 5/6, 132 at their ceiling, 18
+  below it — and those 18 are exactly the scenario-framing false negatives already
+  documented in `ccarRubric.ts`. Their only missing dimension is scenario framing,
+  so the sole way a candidate could score higher is by inserting a phrase from the
+  marker list: **changing text that is already right to satisfy a proxy.** The
+  list was a comment, so nothing could act on it; it is now
+  `SCENARIO_FALSE_NEGATIVES`, and `unachievableDimensions` reads it. **Score the
+  bank read-only first — it costs nothing and it tells you what the run would
+  actually do.**
+- *(2026-09-10)* **The full 150-question run came back clean, and the summary
+  line overstated it.** `RESULT: 150/150 at 6/6` — while 21 questions were at 5/6,
+  correctly capped at their ceiling. The ceiling change had made the count fold
+  every skipped item in as a six. **A run that reports better than reality is
+  worse than one that reports nothing, because it ends the investigation.** Now
+  reported as two numbers with the label each one measures: how many reached the
+  top of the rubric, and how many are as good as they are permitted to get. A test
+  pins both, including one asserting the old wording cannot return. Note what
+  happened here: a tool built to catch checks that overstate, overstating.
+- *(2026-09-10)* **The approval step would have approved 129 while announcing
+  150.** It filtered on `after === 6` where the log line above it printed the
+  ceiling count, so the 21 capped items would have been silently left unapproved
+  — leaving the bank short of the exact thing that was asked for, and saying
+  otherwise. Caught by reading the code before running it, not by running it. The
+  ceiling is now stored on each outcome rather than re-derived in two places,
+  because the summary and the approval disagreed precisely because each guessed
+  separately. **Before a run that writes, read what it will actually select.**
 - *(2026-09-10)* **Do not write source containing backslashes through a shell
   heredoc.** Building the schema parser that way put a literal CR and a real
   newline where `` and `

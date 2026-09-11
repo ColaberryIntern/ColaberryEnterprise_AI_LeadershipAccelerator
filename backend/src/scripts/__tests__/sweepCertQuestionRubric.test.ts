@@ -204,3 +204,70 @@ describe('BANK_QUERY columns exist in the schema', () => {
     expect(referenced.filter((c) => !questionCols.has(c))).toEqual([]);
   });
 });
+
+/**
+ * The summary line must not claim more than the run achieved.
+ *
+ * After the ceiling change it read `RESULT: 150/150 at 6/6` while 21 questions
+ * were at 5/6 — correctly capped, but not sixes. It counted every skipped item
+ * as perfect. A run that reports better than reality is worse than one that
+ * reports nothing, because it ends the investigation.
+ *
+ * Asserted on the source rather than by running main(), which needs a database:
+ * what matters is that the two counts stay distinct and the label on each is the
+ * one it actually measures.
+ */
+describe('the result summary distinguishes perfect from capped', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const src: string = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'sweepCertQuestionRubric.ts'), 'utf8',
+  );
+
+  it('counts sixes strictly, without folding in skipped items', () => {
+    expect(src).toMatch(/const perfect = outcomes\.filter\(\(o\) => o\.after === 6\)/);
+  });
+
+  it('labels the ceiling count as a ceiling, not as 6/6', () => {
+    expect(src).toMatch(/RESULT: \$\{atCeiling\}\/\$\{outcomes\.length\} at their ceiling/);
+    expect(src).not.toMatch(/RESULT: \$\{meets\}\/\$\{outcomes\.length\} at 6\/6/);
+  });
+
+  it('says out loud when items are capped below six', () => {
+    expect(src).toMatch(/capped below six by a dimension no rewrite can change/);
+  });
+});
+
+/**
+ * The approval step must approve what the summary counted.
+ *
+ * It filtered on `after === 6` while the line above it announced the CEILING
+ * count, so a full run would have said "approving 150" and approved 129 —
+ * silently leaving the 21 capped items unapproved and the bank short of the
+ * thing that was asked for.
+ */
+describe('approval targets the ceiling, not a flat six', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const src: string = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'sweepCertQuestionRubric.ts'), 'utf8',
+  );
+
+  it('selects approvable items by their own ceiling', () => {
+    expect(src).toMatch(/const approvable = outcomes\.filter\(\(x\) => x\.after >= x\.ceiling\)/);
+  });
+
+  it('no longer approves on a hard-coded six', () => {
+    expect(src).not.toMatch(/outcomes\.filter\(\(x\) => x\.after === 6\)/);
+  });
+
+  it('announces the same number it will approve', () => {
+    // The specific dishonesty being prevented: a count in the log line that is
+    // not the count in the loop underneath it.
+    expect(src).toMatch(/Approving \$\{approvable\.length\} item\(s\) at their ceiling/);
+  });
+
+  it('stores the ceiling on the outcome instead of re-deriving it', () => {
+    // Summary and approval must agree. They disagreed precisely because each
+    // guessed the ceiling separately.
+    expect(src).toMatch(/ceiling: number;/);
+  });
+});

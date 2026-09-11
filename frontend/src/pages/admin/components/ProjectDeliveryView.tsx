@@ -6,6 +6,7 @@ import CaseStudyReadinessModal from './projectDelivery/CaseStudyReadinessModal';
 import BuildEvidencePanel, { ProjectEvidence } from './projectDelivery/BuildEvidencePanel';
 import ArtifactsPanel, { ArtifactGroup } from './projectDelivery/ArtifactsPanel';
 import LinkChip from './projectDelivery/LinkChip';
+import WithoutProjectPanel, { WithoutProjectSummary } from './projectDelivery/WithoutProjectPanel';
 import {
   RiskPill, SortToggle, sortRows, countAttention, RiskAssessment, SortMode,
 } from './projectDelivery/RiskControls';
@@ -110,6 +111,9 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
   // Which question the list is answering. Readiness is the default because the
   // page's job is case-study conversion; attention is the inversion of it.
   const [sortMode, setSortMode] = useState<SortMode>('readiness');
+  // Students with no project at all. Fetched alongside the list because the board
+  // cannot show them and their absence is the thing worth reporting.
+  const [without, setWithout] = useState<WithoutProjectSummary | null>(null);
   // Evidence and artifacts are fetched on EXPAND, unlike the release bars: they are
   // detail nobody reads from a collapsed row, and both are empty for every project
   // today, so eager-loading them would cost 60 requests to render two empty states.
@@ -128,10 +132,17 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get('/api/admin/projects/delivery', {
-        params: cohortId ? { cohort_id: cohortId } : {},
-      });
-      setRows(res.data.projects || []);
+      const params = cohortId ? { cohort_id: cohortId } : {};
+      // Settled, not all: the delivery table is the page. If the without-project
+      // panel fails, the board must still render rather than showing an error for
+      // a supplementary panel.
+      const [res, wp] = await Promise.allSettled([
+        api.get('/api/admin/projects/delivery', { params }),
+        api.get('/api/admin/projects/without-project', { params }),
+      ]);
+      if (res.status === 'rejected') throw res.reason;
+      setRows(res.value.data.projects || []);
+      setWithout(wp.status === 'fulfilled' ? wp.value.data : null);
     } catch {
       setError('Could not load project delivery.');
     } finally {
@@ -227,6 +238,8 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
         <div className="col-6 col-lg-3"><StatCard label="Overdue tasks" value={totals.overdue} icon="alarm-warning-line" tone={totals.overdue > 0 ? 'danger' : 'success'} /></div>
         <div className="col-6 col-lg-3"><StatCard label="Case-study candidates" value={totals.candidates} icon="award-line" tone="success" hint="score 35+" /></div>
       </div>
+
+      <WithoutProjectPanel data={without} />
 
       {visible.length === 0 && (
         <div className="border rounded p-4 text-center text-muted small">

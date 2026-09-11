@@ -1,6 +1,8 @@
 import {
   STUDENT_INTAKE_SOURCE,
   loadIntakeTruth,
+  loadIntakeTruthAtRevision,
+  saveCorrectedTruth,
   saveIntakeTruth,
 } from '../intakeTruthStore';
 import ProjectUnderstandingRecord from '../../../models/ProjectUnderstandingRecord';
@@ -167,5 +169,74 @@ describe('reading it back', () => {
     // student who skipped every question from one who never started.
     model.findOne.mockResolvedValue(row([]));
     expect(await loadIntakeTruth(PROJECT)).toEqual([]);
+  });
+});
+
+describe('the revision a plan is built from', () => {
+  it('starts at 1, because an existing understanding was never revision zero', async () => {
+    model.findOne.mockResolvedValue(null);
+    const result = await saveIntakeTruth(intake);
+    expect(result.revision).toBe(1);
+    expect(model.create).toHaveBeenCalledWith(expect.objectContaining({ revision: 1 }));
+  });
+
+  it('increments when the facts actually change', async () => {
+    const existing = { items: [], revision: 4, update: jest.fn().mockResolvedValue(undefined) };
+    model.findOne.mockResolvedValue(existing);
+
+    const result = await saveIntakeTruth(intake);
+    expect(result.revision).toBe(5);
+    expect(existing.update).toHaveBeenCalledWith(expect.objectContaining({ revision: 5 }));
+  });
+
+  it('does NOT increment when nothing changed', async () => {
+    // A routine re-sync must not look like an edit to whoever is deciding
+    // whether a plan is stale.
+    model.findOne.mockResolvedValue(null);
+    const first = await saveIntakeTruth(intake);
+
+    model.findOne.mockResolvedValue({
+      items: [...first.items], revision: 7, update: jest.fn(),
+    });
+    expect((await saveIntakeTruth(intake)).revision).toBe(7);
+  });
+
+  it('does not move when a write is refused over a confirmed item', async () => {
+    // A refused write changes nothing, so a plan built on revision 9 is still
+    // built on the truth that is there.
+    model.findOne.mockResolvedValue({
+      items: [{
+        dimension: 'approval_points',
+        value: 'Priyanka signs off.',
+        classification: 'FACT',
+        provenance: 'client_confirmed',
+        source_quote: 'Priyanka signs off.',
+      }],
+      revision: 9,
+      update: jest.fn(),
+    });
+    const result = await saveIntakeTruth(intake);
+    expect(result).toMatchObject({ outcome: 'refused_confirmed', revision: 9 });
+  });
+
+  it('a correction always makes a new revision, and stamps who looked', async () => {
+    const existing = { items: [], revision: 2, update: jest.fn().mockResolvedValue(undefined) };
+    model.findOne.mockResolvedValue(existing);
+
+    const next = await saveCorrectedTruth(PROJECT, []);
+    expect(next).toBe(3);
+    expect(existing.update).toHaveBeenCalledWith(expect.objectContaining({
+      revision: 3, confirmed_at: expect.any(Date),
+    }));
+  });
+
+  it('reads the items and the revision together, for the plan generator', async () => {
+    model.findOne.mockResolvedValue({ items: [], revision: 11 });
+    expect(await loadIntakeTruthAtRevision(PROJECT)).toEqual({ items: [], revision: 11 });
+  });
+
+  it('treats a legacy row with no revision as revision 1, not zero', async () => {
+    model.findOne.mockResolvedValue({ items: [], revision: undefined });
+    expect((await loadIntakeTruthAtRevision(PROJECT))?.revision).toBe(1);
   });
 });

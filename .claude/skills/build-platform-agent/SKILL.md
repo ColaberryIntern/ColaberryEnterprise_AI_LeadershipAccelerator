@@ -124,6 +124,22 @@ Optionally override any Tier-2/3 field below.
   reads the DB column at all. Setting only `system_prompt` gets you a working manager
   conversation but NOT a working student conversation, and vice versa — most agents
   need both, built separately.
+- **The Talk tab's real ACTIONS (goal-setting, 1:1 scheduling, standing directives,
+  task assignment, approve/reject) are free the moment `system_prompt` works — no
+  per-agent wiring.** All eight manager-intent classifiers are generic, keyed on
+  `agentId` alone, with zero agent-specific code anywhere in them. See
+  `references/trust-and-hierarchy.md`'s "Manager-conversation ACTIONS are free"
+  section — do not add a step to this skill's build flow to "wire up" these
+  capabilities; there is nothing to wire for a new agent.
+- **The Trust & Control tab's Role Charter (`AgentRoleCharter`) is real, manager-
+  authored, and NOT seeded automatically** — same posture as the other 5
+  manager-authored tables (`AgentGoal`/`AgentOneOnOne`/`AgentReportSubscription`/
+  `AgentMemoryProposal`/`ManagerDirective`), now 6 total. A brand-new agent's charter
+  reads `charter: null` honestly until a manager writes one via
+  `PUT /api/admin/agents/:id/charter`. Unlike the other 5 (where an honest empty state
+  is fine), consider filling this one out at build time if the new agent's purpose is
+  already well understood — see `references/trust-and-hierarchy.md`'s table for the
+  exact field shape and limits.
 - **`tools_granted` has no enum — reuse the existing tool chest before inventing a
   new tool name.** `backend/src/services/reese/agentToolCapabilities.ts`'s
   `TOOL_CAPABILITIES` is the real, shared registry every agent's transparency page
@@ -310,6 +326,24 @@ H. *(deploy + verify)* `tsc --noEmit` both stacks; unit tests (happy/failure/bou
    reply is grounded (not a generic refusal) — the same live verification pattern
    used for Reese's own recent-activity grounding (`agentManagerConversationPrompt.ts`,
    2026-09-04).
+H.5. *(deploy + verify, REQUIRED)* **Walk every real `AgentDetailPage` tab for the new
+   agent — none of the steps above check this, and "does it actually work across the
+   whole page" was an undocumented gap until this checkpoint (2026-09-10).** Open
+   `/admin/agents/:id` and click through all eight: **At a Glance** (real KPI tiles,
+   no crash even with zero data everywhere), **Live Status** (operational state
+   derives something real, even if "Unknown"), **Overview** (identity/system-prompt/
+   reports-to render, matching what steps E-F actually set), **Work & Decisions**
+   (empty Manager Inbox renders honestly, not broken), **Talk** (send one real message
+   — already covered above, but confirm the tab itself opens clean), **Reports**
+   (subscribe form renders; the new Preview button, 2026-09-10, is a good extra check —
+   click it with any section checked and confirm real content comes back, not an
+   error), **Performance** (empty goals/1:1 lists render honestly), **Trust & Control**
+   (Charter panel shows `null`/empty honestly unless step E.5's charter-fill option was
+   taken, in which case confirm the real written content renders). A tab that crashes
+   or silently shows nothing where an honest empty state was expected is a real defect
+   to fix before considering this agent built — not a follow-up. Also open the real
+   Org Chart page and confirm the new agent appears in the correct position under its
+   `reports_to` chain (visual confirmation, not just the API-level check above).
 
 ## If this agent needs to be proactive (initiates contact on its own)
 
@@ -349,9 +383,12 @@ ones' draft reads/produces) · a ✅/⚠️ checklist (registry-entry-exists ·
 identity-preview-clean · persona-drafted · prompt-drafted · ticket-shape-defined ·
 transparency-page-confirmed-generic-no-change-needed · agent-ticket-standard-reviewed
 (step G.5, if this agent creates tickets) · trust-hierarchy-planned (step E.5) ·
-tool-chest-checked-before-inventing-new-tools · governance-checklist-reviewed) ·
-explicit confirmation nothing was actually created (zero real writes) · the exact next
-step if the producer wants to proceed to a real commit.
+tool-chest-checked-before-inventing-new-tools · governance-checklist-reviewed ·
+manager-intent-actions-confirmed-free-no-wiring-needed · role-charter-plan (write one
+now, or confirm the honest-empty state is acceptable for launch) ·
+all-eight-tabs-walked-live (step H.5)) · explicit confirmation nothing was actually
+created (zero real writes) · the exact next step if the producer wants to proceed to
+a real commit.
 
 ## Governance checklist (mirrored in `docs/PROOFDESK_STATUS.md`)
 

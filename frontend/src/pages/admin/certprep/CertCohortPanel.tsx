@@ -232,7 +232,7 @@ export default function CertCohortPanel({
               <ul className="list-unstyled mb-0">
                 {notStarted.map((s) => (
                   <li key={s.enrollment_id} className="py-1 border-bottom">
-                    <PersonLink name={s.full_name} email={s.email} enrollmentId={s.enrollment_id} />
+                    <PersonLink tab="work" name={s.full_name} email={s.email} enrollmentId={s.enrollment_id} />
                     {s.full_name && s.email && <div className="small text-muted">{s.email}</div>}
                   </li>
                 ))}

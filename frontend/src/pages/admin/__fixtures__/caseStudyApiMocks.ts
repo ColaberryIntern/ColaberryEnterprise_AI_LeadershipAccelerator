@@ -34,6 +34,10 @@ export function installCaseStudyApiMocks(api: jest.Mocked<typeof adminApi>): voi
   api.applyCaseStudyOverride.mockResolvedValue({
     outcome: 'created', snapshotId: SNAPSHOT_DRAFT_ID, version: 4, contentHash: 'h4',
     path: 'identity.standfirst',
+    // An override approves itself and repoints the surfaces the record is already live on,
+    // so the fixture carries the outcome the panels now report. `republished` is empty here
+    // because this fixture's record is not published anywhere.
+    approved: true, republished: [], republishBlocked: [],
   });
   api.approveCaseStudySnapshot.mockResolvedValue({
     outcome: 'approved', snapshot: snapshotFixture(SNAPSHOT_DRAFT_ID, 3, 'approved'),
