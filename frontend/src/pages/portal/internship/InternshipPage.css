@@ -587,3 +587,81 @@
   .ip-terms { grid-template-columns: 1fr; gap: 2px 0; }
   .ip-terms dd { margin-bottom: 8px; }
 }
+
+/* ── The phone-call overlay ────────────────────────────────────────────────
+   Blocks the page while a call is live, then acknowledges the outcome. It is a
+   soft block: every state that waits also offers a way back to answering online.
+   Fixed to the viewport so it covers the whole portal, not just the card. */
+.ip-callover {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(17, 24, 39, 0.55);
+  backdrop-filter: blur(3px);
+}
+.ip-callover__card {
+  background: var(--card, #fff);
+  color: var(--strong, #111827);
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+  width: min(440px, 100%);
+  padding: 32px 28px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.ip-callover__card h3 {
+  margin: 4px 0 0;
+  font-size: 20px;
+  color: var(--strong, #111827);
+}
+.ip-callover__card p {
+  margin: 0;
+  max-width: 42ch;
+  color: var(--muted, #4b5563);
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+.ip-callover__card .ip-skip { margin-top: 6px; }
+.ip-callover__card .te-btn { margin-top: 8px; }
+
+/* Three dots that breathe while the call is live. */
+.ip-callpulse { display: flex; gap: 9px; height: 18px; align-items: center; }
+.ip-callpulse span {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--berry, #b31b34);
+  animation: ip-callpulse 1.2s ease-in-out infinite;
+}
+.ip-callpulse span:nth-child(2) { animation-delay: 0.18s; }
+.ip-callpulse span:nth-child(3) { animation-delay: 0.36s; }
+@keyframes ip-callpulse {
+  0%, 100% { transform: scale(0.7); opacity: 0.45; }
+  50%      { transform: scale(1);   opacity: 1; }
+}
+
+/* The completion check. */
+.ip-callmark {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--good, #2e7d5b);
+}
+.ip-callmark--part { background: var(--watch, #a8690f); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ip-callpulse span { animation: none; opacity: 0.9; }
+}
