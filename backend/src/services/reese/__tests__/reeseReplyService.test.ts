@@ -8,7 +8,10 @@
  */
 jest.mock('../../../models/RoomMembership', () => ({ findOne: jest.fn() }));
 jest.mock('../../../models/RoomMessage', () => ({ findAll: jest.fn() }));
-jest.mock('../reeseIdentitySeed', () => ({ getReeseEnrollmentId: jest.fn(), getReeseAdminUserId: jest.fn(), getReeseAgentId: jest.fn() }));
+jest.mock('../reeseIdentitySeed', () => ({
+  getReeseEnrollmentId: jest.fn(), getReeseAdminUserId: jest.fn(), getReeseAgentId: jest.fn(),
+  REESE_AGENT_NAME: 'Reese',
+}));
 jest.mock('../reeseSystemPrompt', () => ({ buildReeseSystemPrompt: jest.fn() }));
 jest.mock('../../openaiInstrumented', () => ({ getInstrumentedOpenAI: jest.fn() }));
 jest.mock('../../communityRooms/dmService', () => ({ sendDmMessage: jest.fn() }));
