@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NewBuildAnswers, BuildSize } from './projectsStore';
 import { useIsExplorer } from '../useIsExplorer';
-import { fetchIntakeQuestions, IntakeQuestion } from '../../../services/sbpApi';
+import { fetchIntakeQuestions, IntakeQuestion, CoveredAngle } from '../../../services/sbpApi';
 
 // "Start a new build" — the questionnaire that shapes an idea into a project.
 // Three steps: (1) idea + size, (2) interview questions generated from THAT
@@ -75,6 +75,9 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
   // tailored.
   const [questions, setQuestions] = useState<IntakeQuestion[]>([]);
   const [generated, setGenerated] = useState(true);
+  // What the description already answered, as the server reported it. Shown
+  // in the review so a short interview reads as deliberate rather than broken.
+  const [covered, setCovered] = useState<CoveredAngle[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [replies, setReplies] = useState<Record<string, string>>({});
@@ -82,13 +85,16 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
   // Next again doesn't re-ask the server for the same thing.
   const [askedFor, setAskedFor] = useState<string | null>(null);
 
+  // `angle` rides along with each answer. Without it the server cannot file
+  // the answer against a truth dimension and reports it unmapped, which is
+  // what happened to every answer before this line existed.
   const answered = questions
-    .map((q) => ({ id: q.id, question: q.question, answer: (replies[q.id] || '').trim() }))
+    .map((q) => ({ id: q.id, question: q.question, answer: (replies[q.id] || '').trim(), angle: q.angle }))
     .filter((a) => a.answer.length > 0);
 
   const currentQ = questions[qIndex] ?? null;
 
-  const answers: NewBuildAnswers = { idea, name, size, weeks, answers: answered };
+  const answers: NewBuildAnswers = { idea, name, size, weeks, answers: answered, covered };
 
   async function loadQuestions(force = false): Promise<void> {
     const current = idea.trim();
@@ -100,6 +106,7 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
     if (res.ok) {
       setQuestions(res.result.questions);
       setGenerated(res.result.generated !== false);
+      setCovered(res.result.covered ?? []);
       setAskedFor(current);
     } else {
       // The server degrades internally, so a failure here means the request

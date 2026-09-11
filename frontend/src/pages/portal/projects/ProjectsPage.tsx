@@ -504,6 +504,7 @@ const ProjectsPage: React.FC = () => {
       data_sources: a.dataSources || undefined,
       done_definition: a.done || undefined,
       answers: a.answers && a.answers.length ? a.answers : undefined,
+      covered: a.covered && a.covered.length ? a.covered : undefined,
       target_weeks: a.weeks,
     });
     if (!started.ok) { setPipeline({ state: 'local', error: started.error }); return; }

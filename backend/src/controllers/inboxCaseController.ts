@@ -2,7 +2,8 @@ import { Request, Response } from 'express';
 import { Op } from 'sequelize';
 import InboxCase from '../models/InboxCase';
 import InboxCaseEvent from '../models/InboxCaseEvent';
-import { discoverCaseSchema, listCasesQuerySchema, caseIdParamSchema, caseItemParamSchema, updateCaseItemSchema, assessCaseSchema, quickResolveItemSchema } from '../schemas/inboxCaseSchema';
+import { discoverCaseSchema, listCasesQuerySchema, caseIdParamSchema, caseItemParamSchema, updateCaseItemSchema, assessCaseSchema, quickResolveItemSchema, updateCaseOperatorFieldsSchema } from '../schemas/inboxCaseSchema';
+import { updateCaseOperatorFields } from '../services/inboxCase/caseOperatorFieldsService';
 import { discoverCases } from '../services/inboxCase/caseDiscoveryService';
 import { getCaseWithChildren } from '../services/inboxCase/caseRepository';
 import { getCaseTicketId } from '../services/inboxCase/caseTicketService';
@@ -43,7 +44,7 @@ export async function handleListCases(req: Request, res: Response) {
   if (!parsed.success) {
     return res.status(400).json({ error: 'ValidationError', details: parsed.error.issues });
   }
-  const { state, mode, page, limit, include_resolved } = parsed.data;
+  const { state, mode, page, limit, include_resolved, include_snoozed } = parsed.data;
   const where: Record<string, unknown> = {};
   if (state) {
     where.state = state;
@@ -52,6 +53,13 @@ export async function handleListCases(req: Request, res: Response) {
     // list — still reachable via state=RESOLVED or include_resolved=true.
     // An explicit `state` filter above is completely unaffected by this.
     where.state = { [Op.ne]: 'RESOLVED' };
+  }
+  if (!state && !include_snoozed) {
+    // Default view also hides cases snoozed into the future (/inbox-zero).
+    // NULL means never snoozed; a past snoozed_until has expired and the case
+    // is back in the queue. Same shape as the RESOLVED rule above: an explicit
+    // `state` filter is unaffected, and include_snoozed=true shows everything.
+    where.snoozed_until = { [Op.or]: [{ [Op.is]: null }, { [Op.lte]: new Date() }] };
   }
   if (mode) where.mode = mode;
 
@@ -113,6 +121,26 @@ export async function handleUpdateCaseItem(req: Request, res: Response) {
   });
 
   res.json({ item: item.toJSON() });
+}
+
+// /inbox-zero T2b: snooze / priority override on a case. The only writer for
+// the four operator columns T2 added; every change is an audited event with
+// the previous values (see caseOperatorFieldsService).
+export async function handleUpdateCaseOperatorFields(req: Request, res: Response) {
+  const paramsParsed = caseIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) return res.status(400).json({ error: 'ValidationError', details: paramsParsed.error.issues });
+  const bodyParsed = updateCaseOperatorFieldsSchema.safeParse(req.body);
+  if (!bodyParsed.success) return res.status(400).json({ error: 'ValidationError', details: bodyParsed.error.issues });
+
+  try {
+    const result = await updateCaseOperatorFields(paramsParsed.data.caseId, bodyParsed.data, (req as any).admin?.email || 'admin');
+    res.json(result);
+  } catch (err: any) {
+    if (err?.statusCode === 404) return res.status(404).json({ error: err.error_class, message: err.message });
+    if (err?.name === 'CaseResolvedError') return res.status(409).json({ error: err.name, message: err.message });
+    if (err?.name === 'SnoozeRequiresReasonError') return res.status(400).json({ error: 'ValidationError', message: err.message });
+    throw err;
+  }
 }
 
 export async function handleQuickResolveItem(req: Request, res: Response) {

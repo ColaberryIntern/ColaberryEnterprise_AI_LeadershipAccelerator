@@ -25,6 +25,8 @@ interface InboxCaseActionAttributes {
   attempt_count: number;
   external_receipt: Record<string, unknown> | null;
   verification_status: 'PENDING' | 'VERIFIED' | 'VERIFICATION_FAILED' | null;
+  // Bounds the live re-fetch verifier's retries (caseVerificationService).
+  verification_attempt_count: number;
   error_class: string | null;
   error_message: string | null;
   acting_admin: string;
@@ -54,6 +56,7 @@ class InboxCaseAction extends Model<InboxCaseActionAttributes> implements InboxC
   declare attempt_count: number;
   declare external_receipt: Record<string, unknown> | null;
   declare verification_status: 'PENDING' | 'VERIFIED' | 'VERIFICATION_FAILED' | null;
+  declare verification_attempt_count: number;
   declare error_class: string | null;
   declare error_message: string | null;
   declare acting_admin: string;
@@ -84,6 +87,7 @@ InboxCaseAction.init(
     attempt_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     external_receipt: { type: DataTypes.JSONB, allowNull: true },
     verification_status: { type: DataTypes.ENUM('PENDING', 'VERIFIED', 'VERIFICATION_FAILED'), allowNull: true },
+    verification_attempt_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     error_class: { type: DataTypes.STRING(100), allowNull: true },
     error_message: { type: DataTypes.TEXT, allowNull: true },
     acting_admin: { type: DataTypes.STRING(100), allowNull: false },

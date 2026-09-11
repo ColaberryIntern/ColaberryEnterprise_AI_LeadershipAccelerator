@@ -95,6 +95,53 @@ describe('loadCommunications', () => {
     expect(panel!.totalCampaigns).toBe(1);
   });
 
+  it('refuses to pin an outcome to a message when Mandrill recorded a different subject', async () => {
+    // The case from production, 2026-09-11: a campaign email showing "7 opens &
+    // clicks" whose outcomes all carried metadata.subject of her LOGIN emails.
+    // The poll pins every open to the most recent send; the subject is the fact.
+    mockQuery
+      .mockResolvedValueOnce([{
+        campaign_id: 'c1', campaign_name: 'Alumni', campaign_status: 'active', status: 'active',
+        current_step_index: 0, total_steps: 1, enrolled_at: new Date('2026-08-01T00:00:00Z'),
+        last_activity_at: null, touchpoint_count: 1, response_count: 0,
+      }])
+      .mockResolvedValueOnce([{
+        id: 'campaign-email', campaign_id: 'c1', direction: 'outbound', channel: 'email',
+        subject: 'Strengthen Your Career with the Alumni AI Champion Program', body: '<p>hi</p>',
+        sent_at: new Date('2026-08-13T18:52:35Z'), scheduled_for: null, status: 'sent',
+        ai_generated: true, step_index: 0, to_address: 'a@b.com', source: 'scheduled_emails',
+      }])
+      .mockResolvedValueOnce([
+        // Genuinely on this email: no subject recorded (older row), so trusted.
+        { scheduled_email_id: 'campaign-email', campaign_id: 'c1', outcome: 'sent', channel: 'email',
+          created_at: new Date('2026-08-13T18:52:35Z'), metadata: { ai_generated: true } },
+        // Pinned to this email by the poll, but Mandrill says it was a login email.
+        { scheduled_email_id: 'campaign-email', campaign_id: 'c1', outcome: 'opened', channel: 'email',
+          created_at: new Date('2026-08-16T20:35:07Z'),
+          metadata: { subject: 'Log into your ColaberryApp Account', source: 'mandrill_poll' } },
+        { scheduled_email_id: 'campaign-email', campaign_id: 'c1', outcome: 'clicked', channel: 'email',
+          created_at: new Date('2026-09-02T21:05:07Z'),
+          metadata: { subject: '[Accelerator] Your Portal Access Link', source: 'mandrill_poll' } },
+      ]);
+
+    const panel = await loadCommunications([1]);
+    const thread = panel!.threads[0];
+    const email = thread.messages.find((m) => m.id === 'campaign-email')!;
+
+    // Only the outcome whose subject agrees (or was never recorded) stays on it.
+    expect(email.outcomes.map((o) => o.outcome)).toEqual(['sent']);
+    expect(email.outcomes.every((o) => o.attributed)).toBe(true);
+
+    // The two mis-pinned ones become their own rows, named by the REAL subject.
+    const loose = thread.messages.filter((m) => m.source === 'interaction_outcomes');
+    expect(loose.map((m) => m.subject).sort()).toEqual([
+      'Log into your ColaberryApp Account',
+      '[Accelerator] Your Portal Access Link',
+    ].sort());
+    // Every recorded outcome is still counted -- moved, not dropped.
+    expect(panel!.totalOutcomes).toBe(3);
+  });
+
   it('keeps a message with no campaign in its own thread', async () => {
     mockQuery
       .mockResolvedValueOnce([])

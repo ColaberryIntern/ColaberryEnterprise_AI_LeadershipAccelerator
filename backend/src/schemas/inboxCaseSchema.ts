@@ -5,6 +5,7 @@ import {
   ITEM_DISPOSITIONS,
   ACTION_TYPES,
   DISCOVERY_WINDOW_DAYS,
+  PRIORITY_BANDS,
 } from '../types/inboxCase';
 
 // Runtime request/response validation for the Inbox Intel — Case Resolution
@@ -30,6 +31,10 @@ export const listCasesQuerySchema = z.object({
   // behavior is skipped and every state is returned, matching the frontend's
   // "All states (incl. resolved)" option.
   include_resolved: z.coerce.boolean().optional(),
+  // When true (and no explicit `state` filter), cases snoozed into the future
+  // are returned too. Default view hides them: a snoozed case is, by
+  // definition, one Ali asked not to see until its snoozed_until passes.
+  include_snoozed: z.coerce.boolean().optional(),
 });
 
 export const caseIdParamSchema = z.object({ caseId: z.string().uuid() });
@@ -49,6 +54,24 @@ export const updateCaseItemSchema = z
   })
   .refine((v) => v.inclusion_status !== undefined || v.disposition !== undefined, {
     message: 'At least one of inclusion_status or disposition is required',
+  });
+
+// /inbox-zero T2b: the operator-field writer (snooze + priority override).
+// A non-null snoozed_until REQUIRES a reason — "snoozed with a reason/date".
+// snoozed_until: null clears the snooze (and its reason, in the service).
+export const updateCaseOperatorFieldsSchema = z
+  .object({
+    snoozed_until: z.string().datetime({ offset: true }).nullable().optional(),
+    snooze_reason: z.string().trim().max(500).nullable().optional(),
+    priority_band: z.enum(PRIORITY_BANDS).nullable().optional(),
+    priority_reason: z.string().trim().max(500).nullable().optional(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), {
+    message: 'At least one of snoozed_until, snooze_reason, priority_band or priority_reason is required',
+  })
+  .refine((v) => !(typeof v.snoozed_until === 'string' && !(v.snooze_reason ?? '').trim()), {
+    message: 'A snooze requires a reason',
+    path: ['snooze_reason'],
   });
 
 export const answerQuestionSchema = z
@@ -139,7 +162,10 @@ export const caseAssessmentOutputSchema = z.object({
   people_involved: z.array(z.object({ name: z.string(), role: z.string() })).default([]),
   current_owner: z.string().nullable().default(null),
   commitments_made: z
-    .array(z.object({ statement: z.string(), owner: z.string(), evidence: z.array(evidenceRefSchema).default([]) }))
+    // due_at: /inbox-zero T8. Optional so legacy assessments still parse; must
+    // ALSO be declared in the SYSTEM_PROMPT wire shape or the model is never
+    // asked for it (the `deadlines` line below is the precedent).
+    .array(z.object({ statement: z.string(), owner: z.string(), due_at: z.string().nullable().optional(), evidence: z.array(evidenceRefSchema).default([]) }))
     .default([]),
   deadlines: z
     .array(z.object({ description: z.string(), due_at: z.string().nullable().default(null), evidence: z.array(evidenceRefSchema).default([]) }))
@@ -149,6 +175,16 @@ export const caseAssessmentOutputSchema = z.object({
   decisions_required: z.array(z.string()).default([]),
   recommended_next_actions: z.array(z.string()).default([]),
   confidence: z.number().min(0).max(100),
+  // T4 /inbox-zero response-needed contract. OPTIONAL, deliberately: this is
+  // a plain z.object, which STRIPS unknown keys, so any field not declared
+  // here is silently discarded at safeParse — and optional so assessments
+  // produced before the field existed still parse. Read via
+  // readResponseNeeded(), which normalises absence to UNCERTAIN.
+  response_needed: z.enum(['YES', 'NO', 'UNCERTAIN']).optional(),
+  response_needed_confidence: z.number().min(0).max(100).optional(),
+  response_needed_reason: z.string().optional(),
+  response_channel: z.enum(['EMAIL', 'BASECAMP', 'BOTH', 'INTERNAL_TASK', 'NONE']).optional(),
+  response_channel_reason: z.string().optional(),
   // Consolidated, case-level questions — never one per email. Each must be
   // answerable with a short list of choices plus a free-text write-in.
   questions: z

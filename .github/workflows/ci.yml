@@ -77,10 +77,10 @@ jobs:
           # Each was rewritten to guard the PROPERTY, not the snapshot, so it cannot go stale
           # the same way twice.
           #
-          # HomeV2 is the one that is NOT a stale test. Its ten-section budget was raised from
-          # nine at Ali's direction with the note "the next section should replace one, not
-          # extend this again", and the page is at twelve. That is the test doing its job;
-          # whether twelve stands is a design decision, so it waits here for one.
+          # HomeV2 was the one that was NOT a stale test: its section budget caught real
+          # growth. Put to Ali as a design decision on 2026-09-11; he kept the twelve, the
+          # budget was raised and recorded in the test the same way the 9 -> 10 raise was,
+          # and it is enforced again.
           #
           # testEnv/ is NOT a failure. It holds jest helpers that live under __tests__ and
           # contain no test, so jest fails them for being empty. Excluding the directory is
@@ -89,7 +89,7 @@ jobs:
           # MAINTENANCE: nothing joins this list without a reason beside it. Every entry
           # below is a real red suite in main, not a flaky one, and each shrinks the list
           # when fixed.
-          npx react-scripts test --watchAll=false             --testPathIgnorePatterns               "/testEnv/"               "src/pages/publicV2/__tests__/storyDetailV2Contract.test.ts"               "src/pages/publicV2/__tests__/HomeV2.test.tsx"
+          npx react-scripts test --watchAll=false             --testPathIgnorePatterns               "/testEnv/"               "src/pages/publicV2/__tests__/storyDetailV2Contract.test.ts"              
 
   # A typecheck is NOT a build. On 2026-08-15 commit 2f0a72dd left main
   # unbuildable for hours with every check green: an eslint-disable comment in a
