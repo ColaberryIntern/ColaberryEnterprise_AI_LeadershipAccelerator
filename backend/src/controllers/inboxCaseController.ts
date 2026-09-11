@@ -2,7 +2,8 @@ import { Request, Response } from 'express';
 import { Op } from 'sequelize';
 import InboxCase from '../models/InboxCase';
 import InboxCaseEvent from '../models/InboxCaseEvent';
-import { discoverCaseSchema, listCasesQuerySchema, caseIdParamSchema, caseItemParamSchema, updateCaseItemSchema, assessCaseSchema, quickResolveItemSchema } from '../schemas/inboxCaseSchema';
+import { discoverCaseSchema, listCasesQuerySchema, caseIdParamSchema, caseItemParamSchema, updateCaseItemSchema, assessCaseSchema, quickResolveItemSchema, updateCaseOperatorFieldsSchema } from '../schemas/inboxCaseSchema';
+import { updateCaseOperatorFields } from '../services/inboxCase/caseOperatorFieldsService';
 import { discoverCases } from '../services/inboxCase/caseDiscoveryService';
 import { getCaseWithChildren } from '../services/inboxCase/caseRepository';
 import { getCaseTicketId } from '../services/inboxCase/caseTicketService';
@@ -120,6 +121,26 @@ export async function handleUpdateCaseItem(req: Request, res: Response) {
   });
 
   res.json({ item: item.toJSON() });
+}
+
+// /inbox-zero T2b: snooze / priority override on a case. The only writer for
+// the four operator columns T2 added; every change is an audited event with
+// the previous values (see caseOperatorFieldsService).
+export async function handleUpdateCaseOperatorFields(req: Request, res: Response) {
+  const paramsParsed = caseIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) return res.status(400).json({ error: 'ValidationError', details: paramsParsed.error.issues });
+  const bodyParsed = updateCaseOperatorFieldsSchema.safeParse(req.body);
+  if (!bodyParsed.success) return res.status(400).json({ error: 'ValidationError', details: bodyParsed.error.issues });
+
+  try {
+    const result = await updateCaseOperatorFields(paramsParsed.data.caseId, bodyParsed.data, (req as any).admin?.email || 'admin');
+    res.json(result);
+  } catch (err: any) {
+    if (err?.statusCode === 404) return res.status(404).json({ error: err.error_class, message: err.message });
+    if (err?.name === 'CaseResolvedError') return res.status(409).json({ error: err.name, message: err.message });
+    if (err?.name === 'SnoozeRequiresReasonError') return res.status(400).json({ error: 'ValidationError', message: err.message });
+    throw err;
+  }
 }
 
 export async function handleQuickResolveItem(req: Request, res: Response) {

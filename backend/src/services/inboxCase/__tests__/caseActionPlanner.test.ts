@@ -67,6 +67,9 @@ jest.mock('../../../models/InboxCaseItem', () => ({ __esModule: true, default: f
 jest.mock('../../../models/InboxCaseAction', () => ({ __esModule: true, default: fakeInboxCaseAction }));
 jest.mock('../../../models/InboxCaseEvent', () => ({ __esModule: true, default: fakeInboxCaseEvent }));
 jest.mock('../../../models/InboxCaseQuestion', () => ({ __esModule: true, default: fakeInboxCaseQuestion }));
+// /inbox-zero T8: generatePlan records Ali's own commitments on the ledger.
+const fakeInboxCommitment = makeFakeModel();
+jest.mock('../../../models/InboxCommitment', () => ({ __esModule: true, default: fakeInboxCommitment }));
 
 // caseRepository (used here for getCaseOrThrow/transitionCase) now syncs the
 // Tickets board on every transition. caseTicketService transitively imports
@@ -86,6 +89,7 @@ beforeEach(() => {
   fakeInboxCaseAction.rows.clear();
   fakeInboxCaseEvent.rows.clear();
   fakeInboxCaseQuestion.rows.clear();
+  fakeInboxCommitment.rows.clear();
 });
 
 async function seedAnsweredQuestion(caseId: string, overrides: Partial<any> = {}) {

@@ -253,6 +253,28 @@ export async function replyToMessage(messageId: string, comment: string): Promis
   }
 }
 
+/**
+ * Read-only: is the message still in the Inbox folder? Used by the case
+ * verifier (/inbox-zero T5) to confirm an EMAIL_ARCHIVE actually landed,
+ * rather than trusting the executor's receipt. 404 from the inbox-scoped
+ * path means "not in the inbox", which is the success condition for an
+ * archive; anything else is rethrown classified so the caller can tell
+ * "could not check" from "checked and it is still there".
+ */
+export async function isMessageInInbox(messageId: string): Promise<boolean> {
+  const token = await getAccessToken();
+  try {
+    await axios.get(
+      `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/${messageId}?$select=id`,
+      { headers: { Authorization: `Bearer ${token}` }, timeout: 15000 },
+    );
+    return true;
+  } catch (error: any) {
+    if (error?.response?.status === 404) return false;
+    throw wrapGraphError(error, `Inbox lookup for message ${messageId}`);
+  }
+}
+
 export async function archiveMessage(messageId: string): Promise<void> {
   const token = await getAccessToken();
 

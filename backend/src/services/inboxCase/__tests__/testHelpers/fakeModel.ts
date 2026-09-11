@@ -70,6 +70,16 @@ function matchesWhere(row: any, where: any): boolean {
         if (row[key] == null || !(cmp(row[key], (value as any)[Op.gte]) >= 0)) return false;
         continue;
       }
+      // Nested JSON where — Sequelize's Postgres JSONB path filter, e.g.
+      // { snapshot: { thread_id: { [Op.in]: [...] } } } — recurse into the
+      // row's JSON column with the nested clause. Added for the /inbox-zero
+      // reopen-on-reply lookup (caseReopenService). A plain object with no
+      // symbol keys and at least one key is treated as a nested clause.
+      if (symbolKeys.length === 0 && Object.keys(value as object).length > 0) {
+        if (row[key] == null || typeof row[key] !== 'object') return false;
+        if (!matchesWhere(row[key], value)) return false;
+        continue;
+      }
     }
     if (row[key] !== value) return false;
   }

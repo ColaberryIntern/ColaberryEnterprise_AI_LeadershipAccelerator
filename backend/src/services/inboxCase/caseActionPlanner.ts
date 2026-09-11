@@ -4,13 +4,14 @@ import InboxCase from '../../models/InboxCase';
 import InboxCaseItem from '../../models/InboxCaseItem';
 import InboxCaseAction from '../../models/InboxCaseAction';
 import InboxCaseQuestion from '../../models/InboxCaseQuestion';
-import { ActionRiskLevel, ActionType, ALWAYS_INDIVIDUAL_APPROVAL, CaseAssessment, responseNeedsHumanReview } from '../../types/inboxCase';
+import { ActionRiskLevel, ActionType, ALWAYS_INDIVIDUAL_APPROVAL, CaseAssessment, readResponseNeeded, responseNeedsHumanReview } from '../../types/inboxCase';
 import { computeIdempotencyKey, isBasecampDigestSender } from './textNormalization';
 import { getCaseOrThrow, transitionCase } from './caseRepository';
 import { logCaseEvent } from './caseEventLog';
 import { postCaseProgressNote } from './caseTicketService';
 import { redactSecretLikePatterns } from './promptSafety';
 import { redactSensitive } from '../../utils/piiRedaction';
+import { ALI_OWNER_PATTERN, recordCommitmentsFromAssessment } from './commitmentLedgerService';
 
 // Plan (root directive section 6/11): turns a completed assessment into a
 // concrete, previewable bundle of proposed InboxCaseAction rows. Rule-based
@@ -53,6 +54,7 @@ interface PlannerAssessment extends CaseAssessment {
 
 const DEFAULT_FOLLOWUP_DAYS = 3;
 
+
 function requiresIndividualApproval(actionType: ActionType, risk: ActionRiskLevel): boolean {
   return ALWAYS_INDIVIDUAL_APPROVAL.includes(actionType) || risk === 'HIGH';
 }
@@ -92,7 +94,7 @@ function buildWaitingActions(caseRow: InboxCase, assessment: CaseAssessment): Pr
   const actions: ProposedAction[] = [];
   for (const commitment of assessment.commitments_made || []) {
     const owner = (commitment.owner || '').trim();
-    if (!owner || /^ali(\s|$)/i.test(owner)) continue; // Ali's own commitments aren't "waiting on someone else"
+    if (!owner || ALI_OWNER_PATTERN.test(owner)) continue; // Ali's own commitments aren't "waiting on someone else" — they go to the commitment ledger (T8)
     const followUpDate = new Date(Date.now() + DEFAULT_FOLLOWUP_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     actions.push({
       action_type: 'MARK_WAITING',
@@ -106,6 +108,34 @@ function buildWaitingActions(caseRow: InboxCase, assessment: CaseAssessment): Pr
     });
   }
   return actions;
+}
+
+// /inbox-zero T7. MARK_DELEGATED was executable, verifiable and consumed by
+// the verifier, but nothing ever proposed one — delegation was a complete
+// pipeline with no producer. The deterministic signal for "this is a
+// handoff, not a wait" comes from the T4 contract: the assessment says the
+// real action is an INTERNAL_TASK and names a current owner who is not
+// Ali. A wait is the mirror image (someone ELSE promised Ali something —
+// buildWaitingActions). Exactly one MARK_DELEGATED per case, targeting the
+// primary included item so closure condition 7 ("delegated items have an
+// owner + source link") can be satisfied from the item's own source_url.
+function buildDelegationAction(caseRow: InboxCase, assessment: PlannerAssessment, primaryItem: InboxCaseItem | null): ProposedAction | null {
+  const owner = (assessment.current_owner || '').trim();
+  if (!owner || ALI_OWNER_PATTERN.test(owner)) return null;
+  if (readResponseNeeded(assessment).channel !== 'INTERNAL_TASK') return null;
+  if (!primaryItem) return null;
+
+  const statement = assessment.teaching_brief_recommended_decision || assessment.recommended_next_actions?.[0] || 'Hand off to owner';
+  return {
+    action_type: 'MARK_DELEGATED',
+    item_id: primaryItem.id,
+    target_source: 'case',
+    target_id: null,
+    preview: `Delegate to ${owner}: ${statement}`,
+    payload: { owner, statement, source_url: primaryItem.source_url },
+    risk_level: 'LOW',
+    idempotencyParts: [caseRow.id, 'MARK_DELEGATED', owner],
+  };
 }
 
 interface BasecampCommentPair {
@@ -233,9 +263,17 @@ export async function generatePlan(caseId: string, requestedBy: string): Promise
     .sort((a, b) => Number(b.match_score) - Number(a.match_score));
   const replyTarget = includedInboundEmail[0] || includedSentEmailWithRecipient[0] || null;
 
+  // /inbox-zero T8: Ali's own commitments used to be dropped by
+  // buildWaitingActions (correctly — he is not waiting on himself) and that
+  // was their only consumer. Record them on the ledger at plan time;
+  // idempotent on (case_id, statement_hash), so re-planning never duplicates.
+  await recordCommitmentsFromAssessment(caseRow, flatAssessment);
+
   const replyAction = buildReplyAction(caseRow, flatAssessment, replyTarget, answeredQaText);
+  const delegationAction = buildDelegationAction(caseRow, flatAssessment, replyTarget);
   const nonArchiveProposals: ProposedAction[] = [
     ...(replyAction ? [replyAction] : []),
+    ...(delegationAction ? [delegationAction] : []),
     ...buildWaitingActions(caseRow, flatAssessment),
   ];
   const basecampCommentPairs = buildBasecampCommentActions(caseRow, flatAssessment, basecampItems);

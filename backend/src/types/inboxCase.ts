@@ -27,6 +27,12 @@ export type CaseState = (typeof CASE_STATES)[number];
 export const PRIORITY_BANDS = ['P0', 'P1', 'P2', 'P3'] as const;
 export type PriorityBand = (typeof PRIORITY_BANDS)[number];
 
+// /inbox-zero commitment ledger (T8): what ALI owes. See models/InboxCommitment.ts.
+export const COMMITMENT_STATUSES = ['OPEN', 'FULFILLED', 'CANCELLED'] as const;
+export type CommitmentStatus = (typeof COMMITMENT_STATUSES)[number];
+export const COMMITMENT_SOURCES = ['assessment', 'sent_mail'] as const;
+export type CommitmentSource = (typeof COMMITMENT_SOURCES)[number];
+
 // Valid forward transitions. REOPENED can fall back into ASSESSING via a
 // separate explicit reopen operation (see caseStateMachine.ts) rather than
 // being reachable through this table, since reopening is a special reset,
@@ -275,7 +281,10 @@ export interface CaseAssessment {
   impact: string;
   people_involved: Array<{ name: string; role: string }>;
   current_owner: string | null;
-  commitments_made: Array<{ statement: string; owner: string; evidence: EvidenceRef[] }>;
+  // due_at added by /inbox-zero T8 (optional: legacy assessments lack it).
+  // Without a date, "overdue" is not computable and a commitment is reported
+  // as undated, never as overdue.
+  commitments_made: Array<{ statement: string; owner: string; due_at?: string | null; evidence: EvidenceRef[] }>;
   deadlines: Array<{ description: string; due_at: string | null; evidence: EvidenceRef[] }>;
   blockers: string[];
   missing_information: string[];
