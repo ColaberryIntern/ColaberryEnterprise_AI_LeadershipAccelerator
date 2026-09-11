@@ -117,9 +117,12 @@ GrowthJourneyEnrollment.init(
       references: { model: 'journey_paths', key: 'id' },
     },
     subject_ref: { type: DataTypes.STRING(128), allowNull: false },
-    // NOT a foreign key, deliberately — see the header. Explorer profiles are
-    // keyed on the enrollment id and this table must not make its integrity
-    // depend on a row another system may archive.
+    // NOT foreign keys, deliberately. Explorer profiles are keyed on the
+    // enrollment id and this table must not make its integrity depend on a row
+    // another system may archive — and under AD-2 no single identity table is
+    // privileged, so a hard FK to either would let an archive in `enrollments`
+    // cascade into, or block, a participation record. The DDL comment in
+    // `ensureGrowthJourneySchema.ts` says the same; a test asserts the absence.
     lead_id: { type: DataTypes.INTEGER, allowNull: true },
     enrollment_id: { type: DataTypes.UUID, allowNull: true },
     status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'active' },
