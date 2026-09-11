@@ -26,12 +26,15 @@ import { fetchIntakeQuestions, previewIntake } from '../../../../services/sbpApi
 jest.mock('../../../../services/sbpApi', () => ({
   fetchIntakeQuestions: jest.fn(),
   previewIntake: jest.fn(),
+  getCaseStudyFoundation: jest.fn(),
   describeFailure: () => ({ title: '', body: '', action: '' }),
 }));
 jest.mock('../../useIsExplorer', () => ({ useIsExplorer: () => false }));
 
 import ProjectWizard from '../ProjectWizard';
 import { PipelineBanner, CallBanner } from '../ProjectBanners';
+import CaseStudyReadinessCard from '../CaseStudyReadinessCard';
+import { getCaseStudyFoundation } from '../../../../services/sbpApi';
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -176,5 +179,24 @@ maybe('discovery harness', () => {
   it('step 1: the copy that says why detail matters', async () => {
     await mount(<ProjectWizard onCreate={() => {}} />);
     write('04-step1.html', container.innerHTML);
+  });
+
+  it('case study readiness: a build record with one open question', async () => {
+    (getCaseStudyFoundation as jest.Mock).mockResolvedValue({
+      ok: true,
+      foundation: {
+        project_id: 'p', maturity: 'build_record',
+        ladder: ['story_hypothesis', 'build_record', 'capability_demonstration', 'operational_result', 'impact_case_study'],
+        maturityReason: '2 verified stories, no demonstration reference yet.',
+        nextRungNeeds: 'A story that points at a demonstration: a test, a file or a URL where the capability can be watched working.',
+        truthRevision: 3, hypothesisCoverage: { filled: 4, total: 7 },
+        buildEvidence: { facts: [{ dimension: 'integrations', label: 'What it talks to', value: 'Reads the overnight inbox through the Gmail API.', evidence: 'src/gmail/client.ts' }, { dimension: 'systems', label: 'What it has to work with', value: 'Runs nightly as a GitHub Action.', evidence: '.github/workflows/nightly.yml' }], stories: [], verifiedStories: 2 },
+        demonstrationEvidence: [], outcomeEvidence: { items: [], why: 'No approved measurement definitions exist.', heldMeasurementEvents: 1 },
+        openQuestions: 1, publicationPreference: 'undecided', publishable: false, limitations: [],
+      },
+    });
+    // The aside the real interior mounts it in, so the card width matches.
+    await mount(<div className="te-side" style={{ maxWidth: 340 }}><CaseStudyReadinessCard projectId="p" /></div>);
+    write('05-readiness.html', container.innerHTML);
   });
 });

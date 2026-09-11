@@ -68,6 +68,19 @@ export const DIMENSION_HEADING: Readonly<Record<string, string>> = {
   actors: 'Who uses it',
   current_workflow: 'How it starts, and how often',
   desired_outcome: 'What would make someone say they did not know it could do that',
+  // The rest, so a fact a story filed never shows its schema name.
+  inputs: 'What it takes in',
+  outputs: 'What it produces',
+  data: 'The data it works on',
+  integrations: 'What it talks to',
+  pain_points: 'What hurts today',
+  exceptions: 'What happens when things go wrong',
+  security_context: 'What it must protect',
+  ai_opportunities: 'Where AI helps',
+  assumptions: 'What we are assuming',
+  unknowns: 'What nobody knows yet',
+  constraints: 'What it has to live with',
+  delivery_profile: 'How it is likely to be delivered',
 };
 
 export interface ReviewItem {

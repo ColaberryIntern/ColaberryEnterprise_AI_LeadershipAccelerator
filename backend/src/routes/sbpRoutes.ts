@@ -520,6 +520,27 @@ router.get('/api/portal/sbp/intake/:projectId/case-study-hypothesis', requirePar
 });
 
 /*
+ * The case-study foundation: hypothesis, build evidence, demonstration
+ * evidence and outcome evidence, kept apart, with the project's computed
+ * maturity. Read-only, a projection recomputed on every call; nothing here
+ * can publish anything and the response says so (`publishable: false`).
+ * Same scoping as every other build route.
+ */
+router.get('/api/portal/sbp/intake/:projectId/case-study-foundation', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const projectId = z.string().uuid().parse(req.params.projectId);
+    await requireOwnedProject(req, projectId);
+
+    const { loadCaseStudyFoundation } = await import('../services/sbp/caseStudyFoundationLoader');
+    const foundation = await loadCaseStudyFoundation(projectId);
+    if (!foundation) return res.status(404).json({ error: 'No intake for this project' });
+
+    res.json({ project_id: projectId, ...foundation });
+  } catch (e) { fail(res, e, next); }
+});
+
+/*
  * The confirmation gate BEFORE the build exists. The wizard's review step runs
  * ahead of startBuild, so there is no truth row yet; this computes the review
  * from the same pure functions that will write it. No database, no project
