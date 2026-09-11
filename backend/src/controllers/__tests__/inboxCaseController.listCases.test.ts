@@ -89,3 +89,59 @@ describe('handleListCases — sort order', () => {
     expect(callArgs.order).toEqual([['opened_at', 'ASC']]);
   });
 });
+
+// /inbox-zero (CC-20260910-3q7x): the default queue must also hide cases
+// snoozed into the future, and only those. NULL (never snoozed) and a past
+// snoozed_until (snooze expired) both stay in the queue. Pins the T2
+// acceptance criterion; the plan auditor pointed out this filter lives in the
+// controller, so this is where it is tested.
+describe('handleListCases — default snoozed-hidden behavior', () => {
+  function snoozeClause(where: any) {
+    return where.snoozed_until?.[Op.or];
+  }
+
+  it('hides future-snoozed cases by default: NULL or past snoozed_until only', async () => {
+    const req: any = { query: {} };
+    const res = mockRes();
+    const before = Date.now();
+
+    await handleListCases(req, res);
+
+    const clause = snoozeClause(findAndCountAll.mock.calls[0][0].where);
+    expect(clause).toHaveLength(2);
+    expect(clause[0]).toEqual({ [Op.is]: null });
+    const lte: Date = clause[1][Op.lte];
+    expect(lte).toBeInstanceOf(Date);
+    expect(lte.getTime()).toBeGreaterThanOrEqual(before);
+    expect(lte.getTime()).toBeLessThanOrEqual(Date.now());
+  });
+
+  it('returns snoozed cases too when include_snoozed=true', async () => {
+    const req: any = { query: { include_snoozed: 'true' } };
+    const res = mockRes();
+
+    await handleListCases(req, res);
+
+    expect(findAndCountAll.mock.calls[0][0].where.snoozed_until).toBeUndefined();
+  });
+
+  it('an explicit state filter is unaffected by the snooze rule', async () => {
+    const req: any = { query: { state: 'WAITING' } };
+    const res = mockRes();
+
+    await handleListCases(req, res);
+
+    const where = findAndCountAll.mock.calls[0][0].where;
+    expect(where.state).toBe('WAITING');
+    expect(where.snoozed_until).toBeUndefined();
+  });
+
+  it('include_resolved alone does not disable the snooze rule', async () => {
+    const req: any = { query: { include_resolved: 'true' } };
+    const res = mockRes();
+
+    await handleListCases(req, res);
+
+    expect(snoozeClause(findAndCountAll.mock.calls[0][0].where)).toHaveLength(2);
+  });
+});

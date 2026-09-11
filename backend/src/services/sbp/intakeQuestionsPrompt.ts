@@ -28,11 +28,24 @@ export interface IntakeQuestionsInputs {
  * a workflow gets the five a raw idea never contains, a project adds the
  * judgement and the operator, and an autonomous build works the whole list.
  * Raised from 5/7/9 so the top tier can actually reach angle 10.
+ *
+ * ## `min` is gone, and that was a real defect
+ *
+ * The angle list has always said "ask the first {{MAX}} that the student's
+ * description does not already answer clearly". A minimum contradicted it
+ * outright: a student who wrote three careful paragraphs answering eight angles
+ * was still asked six questions, because a floor is a direct numeric
+ * instruction and an exhortation is not.
+ *
+ * The brief for this work puts it plainly: put an upper bound on interview
+ * length, but no artificial lower bound. **The longer and clearer the
+ * description, the shorter the interview must become** - otherwise detail is
+ * punished, and the student learns to write less.
  */
-export const QUESTION_TARGETS: Record<BuildSize, { min: number; max: number }> = {
-  workflow: { min: 4, max: 5 },
-  project: { min: 6, max: 7 },
-  autonomous: { min: 8, max: 10 },
+export const QUESTION_TARGETS: Record<BuildSize, { max: number }> = {
+  workflow: { max: 5 },
+  project: { max: 7 },
+  autonomous: { max: 10 },
 };
 
 export const INTAKE_SYSTEM_PROMPT = `You are a systems architect running the intake interview for a student's capstone project.
@@ -130,7 +143,13 @@ system can show its working, hold an action for approval, or explain itself in p
 suggestions on those two questions are how they find out.
 
 RULES
-- Ask between {{MIN}} and {{MAX}} questions. Fewer, sharper questions beat a long form.
+- Ask AT MOST {{MAX}} questions, and as few as the description leaves genuinely open.
+  There is no minimum. If a detailed description already answers eight of the ten angles
+  clearly, ask the two that are left and list the eight under "covered". Asking a
+  student something they just spent a paragraph telling you is the single fastest way to
+  make them stop writing detail, and detail is what makes the plan good.
+- Put every angle you are NOT asking about into "covered", with the phrase from their
+  description that answers it. An angle you cannot quote is not covered; ask it.
 - Each question must stand alone. Do not number them or reference each other.
 - "why" explains to the student, in one plain sentence, what this changes about their build. It is shown under the question.
 - "placeholder" is a SHORT hint of the KIND of answer wanted — never a real answer they might just accept. It must not be about a different domain than theirs.
@@ -146,18 +165,58 @@ RULES
 export const INTAKE_QUESTIONS_JSON_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['questions'],
+  required: ['questions', 'covered'],
   properties: {
-    questions: {
+    /*
+     * The angles the description already answers, each with the phrase that
+     * answers it. This is what makes a SHORT interview auditable: a student who
+     * wrote three careful paragraphs and got two questions can see the other
+     * eight quoted back at them, and the service can tell "they told us
+     * already" apart from "the model returned junk".
+     *
+     * An angle with no quotable phrase is not covered. That rule is in the
+     * system prompt and it is the whole guard against a model shortening the
+     * interview by deciding it knows best.
+     */
+    covered: {
       type: 'array',
-      minItems: 3,
       maxItems: 10,
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['id', 'question', 'why', 'placeholder', 'suggestions', 'kind'],
+        required: ['angle', 'evidence'],
+        properties: {
+          angle: { type: 'string', description: 'the angle name, e.g. THE TOOLS' },
+          evidence: { type: 'string', description: "the student's own phrase that answers it" },
+        },
+      },
+    },
+    questions: {
+      type: 'array',
+      /*
+       * NO `minItems`. It was 3, and with `strict: true` structured output that
+       * made a short interview literally unrepresentable - the model could not
+       * return two questions even when the description answered the other
+       * eight. The floor in the prompt text was the visible half of this bug;
+       * this was the half that made it impossible to fix by wording alone.
+       */
+      maxItems: 10,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['id', 'question', 'why', 'placeholder', 'suggestions', 'kind', 'angle'],
         properties: {
           id: { type: 'string', description: 'short snake_case key, e.g. primary_users' },
+          /*
+           * WHICH ANGLE THIS QUESTION IS. Required, because the answer is filed
+           * against a truth dimension later and the alternative is guessing from
+           * the wording. A misfiled answer is worse than an unfiled one: it puts a
+           * student's words under a heading they did not mean.
+           */
+          angle: {
+            type: 'string',
+            description: 'the angle name from the priority list, e.g. THE TOOLS',
+          },
           kind: {
             type: 'string',
             enum: ['text', 'single', 'multi'],
@@ -213,7 +272,8 @@ export function buildIntakeQuestionsPrompt(input: IntakeQuestionsInputs): string
     input.idea.slice(0, 20000),
     'STUDENT_IDEA>>>',
     '',
-    `Ask between ${t.min} and ${t.max} questions, grounded in the specifics above.`,
+    `Ask AT MOST ${t.max} questions, grounded in the specifics above. There is no minimum:`,
+    'ask only the angles this description leaves genuinely open, and list the rest in `covered`.',
     'Return only the JSON object.',
   ].filter(Boolean).join('\n');
 }

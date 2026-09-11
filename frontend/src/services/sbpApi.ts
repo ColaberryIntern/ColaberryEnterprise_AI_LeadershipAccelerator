@@ -91,7 +91,9 @@ export interface StartBuildAnswers {
    * pairs, so the requirements are shaped by what this student actually said
    * rather than by three fixed fields.
    */
-  answers?: Array<{ id: string; question: string; answer: string }>;
+  answers?: Array<{ id: string; question: string; answer: string; angle?: string }>;
+  /** Carried through from the intake result so the truth store files them. */
+  covered?: CoveredAngle[];
   target_weeks?: number;
 }
 
@@ -116,10 +118,28 @@ export interface IntakeQuestion {
    * an older cached response has none — the UI must not assume they exist.
    */
   suggestions?: string[];
+  /**
+   * The angle this question came from. Sent back with the answer so the
+   * server files it against a truth dimension by lookup rather than by
+   * guessing from the wording. Optional: an older cached response has none.
+   */
+  angle?: string;
+}
+
+/** An angle the description already answered, with the student's own phrase. */
+export interface CoveredAngle {
+  angle: string;
+  evidence: string;
 }
 
 export interface IntakeQuestionsResult {
   questions: IntakeQuestion[];
+  /**
+   * What was NOT asked, and why. The receipt for a short interview: a student
+   * who wrote three paragraphs and got two questions can see the other eight
+   * quoted back. Optional because an older server omits it.
+   */
+  covered?: CoveredAngle[];
   /**
    * false when the model failed and the server substituted its generic set.
    * The UI must not claim these were tailored when this is false.
@@ -145,6 +165,70 @@ export async function fetchIntakeQuestions(input: {
   try {
     const res = await portalApi.post('/api/portal/sbp/intake/questions', input);
     return { ok: true, result: res.data };
+  } catch (err) {
+    return { ok: false, error: toError(err) };
+  }
+}
+
+/**
+ * One statement the server understood, grouped by how much a person can trust
+ * it. Mirrors `ReviewItem` in backend/src/services/sbp/intakeReview.ts.
+ *
+ *   needsConfirmation  we heard it, nobody has agreed we heard it right
+ *   inferences         nothing was said; the system worked it out
+ *   openQuestions      it was asked and not answered
+ *   unknowns           recorded as unknown, deliberately, and that is allowed
+ *   confirmed          already corrected or agreed
+ */
+export type ReviewGroup = 'confirmed' | 'needsConfirmation' | 'inferences' | 'openQuestions' | 'unknowns';
+
+export interface ReviewItem {
+  index: number;
+  dimension: string;
+  /** The dimension as a person would say it, e.g. "What good looks like". */
+  label: string;
+  value: string;
+  group: ReviewGroup;
+  quote: string | null;
+}
+
+/**
+ * What the server will record if the student confirms. Computed by the same
+ * code that stores it, so this is a preview of the write, not a second opinion.
+ */
+export interface IntakePreview {
+  review: {
+    items: ReviewItem[];
+    counts: Record<ReviewGroup, number>;
+    /** Only these block. Everything else is informational. */
+    contradictions: string[];
+    blocksPlanning: boolean;
+  };
+  /** Still unanswered, in plain words, so the gaps are visible before confirm. */
+  unanswered: string[];
+  /** Angles the description already answered, quoted back as a receipt. */
+  covered: CoveredAngle[];
+  /** Answers the server could not file by angle. Reported, never guessed. */
+  unmapped: number;
+}
+
+/**
+ * Show the student what the server understood, BEFORE it is stored.
+ *
+ * Runs pre-project and touches no database: the truth row is written by
+ * `startBuild`, and writing it earlier would leave a row behind for a student
+ * who goes back and changes an answer. A failure here is a failure to reach
+ * the server, never a refusal; the wizard falls back to echoing the raw
+ * answers so nobody is stranded on the review step.
+ */
+export async function previewIntake(input: {
+  idea: string;
+  answers: Array<{ id: string; question: string; answer: string; angle?: string }>;
+  covered?: CoveredAngle[];
+}): Promise<{ ok: true; preview: IntakePreview } | { ok: false; error: SbpError }> {
+  try {
+    const res = await portalApi.post('/api/portal/sbp/intake/preview', input);
+    return { ok: true, preview: res.data as IntakePreview };
   } catch (err) {
     return { ok: false, error: toError(err) };
   }

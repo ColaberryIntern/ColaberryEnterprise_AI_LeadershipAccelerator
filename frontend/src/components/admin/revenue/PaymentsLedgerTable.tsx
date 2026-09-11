@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { SectionCard, StatusBadge } from '../shell';
 import { RevenueTransaction, RevenueSummary } from '../../../services/revenueApi';
 import { money, fmtAbs, timeAgo } from './format';
+import { personPath } from '../../../adminOs/personLink';
+import PersonLink from '../../../components/admin/person/PersonLink';
 
 interface Props {
   summary: RevenueSummary | null;
@@ -74,23 +76,22 @@ export default function PaymentsLedgerTable({ summary, txns, onRefund, refunding
               <tr key={t.id} style={t.counted ? undefined : { opacity: 0.62 }}>
                 <td className="small text-muted text-nowrap" title={fmtAbs(t.date)}>{timeAgo(t.date)}</td>
                 <td>
-                  {t.enrollment_id ? (
+                  <PersonLink tab="account" name={t.payer_name} email={t.payer_email}
+                    leadId={t.lead_id} enrollmentId={t.enrollment_id} />
+                  {t.enrollment_id && (
                     <button
                       type="button"
-                      className="btn btn-link p-0 fw-medium text-decoration-none text-body"
-                      style={{ verticalAlign: 'baseline' }}
+                      className="btn btn-link p-0 ms-2 align-baseline text-muted"
                       onClick={() => onOpenHistory(t.enrollment_id as string, t.payer_name)}
-                      title={`View ${t.payer_name}'s payment history & timeline`}
+                      title={`Quick payment-history drawer for ${t.payer_name} (the 360 profile has more)`}
                     >
-                      {t.payer_name}
+                      <i className="ri-history-line" aria-hidden="true"></i>
                     </button>
-                  ) : (
-                    <div className="fw-medium">{t.payer_name}</div>
                   )}
                   <div className="small text-muted"><code>{t.payer_email}</code></div>
                   <div className="d-flex gap-3 mt-1">
                     {t.lead_id != null ? (
-                      <Link to={`/admin/leads/${t.lead_id}`} className="small text-decoration-none d-inline-flex align-items-center gap-1" title={`Open lead profile for ${t.payer_name}`}>
+                      <Link to={personPath({ leadId: t.lead_id }, 'account') ?? '/admin/people'} className="small text-decoration-none d-inline-flex align-items-center gap-1" title={`Open lead profile for ${t.payer_name}`}>
                         <i className="ri-contacts-line" aria-hidden="true"></i>Lead
                       </Link>
                     ) : (

@@ -15,6 +15,7 @@ import CurriculumCompletionTab from './components/CurriculumCompletionTab';
 import CurrentClassesDashboard from './components/CurrentClassesDashboard';
 import AdminCommunityRolesPage from './AdminCommunityRolesPage';
 import { resolveAcceleratorNav } from './utils/resolveAcceleratorNav';
+import PersonLink from '../../components/admin/person/PersonLink';
 
 // Program-wide surfaces embedded as tabs. Lazy so folding three substantial
 // pages into this route does not enlarge the Accelerator's initial bundle for
@@ -149,15 +150,21 @@ const DRILLDOWN_TABS: TabKey[] = ['sessions', 'participants', 'class-dashboard',
 // leads because it is where a student's actual build lives; Cert Prep is downstream of
 // having built something, and Case Studies is downstream of both.
 const PROGRAM_TABS: TabKey[] = ['projects', 'cert-prep', 'case-studies'];
+// Ali, 2026-09-10: "For Projects cert prep and casestudies - let's use emoji's."
+// Only the three program-wide tabs carry one, because they render as their own
+// group in the tab bar — emoji on some of the cohort drill-down tabs and not
+// others would read as a rendering fault rather than a distinction. The emoji is
+// part of the label rather than a separate element so it travels with the string
+// wherever the label is used (tab bar, aria labels, tests).
 const TAB_LABELS: Record<TabKey, string> = {
   cohorts: 'Cohorts',
   sessions: 'Sessions',
   participants: 'Participants',
   'class-dashboard': 'Class Dashboard',
   curriculum: 'Curriculum',
-  'cert-prep': 'Cert Prep',
-  'case-studies': 'Case Studies',
-  projects: 'Projects',
+  projects: '🚀 Projects',
+  'cert-prep': '🎓 Cert Prep',
+  'case-studies': '🏆 Case Studies',
 };
 
 function AdminAcceleratorPage() {
@@ -1113,12 +1120,13 @@ function AdminAcceleratorPage() {
                       return (
                       <tr key={e.id}>
                         <td className="fw-medium">
+                          <PersonLink tab="class" name={e.full_name} email={e.email} enrollmentId={e.id} />
                           <button
-                            className="btn btn-link p-0 fw-medium text-start text-decoration-none align-baseline"
+                            className="btn btn-link p-0 ms-2 align-baseline text-muted"
                             onClick={() => setHistoryTarget({ id: e.id, name: e.full_name })}
-                            title="View full history & activity"
+                            title="Quick history drawer (the 360 profile has more)"
                           >
-                            {e.full_name}
+                            <i className="ri-history-line" />
                           </button>
                           {e.company && e.company !== 'Prospect' && (
                             <div className="text-muted small fw-normal">{e.company}</div>
@@ -1236,7 +1244,9 @@ function AdminAcceleratorPage() {
                             const record = attendanceRecords.find((r) => r.enrollment_id === e.id);
                             return (
                               <tr key={e.id}>
-                                <td className="fw-medium">{e.full_name}</td>
+                                <td className="fw-medium">
+                                  <PersonLink tab="class" name={e.full_name} email={e.email} enrollmentId={e.id} />
+                                </td>
                                 <td>{e.company}</td>
                                 <td>
                                   <select

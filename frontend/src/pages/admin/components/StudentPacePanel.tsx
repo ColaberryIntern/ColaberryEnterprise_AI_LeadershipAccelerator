@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../../utils/api';
 import { SectionCard, StatCard, StatusBadge } from '../../../components/admin/shell';
+import PersonLink from '../../../components/admin/person/PersonLink';
 
 /**
  * StudentPacePanel — movement. Who is ahead of the class, who is falling behind it.
@@ -171,7 +172,7 @@ export default function StudentPacePanel({ cohortId }: { cohortId: string }) {
                 onClick={() => { void openStudent(s); }}
                 style={{ cursor: 'pointer' }}
               >
-                <td>{s.name}</td>
+                <td><PersonLink tab="class" name={s.name} enrollmentId={s.enrollmentId} stopPropagation /></td>
                 <td><StatusBadge label={BAND_META[s.band].label} tone={BAND_META[s.band].tone} /></td>
                 <td>{s.weeksCompleted}</td>
                 <td className={s.delta < 0 ? 'text-danger' : 'text-success'}>

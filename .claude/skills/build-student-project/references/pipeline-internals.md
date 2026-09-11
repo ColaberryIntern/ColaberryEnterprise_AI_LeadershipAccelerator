@@ -1,6 +1,8 @@
 # Pipeline internals — the module map, the contracts, the flags
 
-Verified against `origin/main` `4078338f` (2026-08-13). Everything in
+Module map re-verified against `origin/main` `2bbed9f0` (2026-09-09); the contract
+and flag sections below still carry their 2026-08-13 pin at `4078338f` and are
+marked where that matters. Everything in
 `backend/src/services/sbp/` is pure or has a pure core; the I/O shells are named for it.
 
 ## Module map
@@ -13,6 +15,15 @@ Verified against `origin/main` `4078338f` (2026-08-13). Everything in
 | `decomposePrompt.ts` | pure | The decomposition system + user prompt |
 | `decomposeService.ts` | I/O | The decomposition model call. 240s timeout, 1 SDK retry, 1 reshape attempt, then fails with an `error_class` |
 | `planContract.ts` | pure | `BuildPlan` types + `BUILD_PLAN_JSON_SCHEMA` for structured output. The contract between the model and everything downstream |
+| `fileOwnership.ts` | pure | **Who owns each path.** `plan.json` platform-generated (replaced only while provably unedited), `progress.json` co-owned (merged), `profile.json` student-owned (seeded once). Consulted by `repoWriter` at the moment of write |
+| `activeProjectDrift.ts` | pure | The predicate: is this enrollment pointed at a project other than the one being built in |
+| `activeProjectDriftService.ts` | I/O | The query behind it, and what the portal is told |
+| `repoWriteAccess.ts` | I/O | Which repository, when an enrollment has more than one. Ordered, so the answer is not Postgres row order |
+| `capabilityRepoReader.ts` | I/O | Resolves the capability inventory against `github_connections.file_tree_json`. **No GitHub calls** |
+| `repoSignals.ts` | pure | What a file tree can honestly say: languages, shape, visible practices. **Structure only, never quality** |
+| `capabilityInventory.ts` | pure | The capability declarations the labs and the portfolio both point at |
+| `buildLabContract.ts` | pure | The invariants every Build Artifact(s) Lab must hold, checked without a database. `scripts/auditBuildLabs.ts` runs it against production |
+| `repoConnect/` | I/O | The connect surface, including the front door for students who have work but no project |
 | `buildTiers.ts` | pure | What `workflow` / `project` / `autonomous` actually mean |
 | `planGate.ts` | pure | The traceability gate. 17 rules, 9 of them blocking |
 | `planRepair.ts` | I/O | Targeted repair from the violations, max 3 attempts, monotone |
@@ -46,6 +57,80 @@ Frontend: `frontend/src/services/sbpApi.ts` (typed-result client, never throws),
 `projectSync.ts` (mirror), `projectHydrate.ts` (reconcile).
 
 ---
+
+
+### The rest of the map — added 2026-09-09
+
+The table above covers the generate-and-publish spine. It described 34 of the 64 modules
+in `services/sbp/`. These are the other 30, which is where most of the last six weeks of
+work went: connecting a repository, reading it back, and deciding whether a story is done.
+
+Descriptions are each module's own opening line, not a paraphrase, so this table cannot
+drift into wishful thinking about what a module does.
+
+#### `repoConnect/` — getting to a repository the student already has
+
+| File | Pure? | What it owns |
+|---|---|---|
+| `repoConnectService.ts` | I/O | Connect a project to the repo the student **already has**. Not a repo the platform creates |
+| `repoReference.ts` | pure | Turn whatever a student pastes into `{ owner, repo }`, or say why it cannot |
+| `connectChallenge.ts` | I/O | Proof that the student can actually PUSH to the repo they named. A read succeeding proves nothing about write |
+| `connectionAccess.ts` | pure | What the PLATFORM may do with one `github_connections` row |
+| `connectErrors.ts` | pure | The classified failure vocabulary of the connect step |
+| `githubRepoClient.ts` | I/O | The GitHub read boundary for connect |
+| `repoInvitations.ts` | I/O | Accept the collaborator invitations students send us |
+| `webhookSecretService.ts` | I/O | One webhook secret per student repo |
+| `webhookSetupService.ts` | I/O | Everything a student needs to register their own push webhook |
+| `pagesUrlService.ts` | I/O | Where a student's Command Center is actually published |
+
+#### `verification/` — deciding whether a story is done
+
+This subtree is the half that had never run in production when the runbook was last
+written. It has now: **178 tasks carry `verified_at`.**
+
+| File | Pure? | What it owns |
+|---|---|---|
+| `githubPushVerification.ts` | I/O | Turn a GitHub push into a story verification pass |
+| `criterionIdentity.ts` | pure | When two sentences are the SAME acceptance criterion. An agent that invents a criterion matches nothing and is discarded rather than counted |
+| `criterionPaths.ts` | pure | A criterion that NAMES a repo path requires that path to exist |
+| `verificationLatch.ts` | pure | The rule that keeps a verified story verified. A later sync must not un-verify accepted work |
+| `studentProgressMerge.ts` | pure | `mergeProgressFile`, made safe to hand to a student |
+| `storyVerificationRead.ts` | I/O | The one story the workspace page has open |
+| `rejectedClaimsSignal.ts` | I/O | Making `rejected_claims` reach a human, instead of resting in a column |
+
+#### Command Center, documents, and the rest
+
+| File | Pure? | What it owns |
+|---|---|---|
+| `commandCenterLocation.ts` | pure | WHERE the Command Center lives in a student's repo |
+| `commandCenterProgressTemplate.ts` | pure | The `.colaberry/progress.json` template handed over in STORY-000 |
+| `commandCenterTaskColumns.ts` | pure | The STORY-000 task-row columns that MUST move together |
+| `planDocument.ts` | pure | `.colaberry/plan.json`, the file the Command Center reads at runtime. See H-13: generated by us, owned by them |
+| `studentProgressFile.ts` | pure | The commit the platform cannot make, handed over as a file |
+| `progressContract.ts` | pure | The shape both sides of `progress.json` agree on |
+| `studentDataContract.ts` | pure | `docs/DATA_CONTRACT.md`, the field-by-field spec shipped into the repo |
+| `buildProgressSnapshot.ts` | pure | The server's view of a build, shaped for mirroring |
+| `refreshRepoDocuments.ts` | I/O | Re-write the student's data files after a sync |
+| `docsBundle.ts` | pure | The same rendered document set, as a file the student downloads |
+| `zipArchive.ts` | pure | A minimal, dependency-free ZIP writer |
+| `skillInference.ts` | pure | The ten architecture skills, inferred from what was COMMITTED |
+| `scheduleForEnrollment.ts` | I/O | Real cohort dates for one student's build |
+| `intakeTruth.ts` | pure | The intake, as project truth. Maps each answer to an `UnderstandingItem` **by its angle**, never by reading the question wording, because a misfiled answer puts a student's words under a heading they did not mean. Only ever writes FACT on `source_message`; an unrecognised angle is reported unmapped rather than filed somewhere plausible |
+| `intakeTruthStore.ts` | I/O | Persists that truth as a `project_understandings` row keyed `(student_intake, projectId)`. **No new column**: `lead_id` is nullable and that pair is already UNIQUE, so a student project needs no migration against a table AI Flotation and CPN also read, and re-running intake updates one row instead of creating a second understanding. Refuses outright when an item carries a human confirmation - see H-13, platform-generated is not platform-owned |
+| `intakeReview.ts` | pure | The confirmation gate: what was understood, grouped so a student can tell a fact from an inference, plus `applyCorrection`. **Only a contradiction blocks** - a gate that blocks on "you have not confirmed everything" teaches students to click through it, and then it protects nothing. A recorded unknown is its own group, not a gap, because nobody should have to invent a baseline to continue |
+| `intakePreview.ts` | pure | The confirmation gate BEFORE anything is stored. The wizard's review step runs ahead of `startBuild`, which is where the truth row is written, so at the moment a student is asked "is this what you meant" there is no row to show them. Writing the row earlier is the wrong fix (a student who goes back and changes an answer leaves a row that disagrees with what they finally submit); instead this runs the SAME `itemsFromIntake` + `buildIntakeReview` the store will run, so what is shown is exactly what will be written. Served by `POST /api/portal/sbp/intake/preview`, participant-scoped, no DB. Reports unmapped answers as a count rather than hiding them |
+| `projectDiscoveryCall.ts` | pure | Whether to place the interview call, and why not. **Five named refusals**: no consent, no number, nothing left to ask, no configured agent, and no intake yet - the phone CONTINUES an interview, it does not open one. Dialling lives in `synthflowService`, which is what makes every refusal testable without a phone |
+| `story000Truth.ts` | pure | What Story 000 says the platform understands, **and what it admits it does not**. The unanswered half is not a footnote: a Story 000 listing only what is known reads as complete, and the gap then surfaces as a surprise in week six instead of on day one. Renders nothing at all when there was no intake, rather than an empty heading that reads as something lost |
+| `caseStudyHypothesis.ts` | pure | What a case study COULD say before anything has happened. A **projection** recomputed from the truth revision, never stored, so it cannot drift from the truth and there is nothing to publish. Maturity is the constant `story_hypothesis`; achieved results, testimonials, usage and impact are absent from the type rather than empty, so nobody can render a results block over a placeholder |
+| `projectDiscoveryCallPrompt.ts` | pure | The call, built fresh per dial from stored truth and remaining angles. Never a prompt saved in a vendor dashboard, which is a second copy of the interview that nothing here tests |
+| `projectDiscoveryTranscript.ts` | pure | A finished call as `voice_transcript` items. **Never `client_confirmed`**: speech recognition mishears names, and the costliest place to mishear one is the guardrail question, where it becomes the person who approves things. Deterministic, which is what makes webhook replay safe rather than hopeful |
+| `projectNaming.ts` | pure | The one place that decides what a student's project is CALLED |
+
+**Why this table exists at all.** On 2026-09-09 the runbook named 34 of 64 modules, and a
+reader hitting a connect or verification failure would have found nothing here to follow.
+`skillRunbookCoverage.test.ts` now fails when a module is added without a line, so this
+table cannot silently fall behind again. It cannot check that a line is TRUE, only that
+one exists, which is why every description above is quoted from the module itself.
 
 ## The chain, with the exact call order inside publish
 

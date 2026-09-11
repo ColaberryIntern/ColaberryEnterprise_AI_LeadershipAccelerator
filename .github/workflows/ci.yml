@@ -41,6 +41,56 @@ jobs:
           npm install --no-audit --no-fund
           npx tsc --noEmit
 
+  # THE GAP THIS CLOSES. Until this job existed CI ran `tsc` and a build against the
+  # frontend and no TEST at all, so every assertion in `frontend/src/**/__tests__` was
+  # enforced only on whichever machine last happened to run it. A red frontend suite could
+  # therefore sit in main indefinitely, and one did: `storyDetailV2Contract` has six
+  # failures nobody was told about.
+  #
+  # CI=true is what makes react-scripts run once and exit instead of entering watch mode,
+  # and it is also what promotes warnings to errors — the same reason `frontend-build`
+  # sets it explicitly rather than relying on the runner.
+  frontend-tests:
+    name: Frontend unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: react-scripts test
+        working-directory: frontend
+        env:
+          CI: 'true'
+        run: |
+          npm install --no-audit --no-fund
+          # WHAT IS EXCLUDED, AND WHY — one line per suite, mirroring the rule in
+          # backend/jest.ci.config.ts. Turning this job on revealed 7 red suites beyond the
+          # one already known: leave the frontend unenforced, or enforce what passes and NAME
+          # the rest as debt. Named debt wins; an unenforced test file is worth nothing.
+          #
+          # SIX OF THE ORIGINAL EIGHT ARE GONE, and every one was a stale test rather than a
+          # broken page: linkIntegrity and claimsRegistry pinned copy (verified live in a
+          # browser); PlatformV2 described a showroom Ali removed on 2026-08-20; the
+          # subscription fixture never carried `plans`, a field the API always sends; and the
+          # preview test clicked a single Publish button that became one button per surface.
+          # Each was rewritten to guard the PROPERTY, not the snapshot, so it cannot go stale
+          # the same way twice.
+          #
+          # HomeV2 was the one that was NOT a stale test: its section budget caught real
+          # growth. Put to Ali as a design decision on 2026-09-11; he kept the twelve, the
+          # budget was raised and recorded in the test the same way the 9 -> 10 raise was,
+          # and it is enforced again.
+          #
+          # testEnv/ is NOT a failure. It holds jest helpers that live under __tests__ and
+          # contain no test, so jest fails them for being empty. Excluding the directory is
+          # the correct config, not a concession.
+          #
+          # MAINTENANCE: nothing joins this list without a reason beside it. Every entry
+          # below is a real red suite in main, not a flaky one, and each shrinks the list
+          # when fixed.
+          npx react-scripts test --watchAll=false             --testPathIgnorePatterns               "/testEnv/"               "src/pages/publicV2/__tests__/storyDetailV2Contract.test.ts"              
+
   # A typecheck is NOT a build. On 2026-08-15 commit 2f0a72dd left main
   # unbuildable for hours with every check green: an eslint-disable comment in a
   # .ts file named `react-hooks/exhaustive-deps`, a rule CRA does not register

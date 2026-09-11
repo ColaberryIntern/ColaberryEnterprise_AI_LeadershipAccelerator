@@ -24,6 +24,25 @@ jest.mock('../../models', () => ({
   LiveSession: { count: mockLiveSessionCount },
 }));
 
+/**
+ * `deleteCohort` now tears down enrollment-child rows inside a transaction, so it
+ * reaches `sequelize` directly. Without this stub the suite opens a REAL database
+ * connection and fails with a driver error that reads like an infrastructure
+ * problem rather than a missing mock.
+ *
+ * `transaction` runs its callback immediately with a stub handle, so the teardown
+ * still executes its real logic; `query` returns an empty catalog by default,
+ * meaning "no restricting child tables" — the shape every pre-existing assertion
+ * in this file was written against.
+ */
+const mockSequelizeQuery = jest.fn();
+jest.mock('../../config/database', () => ({
+  sequelize: {
+    query: (...args: unknown[]) => mockSequelizeQuery(...args),
+    transaction: async (cb: (t: unknown) => Promise<unknown>) => cb({ __stub: true }),
+  },
+}));
+
 import {
   getDashboardStats,
   listAllCohorts,
@@ -177,6 +196,9 @@ describe('getCohortDependents / deleteCohort — safe-delete guard', () => {
     mockCohortFindByPk.mockReset();
     mockEnrollmentFindAll.mockReset();
     mockLiveSessionCount.mockReset().mockResolvedValue(0);
+    // Default: the catalog reports no restricting child tables, so the teardown is
+    // a no-op and these assertions test the guard, not the cleanup.
+    mockSequelizeQuery.mockReset().mockResolvedValue([[], 0]);
   });
 
   it('throws 404 when the cohort does not exist', async () => {
@@ -210,6 +232,91 @@ describe('getCohortDependents / deleteCohort — safe-delete guard', () => {
 
     expect(result.deleted).toBe(true);
     expect(destroy).toHaveBeenCalled();
+  });
+
+  /**
+   * The teardown these cover is why cohort deletion was broken at all:
+   * `cohorts -> enrollments` cascades, but 25 of the 44 FKs referencing
+   * `enrollments` are NO ACTION, so the cascade dead-ends on any student who has
+   * done anything, and the UI reported only "Failed to delete cohort".
+   */
+  describe('enrollment-child teardown', () => {
+    const catalog = [
+      { table_name: 'cert_sessions', column_name: 'enrollment_id' },
+      { table_name: 'student_architecture_skill', column_name: 'enrollment_id' },
+    ];
+
+    it('clears the blocking child rows and reports what it removed', async () => {
+      const destroy = jest.fn().mockResolvedValue(undefined);
+      mockCohortFindByPk.mockResolvedValue({ id: 'c1', destroy });
+      mockEnrollmentFindAll.mockResolvedValue([{ id: 'e1', status: 'active', amount_paid: null }]);
+      mockSequelizeQuery.mockImplementation((sql: string) => {
+        if (String(sql).includes('information_schema')) return Promise.resolve(catalog);
+        if (String(sql).startsWith('DELETE FROM "cert_sessions"')) return Promise.resolve([[], 11]);
+        if (String(sql).startsWith('DELETE FROM "student_architecture_skill"')) return Promise.resolve([[], 10]);
+        return Promise.resolve([[], 0]); // SAVEPOINT / RELEASE
+      });
+
+      const result = await deleteCohort('c1');
+
+      expect(result.deleted).toBe(true);
+      if (result.deleted) {
+        expect(result.clearedRows).toEqual({ cert_sessions: 11, student_architecture_skill: 10 });
+      }
+      expect(destroy).toHaveBeenCalled();
+    });
+
+    it('does no teardown work when the cohort has no enrollments', async () => {
+      const destroy = jest.fn().mockResolvedValue(undefined);
+      mockCohortFindByPk.mockResolvedValue({ id: 'c1', destroy });
+      mockEnrollmentFindAll.mockResolvedValue([]);
+
+      const result = await deleteCohort('c1');
+
+      expect(result.deleted).toBe(true);
+      // Not even the catalog lookup — there is nothing whose children could block.
+      expect(mockSequelizeQuery).not.toHaveBeenCalled();
+    });
+
+    it('keeps going when one child table refuses, instead of aborting the rest', async () => {
+      // Several of these tables reference each other, so the first pass legitimately
+      // fails on whichever is deleted out of order. A savepoint isolates the failure.
+      const destroy = jest.fn().mockResolvedValue(undefined);
+      mockCohortFindByPk.mockResolvedValue({ id: 'c1', destroy });
+      mockEnrollmentFindAll.mockResolvedValue([{ id: 'e1', status: 'active', amount_paid: null }]);
+      let certAttempts = 0;
+      mockSequelizeQuery.mockImplementation((sql: string) => {
+        const s = String(sql);
+        if (s.includes('information_schema')) return Promise.resolve(catalog);
+        if (s.startsWith('DELETE FROM "cert_sessions"')) {
+          certAttempts += 1;
+          // Blocked on the first pass, succeeds once the other table is cleared.
+          if (certAttempts === 1) return Promise.reject(new Error('FK violation'));
+          return Promise.resolve([[], 11]);
+        }
+        if (s.startsWith('DELETE FROM "student_architecture_skill"')) return Promise.resolve([[], 10]);
+        return Promise.resolve([[], 0]);
+      });
+
+      const result = await deleteCohort('c1');
+
+      expect(result.deleted).toBe(true);
+      if (result.deleted) {
+        expect(result.clearedRows.cert_sessions).toBe(11);
+        expect(result.clearedRows.student_architecture_skill).toBe(10);
+      }
+      expect(certAttempts).toBeGreaterThan(1); // it retried rather than giving up
+    });
+
+    it('still refuses a paid, non-withdrawn enrollment without force — teardown does not bypass the guard', async () => {
+      mockCohortFindByPk.mockResolvedValue({ id: 'c1', destroy: jest.fn() });
+      mockEnrollmentFindAll.mockResolvedValue([{ id: 'e1', status: 'active', amount_paid: 1788 }]);
+
+      const result = await deleteCohort('c1');
+
+      expect(result.deleted).toBe(false);
+      expect(mockSequelizeQuery).not.toHaveBeenCalled();
+    });
   });
 
   it('force=true overrides the block and deletes anyway', async () => {

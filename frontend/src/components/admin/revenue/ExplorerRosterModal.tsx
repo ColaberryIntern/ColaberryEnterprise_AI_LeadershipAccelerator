@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { StatusBadge } from '../shell';
 import { getExplorerRoster, ExplorerRosterRow } from '../../../services/explorerRosterApi';
 import { fmtDate } from './format';
+import PersonLink from '../../../components/admin/person/PersonLink';
 
 interface Props {
   onClose: () => void;
@@ -103,7 +104,10 @@ export default function ExplorerRosterModal({ onClose }: Props) {
                     ) : filtered.map((r) => (
                       <tr key={r.enrollment_id}>
                         <td>
-                          <div className="fw-medium">{r.full_name}</div>
+                          <div className="fw-medium">
+                            <PersonLink tab="growth" name={r.full_name} email={r.email}
+                              enrollmentId={r.enrollment_id} />
+                          </div>
                           <div className="small text-muted"><code>{r.email}</code></div>
                         </td>
                         <td><StatusBadge label={r.level_name} tone={LEVEL_TONE[r.level] || 'neutral'} /></td>

@@ -54,6 +54,10 @@ class ProjectUnderstandingRecord extends Model {
   declare cost_usd: number | null;
   declare runtime_ms: number | null;
   /** The scoped project: blueprint plus the generated proposal half. Cached, see below. */
+  /** Increments when the stored items actually change. See intakeTruthStore. */
+  declare revision: number;
+  /** When a person last confirmed any part of it. Null means nobody has. */
+  declare confirmed_at: Date | null;
   declare scope: unknown | null;
   declare scope_generated_at: Date | null;
   declare created_at: Date;
@@ -76,6 +80,8 @@ ProjectUnderstandingRecord.init(
     error: { type: DataTypes.TEXT, allowNull: true },
     cost_usd: { type: DataTypes.DOUBLE, allowNull: true },
     runtime_ms: { type: DataTypes.INTEGER, allowNull: true },
+    revision: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
+    confirmed_at: { type: DataTypes.DATE, allowNull: true },
     scope: { type: DataTypes.JSONB, allowNull: true },
     scope_generated_at: { type: DataTypes.DATE, allowNull: true },
   },

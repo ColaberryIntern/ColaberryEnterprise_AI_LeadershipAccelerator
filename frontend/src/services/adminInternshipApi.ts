@@ -130,3 +130,153 @@ export async function decideInternshipApplication(id: string, body: {
   const { data } = await api.post(`/api/admin/internship/applications/${id}/decide`, body);
   return data;
 }
+
+// ── Documents ───────────────────────────────────────────────────────────────
+
+export interface AdminDocumentRow {
+  id: string;
+  document_type: string;
+  kind: 'generated' | 'signed_upload';
+  revision: number;
+  status: string;
+  original_filename: string | null;
+  mime_type: string | null;
+  byte_size: number | null;
+  checksum_short: string | null;
+  document_public_id: string | null;
+  verified_by: string | null;
+  verified_at: string | null;
+  rejection_reason: string | null;
+  created_at: string;
+}
+
+export interface AdminDocumentsView {
+  requirements: Array<{
+    document_type: string;
+    title: string;
+    requires_signature: boolean;
+    generated: boolean;
+    latest_upload_revision: number | null;
+    verified: boolean;
+    correction_requested: boolean;
+    rejection_reason: string | null;
+  }>;
+  all_verified: boolean;
+  documents: AdminDocumentRow[];
+}
+
+export async function fetchInternshipDocumentsAdmin(applicationId: string): Promise<AdminDocumentsView> {
+  const { data } = await api.get<AdminDocumentsView>(`/api/admin/internship/applications/${applicationId}/documents`);
+  return data;
+}
+
+/** The reviewer has to actually look at the page before accepting it. */
+export function internshipDocumentFileUrl(documentId: string): string {
+  const base = process.env.REACT_APP_API_URL || '';
+  return `${base}/api/admin/internship/documents/${documentId}/file`;
+}
+
+export async function verifyInternshipDocument(documentId: string, body: {
+  accept: boolean;
+  rejection_reason?: string | null;
+}): Promise<{ ok: boolean; all_verified: boolean; state: string }> {
+  const { data } = await api.post(`/api/admin/internship/documents/${documentId}/verify`, body);
+  return data;
+}
+
+// ── Phase 7: KPIs, profile, conversion ──────────────────────────────────────
+
+export interface InternshipKpi {
+  key: string;
+  label: string;
+  count: number;
+  drilldown: { bucket?: string; state?: string };
+  reliability: 'reliable' | 'unknown';
+  reason?: string;
+}
+
+export async function fetchInternshipKpis(): Promise<{ kpis: InternshipKpi[] }> {
+  const { data } = await api.get('/api/admin/internship/kpis');
+  return data;
+}
+
+export interface TrackedMetric {
+  key: string;
+  label: string;
+  value: string | number | boolean | null;
+  source: string;
+  observed_at: string | null;
+  reliability: 'reliable' | 'unknown';
+  reason?: string;
+}
+
+export interface InternshipProfileSection {
+  has_internship: boolean;
+  application: null | Record<string, any>;
+  membership: null | {
+    cohort_id: string; status: string; joined_at: string | null;
+    week: number | null; training_cohort_id: string | null;
+  };
+  metrics: TrackedMetric[];
+  excluded_from_assessment: Array<{ signal: string; reason: string }>;
+  documents: { all_verified: boolean; requirements: Array<Record<string, any>> };
+  requirements_acknowledged: Array<{ requirement_key: string; state: string; verified_at: string | null }>;
+}
+
+export async function fetchInternshipProfile(enrollmentId: string): Promise<InternshipProfileSection> {
+  const { data } = await api.get(`/api/admin/internship/profile/${enrollmentId}`);
+  return data;
+}
+
+export interface ConversionInternInput {
+  email: string;
+  full_name?: string | null;
+  interview_grandfathered?: boolean;
+  documents_already_verified?: boolean;
+}
+
+export interface ConversionPlanRow {
+  email: string;
+  outcome: 'no_match' | 'ambiguous_match' | 'already_converted' | 'will_convert';
+  enrollment_id: string | null;
+  full_name: string | null;
+  candidate_enrollment_ids: string[];
+  existing_application_state: string | null;
+  already_in_cohort: boolean;
+  requirements: null | { interview: string; documents: string; tool_acknowledgement: string };
+  actions: string[];
+  blocked_reason: string | null;
+  preserved: null | {
+    started_on: string | null; projects: number;
+    attendance_records: number; certification_snapshots: number;
+  };
+}
+
+export interface ConversionPlan {
+  dry_run: true;
+  generated_at: string;
+  cohort_exists: boolean;
+  rows: ConversionPlanRow[];
+  summary: Record<string, number>;
+}
+
+export interface ConversionReport {
+  dry_run: false;
+  committed_at: string;
+  rows: Array<{
+    email: string; ok: boolean; state: string | null;
+    added_to_cohort: boolean; skipped_already_converted: boolean; error: string | null;
+  }>;
+  summary: { converted: number; skipped: number; failed: number };
+}
+
+export async function planInternshipConversion(interns: ConversionInternInput[]): Promise<ConversionPlan> {
+  const { data } = await api.post('/api/admin/internship/conversion/plan', { interns });
+  return data;
+}
+
+/** `confirm: true` is required by the server so a commit cannot be a mis-click. */
+export async function commitInternshipConversion(interns: ConversionInternInput[]): Promise<ConversionReport> {
+  const { data } = await api.post('/api/admin/internship/conversion/commit', { interns, confirm: true });
+  return data;
+}

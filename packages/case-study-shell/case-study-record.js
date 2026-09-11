@@ -494,7 +494,48 @@
    */
   function walkthrough(c, posterFallback) {
     var v = c.walkthroughVideo;
-    if (!v || !v.url) return null;
+    if (!v) return null;
+
+    /* AN OPERATOR'S OWN VIDEO REPLACES THE GENERATED ONE, and it plays through a
+       different element: a provider embed is an <iframe> the provider owns, not a
+       <video> this platform controls.
+
+       Everything the file version does below is therefore skipped rather than
+       adapted. There is no `source`, because the bytes are not ours. There is no
+       caption `track`, because captions belong to the uploader and attaching our
+       narration's VTT would caption someone else's video with our script. There is
+       no `crossorigin`, because we are not reading the media. And the synthetic-voice
+       note is not printed, because this narration is a human's and claiming
+       otherwise would be the exact deception that note exists to prevent.
+
+       `embedUrl` is produced and re-checked server-side by `videoEmbed.ts` against a
+       host allowlist; both surfaces already permit these origins in `frame-src`. */
+    if (v.embedUrl) {
+      var efig = el('figure', 'cs-cover cs-cover--video cs-cover--embed');
+      var frame = document.createElement('iframe');
+      frame.className = 'cs-walkthrough-embed';
+      frame.setAttribute('src', v.embedUrl);
+      frame.setAttribute('title', v.title || 'Walkthrough');
+      frame.setAttribute('loading', 'lazy');
+      frame.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+      frame.setAttribute('allow', 'accelerometer; clipboard-write; encrypted-media; picture-in-picture; fullscreen');
+      frame.setAttribute('allowfullscreen', '');
+      efig.appendChild(frame);
+      var cap = el('figcaption', 'cs-walkthrough-note', v.title || 'Walkthrough');
+      if (v.watchUrl) {
+        cap.appendChild(document.createTextNode(' '));
+        var a = document.createElement('a');
+        a.href = v.watchUrl;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.textContent = v.provider === 'vimeo' ? 'Watch on Vimeo' : 'Watch on YouTube';
+        cap.appendChild(a);
+      }
+      efig.appendChild(cap);
+      return efig;
+    }
+
+    if (!v.url) return null;
     var fig = el('figure', 'cs-cover cs-cover--video');
     var video = document.createElement('video');
     video.className = 'cs-walkthrough-player';

@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import { resolveExplorerGrowthFlags } from './explorerGrowthFlags';
+import { resolveGrowthJourneyFlags } from './growthJourneyFlags';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
@@ -101,6 +102,13 @@ export const env = {
   // resolveAgentId returns nothing and the call is skipped with `no_agent_id` -
   // a visible no-op, never a fallback onto someone else's script.
   synthflowInternshipAgentId: process.env.SYNTHFLOW_INTERNSHIP_AGENT_ID || '',
+  /*
+   * Project discovery, for the student build interview. Unset means no call is
+   * placed and the student is offered chat instead - never a borrowed agent.
+   * Creating the agent in Synthflow is an operator action; the code is complete
+   * and fails closed without it.
+   */
+  synthflowProjectDiscoveryAgentId: process.env.SYNTHFLOW_PROJECT_DISCOVERY_AGENT_ID || '',
 
   // Admin alert phone (for Cory health monitor voice alerts)
   adminAlertPhone: process.env.ADMIN_ALERT_PHONE || '',
@@ -167,6 +175,11 @@ export const env = {
   // default OFF; sub-flags are subordinate to the master and must be read via
   // isExplorerFeatureEnabled(), never directly.
   explorerGrowth: resolveExplorerGrowthFlags(process.env),
+  // Growth Journey OS (T209). Same shape as explorerGrowth - one parse site, every
+  // flag default OFF, sub-flags subordinate to the master and read only via
+  // isGrowthJourneyCapabilityEnabled(). Distinct property names from Explorer's
+  // on purpose: the Explorer flag guard scans every file for Explorer's names.
+  growthJourney: resolveGrowthJourneyFlags(process.env),
   // Today Timeline v2 — the never-ending engagement feed (Phase 1). Default OFF;
   // set TODAY_FEED_V2_ENABLED=true to expose GET /api/portal/runtime/today.
   todayFeedV2Enabled: process.env.TODAY_FEED_V2_ENABLED === 'true',

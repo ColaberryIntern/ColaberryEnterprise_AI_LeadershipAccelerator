@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { SectionCard, StatCard, StatusBadge } from '../../../components/admin/shell';
 import { fetchItemStatistics, BankHealth, ItemStatistic } from '../../../services/certPrepAdminApi';
+import { RubricBadge } from './RubricBadge';
 
 /**
  * CertBankPanel — is the question bank healthy, and which item should somebody
@@ -70,6 +71,28 @@ export default function CertBankPanel({ health }: { health: BankHealth | null })
           />
         </div>
       </div>
+
+      {/*
+        The rubric summary sits with bank health rather than with the item
+        statistics below, because the two answer different questions at different
+        times. Item statistics come from student RESPONSES and stay empty until a
+        cohort has answered; the rubric can be computed the moment a question
+        exists. Bank quality is visible from day one instead of after the first
+        sitting.
+      */}
+      {health?.rubric && health.rubric.scored > 0 && (
+        <div className="d-flex flex-wrap align-items-center gap-3 mb-3 p-3 border rounded">
+          <RubricBadge met={health.rubric.median_met ?? 0} of={health.rubric.of} />
+          <span className="small">
+            <strong>{health.rubric.fully_meets}</strong> of <strong>{health.rubric.scored}</strong>{' '}
+            questions match the published exam shape on all {health.rubric.of} dimensions
+            {health.rubric.median_met !== null && <> · median {health.rubric.median_met}/{health.rubric.of}</>}
+          </span>
+          <span className="small text-muted ms-auto">
+            Advisory. Measures whether items look like real exam items, not whether they are correct.
+          </span>
+        </div>
+      )}
 
       {health && health.domains_with_no_approved.length > 0 && (
         <div className="alert alert-warning">

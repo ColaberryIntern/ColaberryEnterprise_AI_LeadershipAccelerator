@@ -21,6 +21,12 @@ import {
   handleSubmitApplication, handleCallNow, handleScheduleCall, handleCancelCall,
   handleGetApplicantCompleteness,
 } from '../controllers/internshipInterviewController';
+import {
+  handleGetInternshipDocuments, handleDownloadInternshipDocument, handleUploadSignedDocument,
+} from '../controllers/internshipDocumentController';
+import {
+  handleGetInternshipOnboarding, handleRecordAcknowledgement,
+} from '../controllers/internshipActivationController';
 import { requireBuildEntitlement } from '../middlewares/requireBuildEntitlement';
 import { requireContentEntitlement } from '../middlewares/requireContentEntitlement';
 import { requireOrgManager } from '../middlewares/orgAuth';
@@ -31,7 +37,7 @@ import {
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import path from 'path';
 import fs from 'fs';
-import { strategyPrepUpload, buildArtifactUpload, certificateUpload, fieldGuideUpload, communityMediaUpload, COMMUNITY_MEDIA_DIR, agentAttachmentUpload } from '../config/upload';
+import { strategyPrepUpload, buildArtifactUpload, certificateUpload, fieldGuideUpload, communityMediaUpload, COMMUNITY_MEDIA_DIR, agentAttachmentUpload, signedDocumentUpload } from '../config/upload';
 import { attachmentsSchema } from '../services/agents/tools/attachmentSchema';
 import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import { startRequirementsGeneration } from '../services/requirementsGenerationService';
@@ -317,6 +323,27 @@ router.post('/api/portal/internship/interview/call', internshipCallRateLimiter, 
 router.post('/api/portal/internship/interview/call/schedule', internshipCallRateLimiter, requireParticipant, handleScheduleCall);
 router.post('/api/portal/internship/interview/call/cancel', internshipWriteRateLimiter, requireParticipant, handleCancelCall);
 router.post('/api/portal/internship/submit', internshipWriteRateLimiter, requireParticipant, handleSubmitApplication);
+
+// AI Internship offer-letter package. The upload route uses `signedDocumentUpload`
+// — its OWN multer instance accepting only PDF or a clear image, deliberately
+// narrower than the shared document uploader (see config/upload.ts).
+router.get('/api/portal/internship/documents', requireParticipant, handleGetInternshipDocuments);
+
+// AI Internship activation. NOTE there is no participant route that activates
+// anyone — activation is reviewer/system only, so a student cannot put themselves
+// in the cohort by calling an endpoint.
+router.get('/api/portal/internship/onboarding', requireParticipant, handleGetInternshipOnboarding);
+router.post('/api/portal/internship/acknowledgements', internshipWriteRateLimiter, requireParticipant, handleRecordAcknowledgement);
+
+router.get('/api/portal/internship/documents/:documentId/download', requireParticipant, handleDownloadInternshipDocument);
+router.post(
+  '/api/portal/internship/documents/:documentType/signed',
+  internshipWriteRateLimiter,
+  requireParticipant,
+  signedDocumentUpload.single('document'),
+  handleUploadSignedDocument,
+);
+
 
 
 // Blog 2-minute read gate: continuous-dwell heartbeat + collect (ambient blogs, no card row).

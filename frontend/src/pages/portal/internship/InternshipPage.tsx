@@ -10,6 +10,8 @@ import {
 } from '../../../services/internshipApi';
 import InternshipInterview from './InternshipInterview';
 import InternshipSummary from './InternshipSummary';
+import InternshipDocuments from './InternshipDocuments';
+import InternshipOnboarding from './InternshipOnboarding';
 
 /**
  * The AI Internship application surface.
@@ -152,6 +154,15 @@ const InternshipPage: React.FC = () => {
   const showInterview = ['interview_channel_selected', 'interview_scheduled', 'interview_in_progress'].includes(state)
     && !forceSummary;
   const showSummary = state === 'interview_complete' || forceSummary;
+  // The offer-letter package. Shown from approval through to verification, so a
+  // correction request keeps the upload control in reach rather than hiding it.
+  const showDocuments = ['approved', 'offer_letter_ready', 'signed_documents_uploaded', 'documents_verified']
+    .includes(state);
+  // The checklist runs alongside the documents and stays after activation — it is
+  // the first-week list too, not just an activation gate.
+  const showOnboarding = ['approved', 'offer_letter_ready', 'signed_documents_uploaded',
+    'documents_verified', 'payment_pending', 'activation_pending', 'active', 'paused']
+    .includes(state);
 
   return (
     <PortalShell>
@@ -412,7 +423,15 @@ const InternshipPage: React.FC = () => {
           />
         )}
 
-        {!showIntake && !showChannel && !showInterview && !showSummary && status && (
+        {showDocuments && (
+          <InternshipDocuments onChanged={() => { void reload(); }} />
+        )}
+
+        {showOnboarding && (
+          <InternshipOnboarding onChanged={() => { void reload(); }} />
+        )}
+
+        {!showIntake && !showChannel && !showInterview && !showSummary && !showDocuments && !showOnboarding && status && (
           <section className="ip-card">
             <h2>{status.title}</h2>
             <p className="ip-muted">

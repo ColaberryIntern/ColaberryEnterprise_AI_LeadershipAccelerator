@@ -13,6 +13,15 @@ import { ManagerInboxItem } from '../../../services/managerInboxApi';
 // step anywhere in it — adding to that file would risk entangling this
 // checkpoint's coverage with a suite that has zero margin for a mistaken
 // edit). Same react-dom/client + act harness that file established.
+//
+// Checkpoint G (2026-09-10) — Command Center unfolded into "Live Status"
+// (this file's own real-time content, unchanged) and "Overview" (moved out
+// to its own tab and its own dedicated test file,
+// AgentDetailPage.overview.test.tsx, mirroring this file's own separation
+// principle). References to "Command Center" below are updated to "Live
+// Status"; the Identity-content test that used to prove Overview rendered
+// here moved to that new file, replaced below with a test proving it does
+// NOT render here anymore.
 
 jest.mock('../../../services/agentDetailApi', () => ({ getAgentDetail: jest.fn() }));
 jest.mock('../../../services/managerInboxApi', () => ({ getManagerInboxItems: jest.fn() }));
@@ -31,6 +40,7 @@ jest.mock('../../../services/managerDirectiveApi', () => ({ listDirectives: jest
 jest.mock('../../../services/agentReportSubscriptionApi', () => ({ listReportSubscriptions: jest.fn() }));
 jest.mock('../../../services/agentGoalApi', () => ({ listGoals: jest.fn() }));
 jest.mock('../../../services/agentOneOnOneApi', () => ({ listOneOnOnes: jest.fn() }));
+jest.mock('../../../services/agentRoleCharterApi', () => ({ getAgentRoleCharter: jest.fn() }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getAgentDetail } = require('../../../services/agentDetailApi') as { getAgentDetail: jest.Mock };
@@ -44,6 +54,8 @@ const { listReportSubscriptions } = require('../../../services/agentReportSubscr
 const { listGoals } = require('../../../services/agentGoalApi') as { listGoals: jest.Mock };
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { listOneOnOnes } = require('../../../services/agentOneOnOneApi') as { listOneOnOnes: jest.Mock };
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { getAgentRoleCharter } = require('../../../services/agentRoleCharterApi') as { getAgentRoleCharter: jest.Mock };
 
 const DETAIL: AgentDetail = {
   agent: {
@@ -104,8 +116,8 @@ async function renderAgentPage() {
 }
 
 async function openCommandCenterTab() {
-  const tabButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Command Center'));
-  if (!tabButton) throw new Error('Command Center tab button not found');
+  const tabButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Live Status'));
+  if (!tabButton) throw new Error('Live Status tab button not found');
   await act(async () => {
     tabButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -123,6 +135,7 @@ beforeEach(() => {
   listReportSubscriptions.mockResolvedValue([]);
   listGoals.mockResolvedValue([]);
   listOneOnOnes.mockResolvedValue([]);
+  getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-cory', charter: null });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -134,11 +147,15 @@ afterEach(() => {
 });
 
 // At a Glance, Checkpoint F (2026-09-03) — "At a Glance" is now the
-// default tab (Overview's old slot); Command Center's own content
-// (including the relocated Overview content) is additive, reached via a
-// tab click, same as every other real tab.
-describe('AgentDetailPage — At a Glance is the default tab, Command Center is additive', () => {
-  it('renders At a Glance tiles on mount without any tab click, and Command Center content only appears after clicking it', async () => {
+// default tab (Overview's old slot); Live Status's own content is
+// additive, reached via a tab click, same as every other real tab.
+//
+// Checkpoint G (2026-09-10) — Identity content no longer lives here (it
+// unfolded back into its own "Overview" tab — see
+// AgentDetailPage.overview.test.tsx for that coverage). This test now
+// proves the negative: opening Live Status still never shows it.
+describe('AgentDetailPage — At a Glance is the default tab, Live Status is additive', () => {
+  it('renders At a Glance tiles on mount without any tab click, and Live Status never shows Overview\'s Identity content', async () => {
     getAgentDetail.mockResolvedValue(DETAIL);
     getManagerInboxItems.mockResolvedValue([]);
     await renderAgentPage();
@@ -146,11 +163,11 @@ describe('AgentDetailPage — At a Glance is the default tab, Command Center is 
     expect(container.textContent).not.toContain('Identity');
 
     await openCommandCenterTab();
-    expect(container.textContent).toContain('Identity');
+    expect(container.textContent).not.toContain('Identity');
   });
 });
 
-describe('AgentDetailPage — Command Center: operational state', () => {
+describe('AgentDetailPage — Live Status: operational state', () => {
   it('derives and renders a real operational-state label from trust_contract + live_status', async () => {
     getAgentDetail.mockResolvedValue(DETAIL);
     getManagerInboxItems.mockResolvedValue([]);
@@ -161,7 +178,7 @@ describe('AgentDetailPage — Command Center: operational state', () => {
   });
 });
 
-describe('AgentDetailPage — Command Center: Attention Required', () => {
+describe('AgentDetailPage — Live Status: Attention Required', () => {
   it('shows a loading state while the inbox is being fetched', async () => {
     getAgentDetail.mockResolvedValue(DETAIL);
     let resolveInbox: (items: ManagerInboxItem[]) => void = () => {};
@@ -210,7 +227,7 @@ describe('AgentDetailPage — Command Center: Attention Required', () => {
   });
 });
 
-describe('AgentDetailPage — Command Center: Recent Outcome', () => {
+describe('AgentDetailPage — Live Status: Recent Outcome', () => {
   it('shows the most recent done ticket as the verified outcome', async () => {
     getAgentDetail.mockResolvedValue(DETAIL);
     getManagerInboxItems.mockResolvedValue([]);
@@ -229,7 +246,7 @@ describe('AgentDetailPage — Command Center: Recent Outcome', () => {
   });
 });
 
-describe('AgentDetailPage — Command Center: Current Work', () => {
+describe('AgentDetailPage — Live Status: Current Work', () => {
   it('always renders the honest "not yet instrumented" message, never an inferred task', async () => {
     getAgentDetail.mockResolvedValue(DETAIL);
     getManagerInboxItems.mockResolvedValue([]);
@@ -239,7 +256,7 @@ describe('AgentDetailPage — Command Center: Current Work', () => {
   });
 });
 
-describe('AgentDetailPage — Command Center: stat row', () => {
+describe('AgentDetailPage — Live Status: stat row', () => {
   it('renders real cost, schedule, and inbox-count values', async () => {
     getAgentDetail.mockResolvedValue(DETAIL);
     getManagerInboxItems.mockResolvedValue([PENDING_ITEM]);

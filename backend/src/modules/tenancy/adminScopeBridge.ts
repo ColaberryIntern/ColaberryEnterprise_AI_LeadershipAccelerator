@@ -85,16 +85,33 @@ function logLegacyAdminScope(admin: { email?: string }): void {
  * Build the tenancy request context for a legacy admin request.
  *
  * Returns an empty context for an unauthenticated caller, which scopes to nothing.
+ *
+ * `scope` is an ADDITIVE, optional second argument (T207). Without it the behaviour
+ * is exactly what it was. With it, a requested tenant and brand are passed through to
+ * `buildRequestContext`, which validates them against the identity's memberships —
+ * a caller cannot scope to a brand it does not hold.
+ *
+ * ONE PROPERTY OF THE UNDERLYING BUILDER THAT A CALLER MUST KNOW: when a requested
+ * brand is NOT permitted, `buildRequestContext` leaves `brandId` null rather than
+ * throwing — and null means UNSCOPED, not denied. A route that asks for a brand must
+ * therefore check that `ctx.brandId` came back set, and refuse if it did not. Nothing
+ * passed `requestedBrandId` before T207, so this was latent; it is stated here rather
+ * than silently changed in the builder, which every guard in the system depends on.
  */
 export async function contextFromAdminRequest(
   admin: { id?: string; email?: string; role?: string } | undefined,
+  scope: { requestedTenantId?: string | null; requestedBrandId?: string | null } = {},
 ): Promise<PlatformRequestContext> {
   if (!admin) return emptyContext();
 
   const identity = await identityForAdmin(admin);
   if (!identity) return { ...emptyContext(), platformIdentityId: null };
 
-  return buildRequestContext({ platformIdentityId: identity.id });
+  return buildRequestContext({
+    platformIdentityId: identity.id,
+    requestedTenantId: scope.requestedTenantId ?? null,
+    requestedBrandId: scope.requestedBrandId ?? null,
+  });
 }
 
 /**

@@ -71,6 +71,23 @@ jest.mock('../managerDirectiveIntentService', () => ({
   toPendingDirectiveConfirmation: jest.fn(),
   applyConfirmedDirective: jest.fn(),
 }));
+jest.mock('../managerAssignWorkIntentService', () => ({
+  detectAssignWorkIntent: jest.fn(() => null),
+  buildAssignWorkConfirmationCardText: jest.fn(() => ''),
+  toPendingAssignWorkConfirmation: jest.fn(),
+  applyConfirmedAssignWork: jest.fn(),
+}));
+jest.mock('../managerApprovalDecisionIntentService', () => ({
+  detectApproveIntent: jest.fn(() => null),
+  detectRejectIntent: jest.fn(() => null),
+  resolvePendingApprovalTarget: jest.fn(),
+  buildApproveConfirmationCardText: jest.fn(() => ''),
+  buildRejectConfirmationCardText: jest.fn(() => ''),
+  toPendingApproveConfirmation: jest.fn(),
+  toPendingRejectConfirmation: jest.fn(),
+  applyConfirmedApprove: jest.fn(),
+  applyConfirmedReject: jest.fn(),
+}));
 // Same isolation reasoning as managerReliabilityIntentService above —
 // agentWorkStatusIntentService.ts imports Ticket/AdminUser model classes
 // directly; mocked wholesale here since this file only needs "not a
@@ -136,6 +153,33 @@ describe('getConversationHistory', () => {
     const result = await getConversationHistory('agent-1', 'manager@colaberry.com');
 
     expect(result?.messages).toEqual([]);
+  });
+
+  it('regression: queries for the MOST RECENT messages (DESC + limit), never the oldest — ORDER BY created_at ASC LIMIT N silently returns the oldest N once a conversation exceeds the limit, freezing the view on stale history forever', async () => {
+    mockAiAgentFindByPk.mockResolvedValue({ id: 'agent-1' });
+    mockConversationFindOrCreate.mockResolvedValue([{ id: 'conv-1' }, false]);
+    mockMessageFindAll.mockResolvedValue([]);
+
+    await getConversationHistory('agent-1', 'manager@colaberry.com');
+
+    expect(mockMessageFindAll).toHaveBeenCalledWith(expect.objectContaining({ order: [['created_at', 'DESC']] }));
+  });
+
+  it('regression: still returns messages in chronological (oldest-first) order for display, even though the underlying query fetches newest-first', async () => {
+    mockAiAgentFindByPk.mockResolvedValue({ id: 'agent-1' });
+    mockConversationFindOrCreate.mockResolvedValue([{ id: 'conv-1' }, false]);
+    // The real DB, queried DESC, would hand back newest-first — this mock
+    // mirrors that shape rather than the already-chronological shape every
+    // other test in this file uses, to prove the reverse actually happens.
+    mockMessageFindAll.mockResolvedValue([
+      { id: 'm3', role: 'agent', content: 'Third', created_at: new Date('2026-09-10T00:00:03.000Z') },
+      { id: 'm2', role: 'manager', content: 'Second', created_at: new Date('2026-09-10T00:00:02.000Z') },
+      { id: 'm1', role: 'manager', content: 'First', created_at: new Date('2026-09-10T00:00:01.000Z') },
+    ]);
+
+    const result = await getConversationHistory('agent-1', 'manager@colaberry.com');
+
+    expect(result?.messages.map((m) => m.id)).toEqual(['m1', 'm2', 'm3']);
   });
 });
 

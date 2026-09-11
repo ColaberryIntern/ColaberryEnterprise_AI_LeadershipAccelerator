@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import api from '../../utils/api';
 import { PageHeader, SectionCard, StatCard, StatusBadge } from '../../components/admin/shell';
 // The SAME component the Lead detail page renders. Reused rather than rebuilt:
@@ -15,6 +15,19 @@ import ScheduleAppointmentModal from '../../components/admin/ScheduleAppointment
 import LeadPipelineBar from '../../components/admin/lead/LeadPipelineBar';
 import LeadStatusNotes from '../../components/admin/lead/LeadStatusNotes';
 import LeadStrategyPrep from '../../components/admin/lead/LeadStrategyPrep';
+// The programme panels an audit of every person-keyed table added on 2026-09-09.
+// Each is its own module: the page was already 934 lines before they arrived.
+import ClassActivityTab from '../../components/admin/person/ClassActivityTab';
+import WorkTab from '../../components/admin/person/WorkTab';
+import CommunicationsTab from '../../components/admin/person/CommunicationsTab';
+import PriorHistoryPanel from '../../components/admin/person/PriorHistoryPanel';
+import StrategyBriefPanel from '../../components/admin/person/StrategyBriefPanel';
+import AccountTab from '../../components/admin/person/AccountTab';
+import GrowthTab from '../../components/admin/person/GrowthTab';
+import PersonActivityChart from '../../components/admin/person/PersonActivityChart';
+import { Field, Unknown, fmtDate, fmtDateTime } from '../../components/admin/person/primitives';
+import type { Journey, Profile, TempEntry, TimelineEvent, VisitorData } from '../../adminOs/personTypes';
+import { refForApi } from '../../adminOs/personLink';
 
 /**
  * The canonical 360° person profile.
@@ -34,97 +47,6 @@ import LeadStrategyPrep from '../../components/admin/lead/LeadStrategyPrep';
  * component cannot widen access.
  */
 
-interface AcquisitionPanel {
-  phone: string | null; role: string | null; companySize: string | null;
-  industry: string | null; linkedinUrl: string | null;
-  source: string | null; formType: string | null; utmSource: string | null;
-  utmCampaign: string | null; pageUrl: string | null; interestArea: string | null;
-  message: string | null; firstSeen: string | null;
-  pipelineStage: string | null; leadScore: number | null; temperature: string | null;
-  temperatureUpdatedAt: string | null; qualificationLevel: string | null;
-  interestLevel: string | null; maturityScore: number | null;
-  status: string | null; assignedAdmin: string | null; lastContactedAt: string | null;
-  notes: string | null; consentContact: boolean | null;
-  evaluating90Days: boolean | null; createdAt: string | null;
-  leadId: number | null; leadScoreMax: number;
-}
-
-interface VisitorData {
-  id?: string;
-  intent_score?: number;
-  intent_level?: string;
-  total_sessions?: number;
-  total_pageviews?: number;
-  first_seen_at?: string;
-  last_seen_at?: string;
-  device_type?: string;
-  behavioral_signals?: Array<{ signal_type?: string } | string>;
-  sessions?: Array<{
-    started_at?: string; duration_seconds?: number; pageview_count?: number;
-    entry_page?: string; exit_page?: string;
-  }>;
-}
-
-interface TempEntry {
-  from_temperature?: string; to_temperature?: string;
-  changed_by?: string; lead_score?: number; created_at?: string;
-}
-
-interface AppointmentRow {
-  kind: string; title: string | null; scheduledAt: string | null;
-  status: string | null; notes: string | null; meetLink: string | null;
-}
-
-interface AutomationRow {
-  type: string; status: string | null; detail: string | null; createdAt: string | null;
-}
-
-interface LearningRow {
-  enrollmentId: string; cohortId: string | null; status: string | null;
-  tier: string | null; enrollmentType: string | null; enrolledAt: string | null;
-}
-
-interface BillingRow {
-  enrollmentId: string; paymentStatus: string | null;
-  paymentMethod: string | null; amountPaid: number | null;
-}
-
-interface TimelineEvent {
-  occurredAt: string; domain: string; source: string; type: string; summary: string | null;
-}
-
-interface TrustPanel {
-  leadIds: number[];
-  enrollmentIds: string[];
-  matchMethod: string;
-  tracedToLead: boolean;
-  consentRecorded: boolean | null;
-  lastActivity: string | null;
-  gaps: Array<{ field: string; reason: string }>;
-}
-
-interface Journey {
-  firstTouch: string | null; lastActivity: string | null; daysKnown: number | null;
-  sessions: number; pageEvents: number; campaigns: number; emailsSent: number;
-  enrollments: number; intentScore: number | null;
-}
-
-interface Profile {
-  email: string; name: string | null; stage: string; tracedToLead: boolean;
-  company: string | null; title: string | null;
-  acquisition?: AcquisitionPanel | null;
-  learning?: LearningRow[];
-  billing?: BillingRow[];
-  engagement?: { sessions: number; firstSeen: string | null; lastSeen: string | null; sites: string[] } | null;
-  appointments?: AppointmentRow[];
-  automation?: AutomationRow[];
-  intentSuppressedReason?: string;
-  trust?: TrustPanel;
-  journey?: Journey;
-  timeline?: TimelineEvent[];
-  timelineDomains?: string[];
-  withheldPanels: string[];
-}
 
 const STAGE_LABEL: Record<string, string> = {
   anonymous_visitor: 'Anonymous visitor', identified_visitor: 'Identified visitor',
@@ -148,42 +70,49 @@ const DOMAIN_TONE: Record<string, string> = {
   commerce: 'success', learning: 'warning', community: 'dark',
 };
 
-/** Absent, stated. Never an empty cell, and never a zero standing in for unknown. */
-const Unknown = () => <span className="text-muted small">Not recorded</span>;
+const TIMELINE_VIEW_KEY = 'admin_person_timeline_view';
 
-function Field({ label, value, wide }: { label: string; value: React.ReactNode; wide?: boolean }) {
-  const empty = value === null || value === undefined || value === '';
-  return (
-    <div className={wide ? 'col-12 mb-3' : 'col-6 col-lg-4 mb-3'}>
-      <div className="text-muted text-uppercase mb-1" style={{ letterSpacing: '.05em', fontSize: '.7rem' }}>
-        {label}
-      </div>
-      <div className={empty ? '' : 'fw-medium'}>{empty ? <Unknown /> : value}</div>
-    </div>
-  );
-}
-
-const fmtDate = (v: string | null | undefined) =>
-  (v ? new Date(v).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : null);
-const fmtDateTime = (v: string | null | undefined) => (v ? new Date(v).toLocaleString() : null);
-
-type TabKey = 'timeline' | 'journey' | 'acquisition' | 'notes' | 'strategy' | 'engagement' | 'learning' | 'billing' | 'activity' | 'trust';
+type TabKey = 'timeline' | 'journey' | 'acquisition' | 'notes' | 'strategy'
+  | 'communications' | 'class' | 'work' | 'account' | 'growth'
+  | 'engagement' | 'learning' | 'billing' | 'activity' | 'trust';
 
 export default function PersonProfilePage() {
-  const { email: rawEmail } = useParams<{ email: string }>();
-  const email = rawEmail ? decodeURIComponent(rawEmail) : '';
+  // A REF, not necessarily an email. Admin surfaces link with whatever they
+  // hold — `lead:123` and `enrollment:<uuid>` are resolved by the API — so the
+  // route segment is opaque here and `profile.email` is the resolved identity.
+  const { ref: rawRef } = useParams<{ ref: string }>();
+  const personRef = refForApi(rawRef);
+  // ?tab= is a DEFAULT chosen by whoever linked here, not a lock. An unknown
+  // tab, or one this caller may not see, falls through to the usual first tab.
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<TabKey>('timeline');
   const [domainFilter, setDomainFilter] = useState('all');
+  // The timeline draws as a chart by default; the table is one click away and
+  // the choice sticks, because a reader who wants rows wants them every time.
+  // Storage can throw (private window, blocked site data); the page must not.
+  const [timelineView, setTimelineView] = useState<'chart' | 'table'>(() => {
+    try { return localStorage.getItem(TIMELINE_VIEW_KEY) === 'table' ? 'table' : 'chart'; } catch { return 'chart'; }
+  });
+  const chooseTimelineView = (v: 'chart' | 'table') => {
+    setTimelineView(v);
+    try { localStorage.setItem(TIMELINE_VIEW_KEY, v); } catch { /* preference simply does not persist */ }
+  };
   // Website activity and temperature history come from the lead endpoints the
   // Lead page already uses, so the two surfaces cannot disagree. Fetched only
   // when this person HAS a lead, and failing soft: these endpoints are
   // requireSalesOrAdmin, so a scoped identity simply does not get the panels.
   const [visitor, setVisitor] = useState<VisitorData | null>(null);
   const [tempHistory, setTempHistory] = useState<TempEntry[] | null>(null);
+  // The Journey card's OWN touchpoint figure. Counted differently from
+  // anything in the profile payload -- it is the length of the journey event
+  // set -- so the badge has to read the same number rather than approximate
+  // it, or the tab says 2 while the card behind it says 15.
+  const [journeyTouchpoints, setJourneyTouchpoints] = useState<number | null>(null);
   const [showAppointment, setShowAppointment] = useState(false);
   // Bumped after any write so the activity timeline reflects it immediately.
   const [activityKey, setActivityKey] = useState(0);
@@ -195,7 +124,7 @@ export default function PersonProfilePage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get(`/api/admin/people/profile?email=${encodeURIComponent(email)}`);
+      const res = await api.get(`/api/admin/people/profile?ref=${encodeURIComponent(personRef)}`);
       setProfile(res.data);
     } catch (err) {
       setProfile(null);
@@ -208,7 +137,7 @@ export default function PersonProfilePage() {
     } finally {
       setLoading(false);
     }
-  }, [email]);
+  }, [personRef]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -218,7 +147,7 @@ export default function PersonProfilePage() {
   // get those panels rather than breaking the profile.
   const leadId = profile?.acquisition?.leadId ?? null;
   useEffect(() => {
-    if (leadId === null) { setVisitor(null); setTempHistory(null); return; }
+    if (leadId === null) { setVisitor(null); setTempHistory(null); setJourneyTouchpoints(null); return; }
     let cancelled = false;
     (async () => {
       try {
@@ -230,6 +159,11 @@ export default function PersonProfilePage() {
         const rows = Array.isArray(res.data) ? res.data : res.data?.history;
         if (!cancelled) setTempHistory(Array.isArray(rows) ? rows : null);
       } catch { if (!cancelled) setTempHistory(null); }
+      try {
+        const res = await api.get(`/api/admin/leads/${leadId}/journey`);
+        const n = res.data?.metrics?.total_touchpoints;
+        if (!cancelled) setJourneyTouchpoints(typeof n === 'number' ? n : null);
+      } catch { if (!cancelled) setJourneyTouchpoints(null); }
     })();
     return () => { cancelled = true; };
   }, [leadId]);
@@ -239,12 +173,41 @@ export default function PersonProfilePage() {
     if (!profile) return [] as Array<{ key: TabKey; label: string; count?: number }>;
     const t: Array<{ key: TabKey; label: string; count?: number }> = [];
     if (profile.timeline !== undefined) t.push({ key: 'timeline', label: 'Timeline', count: profile.timeline.length });
-    if (profile.acquisition !== undefined) t.push({ key: 'acquisition', label: 'Acquisition' });
+    if (profile.acquisition !== undefined) {
+      // How much of the acquisition record is actually filled in. A lead
+      // captured from a one-field form and one from a full brief request are
+      // different objects, and the count says which this is.
+      const acq = profile.acquisition;
+      const filled = acq
+        ? Object.entries(acq).filter(([k, v]) =>
+            k !== 'leadScoreMax' && v !== null && v !== undefined && v !== '').length
+        : undefined;
+      t.push({ key: 'acquisition', label: 'Acquisition', count: filled });
+    }
     // Journey needs a lead: the analysis is built from lead touchpoints.
-    if (profile.acquisition?.leadId) t.push({ key: 'journey', label: 'Journey' });
+    // The count is TOUCHPOINTS, the same figure the campaign modal shows.
+    if (profile.acquisition?.leadId) {
+      // The Journey card's own figure, not a sum assembled here. The earlier
+      // version added sessions + page events + emails + campaigns and read 2
+      // against a card showing 15 -- two different definitions of the same
+      // word on one screen.
+      t.push({ key: 'journey', label: 'Journey', count: journeyTouchpoints ?? undefined });
+    }
     // The Lead page's Activity tab, moved across whole.
-    if (profile.acquisition?.leadId) t.push({ key: 'notes', label: 'Notes & activity' });
-    if (profile.acquisition?.leadId) t.push({ key: 'strategy', label: 'Strategy prep' });
+    if (profile.acquisition?.leadId) {
+      t.push({ key: 'notes', label: 'Notes & activity', count: tempHistory?.length ?? undefined });
+    }
+    // Not gated on a lead: a student has no lead record and is precisely who
+    // the coaching brief is written for.
+    t.push({ key: 'strategy', label: 'Strategy prep' });
+    // Every communication, threaded by campaign.
+    if (profile.communications) {
+      t.push({
+        key: 'communications',
+        label: 'Communications',
+        count: profile.communications.totalMessages,
+      });
+    }
     if (profile.appointments !== undefined || profile.automation !== undefined) {
       t.push({
         key: 'engagement',
@@ -252,29 +215,91 @@ export default function PersonProfilePage() {
         count: (profile.appointments?.length ?? 0) + (profile.automation?.length ?? 0),
       });
     }
-    if (profile.learning !== undefined) t.push({ key: 'learning', label: 'Programme', count: profile.learning.length });
-    if (profile.billing !== undefined) t.push({ key: 'billing', label: 'Billing', count: profile.billing.length });
-    if (profile.engagement !== undefined) t.push({ key: 'activity', label: 'Site activity' });
+    if (profile.learning !== undefined) t.push({ key: 'learning', label: 'Enrolments', count: profile.learning.length });
+    // The programme surfaces, added 2026-09-09. Each appears only when the API
+    // sent its panel, so a caller without the programme sections never sees the
+    // tab — the same rule every other tab here follows.
+    if (profile.classActivity || profile.curriculum) {
+      t.push({
+        key: 'class',
+        label: 'Class & curriculum',
+        // Cards they COMPLETED plus register entries and written work.
+        // `curriculum.total` counts cards available to them -- 1,131 for a
+        // learner who has finished 10 -- so it promised a full report and
+        // opened on an almost empty one.
+        count: (profile.curriculum?.completed ?? 0)
+          + (profile.classActivity?.attendanceTotal ?? 0)
+          + (profile.curriculum?.reflections ?? 0)
+          + (profile.curriculum?.surveys ?? 0) || undefined,
+      });
+    }
+    if (profile.work) {
+      t.push({
+        key: 'work',
+        label: 'Projects & portfolio',
+        count: profile.work.projects.length + profile.work.caseStudies.length
+          + profile.work.capstones.length,
+      });
+    }
+    if (profile.account || profile.billingDetail) {
+      t.push({
+        key: 'account',
+        label: 'Account & subscription',
+        count: profile.billingDetail?.subscriptions.length ?? undefined,
+      });
+    }
+    if (profile.skills || profile.mentor || profile.content || profile.community || profile.profileContext) {
+      t.push({
+        key: 'growth',
+        label: 'Skills & context',
+        count: (profile.skills?.skillEvidence ?? 0)
+          + (profile.mentor?.mentorTurns ?? 0)
+          + (profile.content?.podcasts ?? 0) + (profile.content?.blogPosts ?? 0)
+          + (profile.content?.videos ?? 0) || undefined,
+      });
+    }
+    if (profile.billing !== undefined) t.push({ key: 'billing', label: 'Payment record', count: profile.billing.length });
+    if (profile.engagement !== undefined) {
+      t.push({ key: 'activity', label: 'Site activity', count: profile.engagement?.sessions ?? undefined });
+    }
     // Last, because it is about the data rather than the person — but present
     // for everyone, because "how much of this should I believe" always applies.
-    if (profile.trust) t.push({ key: 'trust', label: 'Data & trust', count: profile.trust.gaps.length });
+    if (profile.trust) {
+      t.push({
+        key: 'trust',
+        label: 'Data & trust',
+        count: profile.trust.gaps.length + (profile.history?.enrolments.length ?? 0),
+      });
+    }
     return t;
-  }, [profile]);
+  }, [profile, tempHistory, journeyTouchpoints]);
 
+  // Applied ONCE per load. Without the ref the effect would re-apply ?tab= every
+  // time `tab` changed, so clicking away from the requested tab would snap
+  // straight back to it. A ref rather than an eslint-disable: every dependency
+  // stays declared, and `react-hooks/exhaustive-deps` is not registered in this
+  // project's config, so suppressing it is itself a build error.
+  const deepLinkApplied = useRef(false);
   useEffect(() => {
-    if (tabs.length && !tabs.some((t) => t.key === tab)) setTab(tabs[0].key);
-  }, [tabs, tab]);
+    if (!tabs.length) return;
+    if (!deepLinkApplied.current && requestedTab && tabs.some((t) => t.key === requestedTab)) {
+      deepLinkApplied.current = true;
+      setTab(requestedTab as TabKey);
+      return;
+    }
+    if (!tabs.some((t) => t.key === tab)) setTab(tabs[0].key);
+  }, [tabs, tab, requestedTab]);
 
   const acq = profile?.acquisition;
 
   return (
     <div className="container-fluid py-4">
       <PageHeader
-        title={profile?.name || email}
+        title={profile?.name || profile?.email || personRef}
         subtitle={
           profile && (profile.title || profile.company)
             ? [profile.title, profile.company].filter(Boolean).join(' · ')
-            : profile?.email || email
+            : profile?.email || personRef
         }
         icon="user-3-line"
         breadcrumb={[
@@ -305,11 +330,6 @@ export default function PersonProfilePage() {
                 onClick={() => setShowAppointment(true)}>
                 Schedule appointment
               </button>
-            )}
-            {acq?.leadId && (
-              <Link className="btn btn-sm btn-outline-secondary" to={`/admin/leads/${acq.leadId}`}>
-                Lead record
-              </Link>
             )}
           </div>
         }
@@ -355,6 +375,20 @@ export default function PersonProfilePage() {
               <div className="col-6 col-md-4 col-xl-2">
                 <StatCard label="Enrolments" value={profile.journey.enrollments}
                   icon="graduation-cap-line" tone="success" />
+              </div>
+            )}
+            {/* What they DID, beside what they were sent. An acquisition-only
+                header made a heavy learner look like a quiet lead. */}
+            {profile.journey.cardsCompleted > 0 && (
+              <div className="col-6 col-md-4 col-xl-2">
+                <StatCard label="Cards completed" value={profile.journey.cardsCompleted}
+                  icon="book-open-line" tone="success" />
+              </div>
+            )}
+            {profile.journey.sessionsAttended > 0 && (
+              <div className="col-6 col-md-4 col-xl-2">
+                <StatCard label="Classes attended" value={profile.journey.sessionsAttended}
+                  icon="calendar-check-line" tone="success" />
               </div>
             )}
           </div>
@@ -404,7 +438,30 @@ export default function PersonProfilePage() {
 
           {/* ── Timeline ─────────────────────────────────────────────────── */}
           {tab === 'timeline' && profile.timeline && (
-            <SectionCard title="Activity timeline" padded={false}>
+            <SectionCard
+              title="Activity timeline"
+              padded={false}
+              actions={(
+                <div className="btn-group btn-group-sm" role="group" aria-label="Timeline view">
+                  <button
+                    type="button"
+                    className={`btn ${timelineView === 'chart' ? 'btn-dark' : 'btn-outline-secondary'}`}
+                    onClick={() => chooseTimelineView('chart')}
+                    aria-pressed={timelineView === 'chart'}
+                  >
+                    <i className="ri-bar-chart-horizontal-line me-1" aria-hidden="true" />Chart
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn ${timelineView === 'table' ? 'btn-dark' : 'btn-outline-secondary'}`}
+                    onClick={() => chooseTimelineView('table')}
+                    aria-pressed={timelineView === 'table'}
+                  >
+                    <i className="ri-list-check me-1" aria-hidden="true" />Table
+                  </button>
+                </div>
+              )}
+            >
               <div className="d-flex flex-wrap gap-1 p-3 border-bottom">
                 {['all', ...(profile.timelineDomains ?? [])].map((d) => (
                   <button
@@ -419,7 +476,14 @@ export default function PersonProfilePage() {
                 ))}
               </div>
 
-              {profile.timeline.length === 0 ? (
+              {timelineView === 'chart' ? (
+                <PersonActivityChart
+                  events={profile.timeline}
+                  domains={profile.timelineDomains ?? []}
+                  domainFilter={domainFilter}
+                  onSelect={setRawEvent}
+                />
+              ) : profile.timeline.length === 0 ? (
                 <p className="text-muted small p-4 mb-0 text-center">
                   No recorded activity in the areas you can see.
                 </p>
@@ -452,6 +516,14 @@ export default function PersonProfilePage() {
                             </td>
                             <td>
                               <span className="fw-medium">{e.type}</span>
+                              {/* A collapsed fan-out. The reader sees one line and how
+                                  many times it happened, never the same line repeated. */}
+                              {e.occurrences > 1 && (
+                                <span className="badge bg-secondary-subtle text-secondary-emphasis ms-2"
+                                  title={`${e.occurrences} identical events in the same second`}>
+                                  ×{e.occurrences}
+                                </span>
+                              )}
                               {e.summary && <div className="text-muted small">{e.summary}</div>}
                             </td>
                             {/* Source-labelled, so any row traces back to its table. */}
@@ -690,7 +762,34 @@ export default function PersonProfilePage() {
           )}
 
           {/* ── Strategy prep ────────────────────────────────────────────── */}
-          {tab === 'strategy' && acq?.leadId && <LeadStrategyPrep leadId={acq.leadId} />}
+          {tab === 'strategy' && (
+            <>
+              <StrategyBriefPanel personRef={personRef} stage={profile.stage} />
+              {acq?.leadId && <LeadStrategyPrep leadId={acq.leadId} />}
+            </>
+          )}
+
+          {tab === 'class' && (
+            <ClassActivityTab classActivity={profile.classActivity} curriculum={profile.curriculum} />
+          )}
+
+          {tab === 'communications' && <CommunicationsTab communications={profile.communications} />}
+
+          {tab === 'work' && <WorkTab work={profile.work} />}
+
+          {tab === 'account' && (
+            <AccountTab account={profile.account} billing={profile.billingDetail} />
+          )}
+
+          {tab === 'growth' && (
+            <GrowthTab
+              skills={profile.skills}
+              mentor={profile.mentor}
+              content={profile.content}
+              community={profile.community}
+              context={profile.profileContext}
+            />
+          )}
 
           {/* ── Appointments & automation ────────────────────────────────── */}
           {tab === 'engagement' && (
@@ -881,6 +980,15 @@ export default function PersonProfilePage() {
                   )}
                 </SectionCard>
               </div>
+
+              {/* Pre-platform history. In Data & trust because that is where the
+                  profile answers "how much of this should you believe": for a
+                  third of the database this platform's record starts mid-story. */}
+              <div className="col-12">
+                <SectionCard title="Before this platform">
+                  <PriorHistoryPanel history={profile.history} />
+                </SectionCard>
+              </div>
             </div>
           )}
 
@@ -889,11 +997,19 @@ export default function PersonProfilePage() {
             <>
               <div className="modal d-block" tabIndex={-1} role="dialog"
                 style={{ background: 'rgba(0,0,0,.4)' }} onClick={() => setRawEvent(null)}>
-                <div className="modal-dialog modal-dialog-centered" role="document"
+                <div className="modal-dialog modal-dialog-centered modal-lg" role="document"
                   onClick={(e) => e.stopPropagation()}>
                   <div className="modal-content">
                     <div className="modal-header">
-                      <h5 className="modal-title">{rawEvent.type}</h5>
+                      <div>
+                        <h5 className="modal-title mb-0">{rawEvent.type}</h5>
+                        <div className="text-muted small">
+                          <span className={`badge bg-${DOMAIN_TONE[rawEvent.domain] || 'secondary'}-subtle text-${DOMAIN_TONE[rawEvent.domain] || 'secondary'}-emphasis me-2`}>
+                            {rawEvent.domain}
+                          </span>
+                          {fmtDateTime(rawEvent.occurredAt)}
+                        </div>
+                      </div>
                       <button type="button" className="btn-close" aria-label="Close"
                         onClick={() => setRawEvent(null)} />
                     </div>
@@ -902,8 +1018,34 @@ export default function PersonProfilePage() {
                         <Field label="When" value={fmtDateTime(rawEvent.occurredAt)} />
                         <Field label="Domain" value={rawEvent.domain} />
                         <Field label="Source table" value={<code>{rawEvent.source}</code>} />
+                        <Field label="Event type" value={<code>{rawEvent.type}</code>} />
+                        {/* A collapsed fan-out says how many it stands for, so the
+                            reader is never left wondering what the row hides. */}
+                        <Field
+                          label="Identical events collapsed"
+                          value={rawEvent.occurrences > 1
+                            ? `${rawEvent.occurrences} in the same second`
+                            : 'None — this is a single event'} />
+                        <Field label="Person" value={profile.name || profile.email} />
                         <Field label="Detail" wide value={rawEvent.summary} />
                       </div>
+
+                      {/* A communication event has a whole thread behind it, and
+                          the reader almost always wants to read the message
+                          rather than admire its metadata. */}
+                      {rawEvent.domain === 'communication' && profile.communications && (
+                        <div className="alert alert-light border d-flex justify-content-between align-items-center gap-2">
+                          <span className="small">
+                            This is a communication. The full message, its campaign and any reply
+                            are on the Communications tab.
+                          </span>
+                          <button type="button" className="btn btn-sm btn-outline-primary flex-shrink-0"
+                            onClick={() => { setTab('communications'); setRawEvent(null); }}>
+                            Open thread
+                          </button>
+                        </div>
+                      )}
+
                       {/* Naming the table is the point: any figure on this page
                           can be traced to the rows behind it. */}
                       <p className="text-muted small mb-0">

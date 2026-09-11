@@ -19,9 +19,11 @@ import { getActiveProjectTree } from '../projects/projectReadService';
 import TimelineCard from '../../models/TimelineCard';
 import CommunityPost from '../../models/CommunityPost';
 import CommunityMember from '../../models/CommunityMember';
+import StudentTask from '../../models/StudentTask';
 import LiveSession from '../../models/LiveSession';
 import AttendanceRecord from '../../models/AttendanceRecord';
 import { resolveCohortId } from '../communityService';
+import { ritualStudentLabel, ritualArt } from '../runtime/communityRituals';
 import { env } from '../../config/env';
 import type { TodayFeedItem } from './todayFeedComposer';
 import { getTypeExposureMap } from './feedTypeExposureService';
@@ -111,7 +113,10 @@ export async function rehydrateCardItems(items: TodayFeedItem[]): Promise<void> 
   }
 }
 
-function projectItem(t: { id: string; title: string | null; description: string | null; status: string; release_key: string | null }): TodayFeedItem {
+function projectItem(
+  t: { id: string; title: string | null; description: string | null; status: string; release_key: string | null },
+  projectId: string,
+): TodayFeedItem {
   return {
     position: 0,
     kind: 'anchored',
@@ -120,6 +125,13 @@ function projectItem(t: { id: string; title: string | null; description: string 
     type: 'project_task',
     render_band: resolveType('project_task')?.render_band ?? 'task',
     card_id: null,
+    // A project task is not a curriculum card either — same defect class as the
+    // community items above. It has a real destination of its own (the project
+    // workspace, /portal/projects/workspace/:projectId/:taskId), so it carries
+    // both ids and the client navigates there instead of opening a card drawer
+    // that can only ever show a title and a dead "Enter workspace" button.
+    project_id: projectId,
+    project_task_id: t.id,
     title: t.title ?? null,
     subtitle: t.release_key ?? null,
     description: t.description ?? null,
@@ -151,20 +163,47 @@ function communityMedia(mediaUrls: unknown): { video: FeedVideo | null; image: s
 
 type CommunityPostFields = {
   id?: string; body: string; media_urls?: unknown;
+  week?: number | null; ritual_meta?: { ritual?: string } | null;
+  like_count?: number | null; comment_count?: number | null;
   member?: { display_name?: string | null; avatar_url?: string | null; level?: number | null } | null;
 };
+
+type CommunityDynamicFields = Pick<
+  TodayFeedItem,
+  'title' | 'description' | 'image' | 'video' | 'author' | 'student_label' | 'week' | 'like_count' | 'comment_count'
+>;
 
 // The DYNAMIC fields of a community card — derived from the LIVE post. Shared by
 // compose-time (communityItem) and serve-time (rehydrateCommunityItems) so media,
 // author, and text always reflect the current post, never a stale snapshot.
-export function communityFieldsFromPost(p: CommunityPostFields): Pick<TodayFeedItem, 'title' | 'description' | 'image' | 'video' | 'author'> {
+//
+// `student_label` is derived here rather than left to the client: a ritual post
+// belongs to the week's Community Ritual ("Skill Drop", "Cohort Wins"), and the
+// client's only other option is to title-case the type slug, which is how every
+// one of these tiles came to read "Community Discussion". Deriving it at
+// serve-time also repairs the FROZEN snapshots already sitting in
+// today_feed_impressions without a backfill.
+export function communityFieldsFromPost(p: CommunityPostFields): CommunityDynamicFields {
   const body = (p.body || '').trim();
   const title = body.length > 80 ? `${body.slice(0, 77)}…` : body;
   const { video, image } = communityMedia(p.media_urls);
   const author = p.member
     ? { name: p.member.display_name || 'Member', avatar_url: p.member.avatar_url ?? null, level: p.member.level ?? 1 }
     : null;
-  return { title: title || 'Community post', description: body || null, image, video, author };
+  const week = typeof p.week === 'number' ? p.week : null;
+  const student_label = p.ritual_meta
+    ? ritualStudentLabel('community_discussion', week, 'Community Post')
+    : 'Community Post';
+  // A text-only post carried no art at all and rendered as a blank slab in the
+  // feed. Its own media always wins; otherwise fall back to the week's ritual
+  // banner (see ritualArt) so the timeline never shows an empty tile. A video
+  // post keeps a null image — the player is the visual.
+  const art = image || (video ? null : ritualArt(week));
+  return {
+    title: title || 'Community post', description: body || null, image: art, video, author,
+    student_label, week,
+    like_count: p.like_count ?? 0, comment_count: p.comment_count ?? 0,
+  };
 }
 
 function communityItem(p: CommunityPostFields & { id: string }): TodayFeedItem {
@@ -184,11 +223,21 @@ function communityItem(p: CommunityPostFields & { id: string }): TodayFeedItem {
     video: f.video,
     blog: null,
     content: null,
+    // Deliberately null, even though a ritual post knows its week. `week` on a
+    // feed item is not just a label: isPrecedenceImpression() reads it to decide
+    // whether a placed impression counts toward the anchored or the variety
+    // cadence tier, so stamping it here would silently re-tier every community
+    // post in every student's feed. The week reaches the student through the
+    // ritual label and the post body instead.
     week: null,
     estimated_time: null,
     status: null,
     interacted: false,
     author: f.author,
+    community_post_id: p.id,
+    student_label: f.student_label,
+    like_count: f.like_count,
+    comment_count: f.comment_count,
   };
 }
 
@@ -210,13 +259,65 @@ export async function rehydrateCommunityItems(items: TodayFeedItem[]): Promise<v
     });
     const byId = new Map(posts.map((p) => { const plain = p.get({ plain: true }) as any; return [plain.id as string, plain]; }));
     for (const it of community) {
-      const post = byId.get(it.ref.slice('community:'.length));
+      const postId = it.ref.slice('community:'.length);
+      const post = byId.get(postId);
       if (!post) continue;
       const f = communityFieldsFromPost(post);
       it.title = f.title; it.description = f.description; it.image = f.image; it.video = f.video; it.author = f.author;
+      // Identity + label repair for frozen snapshots: rows placed before the
+      // post carried its own id kept `card_id: null` and a slug-derived label,
+      // so the client opened `community:<uuid>` as a card. Re-stamping here
+      // fixes every existing impression on the next serve — no backfill.
+      it.community_post_id = postId;
+      it.student_label = f.student_label;
+      it.like_count = f.like_count; it.comment_count = f.comment_count;
+      // `week` is left exactly as placed — see communityItem() for why a community
+      // item must not acquire one.
     }
   } catch (err: any) {
     console.warn('[todayAnchoredSources] community rehydrate failed:', err?.message?.split('\n')[0]);
+  }
+}
+
+/**
+ * Serve-time re-hydration for `project:` items — the SAME repair community
+ * items got, which project items were missed on.
+ *
+ * Found on prod 2026-09-11 after the routing fix in #2426 shipped: 360
+ * project-task impressions across 26 students, and not one carried
+ * project_id / project_task_id. The ids were added at compose time only, so
+ * every impression placed before that deploy still resolved to the card
+ * drawer — exactly the defect the fix was for. The feed is an append-only
+ * snapshot store; a generator-only change never reaches rows already placed.
+ *
+ * One batched query, only when project items are present. Stamps the task's
+ * current project_id and its own id, and refreshes title/description/status
+ * from the live task so a renamed or completed task does not show stale.
+ * Fail-soft: on error the snapshot is left untouched. Mutates `items` in place.
+ */
+export async function rehydrateProjectItems(items: TodayFeedItem[]): Promise<void> {
+  const project = items.filter((i) => typeof i.ref === 'string' && i.ref.startsWith('project:'));
+  if (!project.length) return;
+  try {
+    const ids = Array.from(new Set(project.map((i) => i.ref.slice('project:'.length))));
+    const tasks = await StudentTask.findAll({
+      where: { id: ids },
+      attributes: ['id', 'project_id', 'title', 'description', 'status', 'release_key'],
+    });
+    const byId = new Map(tasks.map((t) => { const plain = t.get({ plain: true }) as any; return [plain.id as string, plain]; }));
+    for (const it of project) {
+      const taskId = it.ref.slice('project:'.length);
+      const t = byId.get(taskId);
+      if (!t) continue;
+      it.project_id = t.project_id ?? null;
+      it.project_task_id = taskId;
+      if (t.title) it.title = t.title;
+      if (t.description !== undefined) it.description = t.description ?? null;
+      if (t.release_key !== undefined) it.subtitle = t.release_key ?? null;
+      it.status = t.status === 'complete' ? 'completed' : t.status === 'in_progress' ? 'in_progress' : 'available';
+    }
+  } catch (err: any) {
+    console.warn('[todayAnchoredSources] project rehydrate failed:', err?.message?.split('\n')[0]);
   }
 }
 
@@ -396,7 +497,7 @@ async function projectCandidates(enrollmentId: string, placedRefs: Set<string>):
       .flatMap((l) => l.tasks)
       .filter((t) => t.status !== 'complete' && !placedRefs.has(`project:${t.id}`))
       .slice(0, CANDIDATE_CAP)
-      .map(projectItem);
+      .map((t) => projectItem(t, tree.id));
   } catch (err: any) {
     console.warn('[todayAnchoredSources] project failed:', err?.message?.split('\n')[0]);
     return [];

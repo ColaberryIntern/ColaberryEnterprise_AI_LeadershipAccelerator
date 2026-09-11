@@ -127,6 +127,23 @@ export interface SnapshotView {
   readonly repositories: { readonly label: string; readonly role: string; readonly visibility: string }[];
   readonly industry: string;
   readonly primaryCapability: string;
+  /** The hero video, whether generated or operator-supplied. Null when the record has
+   *  neither. `embedUrl` set means an operator chose their own. */
+  readonly walkthroughVideo: {
+    readonly url: string;
+    readonly title: string;
+    readonly embedUrl: string;
+    readonly provider: string;
+    readonly watchUrl: string;
+    /**
+     * The section EXACTLY as stored, so an editor can change one key without destroying
+     * the rest. Writing `walkthroughVideo` replaces the whole section — the panel's first
+     * version sent `{embedUrl, title}` and silently dropped the generated file, its
+     * captions and its poster, which is what left a record with no way back to its own
+     * walkthrough.
+     */
+    readonly raw: Record<string, unknown>;
+  } | null;
 }
 
 export const EMPTY_SNAPSHOT_VIEW: SnapshotView = {
@@ -135,7 +152,7 @@ export const EMPTY_SNAPSHOT_VIEW: SnapshotView = {
   builderNamingConsent: false, situationHeading: '', situationBody: [], heroMetrics: [],
   measurementMetrics: [], timeline: [], stack: [], capabilities: [], integrations: [],
   architectureNarrative: [], roadmap: [], contributors: [], artifacts: [], repositories: [],
-  industry: '', primaryCapability: '',
+  industry: '', primaryCapability: '', walkthroughVideo: null,
 };
 
 export function readSnapshot(content: Record<string, unknown> | null | undefined): SnapshotView {
@@ -216,6 +233,30 @@ export function readSnapshot(content: Record<string, unknown> | null | undefined
     }),
     industry: str(taxonomy.industry),
     primaryCapability: str(taxonomy.primaryCapability),
+    walkthroughVideo: walkthroughOf(content),
+  };
+}
+
+/**
+ * The hero video as the studio needs to describe it: what is on the record now, generated or
+ * operator-supplied.
+ *
+ * Null when the section is absent OR carries neither a file nor an embed — an empty object
+ * is not "a video with blank fields", it is no video, and the panel says so rather than
+ * offering to restore something that was never there.
+ */
+function walkthroughOf(content: Record<string, unknown>): SnapshotView['walkthroughVideo'] {
+  const v = asRecord(content.walkthroughVideo);
+  const url = str(v.url);
+  const embedUrl = str(v.embedUrl);
+  if (!url && !embedUrl) return null;
+  return {
+    url,
+    embedUrl,
+    title: str(v.title),
+    provider: str(v.provider),
+    watchUrl: str(v.watchUrl),
+    raw: v,
   };
 }
 

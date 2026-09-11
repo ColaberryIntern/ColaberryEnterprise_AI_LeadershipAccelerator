@@ -36,6 +36,25 @@ export interface TodayFeedItem {
   points?: { learning?: number; builder?: number; community?: number } | null;  // engagement points the card awards (anchored curriculum cards)
   interacted: boolean;
   author?: { name: string; avatar_url: string | null; level: number } | null;  // community posts: the member byline
+  // ── Community-post items only ────────────────────────────────────────────
+  // A `community:<postId>` item IS a post, not a curriculum card: `card_id` is
+  // null for it. The client used to fall back to the REF as the card id, which
+  // sent `community:<uuid>` to card-scoped runtime endpoints and 500'd (the id
+  // is not a UUID). These carry the post's own identity so the client opens the
+  // post's discussion thread instead of a card panel that cannot exist.
+  community_post_id?: string | null;
+  // ── Project-task items only ──────────────────────────────────────────────
+  // Same shape of problem: a `project:<taskId>` item is a task, not a card, so
+  // `card_id` is null. These carry the task's real address so the client can
+  // navigate to /portal/projects/workspace/:project_id/:project_task_id.
+  project_id?: string | null;
+  project_task_id?: string | null;
+  /** Server-resolved student-facing label — the week's Community Ritual name
+   *  ("Skill Drop", "Cohort Wins") for a ritual post. Clients MUST prefer this
+   *  over deriving a label from `type`, which only ever yields the raw slug. */
+  student_label?: string | null;
+  like_count?: number | null;
+  comment_count?: number | null;
 }
 
 export interface TodayPage {

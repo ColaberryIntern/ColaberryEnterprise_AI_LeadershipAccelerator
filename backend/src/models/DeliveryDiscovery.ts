@@ -2,6 +2,40 @@ import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
 /**
+ * DeliveryDiscovery — NOT IN USE. Do not build on this.
+ *
+ * ## Read this before treating it as the project truth model
+ *
+ * Measured 2026-09-09: this model has **zero consumers**. Nothing reads it and
+ * nothing writes it. The only references are its own registration in
+ * `models/index.ts` and the table-to-model agreement test.
+ *
+ * Its columns describe exactly what a project truth model should hold, which is
+ * the trap: a reader looking for one finds this first and builds on a table
+ * nothing populates. There are three candidates in this repository and this is
+ * the one with no data and no callers.
+ *
+ * **The live one is `ProjectUnderstanding`** in
+ * `services/delivery/projectUnderstanding.ts`, persisted as
+ * `ProjectUnderstandingRecord`. It is fed by the Flotation chat interview and
+ * the Synthflow webhook, it carries classification and provenance per item, and
+ * it enforces the rule that an inferred statement can never be a FACT.
+ * `services/sbp/intakeTruth.ts` maps the Enterprise student intake onto that
+ * same contract.
+ *
+ * ## Why it is still here
+ *
+ * Deleting the model while `delivery_discoveries` still exists would leave the
+ * table with nothing tying its columns to a type, and that agreement test is
+ * the only thing standing between a column rename and a silent production
+ * failure. Dropping the table is a destructive migration that has not been
+ * approved. A dead model that says it is dead costs less than either.
+ *
+ * If this is ever revived, reconcile it with `ProjectUnderstanding` first
+ * rather than beside it.
+ *
+ * ── original header ─────────────────────────────────────────────────────────
+ *
  * DeliveryDiscovery — the understanding a project is built on, versioned and approved.
  *
  * Master plan §Gate 4 requires approval of a discovery snapshot *before* full

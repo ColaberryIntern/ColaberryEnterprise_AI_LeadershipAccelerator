@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import './TodayShell.css';
 import {
   fetchPoints, fetchOnboardingProfile, rsvpOpenHouse, ingestBackground, fetchStreak, claimDailyStreak,
@@ -11,7 +11,7 @@ import OpenOnPhone from './OpenOnPhone';
 import { usePortalFlags } from '../../../hooks/usePortalFlags';
 import {
   readParticipant, countdown, firstClassTargetMs,
-  fmtCentralDateTime,
+  fmtCentralDateTime, projectWorkspacePath,
 } from './shellUtils';
 import portalApi from '../../../utils/portalApi';
 import { emitPointsEarned, onPointsEarned, emitCardCollected } from '../../../services/pointsFx';
@@ -29,6 +29,7 @@ import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
 import CommunityPulse from './CommunityPulse';
 import NextLiveClassCard from './NextLiveClassCard';
 import InternshipOpportunityCard from './InternshipOpportunityCard';
+import InternshipCommandCard from './InternshipCommandCard';
 import { fetchInternshipStatus, InternshipStatus } from '../../../services/internshipApi';
 import { useNextLiveSession } from './useNextLiveSession';
 import '../../../components/timeline/timeline.css';
@@ -86,6 +87,20 @@ const TodayShell: React.FC = () => {
   // Classroom itself orders a week's cards (see findActiveNextCard).
   const [curriculumBuckets, setCurriculumBuckets] = useState<string[]>([]);
   const [selectedCard, setSelectedCard] = useState<TimelineFeedCard | null>(null);
+  const navigate = useNavigate();
+
+  // "Open" a card. Almost always that means the drawer — but a project task is
+  // not a card, it is a task in the student's project, and its real home is the
+  // project workspace (build context, repo state, AI mentor). The drawer could
+  // only ever show its title and a broken "Enter workspace" button. Routed
+  // rather than location.assign so the shell, auth and scroll position survive.
+  // This decision lives here, not in TimelineCard, because the tile is rendered
+  // by containers with no Router and must stay presentational.
+  const openCard = useCallback((card: TimelineFeedCard) => {
+    const workspace = projectWorkspacePath(card);
+    if (workspace) { navigate(workspace); return; }
+    setSelectedCard(card);
+  }, [navigate]);
   // CAPE Phase 0-1 profile (drives SkillMeter + Readiness); Phase 5 filter-chip counts + skill-drawer selection.
   const [capeProfile, setCapeProfile] = useState<LearnerSkillProfile | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<Category | 'all'>('all');
@@ -468,8 +483,8 @@ const TodayShell: React.FC = () => {
             <div id="te-today-plan-anchor">
               <TodayPlan
                 onRefs={setPlanRefs}
-                onOpen={setSelectedCard}
-                onWorkspace={setSelectedCard}
+                onOpen={openCard}
+                onWorkspace={openCard}
                 onComplete={handleCardComplete}
               />
             </div>
@@ -502,8 +517,8 @@ const TodayShell: React.FC = () => {
             {planRefs !== null && (
               <TodayFeedV2
                 fallbackCards={curriculum}
-                onOpen={setSelectedCard}
-                onWorkspace={setSelectedCard}
+                onOpen={openCard}
+                onWorkspace={openCard}
                 onComplete={handleCardComplete}
                 excludeRefs={planRefs}
                 filter={flags?.cape_today_plan ? categoryFilter : undefined}
@@ -559,7 +574,11 @@ const TodayShell: React.FC = () => {
               (from live_sessions) show the live-session card; otherwise fall
               back to the first-class cohort countdown UNCHANGED. The Open House
               "Coming up" card below is unaffected in either case. */}
-          {internship?.render && (
+          {/* Once someone is an intern the recruiting card is replaced by the
+              command card — "after activation, replace the recruiting card with a
+              compact Internship Command Card". Same slot, different job. */}
+          {internship?.render && internship.card_state === 'active' && <InternshipCommandCard />}
+          {internship?.render && internship.card_state !== 'active' && (
             <InternshipOpportunityCard
               status={internship}
               onChanged={() => setInternshipToken((n) => n + 1)}

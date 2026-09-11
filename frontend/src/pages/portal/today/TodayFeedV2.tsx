@@ -37,7 +37,10 @@ export function adapt(item: TodayFeedItem): TimelineFeedCard {
   return {
     id: item.card_id ?? item.ref,
     type: item.type,
-    student_label: labelFor(item.type),
+    // Prefer the server's label. Deriving one from the type slug is only a last
+    // resort: for a community ritual post it yields "Community Discussion",
+    // which is the type's name, not the thing the student is looking at.
+    student_label: item.student_label || labelFor(item.type),
     render_band: item.render_band,
     title: item.title ?? item.subtitle ?? labelFor(item.type),
     subtitle: item.subtitle ?? null,
@@ -59,6 +62,18 @@ export function adapt(item: TodayFeedItem): TimelineFeedCard {
     type_thumbnail: null,
     capabilities: [],
     author: item.author ?? null,
+    // Set only for community-post items. Its presence is what tells the tile and
+    // the drawer to talk to the POST endpoints (thread + comments) instead of the
+    // card-scoped runtime endpoints — `id` here is the `community:<uuid>` ref,
+    // which no card endpoint can resolve.
+    community_post_id: item.community_post_id ?? null,
+    comment_count: item.comment_count ?? null,
+    like_count: item.like_count ?? null,
+    // Set only for project-task items. Their destination is the project
+    // workspace, so the tile navigates there rather than opening a drawer whose
+    // card id (`project:<uuid>`) no card endpoint can resolve.
+    project_id: item.project_id ?? null,
+    project_task_id: item.project_task_id ?? null,
   };
 }
 

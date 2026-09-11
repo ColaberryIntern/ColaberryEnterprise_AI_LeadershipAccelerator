@@ -204,6 +204,29 @@ export async function ensureInboxCaseSchema(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_inbox_case_events_case_created ON inbox_case_events (case_id, created_at)`,
     `CREATE INDEX IF NOT EXISTS idx_inbox_case_events_action_id ON inbox_case_events (action_id)`,
     `CREATE INDEX IF NOT EXISTS idx_inbox_case_events_correlation_id ON inbox_case_events (correlation_id)`,
+
+    // /inbox-zero operator console (CC-20260910-3q7x). Additive, nullable or
+    // defaulted, so a rollback of the code alone is safe. ADD COLUMN IF NOT
+    // EXISTS is required here: the CREATE TABLE above is a no-op on the live
+    // table and would never add these. Snooze, SLA and priority did not exist
+    // anywhere in the repo before this; waiting_since gives the planner's
+    // follow_up_date (buried in the MARK_WAITING action payload, read by
+    // nothing) a queryable home.
+    `ALTER TABLE inbox_cases ADD COLUMN IF NOT EXISTS snoozed_until TIMESTAMPTZ`,
+    `ALTER TABLE inbox_cases ADD COLUMN IF NOT EXISTS snooze_reason TEXT`,
+    `ALTER TABLE inbox_cases ADD COLUMN IF NOT EXISTS waiting_since TIMESTAMPTZ`,
+    `ALTER TABLE inbox_cases ADD COLUMN IF NOT EXISTS sla_due_at TIMESTAMPTZ`,
+    `ALTER TABLE inbox_cases ADD COLUMN IF NOT EXISTS priority_band VARCHAR(2)`,
+    `ALTER TABLE inbox_cases ADD COLUMN IF NOT EXISTS priority_reason TEXT`,
+    `ALTER TABLE inbox_cases DROP CONSTRAINT IF EXISTS ck_inbox_cases_priority_band`,
+    `ALTER TABLE inbox_cases ADD CONSTRAINT ck_inbox_cases_priority_band CHECK (priority_band IS NULL OR priority_band IN ('P0','P1','P2','P3'))`,
+    // The operator's 5-minute delta refresh reads "everything changed since the
+    // cursor"; without this index that is a sequential scan on every tick.
+    `CREATE INDEX IF NOT EXISTS idx_inbox_cases_updated_at ON inbox_cases (updated_at)`,
+    // The actionable-queue read: open state, not snoozed into the future.
+    `CREATE INDEX IF NOT EXISTS idx_inbox_cases_state_snoozed ON inbox_cases (state, snoozed_until)`,
+    // Bounds the live re-fetch verifier's retries (caseVerificationService).
+    `ALTER TABLE inbox_case_actions ADD COLUMN IF NOT EXISTS verification_attempt_count INTEGER NOT NULL DEFAULT 0`,
   ];
 
   for (const sql of statements) {
@@ -214,4 +237,56 @@ export async function ensureInboxCaseSchema(): Promise<void> {
     }
   }
   console.log('[DB] Inbox Intel case-resolution schema ensured');
+
+  // The loop above swallows failures by design (a partial DB self-heals on the
+  // next boot). That is also exactly how a missing column ships silently and
+  // 500s in production. So the columns this session depends on are CHECKED
+  // against the catalog, not assumed — same pattern as ensureEmailSendLedgerSchema.
+  const check = await assertInboxZeroCaseColumns();
+  if (!check.ok) {
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        service: 'backend',
+        event: 'inbox_zero_schema_postcondition_failed',
+        outcome: 'failure',
+        error_class: 'SchemaPostconditionError',
+        context: { missing: check.missing },
+      }),
+    );
+  }
+}
+
+/** Columns the /inbox-zero operator console reads or writes. Checked, not assumed. */
+export const INBOX_ZERO_REQUIRED_COLUMNS = [
+  'inbox_cases.snoozed_until',
+  'inbox_cases.snooze_reason',
+  'inbox_cases.waiting_since',
+  'inbox_cases.sla_due_at',
+  'inbox_cases.priority_band',
+  'inbox_cases.priority_reason',
+  'inbox_case_actions.verification_attempt_count',
+] as const;
+
+/**
+ * Post-condition for the /inbox-zero additive columns. Exported so a test can
+ * prove the assertion fires against an un-migrated catalog — an assertion
+ * nobody has watched fail is not an assertion.
+ */
+export async function assertInboxZeroCaseColumns(): Promise<{ ok: boolean; missing: string[] }> {
+  const missing: string[] = [];
+  try {
+    const [rows]: any = await sequelize.query(
+      `SELECT table_name || '.' || column_name AS col
+         FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name IN ('inbox_cases', 'inbox_case_actions')`,
+    );
+    const found = new Set<string>((rows ?? []).map((r: any) => r.col));
+    for (const col of INBOX_ZERO_REQUIRED_COLUMNS) if (!found.has(col)) missing.push(col);
+  } catch (err: any) {
+    // A catalog read failure is itself a failed post-condition, not a pass.
+    missing.push(`catalog_query_failed:${err?.message ?? 'unknown'}`);
+  }
+  return { ok: missing.length === 0, missing };
 }

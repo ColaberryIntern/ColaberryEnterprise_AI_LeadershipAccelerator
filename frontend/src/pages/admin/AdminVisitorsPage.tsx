@@ -4,6 +4,8 @@ import api from '../../utils/api';
 import Pagination from '../../components/ui/Pagination';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal } from '../../components/admin/shell/trust';
+import { personPath } from '../../adminOs/personLink';
+import PersonLink from '../../components/admin/person/PersonLink';
 
 // Swapped from the force-directed VisitorFlowGraph: a force layout answers
 // "what connects to what", while the question this tab is asked is about the
@@ -813,7 +815,7 @@ function AdminVisitorsPage() {
                 signedIn.map((p) => (
                   <tr key={p.enrollment_id}>
                     <td>
-                      <span className="fw-medium">{p.name}</span>
+                      <PersonLink tab="activity" name={p.name} enrollmentId={p.enrollment_id} />
                     </td>
                     <td><StatusBadge label="Signed in" tone="success" /></td>
                     <td className="small text-muted">{formatRelative(p.last_active_at)}</td>
@@ -1478,7 +1480,7 @@ function AdminVisitorsPage() {
                 {v.lead_id && (
                   <div className="mb-3">
                     <Link
-                      to={`/admin/leads/${v.lead_id}`}
+                      to={personPath({ leadId: v.lead_id }, 'activity') ?? '/admin/people'}
                       className="btn btn-sm btn-outline-primary"
                     >
                       View Lead Profile

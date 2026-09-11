@@ -6,6 +6,7 @@ import api from '../../../utils/api';
 import { useToast } from '../../../components/ui/ToastProvider';
 import { SectionCard, StatCard, StatusBadge } from '../../../components/admin/shell';
 import StudentPacePanel from './StudentPacePanel';
+import PersonLink from '../../../components/admin/person/PersonLink';
 
 type TrendDirection = 'up' | 'down' | 'flat';
 
@@ -210,7 +211,9 @@ export default function ClassDashboardTab({ cohortId }: Props) {
                 <tr><td colSpan={7} className="text-center text-muted py-4">No enrollments</td></tr>
               ) : data.students.map((s) => (
                 <tr key={s.enrollment_id}>
-                  <td className="fw-medium">{s.full_name}</td>
+                  <td className="fw-medium">
+                    <PersonLink tab="class" name={s.full_name} enrollmentId={s.enrollment_id} />
+                  </td>
                   <td className={scoreColor(s.prework_score)}>{s.prework_score != null ? `${s.prework_score}%` : '-'}</td>
                   <td className={scoreColor(s.attendance_score)}>{s.attendance_score != null ? `${s.attendance_score}%` : '-'}</td>
                   <td className={scoreColor(s.assignment_score)}>{s.assignment_score != null ? `${s.assignment_score}%` : '-'}</td>

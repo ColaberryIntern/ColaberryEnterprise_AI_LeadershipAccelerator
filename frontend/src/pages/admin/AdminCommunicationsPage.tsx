@@ -5,6 +5,7 @@ import Pagination from '../../components/ui/Pagination';
 import useDebounce from '../../hooks/useDebounce';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal } from '../../components/admin/shell/trust';
+import { personPath } from '../../adminOs/personLink';
 
 /* ------------------------------------------------------------------ */
 /*  Interfaces                                                         */
@@ -381,7 +382,7 @@ function AdminCommunicationsPage() {
                   className={expandedId === row.id ? 'table-active' : ''}>
                   <td className="small text-nowrap">{fmtTime(row.created_at)}</td>
                   <td className="small" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    <Link to={`/admin/leads/${row.lead_id}`} className="text-decoration-none fw-medium"
+                    <Link to={personPath({ leadId: row.lead_id }, 'communications') ?? '/admin/people'} className="text-decoration-none fw-medium"
                       onClick={e => e.stopPropagation()}>
                       {row.lead_name || row.to_address}
                     </Link>
@@ -493,7 +494,7 @@ function AdminCommunicationsPage() {
                       <SectionCard title="Lead Profile" className="mb-3">
                         <div className="small">
                           <div className="fw-medium mb-1">
-                            <Link to={`/admin/leads/${row.lead_id}`}>{detail.communication?.lead_name}</Link>
+                            <Link to={personPath({ leadId: row.lead_id }, 'communications') ?? '/admin/people'}>{detail.communication?.lead_name}</Link>
                           </div>
                           <div className="text-muted">{detail.communication?.lead_email}</div>
                           {detail.communication?.lead_phone && <div className="text-muted">{detail.communication.lead_phone}</div>}

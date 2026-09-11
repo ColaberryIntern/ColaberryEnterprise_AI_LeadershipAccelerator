@@ -1,7 +1,8 @@
 import { Cohort, Enrollment, AccountCredit, LiveSession, ProgramBlueprint } from '../models';
 import { UpdateCohortInput, CreateCohortInput, ScheduleDayInput } from '../schemas/cohortSchema';
 import { AppError } from '../utils/AppError';
-import { Op, fn, col } from 'sequelize';
+import { Op, fn, col, QueryTypes } from 'sequelize';
+import { sequelize } from '../config/database';
 
 const SESSION_DEFAULT_DURATION_MIN = 90; // matches the existing "Add Session" form's own 10:00->11:30 default
 const DEFAULT_PROGRAM_WEEKS = 12; // matches sessionGenerationService.ts's own constant of the same name
@@ -210,16 +211,59 @@ export async function getCohortDependents(cohortId: string): Promise<CohortDepen
 }
 
 export type DeleteCohortResult =
-  | { deleted: true; cohortId: string; dependents: CohortDependents }
+  | { deleted: true; cohortId: string; dependents: CohortDependents; clearedRows: Record<string, number> }
   | { deleted: false; blocked: true; dependents: CohortDependents };
 
 /**
- * Deletes a cohort. The DB FK (`enrollments_cohort_id_fkey` etc.) is
- * ON DELETE CASCADE, so this also removes every dependent enrollment/session row —
- * irreversible. Refuses by default (returns `blocked: true` rather than throwing,
- * so the controller can surface the dependent counts to the caller) whenever the
- * cohort has a non-withdrawn enrollment with a real recorded payment, or any live
- * session, unless the caller explicitly passes `force: true`.
+ * Child tables referencing `enrollments` whose FK would BLOCK a delete.
+ *
+ * Read from the live catalog rather than hardcoded. There are 25 today, and the
+ * list grows every time a feature adds a per-enrollment table — a fixed list would
+ * be correct the day it was written and quietly wrong afterwards, which is exactly
+ * the failure this function exists to fix.
+ */
+export async function restrictingEnrollmentChildTables(
+  transaction?: any
+): Promise<Array<{ table: string; column: string }>> {
+  const rows = await sequelize.query<{ table_name: string; column_name: string }>(
+    `SELECT tc.table_name, kcu.column_name
+       FROM information_schema.table_constraints tc
+       JOIN information_schema.key_column_usage kcu
+         ON kcu.constraint_name = tc.constraint_name
+       JOIN information_schema.referential_constraints rc
+         ON rc.constraint_name = tc.constraint_name
+       JOIN information_schema.constraint_column_usage ccu
+         ON ccu.constraint_name = tc.constraint_name
+      WHERE tc.constraint_type = 'FOREIGN KEY'
+        AND ccu.table_name = 'enrollments'
+        AND rc.delete_rule IN ('NO ACTION', 'RESTRICT')`,
+    { type: QueryTypes.SELECT, transaction }
+  );
+  return rows.map((r) => ({ table: r.table_name, column: r.column_name }));
+}
+
+/**
+ * Deletes a cohort, clearing the enrollment-scoped rows that would otherwise block it.
+ *
+ * WHY THIS IS NEEDED. `cohorts -> enrollments` is ON DELETE CASCADE, but 25 of the
+ * 44 foreign keys referencing `enrollments` are NO ACTION. The cascade therefore
+ * dead-ends the moment a student has done anything — used Cert Prep, accrued an
+ * Architecture Skill, received a welcome email — and Postgres raises a constraint
+ * violation that the admin UI reported only as "Failed to delete cohort". Every
+ * cohort with real student activity was undeletable and the message said nothing
+ * about why.
+ *
+ * WHY NOT CONVERT THOSE 25 FKs TO CASCADE. That was the first instinct and it is
+ * worse: it removes the database's own guard so that ANY enrollment delete
+ * anywhere silently destroys cert responses, readiness snapshots and skill records.
+ * That is a permanent, global loss of safety to fix one admin action. Tearing down
+ * here keeps RESTRICT protecting every other path, makes the destroyed set explicit
+ * and testable, and returns a count of what was removed so the caller can report it.
+ *
+ * Refuses by default when the cohort holds a non-withdrawn PAID enrollment or any
+ * live session; `force: true` is the caller's explicit acknowledgement. The whole
+ * teardown runs in ONE transaction, so a failure part-way leaves the cohort and
+ * every child row untouched rather than half-deleted.
  */
 export async function deleteCohort(
   id: string,
@@ -234,8 +278,50 @@ export async function deleteCohort(
     return { deleted: false, blocked: true, dependents };
   }
 
-  await cohort.destroy();
-  return { deleted: true, cohortId: id, dependents };
+  const clearedRows: Record<string, number> = {};
+
+  await sequelize.transaction(async (transaction) => {
+    const enrollmentIds = (
+      await Enrollment.findAll({ where: { cohort_id: id }, attributes: ['id'], transaction })
+    ).map((e) => e.id);
+
+    if (enrollmentIds.length) {
+      let remaining = await restrictingEnrollmentChildTables(transaction);
+
+      // Repeated passes: several of these tables reference EACH OTHER
+      // (cert_responses -> cert_sessions), so one ordered sweep would fail on
+      // whichever came first. Each pass deletes what it can; the loop stops when a
+      // pass clears nothing new, meaning the rest genuinely cannot be removed.
+      for (let pass = 0; pass < 5 && remaining.length; pass += 1) {
+        const stillBlocked: typeof remaining = [];
+        for (const child of remaining) {
+          try {
+            await sequelize.query(
+              `SAVEPOINT child_delete`, { transaction }
+            );
+            const result: any = await sequelize.query(
+              `DELETE FROM "${child.table}" WHERE "${child.column}" = ANY(ARRAY[:ids]::uuid[])`,
+              { replacements: { ids: enrollmentIds }, transaction }
+            );
+            await sequelize.query(`RELEASE SAVEPOINT child_delete`, { transaction });
+            const n = Array.isArray(result) && typeof result[1] === 'number' ? result[1] : 0;
+            if (n > 0) clearedRows[child.table] = (clearedRows[child.table] ?? 0) + n;
+          } catch {
+            // A savepoint keeps ONE failing child from poisoning the whole
+            // transaction, so the remaining tables still get their chance.
+            await sequelize.query(`ROLLBACK TO SAVEPOINT child_delete`, { transaction });
+            stillBlocked.push(child);
+          }
+        }
+        if (stillBlocked.length === remaining.length) break;
+        remaining = stillBlocked;
+      }
+    }
+
+    await cohort.destroy({ transaction });
+  });
+
+  return { deleted: true, cohortId: id, dependents, clearedRows };
 }
 
 /**

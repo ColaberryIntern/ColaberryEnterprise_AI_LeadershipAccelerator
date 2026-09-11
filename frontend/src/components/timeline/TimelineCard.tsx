@@ -55,6 +55,18 @@ export interface TimelineFeedCard {
   type_thumbnail?: string | null;   // the type's Experience Studio thumbnail (AI banner) — the card's DEFAULT image; own media art overrides it
   week_title?: string | null;   // the week's SECTION title from the Blueprint — the Overview card's display title (no week number)
   author?: { name: string; avatar_url: string | null; level: number } | null;   // community posts: member byline (avatar + name + level) so the card reads as a real post
+  // Community-post items ONLY (Today feed `community:<postId>` refs). When set,
+  // `id` is a feed ref, NOT a card UUID — every card-scoped endpoint will reject
+  // it. Read this instead and talk to the community post endpoints: the drawer
+  // opens the post's discussion thread, and Comment opens the same thread.
+  community_post_id?: string | null;
+  comment_count?: number | null;   // community posts: replies on the thread
+  like_count?: number | null;      // community posts: cheers on the post
+  // Project-task items ONLY. When set, `id` is the `project:<uuid>` feed ref and
+  // the tile must navigate to /portal/projects/workspace/:project_id/:project_task_id
+  // rather than open the card drawer.
+  project_id?: string | null;
+  project_task_id?: string | null;
 }
 
 export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone' | 'setuplab' | 'timemachine';
@@ -249,6 +261,19 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   // watch beats as it plays and the server returns the ratcheted total.
   const anchored = !card.id.includes(':');
   const watchable = playable && !podcastAudio && anchored && pts > 0 && !!onComplete;
+
+  // A Today-feed community post. Its `id` is the feed ref (`community:<uuid>`),
+  // so every card-scoped affordance on this tile has to route to the post's own
+  // endpoints instead — see community_post_id on TimelineFeedCard.
+  const isCommunityPost = !!card.community_post_id;
+
+  // A project task's destination is the project workspace, not the drawer. The
+  // routing decision deliberately does NOT live here: this tile is rendered by
+  // several containers, some outside a <Router>, so it stays a pure
+  // presentational component and hands the card up through onOpen/onWorkspace.
+  // TodayShell — the only container that ever receives a project task — reads
+  // project_id/project_task_id and navigates. (A useNavigate() here broke four
+  // test suites that render the tile without a Router; CI caught it.)
 
   // Viewport autoplay: a media card (video OR podcast audio) starts playing while
   // it is in view and stops when scrolled away — so only what you're looking at
@@ -486,14 +511,30 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
           <svg viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'}><path d="M12 21s-7-4.5-9.5-9C.8 8.5 2.5 5 6 5c2 0 3.2 1.3 4 2.5C10.8 6.3 12 5 14 5c3.5 0 5.2 3.5 3.5 7C19 16.5 12 21 12 21z" stroke="currentColor" strokeWidth="2" /></svg>{typeof likes === 'number' ? <> {likes}</> : null}
         </button>
         {/* Comment opens the class thread RIGHT HERE in the feed (the workspace
-            shows the same thread beside the AI Mentor). Disabled while locked. */}
-        <button type="button" className={`cmt${showComments ? ' liked' : ''}`} disabled={locked} onClick={() => !locked && setShowComments((s) => !s)}>
-          <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Comment
+            shows the same thread beside the AI Mentor). Disabled while locked.
+            A community POST has no class thread — its conversation is the post's
+            OWN reply thread, which lives in the drawer, so Comment opens that
+            instead of a card-scoped thread the post's ref cannot address. */}
+        <button
+          type="button"
+          className={`cmt${showComments && !isCommunityPost ? ' liked' : ''}`}
+          disabled={locked}
+          onClick={() => {
+            if (locked) return;
+            if (isCommunityPost) { setPlayingInline(false); onOpen?.(card); return; }
+            setShowComments((s) => !s);
+          }}
+        >
+          <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
+          {isCommunityPost && (card.comment_count ?? 0) > 0
+            ? ` ${card.comment_count} ${card.comment_count === 1 ? 'reply' : 'replies'}`
+            : ' Comment'}
         </button>
         {/* Quick shortcut into the full workspace (video + AI Mentor + comments).
             Stops the tile's own inline preview first — same reason as "Open" below —
-            so an unmuted tile doesn't keep playing underneath the drawer's own player. */}
-        {onWorkspace && !locked && (
+            so an unmuted tile doesn't keep playing underneath the drawer's own player.
+            A community post has no workspace: `card.id` is its feed ref, not a card. */}
+        {onWorkspace && !locked && !isCommunityPost && (
           <button type="button" className="cmt" onClick={() => { setPlayingInline(false); onWorkspace(card); }}>
             <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M8 20h8M12 17v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Workspace
           </button>
@@ -510,7 +551,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
                 type="button"
                 className={`fc-cta ${pts > 0 || v.kind === 'lab' ? 'cherry' : 'berry'}`}
                 onClick={() => { setPlayingInline(false); onOpen?.(card); }}
-                title={pts > 0 ? `Open to collect +${pts} pts` : undefined}
+                title={card.project_task_id ? 'Open this task in your project workspace' : pts > 0 ? `Open to collect +${pts} pts` : undefined}
               >
                 {pts > 0
                   ? <><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Collect +{pts} pts</>
@@ -518,8 +559,10 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
               </button>
             )}
       </div>
-      {/* The class thread — toggled by the Comment button, shared with the workspace. Never for locked cards. */}
-      {showComments && !locked && <div style={{ padding: '0 18px 14px' }}><CardComments cardId={card.id} /></div>}
+      {/* The class thread — toggled by the Comment button, shared with the workspace.
+          Never for locked cards, and never for a community post (its Comment button
+          opens the post's own thread in the drawer instead). */}
+      {showComments && !locked && !isCommunityPost && <div style={{ padding: '0 18px 14px' }}><CardComments cardId={card.id} /></div>}
     </div>
   );
 };

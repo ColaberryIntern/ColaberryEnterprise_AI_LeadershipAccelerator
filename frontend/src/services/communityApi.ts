@@ -44,6 +44,9 @@ export interface CommunityComment {
   created_at: string;
   member: CommunityPostMember;
   replies: CommunityComment[];
+  /** Points this reply actually earned, post daily-cap clamp. Present only on
+   *  the create response — celebrate THIS, never a hardcoded value. */
+  points_awarded?: number;
 }
 
 export type CommunityMemberRole = 'student' | 'mentor' | 'staff';
@@ -142,6 +145,18 @@ export async function fetchPosts(
     { params: Object.keys(query).length ? query : undefined }
   );
   return { posts: data.posts, next_cursor: data.next_cursor ?? null };
+}
+
+/**
+ * One post by id, with the viewer's own like state and counts resolved server-
+ * side. GET /api/portal/community/posts/:postId has existed since the community
+ * build shipped but had no client — the Today feed's post cards had no way to
+ * open a single post, which is why opening one from Today went to a card-scoped
+ * endpoint instead. 404 = removed or never existed; 403 = another cohort's post.
+ */
+export async function fetchPost(postId: string): Promise<CommunityPost> {
+  const { data } = await portalApi.get<{ post: CommunityPost }>(`/api/portal/community/posts/${postId}`);
+  return data.post;
 }
 
 export async function createPost(input: {

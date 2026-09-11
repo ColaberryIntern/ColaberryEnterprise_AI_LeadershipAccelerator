@@ -44,3 +44,34 @@ export async function bcPace(minIntervalMs: number = BC_MIN_INTERVAL_MS): Promis
   if (wait > 0) await sleep(wait);
   lastBcCallAt = Date.now();
 }
+
+// ─── Timeouts (/inbox-zero T6) ──────────────────────────────────────────────
+// Every outbound call needs an explicit timeout (root CLAUDE.md, Failure-First
+// Design). basecampClient had none: a Basecamp stall would hang the caller —
+// and an operator session sitting inside it — forever. Read at call time, not
+// module load, so a test or an ops override can change it without a restart.
+export const BC_DEFAULT_TIMEOUT_MS = 15000;
+export function bcTimeoutMs(): number {
+  const n = Number(process.env.BC_TIMEOUT_MS);
+  return Number.isFinite(n) && n > 0 ? n : BC_DEFAULT_TIMEOUT_MS;
+}
+
+/** True for the error `fetch` throws when its AbortSignal fires — both the
+ * DOMException name Node uses for AbortSignal.timeout() and the generic one. */
+export function isAbortError(err: unknown): boolean {
+  const name = (err as { name?: string } | null)?.name;
+  return name === 'TimeoutError' || name === 'AbortError';
+}
+
+/** Parse the `Link` response header for the rel="next" URL. Pure; returns
+ * null when there is no next page. Basecamp paginates every collection this
+ * way and ~40 ad-hoc copies of this parse exist across the scripts — this is
+ * the one the ops client uses. */
+export function parseNextLink(linkHeader: string | null): string | null {
+  if (!linkHeader) return null;
+  for (const part of linkHeader.split(',')) {
+    const m = /<([^>]+)>\s*;\s*rel="?next"?/i.exec(part.trim());
+    if (m) return m[1];
+  }
+  return null;
+}

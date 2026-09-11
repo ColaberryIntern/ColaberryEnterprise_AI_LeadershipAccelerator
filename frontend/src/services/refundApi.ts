@@ -24,6 +24,9 @@ export interface RefundRow {
   status: 'pending' | 'succeeded' | 'failed';
   reason: string | null;
   customer_email: string | null;
+  /** Resolved from the enrolment, else the lead. Null when neither knows them. */
+  customer_name?: string | null;
+  enrollment_id?: string | null;
   voided_credit_cents: number;
   issued_by: string | null;
   error: string | null;

@@ -9,6 +9,7 @@ import {
   OrgPortfolioStats,
   OrganizationStatus,
 } from '../../services/adminOrgApi';
+import { personPath } from '../../adminOs/personLink';
 
 /**
  * AdminBusinessAccountsPage — every company that has registered an account.
@@ -225,7 +226,7 @@ function AdminBusinessAccountsPage(): React.ReactElement {
                     </td>
                     <td>
                       {org.lead_id ? (
-                        <Link to={`/admin/leads/${org.lead_id}`}>#{org.lead_id}</Link>
+                        <Link to={personPath({ leadId: org.lead_id }, 'account') ?? '/admin/people'}>#{org.lead_id}</Link>
                       ) : (
                         <span
                           className="text-muted small"

@@ -14,6 +14,7 @@ jest.mock('../todayAnchoredSources', () => ({
   gatherAnchored: jest.fn().mockResolvedValue({ weekBound: [], evergreenByType: new Map() }),
   rehydrateCardItems: jest.fn().mockResolvedValue(undefined),
   rehydrateCommunityItems: jest.fn().mockResolvedValue(undefined),
+  rehydrateProjectItems: jest.fn().mockResolvedValue(undefined),
   rehydrateSessionItems: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock('../todayDailyRefreshService', () => ({

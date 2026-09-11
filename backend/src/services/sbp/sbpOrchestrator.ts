@@ -110,7 +110,13 @@ export interface StartBuildInput {
    * above for any client new enough to send them; both are supported so a
    * cached older bundle still produces a build.
    */
-  answers?: Array<{ id: string; question: string; answer: string }>;
+  answers?: Array<{ id: string; question: string; answer: string; angle?: string }>;
+  /**
+   * Angles the description already answered, quoted, as the intake service
+   * reported them. Carried through so the truth store files them as facts
+   * rather than losing the one thing that made the short interview honest.
+   */
+  covered?: Array<{ angle: string; evidence: string }>;
 }
 
 /**
@@ -120,6 +126,54 @@ export interface StartBuildInput {
  * Idempotent on `projectId`: re-submitting updates the intake rather than
  * stacking, and a build already generating is not started twice.
  */
+/**
+ * Which revision of the confirmed truth a plan is about to be built from.
+ *
+ * BOUNDED, and that bound is not decoration. The first version of this read the
+ * revision inline and unbounded, which put a database round trip into the
+ * generation path with nothing stopping it taking as long as it liked. The
+ * auto-publish suite caught it immediately by timing out, and the same shape in
+ * production would have been every student's build waiting on a lookup that is
+ * nice to have.
+ *
+ * A plan with an unknown basis is worse than one with a known basis and far
+ * better than a build that hangs, so every failure here - slow, thrown, or
+ * missing - records `null`, which already means "we do not know".
+ */
+/*
+ * 750ms, lowered from 2000.
+ *
+ * NOT because it fixed a test - it did not. The auto-publish suite fails under
+ * parallel load on a contended machine with or without this read, verified by
+ * stashing the change and reproducing the same single failure. The number came
+ * down because looking at it honestly, two seconds was never a budget for the
+ * happy path: this is one indexed lookup of one row, milliseconds when the
+ * database is healthy. Two seconds only ever bought time for an unhealthy one,
+ * and spending that much of a student's build waiting on a value we are
+ * explicitly willing to lose is the wrong trade.
+ */
+const TRUTH_REVISION_TIMEOUT_MS = 750;
+
+async function readTruthRevision(projectId: string): Promise<number | null> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    const lookup = (async () => {
+      const { loadIntakeTruthAtRevision } = await import('./intakeTruthStore');
+      return (await loadIntakeTruthAtRevision(projectId))?.revision ?? null;
+    })();
+    const bound = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), TRUTH_REVISION_TIMEOUT_MS);
+      // Never hold the process open for a value we are willing to lose.
+      timer.unref?.();
+    });
+    return await Promise.race([lookup, bound]);
+  } catch {
+    return null;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export async function startBuild(input: StartBuildInput): Promise<{ projectId: string; correlationId: string; status: BuildStatus }> {
   const correlationId = randomUUID();
 
@@ -144,6 +198,39 @@ export async function startBuild(input: StartBuildInput): Promise<{ projectId: s
     status: 'generating',
   });
   log('sbp_build_started', correlationId, 'success', { projectId: input.projectId, idea_chars: input.idea.length });
+
+  /*
+   * THE INTAKE BECOMES TRUTH HERE, and here is the only place it can.
+   *
+   * Everything downstream reads `project_understandings` for this project - the
+   * confirmation gate, the plan's truth revision, Story 000's own section, the
+   * case-study hypothesis. On 2026-09-11 every one of those was found to be
+   * correct in isolation and unreachable in practice, because nothing on the
+   * real wizard path wrote the row they read. This is the write.
+   *
+   * IT CANNOT FAIL A BUILD. A student whose truth could not be recorded still
+   * gets their plan; they lose the review screen, not the pipeline. Failure is
+   * one classified log line and nothing else, because a thrown error here
+   * would turn a nice-to-have into a build that never starts.
+   */
+  try {
+    const { saveIntakeTruth } = await import('./intakeTruthStore');
+    const truth = await saveIntakeTruth({
+      projectId: input.projectId,
+      idea: input.idea,
+      answers: input.answers,
+      covered: input.covered,
+    });
+    log('sbp_intake_truth_saved', correlationId, 'success', {
+      projectId: input.projectId, outcome: truth.outcome, revision: truth.revision,
+      items: truth.items.length, unmapped: truth.unmapped,
+    });
+  } catch (err) {
+    log('sbp_intake_truth_failed', correlationId, 'failure', {
+      projectId: input.projectId,
+      error_class: (err as { name?: string })?.name ?? 'Error',
+    });
+  }
 
   // Name the project from what the student just typed. THIS IS THE FIRST MOMENT
   // THE NAME IS KNOWABLE: the `projects` row is created by POST /api/portal/
@@ -219,7 +306,21 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
       });
     }
 
-    const draft = await savePlanDraft(input.projectId, scoped.plan, { gate, model, attempts, correlationId });
+    /*
+     * WHICH TRUTH THIS PLAN CAME FROM. Read at save time rather than passed in,
+     * so the recorded revision is the one that existed when the plan was
+     * written - not the one that existed when generation started, which can be
+     * minutes earlier and a correction behind.
+     *
+     * A failure to read it records null rather than failing the build. A plan
+     * with an unknown basis is worse than one with a known basis and better
+     * than no plan at all, and null already means "we do not know".
+     */
+    const truthRevision = await readTruthRevision(input.projectId);
+
+    const draft = await savePlanDraft(input.projectId, scoped.plan, {
+      gate, model, attempts, correlationId, truthRevision,
+    });
     await setStatus(input.projectId, publishable ? 'drafted' : 'gate_failed');
 
     log('sbp_build_generated', correlationId, gate.ok ? 'success' : 'partial', {

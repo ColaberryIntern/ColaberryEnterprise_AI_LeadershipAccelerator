@@ -101,7 +101,24 @@ export async function handleAdminDeleteCohort(
       return;
     }
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
+    // Surface the ACTUAL blocker rather than a generic failure. A cohort delete
+    // that hit a foreign key used to reach the admin as "Failed to delete cohort",
+    // naming neither the table that refused nor the reason — diagnosing one such
+    // case took a production database probe. Postgres hands us the constraint and
+    // table names on a 23503; passing them through turns a dead end into something
+    // an operator can act on or report.
+    const pg = error?.parent ?? error?.original ?? error;
+    if (pg?.code === '23503') {
+      res.status(409).json({
+        error: 'Cohort could not be deleted: rows in another table still reference its enrollments.',
+        error_class: 'ForeignKeyConstraint',
+        constraint: pg.constraint ?? null,
+        blocking_table: pg.table ?? null,
+        detail: pg.detail ?? null,
+      });
+      return;
+    }
     next(error);
   }
 }

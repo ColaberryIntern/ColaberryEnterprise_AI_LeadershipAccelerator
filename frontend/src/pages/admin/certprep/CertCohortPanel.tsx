@@ -4,6 +4,7 @@ import {
   fetchCohortReadiness, fetchCohortWeakness, fetchNotStarted,
   CohortReadinessRow, DomainWeakness, NotStartedStudent,
 } from '../../../services/certPrepAdminApi';
+import PersonLink from '../../../components/admin/person/PersonLink';
 
 /**
  * CertCohortPanel — the operational view: who is ready, where the cohort is
@@ -231,7 +232,7 @@ export default function CertCohortPanel({
               <ul className="list-unstyled mb-0">
                 {notStarted.map((s) => (
                   <li key={s.enrollment_id} className="py-1 border-bottom">
-                    {s.full_name ?? s.email ?? s.enrollment_id}
+                    <PersonLink tab="work" name={s.full_name} email={s.email} enrollmentId={s.enrollment_id} />
                     {s.full_name && s.email && <div className="small text-muted">{s.email}</div>}
                   </li>
                 ))}

@@ -38,7 +38,7 @@ import { isCardServable } from './curriculumScope';
 import { resolve as resolveType } from './typeRegistry';
 import { pickAmbientBatch, AMBIENT_PROVIDERS, AMBIENT_REPEAT_COOLDOWN_DAYS, type AmbientProviderSlug, type AmbientItem } from './ambientPool';
 import { planSlots, interleaveGroups, groupByType, isPrecedenceImpression, isWithinAmbientCooldown, type TodayItemKind } from './todayFeedPlan';
-import { gatherAnchored, rehydrateCardItems, rehydrateCommunityItems, rehydrateSessionItems } from './todayAnchoredSources';
+import { gatherAnchored, rehydrateCardItems, rehydrateCommunityItems, rehydrateProjectItems, rehydrateSessionItems } from './todayAnchoredSources';
 import { orderForVisit } from './todayFeedShuffle';
 import { isDailyRefreshDue } from './todayDailyRefreshService';
 import { getAmbientDistinctSeenCounts } from './ambientTypeExposureService';
@@ -461,6 +461,7 @@ export async function getTodayPage(enrollmentId: string, cursor = 0, pageSize = 
     const items = await composeReadOnlyPage(enrollmentId, from, size, opts.seed);
     await rehydrateCardItems(items);
     await rehydrateCommunityItems(items);
+    await rehydrateProjectItems(items);
     await rehydrateSessionItems(items);
     return { items, nextCursor: from + items.length, exhausted: items.length < size };
   }
@@ -502,6 +503,7 @@ export async function getTodayPage(enrollmentId: string, cursor = 0, pageSize = 
   // three fail-soft).
   await rehydrateCardItems(items);
   await rehydrateCommunityItems(items);
+  await rehydrateProjectItems(items);
   await rehydrateSessionItems(items);
   return { items, nextCursor: from + items.length, exhausted: exhausted && items.length < size };
 }

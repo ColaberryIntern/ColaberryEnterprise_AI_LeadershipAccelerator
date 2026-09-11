@@ -83,6 +83,17 @@ jest.mock('../../../services/managerDirectiveApi', () => ({ listDirectives: jest
 jest.mock('../../../services/agentReportSubscriptionApi', () => ({ listReportSubscriptions: jest.fn() }));
 jest.mock('../../../services/agentGoalApi', () => ({ listGoals: jest.fn() }));
 jest.mock('../../../services/agentOneOnOneApi', () => ({ listOneOnOnes: jest.fn() }));
+// Role Charter tile, Checkpoint H (2026-09-10) — a 6th summary fetch,
+// same reasoning as the 5 above: CRA's Jest preset runs `resetMocks: true`
+// between every test (wipes implementations, not just call history — this
+// file's own comment above already documents the exact same bare-`jest.fn()`
+// -resolves-`undefined` crash for a different mock), so the resolved value
+// set in the factory here is only a first-test fallback; every describe
+// block's own beforeEach re-applies it explicitly, same convention as the
+// other 5.
+jest.mock('../../../services/agentRoleCharterApi', () => ({
+  getAgentRoleCharter: jest.fn().mockResolvedValue({ agentId: 'agent-reese', charter: null }),
+}));
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getManagerInboxItems } = require('../../../services/managerInboxApi') as { getManagerInboxItems: jest.Mock };
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -93,6 +104,8 @@ const { listReportSubscriptions } = require('../../../services/agentReportSubscr
 const { listGoals } = require('../../../services/agentGoalApi') as { listGoals: jest.Mock };
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { listOneOnOnes } = require('../../../services/agentOneOnOneApi') as { listOneOnOnes: jest.Mock };
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { getAgentRoleCharter } = require('../../../services/agentRoleCharterApi') as { getAgentRoleCharter: jest.Mock };
 
 const DETAIL: AgentDetail = {
   agent: {
@@ -181,11 +194,25 @@ let root: Root;
 // At a Glance, Checkpoint F (2026-09-03) — "Overview" is no longer the
 // default tab; its real content (identity, tools, reports-to, trust
 // contract, system prompt) moved into Command Center, unchanged. Every
-// test below that asserts on that content needs Command Center open first
-// — done once, here, so all 50+ call sites below get it for free instead
-// of touching each test individually. The one call site that predates this
+// test below that asserts on that content needs that tab open first — done
+// once, here, so all 50+ call sites below get it for free instead of
+// touching each test individually. The one call site that predates this
 // helper (line ~31, a separate `renderPage()` using `renderToStaticMarkup`)
 // never fires `useEffect` at all, so it's unaffected by tab default.
+//
+// Checkpoint G (2026-09-10) — Command Center unfolded into "Live Status"
+// (real-time content) and "Overview" (this content, unchanged, now its own
+// top-level tab again). Updated to click "Overview" instead — the exact
+// one-line change this comment always anticipated.
+//
+// Checkpoint H (2026-09-10) — Overview's own nine flat sections became
+// seven sub-tabs. Superseded the next day (Checkpoint I) — see below.
+//
+// Checkpoint I (2026-09-11) — Ali pasted a full mockup and asked to match
+// its format: Overview is a single flowing page again (AgentOverviewV2),
+// no sub-tabs. The `overviewSubTab` param and its click logic are gone —
+// every call site below that used to pass one now just gets the whole
+// page's real content from a single "Overview" tab click.
 async function renderAgentPage() {
   await act(async () => {
     root.render(
@@ -197,10 +224,10 @@ async function renderAgentPage() {
     );
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-  const commandTabButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Command Center');
-  if (commandTabButton) {
+  const overviewTabButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Overview');
+  if (overviewTabButton) {
     await act(async () => {
-      commandTabButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      overviewTabButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
   }
@@ -214,6 +241,7 @@ describe('AgentDetailPage — Ticket activity table: colored status badges + CST
     listReportSubscriptions.mockResolvedValue([]);
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
+    getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
     getAgentDetail.mockResolvedValue(DETAIL);
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -225,33 +253,29 @@ describe('AgentDetailPage — Ticket activity table: colored status badges + CST
     container.remove();
   });
 
-  it('renders the Status column as a real StatusBadge with the humanized label, not the raw plain-text status', async () => {
+  it('renders the Status pill with the humanized label, not the raw plain-text status', async () => {
     await renderAgentPage();
 
-    // Tone DISTINCTNESS itself (in_progress != done color) is already pinned at
-    // the data level in ticketTypeMeta.test.ts's isTicketStale/getTicketStatusTone
-    // suite — jsdom's CSSOM doesn't reliably round-trip the `background` shorthand
-    // with a var(...) value through .style/getAttribute('style'), so this test
-    // instead proves the wiring: getTicketStatusLabel/getTicketStatusTone are
-    // actually used in this JSX (humanized label present), not just imported.
-    const badges = Array.from(container.querySelectorAll('.admin-status-badge'));
-    expect(badges.some((b) => b.textContent === 'In Progress')).toBe(true);
-    expect(badges.some((b) => b.textContent === 'Done')).toBe(true);
-    // Regression guard: the old markup was a single fixed class for every row,
-    // and the raw (non-humanized) status string, for every row.
-    expect(container.innerHTML).not.toContain('bg-light text-dark border');
+    // Checkpoint I (2026-09-11) — AgentOverviewV2Tickets.tsx replaced the old
+    // Bootstrap StatusBadge table with adv2-pill spans; tone DISTINCTNESS
+    // itself is pinned at the data level in ticketTypeMeta.test.ts. This
+    // test proves getTicketStatusLabel is actually wired into the JSX
+    // (humanized label present), not just imported.
+    const pills = Array.from(container.querySelectorAll('.adv2-pill'));
+    expect(pills.some((b) => b.textContent === 'In Progress')).toBe(true);
+    expect(pills.some((b) => b.textContent === 'Done')).toBe(true);
     expect(container.textContent).not.toContain('in_progress');
   });
 
-  it('renders the Type column as a colored badge too, reusing the same type-tone helper the ticket board uses', async () => {
+  it('renders the Type pill too, reusing the same type-tone helper the ticket board uses', async () => {
     await renderAgentPage();
 
-    const badges = Array.from(container.querySelectorAll('.admin-status-badge'));
-    expect(badges.some((b) => b.textContent === 'Reese Outreach')).toBe(true);
-    expect(badges.some((b) => b.textContent === 'Student Support')).toBe(true);
+    const pills = Array.from(container.querySelectorAll('.adv2-pill'));
+    expect(pills.some((b) => b.textContent === 'Reese Outreach')).toBe(true);
+    expect(pills.some((b) => b.textContent === 'Student Support')).toBe(true);
   });
 
-  it('renders the Updated column with a CST/CDT label, never the browser-local unlabeled toLocaleString() shape', async () => {
+  it('renders the ticket timestamp with a CST/CDT label, never the browser-local unlabeled toLocaleString() shape', async () => {
     await renderAgentPage();
 
     // 2026-08-12T15:00:00Z is 10:00 AM Central during CDT (summer).
@@ -264,15 +288,14 @@ describe('AgentDetailPage — Ticket activity table: colored status badges + CST
   });
 
   // Ticket Count Sync fix (2026-08-21, session CC-20260818-x4nk continued) —
-  // the "Open tickets" stat used to be tickets.filter(open).length, which
+  // the "Open tickets" fact used to be tickets.filter(open).length, which
   // undercounts once an agent's true ticket volume exceeds the capped tickets
-  // array. Proves the stat now renders the server's independent open_ticket_count.
-  it('renders the "Open tickets" stat from open_ticket_count, not from counting the (capped) tickets array', async () => {
+  // array. Proves it now renders the server's independent open_ticket_count.
+  it('renders "open tickets" from open_ticket_count, not from counting the (capped) tickets array', async () => {
     getAgentDetail.mockResolvedValue({ ...DETAIL, open_ticket_count: 294 }); // far more than the 2-row tickets fixture
     await renderAgentPage();
 
-    const statCards = Array.from(container.querySelectorAll('.admin-stat-card')).map((el) => el.textContent || '');
-    expect(statCards.some((text) => text.includes('Open tickets') && text.includes('294'))).toBe(true);
+    expect(container.textContent).toContain('294 open tickets');
   });
 });
 
@@ -286,6 +309,7 @@ describe('AgentDetailPage — "last activity" indicator on the ticket-activity t
     listReportSubscriptions.mockResolvedValue([]);
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
+    getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -296,7 +320,7 @@ describe('AgentDetailPage — "last activity" indicator on the ticket-activity t
     container.remove();
   });
 
-  it('renders a real, computed "X ago" Last activity column, not a static string', async () => {
+  it('renders a real, computed "X ago" value next to each ticket, not a static string', async () => {
     const fiveHoursAgo = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString();
     getAgentDetail.mockResolvedValue({
       ...DETAIL,
@@ -305,7 +329,6 @@ describe('AgentDetailPage — "last activity" indicator on the ticket-activity t
 
     await renderAgentPage();
 
-    expect(container.textContent).toContain('Last activity');
     expect(container.textContent).toContain('5h ago');
   });
 
@@ -317,7 +340,6 @@ describe('AgentDetailPage — "last activity" indicator on the ticket-activity t
 
     await renderAgentPage();
 
-    expect(container.textContent).toContain('Last activity');
     expect(container.textContent).toContain('unknown');
   });
 });
@@ -333,6 +355,7 @@ describe('AgentDetailPage — "what this agent reads / produces" section', () =>
     listReportSubscriptions.mockResolvedValue([]);
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
+    getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -348,7 +371,7 @@ describe('AgentDetailPage — "what this agent reads / produces" section', () =>
 
     await renderAgentPage();
 
-    expect(container.textContent).toContain('What this agent reads / produces');
+    expect(container.textContent).toContain('Capabilities');
     expect(container.textContent).toContain('ProofDesk learner-progress signals');
     expect(container.textContent).toContain('A reply message in the student DM thread');
     // Ticket-type badges reuse the same getTicketTypeLabel() humanization as the
@@ -393,6 +416,7 @@ describe('AgentDetailPage — title prefers identity.display_name over raw agent
     listReportSubscriptions.mockResolvedValue([]);
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
+    getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -438,6 +462,7 @@ describe('AgentDetailPage — "Reports to" section', () => {
     listReportSubscriptions.mockResolvedValue([]);
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
+    getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -448,13 +473,18 @@ describe('AgentDetailPage — "Reports to" section', () => {
     container.remove();
   });
 
-  it('renders the real trail and the resolved human name/email when the chain resolves', async () => {
+  it('renders the real chain and the resolved human name/email when the chain resolves', async () => {
     getAgentDetail.mockResolvedValue(DETAIL);
 
     await renderAgentPage();
 
     expect(container.textContent).toContain('Reports to');
-    expect(container.textContent).toContain('workforce_intelligence_engine (agent) -> [human]');
+    // Checkpoint I (2026-09-11) — the raw trail string ("workforce_intelligence_engine
+    // (agent) -> [human]") is now parsed into a named chain (see
+    // AgentOverviewV2Sidebar.tsx's parseHop) rather than shown verbatim, per
+    // Ali's pasted mockup — the underlying fact (who reports to whom) is the
+    // same real data, just a cleaner view.
+    expect(container.textContent).toContain('workforce_intelligence_engine');
     expect(container.textContent).toContain('Kes');
     expect(container.textContent).toContain('kesetebirhan@gmail.com');
   });
@@ -512,6 +542,7 @@ describe('AgentDetailPage — "Tools & capabilities" per-tool drill-down', () =>
     listReportSubscriptions.mockResolvedValue([]);
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
+    getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
     getAgentDetail.mockResolvedValue(DETAIL);
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -523,23 +554,27 @@ describe('AgentDetailPage — "Tools & capabilities" per-tool drill-down', () =>
     container.remove();
   });
 
-  it('renders one collapsible <details> per granted tool, named after the real tool string', async () => {
+  it('renders one row per granted tool, named after the real tool string', async () => {
     await renderAgentPage();
 
-    const details = Array.from(container.querySelectorAll('details'));
-    const toolNames = details.map((d) => d.querySelector('summary code')?.textContent);
+    // Checkpoint I (2026-09-11) — the per-tool drill-down is no longer a
+    // collapsible <details> (the mockup's own .adv2-tool rows are always
+    // expanded — short enough not to need collapsing); each tool still
+    // gets its own real, named row.
+    const rows = Array.from(container.querySelectorAll('.adv2-tool'));
+    const toolNames = rows.map((d) => d.querySelector('code')?.textContent);
     expect(toolNames).toEqual(['respond_to_dm', 'read_learner_context']);
   });
 
-  it('each tool\'s own reads/produces are nested inside ITS details element, not the flattened aggregate', async () => {
+  it('each tool\'s own reads/produces are nested inside ITS row, not the flattened aggregate', async () => {
     await renderAgentPage();
 
-    const details = Array.from(container.querySelectorAll('details'));
-    const readLearnerContext = details.find((d) => d.querySelector('summary code')?.textContent === 'read_learner_context');
+    const rows = Array.from(container.querySelectorAll('.adv2-tool'));
+    const readLearnerContext = rows.find((d) => d.querySelector('code')?.textContent === 'read_learner_context');
     expect(readLearnerContext?.textContent).toContain('ProofDesk learner-progress signals');
-    // respond_to_dm has no reads of its own — its OWN details element must not
-    // claim the other tool's read fact.
-    const respondToDm = details.find((d) => d.querySelector('summary code')?.textContent === 'respond_to_dm');
+    // respond_to_dm has no reads of its own — its OWN row must not claim
+    // the other tool's read fact.
+    const respondToDm = rows.find((d) => d.querySelector('code')?.textContent === 'respond_to_dm');
     expect(respondToDm?.textContent).not.toContain('ProofDesk learner-progress signals');
     expect(respondToDm?.textContent).toContain('A reply message in the student DM thread');
   });
@@ -580,6 +615,7 @@ describe('AgentDetailPage — "Scheduled tasks" section', () => {
     listReportSubscriptions.mockResolvedValue([]);
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
+    getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -605,7 +641,7 @@ describe('AgentDetailPage — "Scheduled tasks" section', () => {
 
     await renderAgentPage();
 
-    expect(container.textContent).toContain('Scheduled tasks');
+    expect(container.textContent).toContain('Scheduled work');
     expect(container.textContent).toContain('ReeseAutonomousOutreachSweep');
     expect(container.textContent).toContain('Daily scan of the approved pilot cohort');
     expect(container.textContent).toContain('0 15 * * *');
@@ -650,6 +686,7 @@ describe('AgentDetailPage — "Ticket activity" table: Why column and ticket_bre
     listReportSubscriptions.mockResolvedValue([]);
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
+    getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
     getAgentDetail.mockResolvedValue(DETAIL);
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -671,9 +708,9 @@ describe('AgentDetailPage — "Ticket activity" table: Why column and ticket_bre
     await renderAgentPage();
 
     // t-2 (the fixture's second ticket) has description: null.
-    const rows = Array.from(container.querySelectorAll('tbody tr'));
-    const alexRow = rows.find((r) => r.textContent?.includes('Alex Chen'));
-    expect(alexRow?.querySelectorAll('td')[1].textContent).toBe('—');
+    const whyParagraphs = Array.from(container.querySelectorAll('[data-testid="ticket-why"]'));
+    const alexWhy = whyParagraphs.find((p) => p.closest('div')?.textContent?.includes('Alex Chen'));
+    expect(alexWhy?.textContent).toBe('—');
   });
 
   it('renders the ticket_breakdown summary grouped by type and real signal_type, above the table', async () => {
@@ -716,6 +753,7 @@ describe('AgentDetailPage — "Trust evidence" section', () => {
     listReportSubscriptions.mockResolvedValue([]);
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
+    getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -741,8 +779,8 @@ describe('AgentDetailPage — "Trust evidence" section', () => {
 
     await renderAgentPage();
 
-    const statCards = Array.from(container.querySelectorAll('.admin-stat-card')).map((el) => el.textContent || '');
-    expect(statCards.some((text) => text.includes('Cost (30d)') && text.includes('—'))).toBe(true);
+    const stats = Array.from(container.querySelectorAll('.adv2-stat')).map((el) => el.textContent || '');
+    expect(stats.some((text) => text.includes('Cost (30d)') && text.includes('—'))).toBe(true);
     expect(container.textContent).not.toContain('$0.00');
   });
 
@@ -815,6 +853,7 @@ describe('AgentDetailPage — "Deactivate" action', () => {
     listReportSubscriptions.mockResolvedValue([]);
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
+    getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
     getAgentDetail.mockResolvedValue(DETAIL);
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -895,6 +934,7 @@ describe('AgentDetailPage — reactivation flow (deactivated agent)', () => {
     listReportSubscriptions.mockResolvedValue([]);
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
+    getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -917,7 +957,10 @@ describe('AgentDetailPage — reactivation flow (deactivated agent)', () => {
     getAgentDetail.mockResolvedValue(DETAIL); // enabled: true
     await renderAgentPage();
 
-    expect(reactivateSelect()).toBeUndefined();
+    // querySelector() returns null (not undefined) when nothing matches —
+    // the `as ... | undefined` cast above is compile-time only, so this was
+    // asserting the wrong runtime value pre-existing this session's edits.
+    expect(reactivateSelect()).toBeNull();
     expect(reactivateButton()).toBeUndefined();
   });
 
@@ -995,6 +1038,7 @@ describe('AgentDetailPage — "Trust Contract" section', () => {
     listReportSubscriptions.mockResolvedValue([]);
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
+    getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -1061,9 +1105,9 @@ describe('AgentDetailPage — "Trust Contract" section', () => {
 
     await renderAgentPage();
 
-    // The stat grid renders (trigger_type is set), but no fabricated error banner.
+    // The rows render (trigger_type is set), but no fabricated error banner.
     expect(container.textContent).toContain('Trust Contract');
-    expect(container.querySelector('.alert-warning')).toBeNull();
+    expect(container.textContent).not.toContain('Last error:');
   });
 
   // AI Workforce Reset, Phase C (2026-08-24) — the Permitted dimension: this
@@ -1090,22 +1134,25 @@ describe('AgentDetailPage — "Trust Contract" section', () => {
   // "Reese has several tickets that have been opened... but this says it's
   // never been run." Fixes the literal complaint: an event-driven agent with
   // real ticket activity must never show a bare "Never".
-  // Scoped to `.admin-stat-card` (not `container.textContent`) throughout —
-  // the Ticket activity table below has its OWN "Last activity" column header
-  // (per-ticket, unrelated), so a page-wide text check would false-positive.
-  function trustContractStatCards(): string[] {
-    return Array.from(container.querySelectorAll('.admin-stat-card')).map((el) => el.textContent || '');
+  // Checkpoint I (2026-09-11) — scoped to the Trust Contract card's own
+  // <dl> (first .adv2-rows on the page) rather than page-wide text: the
+  // Scheduled work section below also has its own "Last run" label per
+  // task (unrelated), so an unscoped check could false-positive once a
+  // test's fixture has related_tasks — none of these three do today, but
+  // scoping removes the trap for whoever edits this next.
+  function trustContractRowsText(): string {
+    return container.querySelector('.adv2-rows')?.textContent || '';
   }
 
-  it('Instant: an event-driven agent with real ticket activity shows a "Last activity" stat (not "Last run"/"Never")', async () => {
+  it('Instant: an event-driven agent with real ticket activity shows a "Last activity" row (not "Last run"/"Never")', async () => {
     getAgentDetail.mockResolvedValue(DETAIL); // base fixture: event_driven, last_run_at null, last_activity_at real
 
     await renderAgentPage();
 
-    const cards = trustContractStatCards();
-    expect(cards.some((text) => text.includes('Last activity'))).toBe(true);
-    expect(cards.some((text) => text.includes('Last run'))).toBe(false);
-    expect(cards.some((text) => text.includes('Never'))).toBe(false);
+    const text = trustContractRowsText();
+    expect(text).toContain('Last activity');
+    expect(text).not.toContain('Last run');
+    expect(text).not.toContain('Never');
   });
 
   it('boundary: an event-driven agent with genuinely zero ticket history ever still shows an honest "Last run: Never"', async () => {
@@ -1116,9 +1163,10 @@ describe('AgentDetailPage — "Trust Contract" section', () => {
 
     await renderAgentPage();
 
-    const cards = trustContractStatCards();
-    expect(cards.some((text) => text.includes('Last run') && text.includes('Never'))).toBe(true);
-    expect(cards.some((text) => text.includes('Last activity'))).toBe(false);
+    const text = trustContractRowsText();
+    expect(text).toContain('Last run');
+    expect(text).toContain('Never');
+    expect(text).not.toContain('Last activity');
   });
 
   it('a scheduler-tracked (cron) agent keeps showing "Last run" from last_run_at, never the ticket-derived fallback', async () => {
@@ -1134,8 +1182,9 @@ describe('AgentDetailPage — "Trust Contract" section', () => {
 
     await renderAgentPage();
 
-    const cards = trustContractStatCards();
-    expect(cards.some((text) => text.includes('Last run') && text.includes('5h ago'))).toBe(true);
-    expect(cards.some((text) => text.includes('Last activity'))).toBe(false);
+    const text = trustContractRowsText();
+    expect(text).toContain('Last run');
+    expect(text).toContain('5h ago');
+    expect(text).not.toContain('Last activity');
   });
 });

@@ -124,6 +124,94 @@ export function rollUpTiming(
 }
 
 /* ------------------------------------------------------------------ */
+/*  Task state buckets — the segmented bar                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The four states the compact dashboard's segmented bar draws, plus undated.
+ *
+ * `due_this_week` is the one that does not exist anywhere else in this codebase
+ * and is the reason this function exists: an operator scanning thirty rows needs
+ * to see what is ABOUT to slip, not only what already has. Seven days is the
+ * window because the programme runs on weekly releases.
+ *
+ * `undated` is counted but deliberately kept OUT of the bar's proportions —
+ * 67 of 656 tasks in production carry no due date, and rendering them as a fifth
+ * segment would imply a schedule position they do not have. They are reported as
+ * a separate caption instead.
+ */
+export interface TaskBuckets {
+  total: number;
+  done: number;
+  overdue: number;
+  due_this_week: number;
+  open: number;
+  /** INCOMPLETE tasks with no due date. Mutually exclusive with the four above, so
+   *  the five always sum to `total` and nothing is dropped from the bar. */
+  undated: number;
+  /** ALL tasks with no due date, complete or not. OVERLAPS the buckets above and is
+   *  deliberately not part of the sum: it answers a different question — how much of
+   *  this plan carries no schedule at all.
+   *
+   *  Both are needed. In production every undated task happens to be complete
+   *  (37 of 629, all done), so `undated` is 0 everywhere and a caption keyed on it
+   *  would never appear, hiding the fact that 37 tasks were never scheduled. */
+  no_date: number;
+}
+
+export const DUE_SOON_DAYS = 7;
+
+export function bucketTasks(
+  tasks: Array<{ status?: string | null; due_on?: string | null }> | null | undefined,
+  today: string
+): TaskBuckets {
+  const b: TaskBuckets = {
+    total: 0, done: 0, overdue: 0, due_this_week: 0, open: 0, undated: 0, no_date: 0,
+  };
+  if (!Array.isArray(tasks)) return b;
+
+  const horizon = addDays(today, DUE_SOON_DAYS);
+
+  for (const t of tasks) {
+    b.total += 1;
+    const hasDate = !!t.due_on;
+    if (!hasDate) b.no_date += 1;
+    if (t.status === DONE) { b.done += 1; continue; }
+    const due = t.due_on ? String(t.due_on).slice(0, 10) : null;
+    if (!due) { b.undated += 1; continue; }
+    if (due < today) b.overdue += 1;
+    else if (due <= horizon) b.due_this_week += 1;
+    else b.open += 1;
+  }
+  return b;
+}
+
+/** `YYYY-MM-DD` plus n days, in UTC. */
+export function addDays(iso: string, n: number): string {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  const t = Date.UTC(y, m - 1, d) + n * 86400000;
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+export type ReleaseState = 'landed' | 'overdue' | 'due_soon' | 'open' | 'empty';
+
+/**
+ * One release reduced to a single status, for the small strip of segments that
+ * summarises a project's whole spine on a collapsed row.
+ *
+ * Order matters: a release with ANY overdue task reads as overdue even if most of
+ * it landed, because the overdue work is the thing needing attention. Fully
+ * complete wins only when nothing is outstanding.
+ */
+export function releaseState(b: TaskBuckets): ReleaseState {
+  if (b.total === 0) return 'empty';
+  if (b.overdue > 0) return 'overdue';
+  if (b.done === b.total) return 'landed';
+  if (b.due_this_week > 0) return 'due_soon';
+  return 'open';
+}
+
+/* ------------------------------------------------------------------ */
 /*  Build evidence                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -179,6 +267,131 @@ function isoDateTime(v: unknown): string | null {
   if (!v) return null;
   const d = v instanceof Date ? v : new Date(String(v));
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/* ------------------------------------------------------------------ */
+/*  Repo verification — the evidence that actually exists              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * WHY THIS REPLACED THE MANIFEST COUNTS AS THE PRIMARY SOURCE.
+ *
+ * The build-evidence panel first read `build_manifests`, which are emitted by a
+ * student's own Claude Code to `POST /api/portal/project/telemetry`. That endpoint
+ * is real and student-facing, but nothing in the Student Build Pipeline's docs
+ * bundle, command-center story or build prompt ever tells a student to emit — so
+ * every one of the 178 manifests in production belongs to the platform's own
+ * project or a withdrawn test account, and ZERO to the 30 live student projects.
+ *
+ * Meanwhile the platform ALREADY verifies student work server-side: a job
+ * (`verified_by = 'build_pipeline:repo_verification'`) reads each student's repo
+ * and checks their acceptance criteria against real commits, writing the result to
+ * `student_tasks.verification_json` — present on 309 tasks, with commit SHAs on 174.
+ *
+ * That is both richer and available today: a commit SHA is proof, and `outstanding`
+ * names the exact criteria blocking a task. Closing the gap therefore needed no
+ * student-side token and no change to the auth posture — only pointing at the
+ * evidence the platform was already collecting.
+ */
+export interface VerificationSummary {
+  /** True when any task carries a verification record. */
+  has_verification: boolean;
+  tasks_with_verification: number;
+  verified_tasks: number;
+  in_progress_tasks: number;
+  /** Distinct commits the verifier matched — real construction, not self-report. */
+  commits: number;
+  latest_commit_sha: string | null;
+  latest_commit_at: string | null;
+  last_checked_at: string | null;
+  criteria_passed: number;
+  criteria_total: number;
+  /** Deduplicated criteria still outstanding, most recent first. Capped by the
+   *  caller for display; the count is the honest total. */
+  outstanding: string[];
+  outstanding_count: number;
+}
+
+function asString(v: unknown): string | null {
+  return typeof v === 'string' && v.trim() ? v.trim() : null;
+}
+function asInt(v: unknown): number {
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Rolls per-task verification records into one project-level picture.
+ *
+ * `verification_json` is jsonb and every field is optional, so each read is
+ * defensive: a missing `criteria_total` must contribute 0, not NaN, and a
+ * malformed row must not take the panel down.
+ */
+export function summariseVerification(
+  rows: Array<Record<string, unknown>> | null | undefined
+): VerificationSummary {
+  const empty: VerificationSummary = {
+    has_verification: false, tasks_with_verification: 0, verified_tasks: 0,
+    in_progress_tasks: 0, commits: 0, latest_commit_sha: null, latest_commit_at: null,
+    last_checked_at: null, criteria_passed: 0, criteria_total: 0,
+    outstanding: [], outstanding_count: 0,
+  };
+  if (!Array.isArray(rows) || rows.length === 0) return empty;
+
+  const out: VerificationSummary = { ...empty };
+  const shas = new Set<string>();
+  const seenOutstanding = new Set<string>();
+  let latestCommitAt: string | null = null;
+  let latestSha: string | null = null;
+
+  for (const r of rows) {
+    const v = (r && typeof r === 'object' ? (r as any).verification_json : null) as any;
+    if (!v || typeof v !== 'object') continue;
+    out.tasks_with_verification += 1;
+
+    const state = asString(v.state);
+    if (state === 'verified') out.verified_tasks += 1;
+    else if (state === 'in_progress') out.in_progress_tasks += 1;
+
+    out.criteria_passed += asInt(v.criteria_passed);
+    out.criteria_total += asInt(v.criteria_total);
+
+    const sha = asString(v.commit_sha);
+    if (sha) {
+      shas.add(sha);
+      const at = asString(v.commit_at);
+      // Track the newest commit; a row with a sha but no date still counts toward
+      // the commit total but cannot win "latest".
+      if (at && (!latestCommitAt || at > latestCommitAt)) {
+        latestCommitAt = at;
+        latestSha = sha;
+      } else if (!latestSha) {
+        latestSha = sha;
+      }
+    }
+
+    const checked = asString(v.checked_at);
+    if (checked && (!out.last_checked_at || checked > out.last_checked_at)) {
+      out.last_checked_at = checked;
+    }
+
+    if (Array.isArray(v.outstanding)) {
+      for (const o of v.outstanding) {
+        const text = asString(o);
+        if (text && !seenOutstanding.has(text)) {
+          seenOutstanding.add(text);
+          out.outstanding.push(text);
+        }
+      }
+    }
+  }
+
+  out.commits = shas.size;
+  out.latest_commit_sha = latestSha;
+  out.latest_commit_at = latestCommitAt;
+  out.outstanding_count = out.outstanding.length;
+  out.has_verification = out.tasks_with_verification > 0;
+  return out;
 }
 
 /* ------------------------------------------------------------------ */

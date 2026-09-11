@@ -1,8 +1,24 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   fetchEnrollment, selectEnrollmentCohort, formatClassDate,
   PortalEnrollmentView, EnrollmentCohortOption,
 } from '../../../services/portalEnrollmentApi';
+import { usePortalFlags } from '../../../hooks/usePortalFlags';
+import { startInternshipApplication } from '../../../services/internshipApi';
+
+/**
+ * The AI Internship's sentinel value in the class-date dropdown.
+ *
+ * Deliberately NOT a cohort id. Choosing the internship must never reach
+ * `selectEnrollmentCohort`, because that sets `enrollments.cohort_id` — and the
+ * internship is a SECONDARY membership that leaves the training cohort untouched
+ * (see internshipActivationService). `portalEnrollmentService.isRealClassCohort`
+ * would reject the internship cohort anyway, so passing its real id would simply
+ * fail with `cohort_not_selectable`; a sentinel makes the different code path
+ * explicit rather than relying on that rejection.
+ */
+const INTERNSHIP_CHOICE = '__ai_internship__';
 
 /**
  * EnrollmentSection — the Settings "Enrollment" tab (shown before Subscription).
@@ -33,6 +49,11 @@ const EnrollmentSection: React.FC<{
   const [choice, setChoice] = useState('');
   const [busy, setBusy] = useState(false);
   const [changing, setChanging] = useState(false);
+  const navigate = useNavigate();
+  const { flags } = usePortalFlags();
+  // The internship option only exists when the funnel is switched on. A student
+  // must never be offered an application the API would then 404.
+  const internshipOn = !!flags?.internship;
 
   const flash = (m: string) => { if (onToast) onToast(m); };
 
@@ -50,7 +71,27 @@ const EnrollmentSection: React.FC<{
   const selected = view.cohorts.find((c) => c.id === choice) || null;
   const selectedDate = selected ? formatClassDate(selected.start_date) : null;
 
+  /**
+   * Start an internship application and go to it.
+   *
+   * Separate from `onEnroll` on purpose: this writes nothing to the enrollment.
+   * It opens an application (idempotently — a second click returns the existing
+   * one) and hands the student to the internship page, which is where the
+   * requirements, the intake form and the interview live.
+   */
+  const applyForInternship = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await startInternshipApplication();
+      navigate('/portal/internship');
+    } catch {
+      flash('Could not open the internship application right now. Please try again.');
+    } finally { setBusy(false); }
+  };
+
   const onEnroll = async () => {
+    if (choice === INTERNSHIP_CHOICE) { void applyForInternship(); return; }
     if (busy || !choice) return;
     setBusy(true);
     try {
@@ -86,11 +127,29 @@ const EnrollmentSection: React.FC<{
     <div className="set-field" style={{ maxWidth: 420 }}>
       <label className="set-label" htmlFor="enroll-date">Class start date</label>
       <select id="enroll-date" className="set-input" value={choice} onChange={(e) => setChoice(e.target.value)}>
-        {view.cohorts.map((c) => (
-          <option key={c.id} value={c.id}>{optionLabel(c)}</option>
-        ))}
+        {/* Grouped so the internship never reads as a class DATE. Every other
+            option in this list is a day in the calendar; an ungrouped
+            "AI Internship" sitting among them is a category error a student has
+            to squint at. */}
+        <optgroup label="Class start date">
+          {view.cohorts.map((c) => (
+            <option key={c.id} value={c.id}>{optionLabel(c)}</option>
+          ))}
+        </optgroup>
+        {internshipOn && (
+          <optgroup label="Other programs">
+            <option value={INTERNSHIP_CHOICE}>
+              AI Internship — work on real Colaberry projects
+            </option>
+          </optgroup>
+        )}
       </select>
-      {selected?.core_day && (
+      {choice === INTERNSHIP_CHOICE ? (
+        <span className="set-sub" style={{ margin: '2px 0 0' }}>
+          Rolling weekly starts, no fixed end date. You keep your class enrolment —
+          the internship is added on top, not instead.
+        </span>
+      ) : selected?.core_day && (
         <span className="set-sub" style={{ margin: '2px 0 0' }}>
           Live classes meet {selected.core_day}s, {selected.core_time || ''}.
         </span>
@@ -108,17 +167,21 @@ const EnrollmentSection: React.FC<{
           <p className="set-sub">
             Pick your class start date and enroll — it’s free and reserves your place in the cohort.
           </p>
-          {view.cohorts.length === 0 ? (
+          {view.cohorts.length === 0 && !internshipOn ? (
             <div className="set-empty">No upcoming class dates are open right now — check back soon.</div>
           ) : (
             <>
               {datePicker}
               <div className="set-actions" style={{ justifyContent: 'flex-start' }}>
                 <button className="te-btn cherry" disabled={busy || !choice} onClick={onEnroll}>
-                  {busy ? 'Enrolling…' : `Enroll — reserve my spot${selectedDate ? ` for ${selectedDate}` : ''}`}
+                  {busy
+                    ? (choice === INTERNSHIP_CHOICE ? 'Opening…' : 'Enrolling…')
+                    : choice === INTERNSHIP_CHOICE
+                      ? 'Apply for the AI Internship'
+                      : `Enroll — reserve my spot${selectedDate ? ` for ${selectedDate}` : ''}`}
                 </button>
               </div>
-              {payEarlyNote(selectedDate)}
+              {choice !== INTERNSHIP_CHOICE && payEarlyNote(selectedDate)}
             </>
           )}
         </>
@@ -150,7 +213,11 @@ const EnrollmentSection: React.FC<{
             <>
               {datePicker}
               <div className="set-actions" style={{ justifyContent: 'flex-start' }}>
-                <button className="te-btn berry sm" disabled={busy || !choice || choice === enrolled.id} onClick={onEnroll}>
+                <button
+                  className="te-btn berry sm"
+                  disabled={busy || !choice || choice === enrolled.id || choice === INTERNSHIP_CHOICE}
+                  onClick={onEnroll}
+                >
                   {busy ? 'Saving…' : 'Save new date'}
                 </button>
               </div>
@@ -177,6 +244,22 @@ const EnrollmentSection: React.FC<{
           </p>
         </>
       )}
+      {internshipOn && enrolled && (
+        <div className="set-enroll-callout" style={{ marginTop: 16 }}>
+          <div className="ttl">Also open to you: the AI Internship</div>
+          <p>
+            Work on real Colaberry AI projects alongside your class — two projects at a
+            time, your own manager, and KPIs you track yourself. You keep your class
+            place; the internship is added on top, not instead of it.
+          </p>
+          <div className="set-actions" style={{ justifyContent: 'flex-start', marginTop: 8 }}>
+            <button className="te-btn berry sm" disabled={busy} onClick={applyForInternship}>
+              {busy ? 'Opening…' : 'Apply for the AI Internship'}
+            </button>
+          </div>
+        </div>
+      )}
+
     </section>
   );
 };

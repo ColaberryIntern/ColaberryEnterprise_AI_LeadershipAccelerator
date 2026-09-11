@@ -1,5 +1,5 @@
 import React, { lazy } from 'react';
-import { Route, Navigate } from 'react-router-dom';
+import { Route, Navigate, useParams } from 'react-router-dom';
 import ProtectedRoute from '../components/ProtectedRoute';
 import AdminLayout from '../components/Layout/AdminLayout';
 const AdminChangePasswordPage = lazy(() => import('../pages/admin/AdminChangePasswordPage'));
@@ -11,7 +11,6 @@ const AdminCohortDetailPage = lazy(() => import('../pages/admin/AdminCohortDetai
 const AdminLeadsPage = lazy(() => import('../pages/admin/AdminLeadsPage'));
 const AdminBusinessAccountsPage = lazy(() => import('../pages/admin/AdminBusinessAccountsPage'));
 const AdminBusinessAccountDetailPage = lazy(() => import('../pages/admin/AdminBusinessAccountDetailPage'));
-const AdminLeadDetailPage = lazy(() => import('../pages/admin/AdminLeadDetailPage'));
 const AdminPipelinePage = lazy(() => import('../pages/admin/AdminPipelinePage'));
 
 const AdminImportPage = lazy(() => import('../pages/admin/AdminImportPage'));
@@ -83,6 +82,17 @@ const AdminPortalEnterPage = lazy(() => import('../pages/admin/AdminPortalEnterP
 // in — see docs/architecture/refactored-delivery-os/CLIENT_IDENTITY_ANSWER.md. Serving the
 // client room from a staff-authenticated route makes it reviewable by staff WITHOUT
 // implying an external client can reach it.
+/**
+ * /admin/leads/:id -> the 360 profile for that lead.
+ *
+ * `replace` so Back returns to wherever the reader came from rather than
+ * bouncing them through the retired URL again.
+ */
+function LeadDetailRedirect() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={`/admin/people/${encodeURIComponent(`lead:${id}`)}`} replace />;
+}
+
 const adminRoutes = (
   <>
     <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
@@ -104,7 +114,11 @@ const adminRoutes = (
       <Route element={<AdminLayout />}>
         <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
         <Route path="/admin/people" element={<PeoplePage />} />
-        <Route path="/admin/people/:email" element={<PersonProfilePage />} />
+        {/* `:ref` rather than `:email`: admin surfaces link with whatever identifier
+            their rows carry, and most carry a lead id and no address. The segment
+            accepts an email, `lead:123` or `enrollment:<uuid>`, all resolved
+            server-side. Existing /admin/people/<email> links are unchanged. */}
+        <Route path="/admin/people/:ref" element={<PersonProfilePage />} />
         {/* Portfolio review. INSIDE ProtectedRoute and AdminLayout: it first shipped
             beside /admin/login, outside the auth guard entirely, so the page was
             publicly loadable (the API still 401d, so no data leaked, but the surface
@@ -131,7 +145,17 @@ const adminRoutes = (
             by the ":id" segment. */}
         <Route path="/admin/business-accounts" element={<AdminBusinessAccountsPage />} />
         <Route path="/admin/business-accounts/:id" element={<AdminBusinessAccountDetailPage />} />
-        <Route path="/admin/leads/:id" element={<AdminLeadDetailPage />} />
+        {/* RETIRED 2026-09-10. The 360 profile is a superset of this page --
+            parity checked field by field: all 18 of its fields are among the
+            360's 94, and the shared write components (pipeline, status/notes,
+            strategy prep) are the SAME components, so there is no second write
+            path left to drift.
+
+            Redirected rather than deleted: the brief forbids removing route
+            files in the first release, and every bookmark, email link and
+            external reference to /admin/leads/:id must keep working. The page
+            component still exists on disk and can be re-routed in one line. */}
+        <Route path="/admin/leads/:id" element={<LeadDetailRedirect />} />
         <Route path="/admin/visitors" element={<AdminVisitorsPage />} />
         {/* Estate map: which sites report to which brand, read live. */}
         <Route path="/admin/tracking-estate" element={<AdminTrackingEstatePage />} />

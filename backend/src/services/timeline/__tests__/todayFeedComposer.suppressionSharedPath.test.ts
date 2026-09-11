@@ -22,6 +22,7 @@ jest.mock('../todayAnchoredSources', () => ({
   gatherAnchored: jest.fn(),
   rehydrateCardItems: jest.fn().mockResolvedValue(undefined),
   rehydrateCommunityItems: jest.fn().mockResolvedValue(undefined),
+  rehydrateProjectItems: jest.fn().mockResolvedValue(undefined),
   rehydrateSessionItems: jest.fn().mockResolvedValue(undefined),
 }));
 

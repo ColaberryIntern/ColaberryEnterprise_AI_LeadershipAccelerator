@@ -46,6 +46,8 @@ export interface SettingsPreferences {
   event_reminders: boolean;
   weekly_digest: boolean;
   community_visible: boolean;
+  /** Email me when someone replies to my post or comment. Unset = opted in. */
+  reply_notifications: boolean;
   timezone: string | null;
   weekly_hours: string | null;
   primary_goal: string | null;

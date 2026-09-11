@@ -4,6 +4,7 @@ import { SectionCard, StatusBadge } from '../shell';
 import { UpcomingPayment } from '../../../services/subscriptionAnalyticsApi';
 import { fmtDate, money } from './format';
 import PlanTag from './PlanTag';
+import PersonLink from '../../../components/admin/person/PersonLink';
 
 interface Props {
   payments: UpcomingPayment[];
@@ -41,7 +42,10 @@ export default function UpcomingPaymentsCard({ payments, limit = 12 }: Props) {
               {shown.map((p) => (
                 <tr key={p.enrollment_id}>
                   <td>
-                    <div className="fw-medium">{p.payer_name}</div>
+                    <div className="fw-medium">
+                      <PersonLink tab="account" name={p.payer_name} email={p.payer_email}
+                        enrollmentId={p.enrollment_id} />
+                    </div>
                     <div className="small text-muted"><code>{p.payer_email}</code></div>
                   </td>
                   <td><PlanTag plan={p.plan} /></td>

@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { SectionCard, StatusBadge } from '../../../components/admin/shell';
+import { RubricBadge, rubricTone } from './RubricBadge';
 import {
-  fetchReviewQueue, setQuestionStatus, QuestionRevision, ReviewStatus,
+  fetchReviewQueue, setQuestionStatus, QuestionRevision, ReviewStatus, RubricScore,
 } from '../../../services/certPrepAdminApi';
 
 /**
@@ -44,6 +45,74 @@ export function isFixtureReviewer(reviewer: string | null | undefined): boolean 
   return /@[^@]*\.(test|invalid|example|local)$/i.test(reviewer.trim());
 }
 
+/**
+ * Readable names for the rubric's dimension ids.
+ *
+ * The ids are the contract and stay as they are; these are for the person
+ * reading the card, who should not have to translate `options_are_approaches`
+ * in their head while deciding whether to approve a question.
+ */
+const DIMENSION_LABEL: Record<string, string> = {
+  scenario_framing: 'Opens with a real situation',
+  stem_length: 'Stem length',
+  option_length: 'Option length',
+  options_are_approaches: 'Options are approaches',
+  option_count: 'Four options, single select',
+  rationale_names_distractors: 'Explains every wrong option',
+};
+
+/**
+ * The rubric's verdict, shown where the approval decision is made.
+ *
+ * IT IS ADVISORY AND SAYS SO. The rubric measures whether an item LOOKS LIKE a
+ * real exam item — scenario framing, lengths, whether the options are
+ * articulated approaches. It cannot tell whether the answer key is right, or
+ * whether the question is fair, or whether it teaches the thing the objective
+ * claims. Those are why a human reads it. A 6/6 is not permission to approve
+ * without reading, and the caption says so rather than leaving it implied.
+ *
+ * Missing dimensions are listed with the server's own note rather than a generic
+ * "failed", because "stem is 18 words against a reference median of 46" tells a
+ * reviewer what to do and "stem_length: fail" sends them to go and measure.
+ */
+export function RubricSummary({ rubric }: { rubric: RubricScore }) {
+  const complete = rubric.met === rubric.of;
+  const missed = rubric.dimensions.filter((d) => d.verdict !== 'meets');
+  const tone = rubricTone(rubric.met, rubric.of);
+  const rail = tone === 'success' ? '#198754' : tone === 'warning' ? '#ffc107' : '#dc3545';
+
+  return (
+    <div className="border-start border-3 ps-3 mb-3" style={{ borderColor: rail }}>
+      <div className="d-flex align-items-center gap-2 mb-1">
+        <RubricBadge met={rubric.met} of={rubric.of} />
+        {!complete && (
+          <span className="text-muted small">{missed.length} to fix</span>
+        )}
+      </div>
+
+      {missed.length > 0 && (
+        <ul className="list-unstyled small mb-1">
+          {missed.map((d) => (
+            <li key={d.id} className="mb-1">
+              <span className="text-muted">{DIMENSION_LABEL[d.id] ?? d.id}</span>
+              {d.note && <> — {d.note}</>}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {rubric.firstFix && (
+        <p className="small mb-1"><strong>Fix first:</strong> {rubric.firstFix}</p>
+      )}
+
+      <p className="small text-muted mb-0">
+        Advisory. It measures whether this looks like a real exam item, not whether
+        the answer is right or the question is fair.
+      </p>
+    </div>
+  );
+}
+
 export function QuestionCard({ q, onMoved }: { q: QuestionRevision; onMoved: () => void }) {
   const [busy, setBusy] = useState<ReviewStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +145,8 @@ export function QuestionCard({ q, onMoved }: { q: QuestionRevision; onMoved: () 
         </div>
         <StatusBadge label={q.review_status} tone={STATUS_TONE[q.review_status] ?? 'neutral'} />
       </div>
+
+      {q.rubric && <RubricSummary rubric={q.rubric} />}
 
       <p className="mb-2">{q.stem}</p>
 

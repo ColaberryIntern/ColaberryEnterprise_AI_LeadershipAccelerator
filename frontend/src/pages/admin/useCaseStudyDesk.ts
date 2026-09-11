@@ -94,7 +94,7 @@ export interface CaseStudyDeskState {
   metrics: ReturnType<typeof readSnapshot>['heroMetrics'];
   provenanceVersions: ProvenanceVersionOption[];
   load: () => Promise<void>;
-  override: (path: string, value: string, note?: string) => void;
+  override: (path: string, value: unknown, note?: string) => void;
   setRawPanelOpen: (open: boolean) => void;
   onSync: () => Promise<void>;
   onPublish: (surfaceKey?: CaseStudySurfaceKey) => Promise<void>;
@@ -173,14 +173,18 @@ export function useCaseStudyDesk(id: string): CaseStudyDeskState {
 
   /** One write, one reload, one place errors are surfaced rather than swallowed. */
   const act = useCallback(async (
-    subject: string, run: () => Promise<unknown>, note: string,
+    subject: string,
+    run: () => Promise<unknown>,
+    /** A fixed sentence, or one derived from the result — an action that reports what it
+     *  actually did beats one that reports what it usually does. */
+    note: string | ((result: unknown) => string),
   ): Promise<void> => {
     setBusy(true);
     setActionError(null);
     setActionNote(null);
     try {
-      await run();
-      setActionNote(note);
+      const result = await run();
+      setActionNote(typeof note === 'function' ? note(result) : note);
       await load();
     } catch (err) {
       setActionError(describeApiError(err, subject));
@@ -195,11 +199,38 @@ export function useCaseStudyDesk(id: string): CaseStudyDeskState {
    * touches, and it always produces a NEW snapshot version that has to be
    * approved before it counts, so no panel gets to write directly.
    */
-  const override = useCallback((path: string, value: string, note?: string): void => {
+  const override = useCallback((path: string, value: unknown, note?: string): void => {
     void act(
       'this override',
       () => applyCaseStudyOverride(id, { path, value, ...(note ? { note } : {}) }),
-      `Override applied to ${path} as a new snapshot version. Approve it before it counts.`,
+      /**
+       * Reports what the server DID, not what it used to require. An admin edit is now
+       * approved in the same act and the live surfaces are repointed at it, so the old
+       * "approve it before it counts" sentence would be telling the operator to go and do
+       * something that has already happened. A surface the publish gate refused is named
+       * here, because that is the one case where the edit is saved and the page has not
+       * changed.
+       */
+      (result) => {
+        const r = result as {
+          approved?: boolean;
+          republished?: string[];
+          republishBlocked?: { surfaceKey: string; reason: string }[];
+        } | undefined;
+        const live = r?.republished ?? [];
+        const blocked = r?.republishBlocked ?? [];
+        const parts = [`Saved to ${path}`];
+        if (r?.approved) parts.push('approved');
+        if (live.length) parts.push(`live on ${live.join(', ')}`);
+        let message = `${parts.join(' and ')}.`;
+        if (blocked.length) {
+          message += ` The publish gate refused ${blocked
+            .map((x) => `${x.surfaceKey} (${x.reason})`).join('; ')}.`;
+        } else if (!live.length) {
+          message += ' This record is not published to any surface yet, so nothing changed publicly.';
+        }
+        return message;
+      },
     );
   }, [act, id]);
 

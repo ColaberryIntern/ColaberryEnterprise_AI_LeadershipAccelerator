@@ -4,6 +4,9 @@ import {
   ApplicationDetail, QueueBucket, QueueResponse, ReviewerDecision,
   decideInternshipApplication, fetchInternshipApplication, fetchInternshipQueue,
 } from '../../services/adminInternshipApi';
+import { InternshipKpi, fetchInternshipKpis } from '../../services/adminInternshipApi';
+import InternshipDocumentPanel from '../../components/admin/internship/InternshipDocumentPanel';
+import InternshipConversionPanel from '../../components/admin/internship/InternshipConversionPanel';
 
 /**
  * AdminInternshipPage — the AI Internship review queue and decision surface.
@@ -61,6 +64,7 @@ const NEEDS_SCOPED_REASON: Record<ReviewerDecision, 'rejected' | 'waitlisted' | 
 const AdminInternshipPage: React.FC = () => {
   const [bucket, setBucket] = useState<QueueBucket>('awaiting_review');
   const [queue, setQueue] = useState<QueueResponse | null>(null);
+  const [kpis, setKpis] = useState<InternshipKpi[] | null>(null);
   const [queueError, setQueueError] = useState<string | null>(null);
   const [queueLoading, setQueueLoading] = useState(true);
 
@@ -92,6 +96,16 @@ const AdminInternshipPage: React.FC = () => {
   }, []);
 
   useEffect(() => { void loadQueue(bucket); }, [bucket, loadQueue]);
+
+  useEffect(() => {
+    let alive = true;
+    fetchInternshipKpis()
+      .then((r) => { if (alive) setKpis(r.kpis); })
+      // A KPI row that failed to load shows nothing rather than zeros — a zero
+      // here is a claim about the database, not about a failed request.
+      .catch(() => { if (alive) setKpis(null); });
+    return () => { alive = false; };
+  }, [bucket]);
 
   const loadDetail = useCallback(async (id: string) => {
     setDetailLoading(true);
@@ -168,6 +182,35 @@ const AdminInternshipPage: React.FC = () => {
         icon="user-follow-line"
         breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'AI Internship' }]}
       />
+
+      {kpis && kpis.length > 0 && (
+        <SectionCard title="At a glance" icon="bar-chart-box-line">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+            {kpis.map((k) => (
+              <button
+                key={k.key}
+                type="button"
+                className="btn btn-light text-start"
+                style={{ minWidth: 160, border: '1px solid #e9ecef' }}
+                // Every KPI drills down to the students behind the number.
+                onClick={() => {
+                  if (k.drilldown.bucket) { setBucket(k.drilldown.bucket as QueueBucket); setSelected(null); }
+                }}
+                disabled={!k.drilldown.bucket}
+                title={k.reason ?? undefined}
+              >
+                <div style={{ fontSize: 22, fontWeight: 700 }}>
+                  {k.reliability === 'unknown' ? '—' : k.count}
+                </div>
+                <div className="text-muted" style={{ fontSize: 12 }}>{k.label}</div>
+                {k.reliability === 'unknown' && (
+                  <div className="text-muted" style={{ fontSize: 10.5, fontStyle: 'italic' }}>not measured</div>
+                )}
+              </button>
+            ))}
+          </div>
+        </SectionCard>
+      )}
 
       <SectionCard title="Queue" icon="inbox-2-line">
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
@@ -430,6 +473,11 @@ const AdminInternshipPage: React.FC = () => {
             </SectionCard>
           )}
 
+          <InternshipDocumentPanel
+            applicationId={selected}
+            onChanged={() => { void loadDetail(selected); void loadQueue(bucket); }}
+          />
+
           <SectionCard title="Decide" icon="gavel-line">
             {decisionNote && <div className="alert alert-success" role="status">{decisionNote}</div>}
             {decisionError && <div className="alert alert-danger" role="alert">{decisionError}</div>}
@@ -567,6 +615,8 @@ const AdminInternshipPage: React.FC = () => {
           </SectionCard>
         </>
       )}
+
+      <InternshipConversionPanel onChanged={() => { void loadQueue(bucket); }} />
     </div>
   );
 };

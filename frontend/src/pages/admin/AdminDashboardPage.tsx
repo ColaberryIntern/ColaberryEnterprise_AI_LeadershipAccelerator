@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal } from '../../components/admin/shell/trust';
+import { personPath } from '../../adminOs/personLink';
 
 /* ------------------------------------------------------------------ */
 /*  Interfaces                                                         */
@@ -575,7 +576,7 @@ function AdminDashboardPage() {
                             <div className="small fw-medium">
                               {a.lead ? (
                                 <Link
-                                  to={`/admin/leads/${a.lead.id}`}
+                                  to={personPath({ leadId: a.lead.id }) ?? '/admin/people'}
                                   className="text-decoration-none"
                                   onClick={e => e.stopPropagation()}
                                 >
@@ -618,7 +619,7 @@ function AdminDashboardPage() {
                               <div className="mt-2">
                                 <div className="text-muted small">Lead</div>
                                 <div className="small">
-                                  <Link to={`/admin/leads/${a.lead.id}`} className="text-decoration-none fw-medium">
+                                  <Link to={personPath({ leadId: a.lead.id }) ?? '/admin/people'} className="text-decoration-none fw-medium">
                                     {a.lead.name}
                                   </Link>
                                   {a.lead.email && <span className="text-muted ms-2">{a.lead.email}</span>}

@@ -727,7 +727,8 @@ describe('runAutoSync — sync-status tracker and concurrency guard', () => {
     await new Promise((r) => setTimeout(r, 10)); // let the first call actually start and set inProgress
 
     const secondRun = await runAutoSync('admin', 'ali@colaberry.com'); // arrives while the first is still in flight
-    expect(secondRun).toEqual({ newCasesCreated: 0, itemsAdded: 0, emailsSkippedUnclassified: 0 });
+    // casesReopened added by /inbox-zero T7 (reopen-on-reply); additive.
+    expect(secondRun).toEqual({ newCasesCreated: 0, itemsAdded: 0, emailsSkippedUnclassified: 0, casesReopened: 0 });
     expect(mockSearchAndNormalize).toHaveBeenCalledTimes(1); // the second call never actually fetched anything
 
     releaseFirstCall();

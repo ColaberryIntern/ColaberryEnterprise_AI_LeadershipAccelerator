@@ -284,6 +284,23 @@
    needs a fixed 16:9 box rather than an image's intrinsic height, or the masthead reflows
    the moment the poster loads. */
 .cbv2-story__cover--video { display: grid; gap: 0.6rem; }
+/* An operator's own YouTube or Vimeo video. Same box as the generated player so the hero
+   keeps its shape whichever one a record carries. No `object-fit`: the provider letterboxes
+   inside its own frame, and cropping an iframe would cut off the player controls. */
+/* TOKENS, not the raw values the player above still uses. `storyDetailV2Contract` forbids
+   hardcoded colour in this file; the player's `#11161a` and rgba border predate the rule and
+   are among the violations the suite is currently red on. Copying them would have added to
+   that count, so this rule uses the V2 tokens the rest of the file uses. */
+.cbv2-story__walkthrough-embed {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-lg);
+  border: var(--border-1) solid var(--border-subtle);
+}
+.cbv2-story__cover--embed .cbv2-story__walkthrough-note a { margin-left: 0.25rem; }
+
 .cbv2-story__walkthrough-player {
   display: block;
   width: 100%;

@@ -246,6 +246,7 @@ import InboxDeletedEmail from './InboxDeletedEmail';
 import InboxCase from './InboxCase';
 import InboxCaseItem from './InboxCaseItem';
 import InboxIdentityAlias from './InboxIdentityAlias';
+import InboxCommitment from './InboxCommitment';
 import InboxCaseQuestion from './InboxCaseQuestion';
 import InboxCaseAction from './InboxCaseAction';
 import InboxCaseEvent from './InboxCaseEvent';
@@ -292,6 +293,8 @@ InboxCaseItem.hasMany(InboxCaseAction, { foreignKey: 'item_id', as: 'actions' })
 InboxCaseAction.belongsTo(InboxCaseItem, { foreignKey: 'item_id', as: 'item' });
 InboxCase.hasMany(InboxCaseEvent, { foreignKey: 'case_id', as: 'events' });
 InboxCaseEvent.belongsTo(InboxCase, { foreignKey: 'case_id', as: 'case' });
+InboxCase.hasMany(InboxCommitment, { foreignKey: 'case_id', as: 'commitments' });
+InboxCommitment.belongsTo(InboxCase, { foreignKey: 'case_id', as: 'case' });
 
 // --- Preview Stack associations ---
 Project.hasOne(PreviewStack, { foreignKey: 'project_id', as: 'previewStack' });
@@ -432,6 +435,11 @@ import PlatformDeliveryEvent from './PlatformDeliveryEvent';
 import Tenant from './Tenant';
 import Brand from './Brand';
 import BrandDomain from './BrandDomain';
+import JourneyProgram from './JourneyProgram';
+import JourneyPath from './JourneyPath';
+import OfferFamily from './OfferFamily';
+import BrandOfferPolicy from './BrandOfferPolicy';
+import GrowthJourneyEnrollment from './GrowthJourneyEnrollment';
 import SenderProfile from './SenderProfile';
 import PlatformIdentity from './PlatformIdentity';
 import PlatformIdentityLink from './PlatformIdentityLink';
@@ -453,6 +461,8 @@ import InternshipCardDismissal from './InternshipCardDismissal';
 import InternshipInterviewSession from './InternshipInterviewSession';
 import InternshipInterviewResponse from './InternshipInterviewResponse';
 import InternshipDecision from './InternshipDecision';
+import InternshipDocument from './InternshipDocument';
+import InternshipRequirementAcknowledgement from './InternshipRequirementAcknowledgement';
 import CareerMentorScope from './CareerMentorScope';
 import DeliveryProjectSourceLink from './DeliveryProjectSourceLink';
 import DeliveryProjectMember from './DeliveryProjectMember';
@@ -1435,6 +1445,7 @@ export {
   InboxCase,
   InboxCaseItem,
   InboxIdentityAlias,
+  InboxCommitment,
   InboxCaseQuestion,
   InboxCaseAction,
   InboxCaseEvent,
@@ -1586,6 +1597,11 @@ export {
   Tenant,
   Brand,
   BrandDomain,
+  JourneyProgram,
+  JourneyPath,
+  OfferFamily,
+  BrandOfferPolicy,
+  GrowthJourneyEnrollment,
   SenderProfile,
   PlatformIdentity,
   PlatformIdentityLink,
@@ -1621,6 +1637,8 @@ export {
   InternshipAdministrativeIntake, InternshipCardDismissal,
   InternshipInterviewSession, InternshipInterviewResponse,
   InternshipDecision,
+  InternshipDocument,
+  InternshipRequirementAcknowledgement,
   CareerMentorScope,
   DeliveryProjectMember,
   DeliveryClientSigninToken,
