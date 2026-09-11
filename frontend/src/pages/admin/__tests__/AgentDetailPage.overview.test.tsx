@@ -131,9 +131,9 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
     // System prompt is inside a closed <details> but its text is still in
     // the DOM (native <details> content isn't removed, just visually hidden).
     expect(container.textContent).toContain('You are CoryBrain.');
-    // Trust contract (main column) — real autonomy ladder + real evidence.
-    expect(container.textContent).toContain('Trust contract');
-    expect(container.textContent).toContain('Evidence');
+    // Trust Contract (main column) — real autonomy ladder + real evidence.
+    expect(container.textContent).toContain('Trust Contract');
+    expect(container.textContent).toContain('Trust evidence');
   });
 
   it('never fetches the manager inbox — Overview has no dependency on pending-approval data', async () => {
