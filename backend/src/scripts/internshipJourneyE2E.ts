@@ -98,6 +98,7 @@ async function main(): Promise<void> {
   const { default: InternshipDocument } = await import('../models/InternshipDocument');
   const { default: InternshipStatusEvent } = await import('../models/InternshipStatusEvent');
   const { ensureInternshipSchema } = await import('../db/ensureInternshipSchema');
+  const { ensureEmailSendLedgerSchema } = await import('../db/ensureEmailSendLedgerSchema');
 
   const appSvc = await import('../services/internship/internshipApplicationService');
   const interviewSvc = await import('../services/internship/internshipInterviewService');
@@ -123,6 +124,14 @@ async function main(): Promise<void> {
   // and the journey tested a schema production does not have. It passed 57/57
   // while prod could not insert a single interview session, because the DDL had
   // question_set_id NOT NULL and the model had it nullable.
+  //
+  // The email ledger has no Sequelize model, so sync() cannot create it either.
+  // Boot runs ensureEmailSendLedgerSchema() before ensureInternshipSchema(), and
+  // so does this. Without it, the decision step's sendOnce() threw
+  // `relation "email_send_ledger" does not exist`, the decision service swallowed
+  // that into outcome 'error', and the check below — which then only asserted
+  // "attempted" — passed anyway. Proven on the prod scratch run of 2026-09-11.
+  await ensureEmailSendLedgerSchema();
   await ensureInternshipSchema();
   await sequelize.sync();
   // QueryTypes.SELECT, NOT the bare `[rows] = await query()` destructure. On these
@@ -268,9 +277,29 @@ async function main(): Promise<void> {
   });
   await application.reload();
   check('a reviewer CAN approve', approved.ok === true, application.state);
-  check('email was attempted and reported honestly',
-    approved.ok === true && approved.email.attempted === true,
-    approved.ok === true ? String(approved.email.outcome) : '');
+  // The outcome must be one the LEDGER produced — 'sent', 'skipped' or 'failed'
+  // all mean the attempt was recorded and a retry cannot double-send. 'error'
+  // means sendOnce() threw before writing anything, which is the one outcome that
+  // breaks idempotency; 'no_recipient' means the applicant has no address at all.
+  // The earlier version of this check accepted every one of them.
+  const emailOutcome = approved.ok === true ? String(approved.email.outcome) : '';
+  check('email was attempted and the LEDGER recorded the outcome',
+    approved.ok === true
+      && approved.email.attempted === true
+      && ['sent', 'skipped', 'failed'].includes(emailOutcome),
+    emailOutcome);
+  // And the row itself — not the service's word for it. With no credentials the
+  // transport fails and the ledger says so; with credentials it says 'sent'.
+  const ledgerRows = await sequelize.query<{ status: string; error_class: string | null }>(
+    `SELECT status, error_class FROM email_send_ledger WHERE recipient = :recipient`,
+    { type: QueryTypes.SELECT, replacements: { recipient: 'ada.e2e@example.com' } },
+  );
+  check('exactly one ledger row exists for the decision email',
+    ledgerRows.length === 1,
+    `${ledgerRows.length} rows`);
+  check('the ledger row carries a terminal status',
+    ledgerRows.length === 1 && ['sent', 'failed'].includes(ledgerRows[0].status),
+    ledgerRows[0] ? `${ledgerRows[0].status}${ledgerRows[0].error_class ? ` / ${ledgerRows[0].error_class}` : ''}` : 'no row');
 
   step(8, 'Offer letter');
   const pack = await docSvc.generatePackage({
