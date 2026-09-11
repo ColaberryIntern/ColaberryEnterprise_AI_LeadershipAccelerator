@@ -239,6 +239,29 @@ Weaknesses found by running it, and what was done. Add to this every time.
   mints reordered revisions for what was already written, idempotently. The
   length tell (correct-is-longest 61%, +1.2 words) is real but milder and is
   next.
+- *(2026-09-11)* **Every per-question gate can pass and the bank can still be
+  broken.** 144-at-A was not a defect in any question; it was a defect in the
+  bank, and nothing ran against the bank. There is now a whole-bank rubric
+  (`certBankRubric.ts`: position share, one-letter mock score, per-domain skew,
+  length cue, ceiling rate, duplicate stems, scenario spread, objective floor,
+  mocks supported, all approved) and it runs in THREE places from one
+  definition: CI against the repo, the admin Question Bank panel as a
+  scorecard, and automatically at the end of every script that changes the
+  bank (grow, sweep, rebalance, balance). **A bank-level check that runs in
+  only one of those places is the gap that let 144-at-A into production.**
+  Every check prints its measurement and its threshold, and a failing check
+  names the script that fixes it.
+- *(2026-09-11)* **The correct option was the longest in 112 of 150 generated
+  items — by six characters at the median.** Invisible on any one item, 75% to
+  a student who reads none. "The key must never be longest" would be its own
+  tell (chance is 25%), so `lengthPlan` keeps the key longest in one item in
+  three by a salted hash of the key — salted so it does not travel with the
+  answer position — and `lengthenDistractor` adds detail to the longest WRONG
+  option in the rest, refused unless it lands inside bounds, breaks no
+  invariant and costs no rubric dimension, then re-triaged because a longer
+  distractor can become an arguable one. The generator runs the same step at
+  birth; `balanceCertOptionLengths` backfills. Authored items are never
+  touched by the script: their text lives in the repo.
 - *(2026-09-10)* **Do not write source containing backslashes through a shell
   heredoc.** Building the schema parser that way put a literal CR and a real
   newline where `` and `

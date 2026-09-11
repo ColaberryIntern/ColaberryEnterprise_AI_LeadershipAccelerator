@@ -36,6 +36,7 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { assignAnswerPosition } from '../data/certBlueprints/items/itemFactory';
 import { createDraftRevision, setReviewStatus } from '../services/certPrep/certQuestionBankService';
+import { runLiveAudit } from './lib/certBankAudit';
 
 const args = process.argv.slice(2);
 const write = args.includes('--write');
@@ -168,6 +169,10 @@ async function main(): Promise<void> {
     }
     log(`approved    : ${n} reordered revision(s) as ${approveAs}`);
   }
+
+  // The whole point of this script is a bank-level property, so the bank-level
+  // audit is how it proves it worked. Runs on the live bank after the change.
+  if (write) await runLiveAudit('after rebalance');
 }
 
 const settleTelemetry = (): Promise<void> => new Promise((r) => { setTimeout(r, 1500); });
