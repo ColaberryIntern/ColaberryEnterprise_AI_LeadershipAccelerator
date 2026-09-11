@@ -186,6 +186,46 @@ Weaknesses found by running it, and what was done. Add to this every time.
   because "5/6, discarded" twice told me nothing about which of three fixes to
   make. **A shape gate alone will be satisfied minimally. Pair it with a
   reviewer that argues against the answer.**
+- *(2026-09-11)* **With both gates on, the regenerated batch was genuinely better
+  and 3 of 8 were still discarded on `scenario_framing` alone.** Those stems opened
+  with observations in words the detector does not carry. For GENERATED text the
+  right fix is to tell the model to open the way the published items open
+  ("Monitoring shows ...", "Engineers report ...", then the number) — that is
+  writing to the target shape, not editing already-correct text to satisfy a
+  proxy, which is the line drawn on 2026-09-08 and still holds. Prompt v3.
+  **Operational: batch generation through `docker exec` on prod has OOM'd near
+  34 items. Drive `--to 300` in `--count 25` chunks; the script recomputes from
+  the database each run, so every chunk is resumable and none is big enough to
+  take the container down.**
+- *(2026-09-11)* **The first scaled chunk wrote 25 questions clean, and every one
+  was S1.** The `--to` plan filled the thinnest DOMAIN and picked the FIRST
+  scenario fitting it, so 40 D1 questions were headed into one world while S5 -
+  already the thinnest scenario - never got touched. S1 went 34 to 59 in one
+  chunk; S4 and S5 sat at 19. The exam draws four scenarios of six at random, and
+  a student who lands the thin one is measured against a shallower pool. Now
+  picks the thinnest fitting scenario, with the count kept current inside a
+  chunk so 25 picks spread rather than all landing on whichever was thinnest at
+  the start. **Read what a run wrote, not just how many.**
+- *(2026-09-11)* **Retiring six drafts exposed that the sweep's approve step could
+  un-retire them.** Each became a question whose latest revision is retired, and
+  the approval filter selected on score alone - `--approve-as` would have
+  approved them straight back under a human's name. Retirement now means BOTH
+  the revision status and the identity's `is_retired`, and the sweep skips any
+  key whose latest revision is retired and says how many it skipped.
+- *(2026-09-11)* **Chunk 3 wrote four good questions that were dead on arrival.**
+  The generator built its taken-key set from live identities only, so the keys
+  of six drafts retired that morning read as free, and four new questions landed
+  as revision 2 under identities marked `is_retired`. Serving, the sweep and the
+  generator's own count all exclude retired identities. The count said 25
+  written; the bank was four short of that. **A question key is permanent:
+  retiring it withdraws the content, not the name.** Taken keys now come from
+  every identity. The four were revived (identity live, old revision still
+  retired).
+- *(2026-09-11)* **"11 passed" and "jest exit 1" in the same run.** The scripts
+  fired `main()` on import, so a test importing a pure helper also started a
+  generation run, which failed without a database and set the process exit
+  code. Every test passed and CI would have gone red on a suite with no failing
+  test. All three scripts now guard on `require.main === module`.
 - *(2026-09-10)* **Do not write source containing backslashes through a shell
   heredoc.** Building the schema parser that way put a literal CR and a real
   newline where `` and `

@@ -47,6 +47,11 @@ const IntelligenceSettingsPage = lazy(() => import('../pages/admin/intelligence/
 const MissedOpportunitiesPage = lazy(() => import('../pages/admin/MissedOpportunitiesPage'));
 const AgentOrphansPage = lazy(() => import('../pages/admin/AgentOrphansPage'));
 const AdminMarketingDashboardPage = lazy(() => import('../pages/admin/marketing/AdminMarketingDashboardPage'));
+const AdminBrandsPage = lazy(() => import('../pages/admin/marketing/AdminBrandsPage'));
+const AdminMarketingCalendarPage = lazy(() => import('../pages/admin/marketing/AdminMarketingCalendarPage'));
+const AdminContentComposerPage = lazy(() => import('../pages/admin/marketing/composer/AdminContentComposerPage'));
+const AdminContentQueuePage = lazy(() => import('../pages/admin/marketing/AdminContentQueuePage'));
+const AdminPublishingQueuePage = lazy(() => import('../pages/admin/marketing/AdminPublishingQueuePage'));
 const AdminCommunicationsPage = lazy(() => import('../pages/admin/AdminCommunicationsPage'));
 const AdminTicketBoardPage = lazy(() => import('../pages/admin/AdminTicketBoardPage'));
 const AgentDetailPage = lazy(() => import('../pages/admin/AgentDetailPage'));
@@ -190,6 +195,22 @@ const adminRoutes = (
         <Route path="/admin/agent-orphans" element={<AgentOrphansPage />} />
         <Route path="/admin/communications" element={<AdminCommunicationsPage />} />
         <Route path="/admin/marketing" element={<AdminMarketingDashboardPage />} />
+        {/* Classified in T012 as section `campaigns` before this page existed - see
+            adminNav UNLISTED_PATH_SECTIONS. */}
+        <Route path="/admin/brands" element={<AdminBrandsPage />} />
+        {/* Campaign 360 (spec section 4). Deliberately the SAME component as /admin/campaigns/:id -
+            the detail page already carries the tabs the spec describes, and a second page would
+            be the duplicate destination the spec forbids. The marketing path exists so the IA
+            in the spec resolves; the canonical page is unchanged. */}
+        <Route path="/admin/marketing/campaigns/:id" element={<AdminCampaignDetailPage />} />
+        <Route path="/admin/marketing/calendar" element={<AdminMarketingCalendarPage />} />
+        {/* Marketing composer (spec 8.1). Inherits section `campaigns` from /admin/marketing by
+            longest prefix; the API side maps /api/admin/content the same way. */}
+        <Route path="/admin/marketing/composer" element={<AdminContentComposerPage />} />
+        <Route path="/admin/marketing/composer/:id" element={<AdminContentComposerPage />} />
+        {/* The two queues the needs-attention signals link to (T015). Same section by prefix. */}
+        <Route path="/admin/marketing/content" element={<AdminContentQueuePage />} />
+        <Route path="/admin/marketing/publishing" element={<AdminPublishingQueuePage />} />
         <Route path="/admin/tickets" element={<AdminTicketBoardPage />} />
         <Route path="/admin/agents/:id" element={<AgentDetailPage />} />
         <Route path="/admin/governance" element={<GovernanceCommandCenter />} />

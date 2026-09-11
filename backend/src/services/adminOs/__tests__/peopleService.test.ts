@@ -111,6 +111,35 @@ describe('people roster', () => {
     expect(rowCall().sql).not.toContain('e.email IS NOT NULL AND l.email IS NULL');
   });
 
+  it('scopes to a campaign by campaign_leads membership, statuses bound as a list', async () => {
+    // The Campaign 360 KPI drill-down. Before this filter existed, every KPI opened the
+    // whole roster under a headline that named one campaign and one status.
+    await getPeopleRoster({ sections: sectionsFor('owner'), campaignId: 'c0000000-0000-4000-8000-000000000001', campaignStatuses: ['active'] });
+    const { sql, opts } = rowCall();
+    expect(sql).toContain('l.email IN (SELECT lower(btrim(ld.email)) FROM campaign_leads cl JOIN leads ld ON ld.id = cl.lead_id WHERE cl.campaign_id = :campaignId AND cl.status IN (:campaignStatuses))');
+    expect(opts.replacements.campaignId).toBe('c0000000-0000-4000-8000-000000000001');
+    expect(opts.replacements.campaignStatuses).toEqual(['active']);
+    expect(sql).not.toContain('c0000000'); // bound, never interpolated
+  });
+
+  it('a campaign with no status filter means every lead in the campaign', async () => {
+    await getPeopleRoster({ sections: sectionsFor('owner'), campaignId: 'c0000000-0000-4000-8000-000000000001' });
+    const { sql, opts } = rowCall();
+    expect(sql).toContain('cl.campaign_id = :campaignId)');
+    expect(sql).not.toContain('cl.status IN');
+    expect(opts.replacements.campaignStatuses).toBeUndefined();
+  });
+
+  it('ignores a status that is not a campaign_leads status rather than binding it', async () => {
+    await getPeopleRoster({ sections: sectionsFor('owner'), campaignId: 'c0000000-0000-4000-8000-000000000001', campaignStatuses: ['dnc' as never] });
+    expect(rowCall().sql).not.toContain('cl.status IN');
+  });
+
+  it('no campaign filter unless asked', async () => {
+    await getPeopleRoster({ sections: sectionsFor('owner') });
+    expect(rowCall().sql).not.toContain('campaign_leads');
+  });
+
   it('caps the page size however large a caller asks for', async () => {
     await getPeopleRoster({ sections: sectionsFor('owner'), limit: 100000 });
     expect(rowCall().opts.replacements.limit).toBe(200);

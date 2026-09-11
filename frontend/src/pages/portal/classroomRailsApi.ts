@@ -44,6 +44,24 @@ export interface ClassroomRailsResult {
   degraded: RailSurface[];
 }
 
+/**
+ * The events rail on its own, for Today (Ali, 2026-09-11: show upcoming events
+ * the way the Classroom does, in the same place, with the next 7). Same rail,
+ * same renderer, one fewer thing that can drift between the two pages.
+ * Null when there is nothing upcoming or the fetch fails — Today renders
+ * nothing for the slot rather than an apology.
+ */
+export async function fetchEventsRail(limit = 7): Promise<Rail | null> {
+  try {
+    const { data } = await portalApi.get<{ rail: Rail | null }>(
+      `/api/portal/classroom/rails/events?limit=${encodeURIComponent(String(limit))}`,
+    );
+    return data?.rail ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchClassroomRails(week: number): Promise<ClassroomRailsResult | null> {
   try {
     const { data } = await portalApi.get<ClassroomRailsResult>(

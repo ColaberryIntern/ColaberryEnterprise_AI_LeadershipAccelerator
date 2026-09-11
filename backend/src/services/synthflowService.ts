@@ -1,4 +1,5 @@
 import { env } from '../config/env';
+import { normalizePhone } from '../utils/phone';
 import { getTestOverrides } from './settingsService';
 import { isKillSwitchActive } from './launchSafety';
 import { redactForLogs } from '../utils/piiRedaction';
@@ -206,6 +207,22 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
     // If settings DB fails, don't block the call
   }
 
+  // Normalize to E.164 before it leaves for Synthflow. Synthflow forwards the
+  // number to Twilio as-is, only prepending a bare '+' if there is none — so a
+  // 10-digit US number typed on the form ('6825975784') went out as
+  // '+6825975784', which Twilio reads as country code +682 (Cook Islands) and
+  // rejects with 32205 "No International Permission". A US internship applicant's
+  // interview call therefore never connected. normalizePhone turns that into
+  // '+16825975784'; an already-'+'-prefixed number is left as it is.
+  const dialPhone = normalizePhone(actualPhone);
+  if (!dialPhone) {
+    // Fewer than 7 digits, or otherwise unusable. Dialing it would burn a call on
+    // a guaranteed telephony error, so skip with a reason the caller can surface.
+    console.warn(`[Synthflow] Phone ${redactForLogs(actualPhone)} is not a dialable number. Skipping.`);
+    return { success: true, data: { skipped: true, reason: 'invalid_phone' } };
+  }
+  actualPhone = dialPhone;
+
   // Build custom_variables array per Synthflow V2 API docs
   const customVariables: { key: string; value: string }[] = [];
 
@@ -286,5 +303,62 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
       metadata: { message: String(error?.message || '').slice(0, 200) },
     });
     return { success: false, error: error.message };
+  }
+}
+
+/**
+ * One completed call's outcome, read back from Synthflow's own record.
+ *
+ * WHY THIS EXISTS. Completion normally arrives on the call-complete webhook, which
+ * Synthflow posts from a URL configured per agent in its dashboard. When that is
+ * not configured for an agent — as it was not for the internship interviewer — the
+ * call still happens and the transcript still exists at Synthflow, but our webhook
+ * never fires and the interview is stuck 'in_progress' with nothing extracted.
+ * Reading the call back over the API lets us reconcile that without depending on a
+ * delivery we do not control.
+ */
+export interface SynthflowCallRecord {
+  status: string;              // 'completed' | 'no-answer' | 'failed' | 'in-progress' | …
+  transcript: string;
+  disposition: string | null;
+  durationSeconds: number | null;
+  recordingUrl: string | null;
+  endedReason: string | null;
+}
+
+/** Terminal states — a call in one of these will not change again. */
+export function isTerminalCallStatus(status?: string | null): boolean {
+  const s = (status || '').toLowerCase();
+  return s === 'completed' || s === 'failed' || s === 'no-answer' || s === 'busy' || s === 'canceled' || s === 'cancelled';
+}
+
+/**
+ * Fetch one call from Synthflow. Returns null when voice is off, the key is
+ * missing, the id is unknown, or the request fails — every one of which the caller
+ * must treat as "cannot reconcile right now", never as "the call did not happen".
+ */
+export async function fetchSynthflowCall(callId: string): Promise<SynthflowCallRecord | null> {
+  if (!callId || !env.synthflowApiKey) return null;
+  try {
+    const response = await fetch(`https://api.synthflow.ai/v2/calls/${encodeURIComponent(callId)}`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${env.synthflowApiKey}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) return null;
+    const data = (await response.json()) as any;
+    const call = data?.response?.calls?.[0];
+    if (!call) return null;
+    const rawDuration = call.duration ?? call.telephony_duration ?? null;
+    return {
+      status: String(call.status ?? ''),
+      transcript: String(call.transcript ?? ''),
+      disposition: call.disposition ?? call.end_call_reason ?? null,
+      durationSeconds: typeof rawDuration === 'number' ? Math.round(rawDuration) : null,
+      recordingUrl: call.recording_url ?? null,
+      endedReason: call.end_call_reason ?? null,
+    };
+  } catch {
+    return null;
   }
 }

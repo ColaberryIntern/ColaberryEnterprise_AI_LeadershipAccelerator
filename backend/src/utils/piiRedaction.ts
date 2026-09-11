@@ -23,6 +23,20 @@ const SSN_RE = /\b\d{3}-\d{2}-\d{4}\b/g;
 // (starts and ends on a digit, so a trailing separator is never consumed).
 const CC_RE = /\b\d(?:[ -]?\d){12,15}\b/g;
 
+// Query parameters that carry a credential: magic-link tokens, signed URLs,
+// one-time codes. Matched by NAME, so a masked URL still compares equal to
+// another masked copy of the same URL (the 360 matches clicked links that way).
+const URL_SECRET_PARAM_RE = /([?&](?:token|key|secret|sig|signature|auth|code|t)=)[^&#\s"'<>]+/gi;
+
+/**
+ * Blank every secret-looking query value in a URL, or in any text containing
+ * URLs (an email body). Idempotent; a value already masked stays "***".
+ */
+export function maskUrlSecrets(value: string): string {
+  if (!value) return value;
+  return value.replace(URL_SECRET_PARAM_RE, '$1***');
+}
+
 /** Mask an email as first-char + *** + domain, e.g. "a***@example.com". */
 export function maskEmail(email: string): string {
   return email.replace(EMAIL_RE, (_m, first: string, _rest: string, domain: string) => `${first}***${domain}`);

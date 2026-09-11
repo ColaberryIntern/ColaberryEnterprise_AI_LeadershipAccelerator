@@ -158,6 +158,16 @@
 
 .cbv2-story-figures { min-width: 0; }
 
+/* ...EXCEPT ON SUNKEN GROUND, where the band pays its own block padding after
+   all. Without it the sunken ground is exactly the height of the image and reads
+   as a mat around the picture rather than as a band the picture sits in. Keyed on
+   the same tone class as every other band (`storyDetailV2.css`, "tone"), so there
+   is one name for this idea; the rule sits here because it is the picture band's
+   own exception, not the tone's. */
+.cbv2-story .cbv2-story-figures.cbv2-story__section--sunken {
+  padding-block: var(--space-12);
+}
+
 .cbv2-story-figure {
   display: grid;
   gap: var(--space-3);
@@ -308,14 +318,18 @@
   /* The poster is a frame of the video, so it fills the box like the video it stands in
      for rather than being letterboxed inside its own frame. */
   object-fit: cover;
-  background: #11161a;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  /* The masthead's own dark ground, so the box disappears into it until the poster
+     paints; the hairline is the same subtle border every other box on the page draws,
+     which reads as a rim on a dark surface without a private white-at-16% recipe. */
+  background: var(--surface-inverse);
+  border-radius: var(--radius-lg);
+  border: var(--border-1) solid var(--border-subtle);
 }
 .cbv2-story__walkthrough-note {
   margin: 0;
   font-size: 0.82rem;
   line-height: 1.5;
-  /* On the masthead's dark ground, not the light body. */
-  color: rgba(255, 255, 255, 0.72);
+  /* On the masthead's dark ground, not the light body: the same inverse text token the
+     masthead names for its own copy, rather than white at an opacity picked by eye. */
+  color: var(--text-on-inverse);
 }

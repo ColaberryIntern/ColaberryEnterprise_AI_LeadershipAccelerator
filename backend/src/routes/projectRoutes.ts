@@ -2387,8 +2387,10 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
         attributes: ['capability_id', 'mode_override'],
       });
       for (const c of linkedCampaigns) {
-        if ((c as any).mode_override && (c as any).capability_id) {
-          campaignModeMap.set((c as any).capability_id, (c as any).mode_override);
+        // Typed reads, no cast — Campaign now declares both columns. Duplicate of the block
+        // in autonomousRequirementExpansionService; both were casts for the same reason.
+        if (c.mode_override && c.capability_id) {
+          campaignModeMap.set(c.capability_id, c.mode_override);
         }
       }
     } catch { /* campaign mode is optional */ }

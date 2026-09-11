@@ -1348,10 +1348,58 @@ function filterPathsByBrand(
   );
 }
 
+/**
+ * Sibling of filterPathsByBrand, one level narrower: leads who entered THIS campaign.
+ *
+ * A lead's path may pass through several campaigns; a lead qualifies if any enrolment is the
+ * one asked for, and the whole path is kept so the journey still shows where they came from
+ * and went next. Filtering the enrolments down to only this campaign would amputate the
+ * journey to a single node, which is not a journey.
+ */
+export function filterPathsByCampaign(paths: LeadPathRecord[], campaignId: string): LeadPathRecord[] {
+  return paths.filter((lead) => lead.campaign_enrollments.some((e) => e.campaign_id === campaignId));
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export type GraphScope =
+  | { ok: true; timeWindow: string | undefined; brandId: string | undefined; campaignId: string | undefined }
+  | { ok: false; error: string };
+
+/**
+ * The graph route's query, parsed once and testably. Absent and empty both mean "no filter";
+ * values are trimmed so a stray space cannot become an id that matches nothing. A malformed
+ * campaign id is refused, because reaching the cohort filter with it would render an empty
+ * journey that looks like a campaign no lead ever entered.
+ */
+export function parseGraphScope(query: Record<string, unknown>): GraphScope {
+  const str = (k: string) => (typeof query[k] === 'string' ? (query[k] as string).trim() : '');
+  const timeWindow = str('timeWindow') || undefined;
+  const brandId = str('brandId') || undefined;
+  const rawCampaign = str('campaignId');
+  if (rawCampaign && !UUID_RE.test(rawCampaign)) return { ok: false, error: 'campaignId must be a UUID' };
+  return { ok: true, timeWindow, brandId, campaignId: rawCampaign || undefined };
+}
+
 export async function getCampaignGraphData(
   timeWindow?: string,
   brandId?: string | null,
+  campaignId?: string | null,
 ): Promise<CampaignGraphData> {
+  // Campaign scope takes precedence over brand scope: a campaign belongs to exactly one brand,
+  // so a brand filter on top of it is redundant at best and contradictory at worst.
+  // Derived from the unfiltered graph and never written back to the cache, for the same
+  // reason the brand branch below gives.
+  if (campaignId) {
+    const base = await getCampaignGraphData(timeWindow);
+    const allPaths = graphCache?.leadPaths ?? [];
+    const cohort = filterPathsByCampaign(allPaths, campaignId);
+    const data = await buildGraphFromPaths(cohort);
+    data.time_window = timeWindow || 'all';
+    data.brands = base.brands;
+    return data;
+  }
+
   // A brand-filtered graph is derived from the unfiltered one for this window and
   // deliberately does NOT overwrite the cache. `graphCache.leadPaths` is the
   // population that node-users, edge-users and slice all measure themselves

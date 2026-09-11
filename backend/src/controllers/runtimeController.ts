@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { openCard, completeActivity, readinessSummary, cardContext } from '../services/runtime/runtimeService';
 import { recordWatchBeat } from '../services/runtime/watchProgressService';
 import { recordReadBeat, collectBlog } from '../services/runtime/blogReadGateService';
+import { recordMediaBeat, getMediaVerdict, collectMedia } from '../services/runtime/ambientMediaGateService';
 import { getBlogReader } from '../services/blog/blogReaderService';
 import { recordDwellBeat } from '../services/runtime/cardDwellService';
 import { coach, reflectionPrompts, MentorMode } from '../services/runtime/mentorService';
@@ -198,6 +199,42 @@ export async function handleBlogCollect(req: Request, res: Response, next: NextF
   try {
     const blogId = blogIdSchema.parse(req.params.blogId);
     res.json(await collectBlog(eid(req), blogId));
+  } catch (err) { fail(res, err, next); }
+}
+
+// ── Ambient media (podcast / testimonial) listen-to-earn ────────────────────
+// Same three-step shape as blogs and card videos: beat → verdict → collect.
+// The media id is the provider's id from the feed ref (`podcast:<id>`); it is
+// not a uuid for every provider, so it is bounded, not shape-checked.
+const mediaKindSchema = z.enum(['podcast', 'testimonial']);
+const mediaIdSchema = z.string().min(1).max(200).regex(/^[A-Za-z0-9_.:-]+$/, 'Invalid media id');
+
+/** POST /api/portal/runtime/today/media/:kind/:id/watch — record a playback beat. */
+export async function handleMediaBeat(req: Request, res: Response, next: NextFunction) {
+  try {
+    const kind = mediaKindSchema.parse(req.params.kind);
+    const id = mediaIdSchema.parse(req.params.id);
+    const beat = watchBeatSchema.parse(req.body);
+    res.json(await recordMediaBeat(eid(req), kind, id, beat));
+  } catch (err) { fail(res, err, next); }
+}
+
+/** GET /api/portal/runtime/today/media/:kind/:id/watch — current verdict, no write. */
+export async function handleMediaVerdict(req: Request, res: Response, next: NextFunction) {
+  try {
+    const kind = mediaKindSchema.parse(req.params.kind);
+    const id = mediaIdSchema.parse(req.params.id);
+    res.json(await getMediaVerdict(eid(req), kind, id));
+  } catch (err) { fail(res, err, next); }
+}
+
+/** POST /api/portal/runtime/today/media/:kind/:id/collect — award once the 75% bar
+ *  is met (422 otherwise). Idempotent per (student, media item). */
+export async function handleMediaCollect(req: Request, res: Response, next: NextFunction) {
+  try {
+    const kind = mediaKindSchema.parse(req.params.kind);
+    const id = mediaIdSchema.parse(req.params.id);
+    res.json(await collectMedia(eid(req), kind, id));
   } catch (err) { fail(res, err, next); }
 }
 

@@ -46,6 +46,7 @@
  * and its retry.
  */
 import { Op, Sequelize } from 'sequelize';
+import { maskUrlSecrets } from '../utils/piiRedaction';
 
 /** The fields of a `messages/search` result this module reads. */
 export interface MandrillSearchMessage {
@@ -91,7 +92,9 @@ export const normaliseSubject = (value: unknown): string => String(value ?? '').
 export function clickedUrls(msg: MandrillSearchMessage, cap = 10): string[] {
   const out: string[] = [];
   for (const c of msg.clicks_detail ?? []) {
-    const url = typeof c?.url === 'string' ? c.url.slice(0, 500) : '';
+    // Masked BEFORE it is stored: a magic-link click carries the login token
+    // in its URL, and a credential has no business in an analytics row.
+    const url = typeof c?.url === 'string' ? maskUrlSecrets(c.url.slice(0, 500)) : '';
     if (url && !out.includes(url)) out.push(url);
     if (out.length >= cap) break;
   }
@@ -216,3 +219,53 @@ export async function recordMandrillEngagement(
   }
   return summary;
 }
+
+// ── WHAT THE POLL ASKS MANDRILL FOR ─────────────────────────────────────────
+//
+// Measured 2026-09-11: the shared Mandrill account moves 1,000+ messages a day
+// (school discussions digests alone are 580-850), and `messages/search` caps
+// at 1,000 with no paging. The old request -- `query: '*'`, today only,
+// `limit: 100` -- returned the 100 most recent messages on the account, and on
+// three sampled days not one of them was a campaign email. Attribution was
+// fixed above; this is the fix for what the poll SEES.
+//
+// Every campaign send carries `X-MC-Tags: campaign-sequence` (schedulerService
+// send path), and the search API filters on tags. Two-day window so an open
+// that lands the morning after the send is still caught; the dedup window
+// widens to match. When a result fills the cap, coverage is saturated and the
+// caller should say so -- Aug 13-14 2026 had 1,000+ tagged sends in two days.
+
+/** The tag the send path puts on every campaign email. */
+export const CAMPAIGN_TAG = 'campaign-sequence';
+/** Mandrill's hard maximum for `messages/search`. */
+export const SEARCH_LIMIT = 1000;
+
+export interface SearchRequest {
+  query: '*';
+  tags: string[];
+  date_from: string;
+  date_to: string;
+  limit: number;
+}
+
+const isoDay = (d: Date): string => d.toISOString().split('T')[0];
+
+/** The window's start, as the dedup lower bound: UTC midnight of `date_from`. */
+export function searchWindowStart(now: Date, daysBack = 1): Date {
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  start.setUTCDate(start.getUTCDate() - daysBack);
+  return start;
+}
+
+export function buildSearchRequest(now: Date, daysBack = 1): SearchRequest {
+  return {
+    query: '*',
+    tags: [CAMPAIGN_TAG],
+    date_from: isoDay(searchWindowStart(now, daysBack)),
+    date_to: isoDay(now),
+    limit: SEARCH_LIMIT,
+  };
+}
+
+/** True when Mandrill returned as many rows as it is allowed to: there may be more. */
+export const searchSaturated = (rows: unknown[]): boolean => rows.length >= SEARCH_LIMIT;

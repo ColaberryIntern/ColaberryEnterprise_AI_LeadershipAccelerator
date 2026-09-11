@@ -7,10 +7,15 @@
  */
 import { Op } from 'sequelize';
 import {
+  CAMPAIGN_TAG,
+  SEARCH_LIMIT,
+  buildSearchRequest,
   clickedUrls,
   dedupWhere,
   normaliseSubject,
   recordMandrillEngagement,
+  searchSaturated,
+  searchWindowStart,
   sentEmailWhere,
   type MandrillSearchMessage,
   type PollStores,
@@ -116,7 +121,8 @@ describe('recordMandrillEngagement', () => {
     }
     // What was clicked is now recorded, so the question can be answered.
     const click = created.find((r) => r.outcome === 'clicked')!;
-    expect(click.metadata.clicked_urls).toEqual(['https://app.colaberry.com/login?t=abc']);
+    // Masked at write time: the login token never reaches the row.
+    expect(click.metadata.clicked_urls).toEqual(['https://app.colaberry.com/login?t=***']);
     expect(created.find((r) => r.outcome === 'opened')!.metadata.clicked_urls).toBeUndefined();
   });
 
@@ -198,5 +204,28 @@ describe('helpers', () => {
     expect(where.created_at[Op.gte]).toBe(SINCE);
     expect(where[Op.and][0].logic).toBe('Hello');
     expect((dedupWhere(7, 'opened', '', SINCE) as any)[Op.and][0].logic).toBeNull();
+  });
+});
+
+describe('what the poll asks Mandrill for', () => {
+  it('asks only for campaign-tagged mail, over two days, at the API cap', () => {
+    // 2026-09-11 16:20 UTC; window must run from the 10th through the 11th.
+    const req = buildSearchRequest(new Date('2026-09-11T16:20:00Z'));
+    expect(req).toEqual({ query: '*', tags: [CAMPAIGN_TAG], date_from: '2026-09-10', date_to: '2026-09-11', limit: SEARCH_LIMIT });
+    expect(CAMPAIGN_TAG).toBe('campaign-sequence'); // the X-MC-Tags value the send path sets
+    expect(SEARCH_LIMIT).toBe(1000);
+  });
+
+  it('crosses month and year boundaries in UTC, not local time', () => {
+    expect(buildSearchRequest(new Date('2026-10-01T00:30:00Z')).date_from).toBe('2026-09-30');
+    expect(buildSearchRequest(new Date('2027-01-01T03:00:00Z')).date_from).toBe('2026-12-31');
+    // The dedup lower bound is UTC midnight of date_from, so yesterday's polls are in scope.
+    expect(searchWindowStart(new Date('2026-09-11T16:20:00Z')).toISOString()).toBe('2026-09-10T00:00:00.000Z');
+  });
+
+  it('flags a saturated result so a missed page is loud, not silent', () => {
+    expect(searchSaturated(new Array(SEARCH_LIMIT).fill({}))).toBe(true);
+    expect(searchSaturated(new Array(SEARCH_LIMIT - 1).fill({}))).toBe(false);
+    expect(searchSaturated([])).toBe(false);
   });
 });

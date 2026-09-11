@@ -210,6 +210,61 @@ export interface IntakePreview {
   covered: CoveredAngle[];
   /** Answers the server could not file by angle. Reported, never guessed. */
   unmapped: number;
+  /**
+   * Whether "have an AI call me" can be offered, and the exact consent words
+   * to show if so. Optional: an older server omits it, and the wizard then
+   * offers nothing, which is the safe reading.
+   */
+  callOffer?: CallOffer;
+}
+
+export interface CallOffer {
+  /** True only when every switch a call needs is on. Otherwise show no option. */
+  available: boolean;
+  /** The words the student agrees to. Shown verbatim; stored verbatim. */
+  consentText: string;
+  consentVersion: string;
+}
+
+/** What the student asked for on the review step, sent after the build starts. */
+export interface DiscoveryCallRequest {
+  phone: string;
+  consent: true;
+  consent_version: string;
+  name?: string;
+}
+
+/**
+ * Why a call was not placed, in the server's words. The UI maps these to
+ * plain language; it never invents a reason the server did not give.
+ */
+export type DiscoveryCallReason =
+  | 'no_consent' | 'no_phone' | 'nothing_to_ask' | 'no_agent_configured' | 'no_intake_yet'
+  | 'cooling_down' | 'consent_text_stale' | 'consent_not_recorded' | 'dial_skipped' | 'dial_failed';
+
+export type DiscoveryCallOutcome =
+  | { placed: true; requestId: string; angles: string[]; callId: string | null }
+  | { placed: false; reason: DiscoveryCallReason; requestId: string | null };
+
+/**
+ * Ask for the call. Runs AFTER startBuild, because the call continues an
+ * interview and the server refuses to open one: there is no truth to continue
+ * from until the build has stored it. The server decides; this reports.
+ */
+export async function requestDiscoveryCall(projectId: string, body: DiscoveryCallRequest): Promise<
+  { ok: true; outcome: DiscoveryCallOutcome } | { ok: false; error: SbpError }
+> {
+  try {
+    const res = await portalApi.post(`/api/portal/sbp/intake/${encodeURIComponent(projectId)}/call`, body);
+    return { ok: true, outcome: res.data as DiscoveryCallOutcome };
+  } catch (err: any) {
+    // 422 is a decision, not a transport failure: the consent words were
+    // stale. Report it as an outcome so the UI can say so.
+    if (err?.response?.status === 422 && err.response.data?.reason) {
+      return { ok: true, outcome: { placed: false, reason: err.response.data.reason, requestId: null } };
+    }
+    return { ok: false, error: toError(err) };
+  }
 }
 
 /**
@@ -230,6 +285,33 @@ export async function previewIntake(input: {
     const res = await portalApi.post('/api/portal/sbp/intake/preview', input);
     return { ok: true, preview: res.data as IntakePreview };
   } catch (err) {
+    return { ok: false, error: toError(err) };
+  }
+}
+
+/**
+ * The stored truth, read back after a build exists. Same two halves as the
+ * pre-Confirm preview, plus the revision. Null when the intake never ran, so
+ * a caller can tell "nothing recorded" from "recorded nothing".
+ */
+export interface IntakeReviewRecord {
+  project_id: string;
+  revision: number;
+  items: ReviewItem[];
+  counts: Record<ReviewGroup, number>;
+  contradictions: string[];
+  blocksPlanning: boolean;
+  unanswered: string[];
+}
+
+export async function getIntakeReview(projectId: string): Promise<
+  { ok: true; review: IntakeReviewRecord | null } | { ok: false; error: SbpError }
+> {
+  try {
+    const res = await portalApi.get(`/api/portal/sbp/intake/${encodeURIComponent(projectId)}/review`);
+    return { ok: true, review: res.data as IntakeReviewRecord };
+  } catch (err: any) {
+    if (err?.response?.status === 404) return { ok: true, review: null };
     return { ok: false, error: toError(err) };
   }
 }

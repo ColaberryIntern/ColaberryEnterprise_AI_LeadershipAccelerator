@@ -235,7 +235,10 @@ async function main(): Promise<void> {
   log('OK: every authored item is stored, current, and servable.');
 }
 
-main()
+// Only run when invoked directly; `latestByKey` and `classifyItem` are imported
+// by tests, and firing main() on import tries to reach a database the test does
+// not have.
+if (require.main === module) main()
   .then(() => sequelize.close())
   .catch(async (err) => {
     console.error('verifyCertBankDrift failed:', err instanceof Error ? err.message : err);
