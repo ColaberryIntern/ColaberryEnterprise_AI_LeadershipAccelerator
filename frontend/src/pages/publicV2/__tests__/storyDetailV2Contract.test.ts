@@ -88,6 +88,16 @@ const MEDIA_SOURCES = [
      the admin preview renders it, so a defect in it is a defect an operator
      approves a publish against. */
   path.join(PAGE_DIR, 'StoryDetailArticle.tsx'),
+  /* Two more, added when this test was brought into CI for the first time and
+     immediately found the sections module at 422 lines against the 300 below.
+       - `StoryHeroFigure.tsx` is the masthead's picture - the walkthrough player
+         or the cover - moved out of `storyDetailV2Sections.tsx` along the same
+         pictures-versus-argument seam that produced `StoryFigure`, `StoryDiagram`
+         and `StoryMediaCarousel`.
+       - `StoryRelated.tsx` is the "Keep reading" band. It predates this entry and
+         was never listed, which is the exact gap the comments above describe. */
+  path.join(PAGE_DIR, 'StoryHeroFigure.tsx'),
+  path.join(PAGE_DIR, 'StoryRelated.tsx'),
 ];
 
 /** The page-local file the article moved into. Read wherever PAGE is read. */
@@ -103,7 +113,14 @@ const ARTICLE = path.join(PAGE_DIR, 'StoryDetailArticle.tsx');
  * control-character assertion below runs over both files.
  */
 const MEDIA_CSS = path.join(PAGE_DIR, 'storyMediaV2.css');
-const STYLESHEETS = [path.join(PAGE_DIR, 'storyDetailV2.css'), MEDIA_CSS];
+/**
+ * The "Keep reading" band, split out when `storyDetailV2.css` passed the ceiling
+ * a second time (588 lines). Owned and imported by `StoryRelated.tsx`, the only
+ * component that assigns a `cbv2-related__` class; listed here so the split is
+ * not a way out of the checks.
+ */
+const RELATED_CSS = path.join(PAGE_DIR, 'storyRelatedV2.css');
+const STYLESHEETS = [path.join(PAGE_DIR, 'storyDetailV2.css'), MEDIA_CSS, RELATED_CSS];
 const APP = path.join(SRC, 'App.tsx');
 const LEGACY_TOKENS = path.join(SRC, 'styles', 'tokens.css');
 const V2_TOKEN_DIR = path.join(SRC, 'colaberry', 'tokens');
@@ -167,7 +184,15 @@ describe('the route is registered, and registered statically', () => {
 /* ------------------------------------------------- the closed component set --- */
 
 describe('the case-study component directory is untouched', () => {
-  it('still ships exactly the ten files its own style contract asserts', () => {
+  /**
+   * ELEVEN, and read from the sibling contract rather than restated. This held its own
+   * copy of the list, went out of sync the day CaseStudyMetricShape.tsx was added (the
+   * component that draws a metric's shape - count, ratio, share, span, series - for the
+   * measurement section), and sat red while caseStudyStyleContract.test.ts, the file it
+   * claims to mirror, was updated and green. Two copies of one list is how that happens;
+   * one source and a pointer is how it stops.
+   */
+  it('still ships exactly the files its own style contract asserts', () => {
     const files = fs
       .readdirSync(CASE_STUDY_DIR)
       .filter((file) => file.endsWith('.ts') || file.endsWith('.tsx'))
@@ -180,6 +205,7 @@ describe('the case-study component directory is untouched', () => {
       'CaseStudyFilters.tsx',
       'CaseStudyLedger.tsx',
       'CaseStudyMeasurement.tsx',
+      'CaseStudyMetricShape.tsx',
       'CaseStudyRoadmap.tsx',
       'CaseStudyTimeline.tsx',
       'CaseStudyVerificationBadge.tsx',
@@ -318,7 +344,7 @@ describe('one styling mechanism, the one the V2 pages use', () => {
     }
   });
 
-  it('names every selector in either stylesheet inside the namespace', () => {
+  it('names every selector in every stylesheet inside the namespace', () => {
     for (const file of STYLESHEETS) {
       const css = readCss(file);
       const classes = (css.match(/\.[A-Za-z][A-Za-z0-9_-]*/g) ?? []).map((c) => c.slice(1));
@@ -444,7 +470,7 @@ describe('the story stylesheets name only tokens that exist', () => {
        card to be trapped inside. Requiring a rule that should no longer exist
        would have meant keeping a dead selector alive to satisfy a test.
        What replaces it is stronger rather than weaker: EVERY masthead-scoped
-       colour rule in either stylesheet must name a component class, not just the
+       colour rule in any of the stylesheets must name a component class, not just the
        masthead. That generalises the original guard from two class names to all
        of them. */
     const mastheadColourRules = selectors.filter((selector) =>
@@ -463,7 +489,7 @@ describe('the story stylesheets name only tokens that exist', () => {
     expect(allCss).toMatch(/\.cbv2-story__metric\s+\.cbv2-story__value/);
   });
 
-  it('hardcodes no colour outside the token system, in either stylesheet', () => {
+  it('hardcodes no colour outside the token system, in any stylesheet', () => {
     for (const file of STYLESHEETS) {
       const css = readCss(file);
       expect({ file: path.basename(file), hex: css.match(/#[0-9a-f]{3,8}\b/gi) ?? [] })
@@ -473,7 +499,7 @@ describe('the story stylesheets name only tokens that exist', () => {
     }
   });
 
-  it('pulls in no second stylesheet by @import, in either file', () => {
+  it('pulls in no second stylesheet by @import, in any of them', () => {
     /* COMMENTS STRIPPED FIRST, and this test is the reason that matters.
        The predecessor of this assertion read RAW bytes, which was fine for as
        long as no stylesheet header happened to mention the word. `storyMediaV2.
@@ -494,9 +520,14 @@ describe('the story stylesheets name only tokens that exist', () => {
     // the page. An `@import` would cost a serial round trip before either sheet
     // could paint.
     expect(stripComments(read(PAGE))).toContain("import './storyMediaV2.css';");
+    // The third sheet is imported by the component that draws its markup, not by
+    // the page: `StoryRelated` is mounted only from the page, and the admin
+    // preview - which mounts the article - never renders it.
+    expect(stripComments(read(path.join(PAGE_DIR, 'StoryRelated.tsx'))))
+      .toContain("import './storyRelatedV2.css';");
   });
 
-  it('keeps both stylesheets under the 500-line ceiling that forced the split', () => {
+  it('keeps every stylesheet under the 500-line ceiling that forced the splits', () => {
     const oversize = STYLESHEETS
       .map((file) => ({ file: path.basename(file), lines: read(file).split('\n').length }))
       .filter((entry) => entry.lines > 500);

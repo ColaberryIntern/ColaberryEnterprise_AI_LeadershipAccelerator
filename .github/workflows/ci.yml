@@ -69,7 +69,7 @@ jobs:
           # one already known: leave the frontend unenforced, or enforce what passes and NAME
           # the rest as debt. Named debt wins; an unenforced test file is worth nothing.
           #
-          # SIX OF THE ORIGINAL EIGHT ARE GONE, and every one was a stale test rather than a
+          # SEVEN OF THE ORIGINAL EIGHT ARE GONE, and every one was a stale test rather than a
           # broken page: linkIntegrity and claimsRegistry pinned copy (verified live in a
           # browser); PlatformV2 described a showroom Ali removed on 2026-08-20; the
           # subscription fixture never carried `plans`, a field the API always sends; and the
@@ -82,6 +82,13 @@ jobs:
           # budget was raised and recorded in the test the same way the 9 -> 10 raise was,
           # and it is enforced again.
           #
+          # storyDetailV2Contract was the LAST one out, and the only one whose failures were
+          # in the CODE rather than the test: two non-existent spacing tokens, raw colours in
+          # the player rule, and two files past the ceilings the test asserts. The hero
+          # figure moved to its own file and the "Keep reading" band to its own stylesheet,
+          # both listed in the contract so the split is not a way out of the checks. Nothing
+          # is excluded now except the helper directory below.
+          #
           # testEnv/ is NOT a failure. It holds jest helpers that live under __tests__ and
           # contain no test, so jest fails them for being empty. Excluding the directory is
           # the correct config, not a concession.
@@ -89,7 +96,7 @@ jobs:
           # MAINTENANCE: nothing joins this list without a reason beside it. Every entry
           # below is a real red suite in main, not a flaky one, and each shrinks the list
           # when fixed.
-          npx react-scripts test --watchAll=false             --testPathIgnorePatterns               "/testEnv/"               "src/pages/publicV2/__tests__/storyDetailV2Contract.test.ts"              
+          npx react-scripts test --watchAll=false --testPathIgnorePatterns "/testEnv/"
 
   # A typecheck is NOT a build. On 2026-08-15 commit 2f0a72dd left main
   # unbuildable for hours with every check green: an eslint-disable comment in a

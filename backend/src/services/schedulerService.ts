@@ -5,7 +5,7 @@ import { Op, QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import nodemailer from 'nodemailer';
 import { ScheduledEmail, Lead, Cohort, Campaign, CampaignLead, StrategyCall, Enrollment } from '../models';
-import { recordMandrillEngagement } from './mandrillEngagementPoll';
+import { buildSearchRequest, recordMandrillEngagement, searchSaturated, searchWindowStart } from './mandrillEngagementPoll';
 import type { MandrillSearchMessage } from './mandrillEngagementPoll';
 import { env } from '../config/env';
 import { logActivity } from './activityService';
@@ -2322,30 +2322,37 @@ export function startScheduler(): void {
 
   // Mandrill open/click poll — webhooks are unreliable because older webhooks
   // (school system) consume open/click events before ours. Poll API every 30 min.
-  // Attribution, dedup and recording live in mandrillEngagementPoll.ts, where
-  // the rule (match the SENT EMAIL BY SUBJECT, never by recency) has a test.
+  // Attribution, dedup, recording AND the search request live in
+  // mandrillEngagementPoll.ts, where each rule has a test: match the SENT EMAIL
+  // BY SUBJECT (never by recency); ask only for campaign-tagged mail over a
+  // two-day window at the API's 1,000 cap (a bare `*` at 100 saw none of ours).
   cron.schedule('5,35 * * * *', () => {
     instrumentCronJob('MandrillOpenClickPoll', async () => {
       const axios = require('axios');
       const apiKey = env.mandrillApiKey;
       if (!apiKey) return;
       const { InteractionOutcome } = require('../models');
-      const today = new Date().toISOString().split('T')[0];
+      const now = new Date();
       try {
-        const r = await axios.post('https://mandrillapp.com/api/1.0/messages/search.json', {
-          key: apiKey, query: '*', date_from: today, date_to: today, limit: 100,
-        }, { timeout: 20000 });
+        const r = await axios.post(
+          'https://mandrillapp.com/api/1.0/messages/search.json',
+          { key: apiKey, ...buildSearchRequest(now) },
+          { timeout: 20000 },
+        );
         if (!Array.isArray(r.data)) {
           console.warn('[Mandrill Poll] Unexpected response shape; nothing recorded');
           return;
         }
+        if (searchSaturated(r.data)) {
+          console.warn(`[Mandrill Poll] Result hit the ${r.data.length}-message cap; some campaign mail in the window was not scanned`);
+        }
         const summary = await recordMandrillEngagement(
           r.data as MandrillSearchMessage[],
           { Lead, ScheduledEmail, InteractionOutcome },
-          new Date(today),
+          searchWindowStart(now),
         );
         if (summary.opens > 0 || summary.clicks > 0 || summary.failed > 0) {
-          console.log(`[Mandrill Poll] Recorded ${summary.opens} opens, ${summary.clicks} clicks; ${summary.unattributed} on messages this platform did not send; ${summary.failed} failed`);
+          console.log(`[Mandrill Poll] Scanned ${summary.seen}; recorded ${summary.opens} opens, ${summary.clicks} clicks; ${summary.unattributed} on messages this platform did not send; ${summary.failed} failed`);
         }
       } catch (err: any) {
         console.error('[Mandrill Poll] Error:', err.message);
