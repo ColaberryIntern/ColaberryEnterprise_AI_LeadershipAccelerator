@@ -18,8 +18,9 @@ import { emitPointsEarned, onPointsEarned, emitCardCollected } from '../../../se
 import { uploadResume, fileToBase64 } from '../../../services/portalSettingsApi';
 import { runtimeApi } from '../runtime/runtimeApi';
 import { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
+import { ambientMediaOf } from '../../../components/timeline/ambientMedia';
 import TodayFeedV2 from './TodayFeedV2';
-import UpcomingEventsStrip from './UpcomingEventsStrip';
+import TodayEventsRail from './TodayEventsRail';
 import TodayPlan from './TodayPlan';
 import { useTodayPlanGate } from './useTodayPlanGate';
 import type { Category } from './todayCategoryFilter';
@@ -288,15 +289,26 @@ const TodayShell: React.FC = () => {
   // Shared collect handler for TodayFeedV2 + TodayPlan (CAPE Phase 5) — one
   // implementation so the two surfaces never drift. Throws on the server
   // watch/read/lock gate (422); ambient blogs (`blog:<id>`) use the read gate.
-  const handleCardComplete = useCallback(async (card: TimelineFeedCard) => {
+  // ONE collect path for every kind of Today item. The tile and the drawer both
+  // land here; what differs is only which gate the server applies:
+  //   blog:<id>                → the 2-minute read gate
+  //   podcast:/testimonial:<id> → the 75% listen/watch gate (ambient media)
+  //   everything else          → the card's own completion gate
+  // Server-side rejections (422) propagate so the caller can surface the reason.
+  const collectCard = useCallback(async (card: TimelineFeedCard): Promise<{ points_awarded?: number } | null> => {
     const blogId = card.id.startsWith('blog:') ? card.id.slice('blog:'.length) : null;
-    const res = blogId
-      ? await runtimeApi.blogCollect(blogId)
-      : (await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`)).data;
+    const media = ambientMediaOf(card);
+    if (blogId) return runtimeApi.blogCollect(blogId);
+    if (media) return runtimeApi.mediaCollect(media.kind, media.id);
+    return (await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`)).data;
+  }, []);
+
+  const handleCardComplete = useCallback(async (card: TimelineFeedCard) => {
+    const res = await collectCard(card);
     await loadAll();
     emitPointsEarned(res?.points_awarded ?? 0); // HUD burst + chime
     emitCardCollected(card.id);                 // drop it off the feed
-  }, [loadAll]);
+  }, [collectCard, loadAll]);
 
   return (
     <PortalShell
@@ -490,9 +502,10 @@ const TodayShell: React.FC = () => {
             </div>
           )}
 
-          {/* Upcoming public events, above the timeline. Self-rendering: shows
+          {/* Upcoming public events, above the timeline — the Classroom's own
+              events rail, next 7 (Ali, 2026-09-11). Self-rendering: shows
               nothing when there are no events or CCPP is unreachable. */}
-          <UpcomingEventsStrip />
+          <TodayEventsRail />
 
           {/* ── aggregated timeline — the big feed pulling from every page ──
               id is the "See your timeline" scroll target above. */}
@@ -617,13 +630,9 @@ const TodayShell: React.FC = () => {
         card={selectedCard}
         onClose={() => setSelectedCard(null)}
         onComplete={async (card) => {
-          // Persist the completion (watch/read/lock gates are enforced server-side; a
-          // rejection propagates so the drawer surfaces the reason). Ambient blogs
-          // (ref `blog:<id>`) collect via the blog read gate.
-          const blogId = card.id.startsWith('blog:') ? card.id.slice('blog:'.length) : null;
-          const res = blogId
-            ? await runtimeApi.blogCollect(blogId)
-            : (await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`)).data;
+          // Same dispatch as the tile (collectCard); the drawer additionally closes.
+          // A server rejection propagates so the drawer surfaces the reason.
+          const res = await collectCard(card);
           setSelectedCard(null);
           await loadAll();
           emitPointsEarned(res?.points_awarded ?? 0);   // HUD burst + chime

@@ -80,6 +80,7 @@ import {
   handleOpenCard, handleMentor, handleNudge, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
   handleWatchBeat, handleBlogReadBeat, handleBlogCollect, handleBlogReader, handleDwellBeat, handleGetSurvey, handleSaveSurvey,
+  handleMediaBeat, handleMediaVerdict, handleMediaCollect,
   handleGetWeekReview, handleSaveReflectionSignals,
   handleGetPeerWins, handleSubmitWin, handleCheerWin,
   handleGetAssessment, handleSubmitAssessment,
@@ -164,6 +165,27 @@ router.get('/api/portal/classroom/projection', requireParticipant, async (req, r
  * the page must handle, because a classroom without its rails is the product as
  * it shipped last week, and a classroom that will not load is not.
  */
+// The events rail on its own, for Today (Ali, 2026-09-11: "show it the way it
+// is in the Classroom, in the same place, with the next 7"). Today used to
+// render a 3-row text list; this serves the SAME rail the Classroom renders so
+// the two surfaces cannot drift. `limit` is clamped server-side.
+router.get('/api/portal/classroom/rails/events', requireParticipant, async (req, res) => {
+  const limitRaw = parseInt(String(req.query.limit ?? ''), 10);
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 7;
+  try {
+    const { resolveEventsRail } = await import('../services/classroom/rails/eventsRail');
+    // The events rail ignores its context (public events are the same for every
+    // student), so a minimal, honestly-typed one is enough — no cohort lookup.
+    const ctx = { enrollmentId: req.participant!.sub, cohortId: null, week: 1, isStaff: false };
+    const rail = await resolveEventsRail(ctx, new Date(), { limit });
+    res.json({ rail });
+  } catch (err: any) {
+    // Fail-soft: Today renders nothing for this slot rather than an error box.
+    console.warn('[classroom/rails/events] failed:', err?.message?.split('\n')[0]);
+    res.json({ rail: null });
+  }
+});
+
 router.get('/api/portal/classroom/rails', requireParticipant, async (req, res) => {
   const weekRaw = parseInt(String(req.query.week ?? ''), 10);
   try {
@@ -352,6 +374,11 @@ router.post('/api/portal/runtime/today/blog/:blogId/collect', requireParticipant
 // In-Workspace blog reader: the post's article fetched + sanitized server-side (the
 // training site sends X-Frame-Options: DENY, so it can't be iframed directly).
 router.get('/api/portal/runtime/today/blog/:blogId/reader', requireParticipant, handleBlogReader);
+// Podcast / testimonial listen-to-earn: ambient items with no card row (see
+// ambientMediaGateService). Beat → verdict → collect; 35 / 10 points at 75%.
+router.post('/api/portal/runtime/today/media/:kind/:id/watch', watchBeatRateLimiter, requireParticipant, handleMediaBeat);
+router.get('/api/portal/runtime/today/media/:kind/:id/watch', requireParticipant, handleMediaVerdict);
+router.post('/api/portal/runtime/today/media/:kind/:id/collect', requireParticipant, handleMediaCollect);
 // Generic dwell gate: heartbeat for passive-content types (intel/reflection/…).
 router.post('/api/portal/runtime/cards/:cardId/dwell', watchBeatRateLimiter, requireParticipant, handleDwellBeat);
 router.get('/api/portal/sessions', requireParticipant, handleGetSessions);
