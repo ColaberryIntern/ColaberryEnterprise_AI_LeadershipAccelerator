@@ -17,8 +17,10 @@
  * changes nothing; it exits non-zero to say so, which is the honest answer to
  * "apply these patches" when they are already applied.
  *
- * Runs locally, against the source tree:
- *   node -r ts-node/register src/scripts/applyCertOptionPatches.ts patches.json
+ * Runs locally, against the source tree. The second argument is the
+ * certBlueprints source directory, so a build compiled anywhere can point at
+ * the checkout it should edit:
+ *   node dist/scripts/applyCertOptionPatches.js patches.ndjson src/data/certBlueprints
  */
 import fs from 'fs';
 import path from 'path';
@@ -47,15 +49,35 @@ export function applyPatch(source: string, patch: Patch): { source: string; occu
   return { source: source.replace(from, () => literal(patch.new_text)), occurrences };
 }
 
+/**
+ * The planner streams one patch per line so a killed run keeps what it made;
+ * a resumed run appended to the same file can repeat a patch. Exact repeats
+ * are collapsed here; two different rewrites of the same option are refused
+ * by the exactly-once rule below, because the second would not find its text.
+ */
+export function readPatches(raw: string): Patch[] {
+  const text = raw.trim();
+  const list: Patch[] = text.startsWith('[')
+    ? JSON.parse(text)
+    : text.split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l));
+  const seen = new Set<string>();
+  return list.filter((p) => {
+    const id = JSON.stringify([p.question_key, p.old_text, p.new_text]);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
 function main(): void {
   const file = process.argv[2];
   if (!file) {
-    console.error('usage: applyCertOptionPatches <patches.json>');
+    console.error('usage: applyCertOptionPatches <patches.ndjson> [certBlueprints dir]');
     process.exitCode = 2;
     return;
   }
-  const patches: Patch[] = JSON.parse(fs.readFileSync(file, 'utf8'));
-  const dir = path.join(__dirname, '..', 'data', 'certBlueprints');
+  const patches = readPatches(fs.readFileSync(file, 'utf8'));
+  const dir = path.resolve(process.argv[3] ?? path.join(__dirname, '..', 'data', 'certBlueprints'));
   const files = [
     ...fs.readdirSync(path.join(dir, 'items')).filter((f) => /^d\d.*\.ts$/.test(f)).map((f) => path.join(dir, 'items', f)),
     path.join(dir, 'ccarFoundationsItems.ts'),

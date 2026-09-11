@@ -23,10 +23,17 @@
  * NO DATABASE. Reads `HAND_AUTHORED_ITEMS` from the build it runs in. Needs the
  * model, so it runs where the key is: the backend container.
  *
- * Usage (inside the backend container):
- *   node dist/scripts/planAuthoredOptionLengths.js                 # dry run: what would change
- *   node dist/scripts/planAuthoredOptionLengths.js --write > patches.json
- *   node dist/scripts/planAuthoredOptionLengths.js --write --limit 20 --key CCARF-D3-04
+ * STREAMS. One JSON patch per line on stdout, written the moment it exists.
+ * The first run collected everything and printed it at the end; a concurrent
+ * deploy recreated the container fifty seconds in and the run left nothing
+ * behind. Now a killed run leaves every patch it made, and `--skip N` resumes
+ * past the first N planned items - the plan is pure, so N means the same
+ * items on every run. Redirect stdout on the HOST, never inside the container.
+ *
+ * Usage (from the host):
+ *   docker exec accelerator-backend node dist/scripts/planAuthoredOptionLengths.js            # dry run
+ *   docker exec accelerator-backend node dist/scripts/planAuthoredOptionLengths.js --write > patches.ndjson
+ *   docker exec accelerator-backend node dist/scripts/planAuthoredOptionLengths.js --write --skip 30 >> patches.ndjson
  */
 import { HAND_AUTHORED_ITEMS } from '../data/certBlueprints/items';
 import { lengthPlan, stripOptionLabels } from '../services/certPrep/certOptionLength';
@@ -39,6 +46,8 @@ const limitIdx = args.indexOf('--limit');
 const limit = limitIdx >= 0 ? Number(args[limitIdx + 1]) : Infinity;
 const keyIdx = args.indexOf('--key');
 const onlyKey = keyIdx >= 0 ? args[keyIdx + 1] : null;
+const skipIdx = args.indexOf('--skip');
+const skip = skipIdx >= 0 ? Number(args[skipIdx + 1]) : 0;
 
 /** One change to one option, addressed by text. */
 export interface OptionPatch {
@@ -56,12 +65,12 @@ const err = (line: string): void => { console.error(line); };
 
 async function main(): Promise<void> {
   err(`items       : ${HAND_AUTHORED_ITEMS.length} authored`);
-  err(`mode        : ${write ? 'WRITE — patches to stdout, model calls spent' : 'DRY RUN — no model calls'}`);
+  err(`mode        : ${write ? 'WRITE — one patch per line to stdout, model calls spent' : 'DRY RUN — no model calls'}`);
+  if (skip > 0) err(`skip        : the first ${skip} planned item(s)`);
   err('');
 
-  let notLongest = 0; let kept = 0; let multi = 0; let planned = 0;
-  let patched = 0; let refused = 0; let discarded = 0;
-  const patches: OptionPatch[] = [];
+  let notLongest = 0; let kept = 0; let multi = 0; let planned = 0; let skipped = 0;
+  let patched = 0; let refused = 0; let discarded = 0; let emitted = 0; let processed = 0;
 
   for (const a of HAND_AUTHORED_ITEMS) {
     if (onlyKey && a.question_key !== onlyKey) continue;
@@ -83,6 +92,7 @@ async function main(): Promise<void> {
       const plan = lengthPlan(stripOptionLabels(item).item);
       if (!plan.keyIsLongest) { notLongest += 1; continue; }
       if (plan.keep) { kept += 1; continue; }
+      if (skipped < skip) { skipped += 1; continue; }
       if (planned >= limit) break;
       planned += 1;
       err(`${a.question_key.padEnd(14)} key ${a.correct_keys[0]} longest; would lengthen ${plan.target} to ${plan.minChars}-${plan.maxChars} chars`);
@@ -90,6 +100,12 @@ async function main(): Promise<void> {
     }
 
     if (planned >= limit) break;
+    // The skip is decided by the pure plan, before any model call is spent.
+    const pure = lengthPlan(stripOptionLabels(item).item);
+    if (pure.keyIsLongest && !pure.keep) {
+      if (skipped < skip) { skipped += 1; continue; }
+      processed += 1;
+    }
     const out = await passItem(item);
     if (!out.plan.keyIsLongest) notLongest += 1;
     else if (out.plan.keep) kept += 1;
@@ -103,7 +119,7 @@ async function main(): Promise<void> {
     for (const o of out.item.options) {
       const before = item.options.find((x) => x.key === o.key)!;
       if (before.text === o.text) continue;
-      patches.push({
+      const patch: OptionPatch = {
         question_key: a.question_key,
         domain_id: a.domain_id,
         option_key: o.key,
@@ -114,7 +130,9 @@ async function main(): Promise<void> {
         triage: out.status === 'lengthened'
           ? { verdict: out.triage.verdict, severity: out.triage.severity, detail: out.triage.concerns[0]?.detail ?? null }
           : { verdict: 'not_needed', severity: null, detail: null },
-      });
+      };
+      process.stdout.write(`${JSON.stringify(patch)}\n`);
+      emitted += 1;
     }
     patched += 1;
     const note = out.status === 'lengthened' && out.triage.verdict === 'needs_human' ? `  [triage ${out.triage.severity}]` : '';
@@ -125,12 +143,14 @@ async function main(): Promise<void> {
   err(`multi-select: ${multi} skipped`);
   err(`not longest : ${notLongest} already fine`);
   err(`kept        : ${kept} keep the key longest by hash (one in three)`);
+  if (skip > 0) err(`skipped     : ${skipped}`);
   err(`planned     : ${planned}`);
   if (write) {
-    err(`patched     : ${patched} item(s), ${patches.length} option(s)`);
+    err(`patched     : ${patched} item(s), ${emitted} option(s) written`);
     err(`refused     : ${refused}`);
     err(`discarded   : ${discarded}`);
-    process.stdout.write(`${JSON.stringify(patches, null, 2)}\n`);
+    // The number to hand `--skip` if this run has to be continued.
+    err(`resume with : --skip ${skip + processed}`);
   }
 }
 

@@ -1,4 +1,4 @@
-import { applyPatch, literal } from '../applyCertOptionPatches';
+import { applyPatch, literal, readPatches } from '../applyCertOptionPatches';
 
 /**
  * The applier edits source files, so the property that matters is that it
@@ -52,5 +52,22 @@ describe('applyCertOptionPatches', () => {
 
   it('escapes backslashes and quotes when building the literal', () => {
     expect(literal("it's a \\ path")).toBe("'it\\'s a \\\\ path'");
+  });
+});
+
+describe('readPatches', () => {
+  const p = (k: string, o: string, n: string) => ({ question_key: k, old_text: o, new_text: n });
+
+  it('reads one patch per line, and a JSON array for older files', () => {
+    const lines = [JSON.stringify(p('k1', 'a', 'b')), '', JSON.stringify(p('k2', 'c', 'd'))].join('\n');
+    expect(readPatches(lines)).toHaveLength(2);
+    expect(readPatches(JSON.stringify([p('k1', 'a', 'b')]))).toHaveLength(1);
+  });
+
+  it('collapses an exact repeat from a resumed run, keeps a different rewrite', () => {
+    const lines = [p('k1', 'a', 'b'), p('k1', 'a', 'b'), p('k1', 'a', 'c')].map((x) => JSON.stringify(x)).join('\n');
+    const out = readPatches(lines);
+    expect(out).toHaveLength(2);
+    expect(out.map((x: any) => x.new_text)).toEqual(['b', 'c']);
   });
 });
