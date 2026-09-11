@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AnswerPayload,
   InterviewQuestionView,
@@ -9,6 +9,20 @@ import {
   saveInterviewAnswers,
   scheduleInternshipCall,
 } from '../../../services/internshipApi';
+
+/**
+ * The phone call is a blocking, self-advancing moment.
+ *
+ * 'placing'  — the request is in flight.
+ * 'on_call'  — a call is live; the server still reports live_call. This covers both
+ *              the conversation itself and the short wrap while the transcript is
+ *              reconciled, because the session stays in_progress until then.
+ * 'complete' — the call ended and every question is answered; hands off to summary.
+ * 'partial'  — the call ended having answered some; the rest continue on screen.
+ * 'none'     — the call ended with nothing captured (or never connected).
+ */
+type CallPhase = 'idle' | 'placing' | 'on_call' | 'complete' | 'partial' | 'none';
+const POLL_MS = 5000;
 
 /**
  * The interview, both channels, on one screen.
@@ -53,6 +67,24 @@ const InternshipInterview: React.FC<Props> = ({ onProgressed, onComplete }) => {
   const [error, setError] = useState<string | null>(null);
   const [callNote, setCallNote] = useState<string | null>(null);
   const [when, setWhen] = useState('');
+
+  // The blocking call overlay and the poll that drives it.
+  const [callPhase, setCallPhase] = useState<CallPhase>('idle');
+  const [captured, setCaptured] = useState(0);
+  const resolvedAtStart = useRef(0);
+  const pollTimer = useRef<number | null>(null);
+  const polling = useRef(false);
+
+  const stopPolling = useCallback(() => {
+    polling.current = false;
+    if (pollTimer.current !== null) {
+      window.clearTimeout(pollTimer.current);
+      pollTimer.current = null;
+    }
+  }, []);
+
+  // Stop polling if the component goes away mid-call.
+  useEffect(() => stopPolling, [stopPolling]);
 
   const load = useCallback(async () => {
     try {
@@ -126,21 +158,74 @@ const InternshipInterview: React.FC<Props> = ({ onProgressed, onComplete }) => {
     }
   }, [question, busy, draft, index, view, load, onProgressed, onComplete]);
 
+  // Resolve the overlay once a placed call has left the live state. Called from the
+  // poll and from the initial placement (a call can fail fast, before the first poll).
+  const settleEndedCall = useCallback((v: InterviewView) => {
+    setView(v);
+    if (v.progress.complete) {
+      setCallPhase('complete');
+      // Let the acknowledgement land, then hand off to review-and-submit.
+      window.setTimeout(() => onComplete?.(), 1600);
+      return;
+    }
+    const got = Math.max(0, v.progress.resolved - resolvedAtStart.current);
+    if (got > 0) {
+      setCaptured(got);
+      setIndex(0);
+      setDraft(emptyDraft());
+      setCallPhase('partial');
+      return;
+    }
+    setCallPhase('none');
+  }, [onComplete]);
+
+  const pollCall = useCallback(async () => {
+    if (!polling.current) return;
+    let v: InterviewView | null = null;
+    try { v = await fetchInterview(); } catch { /* transient — keep polling */ }
+    if (!polling.current) return;
+    if (v && !v.live_call) {
+      stopPolling();
+      settleEndedCall(v);
+      return;
+    }
+    if (v) setView(v);
+    pollTimer.current = window.setTimeout(() => { void pollCall(); }, POLL_MS);
+  }, [settleEndedCall, stopPolling]);
+
   const askForCall = useCallback(async () => {
-    setBusy(true);
     setCallNote(null);
+    setCallPhase('placing');
     try {
       const res = await requestInternshipCall();
-      setCallNote(res.placed
-        ? 'Calling you now — answer when it rings. You can finish here if the call drops.'
-        : res.message);
-      if (res.placed) await load();
+      if (!res.placed) {
+        setCallPhase('idle');
+        setCallNote(res.message);
+        return;
+      }
+      const v = await fetchInterview();
+      resolvedAtStart.current = v.progress.resolved;
+      if (!v.live_call) {
+        // Placed but already terminal (a fast no-answer/fail). Settle immediately.
+        settleEndedCall(v);
+        return;
+      }
+      setView(v);
+      setCallPhase('on_call');
+      polling.current = true;
+      pollTimer.current = window.setTimeout(() => { void pollCall(); }, POLL_MS);
     } catch {
+      setCallPhase('idle');
       setCallNote('We could not place the call. You can answer the questions here instead.');
-    } finally {
-      setBusy(false);
     }
-  }, [load]);
+  }, [pollCall, settleEndedCall]);
+
+  // The always-available escape from the overlay: stop waiting and answer on screen.
+  const leaveCall = useCallback(() => {
+    stopPolling();
+    setCallPhase('idle');
+    void load();
+  }, [stopPolling, load]);
 
   const bookCall = useCallback(async () => {
     if (!when) return;
@@ -319,6 +404,59 @@ const InternshipInterview: React.FC<Props> = ({ onProgressed, onComplete }) => {
           not us — stop and tell us.
         </p>
       </section>
+
+      {/* The call takes over the screen so the applicant talks instead of typing,
+          and the page moves itself on the moment the call reconciles. Never a hard
+          trap: every waiting state offers a way back to answering online. */}
+      {callPhase !== 'idle' && (
+        <div className="ip-callover" role="dialog" aria-modal="true" aria-live="assertive">
+          <div className="ip-callover__card">
+            {(callPhase === 'placing' || callPhase === 'on_call') && (
+              <>
+                <div className="ip-callpulse" aria-hidden="true"><span /><span /><span /></div>
+                <h3>{callPhase === 'placing' ? 'Calling you now' : 'You’re on the call'}</h3>
+                <p>
+                  {callPhase === 'placing'
+                    ? 'Answer when your phone rings, and keep this page open.'
+                    : 'Answer the interviewer out loud — there is nothing to do on this screen. It updates by itself the moment the call ends.'}
+                </p>
+                <button type="button" className="ip-skip" onClick={leaveCall}>
+                  I’d rather answer online
+                </button>
+              </>
+            )}
+            {callPhase === 'complete' && (
+              <>
+                <div className="ip-callmark" aria-hidden="true">✓</div>
+                <h3>Interview complete</h3>
+                <p>Thank you — we have your answers. Taking you to review and submit…</p>
+              </>
+            )}
+            {callPhase === 'partial' && (
+              <>
+                <div className="ip-callmark ip-callmark--part" aria-hidden="true">✓</div>
+                <h3>Call ended</h3>
+                <p>
+                  We captured {captured} {captured === 1 ? 'answer' : 'answers'} from your call.
+                  A few questions are still open — you can finish them right here.
+                </p>
+                <button type="button" className="te-btn berry" onClick={() => setCallPhase('idle')}>
+                  Continue
+                </button>
+              </>
+            )}
+            {callPhase === 'none' && (
+              <>
+                <h3>We couldn’t finish the call</h3>
+                <p>Nothing was captured this time. You can try the call again, or answer the questions here.</p>
+                <button type="button" className="te-btn berry" onClick={leaveCall}>
+                  Answer online
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 };
