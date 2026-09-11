@@ -615,3 +615,13 @@
 .pj-root .pj-pipe strong{display:block;margin-bottom:4px;color:var(--text-strong)}
 .pj-root .pj-pipe.ok{border-left-color:var(--leaf-action)}
 .pj-root .pj-pipe.warn{border-left-color:var(--cherry)}
+
+/* Case study readiness ladder (Phase 7). Five rungs, one marked; the top two
+   read as what they are: not reachable from a build alone. */
+.pj-root .pj-ladder{list-style:none;margin:0 0 4px;padding:0}
+.pj-root .pj-rung{display:flex;align-items:center;gap:9px;padding:5px 0;font-size:14px;color:var(--text-muted);flex-wrap:wrap}
+.pj-root .pj-rung .pj-rung-dot{width:10px;height:10px;border-radius:50%;border:2px solid var(--border-default);flex:none;background:var(--surface-page)}
+.pj-root .pj-rung.done{color:var(--leaf-text)} .pj-root .pj-rung.done .pj-rung-dot{background:var(--leaf,#5BA63C);border-color:var(--leaf,#5BA63C)}
+.pj-root .pj-rung.here{color:var(--text-strong);font-weight:700} .pj-root .pj-rung.here .pj-rung-dot{border-color:var(--cherry);background:var(--cherry)}
+.pj-root .pj-rung.measured{opacity:.7} .pj-root .pj-rung.measured .pj-rung-dot{border-style:dashed}
+.pj-root .pj-rung-note{font-size:12px;color:var(--text-muted);font-style:italic}

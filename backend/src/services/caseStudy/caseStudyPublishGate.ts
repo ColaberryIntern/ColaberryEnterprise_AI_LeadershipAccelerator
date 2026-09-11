@@ -102,6 +102,7 @@
  * PURE. No clock, no randomness, no I/O, no database, no logging, no model
  * import. `caseStudyPublicationService.ts` owns all of those and calls this.
  */
+import { ruleMaturity, type PublishFoundation } from './caseStudyPublishMaturityRule';
 import {
   Blockers,
   collectMetrics,
@@ -196,6 +197,11 @@ export function evaluateCaseStudyPublishGate(
       `snapshot version ${input.snapshot.version} carries no content object`,
       'rebuild the snapshot from the sync and re-approve it');
   }
+
+  // 14 and 15 - the line between a build record and a case study. No-op
+  // without a linked project foundation, so the library this was added to
+  // is not refused by it.
+  ruleMaturity((input.foundation ?? null) as PublishFoundation | null, b);
 
   const blockers = b.all();
   const codes: CaseStudyPublishBlockerCode[] = [];
