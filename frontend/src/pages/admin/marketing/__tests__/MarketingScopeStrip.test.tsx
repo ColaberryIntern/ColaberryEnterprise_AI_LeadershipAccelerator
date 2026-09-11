@@ -140,6 +140,31 @@ describe('the comparison window is stated, not implied', () => {
     render();
     expect(container.textContent).toMatch(/7 days/);
   });
+
+  it('renders the server totals for the stated window as counts side by side, never a percentage', () => {
+    // The window it states is the window it shows results for. Before this prop existed the
+    // strip printed a comparison nothing rendered.
+    render({
+      comparison: {
+        start: '2026-08-28', end: '2026-09-03',
+        current: { campaigns: 3, visitors_count: 40, leads_count: 12, engagement_count: 30, enrollments_count: 2 },
+        prior: { campaigns: 3, visitors_count: 44, leads_count: 8, engagement_count: 31, enrollments_count: 2 },
+      },
+    });
+    const totals = container.querySelector('[data-testid="comparison-totals"]')!.textContent ?? '';
+    expect(totals).toContain('leads 12 vs 8 (+4)');
+    expect(totals).toContain('engagement 30 vs 31 (−1)');
+    expect(totals).toContain('enrolments 2 vs 2 (±0)');
+    expect(totals).not.toMatch(/%/);
+  });
+
+  it('shows no totals when no comparison is selected, even if the server sent some', () => {
+    render({
+      scope: { ...SCOPE, comparison: 'none' },
+      comparison: { start: 'x', end: 'y', current: { campaigns: 1, visitors_count: 1, leads_count: 1, engagement_count: 1, enrollments_count: 1 }, prior: { campaigns: 1, visitors_count: 1, leads_count: 1, engagement_count: 1, enrollments_count: 1 } },
+    });
+    expect(container.querySelector('[data-testid="comparison-totals"]')).toBeNull();
+  });
 });
 
 describe('freshness is reported, never invented', () => {

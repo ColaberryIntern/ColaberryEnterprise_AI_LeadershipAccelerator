@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import { getRampStatus, manualAdvanceRamp } from '../../services/autonomousRampService';
 import {
@@ -110,19 +111,25 @@ router.post('/api/admin/campaigns/:id/ghl-resync-lead', requireAdmin, handleGhlR
  * Campaign 360 Attribution (T019). Three models over the campaign's identified leads, with
  * identity coverage and the credit-sum guard reported rather than hidden.
  */
+// Bounded window: 0 attributes nothing, years attribute a visit from another life. 1-365 days
+// is the range in which the answer means something. Zod, per the contract rule - the hand-written
+// regex and Number() checks this replaces were the T019 verifier's convention finding.
+const AttributionParams = z.object({ id: z.string().uuid() });
+const AttributionQuery = z.object({ window: z.coerce.number().int().min(1).max(365).default(30) });
+
 router.get('/api/admin/campaigns/:id/attribution', requireAdmin, async (req: Request, res: Response) => {
-  const id = String(req.params.id ?? '');
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-    res.status(400).json({ error: 'Campaign id must be a UUID', error_class: 'ValidationError' });
+  const params = AttributionParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: 'Campaign id must be a UUID', error_class: 'ValidationError', details: params.error.flatten() });
     return;
   }
-  const rawWindow = Number(req.query.window ?? 30);
-  // Bounded: a window of 0 attributes nothing, a window of years attributes a visit from
-  // another life. 1-365 days is the range in which the answer means something.
-  if (!Number.isInteger(rawWindow) || rawWindow < 1 || rawWindow > 365) {
-    res.status(400).json({ error: 'window must be an integer number of days from 1 to 365', error_class: 'ValidationError' });
+  const query = AttributionQuery.safeParse(req.query);
+  if (!query.success) {
+    res.status(400).json({ error: 'window must be an integer number of days from 1 to 365', error_class: 'ValidationError', details: query.error.flatten() });
     return;
   }
+  const id = params.data.id;
+  const rawWindow = query.data.window;
   try {
     const { getCampaignAttribution } = await import('../../services/marketing/campaignAttributionService');
     res.json(await getCampaignAttribution(id, rawWindow));

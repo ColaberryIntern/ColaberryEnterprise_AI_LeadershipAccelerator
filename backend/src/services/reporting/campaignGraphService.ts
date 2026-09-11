@@ -1356,8 +1356,29 @@ function filterPathsByBrand(
  * and went next. Filtering the enrolments down to only this campaign would amputate the
  * journey to a single node, which is not a journey.
  */
-function filterPathsByCampaign(paths: LeadPathRecord[], campaignId: string): LeadPathRecord[] {
+export function filterPathsByCampaign(paths: LeadPathRecord[], campaignId: string): LeadPathRecord[] {
   return paths.filter((lead) => lead.campaign_enrollments.some((e) => e.campaign_id === campaignId));
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export type GraphScope =
+  | { ok: true; timeWindow: string | undefined; brandId: string | undefined; campaignId: string | undefined }
+  | { ok: false; error: string };
+
+/**
+ * The graph route's query, parsed once and testably. Absent and empty both mean "no filter";
+ * values are trimmed so a stray space cannot become an id that matches nothing. A malformed
+ * campaign id is refused, because reaching the cohort filter with it would render an empty
+ * journey that looks like a campaign no lead ever entered.
+ */
+export function parseGraphScope(query: Record<string, unknown>): GraphScope {
+  const str = (k: string) => (typeof query[k] === 'string' ? (query[k] as string).trim() : '');
+  const timeWindow = str('timeWindow') || undefined;
+  const brandId = str('brandId') || undefined;
+  const rawCampaign = str('campaignId');
+  if (rawCampaign && !UUID_RE.test(rawCampaign)) return { ok: false, error: 'campaignId must be a UUID' };
+  return { ok: true, timeWindow, brandId, campaignId: rawCampaign || undefined };
 }
 
 export async function getCampaignGraphData(

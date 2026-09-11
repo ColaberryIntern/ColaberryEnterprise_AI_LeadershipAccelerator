@@ -1,5 +1,6 @@
 import {
   ALL_BRANDS,
+  comparisonLabel,
   comparisonRange,
   defaultScope,
   freshnessLabel,
@@ -174,5 +175,17 @@ describe('freshnessLabel reports the FETCH time, never the render time', () => {
 
   it('does not print a stale label for an unparseable timestamp', () => {
     expect(freshnessLabel('not-a-date', now)).toBe('Unknown');
+  });
+});
+
+describe('comparisonLabel', () => {
+  it('states both counts and a signed absolute delta', () => {
+    expect(comparisonLabel(12, 8)).toBe('12 vs 8 (+4)');
+    expect(comparisonLabel(30, 31)).toBe('30 vs 31 (−1)');
+    expect(comparisonLabel(2, 2)).toBe('2 vs 2 (±0)');
+  });
+
+  it('never a percentage - a small prior period would turn noise into a trend', () => {
+    expect(comparisonLabel(3, 1)).not.toMatch(/%/);
   });
 });

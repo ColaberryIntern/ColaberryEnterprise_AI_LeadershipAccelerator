@@ -1,11 +1,13 @@
 import React from 'react';
 import {
   ALL_BRANDS,
+  comparisonLabel,
   comparisonRange,
   freshnessLabel,
   rangeLengthDays,
   type ComparisonMode,
   type MarketingScope,
+  type ScopeComparison,
 } from './marketingScope';
 import type { Brand } from '../../../services/adminBrandApi';
 
@@ -30,6 +32,12 @@ export interface MarketingScopeStripProps {
   fetchedAt: string | null;
   /** Injected so the label is deterministic in tests and never reads a clock at render. */
   now: number;
+  /**
+   * The server's totals for the stated comparison window, or null when none was requested or
+   * none has arrived. The strip is the consumer of the window it states: without this prop it
+   * printed a comparison nothing rendered (the verifier's finding).
+   */
+  comparison?: ScopeComparison | null;
   onScopeChange: (next: MarketingScope) => void;
 }
 
@@ -40,7 +48,7 @@ const COMPARISON_LABELS: Record<ComparisonMode, string> = {
 };
 
 export default function MarketingScopeStrip(props: MarketingScopeStripProps) {
-  const { scope, brands, brandsLoading, fetchedAt, now, onScopeChange } = props;
+  const { scope, brands, brandsLoading, fetchedAt, now, comparison = null, onScopeChange } = props;
 
   const compare = comparisonRange(scope.range, scope.comparison);
   const days = rangeLengthDays(scope.range);
@@ -116,6 +124,13 @@ export default function MarketingScopeStrip(props: MarketingScopeStripProps) {
           {days} day{days === 1 ? '' : 's'}
           {compare ? ` vs ${compare.start} to ${compare.end}` : ' · no comparison'}
         </div>
+        {compare && comparison && (
+          <div className="text-muted" data-testid="comparison-totals">
+            leads {comparisonLabel(comparison.current.leads_count, comparison.prior.leads_count)}
+            {' · '}engagement {comparisonLabel(comparison.current.engagement_count, comparison.prior.engagement_count)}
+            {' · '}enrolments {comparisonLabel(comparison.current.enrollments_count, comparison.prior.enrollments_count)}
+          </div>
+        )}
         {/* Freshness is the real fetch time or an explicit "not loaded" - never a clock read
             at render, which would report the moment this component drew as the data's age. */}
         <div className={fetchedAt ? 'text-muted' : 'text-muted fst-italic'} data-testid="freshness">

@@ -12,7 +12,7 @@ import { fromDrilldownUrl, hasRequiredFilters, missingFilters } from '../../../a
  */
 
 const CAMPAIGN = 'c0000000-0000-4000-8000-000000000001';
-const COUNTS = { active: 12, completed: 30, removed: 2, dnc: 3, paused: 1 };
+const COUNTS = { active: 12, completed: 30, removed: 2, paused: 1 };
 
 describe('every KPI exposes a drill-down', () => {
   const kpis = buildOverviewKpis(CAMPAIGN, COUNTS, 48);
@@ -64,16 +64,19 @@ describe('every KPI exposes a drill-down', () => {
 });
 
 describe('the counts are honest', () => {
-  it('DNC / Removed is the SUM of both buckets, not one of them', () => {
-    // The tab computed `removed || dnc || 0`, which discards one bucket whenever both are
-    // non-zero. Two removed plus three DNC is five, and the label promises both.
-    const kpis = buildOverviewKpis(CAMPAIGN, { removed: 2, dnc: 3 }, 5);
-    expect(kpis.find((k) => k.key === 'removed')!.value).toBe(5);
+  it('Removed counts the removed bucket and promises nothing else', () => {
+    // An earlier version summed a `dnc` bucket into this card. getCampaignStats counts
+    // campaign_leads by its five statuses and dnc is not one of them, so that bucket was
+    // always undefined and the label "DNC / Removed" promised a number nothing measures.
+    const kpis = buildOverviewKpis(CAMPAIGN, { removed: 2 }, 5);
+    const removed = kpis.find((k) => k.key === 'removed')!;
+    expect(removed.value).toBe(2);
+    expect(removed.label).toBe('Removed');
   });
 
-  it('the removed drill-down asks the roster for BOTH statuses', () => {
+  it('the removed drill-down asks the roster for exactly the status it counted', () => {
     const kpis = buildOverviewKpis(CAMPAIGN, COUNTS, 48);
-    expect(kpis.find((k) => k.key === 'removed')!.drilldown.filters.status).toBe('removed,dnc');
+    expect(kpis.find((k) => k.key === 'removed')!.drilldown.filters.status).toBe('removed');
   });
 
   it('missing buckets read as zero, not NaN', () => {

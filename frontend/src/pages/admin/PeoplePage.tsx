@@ -68,6 +68,21 @@ export default function PeoplePage() {
     );
   });
 
+  /**
+   * The Campaign 360 KPI drill-down: `?drilldown=1&metric=marketing.campaign_lead_status
+   * &campaign=<id>&status=<s>`. Read once, like the untraced filter, and sent to the API on
+   * every load so the roster shows exactly the population the card counted. Before this the
+   * page consumed only the identity-coverage filter, and every KPI opened the whole roster
+   * under a scoped headline (the verifier's finding).
+   */
+  const [campaignFilter] = useState<{ campaign: string; status: string | null } | null>(() => {
+    const drilldown = fromDrilldownUrl(location.pathname, location.search);
+    const campaign = drilldown?.filters.campaign;
+    if (typeof campaign !== 'string' || campaign === '') return null;
+    const status = drilldown?.filters.status;
+    return { campaign, status: typeof status === 'string' && status !== '' ? status : null };
+  });
+
   const [roster, setRoster] = useState<Roster | null>(null);
   const [search, setSearch] = useState('');
   const [offset, setOffset] = useState(0);
@@ -81,6 +96,10 @@ export default function PeoplePage() {
       const params = new URLSearchParams({ limit: '50', offset: String(offset) });
       if (search.trim()) params.set('search', search.trim());
       if (untracedOnly) params.set('untraced', 'true');
+      if (campaignFilter) {
+        params.set('campaign', campaignFilter.campaign);
+        if (campaignFilter.status) params.set('status', campaignFilter.status);
+      }
       const res = await api.get(`/api/admin/people?${params.toString()}`);
       setRoster(res.data);
     } catch (err) {
@@ -96,7 +115,7 @@ export default function PeoplePage() {
     } finally {
       setLoading(false);
     }
-  }, [search, untracedOnly, offset]);
+  }, [search, untracedOnly, offset, campaignFilter]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -106,6 +125,13 @@ export default function PeoplePage() {
         title="People"
         subtitle="Everyone we can name, and how far they have come."
       />
+
+      {campaignFilter && (
+        <div className="alert alert-info py-2 small" data-testid="campaign-scope">
+          Showing people in one campaign{campaignFilter.status ? ` with status ${campaignFilter.status}` : ''}.{' '}
+          <a href="/admin/people">Clear</a>
+        </div>
+      )}
 
       <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
         <input

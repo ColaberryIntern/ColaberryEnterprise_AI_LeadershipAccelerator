@@ -134,3 +134,21 @@ export function freshnessLabel(fetchedAt: string | null | undefined, now: number
   if (hours < 24) return `Updated ${hours} hr ago`;
   return `Updated ${Math.round(hours / 24)} d ago`;
 }
+
+/** The server's period-over-period totals for the campaigns response. Trusted counts only. */
+export interface ScopeComparison {
+  start: string;
+  end: string;
+  current: { campaigns: number; visitors_count: number; leads_count: number; engagement_count: number; enrollments_count: number };
+  prior: { campaigns: number; visitors_count: number; leads_count: number; engagement_count: number; enrollments_count: number };
+}
+
+/**
+ * "12 vs 8 (+4)" - the delta as words, never a percentage. A percentage of a small prior
+ * period reads as a trend where there is only noise; the two counts side by side do not.
+ */
+export function comparisonLabel(current: number, prior: number): string {
+  const delta = current - prior;
+  const sign = delta > 0 ? '+' : delta < 0 ? '−' : '±';
+  return `${current} vs ${prior} (${sign}${Math.abs(delta)})`;
+}

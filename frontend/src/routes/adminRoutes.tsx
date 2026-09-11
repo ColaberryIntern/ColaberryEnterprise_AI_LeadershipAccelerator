@@ -51,6 +51,8 @@ const AdminMarketingDashboardPage = lazy(() => import('../pages/admin/marketing/
 const AdminBrandsPage = lazy(() => import('../pages/admin/marketing/AdminBrandsPage'));
 const AdminMarketingCalendarPage = lazy(() => import('../pages/admin/marketing/AdminMarketingCalendarPage'));
 const AdminContentComposerPage = lazy(() => import('../pages/admin/marketing/composer/AdminContentComposerPage'));
+const AdminContentQueuePage = lazy(() => import('../pages/admin/marketing/AdminContentQueuePage'));
+const AdminPublishingQueuePage = lazy(() => import('../pages/admin/marketing/AdminPublishingQueuePage'));
 const AdminCommunicationsPage = lazy(() => import('../pages/admin/AdminCommunicationsPage'));
 const AdminTicketBoardPage = lazy(() => import('../pages/admin/AdminTicketBoardPage'));
 const AgentDetailPage = lazy(() => import('../pages/admin/AgentDetailPage'));
@@ -182,6 +184,9 @@ const adminRoutes = (
             longest prefix; the API side maps /api/admin/content the same way. */}
         <Route path="/admin/marketing/composer" element={<AdminContentComposerPage />} />
         <Route path="/admin/marketing/composer/:id" element={<AdminContentComposerPage />} />
+        {/* The two queues the needs-attention signals link to (T015). Same section by prefix. */}
+        <Route path="/admin/marketing/content" element={<AdminContentQueuePage />} />
+        <Route path="/admin/marketing/publishing" element={<AdminPublishingQueuePage />} />
         <Route path="/admin/tickets" element={<AdminTicketBoardPage />} />
         <Route path="/admin/agents/:id" element={<AgentDetailPage />} />
         <Route path="/admin/governance" element={<GovernanceCommandCenter />} />

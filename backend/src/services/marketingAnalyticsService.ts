@@ -96,12 +96,21 @@ function buildUnavailable(): UnavailableMetric[] {
 
 
 
-export async function getCampaignMetrics(filters?: {
+export interface CampaignMetricFilters {
   start?: string;
   end?: string;
-}): Promise<CampaignMetric[]> {
+  /** Scope to one brand. Omitted = every brand the caller may see (the route decides that). */
+  brandId?: string;
+}
+
+export async function getCampaignMetrics(filters?: CampaignMetricFilters): Promise<CampaignMetric[]> {
   const startTime = Date.now();
   const dateFilter = buildDateFilter(filters);
+  // Brand is a WHERE on campaigns, not a join: a campaign with no brand belongs to no brand
+  // scope and drops out when one is chosen. That is the truthful answer, not a leak.
+  const brandClause = filters?.brandId ? 'AND c.brand_id = :brandId' : '';
+  const replacements: Record<string, string> = { ...dateFilter.replacements };
+  if (filters?.brandId) replacements.brandId = filters.brandId;
 
   // Combine visitor tracking data with interaction outcome data for full picture
   const query = `
@@ -117,6 +126,7 @@ export async function getCampaignMetrics(filters?: {
         COUNT(*) FILTER (WHERE io.outcome = 'clicked')::int AS total_clicks
       FROM interaction_outcomes io
       WHERE io.campaign_id IS NOT NULL
+        ${dateFilter.clauseFor('io.created_at')}
       GROUP BY io.campaign_id
     ),
     visitor_data AS (
@@ -127,6 +137,7 @@ export async function getCampaignMetrics(filters?: {
       FROM visitors v
       LEFT JOIN intent_scores i ON i.visitor_id = v.id
       WHERE v.campaign_id IS NOT NULL AND v.campaign_id != ''
+        ${dateFilter.clauseFor('v."createdAt"')}
       GROUP BY v.campaign_id
     )
     SELECT
@@ -151,6 +162,7 @@ export async function getCampaignMetrics(filters?: {
     LEFT JOIN leads l ON l.id = cl.lead_id
     LEFT JOIN enrollments e ON LOWER(e.email) = LOWER(l.email) AND e.status = 'active'
     WHERE c.status = 'active'
+      ${brandClause}
       AND (ce.emails_sent > 0 OR vd.visitors_count > 0)
     GROUP BY c.id, c.name, c.type, c.funnel_stage, vd.visitors_count, vd.high_intent_count,
       ce.emails_sent, ce.unique_opens, ce.unique_clicks, ce.replies, ce.meetings,
@@ -159,7 +171,7 @@ export async function getCampaignMetrics(filters?: {
   `;
 
   const rows = await sequelize.query(query, {
-    replacements: dateFilter.replacements,
+    replacements,
     type: QueryTypes.SELECT,
   }) as any[];
 
@@ -212,21 +224,43 @@ export async function getCampaignMetrics(filters?: {
   return result;
 }
 
+/**
+ * The date range, as a clause for WHICHEVER timestamp column the CTE has. Until this build the
+ * builder returned one clause hard-wired to `v."createdAt"` and nothing interpolated it, so the
+ * range the scope strip stated was never applied - the verifier's finding, and true on main
+ * before this branch. The column is a caller-supplied identifier, never user input.
+ */
 function buildDateFilter(filters?: { start?: string; end?: string }): {
-  clause: string;
+  clauseFor: (column: string) => string;
   replacements: Record<string, string>;
 } {
   const replacements: Record<string, string> = {};
-  const parts: string[] = [];
+  if (filters?.start) replacements.start = filters.start;
+  if (filters?.end) replacements.end = filters.end;
+  return {
+    clauseFor: (column) => [
+      filters?.start ? `AND ${column} >= :start` : '',
+      filters?.end ? `AND ${column} <= :end` : '',
+    ].filter(Boolean).join(' '),
+    replacements,
+  };
+}
 
-  if (filters?.start) {
-    parts.push('AND v."createdAt" >= :start');
-    replacements.start = filters.start;
-  }
-  if (filters?.end) {
-    parts.push('AND v."createdAt" <= :end');
-    replacements.end = filters.end;
-  }
+/** Totals of the trusted counts, for a period-over-period comparison. Pure. */
+export interface CampaignTotals {
+  campaigns: number;
+  visitors_count: number;
+  leads_count: number;
+  engagement_count: number;
+  enrollments_count: number;
+}
 
-  return { clause: parts.join(' '), replacements };
+export function totalCampaignMetrics(rows: readonly Pick<CampaignMetric, 'visitors_count' | 'leads_count' | 'engagement_count' | 'enrollments_count'>[]): CampaignTotals {
+  return rows.reduce<CampaignTotals>((acc, r) => ({
+    campaigns: acc.campaigns + 1,
+    visitors_count: acc.visitors_count + r.visitors_count,
+    leads_count: acc.leads_count + r.leads_count,
+    engagement_count: acc.engagement_count + r.engagement_count,
+    enrollments_count: acc.enrollments_count + r.enrollments_count,
+  }), { campaigns: 0, visitors_count: 0, leads_count: 0, engagement_count: 0, enrollments_count: 0 });
 }

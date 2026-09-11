@@ -93,7 +93,8 @@ const CANDIDATES: readonly Candidate[] = [
     key: 'pending_approvals',
     metricKey: 'marketing.pending_approvals',
     severity: 'action',
-    href: '/admin/marketing/content',
+    // The content review queue (T015 fix): filtered to what is awaiting approval.
+    href: '/admin/marketing/content?status=ready_for_review',
     value: (c) => c.pendingApprovals,
     raise: (v) => v > 0,
     title: (v) => `${v} content item${v === 1 ? '' : 's'} awaiting approval`,
@@ -103,7 +104,7 @@ const CANDIDATES: readonly Candidate[] = [
     key: 'failed_jobs',
     metricKey: 'marketing.failed_publishing_jobs',
     severity: 'action',
-    href: '/admin/marketing/publishing',
+    href: '/admin/marketing/publishing?dead_lettered=true',
     // Null if EITHER half is null: summing a failed count with a real one would report a
     // partial figure as if it were complete.
     value: (c) => (c.failedJobs === null || c.deadLetteredJobs === null ? null : c.failedJobs + c.deadLetteredJobs),
@@ -115,7 +116,7 @@ const CANDIDATES: readonly Candidate[] = [
     key: 'late_jobs',
     metricKey: 'marketing.failed_publishing_jobs',
     severity: 'warning',
-    href: '/admin/marketing/publishing',
+    href: '/admin/marketing/publishing?state=pending',
     value: (c) => c.lateJobs,
     raise: (v) => v > 0,
     title: (v) => `${v} scheduled post${v === 1 ? ' is' : 's are'} overdue and unpublished`,
@@ -135,7 +136,8 @@ const CANDIDATES: readonly Candidate[] = [
     key: 'unmapped_spend',
     metricKey: 'marketing.ad_spend',
     severity: 'warning',
-    href: '/admin/marketing/ads',
+    // No ads workspace exists yet; the dashboard is the truthful destination until one does.
+    href: '/admin/marketing',
     value: (c) => c.unmappedSpendItems,
     raise: (v) => v > 0,
     title: (v) => `${v} spend line${v === 1 ? '' : 's'} not mapped to a campaign`,
@@ -145,7 +147,8 @@ const CANDIDATES: readonly Candidate[] = [
     key: 'unattributed_traffic',
     metricKey: 'growth.source_attribution',
     severity: 'warning',
-    href: '/admin/marketing/attribution',
+    // Attribution lives on each campaign's tab; no cross-campaign page exists yet.
+    href: '/admin/marketing',
     value: (c) => c.unattributedVisitorShare,
     raise: (v) => v >= UNATTRIBUTED_SHARE_THRESHOLD,
     title: (v) => `${Math.round(v * 100)}% of visitors have no attributed source`,

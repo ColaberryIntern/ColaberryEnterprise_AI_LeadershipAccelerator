@@ -225,6 +225,15 @@ describe('OutreachJourneyFlow — filters drive one population', () => {
     expect(text()).toContain('Brand: Colaberry Enterprise');
   });
 
+  it('forwards a campaignId to the API and locks the brand selector to that campaign', async () => {
+    // The Campaign 360 Journey tab hands its campaign down; before this test nothing checked
+    // that the id reached the request (the T018 verifier's finding).
+    await render(<OutreachJourneyFlow campaignId="c0000000-0000-4000-8000-000000000001" />);
+    await settle();
+    expect(mockedApi.getCampaignGraph).toHaveBeenLastCalledWith('all', false, undefined, 'c0000000-0000-4000-8000-000000000001');
+    expect((select('journey-brand') as HTMLSelectElement).disabled).toBe(true);
+  });
+
   it('keeps every brand option after one is selected', async () => {
     await render(<OutreachJourneyFlow />);
     await settle();

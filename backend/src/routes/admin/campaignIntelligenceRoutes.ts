@@ -7,7 +7,7 @@ import { scoreMessageEffectiveness } from '../../services/aiMessageService';
 import { calculateMultiTouchAttribution } from '../../services/revenueDashboardService';
 import { parseNaturalLanguageCampaign } from '../../services/campaignBuilderService';
 import { getPersonaArchetypes } from '../../services/testing/testLeadGenerator';
-import { getCampaignGraphData, getNodeUsers, getEdgeUsers, getSlicedGraphData, buildTimelineBuckets, getCachedLeadPaths } from '../../services/reporting/campaignGraphService';
+import { getCampaignGraphData, getNodeUsers, getEdgeUsers, getSlicedGraphData, buildTimelineBuckets, getCachedLeadPaths, parseGraphScope } from '../../services/reporting/campaignGraphService';
 
 const router = Router();
 
@@ -181,21 +181,15 @@ router.get('/api/admin/campaign-intelligence/visitor-diagnostics', requireAdmin,
 // ── Campaign Intelligence Graph ─────────────────────────────────────────
 
 router.get('/api/admin/campaign-intelligence/graph', requireAdmin, async (req: Request, res: Response) => {
+  // Parsed by a pure, tested function (parseGraphScope) rather than inline, so the 400 for a
+  // malformed campaign id has a test that does not need the whole intelligence router mounted.
+  const scope = parseGraphScope(req.query as Record<string, unknown>);
+  if (!scope.ok) {
+    res.status(400).json({ error: scope.error, error_class: 'ValidationError' });
+    return;
+  }
   try {
-    const timeWindow = req.query.timeWindow as string | undefined;
-    // Absent and empty both mean "no brand filter". Trimmed so a stray space in a
-    // query string cannot become a brand id that matches nothing.
-    const rawBrand = typeof req.query.brandId === 'string' ? req.query.brandId.trim() : '';
-    const brandId = rawBrand.length > 0 ? rawBrand : undefined;
-    // Campaign scope for the Campaign 360 Journey tab. Validated as a UUID: a malformed id
-    // reaching the cohort filter would just match nothing and render an empty journey that
-    // looks like a campaign no lead ever entered.
-    const rawCampaign = typeof req.query.campaignId === 'string' ? req.query.campaignId.trim() : '';
-    if (rawCampaign && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawCampaign)) {
-      res.status(400).json({ error: 'campaignId must be a UUID', error_class: 'ValidationError' });
-      return;
-    }
-    const campaignId = rawCampaign.length > 0 ? rawCampaign : undefined;
+    const { timeWindow, brandId, campaignId } = scope;
     const data = await getCampaignGraphData(timeWindow, brandId, campaignId);
     if (req.query.timeline === 'true') {
       const paths = getCachedLeadPaths();

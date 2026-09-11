@@ -8,14 +8,15 @@ import { TrustSignal } from '../../../components/admin/shell/trust';
 import { deriveMarketingTrust, MarketingDataState } from './marketingTrust';
 import { formatMoneyOrUnavailable, formatRatioOrUnavailable, formatSpend } from './marketingFormat';
 import MarketingScopeStrip from './MarketingScopeStrip';
-import { defaultScope, scopeToQuery, type MarketingScope } from './marketingScope';
+import CampaignTableControls from './CampaignTableControls';
+import { defaultScope, scopeToQuery, type MarketingScope, type ScopeComparison } from './marketingScope';
 import { listBrands, type Brand as ScopeBrand } from '../../../services/adminBrandApi';
 import NeedsAttentionQueue, { type AttentionItem, type ExcludedSignal } from './NeedsAttentionQueue';
 import { getNeedsAttention } from '../../../services/marketingOpsApi';
 import { ALL_BRANDS } from './marketingScope';
 import {
-  ALL_COLUMNS, DEFAULT_COLUMNS, OBJECTIVE_LABELS, loadViews, rankCampaigns, saveViews, upsertView,
-  type ResolvedRanking, type SavedView,
+  ALL_COLUMNS, DEFAULT_COLUMNS, OBJECTIVE_LABELS, rankCampaigns,
+  type ResolvedRanking,
 } from './campaignTableViews';
 
 const MarketingFunnelGraph = lazy(() => import('../../../components/admin/marketing/MarketingFunnelGraph'));
@@ -959,7 +960,7 @@ function CampaignLinkRegistryTab() {
 // ─── Revenue Intelligence Tab (Original Content) ────────────────────────────
 
 function RevenueIntelligenceTab(
-  { onDataState, scope }: { onDataState?: (s: MarketingDataState) => void; scope: MarketingScope },
+  { onDataState, onComparison, scope }: { onDataState?: (s: MarketingDataState) => void; onComparison?: (c: ScopeComparison | null) => void; scope: MarketingScope },
 ) {
   const [campaigns, setCampaigns] = useState<CampaignMetric[]>([]);
   const [loading, setLoading] = useState(true);
@@ -976,15 +977,7 @@ function RevenueIntelligenceTab(
 
   /* ---------- columns and saved views (per-viewer convenience, localStorage) ---------- */
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => new Set(DEFAULT_COLUMNS));
-  const [showColumnPicker, setShowColumnPicker] = useState(false);
-  const [views, setViews] = useState<SavedView[]>(() =>
-    loadViews(typeof window !== 'undefined' ? window.localStorage : null));
-  const [newViewName, setNewViewName] = useState('');
 
-  const persistViews = (next: SavedView[]) => {
-    setViews(next);
-    saveViews(typeof window !== 'undefined' ? window.localStorage : null, next);
-  };
   // Dates come from the page-level scope strip. This tab used to own a second pair of date
   // inputs, which meant the strip could say one range while the table below showed another -
   // two controls for one concept, disagreeing silently.
@@ -1017,6 +1010,8 @@ function RevenueIntelligenceTab(
       setCampaigns(rows);
       // Resolved server-side from the registry. The table applies these; it never decides them.
       setRanking(res.data.ranking || {});
+      // The comparison the strip states, computed by the server over the prior window.
+      onComparison?.(res.data.compare ?? null);
       // Report the REAL fetch time and the server's own unavailable list to the page badge.
       // Reported here rather than during render so the badge cannot claim freshness for a
       // render that fetched nothing.
@@ -1032,10 +1027,11 @@ function RevenueIntelligenceTab(
       // A failed fetch must degrade the badge. The previous implementation left it reading
       // 'live' with a just-now timestamp after a 500.
       onDataState?.({ loading: false, error: true, unavailable: undefined, fetchedAt: null });
+      onComparison?.(null);
     } finally {
       setLoading(false);
     }
-  }, [scope, onDataState]);
+  }, [scope, onDataState, onComparison]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -1142,7 +1138,6 @@ function RevenueIntelligenceTab(
         </button>
       </div>
 
-
       {/* KPI Summary Cards */}
       <div className="row g-3 mb-4">
         {kpiCards.map((kpi) => (
@@ -1232,80 +1227,14 @@ function RevenueIntelligenceTab(
             </div>
           ) : (
             <div>
-              {/* ---- view controls: objective ranking / manual sort, columns, saved views ---- */}
-              <div className="d-flex flex-wrap align-items-center gap-2 px-3 py-2 border-bottom small">
-                {manualSort ? (
-                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setManualSort(null)}>
-                    Sorted by {ALL_COLUMNS.find((c) => c.key === manualSort.key)?.label ?? manualSort.key} - reset to objective ranking
-                  </button>
-                ) : (
-                  <span className="text-muted">Ranked by each campaign's own objective. Click a column to sort manually.</span>
-                )}
-                <div className="ms-auto d-flex gap-2 align-items-center">
-                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setShowColumnPicker((v) => !v)}>
-                    Columns ({activeColumns.length})
-                  </button>
-                  {views.length > 0 && (
-                    <select
-                      className="form-select form-select-sm"
-                      style={{ width: 'auto' }}
-                      value=""
-                      onChange={(e) => {
-                        const v = views.find((x) => x.name === e.target.value);
-                        if (v) setVisibleColumns(new Set(v.columns));
-                      }}
-                    >
-                      <option value="">Saved views...</option>
-                      {views.map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
-                    </select>
-                  )}
-                </div>
-              </div>
-
-              {showColumnPicker && (
-                <div className="px-3 py-2 border-bottom bg-light small">
-                  <div className="d-flex flex-wrap gap-3 mb-2">
-                    {ALL_COLUMNS.map((col) => (
-                      <label key={col.key} className="form-check-label d-flex align-items-center gap-1">
-                        <input
-                          type="checkbox"
-                          className="form-check-input"
-                          checked={visibleColumns.has(col.key)}
-                          onChange={(e) => {
-                            const next = new Set(visibleColumns);
-                            if (e.target.checked) next.add(col.key); else next.delete(col.key);
-                            setVisibleColumns(next);
-                          }}
-                        />
-                        {col.label}
-                      </label>
-                    ))}
-                  </div>
-                  <div className="d-flex gap-2 align-items-center">
-                    <input
-                      className="form-control form-control-sm"
-                      style={{ maxWidth: 220 }}
-                      placeholder="Save this column set as..."
-                      value={newViewName}
-                      onChange={(e) => setNewViewName(e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-primary"
-                      disabled={!newViewName.trim()}
-                      onClick={() => {
-                        persistViews(upsertView(views, { name: newViewName.trim(), columns: Array.from(visibleColumns) }));
-                        setNewViewName('');
-                      }}
-                    >
-                      Save view
-                    </button>
-                    <button type="button" className="btn btn-sm btn-link" onClick={() => setVisibleColumns(new Set(DEFAULT_COLUMNS))}>
-                      Reset columns
-                    </button>
-                  </div>
-                </div>
-              )}
+              {/* View controls live in CampaignTableControls (extracted; the page was past the size ceiling). */}
+              <CampaignTableControls
+                manualSortLabel={manualSort ? (ALL_COLUMNS.find((c) => c.key === manualSort.key)?.label ?? manualSort.key) : null}
+                onResetSort={() => setManualSort(null)}
+                visibleColumns={visibleColumns}
+                onVisibleColumnsChange={setVisibleColumns}
+                storage={typeof window !== 'undefined' ? window.localStorage : null}
+              />
 
               <div className="table-responsive">
                 <table className="table table-hover mb-0" style={{ fontSize: '0.82rem' }}>
@@ -1435,6 +1364,8 @@ function AdminMarketingDashboardPage() {
     return () => { cancelled = true; };
   }, []);
   const handleDataState = useCallback((next: MarketingDataState) => setDataState(next), []);
+  const [comparison, setComparison] = useState<ScopeComparison | null>(null);
+  const handleComparison = useCallback((next: ScopeComparison | null) => setComparison(next), []);
   const trust: TrustSignal = useMemo(() => deriveMarketingTrust(dataState), [dataState]);
 
   return (
@@ -1489,6 +1420,7 @@ function AdminMarketingDashboardPage() {
         brandsLoading={brandsLoading}
         fetchedAt={dataState.fetchedAt ?? null}
         now={Date.now()}
+        comparison={comparison}
         onScopeChange={setScope}
       />
 
@@ -1517,7 +1449,7 @@ function AdminMarketingDashboardPage() {
           </Suspense>
         </div>
       )}
-      {activeTab === 'revenue' && <RevenueIntelligenceTab onDataState={handleDataState} scope={scope} />}
+      {activeTab === 'revenue' && <RevenueIntelligenceTab onDataState={handleDataState} onComparison={handleComparison} scope={scope} />}
       {activeTab === 'registry' && <CampaignLinkRegistryTab />}
       {activeTab === 'outreach' && (
         <Suspense fallback={

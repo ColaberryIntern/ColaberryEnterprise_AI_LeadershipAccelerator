@@ -30,7 +30,6 @@ export interface CampaignStatusCounts {
   active?: number;
   completed?: number;
   removed?: number;
-  dnc?: number;
   paused?: number;
 }
 
@@ -53,10 +52,10 @@ export function buildOverviewKpis(
   counts: CampaignStatusCounts,
   totalEnrolled: number,
 ): OverviewKpi[] {
-  // "DNC / Removed" is the SUM of both buckets. The tab used `removed || dnc || 0`, which reads
-  // as a fallback but silently discards one bucket whenever both are non-zero - a lead can be
-  // in either, and the label promises both.
-  const removed = (counts.removed ?? 0) + (counts.dnc ?? 0);
+  // The tab used to read `removed || dnc`. There is no dnc bucket: `getCampaignStats` counts
+  // campaign_leads by its five statuses and dnc is not one of them, so the card was promising
+  // a number nothing measures. It is Removed, and it drills to status=removed.
+  const removed = counts.removed ?? 0;
 
   return [
     {
@@ -85,11 +84,10 @@ export function buildOverviewKpis(
     },
     {
       key: 'removed',
-      label: 'DNC / Removed',
+      label: 'Removed',
       value: removed,
       tone: 'danger',
-      // Two source statuses, one KPI. The roster receives both so its count matches the card.
-      drilldown: { ...target(campaignId), filters: { campaign: campaignId, status: 'removed,dnc' } },
+      drilldown: { ...target(campaignId), filters: { campaign: campaignId, status: 'removed' } },
       requiredFilters: ['campaign', 'status'],
     },
     {
