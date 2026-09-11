@@ -240,7 +240,13 @@ export interface ProfileContextPanel {
   githubRepos: Array<{ repoUrl: string | null; language: string | null; fileCount: number | null; lastSyncAt: string | null }>;
 }
 
-export interface CommunicationOutcome { outcome: string; at: string | null; channel: string | null }
+export interface CommunicationOutcome {
+  outcome: string; at: string | null; channel: string | null;
+  /** What Mandrill recorded this outcome as being on. */
+  subject: string | null;
+  /** False when that subject disagrees with the message it was pinned to. */
+  attributed: boolean;
+}
 
 export interface CommunicationMessage {
   id: string;

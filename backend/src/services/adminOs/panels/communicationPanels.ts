@@ -38,6 +38,20 @@ export interface CommunicationOutcome {
   outcome: string;
   at: string | null;
   channel: string | null;
+  /**
+   * The subject Mandrill recorded for the message this outcome was actually on.
+   * When it differs from the message the row is attached to, the attachment is
+   * wrong — see `attributed` — and the reader is shown this instead.
+   */
+  subject: string | null;
+  /**
+   * False when the recorded subject disagrees with the message the foreign key
+   * points at. The Mandrill poll in schedulerService pins every open and click
+   * for a lead to "the most recent sent email to this lead", whatever Mandrill
+   * says was opened — so a login-email open lands on a campaign email. The
+   * metadata subject is the truth; the FK is a guess.
+   */
+  attributed: boolean;
 }
 
 export interface CommunicationMessage {
@@ -105,6 +119,7 @@ interface MessageRow {
 interface OutcomeRow {
   scheduled_email_id: string | null; campaign_id: string | null;
   outcome: string; channel: string | null; created_at: string | null;
+  metadata: { subject?: string | null } | null;
 }
 
 /**
@@ -176,7 +191,7 @@ export async function loadCommunications(leadIds: number[]): Promise<Communicati
     sequelize.query<OutcomeRow>(
       `SELECT io.scheduled_email_id::text AS scheduled_email_id,
               io.campaign_id::text AS campaign_id,
-              io.outcome, io.channel, io.created_at
+              io.outcome, io.channel, io.created_at, io.metadata
        FROM interaction_outcomes io
        WHERE io.lead_id IN (:leadIds)
        ORDER BY io.created_at ASC`,
@@ -184,14 +199,30 @@ export async function loadCommunications(leadIds: number[]): Promise<Communicati
     ),
   ]);
 
-  // Outcomes attach to the message they describe. Those with no
-  // scheduled_email_id cannot be attributed to one message and are surfaced on
-  // the thread instead of being dropped or guessed at by timestamp.
+  // ── OUTCOMES ATTACH ONLY WHEN MANDRILL'S OWN SUBJECT AGREES ───────────────
+  //
+  // Found 2026-09-11 on a live profile: an email showing "7 opens & clicks" whose
+  // outcomes all carried metadata.subject of "Log into your ColaberryApp
+  // Account" and "[Accelerator] Your Portal Access Link" — her login emails,
+  // not the campaign email. The Mandrill poll pins every open and click to the
+  // most recent sent email regardless of which was opened. The FK is therefore
+  // a guess; the recorded subject is the fact. Trust the FK only when the two
+  // agree, or when no subject was recorded at all (older rows predate it).
+  const subjectOf = new Map<string, string | null>();
+  for (const m of messages) subjectOf.set(m.id, m.subject);
+  const norm = (v: string | null | undefined) => (v ?? '').trim().toLowerCase();
+
   const byMessage = new Map<string, CommunicationOutcome[]>();
   const unattached: Array<OutcomeRow> = [];
   for (const o of outcomes) {
-    const entry = { outcome: o.outcome, at: o.created_at, channel: o.channel };
-    if (o.scheduled_email_id) {
+    const recorded = o.metadata?.subject ?? null;
+    const fkSubject = o.scheduled_email_id ? subjectOf.get(o.scheduled_email_id) : undefined;
+    const agrees = !recorded || fkSubject === undefined || norm(recorded) === norm(fkSubject);
+    const entry: CommunicationOutcome = {
+      outcome: o.outcome, at: o.created_at, channel: o.channel,
+      subject: recorded, attributed: agrees,
+    };
+    if (o.scheduled_email_id && agrees && subjectOf.has(o.scheduled_email_id)) {
       const list = byMessage.get(o.scheduled_email_id) ?? [];
       list.push(entry);
       byMessage.set(o.scheduled_email_id, list);
@@ -260,15 +291,18 @@ export async function loadCommunications(leadIds: number[]): Promise<Communicati
     });
   }
 
-  // Unattributable outcomes still belong to their campaign's thread.
+  // Unattributable outcomes still belong to their campaign's thread — labelled
+  // with the subject Mandrill recorded, which is the only honest name we have
+  // for an engagement on a message we do not hold.
   for (const o of unattached) {
     const t = threads.get(keyOf(o.campaign_id));
     if (!t) continue;
+    const recorded = o.metadata?.subject ?? null;
     t.messages.push({
       id: `outcome-${o.created_at}-${o.outcome}`,
       direction: o.outcome === 'replied' ? 'inbound' : 'outbound',
       channel: o.channel,
-      subject: null,
+      subject: recorded,
       body: null,
       sentAt: o.created_at,
       scheduledFor: null,
@@ -277,7 +311,7 @@ export async function loadCommunications(leadIds: number[]): Promise<Communicati
       stepIndex: null,
       toAddress: null,
       source: 'interaction_outcomes',
-      outcomes: [{ outcome: o.outcome, at: o.created_at, channel: o.channel }],
+      outcomes: [{ outcome: o.outcome, at: o.created_at, channel: o.channel, subject: recorded, attributed: true }],
     });
   }
 
