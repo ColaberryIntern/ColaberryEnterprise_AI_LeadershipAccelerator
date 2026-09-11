@@ -201,6 +201,16 @@ export const startSchema = z.object({
     id: z.string().max(80),
     question: z.string().max(500),
     answer: z.string().max(ANSWER_MAX),
+    // The angle the question came from, so the answer files against a truth
+    // dimension by lookup rather than by guessing from the wording. Optional:
+    // a bundle cached before angles existed still starts a build, and its
+    // answers are reported unmapped rather than misfiled.
+    angle: z.string().max(80).optional(),
+  })).max(20).optional(),
+  // What the description already answered, as the intake service reported it.
+  covered: z.array(z.object({
+    angle: z.string().max(80),
+    evidence: z.string().max(600),
   })).max(20).optional(),
 });
 
@@ -223,6 +233,7 @@ router.post('/api/portal/sbp/builds', requireParticipant, async (req: Request, r
       targetWeeks: body.target_weeks,
       document: body.document,
       answers: body.answers,
+      covered: body.covered,
     });
     res.status(202).json(result);   // 202: accepted, generation continues
   } catch (e) { fail(res, e, next); }

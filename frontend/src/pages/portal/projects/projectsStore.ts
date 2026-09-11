@@ -152,7 +152,9 @@ export type NewBuildAnswers = {
   dataSources?: string;
   done?: string;
   /** The interview: questions generated from this student's idea, and their replies. */
-  answers?: Array<{ id: string; question: string; answer: string }>;
+  answers?: Array<{ id: string; question: string; answer: string; angle?: string }>;
+  /** Angles the description already answered, quoted. From the intake result. */
+  covered?: Array<{ angle: string; evidence: string }>;
   weeks: number;
 };
 

@@ -91,7 +91,9 @@ export interface StartBuildAnswers {
    * pairs, so the requirements are shaped by what this student actually said
    * rather than by three fixed fields.
    */
-  answers?: Array<{ id: string; question: string; answer: string }>;
+  answers?: Array<{ id: string; question: string; answer: string; angle?: string }>;
+  /** Carried through from the intake result so the truth store files them. */
+  covered?: CoveredAngle[];
   target_weeks?: number;
 }
 
@@ -116,10 +118,28 @@ export interface IntakeQuestion {
    * an older cached response has none — the UI must not assume they exist.
    */
   suggestions?: string[];
+  /**
+   * The angle this question came from. Sent back with the answer so the
+   * server files it against a truth dimension by lookup rather than by
+   * guessing from the wording. Optional: an older cached response has none.
+   */
+  angle?: string;
+}
+
+/** An angle the description already answered, with the student's own phrase. */
+export interface CoveredAngle {
+  angle: string;
+  evidence: string;
 }
 
 export interface IntakeQuestionsResult {
   questions: IntakeQuestion[];
+  /**
+   * What was NOT asked, and why. The receipt for a short interview: a student
+   * who wrote three paragraphs and got two questions can see the other eight
+   * quoted back. Optional because an older server omits it.
+   */
+  covered?: CoveredAngle[];
   /**
    * false when the model failed and the server substituted its generic set.
    * The UI must not claim these were tailored when this is false.
