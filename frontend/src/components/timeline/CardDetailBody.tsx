@@ -323,7 +323,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
     let alive = true;
     runtimeApi.mediaVerdict(ambientMedia.kind, ambientMedia.id).then((v) => { if (alive) setWatch(v); }).catch(() => { /* best-effort */ });
     return () => { alive = false; };
-  }, [ambientMedia?.kind, ambientMedia?.id, live]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ambientMedia?.kind, ambientMedia?.id, live]);
   const completeSafely = onComplete
     ? async () => {
         setGateMsg(null);
