@@ -41,7 +41,7 @@ import { REFERENCE, RUBRIC } from '../../data/certBlueprints/ccarRubric';
  */
 
 export const IMPROVER_MODEL = 'gpt-4o';
-export const IMPROVER_PROMPT_VERSION = 'v2-median-and-measured';
+export const IMPROVER_PROMPT_VERSION = 'v3-attributed-opening';
 
 const TIMEOUT_MS = 30_000;
 const MAX_ATTEMPTS = 2;
@@ -280,6 +280,12 @@ export async function generateItem(spec: {
     'observed, and quantify it: a rate ("about one run in six"), a count ("two',
     'changes merged last week without review"), a duration, a log line. "Occasionally',
     'fails" is not an observation, it is a summary of one. Say who saw it.',
+    '',
+    'OPEN THE WAY THE PUBLISHED ITEMS OPEN. The first words name the evidence and',
+    'its source: "Monitoring shows ...", "Logs show ...", "Engineers report ...",',
+    '"Reviewers report ...", "The team notices ...", "In production, ...",',
+    '"Metrics show ...". Then the number. A stem that begins "A developer has',
+    'observed that" is weaker than one that begins "Monitoring shows that".',
     '',
     'THE KEY MUST RESOLVE THE STEM. Read your own stem back and confirm the correct',
     'option addresses the thing that was actually observed. A retry fixes a call',
