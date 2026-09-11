@@ -5,6 +5,7 @@ import RoomMessage from '../../models/RoomMessage';
 import { getReeseEnrollmentId, getReeseAdminUserId, getReeseAgentId } from './reeseIdentitySeed';
 import { buildReeseSystemPrompt } from './reeseSystemPrompt';
 import { ensureReeseTicketForRoom, logReeseExchangeActivity } from './reeseTicketLinkService';
+import { logAgentActivity } from '../agentBlueprint/agentActivityLogService';
 import { agentHasTool } from '../agents/tools/agentToolRegistry';
 import { readAttachments, attachmentInstruction } from '../agents/tools/readAttachmentsTool';
 import type { AttachmentRef } from '../agents/tools/types';
@@ -200,6 +201,23 @@ export async function maybeTriggerReeseReply(roomId: string, senderEnrollmentId:
       { enrollmentId: reeseEnrollmentId, cohortId: null, isAdmin: false }, roomId, reply,
     );
 
+    // GOALS scorecard fix (Ali: "improve the 3.8/5 Trust score for Reese") —
+    // record this real reply under Reese's OWN AiAgent.id, decoupled from
+    // ticket-linking success, so agentGoalsDimensionsService.ts's
+    // observability/availability/solid dimensions have real data instead of
+    // their zero-row fallback constants. See agentActivityLogService.ts's
+    // header for why this was missing.
+    const reeseAgentId = await getReeseAgentId();
+    if (reeseAgentId) {
+      await logAgentActivity({
+        agentId: reeseAgentId,
+        action: 'reese_dm_reply',
+        result: 'success',
+        reason: 'reply_sent',
+        details: { room_id: roomId },
+      });
+    }
+
     // Reese Agentic AI Employee mission, Checkpoint D — opportunistic,
     // cost-bounded assessment refresh. Fire-and-forget: never awaited, so a
     // slow or failed LLM call here can never delay or break the reply the
@@ -229,5 +247,18 @@ export async function maybeTriggerReeseReply(roomId: string, senderEnrollmentId:
       level: 'warn', service: 'reese', event: 'reply_failed',
       room_id: roomId, error_class: e?.name || 'Error', message: String(e?.message || e),
     }));
+    // Real failure signal for the GOALS "Solid" dimension, same reasoning as
+    // the success-path log above — a caught reply failure is exactly the
+    // kind of real data that dimension is supposed to be computed from.
+    const reeseAgentId = await getReeseAgentId().catch(() => null);
+    if (reeseAgentId) {
+      await logAgentActivity({
+        agentId: reeseAgentId,
+        action: 'reese_dm_reply',
+        result: 'failed',
+        reason: String(e?.message || e),
+        details: { room_id: roomId },
+      });
+    }
   }
 }

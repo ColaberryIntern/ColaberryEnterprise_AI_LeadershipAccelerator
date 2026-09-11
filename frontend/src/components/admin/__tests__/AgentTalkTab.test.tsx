@@ -12,6 +12,8 @@ import { ManagerDirective } from '../../../services/managerDirectiveApi';
 // every Direct submission, and the real "can only narrow" guarantee text —
 // never a fabricated "no conflicts found" claim.
 
+(Element.prototype as any).scrollIntoView = () => { /* no layout in jsdom */ };
+
 jest.mock('../../../services/agentManagerConversationApi', () => ({
   getConversation: jest.fn(),
   sendMessage: jest.fn(),

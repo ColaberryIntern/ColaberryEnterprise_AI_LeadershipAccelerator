@@ -464,6 +464,36 @@ It returns `200 {"project": null}` — **not** a 404 — when there is no active
 `null` there with a published plan in the database means `makeActiveProject` failed; grep
 for `sbp_active_project_failed`, which names the statement.
 
+### 7 · ENRICH — every story, from the first release, no backfill
+
+Every story prompt (STORY-000 included) ends with the same block, from
+`enrichmentPromptBlock.ts`: when acceptance passes, write
+`.colaberry/enrichment/<STORY-ID>.json` naming what the story showed, each entry with the
+file, commit or test that proves it. The push webhook reads the directory after story
+verification (`storyEnrichmentReader.ts`) and applies each file through
+`storyEnrichmentService.ts`, which merges additively into `project_understandings` under a
+compare-and-set on the revision and writes one `story_truth_enrichments` row per event.
+
+What to expect, and how to check it:
+
+- **Replay is a no-op.** The same file pushed twice, or a delivery GitHub retries, is one
+  row with `outcome = 'merged'` and then `sbp_enrichment_replay` in the log. If you see two
+  `merged` rows for one story and one commit, the idempotency key is broken.
+- **A repository cannot establish a business result.** A proposal on `success_definition`,
+  `desired_outcome` or `pain_points` is refused by the contract and lands in the row's
+  `refused` column with the reason. That is the protocol working, not failing.
+- **A disagreement with a confirmed value is a question, never a replacement.** Look for a
+  QUESTION item with `repo_evidence` provenance in the truth; the review screen shows it
+  under "openQuestions" and Story 000 under "Questions a story raised".
+- **Forward repair, not backfill.** An older project with no truth row gets one created
+  from what its next story supports (`saveEnrichedTruth(..., null)`), at revision 1. Nothing
+  scans old projects; nothing invents history.
+
+```sql
+SELECT story_id, outcome, base_revision, merged_revision, counts, created_at
+  FROM story_truth_enrichments WHERE project_id = '<id>' ORDER BY created_at;
+```
+
 ---
 
 ## VERIFICATION CHECKLIST
@@ -616,22 +646,22 @@ deployed.
 | Agent scoping failure kills the build | `scopeAgents` returns the plan unchanged on upstream/malformed/placeholder |
 | A non-existent column reaches production | `ACTIVE_PROJECT_COLUMNS` asserted against the real `Enrollment` model, statically, with no database |
 | Unbounded external calls | 240s decompose / 45s intake / 20s GitHub, all with capped retries; `boundedQueue` at concurrency 3 |
-| One cohort rush OOMs the box | `SBP_PROVISION_CONCURRENCY` + `SBP_PROVISION_MAX_DEPTH`, `QueueFull` → 503 |
-
-#### The second wave — what landed in the six weeks after PR #1463
-
-Everything above was true on 2026-08-13. The rows below were bought between then
-and 2026-09-09, each by a real student losing real time. They are separated only
-so you can see which lessons are recent; they are enforced exactly as hard.
-
-| Failure | The guard |
-|---|---|
-| The platform overwrites a `plan.json` the student hand-edited | `fileOwnership` — `plan.json` is platform-GENERATED, not platform-OWNED. It is replaced **only while provably unedited**; `progress.json` is co-owned and merged; `profile.json` is student-owned and seeded once. Enforced in `repoWriter` at the moment of write |
-| A student builds in one project and watches another | `activeProjectDrift` — `makeActiveProject` catches its own failure into a log line, so publish-time failure is silent. This detects the divergence and the portal says so |
-| One enrollment with two repositories is scored off an arbitrary one | `repoWriteAccess` — `getConnection` was a `findOne` with no ordering, so Postgres row order decided which repository counted. Reading one arbitrarily is not a smaller answer, it is a random one |
-| A student who built everything in their repo sees an empty portfolio | `capabilityRepoReader` — reads `github_connections.file_tree_json` rather than the upload mirror, which only ever carried `.md`, `.txt` and `.csv` |
-| A file tree is read as evidence of quality | `repoSignals` is PURE and reports STRUCTURE only. A `Dockerfile` means a Dockerfile exists; it does not mean the image builds. Every field is phrased as an observation so the narrative layer cannot upgrade it into a claim |
-| A lab renames a path the portfolio looks for | `buildLabContract` — labs live in the database as authored cards, so nothing in CI could fail when one drifted. `scripts/auditBuildLabs.ts` runs the same pure checker against production that the unit tests run against fixtures |
+| One cohort rush OOMs the box | `SBP_PROVISION_CONCURRENCY` + `SBP_PROVISION_MAX_DEPTH`, `QueueFull` → 503 |
+
+#### The second wave — what landed in the six weeks after PR #1463
+
+Everything above was true on 2026-08-13. The rows below were bought between then
+and 2026-09-09, each by a real student losing real time. They are separated only
+so you can see which lessons are recent; they are enforced exactly as hard.
+
+| Failure | The guard |
+|---|---|
+| The platform overwrites a `plan.json` the student hand-edited | `fileOwnership` — `plan.json` is platform-GENERATED, not platform-OWNED. It is replaced **only while provably unedited**; `progress.json` is co-owned and merged; `profile.json` is student-owned and seeded once. Enforced in `repoWriter` at the moment of write |
+| A student builds in one project and watches another | `activeProjectDrift` — `makeActiveProject` catches its own failure into a log line, so publish-time failure is silent. This detects the divergence and the portal says so |
+| One enrollment with two repositories is scored off an arbitrary one | `repoWriteAccess` — `getConnection` was a `findOne` with no ordering, so Postgres row order decided which repository counted. Reading one arbitrarily is not a smaller answer, it is a random one |
+| A student who built everything in their repo sees an empty portfolio | `capabilityRepoReader` — reads `github_connections.file_tree_json` rather than the upload mirror, which only ever carried `.md`, `.txt` and `.csv` |
+| A file tree is read as evidence of quality | `repoSignals` is PURE and reports STRUCTURE only. A `Dockerfile` means a Dockerfile exists; it does not mean the image builds. Every field is phrased as an observation so the narrative layer cannot upgrade it into a claim |
+| A lab renames a path the portfolio looks for | `buildLabContract` — labs live in the database as authored cards, so nothing in CI could fail when one drifted. `scripts/auditBuildLabs.ts` runs the same pure checker against production that the unit tests run against fixtures |
 | A student producing real work cannot find where to connect a repo | `repoConnect` front door — the only connect surface rendered inside a project workspace, and six of the eight students with real work and no repo **had no project**. One of them had 17 submitted artifacts |
 
 ### Prevented only by someone remembering — the useful half

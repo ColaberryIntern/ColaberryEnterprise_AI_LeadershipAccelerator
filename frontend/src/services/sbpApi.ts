@@ -175,12 +175,13 @@ export async function fetchIntakeQuestions(input: {
  * it. Mirrors `ReviewItem` in backend/src/services/sbp/intakeReview.ts.
  *
  *   needsConfirmation  we heard it, nobody has agreed we heard it right
+ *   fromBuild          a story's own work showed it; nobody has agreed yet
  *   inferences         nothing was said; the system worked it out
  *   openQuestions      it was asked and not answered
  *   unknowns           recorded as unknown, deliberately, and that is allowed
  *   confirmed          already corrected or agreed
  */
-export type ReviewGroup = 'confirmed' | 'needsConfirmation' | 'inferences' | 'openQuestions' | 'unknowns';
+export type ReviewGroup = 'confirmed' | 'needsConfirmation' | 'fromBuild' | 'inferences' | 'openQuestions' | 'unknowns';
 
 export interface ReviewItem {
   index: number;

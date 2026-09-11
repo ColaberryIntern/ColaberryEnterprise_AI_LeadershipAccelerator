@@ -97,6 +97,40 @@ export type AsSentResult =
 /** Blank every secret-looking query value. Idempotent, safe on non-URLs. Shared with the poll. */
 export const maskSecrets = maskUrlSecrets;
 
+/**
+ * Mandrill rewrites every link in a sent email through its click tracker:
+ *
+ *   http://track.colaberry.com/track/click/<account>/<host>?p=<base64url JSON>
+ *
+ * and the JSON's `p` field is itself a JSON string carrying the ORIGINAL
+ * `url`. Two reasons to unwrap these before the body leaves the server:
+ *
+ *   1. The clicked URL Mandrill reports is the original, so highlighting has
+ *      to compare against the original, not the tracker.
+ *   2. The base64 payload contains the original URL VERBATIM — login token
+ *      and all — so a mask that only reads query strings would let the
+ *      token through, encoded. Found on the first live render, 2026-09-11.
+ *
+ * A tracker whose payload cannot be decoded keeps its shape but loses the
+ * payload (`p=***`), so nothing encoded survives either way.
+ */
+// `&amp;` as well as `&`: inside an HTML attribute the separator is entity-encoded.
+const TRACKED_LINK = /https?:\/\/[^\s"'<>]*?\/track\/click\/[^\s"'<>]*?(?:\?|&amp;|&)p=([A-Za-z0-9_-]+)[^\s"'<>]*/g;
+
+export function unwrapTrackingLinks(value: string): string {
+  if (!value) return value;
+  return value.replace(TRACKED_LINK, (whole, payload: string) => {
+    try {
+      const outer = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { p?: unknown };
+      const inner = typeof outer.p === 'string' ? (JSON.parse(outer.p) as { url?: unknown }) : null;
+      if (inner && typeof inner.url === 'string' && /^https?:\/\//i.test(inner.url)) return maskUrlSecrets(inner.url);
+    } catch {
+      // Not a payload we understand; fall through to blanking it.
+    }
+    return whole.replace(/((?:\?|&amp;|&)p=)[A-Za-z0-9_-]+/, '$1***');
+  });
+}
+
 const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
 
 /**
@@ -175,8 +209,10 @@ export async function fetchMessageAsSent(q: AsSentQuery, post: MandrillPost | nu
       subject: c.subject ?? hit.subject ?? null,
       from: c.from_email ?? hit.sender ?? null,
       sentAt: new Date((c.ts ?? hit.ts) * 1000).toISOString(),
-      html: typeof c.html === 'string' ? maskSecrets(c.html) : null,
-      text: typeof c.text === 'string' ? maskSecrets(c.text) : null,
+      // Unwrap FIRST: the tracker payload carries the original URL encoded,
+      // where the query-string mask cannot see it.
+      html: typeof c.html === 'string' ? maskSecrets(unwrapTrackingLinks(c.html)) : null,
+      text: typeof c.text === 'string' ? maskSecrets(unwrapTrackingLinks(c.text)) : null,
       opens: hit.opens ?? 0,
       clicks: hit.clicks ?? 0,
       clickedUrls: clicked,

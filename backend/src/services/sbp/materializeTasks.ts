@@ -117,7 +117,7 @@ export async function materializePlanAsTasks(
         // into exactly that state — see commandCenterTaskColumns.ts. Keeping
         // both writers constructing from this object is what makes the two
         // columns physically inseparable.
-        const cc = commandCenterTaskColumns(plan, ctx.schedule ?? null);
+        const cc = commandCenterTaskColumns(plan, ctx.schedule ?? null, { projectId });
         const ccAttrs = {
           project_id: projectId, task_list_id: list.id, story_id: cc.story_id,
           title: cc.title, description: cc.title,
@@ -243,9 +243,9 @@ function taskAttrs(
   // slightly thinner prompt is far better off than one with an empty button.
   let prompt: string;
   try {
-    prompt = buildStoryPrompt(plan, story, { repoUrl: ctx.repoUrl, manifestPaths: ctx.manifestPaths });
+    prompt = buildStoryPrompt(plan, story, { repoUrl: ctx.repoUrl, manifestPaths: ctx.manifestPaths, projectId });
   } catch {
-    prompt = buildStoryPrompt(plan, story, {});
+    prompt = buildStoryPrompt(plan, story, { projectId });
   }
 
   return {

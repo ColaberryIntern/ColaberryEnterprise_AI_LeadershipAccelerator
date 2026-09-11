@@ -111,6 +111,13 @@ export const PROVENANCES = [
   'voice_transcript',
   'ai_inferred',
   'pm_confirmed',
+  /**
+   * Something a story's own work showed: a file, a commit, a test. Added by the
+   * continuous-enrichment protocol (Unified Project Discovery, Phase 6). It can
+   * confirm a BUILD fact and never a business outcome; see
+   * REPO_EVIDENCE_NEVER_FACT_DIMENSIONS.
+   */
+  'repo_evidence',
 ] as const;
 
 export type Provenance = (typeof PROVENANCES)[number];
@@ -133,6 +140,20 @@ export const FACT_BEARING_PROVENANCES: readonly Provenance[] = [
   'source_document',
   'voice_transcript',
   'pm_confirmed',
+  'repo_evidence',
+];
+
+/**
+ * What a repository cannot establish. A commit can prove what was built and
+ * how it behaves; it cannot prove what the business wanted, what hurts today,
+ * or what "good" means to the people paying for it. Repo evidence on these
+ * dimensions is refused at the contract, not downgraded, so nobody can argue
+ * a test run into a business result.
+ */
+export const REPO_EVIDENCE_NEVER_FACT_DIMENSIONS: readonly UnderstandingDimension[] = [
+  'success_definition',
+  'desired_outcome',
+  'pain_points',
 ];
 
 /**
@@ -158,6 +179,23 @@ export interface UnderstandingItem {
    * items have no quote by definition - which is exactly why they cannot be FACT.
    */
   source_quote?: string;
+  /**
+   * Earlier values this item held, newest first. A correction or a strengthening
+   * replaces the value and keeps what it replaced, so history survives without a
+   * second table. Absent on an item that has never changed.
+   */
+  history?: UnderstandingItemHistoryEntry[];
+}
+
+export interface UnderstandingItemHistoryEntry {
+  value: string;
+  classification: Classification;
+  provenance: Provenance;
+  source_quote?: string;
+  /** ISO timestamp of when this value stopped being current. */
+  replaced_at: string;
+  /** What replaced it: a student correction, or a story's evidence. */
+  replaced_by: 'correction' | 'repo_evidence';
 }
 
 export interface ProjectUnderstanding {
@@ -170,12 +208,22 @@ export interface ProjectUnderstanding {
 
 /* ── Schema ───────────────────────────────────────────────────────── */
 
+const historyEntrySchema = z.object({
+  value: z.string().trim().min(1),
+  classification: z.enum(CLASSIFICATIONS),
+  provenance: z.enum(PROVENANCES),
+  source_quote: z.string().trim().min(1).optional(),
+  replaced_at: z.string().min(1),
+  replaced_by: z.enum(['correction', 'repo_evidence']),
+});
+
 const itemSchema = z.object({
   dimension: z.enum(UNDERSTANDING_DIMENSIONS),
   value: z.string().trim().min(1, 'value cannot be empty'),
   classification: z.enum(CLASSIFICATIONS),
   provenance: z.enum(PROVENANCES),
   source_quote: z.string().trim().min(1).optional(),
+  history: z.array(historyEntrySchema).max(50).optional(),
 });
 
 const understandingSchema = z.object({
@@ -265,6 +313,18 @@ export function findIntegrityViolations(u: ProjectUnderstanding): string[] {
     // and the misfiling costs it the FACT status it was entitled to.
     if (item.provenance === 'ai_inferred' && item.source_quote) {
       violations.push(`${where}: "ai_inferred" cannot carry a source_quote`);
+    }
+
+    // Repo evidence is checkable or it is nothing: the reference IS the evidence.
+    if (item.provenance === 'repo_evidence' && !item.source_quote) {
+      violations.push(`${where}: provenance "repo_evidence" requires a source_quote naming the file, commit or test`);
+    }
+
+    // A repository proves what was built, never what the business wanted or
+    // what success means. Refused outright rather than downgraded, so a test
+    // run can never be argued into a business result.
+    if (item.provenance === 'repo_evidence' && REPO_EVIDENCE_NEVER_FACT_DIMENSIONS.includes(item.dimension)) {
+      violations.push(`${where}: repository evidence cannot establish "${item.dimension}"; that is a business statement, not a build fact`);
     }
   });
 
