@@ -5,6 +5,7 @@ import { D2_ITEMS } from './d2ToolsAndMcp';
 import { D3_ITEMS } from './d3ClaudeCode';
 import { D4_ITEMS } from './d4PromptEngineering';
 import { D5_ITEMS } from './d5ContextAndReliability';
+import { GENERATED_ITEMS } from './generated';
 
 /**
  * The whole authored CCAR-F bank.
@@ -66,6 +67,7 @@ export const HAND_AUTHORED_ITEMS: DraftRevisionInput[] = [
 
 export const CCAR_F_ALL_ITEMS: DraftRevisionInput[] = [
   ...HAND_AUTHORED_ITEMS,
+  ...GENERATED_ITEMS,
 ];
 
 /** What a full-length mock needs from each domain, by exam weight (60 items). */
