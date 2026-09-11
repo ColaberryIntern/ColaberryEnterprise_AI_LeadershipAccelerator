@@ -1348,10 +1348,37 @@ function filterPathsByBrand(
   );
 }
 
+/**
+ * Sibling of filterPathsByBrand, one level narrower: leads who entered THIS campaign.
+ *
+ * A lead's path may pass through several campaigns; a lead qualifies if any enrolment is the
+ * one asked for, and the whole path is kept so the journey still shows where they came from
+ * and went next. Filtering the enrolments down to only this campaign would amputate the
+ * journey to a single node, which is not a journey.
+ */
+function filterPathsByCampaign(paths: LeadPathRecord[], campaignId: string): LeadPathRecord[] {
+  return paths.filter((lead) => lead.campaign_enrollments.some((e) => e.campaign_id === campaignId));
+}
+
 export async function getCampaignGraphData(
   timeWindow?: string,
   brandId?: string | null,
+  campaignId?: string | null,
 ): Promise<CampaignGraphData> {
+  // Campaign scope takes precedence over brand scope: a campaign belongs to exactly one brand,
+  // so a brand filter on top of it is redundant at best and contradictory at worst.
+  // Derived from the unfiltered graph and never written back to the cache, for the same
+  // reason the brand branch below gives.
+  if (campaignId) {
+    const base = await getCampaignGraphData(timeWindow);
+    const allPaths = graphCache?.leadPaths ?? [];
+    const cohort = filterPathsByCampaign(allPaths, campaignId);
+    const data = await buildGraphFromPaths(cohort);
+    data.time_window = timeWindow || 'all';
+    data.brands = base.brands;
+    return data;
+  }
+
   // A brand-filtered graph is derived from the unfiltered one for this window and
   // deliberately does NOT overwrite the cache. `graphCache.leadPaths` is the
   // population that node-users, edge-users and slice all measure themselves

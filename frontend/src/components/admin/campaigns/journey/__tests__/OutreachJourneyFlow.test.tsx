@@ -195,7 +195,9 @@ describe('OutreachJourneyFlow — filters drive one population', () => {
   it('asks for all time and no brand on first load', async () => {
     await render(<OutreachJourneyFlow />);
     await settle();
-    expect(mockedApi.getCampaignGraph).toHaveBeenCalledWith('all', false, undefined);
+    // Fourth argument is the campaign scope added for the Campaign 360 Journey tab (T018);
+    // undefined here because the Campaigns page is not campaign-scoped.
+    expect(mockedApi.getCampaignGraph).toHaveBeenCalledWith('all', false, undefined, undefined);
   });
 
   it('refetches when the time window changes', async () => {
@@ -203,7 +205,7 @@ describe('OutreachJourneyFlow — filters drive one population', () => {
     await settle();
     await change(select('journey-time'), '30d');
     await settle();
-    expect(mockedApi.getCampaignGraph).toHaveBeenLastCalledWith('30d', false, undefined);
+    expect(mockedApi.getCampaignGraph).toHaveBeenLastCalledWith('30d', false, undefined, undefined);
   });
 
   it('offers only the windows the backend actually implements', async () => {
@@ -219,7 +221,7 @@ describe('OutreachJourneyFlow — filters drive one population', () => {
     await settle();
     await change(select('journey-brand'), 'b1');
     await settle();
-    expect(mockedApi.getCampaignGraph).toHaveBeenLastCalledWith('all', false, 'b1');
+    expect(mockedApi.getCampaignGraph).toHaveBeenLastCalledWith('all', false, 'b1', undefined);
     expect(text()).toContain('Brand: Colaberry Enterprise');
   });
 

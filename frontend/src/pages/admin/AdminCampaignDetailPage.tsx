@@ -6,6 +6,7 @@ import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components
 import { TrustSignal } from '../../components/admin/shell/trust';
 import OverviewTab from '../../components/campaign/OverviewTab';
 import AnalyticsTab from '../../components/campaign/AnalyticsTab';
+import JourneyTab from '../../components/campaign/JourneyTab';
 import TargetingTab from '../../components/campaign/TargetingTab';
 import StrategyPromptsTab from '../../components/campaign/StrategyPromptsTab';
 import LeadsOutreachTab from '../../components/campaign/LeadsOutreachTab';
@@ -88,11 +89,14 @@ interface AnalyticsData {
   lead_outcomes: any[];
 }
 
-type TabKey = 'overview' | 'analytics' | 'targeting' | 'icp_leads' | 'gtm' | 'leads' | 'crm' | 'evolution' | 'lead_recommendations' | 'settings';
+type TabKey = 'overview' | 'analytics' | 'journey' | 'targeting' | 'icp_leads' | 'gtm' | 'leads' | 'crm' | 'evolution' | 'lead_recommendations' | 'settings';
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'overview', label: 'Overview' },
   { key: 'analytics', label: 'Analytics' },
+  // Campaign 360 Journey (T018). The tab is a thin shell over the existing OutreachJourneyFlow
+  // scoped to this campaign - not a second journey visualisation.
+  { key: 'journey', label: 'Journey' },
   { key: 'targeting', label: 'Targeting' },
   { key: 'icp_leads', label: 'ICP & Leads' },
   { key: 'gtm', label: 'Strategy & Prompts' },
@@ -415,6 +419,8 @@ function AdminCampaignDetailPage() {
           loading={analyticsLoading}
         />
       )}
+
+      {activeTab === 'journey' && <JourneyTab campaignId={id!} />}
 
       {activeTab === 'targeting' && (
         <TargetingTab
