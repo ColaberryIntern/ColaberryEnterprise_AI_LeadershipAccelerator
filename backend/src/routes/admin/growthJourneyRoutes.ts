@@ -1,5 +1,7 @@
 import { Router } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
+import { env } from '../../config/env';
 import {
   getParticipationHandler,
   listParticipationsHandler,
@@ -17,6 +19,20 @@ import {
  * `router.use(BASE, requireAdmin)` binds it to this prefix only. The access
  * test proves the guard fires on these paths and on nothing outside them.
  *
+ * ─── FLAG-GATED ON THE MASTER, AND 404 WHEN OFF ─────────────────────────────
+ *
+ * The plan's rollback paragraph calls this "the new route (flag-gated)", and
+ * the first version read no flag at all — an inconsistency the T209 verifier
+ * found. Now: `GROWTH_JOURNEY_ENABLED` off means these paths do not exist.
+ *
+ * 404, not 503 or 403, for the same anti-enumeration reason the brand guard
+ * uses: a distinct "feature disabled" status would tell a caller the route is
+ * there. The gate reads the MASTER only — the dark-launch guard in
+ * `growthJourneyFlags.test.ts` forbids a direct sub-flag read anywhere outside
+ * the flags module, and the master is the one property it exempts. It runs
+ * AFTER `requireAdmin`, so an unauthenticated caller still sees 401 and learns
+ * nothing about the flag either way.
+ *
  * ─── READS ONLY ─────────────────────────────────────────────────────────────
  *
  * Two GETs. No POST, PUT, PATCH or DELETE, and the controller performs no write.
@@ -29,6 +45,16 @@ const router = Router();
 const BASE = '/api/admin/growth-journey';
 
 router.use(BASE, requireAdmin);
+
+/** Master off => the routes do not exist. Resolved per request so a test can flip it. */
+function requireGrowthJourneyEnabled(_req: Request, res: Response, next: NextFunction): void {
+  if (!env.growthJourney.growthJourneyEnabled) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  next();
+}
+router.use(BASE, requireGrowthJourneyEnabled);
 
 router.get(`${BASE}/participations`, listParticipationsHandler);
 router.get(`${BASE}/participations/:id`, getParticipationHandler);

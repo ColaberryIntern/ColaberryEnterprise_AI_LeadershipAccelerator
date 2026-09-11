@@ -163,7 +163,16 @@ export async function resolveSubject(anchor: SubjectAnchor): Promise<SubjectReso
       const member = await OrgMember.findByPk(orgMemberId);
       if (member) {
         sources.push('org_member');
-        if (!enrollmentId && member.enrollment_id) enrollmentId = member.enrollment_id;
+        if (!enrollmentId && member.enrollment_id) {
+          // VALIDATED, like a caller-supplied enrollment id would be. A dangling
+          // `org_members.enrollment_id` otherwise reached the facade as a
+          // resolved learner with an enrollment that does not exist - reported
+          // as learner_without_profile, which reads as "not scored yet" rather
+          // than "points at nothing". Found by the T206 verifier, fixed here
+          // because the anchor is the resolver's to vouch for.
+          const inherited = await Enrollment.findByPk(member.enrollment_id, { attributes: ['id'] });
+          if (inherited) enrollmentId = member.enrollment_id;
+        }
       } else {
         orgMemberId = null;
       }

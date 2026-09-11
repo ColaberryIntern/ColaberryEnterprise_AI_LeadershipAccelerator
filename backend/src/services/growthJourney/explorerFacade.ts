@@ -14,6 +14,7 @@ import {
 import { getExplorerWhy, type ExplorerWhy } from '../explorerGrowth/explorerWhyService';
 import { resolveSubject, type SubjectAnchor, type SubjectResolution } from './subjectResolver';
 import { BACKFILL_SOURCE } from './explorerProgramBridge';
+import { subjectRef } from '../../models/GrowthJourneyEnrollment';
 
 /**
  * The Explorer compatibility facade (T206).
@@ -91,9 +92,16 @@ export interface ParticipationSummary {
 async function participationsFor(
   resolution: Extract<SubjectResolution, { status: 'resolved' }>,
 ): Promise<ParticipationSummary[]> {
-  const refs: string[] = [];
-  if (resolution.subject.enrollment_id) refs.push(`enrollment:${resolution.subject.enrollment_id}`);
-  if (resolution.subject.lead_id !== null) refs.push(`lead:${resolution.subject.lead_id}`);
+  // THROUGH subjectRef(), NEVER A LITERAL. `subjectRef()` is documented as the
+  // single place the derived key is built, and the first version of this
+  // function rebuilt the same string by hand two tasks later - so a change to
+  // the spelling there would have made this return zero participations for
+  // everyone, silently. Both spellings are requested on purpose: a person keyed
+  // by enrollment and a person keyed by lead are the same person to a reader.
+  const refs = [
+    subjectRef({ enrollmentId: resolution.subject.enrollment_id }),
+    subjectRef({ leadId: resolution.subject.lead_id }),
+  ].filter((r): r is string => r !== null);
   if (refs.length === 0) return [];
 
   const rows = await GrowthJourneyEnrollment.findAll({ where: { subject_ref: refs } });

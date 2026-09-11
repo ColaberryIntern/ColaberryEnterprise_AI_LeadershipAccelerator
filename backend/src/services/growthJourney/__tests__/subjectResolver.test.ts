@@ -310,6 +310,26 @@ describe('the identity half', () => {
     expect(r.subject.email_normalized).toBe('mixed.case@example.test');
   });
 
+  it('drops a DANGLING enrollment id inherited from an org member', async () => {
+    // The org member row points at an enrollment that no longer exists. Without
+    // validation the facade reported learner_without_profile - "not scored yet"
+    // - for an enrollment that is simply gone. Found by the T206 verifier.
+    orgMemberFindByPk.mockResolvedValue({ id: 'om-1', enrollment_id: 'enr-gone' });
+    enrollmentFindByPk.mockResolvedValue(null);
+    const r = await resolveSubject({ orgMemberId: 'om-1' });
+    if (r.status !== 'resolved') throw new Error('expected resolved via org member');
+    expect(r.subject.org_member_id).toBe('om-1');
+    expect(r.subject.enrollment_id).toBeNull();
+  });
+
+  it('keeps an inherited enrollment id that DOES exist', async () => {
+    orgMemberFindByPk.mockResolvedValue({ id: 'om-1', enrollment_id: 'enr-9' });
+    enrollmentFindByPk.mockResolvedValue({ id: 'enr-9', email: 'x@example.test' });
+    const r = await resolveSubject({ orgMemberId: 'om-1' });
+    if (r.status !== 'resolved') throw new Error('expected resolved');
+    expect(r.subject.enrollment_id).toBe('enr-9');
+  });
+
   it('drops a dangling lead id rather than reporting an identity that is gone', async () => {
     visitorFindByPk.mockResolvedValue({ id: 'vis-1', lead_id: 999 });
     leadFindByPk.mockResolvedValue(null);

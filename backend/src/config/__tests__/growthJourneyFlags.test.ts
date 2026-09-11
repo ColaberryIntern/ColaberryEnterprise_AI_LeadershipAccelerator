@@ -110,7 +110,11 @@ describe('the env keys', () => {
   });
 
   it('share no env var name with Explorer', () => {
-    const explorer = new Set(Object.values(EXPLORER_GROWTH_ENV_KEYS));
+    // `Set<string>`, not the inferred `Set<ExplorerLiteral>`: without the widening,
+    // `.has(growthKey)` is TS2345 under strict, and this file was the only one of
+    // the pair not type-clean. No gate sees __tests__, which is exactly why it
+    // has to be right by hand.
+    const explorer = new Set<string>(Object.values(EXPLORER_GROWTH_ENV_KEYS));
     for (const key of Object.values(GROWTH_JOURNEY_ENV_KEYS)) expect(explorer.has(key)).toBe(false);
   });
 

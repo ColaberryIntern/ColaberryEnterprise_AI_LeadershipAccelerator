@@ -51,6 +51,22 @@ import {
  * brand and did not get it is refused with 403 — proceeding would hand a
  * brand-scoped operator the whole tenant because they typed the wrong id.
  *
+ * ─── G2: BRAND CONFINEMENT IS OPT-IN BY THE CALLER — A KNOWN, PINNED GAP ───
+ *
+ * `buildRequestContext` never DERIVES a brand scope from a brand-restricted
+ * membership; it only validates one the caller requests. So a Training-only
+ * operator who simply omits `?brand_id=` reads an Enterprise row with 200, and
+ * the refuse-never-widen check above cannot fire because nothing was
+ * requested. This route cannot close that: the context carries the granted
+ * brand, not the membership's, so it cannot tell a tenant-wide operator from a
+ * brand-restricted one who stayed quiet.
+ *
+ * The fix lives in the builder — auto-confine when every membership in the
+ * operating tenant shares one non-null `brand_id`, mirroring the single-tenant
+ * auto-select four lines above it — and that is a security-module change kept
+ * out of this task deliberately. A test pins TODAY'S behaviour under a name
+ * that says so, so the gap is visible in the suite rather than silent.
+ *
  * ─── IN PRODUCTION TODAY, THIS ROUTE RETURNS 404 TO EVERY ADMIN ─────────────
  *
  * There are zero active `tenant_memberships`. With no membership,
@@ -69,7 +85,34 @@ function badRequest(res: Response, err: ZodError): void {
   });
 }
 
-function accessDenied(res: Response, err: TenantAccessError): void {
+/**
+ * Render a guard refusal.
+ *
+ * A 404 FROM THE GUARD IS BYTE-IDENTICAL TO A GENUINE NOT-FOUND. The first
+ * version rendered `err.errorClass`, so a cross-tenant refusal carried
+ * `"error_class":"TenantIsolationViolation"` while a missing row did not — and
+ * the entire reason the guard returns 404 rather than 403 is to not confirm the
+ * row exists. The body confirmed it. An independent review executed both
+ * responses and diffed them. The class is still logged server-side, where it
+ * belongs; it is not for the caller.
+ *
+ * A 403 keeps its class: by then the caller already knows the row exists.
+ */
+function accessDenied(req: Request, res: Response, err: TenantAccessError): void {
+  if (err.status === 404) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        service: 'growth-journey-admin',
+        event: 'participation_read_refused',
+        error_class: err.errorClass,
+        outcome: 'failure',
+        path: req.path,
+      }),
+    );
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
   res.status(err.status).json({ error: err.message, error_class: err.errorClass });
 }
 
@@ -92,11 +135,11 @@ async function scopedContext(
   });
 
   if (query.tenant_id && ctx.tenantId !== query.tenant_id) {
-    accessDenied(res, new TenantAccessError('Tenant not in scope', 403, 'AuthorizationError'));
+    accessDenied(req, res, new TenantAccessError('Tenant not in scope', 403, 'AuthorizationError'));
     return null;
   }
   if (query.brand_id && ctx.brandId !== query.brand_id) {
-    accessDenied(res, new TenantAccessError('Brand not in scope', 403, 'AuthorizationError'));
+    accessDenied(req, res, new TenantAccessError('Brand not in scope', 403, 'AuthorizationError'));
     return null;
   }
   return ctx;
@@ -142,7 +185,7 @@ export async function getParticipationHandler(req: Request, res: Response): Prom
 
     res.json(row);
   } catch (err) {
-    if (err instanceof TenantAccessError) return accessDenied(res, err);
+    if (err instanceof TenantAccessError) return accessDenied(req, res, err);
     const errorClass = logReadFailure(req, err);
     res.status(500).json({ error: 'Participation read failed', error_class: errorClass });
   }
@@ -175,7 +218,7 @@ export async function listParticipationsHandler(req: Request, res: Response): Pr
 
     res.json({ rows, total: count, limit: query.data.limit, offset: query.data.offset });
   } catch (err) {
-    if (err instanceof TenantAccessError) return accessDenied(res, err);
+    if (err instanceof TenantAccessError) return accessDenied(req, res, err);
     const errorClass = logReadFailure(req, err);
     res.status(500).json({ error: 'Participation list failed', error_class: errorClass });
   }

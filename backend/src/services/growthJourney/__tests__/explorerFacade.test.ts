@@ -180,6 +180,16 @@ describe('a subject without an enrollment is NOT an error', () => {
     expect(r.enrollment_id).toBe('enr-1');
   });
 
+  it('lets an Explorer read that THROWS propagate — it is not a status', async () => {
+    // Wrapping getLearnerProfile in try/catch -> null would reclassify "Explorer
+    // is down" as learner_without_profile, which conflates an outage with a
+    // learner who has not been scored yet. An independent mutation proved no
+    // test pinned this; this is the pin. Propagation is the honest answer here:
+    // the caller on the other side decides what an outage means.
+    getLearnerProfile.mockRejectedValue(new Error('connection terminated'));
+    await expect(getLearnerJourney({ enrollmentId: 'enr-1' })).rejects.toThrow('connection terminated');
+  });
+
   it('propagates an unresolved subject with its reason, and calls nothing', async () => {
     resolveSubject.mockResolvedValue({ status: 'unresolved', reason: 'anchor_not_found' });
     const r = await getLearnerJourney({ leadId: 999 });
@@ -215,6 +225,14 @@ describe('a subject without an enrollment is NOT an error', () => {
 });
 
 describe('participations come from the derived key, both spellings', () => {
+  it('builds both refs through subjectRef(), so a spelling change there cannot strand it', async () => {
+    // Asserted on the source, because the behavioural test below would keep
+    // passing with a hand-built literal that happened to match today.
+    expect(CODE).toMatch(/subjectRef\(/);
+    expect(CODE).not.toMatch(/`enrollment:\$\{/);
+    expect(CODE).not.toMatch(/`lead:\$\{/);
+  });
+
   it('queries by enrollment: and lead: refs together', async () => {
     await getLearnerJourney({ leadId: 42 });
     expect(enrollmentFindAll).toHaveBeenCalledWith({
