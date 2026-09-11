@@ -184,7 +184,7 @@ export async function evaluateAndDispatch(
         results.push({ type: String(action?.type ?? ''), status: 'skipped', detail: { reason: 'already_executed' }, rule: rule.name });
         continue;
       }
-      const r = await runAction(action, ctx);
+      const r = await runAction(action, { ...ctx, rule_id: rule.id, rule_version: rule.version });
       results.push({ ...r, rule: rule.name });
       await claim.update({
         status: r.status,

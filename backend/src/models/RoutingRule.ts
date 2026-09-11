@@ -1,4 +1,4 @@
-import { DataTypes, Model } from 'sequelize';
+import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../config/database';
 
 export interface RoutingAction {
@@ -20,7 +20,10 @@ interface RoutingRuleAttributes {
   updated_at?: Date;
 }
 
-class RoutingRule extends Model<RoutingRuleAttributes> implements RoutingRuleAttributes {
+/** What a caller must supply to create a rule: the database mints the id, the version and the timestamps. */
+export type RoutingRuleCreationAttributes = Optional<RoutingRuleAttributes, 'id' | 'version' | 'created_at' | 'updated_at'>;
+
+class RoutingRule extends Model<RoutingRuleAttributes, RoutingRuleCreationAttributes> implements RoutingRuleAttributes {
   declare id: string;
   declare name: string;
   declare priority: number;

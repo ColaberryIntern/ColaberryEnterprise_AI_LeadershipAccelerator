@@ -104,9 +104,13 @@ describe('tag_lead persists only what leads can hold, and says so', () => {
 });
 
 describe('the registry', () => {
-  it('exposes exactly the seven existing types (Phase 2 actions register in T227)', () => {
+  it('exposes the seven existing types plus the nine Phase 2 actions (T227), nothing else', () => {
     expect(knownActionTypes().sort()).toEqual(
-      ['create_deal', 'enroll_campaign', 'notify_sales', 'request_callback', 'send_pdf', 'tag_lead', 'trigger_booking_flow'].sort(),
+      [
+        'create_deal', 'enroll_campaign', 'notify_sales', 'request_callback', 'send_pdf', 'tag_lead', 'trigger_booking_flow',
+        'assign_journey_program', 'assign_service_path', 'request_classification_review', 'create_cross_brand_referral_request',
+        'suppress_or_wait', 'create_business_account', 'enter_governed_campaign', 'schedule_ai_qualification', 'create_handoff',
+      ].sort(),
     );
   });
 });

@@ -135,6 +135,12 @@ describe('brand facts (T226)', () => {
     await evaluateAndDispatch(lead, context());
     expect(runAction.mock.calls[0][1]).toMatchObject({ brand_id: 'b-af', brand_slug: 'ai-flotation', tenant_id: 't-af' });
   });
+
+  it('the handler context names the rule and the version that fired (T227)', async () => {
+    rules.push(rule({ id: 'rule-7', version: 3 }));
+    await evaluateAndDispatch(lead, context());
+    expect(runAction.mock.calls[0][1]).toMatchObject({ rule_id: 'rule-7', rule_version: 3 });
+  });
 });
 
 describe('claim-then-run: replay safety', () => {

@@ -3,6 +3,7 @@ import { Campaign, CommunicationLog } from '../models';
 import { sendNewLeadAlert } from './emailService';
 import { logCommunication } from './communicationLogService';
 import { requestInstantCallback } from './callbackRequestService';
+import { makeGrowthJourneyActions } from './routing/growthJourneyActions';
 
 /**
  * Marks the audit rows this handler writes, so the dedup query is unambiguous.
@@ -32,6 +33,13 @@ export interface ActionContext {
   tenant_id?: string | null;
   brand_id?: string | null;
   brand_slug?: string | null;
+  /**
+   * The rule and version that fired this action (T227). Set by the engine at
+   * dispatch; absent for a direct caller. Growth-journey actions stamp them on
+   * what they create so an enrolment and its execution audit row join both ways.
+   */
+  rule_id?: string | null;
+  rule_version?: number | null;
 }
 
 /**
@@ -289,6 +297,9 @@ export const ACTION_HANDLERS: Record<string, ActionHandler> = {
   enroll_campaign: enrollCampaign,
   create_deal: createDeal,
   trigger_booking_flow: triggerBookingFlow,
+  // Phase 2 (T227): the nine growth-journey actions of spec §7.2. Each is
+  // master-gated inside the handler; four of them are recorded, not applied.
+  ...makeGrowthJourneyActions(),
 };
 
 export type RunActionStatus = 'ok' | 'failed' | 'unknown' | 'deferred';
