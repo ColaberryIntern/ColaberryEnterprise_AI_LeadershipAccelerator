@@ -19,6 +19,7 @@
  * write.
  */
 import { BuildPlan, PlanRelease, PlanRequirement, PlanStory } from './planContract';
+import { enrichmentPromptBlock } from './enrichmentPromptBlock';
 
 export class PromptAssemblyError extends Error {
   readonly error_class = 'PromptPathNotWritten';
@@ -36,6 +37,12 @@ export interface PromptContext {
   workingBlock?: string;
   /** Free-text notes from the student. Untrusted — delimited, never trusted as instruction. */
   notes?: string;
+  /**
+   * The project this story belongs to, for the enrichment file the story
+   * writes when it finishes. Absent on a caller that has no project in hand;
+   * the block then tells the agent where to copy it from.
+   */
+  projectId?: string;
 }
 
 /** SAFE-002: student free text is DATA. Delimit and label it, never inline it raw. */
@@ -236,6 +243,14 @@ export function buildStoryPrompt(
     '- When you are finished, tell me your confidence as a percentage that this story is',
     '  complete and correct, and what would raise it.',
   ].join('\n'));
+
+  // ── 8b. Continuous enrichment. Every story prompt carries the same block
+  // through this one call, so a story cannot opt out and the test that holds
+  // every prompt to it has one thing to check.
+  sections.push(enrichmentPromptBlock({
+    projectId: ctx.projectId ?? '<project_id from .colaberry/manifest.json>',
+    storyId: story.id,
+  }));
 
   // ── 9. Working mode ───────────────────────────────────────────────────────
   sections.push(ctx.workingBlock?.trim() || DEFAULT_WORKING_BLOCK);

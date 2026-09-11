@@ -20,6 +20,7 @@
  * Pure functions only. No I/O.
  */
 import { story000TruthSection } from './story000Truth';
+import { enrichmentPromptBlock } from './enrichmentPromptBlock';
 import type { UnderstandingItem } from '../delivery/projectUnderstanding';
 import { BuildPlan, PlanRequirement } from './planContract';
 import type { Schedule } from './buildSchedule';
@@ -144,7 +145,11 @@ export function agentRoster(plan: BuildPlan): Array<{ name: string; stories: str
  * The prompt. Long on purpose: it is the one prompt a student runs before they
  * have any of their own code, so it has to carry the whole picture with it.
  */
-export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null): string {
+export function commandCenterPrompt(
+  plan: BuildPlan,
+  schedule?: Schedule | null,
+  opts: { projectId?: string } = {},
+): string {
   const kpis = measures(plan);
   const safes = guardrails(plan);
   const systems = systemsOfRecord(plan);
@@ -767,6 +772,15 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
   lines.push(bullet('A tab needs data your plan does not contain — build the empty state and ask, rather than inventing the data.'));
   lines.push(bullet('You are about to hard-code a KPI value, a customer name, or an integration status.'));
   lines.push(bullet('The guardrails tab is empty because your plan has no SAFE requirement — that is worth fixing before you build further.'));
+  lines.push('');
+
+  // Continuous enrichment: STORY-000 participates like every other story, and
+  // it is the one whose truth section lists what is still unanswered, so it
+  // is where forward repair for an older project begins. One shared block.
+  lines.push(enrichmentPromptBlock({
+    projectId: opts.projectId ?? '<project_id from .colaberry/manifest.json>',
+    storyId: COMMAND_CENTER_STORY_ID,
+  }));
   lines.push('');
 
   lines.push('## How I want you to work');

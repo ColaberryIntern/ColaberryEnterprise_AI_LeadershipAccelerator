@@ -126,7 +126,8 @@ describe('STORY-000 resolves even though it is not in plan.stories', () => {
     // reads and the criteria the platform matches is the defect that started
     // this workstream.
     const { commandCenterPrompt } = await import('../../services/sbp/commandCenterStory');
-    const expected = commandCenterPrompt(storedPlan().plan as any, null);
+    // Same project id the route passes, so the enrichment block matches too.
+    const expected = commandCenterPrompt(storedPlan().plan as any, null, { projectId: PROJECT });
 
     const res = await get(COMMAND_CENTER_STORY_ID);
 

@@ -93,7 +93,14 @@ const OWNERSHIP: Record<string, FileOwnership> = {
  * writes to it costs one line; classifying it afterwards costs a student their
  * week.
  */
-const STUDENT_OWNED_PREFIXES: readonly string[] = ['.claude/agents/'];
+const STUDENT_OWNED_PREFIXES: readonly string[] = [
+  '.claude/agents/',
+  // Enrichment files are written by the agent that built each story and read
+  // by the platform on push. The platform never writes one; overwriting a
+  // story's own account of what it learned would be the platform testifying
+  // on the story's behalf.
+  '.colaberry/enrichment/',
+];
 
 export function ownershipOf(path: string): FileOwnership {
   const exact = OWNERSHIP[path];
