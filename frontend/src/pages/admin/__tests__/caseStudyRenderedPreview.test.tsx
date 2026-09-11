@@ -234,11 +234,19 @@ describe('switching a surface in PREVIEW is a read', () => {
     WRITE_CALLS.forEach((name) => expect(api[name]).not.toHaveBeenCalled());
   });
 
-  it('leaves publish bound to enterprise after the operator has previewed every surface', async () => {
+  it('previewing other surfaces never redirects where Publish sends the record', async () => {
     // The dangerous version of this tab is a surface selector wired to the
     // publish surface, so an operator looking at Training is one click from
-    // publishing to it. `PUBLISH_SURFACE` is passed to the lens as a VALUE and
-    // never read back out.
+    // publishing to it. The preview lens receives its surface as a VALUE and
+    // never writes it back to anything.
+    //
+    // PUBLISH IS PER SURFACE NOW. There is no single `cs-publish` control any more:
+    // the Publish tab renders one row per surface, each with its own button
+    // (`cs-publish-<surfaceKey>`), so the surface being published to is named on the
+    // control itself rather than inherited from anywhere. That removes the coupling
+    // this test was written to catch by construction — but the assertion is kept in
+    // its new shape, because "I previewed Training, then pressed the enterprise
+    // button, and it went to enterprise" is still the property an operator relies on.
     await mountPreview();
     H.click('cs-preview-surface-tab-training');
     await H.settle();
@@ -247,7 +255,7 @@ describe('switching a surface in PREVIEW is a read', () => {
 
     H.click('cs-studio-tab-publish');
     await H.settle();
-    H.click('cs-publish');
+    H.click('cs-publish-enterprise');
     await H.settle();
 
     expect(api.publishCaseStudy).toHaveBeenCalledWith(ID, { surfaceKey: 'enterprise' });
