@@ -197,6 +197,21 @@ Weaknesses found by running it, and what was done. Add to this every time.
   34 items. Drive `--to 300` in `--count 25` chunks; the script recomputes from
   the database each run, so every chunk is resumable and none is big enough to
   take the container down.**
+- *(2026-09-11)* **The first scaled chunk wrote 25 questions clean, and every one
+  was S1.** The `--to` plan filled the thinnest DOMAIN and picked the FIRST
+  scenario fitting it, so 40 D1 questions were headed into one world while S5 -
+  already the thinnest scenario - never got touched. S1 went 34 to 59 in one
+  chunk; S4 and S5 sat at 19. The exam draws four scenarios of six at random, and
+  a student who lands the thin one is measured against a shallower pool. Now
+  picks the thinnest fitting scenario, with the count kept current inside a
+  chunk so 25 picks spread rather than all landing on whichever was thinnest at
+  the start. **Read what a run wrote, not just how many.**
+- *(2026-09-11)* **Retiring six drafts exposed that the sweep's approve step could
+  un-retire them.** Each became a question whose latest revision is retired, and
+  the approval filter selected on score alone - `--approve-as` would have
+  approved them straight back under a human's name. Retirement now means BOTH
+  the revision status and the identity's `is_retired`, and the sweep skips any
+  key whose latest revision is retired and says how many it skipped.
 - *(2026-09-10)* **Do not write source containing backslashes through a shell
   heredoc.** Building the schema parser that way put a literal CR and a real
   newline where `` and `

@@ -252,7 +252,9 @@ describe('approval targets the ceiling, not a flat six', () => {
   );
 
   it('selects approvable items by their own ceiling', () => {
-    expect(src).toMatch(/const approvable = outcomes\.filter\(\(x\) => x\.after >= x\.ceiling\)/);
+    // The ceiling comparison is the load-bearing part; the retired-key guard
+    // that follows it has its own describe block below.
+    expect(src).toMatch(/const approvable = outcomes\.filter\(\(x\) => x\.after >= x\.ceiling/);
   });
 
   it('no longer approves on a hard-coded six', () => {
@@ -269,5 +271,33 @@ describe('approval targets the ceiling, not a flat six', () => {
     // Summary and approval must agree. They disagreed precisely because each
     // guessed the ceiling separately.
     expect(src).toMatch(/ceiling: number;/);
+  });
+});
+
+/**
+ * The approve step must never resurrect a retired revision.
+ *
+ * Retiring the six untriaged first-batch drafts left each as a question whose
+ * LATEST revision is retired. The approval filter selected on score alone, so a
+ * sweep with --approve-as would have approved them straight back - un-retiring
+ * content that was withdrawn on purpose, and stamping a human's name on it.
+ */
+describe('approval skips a retired latest revision', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const src: string = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'sweepCertQuestionRubric.ts'), 'utf8',
+  );
+
+  it('queries for keys whose latest revision is retired before approving', () => {
+    expect(src).toMatch(/review_status = 'retired'/);
+    expect(src).toMatch(/revision = \(SELECT MAX\(v\.revision\)/);
+  });
+
+  it('excludes those keys from the approvable set', () => {
+    expect(src).toMatch(/x\.after >= x\.ceiling && !retiredKeys\.has\(x\.key\)/);
+  });
+
+  it('says how many it skipped, so a short approval count is explained', () => {
+    expect(src).toMatch(/skipped: latest revision is retired/);
   });
 });
