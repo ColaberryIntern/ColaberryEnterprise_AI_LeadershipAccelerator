@@ -132,12 +132,22 @@ describe('HomeV2 — structure', () => {
    * the way the old marketing site did -- so it is RAISED deliberately and
    * recorded here rather than quietly deleted.
    *
-   * The next section to be added should replace one, not extend this again.
+   * Raised from 10 to 12 on 2026-09-11. The page reached twelve in #1895
+   * (2026-08-27, the session-11 build-day work) and this test went red — but
+   * nothing ran frontend tests then, so it stayed red for a fortnight and the
+   * first anyone heard was when CI started running them. Put to Ali as a design
+   * decision, not a test fix: keep twelve and record it, or cut two. He chose to
+   * keep them. So the ceiling moves the same way it did last time, deliberately
+   * and with the reason written down, rather than the guard being quietly
+   * loosened or switched off.
+   *
+   * The rule stands: the next section to be added should replace one, not
+   * extend this again.
    */
-  it('stays within the ten-section budget', () => {
+  it('stays within the twelve-section budget', () => {
     const count = (html().match(/<section/g) || []).length;
     expect(count).toBeGreaterThan(0);
-    expect(count).toBeLessThanOrEqual(10);
+    expect(count).toBeLessThanOrEqual(12);
   });
 
   it('renders both hero CTAs', () => {
