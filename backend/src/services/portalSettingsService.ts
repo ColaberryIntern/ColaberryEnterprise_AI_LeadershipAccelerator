@@ -38,7 +38,13 @@ const LONG_MAX = 600;
 // dedicated columns needed.
 const PERSONALIZATION_KEYS = ['industry', 'role', 'seniority', 'years_experience', 'location', 'goals', 'skills'] as const;
 const PREF_STRING_KEYS = ['timezone', 'weekly_hours', 'primary_goal', 'preferred_contact', 'experience_level'] as const;
-const PREF_BOOL_KEYS = ['email_updates', 'event_reminders', 'weekly_digest', 'community_visible'] as const;
+// `reply_notifications` — email me when someone replies to my post or comment.
+// Lives here rather than on community_members deliberately: this is where every
+// other "email me when…" preference already lives, it is where a student looks
+// for them, and the JSONB store needs no migration. Booleans here default to
+// opted-in (see readIntake below), which is what a notification nobody has
+// opted out of should do.
+const PREF_BOOL_KEYS = ['email_updates', 'event_reminders', 'weekly_digest', 'community_visible', 'reply_notifications'] as const;
 type PersonalizationKey = typeof PERSONALIZATION_KEYS[number];
 type PrefStringKey = typeof PREF_STRING_KEYS[number];
 type PrefBoolKey = typeof PREF_BOOL_KEYS[number];

@@ -618,6 +618,8 @@ export async function removeCommentAsModerator(enrollmentId: string, commentId: 
 
 // ─── Comments ───────────────────────────────────────────────────────────
 
+import { notifyReplyByEmail } from './community/replyNotificationService';
+
 export interface CommentItem {
   id: string;
   body: string;
@@ -692,6 +694,18 @@ export async function createComment(
       notification_type: 'reply',
       source_type: 'comment',
       source_id: comment.id,
+    });
+
+    // …and out of the app. The bell alone only reaches a student who is already
+    // in the portal, which is most of why threads never started. Fire-and-forget
+    // and fail-soft by contract: a mail outage must never stop a reply posting.
+    void notifyReplyByEmail({
+      commentId: comment.id,
+      recipientMemberId: notifyRecipientId,
+      actorDisplayName: member.display_name,
+      commentBody: input.body,
+      postId,
+      onOwnPost: parentCommentId === null,
     });
   }
 

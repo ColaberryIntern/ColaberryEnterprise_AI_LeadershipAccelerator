@@ -206,6 +206,89 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+export interface CommunityReplyEmailData {
+  to: string;
+  recipientName: string;
+  actorName: string;
+  preview: string;
+  postId: string;
+  onOwnPost: boolean;
+  /** The comment id — the business event this mail is about. */
+  eventId: string;
+}
+
+export function buildCommunityReplyHtml(data: CommunityReplyEmailData): string {
+  const first = escapeHtml((data.recipientName || '').trim().split(/\s+/)[0] || 'there');
+  const actor = escapeHtml(data.actorName || 'A classmate');
+  const preview = escapeHtml(data.preview || '');
+  const where = data.onOwnPost ? 'your post' : 'your comment';
+  const link = `https://enterprise.colaberry.ai/portal/community?post=${encodeURIComponent(data.postId)}`;
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${actor} replied to you</title></head>
+<body style="margin:0; padding:0; background:#f7fafc;">
+  <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${actor} replied to ${where} in the Colaberry community.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7fafc; padding:24px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%; background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; font-family:'Segoe UI', system-ui, -apple-system, sans-serif;">
+        <tr><td style="background:#ffffff; padding:24px 32px 20px; border-bottom:3px solid #1a365d;">
+          <img src="https://enterprise.colaberry.ai/colaberry-logo-transparent.png" alt="Colaberry" width="150" style="display:block; width:150px; max-width:150px; height:auto; border:0;">
+          <div style="color:#1a365d; font-size:12px; font-weight:600; letter-spacing:0.5px; margin-top:10px; text-transform:uppercase;">Community</div>
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <h1 style="margin:0 0 16px; color:#1a365d; font-size:22px; font-weight:700; line-height:1.3;">${actor} replied to ${where}.</h1>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
+            <tr><td style="background:#f6f7f8; border-left:3px solid #367895; border-radius:0 8px 8px 0; padding:14px 16px; color:#2d3748; font-size:15px; line-height:1.6;">${preview}</td></tr>
+          </table>
+          <p style="margin:0 0 22px; color:#2d3748; font-size:15px; line-height:1.6;">Hi ${first}, someone in your cohort took the time to answer you. Replying back is worth 2 points, and it keeps the thread alive for everyone reading it.</p>
+          <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#FB2832; border-radius:8px;">
+            <a href="${link}" style="display:inline-block; padding:13px 26px; color:#ffffff; font-size:15px; font-weight:700; text-decoration:none;">Read and reply</a>
+          </td></tr></table>
+        </td></tr>
+        <tr><td style="padding:18px 32px 26px; border-top:1px solid #e2e8f0; color:#6b7280; font-size:12px; line-height:1.6;">
+          You are getting this because someone replied to you in the Colaberry community.
+          Turn these off any time in <a href="https://enterprise.colaberry.ai/portal/settings" style="color:#367895;">Settings &#8250; Preferences</a>.
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+/**
+ * One email per reply, to the person who was replied to. Idempotency is carried
+ * on the Mandrill metadata + tag keyed to the comment id, so a retry of the
+ * caller cannot produce a second mail for the same comment.
+ */
+export async function sendCommunityReplyEmail(data: CommunityReplyEmailData): Promise<{ sent: boolean; messageId?: string }> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping community reply to:', redactForLogs(data.to));
+    return { sent: false };
+  }
+  const subject = `${data.actorName} replied to ${data.onOwnPost ? 'your post' : 'your comment'}`;
+  const r = await resolveEmailRecipient(data.to, subject);
+  const html = buildCommunityReplyHtml(data);
+  const fromHeader = `"Colaberry Community" <${env.trainingWelcomeFromEmail}>`;
+  const info = await guardedSendMail({
+    from: fromHeader,
+    replyTo: fromHeader,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: {
+      'X-MC-Tags': 'community-reply',
+      // Per-event key: the same comment can never mail twice.
+      'X-MC-Metadata': JSON.stringify({ comment_id: data.eventId }),
+    },
+  });
+  const sent = Boolean(info.messageId);
+  console.log(`[Email] Community reply ${sent ? 'sent' : 'BLOCKED (kill switch)'} to: ${redactForLogs(r.to)} | comment: ${data.eventId}`);
+  return { sent, messageId: info.messageId };
+}
+
 export function buildTrainingWelcomeHtml(data: TrainingWelcomeData): string {
   const firstName = (data.fullName || '').trim().split(/\s+/)[0] || 'there';
   const name = escapeHtml(firstName);

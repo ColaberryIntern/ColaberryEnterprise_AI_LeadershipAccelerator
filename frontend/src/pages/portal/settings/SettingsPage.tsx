@@ -29,6 +29,9 @@ const EMPTY_PERSONAL: PersonalForm = { industry: '', role: '', seniority: '', ye
 
 const DEFAULT_PREFS: SettingsPreferences = {
   email_updates: true, event_reminders: true, weekly_digest: true, community_visible: true,
+  // Opted in by default, matching how the server resolves an unset boolean
+  // preference. A reply nobody has opted out of should reach them.
+  reply_notifications: true,
   timezone: null, weekly_hours: null, primary_goal: null, preferred_contact: null, experience_level: null,
 };
 
@@ -490,6 +493,7 @@ const SettingsPage: React.FC = () => {
             ['email_updates', 'Program updates', 'Important announcements about your cohort and the program.'],
             ['event_reminders', 'Event reminders', 'A nudge before live classes and events you can join.'],
             ['weekly_digest', 'Weekly digest', 'A Monday summary of your progress, points, and what’s next.'],
+            ['reply_notifications', 'Replies to my posts', 'Email me when someone answers a post or comment of mine.'],
             ['community_visible', 'Show me in the community', 'Let other members see your profile in Community.'],
           ] as [keyof SettingsPreferences, string, string][]).map(([key, lab, desc]) => (
             <div className="set-row" key={key}>

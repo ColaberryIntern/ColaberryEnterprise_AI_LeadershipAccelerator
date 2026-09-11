@@ -78,10 +78,30 @@ export interface RitualConfig {
 const RITUAL_ART_BASE = '/thumbnails/curriculum-types';
 const SHARED_RITUAL_ART = `${RITUAL_ART_BASE}/community_discussion.jpg`;
 
-/** Rituals with their own produced artwork. Add a key here when its jpg lands. */
+/**
+ * Every ritual has its own banner. Drawn in the house palette (soft figures,
+ * navy ground, teal with one coral accent, lockup bottom-right, 900x300) and
+ * rendered to JPEG so they sit beside the other 56 type thumbnails without
+ * looking foreign. `communityRituals.art.test.ts` asserts each file exists on
+ * disk, so a key can never point at a 404 in production.
+ */
 const RITUAL_ART: Record<string, string> = {
-  // e.g. skill_drop: `${RITUAL_ART_BASE}/ritual_skill_drop.jpg`,
+  roll_call: `${RITUAL_ART_BASE}/ritual_roll_call.jpg`,
+  skill_drop: `${RITUAL_ART_BASE}/ritual_skill_drop.jpg`,
+  show_and_tell: `${RITUAL_ART_BASE}/ritual_show_and_tell.jpg`,
+  steal_this_prompt: `${RITUAL_ART_BASE}/ritual_steal_this_prompt.jpg`,
+  cohort_wins: `${RITUAL_ART_BASE}/ritual_cohort_wins.jpg`,
+  unblock_me: `${RITUAL_ART_BASE}/ritual_unblock_me.jpg`,
+  meet_my_team: `${RITUAL_ART_BASE}/ritual_meet_my_team.jpg`,
+  never_again: `${RITUAL_ART_BASE}/ritual_never_again.jpg`,
+  war_story: `${RITUAL_ART_BASE}/ritual_war_story.jpg`,
+  hot_take: `${RITUAL_ART_BASE}/ritual_hot_take.jpg`,
+  teach_one_thing: `${RITUAL_ART_BASE}/ritual_teach_one_thing.jpg`,
+  architect_manifesto: `${RITUAL_ART_BASE}/ritual_architect_manifesto.jpg`,
 };
+
+/** Exported for the on-disk guard test only. */
+export const RITUAL_ART_FILES = RITUAL_ART;
 
 export function ritualArt(week: number | null | undefined): string {
   const r = ritualForWeek(week);
