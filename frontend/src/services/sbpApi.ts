@@ -175,12 +175,13 @@ export async function fetchIntakeQuestions(input: {
  * it. Mirrors `ReviewItem` in backend/src/services/sbp/intakeReview.ts.
  *
  *   needsConfirmation  we heard it, nobody has agreed we heard it right
+ *   fromBuild          a story's own work showed it; nobody has agreed yet
  *   inferences         nothing was said; the system worked it out
  *   openQuestions      it was asked and not answered
  *   unknowns           recorded as unknown, deliberately, and that is allowed
  *   confirmed          already corrected or agreed
  */
-export type ReviewGroup = 'confirmed' | 'needsConfirmation' | 'inferences' | 'openQuestions' | 'unknowns';
+export type ReviewGroup = 'confirmed' | 'needsConfirmation' | 'fromBuild' | 'inferences' | 'openQuestions' | 'unknowns';
 
 export interface ReviewItem {
   index: number;
@@ -312,6 +313,47 @@ export async function getIntakeReview(projectId: string): Promise<
     return { ok: true, review: res.data as IntakeReviewRecord };
   } catch (err: any) {
     if (err?.response?.status === 404) return { ok: true, review: null };
+    return { ok: false, error: toError(err) };
+  }
+}
+
+/**
+ * What a case study could be built from, in four sections that stay apart,
+ * with the project's computed rung. Read-only: the shape carries
+ * `publishable: false` and nothing on the student side can change that.
+ */
+export type CaseStudyMaturity =
+  | 'story_hypothesis' | 'build_record' | 'capability_demonstration' | 'operational_result' | 'impact_case_study';
+
+export interface CaseStudyFoundation {
+  project_id: string;
+  maturity: CaseStudyMaturity;
+  ladder: CaseStudyMaturity[];
+  maturityReason: string;
+  nextRungNeeds: string | null;
+  truthRevision: number | null;
+  hypothesisCoverage: { filled: number; total: number };
+  buildEvidence: {
+    facts: Array<{ dimension: string; label: string; value: string; evidence: string }>;
+    stories: Array<{ storyId: string; outcome: string; added: number; questions: number; refused: number }>;
+    verifiedStories: number;
+  };
+  demonstrationEvidence: Array<{ storyId: string; kind: string; ref: string; note: string | null }>;
+  outcomeEvidence: { items: never[]; why: string; heldMeasurementEvents: number };
+  openQuestions: number;
+  publicationPreference: 'undecided';
+  publishable: false;
+  limitations: string[];
+}
+
+export async function getCaseStudyFoundation(projectId: string): Promise<
+  { ok: true; foundation: CaseStudyFoundation | null } | { ok: false; error: SbpError }
+> {
+  try {
+    const res = await portalApi.get(`/api/portal/sbp/intake/${encodeURIComponent(projectId)}/case-study-foundation`);
+    return { ok: true, foundation: res.data as CaseStudyFoundation };
+  } catch (err: any) {
+    if (err?.response?.status === 404) return { ok: true, foundation: null };
     return { ok: false, error: toError(err) };
   }
 }

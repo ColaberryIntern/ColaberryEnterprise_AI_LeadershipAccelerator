@@ -239,6 +239,64 @@ Weaknesses found by running it, and what was done. Add to this every time.
   mints reordered revisions for what was already written, idempotently. The
   length tell (correct-is-longest 61%, +1.2 words) is real but milder and is
   next.
+- *(2026-09-11)* **Every per-question gate can pass and the bank can still be
+  broken.** 144-at-A was not a defect in any question; it was a defect in the
+  bank, and nothing ran against the bank. There is now a whole-bank rubric
+  (`certBankRubric.ts`: position share, one-letter mock score, per-domain skew,
+  length cue, ceiling rate, duplicate stems, scenario spread, objective floor,
+  mocks supported, all approved) and it runs in THREE places from one
+  definition: CI against the repo, the admin Question Bank panel as a
+  scorecard, and automatically at the end of every script that changes the
+  bank (grow, sweep, rebalance, balance). **A bank-level check that runs in
+  only one of those places is the gap that let 144-at-A into production.**
+  Every check prints its measurement and its threshold, and a failing check
+  names the script that fixes it.
+- *(2026-09-11)* **The correct option was the longest in 112 of 150 generated
+  items — by six characters at the median.** Invisible on any one item, 75% to
+  a student who reads none. "The key must never be longest" would be its own
+  tell (chance is 25%), so `lengthPlan` keeps the key longest in one item in
+  three by a salted hash of the key — salted so it does not travel with the
+  answer position — and `lengthenDistractor` adds detail to the longest WRONG
+  option in the rest, refused unless it lands inside bounds, breaks no
+  invariant and costs no rubric dimension, then re-triaged because a longer
+  distractor can become an arguable one. The generator runs the same step at
+  birth; `balanceCertOptionLengths` backfills. Authored items are never
+  touched by the script: their text lives in the repo.
+- *(2026-09-11)* **Four of the first twenty-three lengthened options came back
+  as "D. Allocate ..." and were minted that way.** Asked to rewrite option D,
+  the model recites the list. Rendered, the student sees "D. D. Allocate",
+  which marks the option as the one that was edited: a new tell introduced by
+  the tool that removes an old one. It passed the bounds check (the label is
+  three characters), the invariants (nothing empty), the rubric (shape) and
+  the triage (correctness). **Every text a model returns needs a check for
+  the model's habits, not just for the property you asked for.** Now: the
+  lengthener strips the label before measuring; `checkInvariants` refuses any
+  option that begins with its own letter, which covers the improver and the
+  generator too; the bank audit has a hard `option_labels` check; and the
+  balancer strips and re-mints what was already written, without a model
+  call. Also found on the same read: the triage-medium rate on lengthened
+  items looked alarming (19 of 23 against 15% at generation) until both
+  versions were re-triaged side by side: the same concern on the same
+  untouched option, before and after. **Compare against the baseline before
+  believing a rate.**
+- *(2026-09-11)* **`seedCertPrepContent --approve-as` approved every draft in
+  the table, not the ones it had just minted.** Found while planning the
+  authored-half length pass, which ends with a re-seed: production holds 149
+  superseded drafts (each replaced by a later approved revision, hidden from
+  the queue), and the next `--revise --approve-as ali@colaberry.com` would
+  have stamped all of them with his name. A reviewer's name on a revision
+  they never saw is a false audit trail. Approval is now scoped to what the
+  run minted, and the run says so when that is nothing. **A flag that acts on
+  "everything in state X" is a footgun the moment state X has history.**
+- *(2026-09-11)* **The authored half measured 58% correct-is-longest by
+  characters, 37% by words.** The rubric comment quoted the 37; the audit
+  measures characters. Under the ceiling, but the half a student meets first.
+  The database balancer skips authored items by design (their text is in the
+  repo), so the same pass now has a second front end: `planAuthoredOptionLengths`
+  emits patches addressed by option TEXT (the repo letter and the database
+  letter differ, because `item()` re-letters as it places the key), and
+  `applyCertOptionPatches` refuses anything it cannot place exactly once.
+  Both scripts share `lib/certLengthPass`, so "balanced" means one thing.
 - *(2026-09-10)* **Do not write source containing backslashes through a shell
   heredoc.** Building the schema parser that way put a literal CR and a real
   newline where `` and `

@@ -216,6 +216,7 @@ import LeadSource from './LeadSource';
 import EntryPoint from './EntryPoint';
 import FormDefinition from './FormDefinition';
 import RoutingRule from './RoutingRule';
+import RoutingRuleExecution from './RoutingRuleExecution';
 import RawLeadPayload from './RawLeadPayload';
 import ScholarshipInterview from './ScholarshipInterview';
 
@@ -440,6 +441,8 @@ import JourneyPath from './JourneyPath';
 import OfferFamily from './OfferFamily';
 import BrandOfferPolicy from './BrandOfferPolicy';
 import GrowthJourneyEnrollment from './GrowthJourneyEnrollment';
+import GrowthJourneyClassification from './GrowthJourneyClassification';
+import GrowthJourneyTransition from './GrowthJourneyTransition';
 import SenderProfile from './SenderProfile';
 import PlatformIdentity from './PlatformIdentity';
 import PlatformIdentityLink from './PlatformIdentityLink';
@@ -517,6 +520,7 @@ import CertQuestionRevision from './CertQuestionRevision';
 import CertSession from './CertSession';
 import ProjectUnderstandingRecord from './ProjectUnderstandingRecord';
 import ProjectDiscoveryCallRequest from './ProjectDiscoveryCallRequest';
+import StoryTruthEnrichmentRecord from './StoryTruthEnrichmentRecord';
 import CertResponse from './CertResponse';
 import CertReadinessSnapshot from './CertReadinessSnapshot';
 import CertEvidenceMapping from './CertEvidenceMapping';
@@ -1277,7 +1281,7 @@ export {
   // Cert Prep (Claude Certified Architect readiness)
   CertTrack, CertDomain, CertQuestion, CertQuestionRevision,
   CertSession, CertResponse, CertReadinessSnapshot, CertEvidenceMapping,
-  ProjectUnderstandingRecord, ProjectDiscoveryCallRequest,
+  ProjectUnderstandingRecord, ProjectDiscoveryCallRequest, StoryTruthEnrichmentRecord,
   Cohort, Enrollment, Podcast, PodcastView, TimelineCardComment, CardSurveyResponse, AssessmentAttempt, ReflectionEntry, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
   SystemSetting, EventLedger, Campaign, CampaignLead,
@@ -1454,6 +1458,7 @@ export {
   EntryPoint,
   FormDefinition,
   RoutingRule,
+  RoutingRuleExecution,
   RawLeadPayload,
   ScholarshipInterview,
   AiCompany,
@@ -1603,6 +1608,8 @@ export {
   OfferFamily,
   BrandOfferPolicy,
   GrowthJourneyEnrollment,
+  GrowthJourneyClassification,
+  GrowthJourneyTransition,
   SenderProfile,
   PlatformIdentity,
   PlatformIdentityLink,

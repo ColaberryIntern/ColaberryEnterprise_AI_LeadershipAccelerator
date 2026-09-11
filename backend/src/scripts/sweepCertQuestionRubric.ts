@@ -49,6 +49,7 @@ import { sequelize } from '../config/database';
 import { scoreItem } from '../services/certPrep/certQuestionRubric';
 import { improveItem, ImproverItem, achievableScore, unachievableDimensions } from '../services/certPrep/certQuestionImprover';
 import { createDraftRevision, setReviewStatus } from '../services/certPrep/certQuestionBankService';
+import { runLiveAudit } from './lib/certBankAudit';
 
 const args = process.argv.slice(2);
 const write = args.includes('--write');
@@ -347,6 +348,10 @@ async function main(): Promise<void> {
     }
     log(`Approved ${approved} revision(s) as ${approveAs}.`);
   }
+
+  // Whole-bank rubric on what this run left behind. Runs whenever anything was
+  // written or approved, because both change what a student can be served.
+  if (write) await runLiveAudit('after sweep');
 }
 
 /**

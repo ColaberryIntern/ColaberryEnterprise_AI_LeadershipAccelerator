@@ -368,7 +368,7 @@ router.get('/api/portal/sbp/builds/:projectId/stories/:storyId/prompt', requireP
       const schedule = await scheduleForEnrollment(eid(req), stored.plan, null, stored.published_at);
       return res.json({
         story_id: COMMAND_CENTER_STORY_ID,
-        prompt: commandCenterPrompt(stored.plan, schedule),
+        prompt: commandCenterPrompt(stored.plan, schedule, { projectId }),
         has_repo: Boolean(repo),
         paths_verified: manifest.length > 0,
       });
@@ -381,6 +381,7 @@ router.get('/api/portal/sbp/builds/:projectId/stories/:storyId/prompt', requireP
       repoUrl: repo?.url ?? null,
       manifestPaths: manifest,
       notes: typeof req.query.notes === 'string' ? req.query.notes : undefined,
+      projectId,
     });
     res.json({ story_id: story.id, prompt, has_repo: Boolean(repo), paths_verified: manifest.length > 0 });
   } catch (e) { fail(res, e, next); }
@@ -515,6 +516,27 @@ router.get('/api/portal/sbp/intake/:projectId/case-study-hypothesis', requirePar
     });
 
     res.json({ project_id: projectId, hypothesis, coverage: hypothesisCoverage(hypothesis) });
+  } catch (e) { fail(res, e, next); }
+});
+
+/*
+ * The case-study foundation: hypothesis, build evidence, demonstration
+ * evidence and outcome evidence, kept apart, with the project's computed
+ * maturity. Read-only, a projection recomputed on every call; nothing here
+ * can publish anything and the response says so (`publishable: false`).
+ * Same scoping as every other build route.
+ */
+router.get('/api/portal/sbp/intake/:projectId/case-study-foundation', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const projectId = z.string().uuid().parse(req.params.projectId);
+    await requireOwnedProject(req, projectId);
+
+    const { loadCaseStudyFoundation } = await import('../services/sbp/caseStudyFoundationLoader');
+    const foundation = await loadCaseStudyFoundation(projectId);
+    if (!foundation) return res.status(404).json({ error: 'No intake for this project' });
+
+    res.json({ project_id: projectId, ...foundation });
   } catch (e) { fail(res, e, next); }
 });
 

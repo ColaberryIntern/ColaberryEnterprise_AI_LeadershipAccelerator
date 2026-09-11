@@ -30,6 +30,7 @@ import communityRoomsRoutes from './routes/communityRoomsRoutes';
 import alumniReferralRoutes from './routes/alumniReferralRoutes';
 import qrRedirectRoutes from './routes/qrRedirectRoutes';
 import trackedLinkRedirectRoutes from './routes/trackedLinkRedirectRoutes';
+import openclawShortLinkRoutes from './routes/openclawShortLinkRoutes';
 import v1Routes from './routes/v1Routes';
 import advisorRoutes from './routes/advisorRoutes';
 import showcaseArtifactRoutes from './routes/showcaseArtifactRoutes';
@@ -84,6 +85,7 @@ import { ensureAgentManagerConversationSchema } from './db/ensureAgentManagerCon
 import { ensureAgentGoalSchema } from './db/ensureAgentGoalSchema';
 import { ensureProjectUnderstandingSchema } from './db/ensureProjectUnderstandingSchema';
 import { ensureProjectDiscoveryCallSchema } from './db/ensureProjectDiscoveryCallSchema';
+import { ensureStoryEnrichmentSchema } from './db/ensureStoryEnrichmentSchema';
 import { ensureAgentOneOnOneSchema } from './db/ensureAgentOneOnOneSchema';
 import { ensureAgentReportSubscriptionSchema } from './db/ensureAgentReportSubscriptionSchema';
 import { ensureAgentReportRunSchema } from './db/ensureAgentReportRunSchema';
@@ -108,6 +110,7 @@ import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema'
 import { ensureOrgAccountSchema } from './db/ensureOrgAccountSchema';
 import { ensureMultiTenantSchema } from './db/ensureMultiTenantSchema';
 import { ensureGrowthJourneySchema } from './db/ensureGrowthJourneySchema';
+import { ensureRoutingAuditSchema } from './db/ensureRoutingAuditSchema';
 import { ensureRefactoredDeliverySchema } from './db/ensureRefactoredDeliverySchema';
 import { ensureCareerPublicationSchema } from './db/ensureCareerPublicationSchema';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
@@ -204,6 +207,9 @@ app.use(qrRedirectRoutes);
 // issues nothing at all if that fails - see the route's header for why validating only at
 // creation time is not sufficient.
 app.use(trackedLinkRedirectRoutes);
+// OpenClaw outreach short link (/i/:tag) - public, same reason and same rule as /r/ above.
+// It sat BELOW adminRoutes from 2026-08-27 to 2026-09-11 and 401'd every visitor.
+app.use(openclawShortLinkRoutes);
 app.use(v1Routes);
 
 // PUBLIC API routes — MUST stay mounted BEFORE adminRoutes. adminRoutes is mounted
@@ -230,45 +236,6 @@ app.use(publicCareerPortfolioRoutes);
 app.use(publicCaseStudyRoutes);
 
 app.use(adminRoutes);
-
-// OpenClaw tracked short URL redirect (public, no auth)
-app.get('/i/:tag', async (req, res) => {
-  try {
-    const { OpenclawResponse: OcResponse } = await import('./models');
-    const response = await OcResponse.findOne({ where: { short_id: req.params.tag } });
-    if (!response) return res.redirect('/ai-architect');
-
-    // Record visitor attribution
-    try {
-      const { Visitor } = await import('./models');
-      if (Visitor) {
-        await (Visitor as any).create({
-          campaign_id: response.utm_params?.utm_campaign || response.short_id,
-          source: response.utm_params?.utm_source || response.platform,
-          medium: response.utm_params?.utm_medium || 'organic_outreach',
-          landing_page: '/ai-architect',
-          referrer: req.get('referer') || null,
-          ip_address: req.ip,
-          user_agent: req.get('user-agent'),
-          created_at: new Date(),
-        });
-      }
-    } catch {
-      // Visitor tracking is non-critical
-    }
-
-    // Update engagement metrics
-    const clicks = (response.engagement_metrics?.clicks || 0) + 1;
-    await response.update({
-      engagement_metrics: { ...response.engagement_metrics, clicks },
-      updated_at: new Date(),
-    });
-
-    res.redirect('/ai-architect');
-  } catch {
-    res.redirect('/ai-architect');
-  }
-});
 
 app.use(errorHandler);
 
@@ -2461,6 +2428,9 @@ async function start(): Promise<void> {
 
   // Ingestion schema first — so the leads.source_id FK can resolve during alter sync.
   await ensureIngestionSchema();
+  // Phase 2 (T226): routing_rules.version + routing_rule_executions. Must follow
+  // ensureIngestionSchema, which creates the table the ALTER names.
+  await ensureRoutingAuditSchema();
   // Ops Command Center schema — explicit creation because alter sync hits
   // pre-existing index conflicts elsewhere and never reaches the ops_* models.
   await ensureOpsCommandCenterSchema();
@@ -2833,6 +2803,9 @@ async function start(): Promise<void> {
   // Unified Project Discovery, Phase 5: a student's request to be called about
   // their project, with the consent scoped to it. Additive, idempotent.
   await ensureProjectDiscoveryCallSchema();
+  // Phase 6: the ledger of what each story's repo taught the truth, keyed
+  // so a replay is a no-op. Additive, idempotent.
+  await ensureStoryEnrichmentSchema();
   // AI Workforce Management, Checkpoint D — a manager's structured 1:1
   // check-in record with their agent. Additive, idempotent, no flag. No
   // seeder writes to it; a manager writes the first row via

@@ -606,6 +606,8 @@ export async function publishBuild(
     planVersion: published.version,
     planSha256: published.plan_sha256,
     correlationId: correlationId ?? undefined,
+    projectId,
+    truthRevision: published.truth_revision ?? null,
     schedule,
     progress: snapshot.progress,
     baselineByStory: snapshot.baselineByStory,

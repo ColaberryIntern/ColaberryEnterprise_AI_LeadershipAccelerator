@@ -175,3 +175,39 @@ describe('grouping rules, stated once', () => {
     expect(fullyReviewed([item({ provenance: 'client_confirmed' })])).toBe(true);
   });
 });
+
+describe('what a build showed (Phase 6)', () => {
+  it('groups repo evidence as fromBuild, after what the student said and before inferences', () => {
+    const review = buildIntakeReview([
+      item({ dimension: 'systems', value: 'Probably Postgres.', classification: 'ASSUMPTION', provenance: 'ai_inferred', source_quote: undefined }),
+      item({ dimension: 'integrations', value: 'Reads Zendesk.', provenance: 'repo_evidence', source_quote: 'src/client.ts' }),
+      item({ dimension: 'actors', value: 'Priya.' }),
+    ]);
+    expect(review.items.map((i) => i.group)).toEqual(['needsConfirmation', 'fromBuild', 'inferences']);
+    expect(review.counts.fromBuild).toBe(1);
+  });
+
+  it('a question a story raised is a question, whatever its provenance', () => {
+    expect(groupOf(item({ classification: 'QUESTION', provenance: 'repo_evidence', source_quote: 'src/x.ts' }))).toBe('openQuestions');
+  });
+
+  it('a correction keeps the earlier value in history, newest first', () => {
+    const heard = item({ dimension: 'actors', value: 'Priya.', provenance: 'repo_evidence', source_quote: 'src/review.ts' });
+    const first = applyCorrection([heard], { index: 0, value: 'Priya Natarajan.' });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    expect(first.items[0].history).toHaveLength(1);
+    expect(first.items[0].history![0]).toMatchObject({ value: 'Priya.', provenance: 'repo_evidence', replaced_by: 'correction' });
+
+    const second = applyCorrection(first.items, { index: 0, value: 'Priya N.' });
+    if (!second.ok) return;
+    expect(second.items[0].history!.map((h) => h.value)).toEqual(['Priya Natarajan.', 'Priya.']);
+  });
+
+  it('confirming an already-confirmed value unchanged adds nothing to history', () => {
+    const confirmed = item({ provenance: 'client_confirmed' });
+    const r = applyCorrection([confirmed], { index: 0, value: null });
+    if (!r.ok) return;
+    expect(r.items[0].history).toBeUndefined();
+  });
+});
