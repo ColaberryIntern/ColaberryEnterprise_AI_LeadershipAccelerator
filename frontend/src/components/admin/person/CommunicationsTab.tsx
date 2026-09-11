@@ -74,19 +74,112 @@ function MessageRow({ m }: { m: CommunicationMessage }) {
           )}
         </div>
 
-        {m.body && (
-          <button type="button" className="btn btn-sm btn-link text-decoration-none p-0"
-            onClick={() => setOpen((v) => !v)}>
-            {open ? 'Hide' : 'Read'}
-          </button>
-        )}
+        <button type="button" className="btn btn-sm btn-link text-decoration-none p-0 flex-shrink-0"
+          onClick={() => setOpen(true)}>
+          Open
+        </button>
       </div>
 
-      {open && m.body && (
-        <div className="mt-2 p-3 bg-light rounded small" style={{ whiteSpace: 'pre-wrap', maxHeight: 420, overflowY: 'auto' }}>
-          {m.body}
+      {open && <MessageModal m={m} onClose={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+/**
+ * One message in full.
+ *
+ * Matches the campaign lead modal's shape -- the message on the left, its
+ * delivery facts on the right -- because that is the layout Ali already reads
+ * these in, and a second arrangement for the same content is a second thing to
+ * learn. What it deliberately does NOT repeat is the campaign-level summary
+ * (step progress, touchpoints, enrolment status): that sits on the thread
+ * header above, and printing it again in every message is noise.
+ */
+function MessageModal({ m, onClose }: { m: CommunicationMessage; onClose: () => void }) {
+  const inbound = m.direction === 'inbound';
+  return (
+    <div className="modal d-block" tabIndex={-1} role="dialog"
+      style={{ background: 'rgba(0,0,0,.4)' }} onClick={onClose}>
+      <div className="modal-dialog modal-dialog-centered modal-lg" role="document"
+        onClick={(e) => e.stopPropagation()}>
+        <div className="modal-content">
+          <div className="modal-header">
+            <div>
+              <h5 className="modal-title mb-0">
+                {m.subject || <span className="text-muted fst-italic">No subject</span>}
+              </h5>
+              <div className="text-muted small mt-1">
+                <span className={`badge bg-${inbound ? 'success' : 'secondary'}-subtle text-${inbound ? 'success' : 'secondary'}-emphasis me-2`}>
+                  {inbound ? 'from them' : 'from us'}
+                </span>
+                {fmtDateTime(m.sentAt ?? m.scheduledFor) ?? 'no timestamp'}
+              </div>
+            </div>
+            <button type="button" className="btn-close" aria-label="Close" onClick={onClose} />
+          </div>
+
+          <div className="modal-body">
+            <div className="row g-3 mb-3">
+              <div className="col-6 col-md-3">
+                <div className="text-muted text-uppercase" style={{ letterSpacing: '.05em', fontSize: '.68rem' }}>Channel</div>
+                <div className="fw-medium">{m.channel ?? '—'}</div>
+              </div>
+              <div className="col-6 col-md-3">
+                <div className="text-muted text-uppercase" style={{ letterSpacing: '.05em', fontSize: '.68rem' }}>Status</div>
+                <div className="fw-medium">{m.status ?? '—'}</div>
+              </div>
+              <div className="col-6 col-md-3">
+                <div className="text-muted text-uppercase" style={{ letterSpacing: '.05em', fontSize: '.68rem' }}>Step</div>
+                <div className="fw-medium">{m.stepIndex !== null ? m.stepIndex + 1 : '—'}</div>
+              </div>
+              <div className="col-6 col-md-3">
+                <div className="text-muted text-uppercase" style={{ letterSpacing: '.05em', fontSize: '.68rem' }}>Written by</div>
+                <div className="fw-medium">{m.aiGenerated ? 'AI' : 'Human'}</div>
+              </div>
+              <div className="col-12">
+                <div className="text-muted text-uppercase" style={{ letterSpacing: '.05em', fontSize: '.68rem' }}>To</div>
+                <div className="fw-medium">{m.toAddress ?? '—'}</div>
+              </div>
+            </div>
+
+            {m.outcomes.length > 0 && (
+              <div className="mb-3">
+                <div className="text-muted text-uppercase mb-1" style={{ letterSpacing: '.05em', fontSize: '.68rem' }}>
+                  What happened to it
+                </div>
+                <div className="d-flex flex-wrap gap-1">
+                  {m.outcomes.map((o, i) => (
+                    <span key={`${o.outcome}-${i}`}
+                      className={`badge bg-${OUTCOME_TONE[o.outcome] ?? 'secondary'}-subtle text-${OUTCOME_TONE[o.outcome] ?? 'secondary'}-emphasis`}>
+                      {o.outcome}{o.at ? ` · ${fmtDateTime(o.at)}` : ''}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="text-muted text-uppercase mb-1" style={{ letterSpacing: '.05em', fontSize: '.68rem' }}>
+              Message
+            </div>
+            {m.body ? (
+              <div className="p-3 bg-light rounded small"
+                style={{ whiteSpace: 'pre-wrap', maxHeight: 460, overflowY: 'auto' }}>
+                {m.body}
+              </div>
+            ) : (
+              /* Absent, stated. Cancelled sends and some logged mail genuinely
+                 store no body -- that is not a rendering failure. */
+              <p className="text-muted small mb-0">
+                No body was stored for this message, so there is nothing to read.
+              </p>
+            )}
+
+            <p className="text-muted small mb-0 mt-3">
+              Read from <code>{m.source}</code>.
+            </p>
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

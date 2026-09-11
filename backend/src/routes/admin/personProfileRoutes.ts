@@ -5,6 +5,8 @@ import { getPersonProfile } from '../../services/adminOs/personProfileService';
 import { hasAnyPersonScope } from '../../services/adminOs/personScope';
 import { visibleEnrollmentIds } from '../../services/career/careerMentorScopeService';
 import { resolveRefToEmail } from '../../services/adminOs/personRef';
+import { generateStrategyBrief } from '../../services/adminOs/strategyBriefService';
+import { loadCcppHistory } from '../../services/adminOs/panels/historyPanels';
 
 /**
  * One person's 360° profile.
@@ -84,6 +86,64 @@ router.get('/api/admin/people/profile', requireAdmin, async (req: Request, res: 
   } catch (error) {
     res.status(500).json({
       error: 'Could not read this profile.',
+      error_class: error instanceof Error ? error.constructor.name : 'Unknown',
+    });
+  }
+});
+
+/**
+ * POST /api/admin/people/strategy-brief — a written brief for whoever is about
+ * to contact this person.
+ *
+ * POST rather than GET because it costs a model call and must not be triggered
+ * by a prefetch, a crawler or a browser retry.
+ *
+ * The brief is built from the SAME profile the caller is permitted to see, so a
+ * scoped role cannot obtain, through the brief, anything the page would have
+ * withheld from them.
+ */
+router.post('/api/admin/people/strategy-brief', requireAdmin, async (req: Request, res: Response) => {
+  const parsed = querySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'An email or ref is required.' });
+    return;
+  }
+
+  const sections = adminAllowedSections(req.admin!);
+  if (!hasAnyPersonScope(sections)) {
+    res.status(403).json({ error: 'Your role does not include access to person records.' });
+    return;
+  }
+
+  try {
+    const email = parsed.data.email ?? await resolveRefToEmail(parsed.data.ref);
+    if (!email) {
+      res.status(404).json({ error: 'No such person, or not visible to your role.' });
+      return;
+    }
+
+    const scopedEnrollments = await visibleEnrollmentIds({
+      sub: req.admin!.sub,
+      email: req.admin!.email,
+      role: req.admin!.role,
+      mgmt_role: req.admin!.mgmt_role ?? null,
+      enrollmentId: (req.admin as unknown as { enrollment_id?: string })?.enrollment_id ?? null,
+    });
+
+    const profile = await getPersonProfile({ email, sections, visibleEnrollmentIds: scopedEnrollments });
+    if (!profile) {
+      res.status(404).json({ error: 'No such person, or not visible to your role.' });
+      return;
+    }
+
+    // Already on the profile when permitted; fetched here only when it was not.
+    const history = profile.history ?? await loadCcppHistory(email);
+
+    const brief = await generateStrategyBrief(profile, history);
+    res.json(brief);
+  } catch (error) {
+    res.status(500).json({
+      error: 'Could not write a brief for this person.',
       error_class: error instanceof Error ? error.constructor.name : 'Unknown',
     });
   }
