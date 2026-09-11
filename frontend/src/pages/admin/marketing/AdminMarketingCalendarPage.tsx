@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { PageHeader, SectionCard } from '../../../components/admin/shell';
 import { TrustSignal } from '../../../components/admin/shell/trust';
 import api from '../../../utils/api';
@@ -71,6 +72,7 @@ function AdminMarketingCalendarPage() {
         subtitle="Every scheduled item across brands and channels, shown in your zone and in each brand's."
         breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Marketing', to: '/admin/marketing' }, { label: 'Calendar' }]}
         trust={trust}
+        actions={<Link to="/admin/marketing/composer" className="btn btn-sm btn-primary">New post</Link>}
       />
 
       <div className="d-flex flex-wrap align-items-end gap-3 px-3 py-2 border-bottom bg-light">

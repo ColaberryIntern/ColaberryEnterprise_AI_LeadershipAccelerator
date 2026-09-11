@@ -50,6 +50,7 @@ const AgentOrphansPage = lazy(() => import('../pages/admin/AgentOrphansPage'));
 const AdminMarketingDashboardPage = lazy(() => import('../pages/admin/marketing/AdminMarketingDashboardPage'));
 const AdminBrandsPage = lazy(() => import('../pages/admin/marketing/AdminBrandsPage'));
 const AdminMarketingCalendarPage = lazy(() => import('../pages/admin/marketing/AdminMarketingCalendarPage'));
+const AdminContentComposerPage = lazy(() => import('../pages/admin/marketing/composer/AdminContentComposerPage'));
 const AdminCommunicationsPage = lazy(() => import('../pages/admin/AdminCommunicationsPage'));
 const AdminTicketBoardPage = lazy(() => import('../pages/admin/AdminTicketBoardPage'));
 const AgentDetailPage = lazy(() => import('../pages/admin/AgentDetailPage'));
@@ -177,6 +178,10 @@ const adminRoutes = (
             in the spec resolves; the canonical page is unchanged. */}
         <Route path="/admin/marketing/campaigns/:id" element={<AdminCampaignDetailPage />} />
         <Route path="/admin/marketing/calendar" element={<AdminMarketingCalendarPage />} />
+        {/* Marketing composer (spec 8.1). Inherits section `campaigns` from /admin/marketing by
+            longest prefix; the API side maps /api/admin/content the same way. */}
+        <Route path="/admin/marketing/composer" element={<AdminContentComposerPage />} />
+        <Route path="/admin/marketing/composer/:id" element={<AdminContentComposerPage />} />
         <Route path="/admin/tickets" element={<AdminTicketBoardPage />} />
         <Route path="/admin/agents/:id" element={<AgentDetailPage />} />
         <Route path="/admin/governance" element={<GovernanceCommandCenter />} />
