@@ -28,8 +28,11 @@ import { ManagerDirective, listDirectives, revokeDirective } from '../../service
 // Overview sub-tabs (2026-09-10) — Ali: "The role character stored in
 // Trust & Control shoudl be moved to Identify." The Charter tab that
 // Checkpoint E folded in above is moved out again — it now lives on
-// Overview's Identity sub-tab (AgentOverviewTab.tsx via
-// overview/OverviewIdentityTab.tsx), a real relocation, not a duplicate.
+// Overview's Identity section (real relocation, not a duplicate). Since
+// the 2026-09-11 Overview redesign (Ali's pasted mockup) that's
+// AgentOverviewV2Sidebar.tsx's own inline Role Charter card, reusing
+// agentRoleCharterApi.ts directly. The old standalone AgentCharterTab.tsx
+// component was deleted the same pass — nothing rendered it any more.
 
 interface Props {
   agentId: string;
