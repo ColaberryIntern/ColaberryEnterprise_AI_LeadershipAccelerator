@@ -278,6 +278,24 @@ describe('classify and persist', () => {
     expect(m.classificationCreate).not.toHaveBeenCalled();
   });
 
+  it('Scenario H (isolation half): one person, a Training relationship then an Enterprise one → two rows under two brand_ids, neither replaying the other', async () => {
+    arrange({ brand: 'training', lead: { interest_level: 'enrollment', message: null } });
+    const training = await classifySubject({ anchor, trigger: 'lead_ingest', flags: flags() });
+    m.campaignFindByPk.mockResolvedValue({ id: 'camp-9', brand_id: 'b-ent', settings: { campaign_key: 'enterprise_cold_q3' }, interest_group: null });
+    const enterprise = await classifySubject({
+      anchor, trigger: 'reply', flags: flags(),
+      extras: { reply: { body: 'Yes, automate our intake', channel: 'email', campaign_id: 'camp-9' } },
+    });
+    if (training.status !== 'classified' || enterprise.status !== 'classified') throw new Error('expected two classified rows');
+    expect(createdRows).toHaveLength(2);
+    expect(createdRows.map((r) => r.brand_id)).toEqual(['b-tr', 'b-ent']);
+    expect(createdRows.map((r) => r.tenant_id)).toEqual(['t-col', 't-col']);
+    expect(createdRows[0].idempotency_key).not.toBe(createdRows[1].idempotency_key);
+    expect(enterprise.replayed).toBe(false);
+    // A Training-restricted member's list carries `brand_id: [b-tr]` in its where clause (the route test pins that), so it sees one of the two.
+    expect(createdRows.filter((r) => ['b-tr'].includes(String(r.brand_id)))).toHaveLength(1);
+  });
+
   it('Scenario J: an input that cannot be loaded is marked unavailable, never zeroed, and the row still lands', async () => {
     arrange({ pageEventsThrow: true });
     const r = await classifySubject({ anchor, trigger: 'lead_ingest', flags: flags() });

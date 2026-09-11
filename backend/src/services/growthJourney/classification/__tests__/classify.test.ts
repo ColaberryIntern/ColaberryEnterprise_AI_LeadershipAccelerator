@@ -166,6 +166,7 @@ describe('each step fires only when the earlier ones abstain', () => {
     expect(r.intent).toBe('opt_out');
     expect(r.primary_path).toBeNull();
     expect(r.requires_human_review).toBe(false);
+    expect(r.source_step).toBe(6); // the terminal answer decided, even without a path
     expect(ai).not.toHaveBeenCalled();
     expect(r.steps_considered.find((s) => s.step === 7)?.outcome).toBe('skipped');
   });

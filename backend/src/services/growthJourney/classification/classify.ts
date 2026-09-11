@@ -151,6 +151,8 @@ export async function classifyInput(
     }
     absorb(l, name, a);
     if (a.terminal) {
+      // A terminal answer (an opt-out) decided the ladder even without a path.
+      l.decidedBy = name;
       terminal = true;
       break;
     }
