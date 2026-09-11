@@ -332,6 +332,7 @@ const STYLESHEETS = [
   'pages/publicV2/servicesV2.css',
   'pages/publicV2/storyDetailV2.css',
   'pages/publicV2/storyMediaV2.css',
+  'pages/publicV2/storyRelatedV2.css',
   'components/caseStudy/caseStudy.css',
 ];
 

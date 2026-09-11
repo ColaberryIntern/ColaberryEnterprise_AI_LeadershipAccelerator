@@ -7,6 +7,10 @@ import {
   caseStudyDetailPath,
   resolveCaseStudySurfaceProfile,
 } from '../../config/caseStudySurfaces';
+/* The band's own rules, split out of `storyDetailV2.css` at the 500-line
+   ceiling. Imported here rather than by the page because this component is the
+   thing that draws the markup, and the page is its only mount point. */
+import './storyRelatedV2.css';
 
 /**
  * "Keep reading" — the other records a reader can go to next.
