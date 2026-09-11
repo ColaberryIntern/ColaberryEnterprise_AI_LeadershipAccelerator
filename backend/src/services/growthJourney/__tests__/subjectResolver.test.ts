@@ -43,6 +43,10 @@ jest.mock('../../../models', () => ({
 
 jest.mock('../../explorerGrowth/explorerIdentityBridge', () => ({
   resolveExplorerLead: (...a: unknown[]) => resolveExplorerLead(...a),
+  // The REAL normaliser, not a stub. It is a pure function, and the point of
+  // the lead-path test is that the resolver produces the same value the bridge
+  // would — a stub would only prove the resolver called something.
+  normalizeEmail: jest.requireActual('../../explorerGrowth/explorerIdentityBridge').normalizeEmail,
 }));
 
 jest.mock('../../../modules/tenancy/leadContextService', () => ({
@@ -275,6 +279,35 @@ describe('the identity half', () => {
     expect(r.subject.org_member_id).toBe('om-1');
     expect(r.subject.enrollment_id).toBe('enr-9');
     expect(r.sources).toContain('org_member');
+  });
+
+  it('does not overwrite a caller-supplied enrollment id with the org member’s', async () => {
+    // One of two precedence branches an independent review found unpinned.
+    // Caller wins, deterministically - the same rule as the visitor case.
+    orgMemberFindByPk.mockResolvedValue({ id: 'om-1', enrollment_id: 'enr-from-member' });
+    const r = await resolveSubject({ enrollmentId: 'enr-1', orgMemberId: 'om-1' });
+    if (r.status !== 'resolved') throw new Error('expected resolved');
+    expect(r.subject.enrollment_id).toBe('enr-1');
+  });
+
+  it('does not overwrite a caller-supplied lead id with the bridge’s', async () => {
+    // The other unpinned branch. The bridge resolves enr-1 to lead 42; the
+    // caller said 7. The caller's anchor is the one they are asking about.
+    resolveExplorerLead.mockResolvedValue(bridged({ lead_id: 42 }));
+    leadFindByPk.mockResolvedValue({ id: 7, email: 'seven@example.test' });
+    const r = await resolveSubject({ enrollmentId: 'enr-1', leadId: 7 });
+    if (r.status !== 'resolved') throw new Error('expected resolved');
+    expect(r.subject.lead_id).toBe(7);
+  });
+
+  it('normalises the email on the lead-only path, through the bridge’s own function', async () => {
+    // `email_normalized` carried the RAW Lead.email when no enrollment was
+    // involved. Lead.email has no lowercase hook and the unique index is on
+    // LOWER(email), so mixed case exists in the table.
+    leadFindByPk.mockResolvedValue({ id: 42, email: '  Mixed.Case@Example.TEST ' });
+    const r = await resolveSubject({ leadId: 42 });
+    if (r.status !== 'resolved') throw new Error('expected resolved');
+    expect(r.subject.email_normalized).toBe('mixed.case@example.test');
   });
 
   it('drops a dangling lead id rather than reporting an identity that is gone', async () => {

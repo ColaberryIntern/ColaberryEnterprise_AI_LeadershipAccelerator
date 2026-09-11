@@ -1,5 +1,5 @@
 import { Lead, Enrollment, Visitor, OrgMember } from '../../models';
-import { resolveExplorerLead } from '../explorerGrowth/explorerIdentityBridge';
+import { resolveExplorerLead, normalizeEmail } from '../explorerGrowth/explorerIdentityBridge';
 import { getLeadContexts } from '../../modules/tenancy/leadContextService';
 
 /**
@@ -87,6 +87,17 @@ export interface SubjectView {
    * `leadContextService`. NOT a second per-brand relationship model — §15's
    * deliverable is "subject AND RELATIONSHIP service", and cycle 1 of the plan
    * omitted this half, which is how a second one gets built.
+   *
+   * UNFILTERED ACROSS TENANTS, AND THAT IS A HAZARD AT ANY HTTP BOUNDARY. This
+   * comes from `getLeadContexts`, whose own doc says callers MUST filter by
+   * authorized tenants: a CPN operator opening a lead must not learn the person
+   * also has an AI Flotation relationship — the existence of the relationship
+   * is itself confidential. This resolver is an internal view and returns all
+   * of them. Any route that exposes this field must apply
+   * `getAuthorizedLeadContexts` semantics first (filter by the caller's
+   * `authorizedTenantIds`, or pass through only for a platform superadmin).
+   * T207's participation routes do not expose it; a future one must not
+   * without that filter.
    */
   brand_relationships: BrandRelationship[];
 }
@@ -176,7 +187,15 @@ export async function resolveSubject(anchor: SubjectAnchor): Promise<SubjectReso
       const lead = await Lead.findByPk(leadId, { attributes: ['id', 'email'] });
       if (lead) {
         sources.push('lead');
-        emailNormalized = emailNormalized ?? ((lead as { email?: string }).email ?? null);
+        // Normalised through the SAME function the bridge uses, so the two
+        // paths cannot disagree about what the field means. `Lead.email` has no
+        // lowercase hook and the unique index is on LOWER(email), so mixed case
+        // exists in the table; a field called `email_normalized` carrying a raw
+        // value was a promise the lead-only path did not keep.
+        if (emailNormalized === null) {
+          const raw = (lead as { email?: string | null }).email;
+          emailNormalized = raw ? normalizeEmail(raw) || null : null;
+        }
       } else {
         // A dangling anchor: the lead id came from a visitor row or the caller,
         // and the lead is gone. Drop it rather than reporting an identity that
@@ -199,9 +218,9 @@ export async function resolveSubject(anchor: SubjectAnchor): Promise<SubjectReso
       brandRelationships = contexts.map((c) => ({
         tenant_id: c.tenant_id,
         brand_id: c.brand_id,
-        relationship_type: (c as { relationship_type?: string | null }).relationship_type ?? null,
-        first_touch_at: (c as { first_touch_at?: Date | null }).first_touch_at ?? null,
-        last_touch_at: (c as { last_touch_at?: Date | null }).last_touch_at ?? null,
+        relationship_type: c.relationship_type ?? null,
+        first_touch_at: c.first_touch_at ?? null,
+        last_touch_at: c.last_touch_at ?? null,
       }));
     }
 
@@ -226,7 +245,11 @@ export async function resolveSubject(anchor: SubjectAnchor): Promise<SubjectReso
     // for ordinary page views.
     console.error(
       JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'growth-journey-subject-resolver',
         event: 'growth_journey.subject_resolver.lookup_failed',
+        outcome: 'failure',
         anchors_supplied: Object.keys(anchor).filter(
           (k) => (anchor as Record<string, unknown>)[k] != null,
         ),
