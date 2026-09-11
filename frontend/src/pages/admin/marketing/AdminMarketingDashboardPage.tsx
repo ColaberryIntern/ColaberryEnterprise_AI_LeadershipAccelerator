@@ -1078,7 +1078,6 @@ function RevenueIntelligenceTab(
   // platform and creative are gone: the server used to select `NULL AS platform, NULL AS
   // creative`, so these columns rendered an em dash on every row of every campaign forever
   // while looking like a dimension that simply had no data yet.
-  const hasMetadata = useMemo(() => campaigns.some(c => c.campaign_type), [campaigns]);
 
   /** What the server says it cannot compute. Same list for every row; read it once. */
   const unavailable = useMemo<UnavailableMetric[]>(() => campaigns[0]?.unavailable ?? [], [campaigns]);

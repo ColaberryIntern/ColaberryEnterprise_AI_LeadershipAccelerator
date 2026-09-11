@@ -92,7 +92,7 @@ export default function AdminContentComposerPage() {
   useEffect(() => {
     if (!routeId) return;
     reload(routeId).catch((err) => fail(err, 'The item could not be loaded.'));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line
   }, [routeId]);
 
   const brand = useMemo(() => brands.find((b) => b.id === setup.brand_id) ?? null, [brands, setup.brand_id]);
