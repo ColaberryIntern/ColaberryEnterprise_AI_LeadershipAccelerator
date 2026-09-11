@@ -33,6 +33,7 @@ marked where that matters. Everything in
 | `buildSchedule.ts` | pure | Release weeks → real calendar dates, capacity, demo release, prep tasks |
 | `commandCenterStory.ts` | pure | STORY-000: its id, title, acceptance, and prompt built from the student's own plan |
 | `materializeTasks.ts` | I/O | Plan → `student_task_lists` + `student_tasks`, one transaction |
+| `addStoryService.ts` | I/O | A student adds one story to a PUBLISHED build. Builds the revision (next `STORY-nnn` plus a `should` requirement it fulfils, so `dangling_requirement` never fires), gates it, saves it as the next draft, and hands it to `publishBuild` — the same path as the first publish, so the repo render and materialisation are inherited. Add only: editing a story's acceptance lines rewrites the verification contract. Nothing is written before the gate passes; a plan that predates a blocking rule is refused as `PlanPredatesGate`, not blamed on the student |
 | `buildStoryPrompt.ts` | pure | The Claude Code prompt stored on each task's `build` column |
 | `renderDocs.ts` | pure | The ~16-19 file document set + the path allowlist |
 | `repoWriter.ts` | I/O | One GitHub commit, content-hash idempotent, allowlist enforced by throwing. Two co-owned files are merged rather than replaced: `CLAUDE.md` via `spliceManagedBlock`, `.colaberry/progress.json` via `mergeProgressFile` (#1463) |
