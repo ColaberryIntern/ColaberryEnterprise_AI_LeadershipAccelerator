@@ -49,6 +49,12 @@ export interface BackendTaskNode {
    * sent without a coordinated release.
    */
   verified_at?: string | null;
+  /**
+   * What verifying this story pays — priced by the backend from the build's
+   * budget (sbp/verification/storyPoints). Optional for the same reason as
+   * `verified_at`: an older server simply has no price tags.
+   */
+  points?: number | null;
 }
 export interface BackendListNode {
   id: string;
@@ -268,17 +274,28 @@ export function overlayCompletions(p: StudentProject, tree: BackendProjectTree):
   const adopted = withServerTasks !== p;
 
   const done = new Set<string>();
+  // The server's price tag per story. Tasks this device stored before stories
+  // carried points (or before the plan was published) have none; the overlay
+  // is how they get one without a reinstall. Same-reference when nothing moved.
+  const price = new Map<string, number>();
   for (const l of tree.lists) for (const t of l.tasks) {
     if (t.status === 'complete' && t.story_id) done.add(t.story_id);
+    if (typeof t.points === 'number' && t.points > 0) price.set(t.story_id || t.id, t.points);
   }
   let changed = false;
   const lists = withServerTasks.lists.map((l) => {
     const tasks = l.tasks.map((t) => {
+      let next = t;
       if (t.state !== 'done' && done.has(taskKey(t))) {
         changed = true;
-        return { ...t, state: 'done' as TaskState, due: 'done' as TaskDue };
+        next = { ...next, state: 'done' as TaskState, due: 'done' as TaskDue };
       }
-      return t;
+      const pts = price.get(taskKey(t));
+      if (pts !== undefined && t.points !== pts) {
+        changed = true;
+        next = { ...next, points: pts };
+      }
+      return next;
     });
     return changed ? { ...l, tasks } : l;
   });
@@ -401,6 +418,9 @@ function taskFromServer(t: BackendTaskNode, due: TaskDue): ProjectTask {
     // verified this" and "this server does not report verification" are
     // the same fact to every reader, and one shape is easier to assert on.
     verifiedAt: t.verified_at ?? null,
+    // Only a real, positive price becomes a badge; null/0/absent stay undefined
+    // so the hero and the cards show nothing rather than "+0 pts".
+    ...(typeof t.points === 'number' && t.points > 0 ? { points: t.points } : {}),
     state: stateFromStatus(t.status),
     due,
   };

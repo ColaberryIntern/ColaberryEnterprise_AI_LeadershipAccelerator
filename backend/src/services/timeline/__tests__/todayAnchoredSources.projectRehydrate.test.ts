@@ -22,6 +22,14 @@ jest.mock('../../../models/StudentTask', () => ({
 jest.mock('../../../models/CommunityPost', () => ({ __esModule: true, default: { findAll: jest.fn() } }));
 jest.mock('../../../models/CommunityMember', () => ({ __esModule: true, default: {} }));
 
+// The story price tag comes from the module the verifier pays from. Mocked so
+// these tests own the rate; `pointsByStoryId` is the real pure mapper.
+const mockStoryPoints = jest.fn();
+jest.mock('../../sbp/verification/storyPoints', () => ({
+  storyPointsForProject: (...args: any[]) => mockStoryPoints(...args),
+  pointsByStoryId: jest.requireActual('../../sbp/verification/storyPoints').pointsByStoryId,
+}));
+
 import { rehydrateProjectItems } from '../todayAnchoredSources';
 
 const PROJ = 'a1111111-1111-4111-8111-111111111111';
@@ -39,7 +47,11 @@ function mkStale(taskId = TASK): any {
 
 const stub = (rows: any[]) => mockFindAll.mockResolvedValue(rows.map((r) => ({ get: () => r })));
 
-beforeEach(() => { mockFindAll.mockReset(); });
+beforeEach(() => {
+  mockFindAll.mockReset();
+  mockStoryPoints.mockReset();
+  mockStoryPoints.mockResolvedValue(null);   // no published plan unless a test says otherwise
+});
 
 describe('rehydrateProjectItems', () => {
   it('stamps project_id and project_task_id onto a FROZEN impression that never had them', async () => {
@@ -102,5 +114,61 @@ describe('rehydrateProjectItems', () => {
     mockFindAll.mockReset();
     await rehydrateProjectItems([{ ...mkStale(), ref: 'card:c1' }]);
     expect(mockFindAll).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The price tag, at serve time. Ali, 2026-09-11: "points should be on the
+ * Today timeline for the project work." Every project impression on prod was
+ * frozen with no `points` at all; the tile can only show what this stamps.
+ */
+describe('rehydrateProjectItems — the story price tag', () => {
+  const priced = () => mockStoryPoints.mockResolvedValue({ per_story: 57, story_ids: new Set(['STORY-000', 'STORY-014']), stories_in_plan: 14 });
+
+  it('stamps the build rate onto a FROZEN impression of a plan story', async () => {
+    const item = mkStale();
+    stub([{ id: TASK, project_id: PROJ, story_id: 'STORY-014', title: 'T', description: null, status: 'not_started', release_key: 'r0' }]);
+    priced();
+    await rehydrateProjectItems([item]);
+    expect(item.points).toEqual({ builder: 57 });
+    expect(mockStoryPoints).toHaveBeenCalledWith(PROJ);
+  });
+
+  it('prices NOTHING that is not a plan story — a demo-prep task carries no badge', async () => {
+    const item = mkStale();
+    stub([{ id: TASK, project_id: PROJ, story_id: 'PREP-1', title: 'Rehearse the demo', description: null, status: 'not_started', release_key: 'prep' }]);
+    priced();
+    await rehydrateProjectItems([item]);
+    expect(item.points).toBeNull();
+  });
+
+  it('prices nothing when the project has no published plan, and nothing when the budget is unset', async () => {
+    const a = mkStale();
+    stub([{ id: TASK, project_id: PROJ, story_id: 'STORY-014', title: 'T', description: null, status: 'not_started', release_key: 'r0' }]);
+    await rehydrateProjectItems([a]);                       // default: null plan
+    expect(a.points).toBeNull();
+
+    const b = mkStale();
+    mockStoryPoints.mockResolvedValue({ per_story: 0, story_ids: new Set(['STORY-014']), stories_in_plan: 1 });
+    await rehydrateProjectItems([b]);
+    expect(b.points).toBeNull();                            // never "+0 pts"
+  });
+
+  it('reads the plan ONCE per project for many items, and fails soft if that read throws', async () => {
+    stub([
+      { id: 't1', project_id: PROJ, story_id: 'STORY-000', title: 'A', description: null, status: 'not_started', release_key: 'r0' },
+      { id: 't2', project_id: PROJ, story_id: 'STORY-014', title: 'B', description: null, status: 'not_started', release_key: 'r0' },
+    ]);
+    priced();
+    const items = [mkStale('t1'), mkStale('t2')];
+    await rehydrateProjectItems(items);
+    expect(mockStoryPoints).toHaveBeenCalledTimes(1);
+    expect(items.map((i) => i.points)).toEqual([{ builder: 57 }, { builder: 57 }]);
+
+    mockStoryPoints.mockRejectedValue(new Error('points_config unreachable'));
+    const again = [mkStale('t1')];
+    await expect(rehydrateProjectItems(again)).resolves.toBeUndefined();
+    expect(again[0].project_task_id).toBe('t1');            // the rest of the rehydrate still landed
+    expect(again[0].points).toBeNull();
   });
 });

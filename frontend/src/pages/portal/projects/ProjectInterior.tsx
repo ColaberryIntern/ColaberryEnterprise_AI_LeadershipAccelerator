@@ -7,119 +7,80 @@ import NextSessionStrip from './NextSessionStrip';
 import { CorySpark } from '../../../components/portal/CoryMark';
 import { useIsExplorer } from '../useIsExplorer';
 import ProjectsNextStepHero from './ProjectsNextStepHero';
+import TimelineCard, { type TimelineFeedCard } from '../../../components/timeline/TimelineCard';
+import TimelineFeed from '../../../components/timeline/TimelineFeed';
+// Every rule for the Classroom card is scoped `.tl-de …` in timeline.css, and
+// /portal/projects is its own route chunk: import it here so a cold load of
+// the Projects tab styles the cards (ProjectsNextStepHero does the same).
+import '../../../components/timeline/timeline.css';
 
 // The portal-native project workspace, in the Today-page shape: a full-width
 // build header, then a two-column grid — left is the FB timeline (hero "your
 // next action" -> next session -> task feed); right is a clickable project
 // OUTLINE (the releases/lists) that filters the middle timeline, plus a build
-// dashboard. Click a task card to expand its story, prompt, acceptance, owner.
+// dashboard. Click a task card to open its workspace.
 
 const DUE_LABEL: Record<string, string> = { overdue: 'Overdue', today: 'Due today', up: 'Upcoming', done: 'Completed' };
-const CAL = <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>;
 
-function DueChip({ due }: { due: ProjectTask['due'] }) {
-  return <span className={`pj-due ${due}`}>{CAL}{DUE_LABEL[due]}</span>;
-}
-function urgColor(t: ProjectTask): string {
-  if (t.state === 'done') return '#8C8C8C';
-  if (t.due === 'overdue') return '#C20E1E';
-  if (t.due === 'today') return '#E8920C';
-  return '#367895';
-}
-
-// Per-task context notes and prompt assembly now belong entirely to the workspace
-// drawer (FR-035): the card no longer copies a prompt, so it no longer needs to
-// read the notes that prompt would have included.
-// Small inline icons for the shared action buttons.
-const IC_OPEN = <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>;
-const IC_LOCK = <svg viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>;
-
-// ── ONE primary action per card (SBP-GH-v1 FR-035) ──
-// Was four flat buttons — Copy Prompt · Open Workspace · Mark Done · Skip — on
-// the hero AND every card. That asked a student to choose a tool before reading
-// the task, and let them declare a story finished having done nothing.
+// ── one task as the SAME card the Classroom renders ──
+// Ali, 2026-09-11: "Projects should look more like the Classroom section, and
+// the projects should have points instead of the open button." So a story is
+// rendered through TimelineCard — the one universal card — not a lookalike:
+// the list-name chip, the "+N pts" badge, the Not started / Completed pip, the
+// description, and a cherry "Build · +N pts" CTA that takes them to the
+// workspace. The points are paid when the platform verifies the story from
+// the repo, never by a click, and the button says exactly that on hover.
 //
-// Now: one primary **Open**, plus a quiet Skip. Copy-prompt and open-workspace
-// move into the drawer, where the student has actually read the story, the
-// requirement and the acceptance first. Mark-done also lives in the drawer and
-// becomes evidence-gated in a later release; leaving it on the card would keep
-// the "click to declare done" affordance this change exists to remove.
-//
-// Skip stays on the card and stays ungated: skipping is an honest "not doing
-// this now", and a skipped prerequisite still does not clear a downstream gate.
-const TaskActions: React.FC<{
-  project: StudentProject;
-  task: ProjectTask;
-  onOpen: (taskId: string) => void;
-}> = ({ project, task, onOpen }) => {
-  const demo = useIsExplorer();   // Explorer = demo mode: doing actions are locked
-  const lock = demo ? 'Demo — enroll to build for real' : undefined;
-
-  return (
-    <div className="pw-acts">
-      <button
-        type="button"
-        className="pw-act open primary"
-        onClick={() => onOpen(task.id)}
-        aria-label={`Open ${task.title}`}
-      >
-        {IC_OPEN} Open
-      </button>
-      <button type="button" className="pw-act skip" onClick={() => skipTask(project.id, task.id)} disabled={demo} title={lock}>
-        Skip
-      </button>
-    </div>
-  );
-};
-// ── one task as an FB-style feed card ──
-// A NON-blocked task: click to open the workspace drawer + the shared 4 actions.
-// A BLOCKED task: rendered VISIBLE but LOCKED — a lock icon + "Blocked · waiting on
-// STORY-XXX" note, not clickable (onOpen is a no-op), and it shows a single disabled
-// "Locked" pill instead of the action buttons. The student can see it, not act on it.
-const TaskCard: React.FC<{
-  project: StudentProject; task: ProjectTask; listName: string; onOpen: (taskId: string) => void;
-}> = ({ project, task, listName, onOpen }) => {
-  const req = task.req ? project.reqs.find((r) => r.id === task.req) : null;
+// A BLOCKED task (release gate) becomes a LOCKED card: visible, not clickable,
+// with "Complete STORY-XXX to unlock" in the card's own lock note — the same
+// treatment a week-gated curriculum card gets.
+function taskToFeedCard(project: StudentProject, task: ProjectTask, listName: string): TimelineFeedCard {
   const done = task.state === 'done';
   const { blocked, waitingOn } = isTaskBlocked(project, task);
-  const color = blocked ? '#9A9A9A' : urgColor(task);
-  const openIfAllowed = () => { if (!blocked) onOpen(task.id); }; // blocked → no-op
+  return {
+    id: task.id,
+    type: 'project_task',
+    student_label: listName,
+    render_band: 'task',
+    title: task.title,
+    subtitle: task.release ?? null,
+    description: task.what ?? null,
+    week: null,
+    bucket: 'build',
+    order: 0,
+    difficulty: '',
+    estimated_time: null,
+    // Builder points, the ledger the work lands in; the card shows the total.
+    // Only a real, positive price becomes a badge — nothing here is invented.
+    points: task.points && task.points > 0 ? { builder: task.points } : {},
+    competencies: [],
+    status: done ? 'completed' : blocked ? 'locked' : 'available',
+    lock_reason: blocked ? waitingOn.join(', ') : null,
+    quiz_score: null,
+    completed_at: task.verifiedAt ?? null,
+    // The due state, where a curriculum card shows its difficulty word.
+    meta: done ? null : DUE_LABEL[task.due],
+    project_id: project.id,
+    project_task_id: task.id,
+  };
+}
 
+// Skip stays, and stays ungated: skipping is an honest "not doing this now",
+// and a skipped prerequisite still does not clear a downstream gate. It sits
+// under the card rather than on it — the card's one action is the build.
+const SkipRow: React.FC<{ project: StudentProject; task: ProjectTask }> = ({ project, task }) => {
+  const demo = useIsExplorer();   // Explorer = demo mode: doing actions are locked
   return (
-    <div className={`pjt-card${done ? ' done' : ''}${blocked ? ' blocked' : ''}`}>
-      <div className="pjt-head" onClick={openIfAllowed}>
-        <span className="pjt-ic" style={{ background: color }}>
-          {blocked
-            ? <svg viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" stroke="#fff" strokeWidth="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="#fff" strokeWidth="2" strokeLinecap="round" /></svg>
-            : <svg viewBox="0 0 24 24" fill="none"><path d="M3 7l9-4 9 4-9 4-9-4z" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /><path d="M3 12l9 4 9-4" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg>}
-        </span>
-        <div className="pjt-main">
-          <div className="pjt-src">
-            <span className="chip" style={{ padding: '2px 9px', background: 'rgba(54,120,149,.12)', color: '#2E6A86' }}><span className="sw" style={{ background: '#367895' }} />{listName}</span>
-            <DueChip due={task.due} />
-            {task.owner && <span className="pjt-owner">{task.owner}</span>}
-            {req && <span className={`pj-st ${req.state}`}>{task.req} · {req.state}</span>}
-          </div>
-          <div className="pjt-title">{task.title}</div>
-          {task.what && <div className="pjt-sub">{task.what}</div>}
-          {blocked && (
-            <div style={{ marginTop: 8 }}>
-              <span className="pjt-lock">{IC_LOCK} Blocked · waiting on {waitingOn.join(', ')}</span>
-            </div>
-          )}
-        </div>
-        {!blocked && <span className="pjt-chev"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>}
-      </div>
-
-      <div className="pjt-foot">
-        {done ? (
-          <span className="pjt-donetag"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed</span>
-        ) : blocked ? (
-          <span className="pjt-lockpill">{IC_LOCK} Locked</span>
-        ) : (
-          <TaskActions project={project} task={task} onOpen={onOpen} />
-        )}
-      </div>
+    <div className="pw-acts" style={{ margin: '-8px 0 16px', justifyContent: 'flex-end' }}>
+      <button
+        type="button"
+        className="pw-act skip"
+        onClick={() => skipTask(project.id, task.id)}
+        disabled={demo}
+        title={demo ? 'Demo — enroll to build for real' : 'Set this story aside for now'}
+      >
+        Skip for now
+      </button>
     </div>
   );
 };
@@ -180,6 +141,9 @@ const ProjectInterior: React.FC<{
   }));
   openTasks.sort((a, b) => rank[a.t.due] - rank[b.t.due]);
   const selName = sel === 'all' ? null : project.lists.find((l) => l.id === sel)?.name;
+  // The card hands itself up; the page owns routing (TimelineCard is Router-free
+  // by design). A locked card never calls this — the release gate holds there.
+  const openCard = (card: TimelineFeedCard) => { if (card.project_task_id) onOpenTask(card.project_task_id); };
 
   return (
     <>
@@ -232,12 +196,26 @@ const ProjectInterior: React.FC<{
         <div>
           <NextSessionStrip />
 
-          {/* the FB timeline, filtered by the outline selection */}
+          {/* the FB timeline, filtered by the outline selection — the Classroom's
+              cards, wrapped in `.tl-de` because every rule for them is scoped
+              under it (see ProjectsNextStepHero for the same reason). */}
           <div className="te-sec-title">{selName ? `${selName} · tasks` : 'This build · next task due first'}</div>
-          {openTasks.map(({ t, list }) => <TaskCard key={t.id} project={project} task={t} listName={list} onOpen={onOpenTask} />)}
-          {sel === 'all' && project.activity.map((a) => <ActivityCard key={a.id} a={a} />)}
-          {doneTasks.map(({ t, list }) => <TaskCard key={t.id} project={project} task={t} listName={list} onOpen={onOpenTask} />)}
-          {!openTasks.length && !doneTasks.length && <div className="fc-empty">No tasks in this section.</div>}
+          <div className="tl-de">
+            {openTasks.map(({ t, list }) => {
+              const card = taskToFeedCard(project, t, list);
+              return (
+                <React.Fragment key={t.id}>
+                  <TimelineCard card={card} onOpen={openCard} onWorkspace={openCard} />
+                  {card.status === 'available' && <SkipRow project={project} task={t} />}
+                </React.Fragment>
+              );
+            })}
+            {sel === 'all' && project.activity.map((a) => <ActivityCard key={a.id} a={a} />)}
+            {/* Finished stories stay in the feed, compact — the Classroom's own
+                treatment of completed work — with their "Completed · +N pts". */}
+            <TimelineFeed cards={doneTasks.map(({ t, list }) => taskToFeedCard(project, t, list))} compactCompleted onOpen={openCard} onWorkspace={openCard} />
+            {!openTasks.length && !doneTasks.length && <div className="fc-empty">No tasks in this section.</div>}
+          </div>
         </div>
 
         {/* right sidebar: clickable outline + build dashboard */}

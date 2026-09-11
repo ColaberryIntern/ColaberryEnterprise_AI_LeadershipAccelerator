@@ -40,6 +40,11 @@ jest.mock('../../../progression/evidenceEngine', () => ({
 jest.mock('../../../progression/pointsConfigService', () => ({
   getBudgetPerUnitXp: (...a: any[]) => mockGetBudgetPerUnitXp(...a),
 }));
+// The HUD points mirror (2026-09-11) — not under test here; stubbed so the
+// award never reaches a database.
+jest.mock('../../../pointsService', () => ({
+  award: jest.fn().mockResolvedValue({ awarded: true, points: 0 }),
+}));
 
 import { verifyBuildFromRepo } from '../buildVerificationService';
 import { PROGRESS_SCHEMA_VERSION } from '../progressContract';

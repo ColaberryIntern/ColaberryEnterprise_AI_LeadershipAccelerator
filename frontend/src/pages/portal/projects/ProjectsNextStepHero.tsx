@@ -125,7 +125,11 @@ const ProjectsNextStepHero: React.FC<Props> = ({ primary, primaryNext, demo, var
             <h2>{primaryNext.task.title}</h2>
             {primaryNext.task.what && <p>{primaryNext.task.what}</p>}
             <div className="pjw-actions" style={{ marginTop: 0 }}>
-              <button type="button" className="tl-btn primary" onClick={onOpenBuild}>Open</button>
+              {/* Says what building it pays, like the card below it — the points
+                  land when the platform verifies the story, not on this click. */}
+              <button type="button" className="tl-btn primary" onClick={onOpenBuild} title={pts > 0 ? `Verified work pays +${pts} pts` : undefined}>
+                {pts > 0 ? `Build · +${pts} pts` : 'Open'}
+              </button>
               {primaryNext.task.prompt && (
                 <button type="button" className="te-btn ghost" onClick={onCopyPrompt} disabled={demo} title={demo ? 'Demo — enroll to build for real' : undefined}>Copy prompt</button>
               )}

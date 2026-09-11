@@ -75,6 +75,10 @@ export interface TimelineFeedCard {
   // rather than open the card drawer.
   project_id?: string | null;
   project_task_id?: string | null;
+  // Free-text meta the SOURCE wants on the tile in place of the difficulty word
+  // ("Due today", "Overdue"). The Projects page sets it; curriculum cards leave
+  // it unset and keep showing their difficulty.
+  meta?: string | null;
 }
 
 export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone' | 'setuplab' | 'timemachine';
@@ -241,7 +245,12 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   const locked = card.status === 'locked';
   const isSkillsJar = v.kind === 'skilljar';
   const pts = totalPoints(card.points);
-  const metaLine = [card.estimated_time ? `${card.estimated_time} min` : null, card.difficulty].filter(Boolean).join(' · ');
+  const metaLine = [card.estimated_time ? `${card.estimated_time} min` : null, card.meta ?? card.difficulty].filter(Boolean).join(' · ');
+  // A project story. Its points are paid by the platform when the repo VERIFIES
+  // the story, never by a click here — so the button says what building it
+  // pays and takes them to the workspace (Ali, 2026-09-11: "points instead of
+  // the open button, just like the Classroom").
+  const isProjectTask = !!card.project_task_id;
   // Media/external cards keep their authored title casing; curriculum content
   // titles are Title-Cased for display.
   const externalTitle = v.kind === 'video' || isSkillsJar || ['testimonial', 'blog', 'podcast', 'announcement'].includes(card.type);
@@ -562,7 +571,9 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
           disabled={locked}
           onClick={() => {
             if (locked) return;
-            if (isCommunityPost) { setPlayingInline(false); onOpen?.(card); return; }
+            // A project story's conversation lives in its workspace (beside the
+            // mentor), not in a card thread its `project:<uuid>` id cannot address.
+            if (isCommunityPost || isProjectTask) { setPlayingInline(false); onOpen?.(card); return; }
             setShowComments((s) => !s);
           }}
         >
@@ -592,11 +603,17 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
                 type="button"
                 className={`fc-cta ${pts > 0 || v.kind === 'lab' || isCommunityPost ? 'cherry' : 'berry'}`}
                 onClick={() => { setPlayingInline(false); onOpen?.(card); }}
-                title={card.project_task_id ? 'Open this task in your project workspace'
+                title={isProjectTask
+                  ? (pts > 0 ? `Build this story in your workspace — verified work pays +${pts} pts` : 'Open this task in your project workspace')
                   : isCommunityPost ? `Reply to earn +${REPLY_POINTS} pts`
                     : pts > 0 ? `Open to collect +${pts} pts` : undefined}
               >
-                {pts > 0
+                {isProjectTask
+                  // Not "Collect": nothing here is collected by clicking. The
+                  // platform pays the story when the repo verifies it, and the
+                  // button says what that is worth on the way in.
+                  ? <><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {pts > 0 ? <>Build · +{pts} pts</> : 'Start'}</>
+                  : pts > 0
                   ? <><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Collect +{pts} pts</>
                   : isCommunityPost
                     // A community post pays for the REPLY, not for opening. Say so on the
