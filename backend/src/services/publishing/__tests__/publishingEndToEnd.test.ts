@@ -22,6 +22,7 @@ jest.mock('../../launchSafety', () => ({ isKillSwitchActive: jest.fn(async () =>
 import * as mockedModels from '../../../models';
 import { type FakeModelSet, resetAll } from './fakeModels';
 import { generateItemVariants, validateItem } from '../../content/composerService';
+import { generateItemLinks } from '../../content/composerLinkService';
 import { schedule, sendForApproval } from '../../content/composerActionService';
 import { decideApproval } from '../../content/contentApprovalService';
 import { DryRunAdapter } from '../dryRunAdapter';
@@ -48,12 +49,18 @@ function adapters() {
 
 async function compose(): Promise<string> {
   const brand = await models.Brand.create({ tenant_id: 't-1', slug: 'colaberry', name: 'Colaberry', status: 'active', timezone: 'America/Chicago' });
+  await models.BrandDomain.create({ brand_id: brand.id, hostname: 'enterprise.colaberry.ai', purpose: 'app' });
   const campaign = await models.Campaign.create({ tenant_id: 't-1', brand_id: brand.id, name: 'Nov Open House', utm_campaign_slug: 'colaberry-awareness-2026-11' });
   const item = await models.ContentItem.create({
     tenant_id: 't-1', brand_id: brand.id, campaign_id: campaign.id, title: 'Free AI class',
     canonical_body: 'Join our free AI class this Thursday at 6pm CT.', content_type: 'text', status: 'draft', revision: 1,
   });
   await generateItemVariants(item.id, ['linkedin_organization', 'x']);
+  // Real tracked links through the real service, one per variant. They are minted `draft`
+  // and the redirect serves only `active`, so the tick below is what makes them clickable.
+  const links = await generateItemLinks(item.id, 'https://enterprise.colaberry.ai/free-class', AUTHOR.email);
+  expect(links.map((l) => l.provider).sort()).toEqual(['linkedin_organization', 'x']);
+  expect(models.TrackedLink.rows.map((l) => l.status)).toEqual(['draft', 'draft']);
   const v = await validateItem(item.id);
   expect(v.ok).toBe(true);
   return item.id;
@@ -86,6 +93,7 @@ describe('compose -> approval -> scheduled job -> receipt, dry-run adapter only'
     const early = await runDueJobs({ now: () => T0, killSwitch: async () => false, adapterFor: adapters().factory, workerId: 'w-1' });
     expect(early).toMatchObject({ halted: false, claimed: 0, published: 0 });
     expect(models.ExternalPublication.rows).toHaveLength(0);
+    expect(models.TrackedLink.rows.every((l) => l.status === 'draft')).toBe(true);
 
     const { factory, made } = adapters();
     const result = await runDueJobs({ now: () => AFTER, killSwitch: async () => false, adapterFor: factory, workerId: 'w-1' });
@@ -113,6 +121,16 @@ describe('compose -> approval -> scheduled job -> receipt, dry-run adapter only'
     const item = await models.ContentItem.findByPk(itemId);
     expect(item!.status).toBe('published');
     expect(item!.published_at).toEqual(AFTER);
+
+    // The short links went live WITH the posts - each variant's own link, not "all links".
+    // Before this the composer's links stayed draft forever and every click was a 410.
+    for (const variant of models.ContentVariant.rows) {
+      const link = models.TrackedLink.rows.find((l) => l.id === variant.tracked_link_id)!;
+      expect(link).toBeDefined();
+      expect(link.status).toBe('active');
+      expect(link.published_at).toEqual(AFTER);
+      expect(link.utm_campaign).toBe('colaberry-awareness-2026-11');
+    }
 
     // The trail: request + response per job, and nothing that looks like a token.
     const events = models.PlatformDeliveryEvent.rows;
@@ -149,6 +167,11 @@ describe('compose -> approval -> scheduled job -> receipt, dry-run adapter only'
     expect(models.ExternalPublication.rows).toHaveLength(2); // no third row
     expect(made.get(job.provider as ProviderKey)!.calls).toHaveLength(2); // asked twice, same id both times
     expect(models.PlatformDeliveryEvent.rows.some((e) => e.event_type === 'publish_reconciled_existing')).toBe(true);
+    // The re-run did not re-stamp the link: activation happened once, at the first success.
+    const variant = models.ContentVariant.rows.find((v) => v.id === job.content_variant_id)!;
+    const link = models.TrackedLink.rows.find((l) => l.id === variant.tracked_link_id)!;
+    expect(link.status).toBe('active');
+    expect(link.published_at).toEqual(AFTER);
   });
 });
 
