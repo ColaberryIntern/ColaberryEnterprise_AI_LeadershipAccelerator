@@ -58,7 +58,8 @@ async function compose(): Promise<string> {
   await generateItemVariants(item.id, ['linkedin_organization', 'x']);
   // Real tracked links through the real service, one per variant. They are minted `draft`
   // and the redirect serves only `active`, so the tick below is what makes them clickable.
-  const links = await generateItemLinks(item.id, 'https://enterprise.colaberry.ai/free-class', AUTHOR.email);
+  const links = await generateItemLinks(item.id, 'https://enterprise.colaberry.ai/free-class', AUTHOR.adminId);
+  expect(models.TrackedLink.rows.every((l) => l.created_by === AUTHOR.adminId)).toBe(true);
   expect(links.map((l) => l.provider).sort()).toEqual(['linkedin_organization', 'x']);
   expect(models.TrackedLink.rows.map((l) => l.status)).toEqual(['draft', 'draft']);
   const v = await validateItem(item.id);
