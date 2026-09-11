@@ -50,8 +50,26 @@ describe('publicClaim — the publish gate (happy path)', () => {
     expect(publicClaim('anthropic.capability')).toBe('We build on Claude and Claude Code.');
   });
 
+  /**
+   * THE GATE, NOT THE COPY.
+   *
+   * This asserted the literal '$149/month, billed annually' and broke when the wording was
+   * shortened to '$149' — while the live page reads "$149 per person, per month, billed
+   * annually", verified in a browser. The price never lost its term; the test had simply
+   * pinned a marketing string, so it went red for a month and nobody heard, because nothing
+   * ran it.
+   *
+   * What is worth guarding is that a VERIFIED, live, approved claim publishes its wording
+   * at all — the failure paths below prove the other direction. Comparing against the
+   * registry's own entry keeps that guarantee and cannot be broken by an edit to the copy.
+   *
+   * The shape check stays deliberately: a pricing claim that published an empty string or
+   * lost its currency figure would still be a defect, and that is not a wording preference.
+   */
   it('returns live-verified pricing', () => {
-    expect(publicClaim('pricing.individual.annual')).toBe('$149/month, billed annually');
+    const claim = getClaim('pricing.individual.annual') as Claim;
+    expect(publicClaim('pricing.individual.annual')).toBe(claim.publicWording);
+    expect(publicClaim('pricing.individual.annual')).toMatch(/\$\d/);
   });
 });
 
@@ -166,9 +184,26 @@ describe('the capability gate is independent of the verification gate', () => {
     expect(publicClaim('surface.fourview.console')).toBeNull();
   });
 
-  it('blocks every other unbuilt surface too', () => {
-    expect(publicClaim('surface.opportunity.lab')).toBeNull();
-    expect(publicClaim('surface.proof.room')).toBeNull();
+  /**
+   * DERIVED FROM THE REGISTRY, not a hand-kept list of keys.
+   *
+   * This named `surface.proof.room` and went red the day that surface was correctly marked
+   * BUILT — the Case Study OS shipped and `/proof` now does render records carrying their
+   * evidence class, which the registry entry documents at length. The claim was right to
+   * start publishing; the test was holding a snapshot of which surfaces existed in August.
+   *
+   * Enumerating the unbuilt ones keeps the actual guarantee — nothing marked `unbuilt` may
+   * publish — and makes the test correct by construction as surfaces ship. A surface going
+   * live now updates one field instead of a field and a test.
+   */
+  it('blocks every unbuilt surface, whichever they currently are', () => {
+    const unbuilt = CLAIMS.filter((c) => c.capability === 'unbuilt');
+    // A guard over an empty set proves nothing; if every surface ships, delete this test
+    // rather than let it pass vacuously.
+    expect(unbuilt.length).toBeGreaterThan(0);
+    unbuilt.forEach((c) => {
+      expect(publicClaim(c.key)).toBeNull();
+    });
   });
 
   it('allows verified claims about surfaces that do exist', () => {
@@ -183,7 +218,12 @@ describe('route scoping', () => {
   });
 
   it('permits an explicitly approved route', () => {
-    expect(publicClaim('pricing.team', '/pricing')).toBe('Team — $1,200');
+    // Same reasoning as the pricing happy path: the property under test is that an approved
+    // route publishes and an unapproved one does not (the next case), which the copy does
+    // not participate in.
+    const claim = getClaim('pricing.team') as Claim;
+    expect(publicClaim('pricing.team', '/pricing')).toBe(claim.publicWording);
+    expect(publicClaim('pricing.team', '/pricing')).toMatch(/\$\d/);
   });
 
   it('blocks a route that was not approved', () => {
