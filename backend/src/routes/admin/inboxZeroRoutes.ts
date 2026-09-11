@@ -10,6 +10,7 @@ import {
   handleZeroNext,
   handleZeroOverview,
   handleZeroQueue,
+  handleZeroReconcile,
   handleZeroSnoozed,
   handleZeroStart,
   handleZeroStop,
@@ -36,5 +37,9 @@ router.get('/api/admin/inbox/zero/waiting', requireAdmin, handleZeroWaiting);
 router.get('/api/admin/inbox/zero/commitments', requireAdmin, handleZeroCommitments);
 router.get('/api/admin/inbox/zero/snoozed', requireAdmin, handleZeroSnoozed);
 router.get('/api/admin/inbox/zero/cases/:caseId', requireAdmin, handleZeroFocusCase);
+// T16: bounded liveness sweep. Writes only what the provider says about
+// Ali's own inbox (source_live/checked_at) and dispositions evidence that has
+// left it; no external effect.
+router.post('/api/admin/inbox/zero/liveness/reconcile', requireAdmin, handleZeroReconcile);
 
 export default router;

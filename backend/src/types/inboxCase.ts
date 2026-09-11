@@ -81,6 +81,12 @@ export const ITEM_DISPOSITIONS = [
 ] as const;
 export type ItemDisposition = (typeof ITEM_DISPOSITIONS)[number];
 
+// /inbox-zero T16 — why a source is no longer live in the inbox. A closed set
+// so the console can render each one in plain English and tests can assert
+// the extraction, not just the count.
+export const SOURCE_GONE_REASONS = ['archived', 'trashed', 'spam', 'missing', 'not_in_inbox', 'completed'] as const;
+export type SourceGoneReason = (typeof SOURCE_GONE_REASONS)[number];
+
 export const ITEM_INCLUSION_STATUSES = ['INCLUDED', 'CANDIDATE', 'EXCLUDED'] as const;
 export type ItemInclusionStatus = (typeof ITEM_INCLUSION_STATUSES)[number];
 

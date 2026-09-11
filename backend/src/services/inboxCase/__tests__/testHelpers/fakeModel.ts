@@ -47,7 +47,8 @@ function matchesWhere(row: any, where: any): boolean {
         continue;
       }
       if (symbolKeys.includes(Op.is)) {
-        if (row[key] !== (value as any)[Op.is]) return false;
+        // SQL NULL semantics: an attribute the row never had IS NULL.
+        if ((row[key] ?? null) !== ((value as any)[Op.is] ?? null)) return false;
         continue;
       }
       // Comparison operators, added for the /inbox-zero waiting/snooze reads
@@ -114,11 +115,60 @@ export function makeFakeModel() {
     async findOne({ where }: any = {}) {
       return Array.from(rows.values()).find((r) => matchesWhere(r, where)) || null;
     },
-    async findAll({ where }: any = {}) {
-      return Array.from(rows.values()).filter((r) => matchesWhere(r, where));
+    // `order` and `limit` are honoured because inboxLivenessService's rotation
+    // depends on them (stalest first, NULLS FIRST, bounded) — a fake that
+    // returned every row in insertion order would pass a broken rotation.
+    async findAll({ where, order, limit }: any = {}) {
+      let out = Array.from(rows.values()).filter((r) => matchesWhere(r, where));
+      if (Array.isArray(order) && order.length) out = sortRows(out, order);
+      if (typeof limit === 'number') out = out.slice(0, limit);
+      return out;
     },
     async count({ where }: any = {}) {
       return Array.from(rows.values()).filter((r) => matchesWhere(r, where)).length;
     },
+    async max(field: string, { where }: any = {}) {
+      const vals = Array.from(rows.values()).filter((r) => matchesWhere(r, where)).map((r) => r[field]).filter((v) => v != null);
+      if (!vals.length) return null;
+      return vals.reduce((a, b) => (cmpVal(a, b) >= 0 ? a : b));
+    },
+    // Static Model.update(values, { where }) → [affectedCount], as Sequelize does.
+    async update(values: any, { where }: any = {}) {
+      const hit = Array.from(rows.values()).filter((r) => matchesWhere(r, where));
+      for (const r of hit) Object.assign(r, values);
+      return [hit.length];
+    },
   };
+}
+
+function cmpVal(a: any, b: any): number {
+  const av = a instanceof Date ? a.getTime() : a;
+  const bv = b instanceof Date ? b.getTime() : b;
+  return av < bv ? -1 : av > bv ? 1 : 0;
+}
+
+// Sequelize order tuples: [['col', 'ASC'], ['col', 'DESC NULLS LAST'], ...].
+// Postgres default: ASC puts NULLs last, DESC puts NULLs first, unless the
+// direction string says otherwise.
+function sortRows(list: any[], order: Array<[string, string?]>): any[] {
+  const keys = order.map(([col, dir = 'ASC']) => {
+    const d = dir.toUpperCase();
+    const desc = d.startsWith('DESC');
+    const nullsFirst = d.includes('NULLS FIRST') ? true : d.includes('NULLS LAST') ? false : desc;
+    return { col, desc, nullsFirst };
+  });
+  return [...list].sort((x, y) => {
+    for (const { col, desc, nullsFirst } of keys) {
+      const a = x[col];
+      const b = y[col];
+      const an = a == null;
+      const bn = b == null;
+      if (an && bn) continue;
+      if (an) return nullsFirst ? -1 : 1;
+      if (bn) return nullsFirst ? 1 : -1;
+      const c = cmpVal(a, b);
+      if (c !== 0) return desc ? -c : c;
+    }
+    return 0;
+  });
 }

@@ -252,6 +252,10 @@ export const inboxZeroCursorSchema = z.object({
 export const inboxZeroOverviewQuerySchema = z.object({ cursor: z.string().datetime({ offset: true }).optional() });
 export const inboxZeroDeltaQuerySchema = z.object({ since: z.string().datetime({ offset: true }) });
 export const inboxZeroNextQuerySchema = z.object({ focus: z.enum(['urgent', 'vip', 'waiting', 'basecamp', 'email']).optional() });
+export const inboxZeroReconcileSchema = z.object({
+  limit: z.number().int().min(1).max(1000).optional(),
+  stale_minutes: z.number().int().min(0).max(1440).optional(),
+});
 export const inboxZeroQueueQuerySchema = z.object({
   view: z.enum(['urgency', 'mailbox', 'person', 'topic', 'destination', 'owner', 'age', 'due', 'confidence']).default('urgency'),
 });

@@ -227,6 +227,19 @@ export async function ensureInboxCaseSchema(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_inbox_cases_state_snoozed ON inbox_cases (state, snoozed_until)`,
     // Bounds the live re-fetch verifier's retries (caseVerificationService).
     `ALTER TABLE inbox_case_actions ADD COLUMN IF NOT EXISTS verification_attempt_count INTEGER NOT NULL DEFAULT 0`,
+    // /inbox-zero T16 — inbox liveness (Ali: "If I delete something from my
+    // inbox, then it should not show up on this report"). The engine builds a
+    // case from what was in the inbox at discovery and never re-checked; these
+    // three columns materialise "is the source still in the inbox right now"
+    // so the console can filter on them without a provider call per case.
+    // NULL = never checked. FALSE is only ever written from a definitive
+    // provider answer (inboxLivenessService); "could not check" stays NULL.
+    `ALTER TABLE inbox_case_items ADD COLUMN IF NOT EXISTS source_live BOOLEAN`,
+    `ALTER TABLE inbox_case_items ADD COLUMN IF NOT EXISTS source_checked_at TIMESTAMPTZ`,
+    `ALTER TABLE inbox_case_items ADD COLUMN IF NOT EXISTS source_gone_reason TEXT`,
+    // The reconciler rotates through open items stalest-first; NULLS FIRST
+    // means never-checked rows are swept before anything is re-checked.
+    `CREATE INDEX IF NOT EXISTS idx_inbox_case_items_liveness ON inbox_case_items (source_checked_at NULLS FIRST) WHERE disposition IS NULL`,
   ];
 
   for (const sql of statements) {
@@ -266,6 +279,9 @@ export const INBOX_ZERO_REQUIRED_COLUMNS = [
   'inbox_cases.priority_band',
   'inbox_cases.priority_reason',
   'inbox_case_actions.verification_attempt_count',
+  'inbox_case_items.source_live',
+  'inbox_case_items.source_checked_at',
+  'inbox_case_items.source_gone_reason',
 ] as const;
 
 /**
@@ -280,7 +296,7 @@ export async function assertInboxZeroCaseColumns(): Promise<{ ok: boolean; missi
       `SELECT table_name || '.' || column_name AS col
          FROM information_schema.columns
         WHERE table_schema = 'public'
-          AND table_name IN ('inbox_cases', 'inbox_case_actions')`,
+          AND table_name IN ('inbox_cases', 'inbox_case_actions', 'inbox_case_items')`,
     );
     const found = new Set<string>((rows ?? []).map((r: any) => r.col));
     for (const col of INBOX_ZERO_REQUIRED_COLUMNS) if (!found.has(col)) missing.push(col);

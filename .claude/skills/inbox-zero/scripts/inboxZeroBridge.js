@@ -17,6 +17,7 @@
  *   start        {tab}                      POST session/start
  *   heartbeat    {lease_id}                 POST session/heartbeat
  *   stop         {lease_id}                 POST session/stop
+ *   reconcile    {limit?, stale_minutes?}   POST liveness/reconcile (T16 bounded inbox-liveness sweep)
  *   cursor       {lease_id,to,processing_succeeded}  POST session/cursor
  *   health       {}                         GET  health
  *   overview     {cursor?}                  GET  overview
@@ -40,6 +41,12 @@
  *
  * IZ_DRY_RUN=1 prints the request it WOULD make (method, path, body) and exits
  * without minting a token or calling anything.
+ *
+ * Every ISO-8601 timestamp in the response body gets a sibling `<key>_ct`
+ * rendered in Central time (IZ_TZ, default America/Chicago), e.g.
+ *   "expiresAt": "2026-09-11T20:22:45.292Z", "expiresAt_ct": "Fri 11 Sep 2026, 3:22 PM CDT"
+ * Ali reads Central; the API keeps UTC; the conversion is done here, by Node's
+ * ICU, never by hand. IZ_TZ= (empty) disables the annotation.
  */
 'use strict';
 
@@ -58,6 +65,7 @@ function route(cmd, a) {
     case 'start': return { method: 'POST', path: `${ZERO}/session/start`, body: { tab: a.tab } };
     case 'heartbeat': return { method: 'POST', path: `${ZERO}/session/heartbeat`, body: { lease_id: a.lease_id } };
     case 'stop': return { method: 'POST', path: `${ZERO}/session/stop`, body: { lease_id: a.lease_id } };
+    case 'reconcile': return { method: 'POST', path: `${ZERO}/liveness/reconcile`, body: pick(a, ['limit', 'stale_minutes']) };
     case 'cursor': return { method: 'POST', path: `${ZERO}/session/cursor`, body: { lease_id: a.lease_id, to: a.to, processing_succeeded: a.processing_succeeded === true } };
     case 'health': return { method: 'GET', path: `${ZERO}/health` };
     case 'overview': return { method: 'GET', path: `${ZERO}/overview${q({ cursor: a.cursor })}` };
@@ -77,6 +85,38 @@ function route(cmd, a) {
     case 'assess': return { method: 'POST', path: `${CASES}/${id}/assess`, body: pick(a, ['force']) };
     default: return null;
   }
+}
+
+const TZ = process.env.IZ_TZ === undefined ? 'America/Chicago' : process.env.IZ_TZ;
+const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/;
+const ctFmt = TZ ? new Intl.DateTimeFormat('en-US', {
+  timeZone: TZ, weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+  hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+}) : null;
+
+// "Thu, Sep 11, 2026, 3:22 PM CDT" -> "Thu 11 Sep 2026, 3:22 PM CDT" (absolute, unambiguous).
+function toCentral(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const p = Object.fromEntries(ctFmt.formatToParts(d).filter((x) => x.type !== 'literal').map((x) => [x.type, x.value]));
+  return `${p.weekday} ${p.day} ${p.month} ${p.year}, ${p.hour}:${p.minute} ${p.dayPeriod} ${p.timeZoneName}`;
+}
+
+// Walks the body once; adds `<key>_ct` next to every ISO timestamp string.
+// Additive only — nothing the API returned is changed or removed.
+function annotateCentral(node, depth) {
+  if (!ctFmt || depth > 12 || node === null || typeof node !== 'object') return node;
+  if (Array.isArray(node)) { node.forEach((x) => annotateCentral(x, depth + 1)); return node; }
+  for (const k of Object.keys(node)) {
+    const v = node[k];
+    if (typeof v === 'string' && ISO_RE.test(v)) {
+      const ct = toCentral(v);
+      if (ct && !(`${k}_ct` in node)) node[`${k}_ct`] = ct;
+    } else if (v && typeof v === 'object') {
+      annotateCentral(v, depth + 1);
+    }
+  }
+  return node;
 }
 
 function pick(obj, keys) {
@@ -131,7 +171,7 @@ async function main() {
   const text = await res.text();
   let body;
   try { body = text ? JSON.parse(text) : null; } catch { body = { raw: text.slice(0, 2000) }; }
-  process.stdout.write(JSON.stringify({ ok: res.ok, status: res.status, cmd, body }) + '\n');
+  process.stdout.write(JSON.stringify({ ok: res.ok, status: res.status, cmd, body: annotateCentral(body, 0), tz: TZ || null }) + '\n');
   if (!res.ok) process.exit(2);
 }
 

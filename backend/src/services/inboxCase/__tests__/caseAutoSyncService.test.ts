@@ -12,6 +12,8 @@ function matchesWhere(row: any, where: any): boolean {
       if (symbolKeys.includes(Op.in)) { if (!(value as any)[Op.in].includes(row[key])) return false; continue; }
       if (symbolKeys.includes(Op.gt)) { if (!(row[key] > (value as any)[Op.gt])) return false; continue; }
       if (symbolKeys.includes(Op.ne)) { if (row[key] === (value as any)[Op.ne]) return false; continue; }
+      // IS NULL: an attribute the row never had is NULL in Postgres too (T16 stamp query).
+      if (symbolKeys.includes(Op.is)) { if ((row[key] ?? null) !== ((value as any)[Op.is] ?? null)) return false; continue; }
     }
     if (row[key] !== value) return false;
   }
@@ -55,6 +57,13 @@ function makeFakeModel() {
     },
     async findAll({ where }: any = {}) {
       return Array.from(rows.values()).filter((r) => matchesWhere(r, where));
+    },
+    // Static Model.update(values, { where }) → [affectedCount]; T16 stamps
+    // freshly created email items live-at-discovery through it.
+    async update(values: any, { where }: any = {}) {
+      const hit = Array.from(rows.values()).filter((r) => matchesWhere(r, where));
+      for (const r of hit) Object.assign(r, values);
+      return [hit.length];
     },
   };
 }
@@ -153,7 +162,12 @@ jest.mock('../../inbox/inboxSyncService', () => ({
   extractBodyText: (...args: any[]) => mockExtractBodyText(...args),
 }));
 
-import { runAutoSync, getSyncStatus } from '../caseAutoSyncService';
+// T16: the liveness sweep at the end of a run is its own unit (inboxLivenessService.test.ts);
+// here it is a seam — called once per run, and its failure never fails the sync.
+const mockReconcileLiveness = jest.fn(async () => ({ checked: 0, live: 0, gone: 0, unverifiable: 0, skipped_backoff: 0, cases_closed: [], close_blocked: [] }));
+jest.mock('../inboxLivenessService', () => ({ reconcileLiveness: (...a: any[]) => mockReconcileLiveness(...a) }));
+
+import { runAutoSync, getSyncStatus, gmailWindowQuery } from '../caseAutoSyncService';
 
 beforeEach(() => {
   fakeSystemSetting.rows.clear();
@@ -557,6 +571,55 @@ describe('runAutoSync — global dedup', () => {
     const result = await runAutoSync('cron', 'system');
 
     expect(result.newCasesCreated).toBe(0);
+  });
+});
+
+describe('runAutoSync — inbox liveness (T16)', () => {
+  beforeEach(() => mockReconcileLiveness.mockClear());
+
+  it("the Gmail window query is inbox-scoped and still excludes sent mail (both clauses load-bearing)", () => {
+    const q = gmailWindowQuery(2);
+    expect(q).toContain('in:inbox');
+    expect(q).toContain('-in:sent');
+    expect(q).toBe('newer_than:2h -in:sent in:inbox');
+  });
+
+  it('asks Gmail with the inbox-scoped query on a real run', async () => {
+    mockSearchAndNormalize.mockResolvedValue([]);
+    await runAutoSync('cron', 'system');
+    const queries = mockSearchAndNormalize.mock.calls.map((c: any[]) => c[2]);
+    expect(queries.length).toBeGreaterThan(0);
+    for (const q of queries) expect(q).toMatch(/in:inbox/);
+  });
+
+  it('stamps every email item it creates as live-at-discovery, and leaves Basecamp items unstamped', async () => {
+    const candidate = rawEmailCandidate();
+    await seedClassifiedEmail('gmail_colaberry', candidate.source_id, 'INBOX');
+    mockSearchAndNormalize.mockResolvedValue([candidate]);
+
+    await runAutoSync('cron', 'system');
+
+    const items = Array.from(fakeInboxCaseItem.rows.values());
+    expect(items).toHaveLength(1);
+    expect(items[0].source_live).toBe(true);
+    expect(items[0].source_checked_at).toBeInstanceOf(Date);
+  });
+
+  it('runs one bounded liveness sweep per run, after case creation, with the run correlation id', async () => {
+    mockSearchAndNormalize.mockResolvedValue([]);
+    await runAutoSync('cron', 'system');
+    expect(mockReconcileLiveness).toHaveBeenCalledTimes(1);
+    expect(mockReconcileLiveness.mock.calls[0][0]).toEqual({ correlationId: expect.any(String) });
+  });
+
+  it('a throwing sweep is logged and never fails the sync or the cursor write', async () => {
+    mockReconcileLiveness.mockRejectedValueOnce(Object.assign(new Error('gmail down'), { error_class: 'UpstreamUnavailable' }));
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockSearchAndNormalize.mockResolvedValue([]);
+    await expect(runAutoSync('cron', 'system')).resolves.toBeTruthy();
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('liveness_reconcile_failed'));
+    expect(fakeSystemSetting.rows.size).toBe(1); // cursor still written
+    errorSpy.mockRestore();
   });
 });
 

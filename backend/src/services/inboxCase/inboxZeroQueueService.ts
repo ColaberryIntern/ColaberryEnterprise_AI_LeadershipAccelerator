@@ -1,7 +1,7 @@
-import { Op } from 'sequelize';
 import InboxCase from '../../models/InboxCase';
 import InboxCaseItem from '../../models/InboxCaseItem';
 import { CaseSummary, summarise } from './inboxZeroService';
+import { loadVisibleCases } from './inboxZeroVisibility';
 
 // /inbox-zero zoom-out (T9a). The portfolio view: the same open cases the
 // overview counts, grouped the way the brief lists — so Ali can zoom out
@@ -52,15 +52,9 @@ function ownerOf(c: InboxCase): string {
 }
 
 export async function getQueue(view: QueueView, now: Date = new Date()): Promise<QueueResult> {
-  const open = await InboxCase.findAll({ where: { state: { [Op.ne]: 'RESOLVED' } } as any }); // `as any`: Op-keyed where
-  const itemsByCase = new Map<string, InboxCaseItem[]>();
-  if (view === 'mailbox' || view === 'person') {
-    const items = await InboxCaseItem.findAll({ where: { case_id: { [Op.in]: open.map((c) => c.id) }, inclusion_status: { [Op.ne]: 'EXCLUDED' } } as any }); // `as any`: Op-keyed where
-    for (const i of items) {
-      if (!itemsByCase.has(i.case_id)) itemsByCase.set(i.case_id, []);
-      itemsByCase.get(i.case_id)!.push(i);
-    }
-  }
+  // T16: the same liveness-filtered set the overview and `next` use, and the
+  // same bulk item load (the mailbox/person views group on items anyway).
+  const { cases: open, itemsByCase } = await loadVisibleCases();
 
   const groups = new Map<string, QueueGroup>();
   const add = (key: string, label: string, s: CaseSummary) => {

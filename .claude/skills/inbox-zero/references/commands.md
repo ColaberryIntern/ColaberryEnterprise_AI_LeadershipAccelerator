@@ -5,7 +5,7 @@ skill name is matched against the table; anything else is a focus hint.
 
 | Input | Resolves to | Bridge calls, in order |
 |---|---|---|
-| (nothing) · `start` | start | `start` → render overview → arm `/loop 5m /inbox-zero refresh` |
+| (nothing) · `start` | start | `start` → `reconcile` (bounded liveness sweep) → `overview` → render → arm `/loop 5m /inbox-zero refresh` |
 | `resume` | resume | `start` (a released/expired lease for this tab is re-acquirable) → overview; cursor unchanged |
 | `status` | status | `overview` (no lease change; works even if another tab holds the lease) |
 | `next` | next | `next` → if unassessed: `assess`, `plan` → `next` again → render focus |
@@ -15,7 +15,7 @@ skill name is matched against the table; anything else is a focus hint.
 | `snoozed` | snoozed list | `snoozed` |
 | `waiting` | waiting ledger | `waiting` (stale first) |
 | `commitments` · `what do I owe` | commitment ledger | `commitments` (overdue first) |
-| `refresh` | refresh tick | `heartbeat` → `delta {since: cursor}` → render one line (or interrupt) → `cursor {processing_succeeded}` |
+| `refresh` | refresh tick | `heartbeat` → `delta {since: cursor}` → render one line (or interrupt) → `cursor {processing_succeeded}` (the backend's own 5-minute sweep keeps liveness current; `refresh` does not call `reconcile`) |
 | `stop` · `done` · `close` | stop | `stop` → closeout |
 | anything else | focus hint | `queue {view: person}` and pick the group whose label matches; else `next` |
 
@@ -40,7 +40,7 @@ After any decision: `next`. The overview is re-rendered after every third decisi
 2. `delta {since: cursor_at}`.
 3. If `interrupts` is non-empty → the interrupt line, naming the top P0/P1 and its why. Do not
    replace the focus view Ali is working in.
-4. Else → the quiet line: `+<count> new · overview updated · next refresh <HH:MM>`.
+4. Else → the quiet line: `+<count> new · <closed> cleared · overview updated · next refresh <HH:MM CDT|CST>` (Central time, always; omit `<closed> cleared` when zero — `closed` counts cases resolved since the cursor, including mail the liveness sweep found had left your inbox, and is never folded into "new").
 5. `cursor {lease_id, to: next_cursor, processing_succeeded: true}` only if steps 2-4 succeeded.
    On any failure: the failed line, cursor untouched.
 6. Never re-render the overview or the focus view on a refresh unless Ali asks.
