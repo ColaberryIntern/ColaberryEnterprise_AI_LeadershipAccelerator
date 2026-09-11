@@ -45,27 +45,21 @@ import {
  *
  * ─── REFUSE, NEVER WIDEN ────────────────────────────────────────────────────
  *
- * `buildRequestContext` leaves `brandId` null when a requested brand is not
- * permitted, and null means UNSCOPED in every guard. Nothing passed a requested
- * brand before this route, so that was latent. Here, a caller who asked for a
- * brand and did not get it is refused with 403 — proceeding would hand a
- * brand-scoped operator the whole tenant because they typed the wrong id.
+ * `buildRequestContext` THROWS `TenantAccessError` (403) when a requested brand is
+ * not permitted, and the catch below turns that into the 403 response. The
+ * `scopedContext` comparison of `ctx.brandId` to the request stays as a second
+ * line: if the builder ever regressed to returning null for a refusal, this route
+ * would still refuse rather than widen a brand-scoped operator to their tenant.
  *
- * ─── G2: BRAND CONFINEMENT IS OPT-IN BY THE CALLER — A KNOWN, PINNED GAP ───
+ * ─── G2: BRAND CONFINEMENT IS AUTOMATIC ────────────────────────────────────
  *
- * `buildRequestContext` never DERIVES a brand scope from a brand-restricted
- * membership; it only validates one the caller requests. So a Training-only
- * operator who simply omits `?brand_id=` reads an Enterprise row with 200, and
- * the refuse-never-widen check above cannot fire because nothing was
- * requested. This route cannot close that: the context carries the granted
- * brand, not the membership's, so it cannot tell a tenant-wide operator from a
- * brand-restricted one who stayed quiet.
- *
- * The fix lives in the builder — auto-confine when every membership in the
- * operating tenant shares one non-null `brand_id`, mirroring the single-tenant
- * auto-select four lines above it — and that is a security-module change kept
- * out of this task deliberately. A test pins TODAY'S behaviour under a name
- * that says so, so the gap is visible in the suite rather than silent.
+ * The context carries `authorizedBrandIds` — the brands the caller's memberships
+ * confine them to, or null when they are not brand-restricted — and
+ * `requireBrandAccess` / `tenantScopeWhere` consult it whether or not `?brand_id=`
+ * was sent. A Training-only operator who omits the parameter is narrowed to
+ * Training by the builder (`brandId` auto-confined) and refused an Enterprise row
+ * with 403. This was a pinned, named gap in the first version of this route; the
+ * access test that pinned it now asserts the refusal.
  *
  * ─── IN PRODUCTION TODAY, THIS ROUTE RETURNS 404 TO EVERY ADMIN ─────────────
  *

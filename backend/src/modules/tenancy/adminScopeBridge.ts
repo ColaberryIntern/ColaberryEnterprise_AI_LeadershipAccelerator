@@ -91,12 +91,16 @@ function logLegacyAdminScope(admin: { email?: string }): void {
  * `buildRequestContext`, which validates them against the identity's memberships —
  * a caller cannot scope to a brand it does not hold.
  *
- * ONE PROPERTY OF THE UNDERLYING BUILDER THAT A CALLER MUST KNOW: when a requested
- * brand is NOT permitted, `buildRequestContext` leaves `brandId` null rather than
- * throwing — and null means UNSCOPED, not denied. A route that asks for a brand must
- * therefore check that `ctx.brandId` came back set, and refuse if it did not. Nothing
- * passed `requestedBrandId` before T207, so this was latent; it is stated here rather
- * than silently changed in the builder, which every guard in the system depends on.
+ * A requested brand the memberships do not cover is REFUSED BY THROWING: the builder
+ * raises `TenantAccessError` (403) and this function lets it propagate. It used to
+ * return a context with `brandId` null instead, and null means "not narrowed", so a
+ * route that forgot to compare `ctx.brandId` to what it asked for would have widened a
+ * brand-scoped operator to their whole tenant. Callers that pass a brand must handle
+ * the throw; callers that pass none (everything older than the growth-journey routes)
+ * cannot see it.
+ *
+ * The builder also confines a brand-restricted operator to their brand when they name
+ * none (`authorizedBrandIds`), so a route no longer has to. See tenantAuthorization.
  */
 export async function contextFromAdminRequest(
   admin: { id?: string; email?: string; role?: string } | undefined,

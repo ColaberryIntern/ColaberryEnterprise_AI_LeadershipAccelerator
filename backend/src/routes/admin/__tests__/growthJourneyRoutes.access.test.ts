@@ -44,6 +44,7 @@ jest.mock('../../../modules/tenancy/adminScopeBridge', () => ({
 
 import growthJourneyRoutes from '../growthJourneyRoutes';
 import { GROWTH_JOURNEY_ENV_KEYS } from '../../../config/growthJourneyFlags';
+import { TenantAccessError } from '../../../modules/tenancy/tenantAuthorization';
 
 /**
  * T207 — brand scoping on the new read paths.
@@ -91,7 +92,13 @@ function app() {
 const auth = (r: request.Test) => r.set('Authorization', `Bearer ${token()}`);
 
 /** A context as `buildRequestContext` would produce it for a member of one tenant. */
-const memberOf = (tenantId: string, brandId: string | null = null) => ({
+// `authorizedBrandIds` defaults to null (not brand-restricted) so every pre-existing
+// row of the status matrix keeps its meaning; the G2 case passes an explicit set.
+const memberOf = (
+  tenantId: string,
+  brandId: string | null = null,
+  authorizedBrandIds: string[] | null = null,
+) => ({
   platformIdentityId: 'pid-1',
   tenantId,
   brandId,
@@ -99,12 +106,14 @@ const memberOf = (tenantId: string, brandId: string | null = null) => ({
   roles: ['tenant_admin'],
   isPlatformSuperAdmin: false,
   authorizedTenantIds: [tenantId],
+  authorizedBrandIds,
 });
 
 const noMembership = () => ({
   platformIdentityId: 'pid-1',
   tenantId: null,
   brandId: null,
+  authorizedBrandIds: null,
   organizationId: null,
   roles: [],
   isPlatformSuperAdmin: false,
@@ -323,27 +332,54 @@ describe('the status matrix, using the codes the guard actually returns', () => 
   });
 });
 
-describe('G2 — KNOWN GAP, pinned so it is visible: brand confinement is opt-in', () => {
-  it('a brand-restricted member who omits ?brand_id= reads another brand in their tenant with 200', async () => {
-    // THIS IS THE GAP, NOT THE GOAL. The builder never derives brandId from a
-    // brand-restricted membership, so with nothing requested the context is
-    // tenant-wide and requireBrandAccess has no brand to compare. The fix is a
-    // security-module change (auto-confine in buildRequestContext) kept out of
-    // this task; this test exists so the behaviour is asserted in the suite
-    // rather than discovered in production. When the builder is fixed, this
-    // test should FAIL, and that failure is the signal to flip it to 403.
-    contextFromAdminRequest.mockResolvedValue(memberOf(TENANT.colaberry, null));
+describe('G2 — brand confinement is automatic', () => {
+  it('a brand-restricted member who omits ?brand_id= is refused another brand in their tenant with 403', async () => {
+    // The builder now carries the membership's restriction as `authorizedBrandIds`
+    // and `requireBrandAccess` consults it whether or not a brand was requested.
+    // This test asserted a 200 while the behaviour was a named gap; the builder
+    // change flipped it, as that version said it should.
+    contextFromAdminRequest.mockResolvedValue(memberOf(TENANT.colaberry, null, [BRAND.training]));
     findByPk.mockResolvedValue(row(TENANT.colaberry, BRAND.enterprise));
     const res = await auth(request(app()).get(`${BASE}/participations/${ROW_ID}`));
+    expect(res.status).toBe(403);
+  });
+
+  it('and still reads their own brand with 200 when they omit the parameter', async () => {
+    contextFromAdminRequest.mockResolvedValue(memberOf(TENANT.colaberry, BRAND.training, [BRAND.training]));
+    findByPk.mockResolvedValue(row(TENANT.colaberry, BRAND.training));
+    const res = await auth(request(app()).get(`${BASE}/participations/${ROW_ID}`));
     expect(res.status).toBe(200);
+  });
+
+  it('the list route never returns a row outside the set: the where clause carries brand_id', async () => {
+    contextFromAdminRequest.mockResolvedValue(memberOf(TENANT.colaberry, null, [BRAND.training]));
+    findAndCountAll.mockResolvedValue({ rows: [], count: 0 });
+    await auth(request(app()).get(`${BASE}/participations`));
+    expect(findAndCountAll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ tenant_id: TENANT.colaberry, brand_id: [BRAND.training] }),
+      }),
+    );
+  });
+
+  it('a thrown brand refusal from the bridge becomes a 403, not a 500', async () => {
+    contextFromAdminRequest.mockRejectedValue(
+      new TenantAccessError('Brand not in scope', 403, 'AuthorizationError'),
+    );
+    const res = await auth(
+      request(app()).get(`${BASE}/participations/${ROW_ID}?brand_id=${BRAND.enterprise}`),
+    );
+    expect(res.status).toBe(403);
+    expect(findByPk).not.toHaveBeenCalled();
   });
 });
 
 describe('refuse, never widen — a requested scope that was not granted', () => {
   it('403 when the caller asks for a brand the bridge did not grant', async () => {
-    // `buildRequestContext` leaves brandId null for a brand the caller does not
-    // hold, and null means UNSCOPED. Proceeding would hand a brand-scoped
-    // operator the whole tenant for typing the wrong id.
+    // The builder throws for a brand the caller does not hold (see the block
+    // above); this pins the route's OWN second-line check for the case where a
+    // bridge returned null anyway, so a builder regression could not widen a
+    // brand-scoped operator to the whole tenant for typing the wrong id.
     contextFromAdminRequest.mockResolvedValue(memberOf(TENANT.colaberry, null));
     findByPk.mockResolvedValue(row(TENANT.colaberry, BRAND.training));
     const res = await auth(

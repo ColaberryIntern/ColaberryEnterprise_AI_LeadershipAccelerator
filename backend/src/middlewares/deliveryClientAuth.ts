@@ -137,6 +137,7 @@ export function requireDeliveryProjectAccess(paramName = 'projectId') {
           roles: [],
           isPlatformSuperAdmin: false,
           authorizedTenantIds: [],
+          authorizedBrandIds: null,
         },
         resourceType: 'delivery_project',
         resourceId: requested,

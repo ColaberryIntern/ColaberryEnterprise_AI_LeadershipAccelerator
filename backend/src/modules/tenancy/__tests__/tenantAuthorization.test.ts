@@ -111,12 +111,16 @@ describe('buildRequestContext', () => {
     });
     expect(permitted.brandId).toBe(BRAND_ENTERPRISE);
 
-    const refused = await buildRequestContext({
-      platformIdentityId: IDENTITY,
-      requestedTenantId: COLABERRY,
-      requestedBrandId: BRAND_TRAINING,
-    });
-    expect(refused.brandId).toBeNull();
+    // A refused brand is THROWN, not returned as null. Null means "not narrowed",
+    // and returning it for a refusal would let a route that forgot to compare widen
+    // a brand-scoped operator to the whole tenant.
+    await expect(
+      buildRequestContext({
+        platformIdentityId: IDENTITY,
+        requestedTenantId: COLABERRY,
+        requestedBrandId: BRAND_TRAINING,
+      }),
+    ).rejects.toMatchObject({ status: 403, errorClass: 'AuthorizationError' });
   });
 
   it('treats a null brand_id membership as covering every brand in the tenant', async () => {
@@ -250,5 +254,218 @@ describe('role registry wiring', () => {
     membershipFindAll.mockResolvedValue([membership(CPN, 'not_a_real_role')]);
     const ctx = await buildRequestContext({ platformIdentityId: IDENTITY });
     expect(hasPermission(ctx, 'lead.read')).toBe(false);
+  });
+});
+
+/**
+ * G2 — brand confinement is carried by the context, not opted into by the caller.
+ *
+ * Before: `brandId` was set only from a request, so a brand-restricted operator who did
+ * not ask to be confined read their whole tenant. Now `authorizedBrandIds` carries the
+ * restriction regardless, the builder auto-confines a single-brand operator, and both
+ * guards consult the set. Every case below is one row of the plan's acceptance table.
+ */
+describe('G2 — brand confinement is automatic', () => {
+  const BRAND_CPN = '77777777-7777-4777-8777-777777777777';
+
+  it('auto-confines a single-brand operator who named no brand', async () => {
+    membershipFindAll.mockResolvedValue([
+      membership(COLABERRY, TENANT_ROLES.BRAND_ADMIN, BRAND_TRAINING),
+    ]);
+    const ctx = await buildRequestContext({ platformIdentityId: IDENTITY });
+    expect(ctx.tenantId).toBe(COLABERRY);
+    expect(ctx.brandId).toBe(BRAND_TRAINING);
+    expect(ctx.authorizedBrandIds).toEqual([BRAND_TRAINING]);
+  });
+
+  it('leaves a tenant-wide operator unrestricted: null brandId AND null set', async () => {
+    membershipFindAll.mockResolvedValue([membership(COLABERRY, TENANT_ROLES.TENANT_ADMIN, null)]);
+    const ctx = await buildRequestContext({ platformIdentityId: IDENTITY });
+    expect(ctx.brandId).toBeNull();
+    expect(ctx.authorizedBrandIds).toBeNull();
+  });
+
+  it('a two-brand operator is not narrowed to one, but the set is carried', async () => {
+    membershipFindAll.mockResolvedValue([
+      membership(COLABERRY, TENANT_ROLES.BRAND_ADMIN, BRAND_TRAINING),
+      membership(COLABERRY, TENANT_ROLES.BRAND_MARKETER, BRAND_ENTERPRISE),
+    ]);
+    const ctx = await buildRequestContext({ platformIdentityId: IDENTITY });
+    expect(ctx.brandId).toBeNull();
+    expect(ctx.authorizedBrandIds?.slice().sort()).toEqual(
+      [BRAND_TRAINING, BRAND_ENTERPRISE].sort(),
+    );
+  });
+
+  it('a two-brand operator may request either of theirs, and is refused a third', async () => {
+    membershipFindAll.mockResolvedValue([
+      membership(COLABERRY, TENANT_ROLES.BRAND_ADMIN, BRAND_TRAINING),
+      membership(COLABERRY, TENANT_ROLES.BRAND_ADMIN, BRAND_ENTERPRISE),
+    ]);
+    const chosen = await buildRequestContext({
+      platformIdentityId: IDENTITY,
+      requestedBrandId: BRAND_ENTERPRISE,
+    });
+    expect(chosen.brandId).toBe(BRAND_ENTERPRISE);
+    await expect(
+      buildRequestContext({ platformIdentityId: IDENTITY, requestedBrandId: BRAND_CPN }),
+    ).rejects.toBeInstanceOf(TenantAccessError);
+  });
+
+  it('a brand cannot be granted without a resolved tenant: multi-tenant + brand request throws', async () => {
+    membershipFindAll.mockResolvedValue([
+      membership(COLABERRY, TENANT_ROLES.BRAND_ADMIN, BRAND_TRAINING),
+      membership(CPN, TENANT_ROLES.BRAND_ADMIN, BRAND_CPN),
+    ]);
+    // No requestedTenantId and two tenants → tenantId null → the brand cannot be scoped.
+    await expect(
+      buildRequestContext({ platformIdentityId: IDENTITY, requestedBrandId: BRAND_TRAINING }),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('a multi-tenant restricted operator with no tenant chosen carries the union of brands', async () => {
+    membershipFindAll.mockResolvedValue([
+      membership(COLABERRY, TENANT_ROLES.BRAND_ADMIN, BRAND_TRAINING),
+      membership(CPN, TENANT_ROLES.BRAND_ADMIN, BRAND_CPN),
+    ]);
+    const ctx = await buildRequestContext({ platformIdentityId: IDENTITY });
+    expect(ctx.tenantId).toBeNull();
+    expect(ctx.authorizedBrandIds?.slice().sort()).toEqual([BRAND_TRAINING, BRAND_CPN].sort());
+    // and the list scope is narrowed by tenant AND brand
+    expect(tenantScopeWhere(ctx)).toEqual({
+      tenant_id: ctx.authorizedTenantIds,
+      brand_id: ctx.authorizedBrandIds,
+    });
+  });
+
+  it('restriction is computed for the operating tenant only', async () => {
+    // Brand-restricted in CPN, tenant-wide in Colaberry. Operating in Colaberry → unrestricted.
+    membershipFindAll.mockResolvedValue([
+      membership(COLABERRY, TENANT_ROLES.TENANT_ADMIN, null),
+      membership(CPN, TENANT_ROLES.BRAND_ADMIN, BRAND_CPN),
+    ]);
+    const inColaberry = await buildRequestContext({
+      platformIdentityId: IDENTITY,
+      requestedTenantId: COLABERRY,
+    });
+    expect(inColaberry.authorizedBrandIds).toBeNull();
+    const inCpn = await buildRequestContext({
+      platformIdentityId: IDENTITY,
+      requestedTenantId: CPN,
+    });
+    expect(inCpn.authorizedBrandIds).toEqual([BRAND_CPN]);
+    expect(inCpn.brandId).toBe(BRAND_CPN);
+  });
+
+  it('a platform superadmin is never brand-restricted, whatever their memberships say', async () => {
+    membershipFindAll.mockResolvedValue([
+      membership(COLABERRY, TENANT_ROLES.PLATFORM_SUPER_ADMIN, BRAND_TRAINING),
+    ]);
+    const ctx = await buildRequestContext({ platformIdentityId: IDENTITY });
+    expect(ctx.isPlatformSuperAdmin).toBe(true);
+    expect(ctx.authorizedBrandIds).toBeNull();
+    // and may still name any brand
+    const named = await buildRequestContext({
+      platformIdentityId: IDENTITY,
+      requestedTenantId: CPN,
+      requestedBrandId: BRAND_CPN,
+    });
+    expect(named.brandId).toBe(BRAND_CPN);
+  });
+
+  it('emptyContext is not brand-restricted (tenant scope already closes it)', () => {
+    expect(emptyContext().authorizedBrandIds).toBeNull();
+    expect(tenantScopeWhere(emptyContext())).toEqual({ tenant_id: null });
+  });
+
+  it('no source file still describes the old opt-in behaviour as a known gap', () => {
+    // The gap was pinned in three places by name while it was open. Once the
+    // builder closed it, prose saying "known gap" or "latent" or "null means
+    // UNSCOPED" would be a comment claiming a property that is no longer true —
+    // and a comment that states a property is a test somebody owes.
+    const fs = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+    const files = [
+      path.join(__dirname, '..', 'tenantAuthorization.ts'),
+      path.join(__dirname, '..', 'adminScopeBridge.ts'),
+      path.join(__dirname, '..', '..', '..', 'controllers', 'growthJourneyController.ts'),
+      path.join(__dirname, '..', '..', '..', 'routes', 'admin', '__tests__', 'growthJourneyRoutes.access.test.ts'),
+    ];
+    for (const f of files) {
+      const src = fs.readFileSync(f, 'utf8');
+      expect(src).not.toMatch(/known gap/i);
+      expect(src).not.toMatch(/\blatent\b/i);
+      expect(src).not.toMatch(/null means UNSCOPED/);
+    }
+    // Control: the scan reads real files — the builder source must contain the
+    // field this whole block is about.
+    expect(fs.readFileSync(files[0], 'utf8')).toContain('authorizedBrandIds');
+  });
+
+  describe('tenantScopeWhere', () => {
+    it('adds the brand set for a restricted operator', async () => {
+      membershipFindAll.mockResolvedValue([
+        membership(COLABERRY, TENANT_ROLES.BRAND_ADMIN, BRAND_TRAINING),
+      ]);
+      const ctx = await buildRequestContext({ platformIdentityId: IDENTITY });
+      expect(tenantScopeWhere(ctx)).toEqual({ tenant_id: COLABERRY, brand_id: [BRAND_TRAINING] });
+    });
+
+    it('is byte-identical to before for a tenant-wide operator (regression control)', async () => {
+      membershipFindAll.mockResolvedValue([membership(COLABERRY, TENANT_ROLES.TENANT_ADMIN, null)]);
+      const ctx = await buildRequestContext({ platformIdentityId: IDENTITY });
+      expect(JSON.stringify(tenantScopeWhere(ctx))).toBe(JSON.stringify({ tenant_id: COLABERRY }));
+    });
+  });
+
+  describe('requireBrandAccess', () => {
+    async function restrictedTo(...brands: string[]) {
+      membershipFindAll.mockResolvedValue(
+        brands.map((b) => membership(COLABERRY, TENANT_ROLES.BRAND_ADMIN, b)),
+      );
+      return buildRequestContext({ platformIdentityId: IDENTITY });
+    }
+
+    function status(fn: () => void): number | 'passed' {
+      try {
+        fn();
+        return 'passed';
+      } catch (err) {
+        return (err as TenantAccessError).status;
+      }
+    }
+
+    it('refuses a brand outside the set EVEN WHEN brandId is null (two-brand operator)', async () => {
+      const ctx = await restrictedTo(BRAND_TRAINING, BRAND_ENTERPRISE);
+      expect(ctx.brandId).toBeNull();
+      expect(status(() => requireBrandAccess(ctx, COLABERRY, BRAND_CPN))).toBe(403);
+    });
+
+    it('passes a brand inside the set', async () => {
+      const ctx = await restrictedTo(BRAND_TRAINING, BRAND_ENTERPRISE);
+      expect(status(() => requireBrandAccess(ctx, COLABERRY, BRAND_ENTERPRISE))).toBe('passed');
+    });
+
+    it('refuses a brand-less row to a brand-restricted caller', async () => {
+      const ctx = await restrictedTo(BRAND_TRAINING);
+      expect(status(() => requireBrandAccess(ctx, COLABERRY, null))).toBe(403);
+    });
+
+    it('a single-brand operator who named nothing is refused the other brand (the G2 case)', async () => {
+      const ctx = await restrictedTo(BRAND_TRAINING);
+      expect(status(() => requireBrandAccess(ctx, COLABERRY, BRAND_ENTERPRISE))).toBe(403);
+      expect(status(() => requireBrandAccess(ctx, COLABERRY, BRAND_TRAINING))).toBe('passed');
+    });
+
+    it('still 404s another tenant’s row before any brand logic (unchanged, the control)', async () => {
+      const ctx = await restrictedTo(BRAND_TRAINING);
+      expect(status(() => requireBrandAccess(ctx, CPN, BRAND_TRAINING))).toBe(404);
+    });
+
+    it('a tenant-wide operator passes a brand-less row (unchanged)', async () => {
+      membershipFindAll.mockResolvedValue([membership(COLABERRY, TENANT_ROLES.TENANT_ADMIN, null)]);
+      const ctx = await buildRequestContext({ platformIdentityId: IDENTITY });
+      expect(status(() => requireBrandAccess(ctx, COLABERRY, null))).toBe('passed');
+    });
   });
 });
