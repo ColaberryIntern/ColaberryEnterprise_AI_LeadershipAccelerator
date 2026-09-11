@@ -46,6 +46,7 @@
  * and its retry.
  */
 import { Op, Sequelize } from 'sequelize';
+import { maskUrlSecrets } from '../utils/piiRedaction';
 
 /** The fields of a `messages/search` result this module reads. */
 export interface MandrillSearchMessage {
@@ -91,7 +92,9 @@ export const normaliseSubject = (value: unknown): string => String(value ?? '').
 export function clickedUrls(msg: MandrillSearchMessage, cap = 10): string[] {
   const out: string[] = [];
   for (const c of msg.clicks_detail ?? []) {
-    const url = typeof c?.url === 'string' ? c.url.slice(0, 500) : '';
+    // Masked BEFORE it is stored: a magic-link click carries the login token
+    // in its URL, and a credential has no business in an analytics row.
+    const url = typeof c?.url === 'string' ? maskUrlSecrets(c.url.slice(0, 500)) : '';
     if (url && !out.includes(url)) out.push(url);
     if (out.length >= cap) break;
   }
