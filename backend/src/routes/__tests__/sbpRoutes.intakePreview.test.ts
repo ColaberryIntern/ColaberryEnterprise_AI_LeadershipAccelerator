@@ -44,6 +44,14 @@ jest.mock('../../services/sbp/intakeTruthStore', () => ({
   loadIntakeTruthAtRevision: jest.fn(async () => { throw new Error('preview must never read'); }),
 }));
 
+// The call offer that rides on the preview is configuration, not truth, and
+// is tested with the call route. Here it is inert: no agent, no option.
+jest.mock('../../services/sbp/projectDiscoveryCallRequest', () => ({
+  __esModule: true,
+  callAvailability: () => ({ available: false, consentText: 'words', consentVersion: 'v' }),
+  requestProjectDiscoveryCall: jest.fn(async () => { throw new Error('preview must never request a call'); }),
+}));
+
 import sbpRoutes from '../sbpRoutes';
 import { saveIntakeTruth, loadIntakeTruth } from '../../services/sbp/intakeTruthStore';
 
@@ -122,6 +130,7 @@ describe('the read-back', () => {
 
     expect(covered).toEqual(BODY.covered);
     expect(unmapped).toBe(0);
+    expect(res.body.callOffer).toEqual({ available: false, consentText: 'words', consentVersion: 'v' });
     // The plain-words list, from the same table Story 000 renders.
     expect(unanswered).toContain('there is no baseline, so nothing can be measured against it later');
     expect(unanswered).not.toContain('nobody has said what a person should check before this acts');

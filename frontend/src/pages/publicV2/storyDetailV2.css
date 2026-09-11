@@ -20,6 +20,12 @@
    imports every V2 page STATICALLY. If any V2 route is ever lazy-loaded, the
    shared primitives must move into publicV2.css first or this page's layout
    silently degrades -- which is why this route is not lazy either.
+
+   TWO SPLITS, SAME SEAM. The pictures live in `storyMediaV2.css` and the
+   "Keep reading" band in `storyRelatedV2.css`, each carved out when this file
+   passed CLAUDE.md's 500-line ceiling. Both are on the contract test's list, so
+   a rule that moves between the three files is checked exactly as hard in its
+   new home as in its old one.
    ========================================================================== */
 
 .cbv2-story { display: block; }
@@ -172,14 +178,8 @@
    to be locked cannot rest on that. Scoped under `.cbv2-story` so no other page
    inherits the decision either. */
 .cbv2-story .cbv2-story__section--sunken { background: var(--surface-sunken); }
-
-/* A picture band pays its own block padding, which it does not otherwise carry.
-   Without it the sunken ground is exactly the height of the image and reads as a
-   mat around the picture rather than as a band the picture sits in. Keyed on the
-   same tone class as every other band, so there is one name for this idea. */
-.cbv2-story .cbv2-story-figures.cbv2-story__section--sunken {
-  padding-block: var(--space-12);
-}
+/* The one band that pays its own padding on this ground is the picture band,
+   and that rule lives with the picture band's other rules in `storyMediaV2.css`. */
 
 /* --------------------------------------------------------- hero figures --- */
 
@@ -495,90 +495,3 @@
 /* Repository visibility. Same tag shape as the role beside it, because they are
    the same kind of fact and a second shape would imply a second importance. */
 .cbv2-story__repo-visibility { white-space: nowrap; }
-
-/* ---------- KEEP READING ---------- */
-/* Ali, 2026-09-08: "show other related project at the end of the Case Study's so
-   they can continue looking through related case studys... only include Case
-   Studys that can be shown on their respective site." The surface filter is the
-   server's; this only styles what it returns. Three at most — an invitation to
-   keep reading rather than a second index. */
-.cbv2-story__related {
-  display: grid;
-  gap: var(--space-5);
-  margin-top: var(--space-9);
-  padding-top: var(--space-7);
-  border-top: var(--border-1) solid var(--border-subtle);
-}
-.cbv2-related__list {
-  display: grid;
-  /* CAPPED, NOT STRETCHED. With `1fr` a row holding one or two items lets each
-     fill the whole row: the "Keep reading" cards measured 710px on Enterprise
-     and 1024px on AI Flotation against the 368px index card Ali called the
-     right size. `justify-content: start` plus a fixed upper track keeps a card
-     the same object whether the row holds one of them or four. */
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 23rem));
-  justify-content: start;
-  gap: var(--space-5);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.cbv2-related__link {
-  display: grid;
-  gap: var(--space-3);
-  height: 100%;
-  align-content: start;
-  color: inherit;
-  text-decoration: none;
-}
-/* 16/10 and cropped from the top, matching the index cards on all three sites —
-   these are pictures of screens, and a screen puts its heading at the top. */
-.cbv2-related__media {
-  display: block;
-  width: 100%;
-  aspect-ratio: 16 / 10;
-  object-fit: cover;
-  object-position: center top;
-  border-radius: var(--radius-md);
-  background: var(--surface-sunken);
-}
-.cbv2-related__body { display: grid; gap: var(--space-2); }
-.cbv2-related__meta {
-  font-size: var(--fs-caption);
-  letter-spacing: var(--ls-wide);
-  text-transform: uppercase;
-  color: var(--brand-primary);
-}
-.cbv2-related__title {
-  font-family: var(--font-display);
-  font-weight: var(--fw-bold);
-  color: var(--text-strong);
-  line-height: 1.3;
-}
-.cbv2-related__link:hover .cbv2-related__title { text-decoration: underline; }
-.cbv2-related__link:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 3px; }
-.cbv2-related__note {
-  font-size: var(--fs-body-sm);
-  line-height: 1.5;
-  color: var(--text-muted);
-  /* Three lines: a taste of the record, not the record. */
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-/* THE SAME CARD as the /proof grid. Ali, 2026-09-09: "All the cards should be
-   the same size." Chrome and clamp matched to `.cbv2-cs-card`, so a reader
-   meets one object whether it is on the index or at the foot of a record. */
-.cbv2-related__link {
-  overflow: hidden;
-  background: var(--surface-card);
-  border: var(--border-1) solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  transition: box-shadow var(--dur-fast) var(--ease-standard);
-}
-.cbv2-related__link:hover { box-shadow: var(--shadow-md); }
-.cbv2-related__media { border-radius: 0; }
-.cbv2-related__body { padding: var(--space-6); }
-.cbv2-related__note { -webkit-line-clamp: 4; }

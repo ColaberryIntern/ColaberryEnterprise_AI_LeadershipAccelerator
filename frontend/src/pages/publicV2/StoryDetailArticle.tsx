@@ -5,7 +5,7 @@ import CaseStudyVerificationBadge from '../../components/caseStudy/CaseStudyVeri
 import { heroFacts, heroMetricsFor, visibleSections } from './storyDetailV2Model';
 import StoryHeroActions from './StoryHeroActions';
 import StoryContextStrip from './StoryContextStrip';
-import { StoryHeroFigure } from './storyDetailV2Sections';
+import { StoryHeroFigure } from './StoryHeroFigure';
 import StorySectionList from './StorySectionList';
 import { storyIndicators } from './storyIndicatorModel';
 import { placeStoryFigures } from './storyFigurePlacement';

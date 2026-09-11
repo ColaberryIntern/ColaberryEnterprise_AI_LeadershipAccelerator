@@ -83,6 +83,7 @@ import { ensureManagerDirectiveSchema } from './db/ensureManagerDirectiveSchema'
 import { ensureAgentManagerConversationSchema } from './db/ensureAgentManagerConversationSchema';
 import { ensureAgentGoalSchema } from './db/ensureAgentGoalSchema';
 import { ensureProjectUnderstandingSchema } from './db/ensureProjectUnderstandingSchema';
+import { ensureProjectDiscoveryCallSchema } from './db/ensureProjectDiscoveryCallSchema';
 import { ensureAgentOneOnOneSchema } from './db/ensureAgentOneOnOneSchema';
 import { ensureAgentReportSubscriptionSchema } from './db/ensureAgentReportSubscriptionSchema';
 import { ensureAgentReportRunSchema } from './db/ensureAgentReportRunSchema';
@@ -2803,6 +2804,9 @@ async function start(): Promise<void> {
   // POST .../goals.
   await ensureAgentGoalSchema();
   await ensureProjectUnderstandingSchema();
+  // Unified Project Discovery, Phase 5: a student's request to be called about
+  // their project, with the consent scoped to it. Additive, idempotent.
+  await ensureProjectDiscoveryCallSchema();
   // AI Workforce Management, Checkpoint D — a manager's structured 1:1
   // check-in record with their agent. Additive, idempotent, no flag. No
   // seeder writes to it; a manager writes the first row via
