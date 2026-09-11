@@ -498,6 +498,22 @@ export const METRICS: Record<string, MetricDef> = {
     drilldown: { target: 'people.roster', requiredFilters: ['campaign', 'engaged'] },
   },
 
+  'marketing.campaign_lead_status': {
+    key: 'marketing.campaign_lead_status',
+    name: 'Campaign leads by status',
+    domain: 'marketing',
+    unit: 'count',
+    definition: 'Leads enrolled in a campaign, sliced by their enrolment status.',
+    formula: 'COUNT(*) FROM campaign_leads GROUP BY campaign_id, status',
+    sources: ['campaign_leads'],
+    grain: 'person',
+    dimensions: ['campaign', 'status'],
+    status: 'trusted',
+    // The Campaign 360 Overview KPIs drill into this. `campaign` is required on every one so
+    // the roster can never open unscoped; `status` is added by the sliced KPIs.
+    drilldown: { target: 'people.roster', requiredFilters: ['campaign'] },
+  },
+
   'marketing.publish_success_rate': {
     key: 'marketing.publish_success_rate',
     name: 'Publish success rate',

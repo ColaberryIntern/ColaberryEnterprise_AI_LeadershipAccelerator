@@ -170,6 +170,11 @@ const adminRoutes = (
         {/* Classified in T012 as section `campaigns` before this page existed - see
             adminNav UNLISTED_PATH_SECTIONS. */}
         <Route path="/admin/brands" element={<AdminBrandsPage />} />
+        {/* Campaign 360 (spec section 4). Deliberately the SAME component as /admin/campaigns/:id -
+            the detail page already carries the tabs the spec describes, and a second page would
+            be the duplicate destination the spec forbids. The marketing path exists so the IA
+            in the spec resolves; the canonical page is unchanged. */}
+        <Route path="/admin/marketing/campaigns/:id" element={<AdminCampaignDetailPage />} />
         <Route path="/admin/tickets" element={<AdminTicketBoardPage />} />
         <Route path="/admin/agents/:id" element={<AgentDetailPage />} />
         <Route path="/admin/governance" element={<GovernanceCommandCenter />} />
