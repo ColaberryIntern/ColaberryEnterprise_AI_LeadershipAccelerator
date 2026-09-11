@@ -279,6 +279,24 @@ Weaknesses found by running it, and what was done. Add to this every time.
   versions were re-triaged side by side: the same concern on the same
   untouched option, before and after. **Compare against the baseline before
   believing a rate.**
+- *(2026-09-11)* **`seedCertPrepContent --approve-as` approved every draft in
+  the table, not the ones it had just minted.** Found while planning the
+  authored-half length pass, which ends with a re-seed: production holds 149
+  superseded drafts (each replaced by a later approved revision, hidden from
+  the queue), and the next `--revise --approve-as ali@colaberry.com` would
+  have stamped all of them with his name. A reviewer's name on a revision
+  they never saw is a false audit trail. Approval is now scoped to what the
+  run minted, and the run says so when that is nothing. **A flag that acts on
+  "everything in state X" is a footgun the moment state X has history.**
+- *(2026-09-11)* **The authored half measured 58% correct-is-longest by
+  characters, 37% by words.** The rubric comment quoted the 37; the audit
+  measures characters. Under the ceiling, but the half a student meets first.
+  The database balancer skips authored items by design (their text is in the
+  repo), so the same pass now has a second front end: `planAuthoredOptionLengths`
+  emits patches addressed by option TEXT (the repo letter and the database
+  letter differ, because `item()` re-letters as it places the key), and
+  `applyCertOptionPatches` refuses anything it cannot place exactly once.
+  Both scripts share `lib/certLengthPass`, so "balanced" means one thing.
 - *(2026-09-10)* **Do not write source containing backslashes through a shell
   heredoc.** Building the schema parser that way put a literal CR and a real
   newline where `` and `
