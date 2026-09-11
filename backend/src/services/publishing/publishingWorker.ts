@@ -32,6 +32,9 @@ import { ProviderPublishError, type PublishPayload, type PublishReceipt, type So
  * there for exactly the ambiguous-timeout case.
  */
 
+/** Statuses from which a job may publish. Anything else means the item moved on without its jobs. */
+const PUBLISHABLE_STATUSES: readonly ContentItemStatus[] = ['scheduled', 'publishing', 'partially_published', 'publish_failed'];
+
 export interface WorkerDeps {
   now: () => Date;
   killSwitch: () => Promise<boolean>;
@@ -176,6 +179,18 @@ async function publishOne(job: PublishingJob, adapter: SocialProviderAdapter, de
     await permanentFailure(job, 'Content item no longer exists.', 'MissingContent', now);
     return 'failed';
   }
+  // Two guards before anything leaves. recordEdit cancels queued jobs when approved copy is
+  // edited, so these should never fire - which is exactly why they exist: the worker is the
+  // last line before an external action, and it does not trust the path that led here.
+  if (job.content_revision !== (item.revision ?? 1)) {
+    await permanentFailure(job, `Content changed since this job was queued (revision ${job.content_revision} -> ${item.revision}). Re-schedule the current revision.`, 'StaleRevision', now);
+    return 'failed';
+  }
+  if (!PUBLISHABLE_STATUSES.includes(item.status)) {
+    await permanentFailure(job, `Item is ${item.status}, not publishable.`, 'ItemNotPublishable', now);
+    return 'failed';
+  }
+
   const variant = job.content_variant_id ? await ContentVariant.findByPk(job.content_variant_id) : null;
 
   if (item.status === 'scheduled' || item.status === 'partially_published' || item.status === 'publish_failed') {

@@ -101,6 +101,11 @@ async function enqueueJobs(item: ContentItem, publishAt: Date): Promise<ActionRe
 
 export async function saveDraft(itemId: string): Promise<ActionResult> {
   const item = await loadItem(itemId);
+  // scheduled -> draft is legal in the table ONLY for invalidation (recordEdit), which
+  // cancels the queued jobs as it goes. Save-draft does not, so it must not take that door.
+  if (item.status === 'scheduled') {
+    throw new WorkflowError('This item is scheduled. Cancel its queued jobs first; saving as draft does not unschedule.', 409, 'IllegalTransition');
+  }
   if (item.status !== 'draft') {
     move(item, 'draft');
     // Withdrawing from review closes the open request so a reviewer cannot approve a post

@@ -1,8 +1,9 @@
 /**
  * Import a Loomly calendar export (CSV) into the Content OS - spec section 18 Stage B.
  *
- * Dry run by default: parses, maps, deduplicates, and writes the exception report without
- * touching the database. `--execute` performs the writes. Published posts land as READ-ONLY
+ * Dry run by default: parses, maps, deduplicates, and writes the exception report. The dry run
+ * READS the database (brand lookup, existing-key check) and writes nothing; `--execute`
+ * performs the writes. Published posts land as READ-ONLY
  * history with provenance `loomly_import`; future schedules land as drafts that need
  * verification; every skipped or invalid row is in the report. Re-running the same file is a
  * no-op (every row is keyed; existing keys are reported as duplicate_existing).
@@ -51,23 +52,37 @@ async function main(): Promise<void> {
   const fileLevel = plan.exceptions.filter((e) => e.row === 0);
   for (const e of fileLevel) console.log(`[loomly-import] header: ${e.code} - ${e.detail}`);
 
-  let exceptions = [...plan.exceptions];
+  const exceptions = [...plan.exceptions];
+  const reportPath = args.report ?? path.resolve(__dirname, '../../../tmp', `loomly-exceptions-${now.toISOString().replace(/[:.]/g, '-')}.md`);
+  const writeReport = () => {
+    fs.mkdirSync(path.dirname(reportPath), { recursive: true });
+    fs.writeFileSync(reportPath, renderExceptionReport(exceptions, args.file, now), 'utf8');
+    console.log(`[loomly-import] exception report: ${reportPath} (${exceptions.length} exceptions)`);
+  };
+
   if (plan.exceptions.some((e) => e.code === 'missing_column')) {
     console.error('[loomly-import] file rejected: required columns missing. Fix the header aliases (see docs/marketing/LOOMLY_IMPORT_MAPPING.md) and re-run.');
-  } else {
-    const outcome = await importLoomlyPosts(plan.posts, sequelizeLoomlyStore(), { execute: args.execute, calendarToBrandSlug: args.calendars });
-    exceptions = exceptions.concat(outcome.exceptions);
-    console.log(`[loomly-import] ${args.execute ? 'imported' : 'would import'}: history=${outcome.imported.history} scheduled_draft=${outcome.imported.scheduledDraft} draft=${outcome.imported.draft}; skipped_existing_or_unmapped=${outcome.skipped}`);
+    writeReport();
+    return;
   }
 
-  const reportPath = args.report ?? path.resolve(__dirname, '../../../tmp', `loomly-exceptions-${now.toISOString().replace(/[:.]/g, '-')}.md`);
-  fs.mkdirSync(path.dirname(reportPath), { recursive: true });
-  fs.writeFileSync(reportPath, renderExceptionReport(exceptions, args.file, now), 'utf8');
-  console.log(`[loomly-import] exception report: ${reportPath} (${exceptions.length} exceptions)`);
+  // The parse-level exceptions are already in hand; the report is written whether or not the
+  // store step succeeds, so a database failure never costs the operator the triage list.
+  try {
+    const outcome = await importLoomlyPosts(plan.posts, sequelizeLoomlyStore(), { execute: args.execute, calendarToBrandSlug: args.calendars });
+    exceptions.push(...outcome.exceptions);
+    console.log(`[loomly-import] ${args.execute ? 'imported' : 'would import'}: history=${outcome.imported.history} scheduled_draft=${outcome.imported.scheduledDraft} draft=${outcome.imported.draft}; skipped_existing_or_unmapped=${outcome.skipped}`);
+  } finally {
+    writeReport();
+  }
   if (!args.execute) console.log('[loomly-import] dry run - nothing written. Re-run with --execute to apply.');
 }
 
 main().then(() => process.exit(0)).catch((err) => {
-  console.error(`[loomly-import] FAILED: ${err instanceof Error ? err.message : String(err)}`);
+  // Sequelize connection errors carry an empty message and the cause in `parent`; the class
+  // name is what says "no database", so it is printed first.
+  const e = err as { name?: string; message?: string; parent?: { code?: string; message?: string } };
+  const cause = e?.parent?.code ?? e?.parent?.message ?? '';
+  console.error(`[loomly-import] FAILED: ${e?.name ?? 'Error'}: ${e?.message || '(no message)'}${cause ? ` [${cause}]` : ''}`);
   process.exit(1);
 });

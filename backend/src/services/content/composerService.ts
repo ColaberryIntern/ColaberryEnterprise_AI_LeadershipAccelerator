@@ -5,7 +5,8 @@ import { applyEdit, fingerprint, generateVariants, revertToGenerated, type Varia
 import { validateSubmission, type SubmissionValidation } from './composerValidation';
 import { checkContentForBrand } from './brandGovernanceService';
 import type { GovernanceResult } from './brandGovernance';
-import { assertWritable, WorkflowError } from './contentWorkflowService';
+import { assertWritable, WorkflowError, type Actor } from './contentWorkflowService';
+import { withEditRecorded, type RecordedEdit } from './composerEdits';
 
 /**
  * composerService — persists what the pure composer modules decide.
@@ -19,6 +20,11 @@ import { assertWritable, WorkflowError } from './contentWorkflowService';
  * `source: 'edited'`, and `metadata.canonicalFingerprint` is what lets a later regeneration
  * tell whether an edit is stale. Both are written the moment a human edits and never cleared
  * by generation.
+ *
+ * EVERY MUTATOR IS A RECORDED EDIT (composerEdits.withEditRecorded): the revision bumps, an
+ * approval held by the item is invalidated when the edit touches copy, queued jobs are
+ * cancelled, and the touched variants go back to `unvalidated`. Callers get the item back
+ * as it is AFTER that, because its status may have changed under them.
  */
 
 const URL_RE = /https?:\/\/[^\s)]+/g;
@@ -54,64 +60,76 @@ async function loadVariants(itemId: string, canonical: string): Promise<{ rows: 
 /**
  * Generate (or regenerate) variants for the given providers. Edited variants survive.
  */
-export async function generateItemVariants(itemId: string, providers: readonly ProviderKey[]): Promise<Variant[]> {
+export async function generateItemVariants(
+  itemId: string,
+  providers: readonly ProviderKey[],
+  actor: Actor = {},
+): Promise<RecordedEdit<Variant[]>> {
   const item = await loadItem(itemId, true);
-  const canonical = item.canonical_body ?? '';
-  const { rows, variants: existing } = await loadVariants(itemId, canonical);
-  const next = generateVariants(canonical, providers, existing);
+  return withEditRecorded(itemId, actor, providers, async () => {
+    const canonical = item.canonical_body ?? '';
+    const { rows, variants: existing } = await loadVariants(itemId, canonical);
+    const next = generateVariants(canonical, providers, existing);
 
-  const byProvider = new Map(rows.map((r) => [r.provider, r]));
-  for (const v of next) {
-    const row = byProvider.get(v.provider);
-    const patch = {
-      body: v.text,
-      is_manually_edited: v.source === 'edited',
-      metadata: { ...(row?.metadata ?? {}), canonicalFingerprint: v.canonicalFingerprint, stale: v.stale },
-    };
-    if (row) {
-      // An edited row keeps its body; only its stale flag moves. A generated row is replaced.
-      await row.update(v.source === 'edited' ? { metadata: patch.metadata } : patch);
-    } else {
-      await ContentVariant.create({ content_item_id: itemId, provider: v.provider, ...patch } as any);
+    const byProvider = new Map(rows.map((r) => [r.provider, r]));
+    for (const v of next) {
+      const row = byProvider.get(v.provider);
+      const patch = {
+        body: v.text,
+        is_manually_edited: v.source === 'edited',
+        metadata: { ...(row?.metadata ?? {}), canonicalFingerprint: v.canonicalFingerprint, stale: v.stale },
+      };
+      if (row) {
+        // An edited row keeps its body; only its stale flag moves. A generated row is replaced.
+        await row.update(v.source === 'edited' ? { metadata: patch.metadata } : patch);
+      } else {
+        // Sequelize's creation-attributes type predates the model's `declare` fields; the
+        // cast is the repo's idiom for create() on these models.
+        await ContentVariant.create({ content_item_id: itemId, provider: v.provider, ...patch } as any);
+      }
     }
-  }
-  return next;
+    return next;
+  });
 }
 
 export async function editItemVariant(
   itemId: string,
   provider: ProviderKey,
   text: string,
-  actorEmail: string | null,
-): Promise<Variant> {
+  actor: Actor,
+): Promise<RecordedEdit<Variant>> {
   const item = await loadItem(itemId, true);
   const canonical = item.canonical_body ?? '';
   const row = await ContentVariant.findOne({ where: { content_item_id: itemId, provider } });
   if (!row) throw new WorkflowError(`No ${provider} variant exists yet; generate first.`, 404, 'NotFound');
-  const current = rowToVariant(row, canonical)!;
-  const edited = applyEdit(current, text, canonical);
-  await row.update({
-    body: edited.text,
-    is_manually_edited: true,
-    edited_by: actorEmail,
-    edited_at: new Date(),
-    metadata: { ...(row.metadata ?? {}), canonicalFingerprint: edited.canonicalFingerprint, stale: false },
+  return withEditRecorded(itemId, actor, [provider], async () => {
+    const current = rowToVariant(row, canonical)!;
+    const edited = applyEdit(current, text, canonical);
+    await row.update({
+      body: edited.text,
+      is_manually_edited: true,
+      edited_by: actor.email ?? null,
+      edited_at: new Date(),
+      metadata: { ...(row.metadata ?? {}), canonicalFingerprint: edited.canonicalFingerprint, stale: false },
+    });
+    return edited;
   });
-  return edited;
 }
 
-export async function revertItemVariant(itemId: string, provider: ProviderKey): Promise<Variant> {
+export async function revertItemVariant(itemId: string, provider: ProviderKey, actor: Actor = {}): Promise<RecordedEdit<Variant>> {
   const item = await loadItem(itemId, true);
   const canonical = item.canonical_body ?? '';
   const row = await ContentVariant.findOne({ where: { content_item_id: itemId, provider } });
   if (!row) throw new WorkflowError(`No ${provider} variant exists.`, 404, 'NotFound');
-  const reverted = revertToGenerated(rowToVariant(row, canonical)!, canonical);
-  await row.update({
-    body: reverted.text,
-    is_manually_edited: false,
-    metadata: { ...(row.metadata ?? {}), canonicalFingerprint: reverted.canonicalFingerprint, stale: false },
+  return withEditRecorded(itemId, actor, [provider], async () => {
+    const reverted = revertToGenerated(rowToVariant(row, canonical)!, canonical);
+    await row.update({
+      body: reverted.text,
+      is_manually_edited: false,
+      metadata: { ...(row.metadata ?? {}), canonicalFingerprint: reverted.canonicalFingerprint, stale: false },
+    });
+    return reverted;
   });
-  return reverted;
 }
 
 export interface ItemValidation {
@@ -144,7 +162,7 @@ export async function validateItem(itemId: string): Promise<ItemValidation> {
 
   for (const r of providers.variants) {
     const row = rows.find((x) => x.provider === r.provider);
-    if (row) await row.update({ validation_state: r.ok ? 'valid' : 'invalid', validation_errors: r.problems } as any);
+    if (row) await row.update({ validation_state: r.ok ? 'valid' : 'invalid', validation_errors: r.problems });
   }
 
   const governance = item.brand_id

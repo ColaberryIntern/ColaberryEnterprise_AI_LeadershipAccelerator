@@ -1,6 +1,6 @@
 import type { ContentItemStatus } from '../../models/ContentItem';
 import type { ContentApprovalStatus } from '../../models/ContentApprovalRequest';
-import { decidePublishMode, getProviderCapabilities, type ProviderKey } from '../publishing/providerCapabilities';
+import { decidePublishMode, getProviderCapabilities, publishButtonFor, type ProviderKey } from '../publishing/providerCapabilities';
 import type { VariantProblem } from './composerValidation';
 
 /**
@@ -202,6 +202,13 @@ export interface ConfirmationSummary {
     canSendForApproval: boolean;
     canSchedule: boolean;
     canPublishNow: boolean;
+    /**
+     * What the publish button SAYS, from the registry's decision per account: "Publish now"
+     * only when every account publishes directly; "Create handoff packages" when none does;
+     * the mixed form names the split. Spec 8.2 forbids a fake Publish button, and a button
+     * that says Publish over seven handoffs is one.
+     */
+    publishLabel: string;
     reasons: string[];
   };
 }
@@ -282,6 +289,12 @@ export function buildConfirmation(input: ConfirmationInput): ConfirmationSummary
   if (isApproved && item.scheduled_for === null) reasons.push('Set a time to schedule, or publish now.');
   const canPublishNow = clean && isApproved;
 
+  const direct = accounts.filter((a) => publishButtonFor(decidePublishMode(getProviderCapabilities(a.provider), 'publish')).label === 'Publish').length;
+  const handoff = accounts.length - direct;
+  const publishLabel = accounts.length === 0 || handoff === 0
+    ? 'Publish now'
+    : direct === 0 ? 'Create handoff packages' : `Publish now (${direct} direct, ${handoff} handoff)`;
+
   return {
     item: { id: item.id, title: item.title, status: item.status, contentType: item.content_type, revision: item.revision },
     brand: brand ? { id: brand.id, name: brand.name, timezone, timezoneSource } : null,
@@ -305,6 +318,7 @@ export function buildConfirmation(input: ConfirmationInput): ConfirmationSummary
       canSendForApproval,
       canSchedule,
       canPublishNow,
+      publishLabel,
       reasons,
     },
   };

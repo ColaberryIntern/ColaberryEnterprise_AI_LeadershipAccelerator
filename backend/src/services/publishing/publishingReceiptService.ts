@@ -96,10 +96,20 @@ export async function cancelJob(jobId: string, actor: Actor, reason: string | nu
   const job = await PublishingJob.findByPk(jobId);
   if (!job) throw new WorkflowError('Job not found', 404, 'NotFound');
   const state = job.state as PublishingJobState;
-  if (state === 'published' || state === 'cancelled') {
+  // A published job whose receipt is a handoff nobody completed has posted nothing; that one
+  // CAN be cancelled, and cancelling it retires the pending package too.
+  const pendingHandoff = state === 'published'
+    ? await ExternalPublication.findOne({ where: { publishing_job_id: job.id, current_status: 'handoff_pending' } })
+    : null;
+  if ((state === 'published' && !pendingHandoff) || state === 'cancelled') {
     throw new WorkflowError(`A ${state} job cannot be cancelled.`, 409, 'NotCancellable');
   }
+  const now = new Date();
+  if (pendingHandoff) {
+    await pendingHandoff.update({ current_status: 'cancelled', removed_at: now, removed_reason: (reason ?? 'handoff cancelled').slice(0, 200) });
+  }
   await job.update({ state: 'cancelled' as PublishingJobState, claimed_by: null, claimed_at: null, next_retry_at: null });
-  await internalEvent(job, job.provider, 'manual_cancel', `Cancelled by ${actor.email ?? 'unknown'}${reason ? `: ${reason}` : ''}.`, { previous_state: state });
+  await internalEvent(job, job.provider, 'manual_cancel', `Cancelled by ${actor.email ?? 'unknown'}${reason ? `: ${reason}` : ''}.`, { previous_state: state, handoff_cancelled: Boolean(pendingHandoff) });
+  if (pendingHandoff) await reconcileItemStatus(job.content_item_id, job.scheduled_occurrence, now);
   return job;
 }

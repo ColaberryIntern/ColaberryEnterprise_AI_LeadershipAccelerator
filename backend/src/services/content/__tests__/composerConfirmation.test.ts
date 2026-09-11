@@ -157,6 +157,17 @@ describe('readiness tells the buttons what they may do, with reasons', () => {
     expect(c.readiness.reasons).toContain('1 validation blocker must be fixed.');
   });
 
+  it('the publish button says what will actually happen, per the registry', () => {
+    // Every provider is handoff today (no app approved, no account connected).
+    const c = buildConfirmation(input());
+    expect(c.accounts.every((a) => a.mode === 'handoff')).toBe(true);
+    expect(c.readiness.publishLabel).toBe('Create handoff packages');
+    // No accounts at all: the plain label, and nothing to publish anyway.
+    const none = buildConfirmation(input({ variants: [], links: [], validation: { ok: true, blockers: [] } }));
+    expect(none.readiness.publishLabel).toBe('Publish now');
+    expect(none.readiness.canPublishNow).toBe(false);
+  });
+
   it('an approved item with no time set is told to pick one', () => {
     const c = buildConfirmation(input({ item: { ...input().item, scheduled_for: null } }));
     expect(c.readiness.canSchedule).toBe(false);

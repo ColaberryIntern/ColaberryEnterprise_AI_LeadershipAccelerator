@@ -3,16 +3,17 @@ import { z } from 'zod';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import { ContentItem } from '../../models';
 import { adminTenantScope, scopeAllows } from '../../modules/tenancy/adminScopeBridge';
-import { PROVIDER_KEYS, decidePublishMode, getProviderCapabilities } from '../../services/publishing/providerCapabilities';
-import { CONTENT_ITEM_STATUSES } from '../../models/ContentItem';
+import { PROVIDER_KEYS, decidePublishMode, getProviderCapabilities, type ProviderKey } from '../../services/publishing/providerCapabilities';
+import { CONTENT_ITEM_STATUSES, type ContentItemStatus } from '../../models/ContentItem';
 import {
   editItemVariant,
   generateItemVariants,
   revertItemVariant,
   validateItem,
 } from '../../services/content/composerService';
-import { assertWritable, transitionContentItem, WorkflowError } from '../../services/content/contentWorkflowService';
+import { transitionContentItem, WorkflowError } from '../../services/content/contentWorkflowService';
 import { generateItemLinks } from '../../services/content/composerLinkService';
+import { updateItemDraft } from '../../services/content/composerEdits';
 import { buildItemConfirmation } from '../../services/content/composerConfirmationService';
 import { COMPOSER_ACTIONS, runComposerAction, type ComposerAction } from '../../services/content/composerActionService';
 import { APPROVAL_DECISIONS, decideApproval, type ApprovalDecision } from '../../services/content/contentApprovalService';
@@ -100,6 +101,10 @@ async function visibleItem(req: Request, id: string): Promise<ContentItem | null
   return item;
 }
 
+function actorOf(req: Request) {
+  return { adminId: req.admin?.sub ?? null, email: req.admin?.email ?? null };
+}
+
 router.post('/api/admin/content', requireAdmin, async (req: Request, res: Response) => {
   const parsed = CreateDraftSchema.safeParse(req.body);
   if (!parsed.success) return bad(res, parsed.error.flatten());
@@ -122,6 +127,7 @@ router.post('/api/admin/content', requireAdmin, async (req: Request, res: Respon
       status: 'draft',
       created_by: req.admin?.email ?? null,
       metadata: { isPaid: parsed.data.is_paid, hasOffer: parsed.data.has_offer, kinds: parsed.data.kinds },
+      // Sequelize's creation-attributes type predates the model's `declare` fields (repo idiom).
     } as any);
     res.status(201).json({ item });
   } catch (err) { fail(res, err, 'composer_create_failed'); }
@@ -181,16 +187,9 @@ router.patch('/api/admin/content/:id', requireAdmin, async (req: Request, res: R
   const parsed = UpdateDraftSchema.safeParse(req.body);
   if (!parsed.success) return bad(res, parsed.error.flatten());
   try {
-    const item = await visibleItem(req, id.data);
-    if (!item) return void res.status(404).json(NOT_FOUND);
-    assertWritable(item);
-    const { scheduled_for, ...rest } = parsed.data;
-    await item.update({
-      ...rest,
-      ...(scheduled_for !== undefined ? { scheduled_for: scheduled_for ? new Date(scheduled_for) : null } : {}),
-      revision: (item.revision ?? 0) + 1,
-    } as any);
-    res.json({ item });
+    if (!(await visibleItem(req, id.data))) return void res.status(404).json(NOT_FOUND);
+    const { item, invalidation } = await updateItemDraft(id.data, parsed.data, actorOf(req));
+    res.json({ item, invalidation });
   } catch (err) { fail(res, err, 'composer_update_failed'); }
 });
 
@@ -201,8 +200,8 @@ router.post('/api/admin/content/:id/variants/generate', requireAdmin, async (req
   if (!parsed.success) return bad(res, parsed.error.flatten());
   try {
     if (!(await visibleItem(req, id.data))) return void res.status(404).json(NOT_FOUND);
-    const variants = await generateItemVariants(id.data, parsed.data.providers as any);
-    res.json({ variants });
+    const { result: variants, item, invalidation } = await generateItemVariants(id.data, parsed.data.providers as ProviderKey[], actorOf(req));
+    res.json({ variants, item, invalidation });
   } catch (err) { fail(res, err, 'composer_generate_failed'); }
 });
 
@@ -214,8 +213,8 @@ router.patch('/api/admin/content/:id/variants/:provider', requireAdmin, async (r
   if (!parsed.success) return bad(res, parsed.error.flatten());
   try {
     if (!(await visibleItem(req, id.data))) return void res.status(404).json(NOT_FOUND);
-    const variant = await editItemVariant(id.data, provider.data as any, parsed.data.text, req.admin?.email ?? null);
-    res.json({ variant });
+    const { result: variant, item, invalidation } = await editItemVariant(id.data, provider.data as ProviderKey, parsed.data.text, actorOf(req));
+    res.json({ variant, item, invalidation });
   } catch (err) { fail(res, err, 'composer_edit_failed'); }
 });
 
@@ -225,7 +224,8 @@ router.post('/api/admin/content/:id/variants/:provider/revert', requireAdmin, as
   if (!id.success || !provider.success) return bad(res, { id: id.success, provider: provider.success });
   try {
     if (!(await visibleItem(req, id.data))) return void res.status(404).json(NOT_FOUND);
-    res.json({ variant: await revertItemVariant(id.data, provider.data as any) });
+    const { result: variant, item, invalidation } = await revertItemVariant(id.data, provider.data as ProviderKey, actorOf(req));
+    res.json({ variant, item, invalidation });
   } catch (err) { fail(res, err, 'composer_revert_failed'); }
 });
 
@@ -245,7 +245,7 @@ router.post('/api/admin/content/:id/transition', requireAdmin, async (req: Reque
   if (!parsed.success) return bad(res, parsed.error.flatten());
   try {
     if (!(await visibleItem(req, id.data))) return void res.status(404).json(NOT_FOUND);
-    const { item, result } = await transitionContentItem(id.data, parsed.data.to as any);
+    const { item, result } = await transitionContentItem(id.data, parsed.data.to as ContentItemStatus);
     res.json({ item, result });
   } catch (err) { fail(res, err, 'composer_transition_failed'); }
 });
@@ -277,7 +277,7 @@ router.post('/api/admin/content/:id/action', requireAdmin, async (req: Request, 
   if (!parsed.success) return bad(res, parsed.error.flatten());
   try {
     if (!(await visibleItem(req, id.data))) return void res.status(404).json(NOT_FOUND);
-    const actor = { adminId: req.admin?.sub ?? null, email: req.admin?.email ?? null };
+    const actor = actorOf(req);
     const when = parsed.data.scheduled_for ? new Date(parsed.data.scheduled_for) : null;
     const result = await runComposerAction(id.data, parsed.data.action as ComposerAction, actor, when);
     res.json({
@@ -299,7 +299,7 @@ router.post('/api/admin/content/:id/approval', requireAdmin, async (req: Request
   if (!parsed.success) return bad(res, parsed.error.flatten());
   try {
     if (!(await visibleItem(req, id.data))) return void res.status(404).json(NOT_FOUND);
-    const actor = { adminId: req.admin?.sub ?? null, email: req.admin?.email ?? null };
+    const actor = actorOf(req);
     const { item, request } = await decideApproval(id.data, parsed.data.decision as ApprovalDecision, actor, parsed.data.note ?? null);
     res.json({ item, request });
   } catch (err) { fail(res, err, 'composer_approval_failed'); }

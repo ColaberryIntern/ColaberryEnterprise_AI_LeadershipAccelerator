@@ -1,4 +1,5 @@
 import { Brand, ContentItem, ContentVariant, ExternalPublication } from '../../models';
+import { sequelize } from '../../config/database';
 import type { ImportException, MappedPost } from './loomlyImport';
 
 /**
@@ -22,6 +23,11 @@ import type { ImportException, MappedPost } from './loomlyImport';
  *
  * IDEMPOTENT ON THE DEDUP KEY. Every row this writes carries `metadata.loomlyKey`; a re-run
  * of the same file finds them and records `duplicate_existing` instead of inserting.
+ *
+ * ATOMIC PER POST. A history post is three rows (item, variant, publication) written in one
+ * transaction. Without it, a failure after the first create would leave an item carrying
+ * the loomlyKey with no variant or publication, and every re-run would then skip it as
+ * `duplicate_existing` and never repair it - the verifier's finding.
  */
 
 export const PROVENANCE = 'loomly_import';
@@ -92,61 +98,67 @@ export function sequelizeLoomlyStore(): LoomlyImportStore {
       return hit !== null;
     },
     async insertHistory({ tenantId, brandId, post }) {
-      const item = await ContentItem.create({
-        tenant_id: tenantId,
-        brand_id: brandId,
-        campaign_id: null,
-        title: `[Loomly] ${post.text.slice(0, 80) || post.provider}`,
-        canonical_body: post.text,
-        content_type: post.mediaUrls.length > 0 ? 'image' : 'text',
-        status: 'published',
-        created_by: post.author,
-        scheduled_for: post.scheduledFor ? new Date(post.scheduledFor) : null,
-        published_at: post.publishedAt ? new Date(post.publishedAt) : null,
-        human_approved: true,
-        metadata: {
-          provenance: PROVENANCE, readOnly: true, loomlyKey: post.key, keyStrength: post.keyStrength,
-          loomlyStatus: post.loomlyStatus, loomlyCalendar: post.calendar, labels: post.labels, mediaUrls: post.mediaUrls, importedAt: new Date().toISOString(),
-        },
-      } as any);
-      await ContentVariant.create({
-        content_item_id: item.id, provider: post.provider, body: post.text, link_url: post.permalink,
-        validation_state: 'valid', metadata: { provenance: PROVENANCE, account: post.account },
-      } as any);
-      await ExternalPublication.create({
-        publishing_job_id: null,
-        tenant_id: tenantId,
-        brand_id: brandId,
-        content_item_id: item.id,
-        provider: post.provider,
-        external_id: post.externalId ?? post.permalink ?? `loomly:${post.key}`,
-        permalink: post.permalink,
-        published_at: post.publishedAt ? new Date(post.publishedAt) : null,
-        current_status: 'live',
-        metadata: { mode: 'imported', provenance: PROVENANCE, loomlyKey: post.key, account: post.account, keyStrength: post.keyStrength },
-      } as any);
+      await sequelize.transaction(async (t) => {
+        const item = await ContentItem.create({
+          tenant_id: tenantId,
+          brand_id: brandId,
+          campaign_id: null,
+          title: `[Loomly] ${post.text.slice(0, 80) || post.provider}`,
+          canonical_body: post.text,
+          content_type: post.mediaUrls.length > 0 ? 'image' : 'text',
+          status: 'published',
+          created_by: post.author,
+          scheduled_for: post.scheduledFor ? new Date(post.scheduledFor) : null,
+          published_at: post.publishedAt ? new Date(post.publishedAt) : null,
+          human_approved: true,
+          metadata: {
+            provenance: PROVENANCE, readOnly: true, loomlyKey: post.key, keyStrength: post.keyStrength,
+            loomlyStatus: post.loomlyStatus, loomlyCalendar: post.calendar, labels: post.labels, mediaUrls: post.mediaUrls, importedAt: new Date().toISOString(),
+          },
+        // Sequelize's creation-attributes type predates the models' `declare` fields; the casts
+        // on create() below are the repo's idiom, not a loosening of the row's contract.
+        } as any, { transaction: t });
+        await ContentVariant.create({
+          content_item_id: item.id, provider: post.provider, body: post.text, link_url: post.permalink,
+          validation_state: 'valid', metadata: { provenance: PROVENANCE, account: post.account },
+        } as any, { transaction: t });
+        await ExternalPublication.create({
+          publishing_job_id: null,
+          tenant_id: tenantId,
+          brand_id: brandId,
+          content_item_id: item.id,
+          provider: post.provider,
+          external_id: post.externalId ?? post.permalink ?? `loomly:${post.key}`,
+          permalink: post.permalink,
+          published_at: post.publishedAt ? new Date(post.publishedAt) : null,
+          current_status: 'live',
+          metadata: { mode: 'imported', provenance: PROVENANCE, loomlyKey: post.key, account: post.account, keyStrength: post.keyStrength },
+        } as any, { transaction: t });
+      });
     },
     async insertDraft({ tenantId, brandId, post }) {
-      const item = await ContentItem.create({
-        tenant_id: tenantId,
-        brand_id: brandId,
-        campaign_id: null,
-        title: `[Loomly] ${post.text.slice(0, 80) || post.provider}`,
-        canonical_body: post.text,
-        content_type: post.mediaUrls.length > 0 ? 'image' : 'text',
-        status: 'draft',
-        created_by: post.author,
-        // Deliberately NOT scheduled_for: an imported schedule is a claim to verify, not a queue entry.
-        scheduled_for: null,
-        metadata: {
-          provenance: PROVENANCE, readOnly: false, needsVerification: post.kind === 'scheduled_draft', loomlyKey: post.key,
-          loomlyScheduledFor: post.scheduledFor, loomlyStatus: post.loomlyStatus, loomlyCalendar: post.calendar, labels: post.labels, mediaUrls: post.mediaUrls,
-          importedAt: new Date().toISOString(),
-        },
-      } as any);
-      await ContentVariant.create({
-        content_item_id: item.id, provider: post.provider, body: post.text, metadata: { provenance: PROVENANCE, account: post.account },
-      } as any);
+      await sequelize.transaction(async (t) => {
+        const item = await ContentItem.create({
+          tenant_id: tenantId,
+          brand_id: brandId,
+          campaign_id: null,
+          title: `[Loomly] ${post.text.slice(0, 80) || post.provider}`,
+          canonical_body: post.text,
+          content_type: post.mediaUrls.length > 0 ? 'image' : 'text',
+          status: 'draft',
+          created_by: post.author,
+          // Deliberately NOT scheduled_for: an imported schedule is a claim to verify, not a queue entry.
+          scheduled_for: null,
+          metadata: {
+            provenance: PROVENANCE, readOnly: false, needsVerification: post.kind === 'scheduled_draft', loomlyKey: post.key,
+            loomlyScheduledFor: post.scheduledFor, loomlyStatus: post.loomlyStatus, loomlyCalendar: post.calendar, labels: post.labels, mediaUrls: post.mediaUrls,
+            importedAt: new Date().toISOString(),
+          },
+        } as any, { transaction: t });
+        await ContentVariant.create({
+          content_item_id: item.id, provider: post.provider, body: post.text, metadata: { provenance: PROVENANCE, account: post.account },
+        } as any, { transaction: t });
+      });
     },
   };
 }

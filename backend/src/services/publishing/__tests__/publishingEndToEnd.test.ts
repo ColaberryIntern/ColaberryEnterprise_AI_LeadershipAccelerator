@@ -139,7 +139,11 @@ describe('compose -> approval -> scheduled job -> receipt, dry-run adapter only'
     const { factory, made } = adapters();
     await runDueJobs({ now: () => AFTER, killSwitch: async () => false, adapterFor: factory, workerId: 'w-1' });
     const job = models.PublishingJob.rows[0];
-    await job.update({ state: 'pending' }); // pretend the success write was lost
+    // Pretend the job's success write was lost. The item would then still be `publishing`
+    // (reconciliation needs every job settled), so put it there too; a re-run against an
+    // item that is already `published` is refused as ItemNotPublishable by design.
+    await job.update({ state: 'pending' });
+    await (await models.ContentItem.findByPk(itemId))!.update({ status: 'publishing' });
     const r = await runDueJobs({ now: () => AFTER, killSwitch: async () => false, adapterFor: factory, workerId: 'w-2' });
     expect(r.published).toBe(1);
     expect(models.ExternalPublication.rows).toHaveLength(2); // no third row

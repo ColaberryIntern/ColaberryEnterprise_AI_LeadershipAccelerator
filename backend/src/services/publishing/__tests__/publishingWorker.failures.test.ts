@@ -200,6 +200,20 @@ describe('handoff: a receipt a person completes', () => {
     await expect(completeHandoff(pub.id, { externalId: 'again', permalink: null }, ACTOR)).rejects.toMatchObject({ errorClass: 'NotHandoffPending' });
   });
 
+  it('a pending handoff can be cancelled: the package is retired, the job cancelled, the item settles', async () => {
+    const itemId = await seedScheduled(['meta_instagram']);
+    await tick(makeAdapterFactory('live', () => NOW));
+    const job = models.PublishingJob.rows[0];
+    expect(job.state).toBe('published');
+    const cancelled = await cancelJob(job.id, ACTOR, 'wrong week');
+    expect(cancelled.state).toBe('cancelled');
+    expect(models.ExternalPublication.rows[0].current_status).toBe('cancelled');
+    expect(models.ExternalPublication.rows[0].removed_reason).toBe('wrong week');
+    // Nothing went out for this occurrence; the item is no longer parked in publishing.
+    expect((await models.ContentItem.findByPk(itemId))!.status).toBe('publish_failed');
+    await expect(completeHandoff(models.ExternalPublication.rows[0].id, { externalId: 'late', permalink: null }, ACTOR)).rejects.toMatchObject({ errorClass: 'NotHandoffPending' });
+  });
+
   it('two handoffs cannot be completed with the same real id', async () => {
     await seedScheduled(['meta_instagram']);
     await seedScheduled(['meta_instagram']);

@@ -229,9 +229,11 @@ describe('what invalidation does NOT trip on', () => {
   it('an invalidated item lands in draft, and only approved/scheduled items hold an approval', () => {
     expect(STATUS_AFTER_INVALIDATION).toBe('draft');
     expect(STATUSES_HOLDING_AN_APPROVAL).toEqual(['approved', 'scheduled']);
-    // And the machine agrees: both can legally return to draft.
+    // And the machine agrees: BOTH can legally return to draft. The earlier form of this
+    // assertion (`draft || approved`) passed for `scheduled` while recordEdit left a
+    // scheduled item scheduled - the verifier's finding. Strict now.
     for (const s of STATUSES_HOLDING_AN_APPROVAL) {
-      expect(canTransition(s, 'draft') || canTransition(s, 'approved')).toBe(true);
+      expect(canTransition(s, STATUS_AFTER_INVALIDATION)).toBe(true);
     }
   });
 });

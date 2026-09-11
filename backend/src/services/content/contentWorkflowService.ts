@@ -1,4 +1,4 @@
-import { ContentApprovalEvent, ContentApprovalRequest, ContentItem } from '../../models';
+import { ContentApprovalEvent, ContentApprovalRequest, ContentItem, PublishingJob } from '../../models';
 import type { ContentItemStatus } from '../../models/ContentItem';
 import {
   approvalInvalidatedBy,
@@ -110,6 +110,19 @@ export async function recordEdit(
   const reason = `Edited after approval: ${invalidation.fields.join(', ')} changed.`;
   const now = new Date();
 
+  // A scheduled item has jobs waiting to publish the copy that was just changed. They are
+  // cancelled here, in the same operation that invalidates the approval, so the item can
+  // legally return to draft with nothing live behind it. Published/claimed jobs are left
+  // alone: what already went out is history, and what is mid-flight settles on its own.
+  let jobsCancelled = 0;
+  if (item.status === 'scheduled') {
+    const [n] = await PublishingJob.update(
+      { state: 'cancelled', claimed_by: null, claimed_at: null, next_retry_at: null },
+      { where: { content_item_id: itemId, state: ['pending', 'retrying'] } },
+    );
+    jobsCancelled = n;
+  }
+
   const openApprovals = await ContentApprovalRequest.findAll({
     where: { content_item_id: itemId, status: 'approved' },
   });
@@ -125,7 +138,7 @@ export async function recordEdit(
       note: reason,
       // The field list travels in the payload so a reader can see WHAT broke the approval
       // without reconstructing two snapshots.
-      payload: { fields: invalidation.fields, revision_before: item.revision, revision_after: revision },
+      payload: { fields: invalidation.fields, revision_before: item.revision, revision_after: revision, jobs_cancelled: jobsCancelled },
       occurred_at: now,
     } as any);
   }

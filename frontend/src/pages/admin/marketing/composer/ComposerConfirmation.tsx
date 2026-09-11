@@ -149,7 +149,10 @@ export default function ComposerConfirmation({ summary, busy, onAction }: Compos
         <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || !readiness.canSaveDraft} onClick={() => onAction('save_draft')}>Save draft</button>
         <button type="button" className="btn btn-outline-primary btn-sm" disabled={busy || !readiness.canSendForApproval} onClick={() => onAction('send_for_approval')}>Send for approval</button>
         <button type="button" className="btn btn-primary btn-sm" disabled={busy || !readiness.canSchedule} onClick={() => onAction('schedule')}>Schedule</button>
-        <button type="button" className="btn btn-danger btn-sm" disabled={busy || !readiness.canPublishNow} onClick={() => onAction('publish_now')}>Publish now</button>
+        {/* The label is the server's, from the registry's per-account decision: "Publish now"
+            only when every account publishes directly, "Create handoff packages" when none
+            does. Spec 8.2: never a fake Publish button. */}
+        <button type="button" className="btn btn-danger btn-sm" disabled={busy || !readiness.canPublishNow} onClick={() => onAction('publish_now')}>{readiness.publishLabel}</button>
       </div>
       {readiness.reasons.length > 0 && (
         <ul className="small text-muted mt-2 mb-0" data-testid="confirm-reasons">

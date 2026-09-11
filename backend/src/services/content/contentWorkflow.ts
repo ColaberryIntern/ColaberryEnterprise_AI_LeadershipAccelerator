@@ -33,7 +33,10 @@ export const TRANSITIONS: Record<ContentItemStatus, readonly ContentItemStatus[]
   // An approved item that is edited on an invalidating field goes BACK to draft via
   // invalidation, never straight to scheduled with a stale approval.
   approved: ['scheduled', 'draft', 'archived', 'expired'],
-  scheduled: ['publishing', 'approved', 'cancelled', 'expired'],
+  // 'draft' is reachable from scheduled ONLY through invalidation (recordEdit): an edit to
+  // approved copy after it was queued. recordEdit cancels the queued jobs in the same
+  // operation, so a scheduled item never goes back to draft with a live job behind it.
+  scheduled: ['publishing', 'approved', 'cancelled', 'expired', 'draft'],
   publishing: ['published', 'publish_failed', 'partially_published'],
   published: ['removed_by_provider', 'archived'],
   // Exceptional states and where they can go.

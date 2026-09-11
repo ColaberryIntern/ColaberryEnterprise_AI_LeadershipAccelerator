@@ -118,7 +118,7 @@ export interface ConfirmationSummary {
     request: { status: string; requested_by: string | null; requested_at: string; decided_by: string | null; decided_at: string | null; decision_note: string | null } | null;
   };
   validation: { ran: boolean; ok: boolean; blockerCount: number; blockers: VariantProblem[] };
-  readiness: { canSaveDraft: boolean; canSendForApproval: boolean; canSchedule: boolean; canPublishNow: boolean; reasons: string[] };
+  readiness: { canSaveDraft: boolean; canSendForApproval: boolean; canSchedule: boolean; canPublishNow: boolean; publishLabel: string; reasons: string[] };
 }
 
 export type ComposerAction = 'save_draft' | 'send_for_approval' | 'schedule' | 'publish_now';

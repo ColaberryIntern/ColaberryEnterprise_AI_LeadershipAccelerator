@@ -43,7 +43,7 @@ const SUMMARY: ConfirmationSummary = {
   linkGaps: ['meta_instagram'],
   approval: { label: 'Approved', itemStatus: 'approved', humanApproved: true, request: { status: 'approved', requested_by: 'sohail@colaberry.com', requested_at: '2026-10-30T12:00:00.000Z', decided_by: 'ali@colaberry.com', decided_at: '2026-10-30T14:00:00.000Z', decision_note: null } },
   validation: { ran: true, ok: true, blockerCount: 0, blockers: [] },
-  readiness: { canSaveDraft: true, canSendForApproval: false, canSchedule: true, canPublishNow: true, reasons: [] },
+  readiness: { canSaveDraft: true, canSendForApproval: false, canSchedule: true, canPublishNow: true, publishLabel: 'Publish now', reasons: [] },
 };
 
 function render(summary: ConfirmationSummary, onAction: (a: ComposerAction) => void = () => undefined, busy = false) {
@@ -185,10 +185,17 @@ describe('actions follow the server readiness verdict', () => {
   it('a refusal prints its reasons next to the buttons', () => {
     render({
       ...SUMMARY,
-      readiness: { canSaveDraft: true, canSendForApproval: true, canSchedule: false, canPublishNow: false, reasons: ['Publishing needs an approved item; this one is draft.'] },
+      readiness: { canSaveDraft: true, canSendForApproval: true, canSchedule: false, canPublishNow: false, publishLabel: 'Publish now', reasons: ['Publishing needs an approved item; this one is draft.'] },
     });
     expect(buttons()['Publish now'].disabled).toBe(true);
     expect(block('confirm-reasons').textContent).toContain('Publishing needs an approved item; this one is draft.');
+  });
+
+  it('the publish button carries the server label, so seven handoffs never read as Publish', () => {
+    render({ ...SUMMARY, readiness: { ...SUMMARY.readiness, publishLabel: 'Create handoff packages' } });
+    const b = buttons();
+    expect(b['Create handoff packages']).toBeDefined();
+    expect(b['Publish now']).toBeUndefined();
   });
 
   it('busy disables everything regardless of readiness', () => {
