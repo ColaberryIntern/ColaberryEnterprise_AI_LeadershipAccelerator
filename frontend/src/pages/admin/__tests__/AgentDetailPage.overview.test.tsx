@@ -99,6 +99,20 @@ async function openOverviewTab() {
   });
 }
 
+// Checkpoint H (2026-09-10) — Overview's nine flat sections became seven
+// sub-tabs (see AgentOverviewTab.tsx). Every sub-tab's own nav-pill label
+// text is always present in the DOM (it's the button text), so asserting
+// on a label alone no longer proves that section's real content rendered —
+// the sub-tab has to actually be clicked first.
+async function openOverviewSubTab(label: string) {
+  const subTabButton = Array.from(container.querySelectorAll('.nav-pills button')).find((b) => b.textContent?.trim() === label);
+  if (!subTabButton) throw new Error(`Overview sub-tab "${label}" not found`);
+  await act(async () => {
+    subTabButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   listDirectives.mockResolvedValue([]);
@@ -119,13 +133,24 @@ afterEach(() => {
 });
 
 describe('AgentDetailPage — Overview tab', () => {
-  it('is not shown on mount (At a Glance is the default), and shows real Identity/system-prompt content once opened', async () => {
+  it('is not shown on mount (At a Glance is the default), and Identity is the default sub-tab once opened', async () => {
     await renderAgentPage();
     expect(container.textContent).not.toContain('Identity');
 
     await openOverviewTab();
-    expect(container.textContent).toContain('Identity');
-    expect(container.textContent).toContain('System prompt');
+    // Identity is the default sub-tab: its real content shows with no sub-tab click.
+    // DETAIL's identity is null, so the honest "no linked identity" state is
+    // the real content here — still proof the Identity sub-tab, not some
+    // other sub-tab, rendered by default.
+    expect(container.textContent).toContain('No linked staff identity yet.');
+    // The other sub-tabs' real content is not rendered until clicked.
+    expect(container.textContent).not.toContain('You are CoryBrain.');
+  });
+
+  it('shows the real system prompt once the System prompt sub-tab is opened', async () => {
+    await renderAgentPage();
+    await openOverviewTab();
+    await openOverviewSubTab('System prompt');
     expect(container.textContent).toContain('You are CoryBrain.');
   });
 

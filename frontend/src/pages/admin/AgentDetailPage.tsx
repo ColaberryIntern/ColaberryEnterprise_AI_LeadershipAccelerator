@@ -99,6 +99,17 @@ import AgentTrustControlTab from '../../components/admin/AgentTrustControlTab';
 // tab key, so At a Glance's click-through target needed no change), and
 // "Overview" (AgentOverviewTab.tsx, unchanged) returns to being its own
 // top-level tab. Tab count goes to eight.
+//
+// Checkpoint H (2026-09-10) — same session, Ali's next request: "Overview
+// should have subtabs." AgentOverviewTab.tsx's nine flat sections become
+// seven sub-tabs (Identity, Trust, System prompt, Reports to, Tools,
+// Scheduled tasks, Tickets) — see that file for the full breakdown. Role
+// Charter moves from Trust & Control into Identity (a real relocation,
+// Ali's own wording); AgentTrustControlTab no longer takes an `agentName`
+// prop as a result. Reports to gains a real Mermaid diagram of this
+// agent's own upward chain, built client-side from the existing
+// reports_to.trail data — no backend change needed. Top-level tab count
+// stays at eight; this checkpoint only restructures what's inside Overview.
 
 type TabKey = 'glance' | 'command' | 'overview' | 'work' | 'talk' | 'reports' | 'performance' | 'trust';
 const TABS: Array<{ key: TabKey; label: string; icon: string }> = [
@@ -374,7 +385,7 @@ export default function AgentDetailPage() {
       {activeTab === 'talk' && <AgentTalkTab agentId={id} />}
       {activeTab === 'reports' && <AgentReportsTab agentId={id} />}
       {activeTab === 'performance' && <AgentPerformanceTab agentId={id} />}
-      {activeTab === 'trust' && <AgentTrustControlTab agentId={id} agentName={displayName} detail={detail} />}
+      {activeTab === 'trust' && <AgentTrustControlTab agentId={id} detail={detail} />}
     </>
   );
 }
