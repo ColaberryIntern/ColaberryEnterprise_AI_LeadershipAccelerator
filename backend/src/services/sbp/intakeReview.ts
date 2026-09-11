@@ -52,10 +52,28 @@ export type ReviewGroup =
   | 'openQuestions'
   | 'unknowns';
 
+/**
+ * Human-facing heading per dimension. The student's words, not our schema's.
+ * Lives here, with the review, and Story 000 imports it, so the wizard and the
+ * repo document say the same thing about the same fact.
+ */
+export const DIMENSION_HEADING: Readonly<Record<string, string>> = {
+  problem: 'What you are building',
+  approval_points: 'What a person checks before it acts',
+  systems: 'What it has to work with',
+  human_only_decisions: 'What stays a human call',
+  success_definition: 'What good looks like',
+  actors: 'Who uses it',
+  current_workflow: 'How it starts, and how often',
+  desired_outcome: 'What would make someone say they did not know it could do that',
+};
+
 export interface ReviewItem {
   /** Stable within one review, so a correction can name which item it fixes. */
   readonly index: number;
   readonly dimension: UnderstandingDimension;
+  /** The dimension as a person would say it. Falls back to the raw name. */
+  readonly label: string;
   readonly value: string;
   readonly group: ReviewGroup;
   /** The student's own words this came from, when it came from words. */
@@ -94,6 +112,7 @@ export function buildIntakeReview(items: readonly UnderstandingItem[]): IntakeRe
   const reviewItems: ReviewItem[] = items.map((item, index) => ({
     index,
     dimension: item.dimension,
+    label: DIMENSION_HEADING[item.dimension] ?? item.dimension,
     value: item.value,
     group: groupOf(item),
     quote: item.source_quote ?? null,

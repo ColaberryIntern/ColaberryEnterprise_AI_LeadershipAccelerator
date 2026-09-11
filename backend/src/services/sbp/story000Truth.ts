@@ -1,5 +1,5 @@
 import { remainingAngles } from './projectDiscoveryCall';
-import { groupOf } from './intakeReview';
+import { DIMENSION_HEADING, groupOf } from './intakeReview';
 import { ANGLE_TO_DIMENSION } from './intakeTruth';
 import type { UnderstandingItem } from '../delivery/projectUnderstanding';
 
@@ -38,20 +38,11 @@ export interface Story000TruthInput {
   readonly revision?: number | null;
 }
 
-/** Human-facing heading per dimension. The student's words, not our schema's. */
-const DIMENSION_HEADING: Readonly<Record<string, string>> = {
-  problem: 'What you are building',
-  approval_points: 'What a person checks before it acts',
-  systems: 'What it has to work with',
-  human_only_decisions: 'What stays a human call',
-  success_definition: 'What good looks like',
-  actors: 'Who uses it',
-  current_workflow: 'How it starts, and how often',
-  desired_outcome: 'What would make someone say they did not know it could do that',
-};
-
-/** What a still-unanswered angle costs, said plainly rather than as a label. */
-const UNANSWERED_COST: Readonly<Record<string, string>> = {
+/**
+ * What a still-unanswered angle costs, said plainly rather than as a label.
+ * Exported so the pre-build preview says the same words Story 000 will.
+ */
+export const UNANSWERED_COST: Readonly<Record<string, string>> = {
   'THE GUARDRAIL': 'nobody has said what a person should check before this acts',
   'THE TOOLS': 'the systems it must read from and write to are not settled',
   'WHEN IT IS NOT SURE': 'what it does when it is uncertain is undecided',
