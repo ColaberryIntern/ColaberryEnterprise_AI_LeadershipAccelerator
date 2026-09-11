@@ -69,7 +69,7 @@
 .adv2-facts a.adv2-link { font-weight: 500; }
 .adv2-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--adv2-ok); margin-right: 6px; vertical-align: 1px; }
 .adv2-dot.adv2-neutral { background: var(--adv2-ink-3); }
-.adv2-tabs { display: flex; gap: 4px; margin: 16px 0 0 -8px; overflow: auto; }
+.adv2-tabs { display: flex; gap: 4px; margin: 16px 0 0 -8px; overflow-x: auto; overflow-y: hidden; }
 .adv2-tab { padding: 9px 10px 12px; border: 0; background: none; color: var(--adv2-ink-2); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
 .adv2-tab:hover { color: var(--adv2-ink); }
 .adv2-tab[aria-selected="true"] { color: var(--adv2-ink); border-bottom-color: var(--adv2-ink); font-weight: 500; }
