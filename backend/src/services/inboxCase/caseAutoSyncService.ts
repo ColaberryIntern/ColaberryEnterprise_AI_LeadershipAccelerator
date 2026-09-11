@@ -13,6 +13,7 @@ import { toCandidate as hotmailToCandidate } from './sources/hotmailCaseSource';
 import { todoToCandidate, fetchExactReference, resolveDigestTodoByTitle } from './sources/basecampCaseSource';
 import { RawCandidateItem } from './sources/caseSourceAdapter';
 import { ScoredCandidate, groupCandidates } from './caseGroupingService';
+import { reopenCasesOnNewReplies } from './caseReopenService';
 import { computeSourceHash, BasecampReference, parseDigestTodoLines, isBasecampDigestSender } from './textNormalization';
 import { persistClusterAsCase, DiscoveredCaseSummary, MAX_CANDIDATES_PER_CASE } from './caseDiscoveryService';
 import { logCaseEvent } from './caseEventLog';
@@ -39,6 +40,8 @@ export interface AutoSyncResult {
   newCasesCreated: number;
   itemsAdded: number;
   emailsSkippedUnclassified: number;
+  /** Cases reopened because a new reply arrived on a thread they own (/inbox-zero T7). */
+  casesReopened: number;
 }
 
 async function readCursor(): Promise<Date> {
@@ -336,7 +339,7 @@ export async function runAutoSync(triggeredBy: 'cron' | 'admin', requestedBy: st
     // the same moment). The caller's own toast/result is a minor UX
     // trade-off in this rare case — the frontend's progress bar polls
     // getSyncStatus() separately for the real, in-flight picture.
-    return { newCasesCreated: 0, itemsAdded: 0, emailsSkippedUnclassified: 0 };
+    return { newCasesCreated: 0, itemsAdded: 0, emailsSkippedUnclassified: 0, casesReopened: 0 };
   }
 
   syncStatus = { inProgress: true, stage: 'fetching_email', startedAt: new Date().toISOString(), lastCompletedAt: syncStatus.lastCompletedAt, lastResult: syncStatus.lastResult };
@@ -368,7 +371,13 @@ export async function runAutoSync(triggeredBy: 'cron' | 'admin', requestedBy: st
 
     syncStatus = { ...syncStatus, stage: 'clustering_and_removing_stale' };
     const scored = surviving.map(toScoredCandidate);
-    const clusters = groupCandidates(scored);
+
+    // /inbox-zero T7: a new reply on a thread owned by a RESOLVED / WAITING /
+    // DELEGATED case reopens THAT case and attaches there, instead of
+    // spawning a second case with none of the first one's history. Runs on
+    // the already-filtered, in-scope list, so gate 1 still applies.
+    const reopen = await reopenCasesOnNewReplies(scored, correlationId);
+    const clusters = groupCandidates(reopen.passthrough);
 
     let newCasesCreated = 0;
     let itemsAdded = 0;
@@ -389,7 +398,12 @@ export async function runAutoSync(triggeredBy: 'cron' | 'admin', requestedBy: st
     await disposeItemsDeletedAtSource(correlationId);
     await writeCursor(runStartedAt);
 
-    const result: AutoSyncResult = { newCasesCreated, itemsAdded, emailsSkippedUnclassified: skippedUnclassified };
+    const result: AutoSyncResult = {
+      newCasesCreated,
+      itemsAdded: itemsAdded + reopen.attached,
+      emailsSkippedUnclassified: skippedUnclassified,
+      casesReopened: reopen.reopenedCaseIds.length,
+    };
     syncStatus = { inProgress: false, stage: null, startedAt: syncStatus.startedAt, lastCompletedAt: new Date().toISOString(), lastResult: result };
     return result;
   } finally {

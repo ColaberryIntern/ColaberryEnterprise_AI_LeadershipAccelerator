@@ -21,6 +21,16 @@ jest.mock('../caseTicketService', () => ({
   postCaseProgressNote: jest.fn(async () => {}),
 }));
 
+// /inbox-zero T5: verification now re-fetches external effects live
+// (externalVerifiers.ts). This file is about the verify LOOP's mechanics —
+// receipt-shape gate, auto-disposition, case transition — so the re-fetch is
+// stubbed to "verified" here. The three real outcomes (verified / missing /
+// unverifiable, with the bounded settle) are exercised in
+// caseVerificationService.liveRefetch.test.ts.
+jest.mock('../externalVerifiers', () => ({
+  verifyExternalEffect: jest.fn(async () => ({ kind: 'verified', detail: 'stubbed' })),
+}));
+
 import { verifyCase } from '../caseVerificationService';
 
 beforeEach(() => {

@@ -50,6 +50,7 @@ import cron from 'node-cron';
 import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } from './intelligence';
 import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
+import { ensureInboxCommitmentSchema } from './db/ensureInboxCommitmentSchema';
 import { ensureLeadViewPreferenceSchema } from './db/ensureLeadViewPreferenceSchema';
 import { ensureScholarshipInterviewSchema } from './db/ensureScholarshipInterviewSchema';
 import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
@@ -2434,6 +2435,8 @@ async function start(): Promise<void> {
   await ensureLiveSessionSchema();
   // Inbox Intel — Case Resolution Engine: 6 case-resolution tables (idempotent DDL).
   await ensureInboxCaseSchema();
+  // /inbox-zero commitment ledger (what Ali owes). Depends on inbox_cases above.
+  await ensureInboxCommitmentSchema();
   await ensureLeadViewPreferenceSchema();
   await ensureScholarshipInterviewSchema();
   // ProofDesk Work Ledger — Milestone 1 (Foundation): 4 ledger tables + 12 additive

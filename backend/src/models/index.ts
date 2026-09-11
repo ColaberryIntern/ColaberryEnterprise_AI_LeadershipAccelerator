@@ -246,6 +246,7 @@ import InboxDeletedEmail from './InboxDeletedEmail';
 import InboxCase from './InboxCase';
 import InboxCaseItem from './InboxCaseItem';
 import InboxIdentityAlias from './InboxIdentityAlias';
+import InboxCommitment from './InboxCommitment';
 import InboxCaseQuestion from './InboxCaseQuestion';
 import InboxCaseAction from './InboxCaseAction';
 import InboxCaseEvent from './InboxCaseEvent';
@@ -292,6 +293,8 @@ InboxCaseItem.hasMany(InboxCaseAction, { foreignKey: 'item_id', as: 'actions' })
 InboxCaseAction.belongsTo(InboxCaseItem, { foreignKey: 'item_id', as: 'item' });
 InboxCase.hasMany(InboxCaseEvent, { foreignKey: 'case_id', as: 'events' });
 InboxCaseEvent.belongsTo(InboxCase, { foreignKey: 'case_id', as: 'case' });
+InboxCase.hasMany(InboxCommitment, { foreignKey: 'case_id', as: 'commitments' });
+InboxCommitment.belongsTo(InboxCase, { foreignKey: 'case_id', as: 'case' });
 
 // --- Preview Stack associations ---
 Project.hasOne(PreviewStack, { foreignKey: 'project_id', as: 'previewStack' });
@@ -1423,6 +1426,7 @@ export {
   InboxCase,
   InboxCaseItem,
   InboxIdentityAlias,
+  InboxCommitment,
   InboxCaseQuestion,
   InboxCaseAction,
   InboxCaseEvent,

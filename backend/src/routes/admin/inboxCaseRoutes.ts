@@ -5,6 +5,7 @@ import {
   handleListCases,
   handleGetCase,
   handleUpdateCaseItem,
+  handleUpdateCaseOperatorFields,
   handleQuickResolveItem,
   handleAssessCase,
   handleGetCaseAudit,
@@ -44,6 +45,8 @@ router.get('/api/admin/inbox/cases/sync-status', requireAdmin, handleGetSyncStat
 router.get('/api/admin/inbox/cases/:caseId', requireAdmin, handleGetCase);
 router.post('/api/admin/inbox/cases/:caseId/assess', requireAdmin, handleAssessCase);
 router.patch('/api/admin/inbox/cases/:caseId/items/:itemId', requireAdmin, handleUpdateCaseItem);
+// /inbox-zero T2b: snooze + priority override (the writer for T2's operator columns).
+router.patch('/api/admin/inbox/cases/:caseId/operator', requireAdmin, handleUpdateCaseOperatorFields);
 router.post('/api/admin/inbox/cases/:caseId/items/:itemId/quick-resolve', requireAdmin, handleQuickResolveItem);
 router.get('/api/admin/inbox/cases/:caseId/audit', requireAdmin, handleGetCaseAudit);
 
