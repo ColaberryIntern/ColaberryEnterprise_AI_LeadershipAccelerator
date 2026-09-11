@@ -48,6 +48,7 @@ const IntelligenceSettingsPage = lazy(() => import('../pages/admin/intelligence/
 const MissedOpportunitiesPage = lazy(() => import('../pages/admin/MissedOpportunitiesPage'));
 const AgentOrphansPage = lazy(() => import('../pages/admin/AgentOrphansPage'));
 const AdminMarketingDashboardPage = lazy(() => import('../pages/admin/marketing/AdminMarketingDashboardPage'));
+const AdminBrandsPage = lazy(() => import('../pages/admin/marketing/AdminBrandsPage'));
 const AdminCommunicationsPage = lazy(() => import('../pages/admin/AdminCommunicationsPage'));
 const AdminTicketBoardPage = lazy(() => import('../pages/admin/AdminTicketBoardPage'));
 const AgentDetailPage = lazy(() => import('../pages/admin/AgentDetailPage'));
@@ -166,6 +167,9 @@ const adminRoutes = (
         <Route path="/admin/agent-orphans" element={<AgentOrphansPage />} />
         <Route path="/admin/communications" element={<AdminCommunicationsPage />} />
         <Route path="/admin/marketing" element={<AdminMarketingDashboardPage />} />
+        {/* Classified in T012 as section `campaigns` before this page existed - see
+            adminNav UNLISTED_PATH_SECTIONS. */}
+        <Route path="/admin/brands" element={<AdminBrandsPage />} />
         <Route path="/admin/tickets" element={<AdminTicketBoardPage />} />
         <Route path="/admin/agents/:id" element={<AgentDetailPage />} />
         <Route path="/admin/governance" element={<GovernanceCommandCenter />} />

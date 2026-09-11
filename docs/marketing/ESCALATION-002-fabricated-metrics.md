@@ -205,6 +205,47 @@ calculations, high blast radius) and well outside a marketing build's scope.
 Option B is a trap worth naming: it makes the number *plausible*, which removes the only clue
 anyone had that it was fabricated.
 
+## DECISIONS TAKEN - Ali, 2026-09-10
+
+Four of the five are settled. Recorded here so the follow-on workstream does not re-litigate
+them, and so the reasoning survives the session that produced it.
+
+**1. The three remaining fabricating services - SPLIT THEM BY WHAT THEY CLAIM. Accepted.**
+They are not one problem. `revenueDashboardService` reports `actualRevenue`, which must come
+from real payments or report unavailable, exactly as the marketing services now do.
+`scenarioSimulationEngine` is a SIMULATOR and `opportunityScoringService` PROJECTS - an assumed
+price is legitimate in both, provided it is labelled an assumption and read from the setting
+rather than from a private constant. Treating all three identically would have broken two
+things that were not broken.
+
+**2. The 34 hardcoded `level: 'live'` badges - FIX PER PAGE AS TOUCHED, PLUS A LINT. Accepted.**
+A 34-page sweep is a large diff across untested surfaces to change a badge nobody currently
+relies on. A lint that fails any NEW page hardcoding it stops the bleeding immediately; the
+backlog drains as pages are worked on for other reasons.
+
+**3. The `GREATEST(site_visitors, email_clickers)` denominator - CORRECT IT, WITH NOTICE.
+Accepted.** The fix is easy. The expensive part is that four percentages will move for
+operators who have been reading them for months, so the announcement is the deliverable, not
+the patch.
+
+**4. What an enrollment invoice should bill - STILL OPEN.** This one carried no recommendation
+because it needs product knowledge rather than engineering judgement. The database shows
+$1,788, $199 and $149 all in current use; guessing which is canonical is exactly the kind of
+assumption this document exists to prevent. Specifically unresolved: whether the target is a
+PaySimple RECURRING SUBSCRIPTION object rather than the one-off invoice the code creates today,
+whether the annual prepay is a separate $1,788 one-off, and whether a month-to-month tier at
+$199 is still offered.
+
+Not urgent: nothing bills wrongly today, because the $4,500 path is live-capable but unused.
+
+**5. `price_per_enrollment` as the single source of truth - YES, AND CHANGE ITS DEFAULT.
+Accepted.** The setting already exists in `governanceService` and nothing reads it. Adopting it
+without changing its default of 4500 would centralise the wrong number, which is worse than
+five visible copies of it - one wrong value with authority beats five wrong values that at
+least look suspicious.
+
+---
+
 ## Decision needed from Ali
 
 1. Proceed with Option A as a follow-on workstream after the marketing build?
