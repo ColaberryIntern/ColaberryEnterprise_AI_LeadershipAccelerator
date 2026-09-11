@@ -19,6 +19,8 @@
  *
  * Pure functions only. No I/O.
  */
+import { story000TruthSection } from './story000Truth';
+import type { UnderstandingItem } from '../delivery/projectUnderstanding';
 import { BuildPlan, PlanRequirement } from './planContract';
 import type { Schedule } from './buildSchedule';
 import {
@@ -1143,6 +1145,14 @@ export function commandCenterProgressSeedBlock(): string {
  */
 export interface CommandCenterDocOptions {
   /**
+   * The confirmed truth this project was planned from, and its revision.
+   *
+   * OMITTED RENDERS NOTHING, deliberately. A project with no intake gets no
+   * heading promising a section that is not there, which reads as a system that
+   * lost something rather than one that never had it.
+   */
+  truth?: { items: readonly UnderstandingItem[]; revision?: number | null };
+  /**
    * What the PLATFORM can do with this student's repo, as GitHub reported it —
    * `writeAccessOf(connection)` from `repoConnect/connectionAccess`.
    *
@@ -1274,6 +1284,10 @@ export function commandCenterStoryDoc(
   schedule?: Schedule | null,
   opts: CommandCenterDocOptions = {},
 ): string {
+  const truthSection = opts.truth
+    ? story000TruthSection({ items: opts.truth.items, revision: opts.truth.revision ?? null })
+    : [];
+
   return [
     `# ${COMMAND_CENTER_STORY_ID} — Build your Command Center`,
     '',
@@ -1283,6 +1297,11 @@ export function commandCenterStoryDoc(
     '**Owner:** you, with Claude Code',
     '**Blocked by:** nothing — this is the first thing you build',
     '',
+    // Before the mechanics. A student opening this cold should see what the
+    // platform thinks their project IS - and what it admits it does not know -
+    // before being told how to build the window onto it.
+    ...truthSection,
+    ...(truthSection.length ? ['---', ''] : []),
     '## The requirement this satisfies',
     '',
     'None of yours, and that is deliberate. The Command Center is the window onto your',
