@@ -206,12 +206,14 @@ let root: Root;
 // one-line change this comment always anticipated.
 //
 // Checkpoint H (2026-09-10) — Overview's own nine flat sections became
-// seven sub-tabs (see AgentOverviewTab.tsx). Identity is the default
-// sub-tab, so tests that only need Identity content need no further change;
-// every other section now needs its sub-tab clicked too, hence the optional
-// second param, applied uniformly across a describe block for simplicity
-// (clicking a sub-tab a test's own assertions don't touch is harmless).
-async function renderAgentPage(overviewSubTab?: string) {
+// seven sub-tabs. Superseded the next day (Checkpoint I) — see below.
+//
+// Checkpoint I (2026-09-11) — Ali pasted a full mockup and asked to match
+// its format: Overview is a single flowing page again (AgentOverviewV2),
+// no sub-tabs. The `overviewSubTab` param and its click logic are gone —
+// every call site below that used to pass one now just gets the whole
+// page's real content from a single "Overview" tab click.
+async function renderAgentPage() {
   await act(async () => {
     root.render(
       <MemoryRouter initialEntries={['/admin/agents/agent-reese']}>
@@ -228,15 +230,6 @@ async function renderAgentPage(overviewSubTab?: string) {
       overviewTabButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-  }
-  if (overviewSubTab) {
-    const subTabButton = Array.from(container.querySelectorAll('.nav-pills button')).find((b) => b.textContent?.trim() === overviewSubTab);
-    if (subTabButton) {
-      await act(async () => {
-        subTabButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      });
-    }
   }
 }
 
@@ -260,34 +253,30 @@ describe('AgentDetailPage — Ticket activity table: colored status badges + CST
     container.remove();
   });
 
-  it('renders the Status column as a real StatusBadge with the humanized label, not the raw plain-text status', async () => {
-    await renderAgentPage('Tickets');
+  it('renders the Status pill with the humanized label, not the raw plain-text status', async () => {
+    await renderAgentPage();
 
-    // Tone DISTINCTNESS itself (in_progress != done color) is already pinned at
-    // the data level in ticketTypeMeta.test.ts's isTicketStale/getTicketStatusTone
-    // suite — jsdom's CSSOM doesn't reliably round-trip the `background` shorthand
-    // with a var(...) value through .style/getAttribute('style'), so this test
-    // instead proves the wiring: getTicketStatusLabel/getTicketStatusTone are
-    // actually used in this JSX (humanized label present), not just imported.
-    const badges = Array.from(container.querySelectorAll('.admin-status-badge'));
-    expect(badges.some((b) => b.textContent === 'In Progress')).toBe(true);
-    expect(badges.some((b) => b.textContent === 'Done')).toBe(true);
-    // Regression guard: the old markup was a single fixed class for every row,
-    // and the raw (non-humanized) status string, for every row.
-    expect(container.innerHTML).not.toContain('bg-light text-dark border');
+    // Checkpoint I (2026-09-11) — AgentOverviewV2Tickets.tsx replaced the old
+    // Bootstrap StatusBadge table with adv2-pill spans; tone DISTINCTNESS
+    // itself is pinned at the data level in ticketTypeMeta.test.ts. This
+    // test proves getTicketStatusLabel is actually wired into the JSX
+    // (humanized label present), not just imported.
+    const pills = Array.from(container.querySelectorAll('.adv2-pill'));
+    expect(pills.some((b) => b.textContent === 'In Progress')).toBe(true);
+    expect(pills.some((b) => b.textContent === 'Done')).toBe(true);
     expect(container.textContent).not.toContain('in_progress');
   });
 
-  it('renders the Type column as a colored badge too, reusing the same type-tone helper the ticket board uses', async () => {
-    await renderAgentPage('Tickets');
+  it('renders the Type pill too, reusing the same type-tone helper the ticket board uses', async () => {
+    await renderAgentPage();
 
-    const badges = Array.from(container.querySelectorAll('.admin-status-badge'));
-    expect(badges.some((b) => b.textContent === 'Reese Outreach')).toBe(true);
-    expect(badges.some((b) => b.textContent === 'Student Support')).toBe(true);
+    const pills = Array.from(container.querySelectorAll('.adv2-pill'));
+    expect(pills.some((b) => b.textContent === 'Reese Outreach')).toBe(true);
+    expect(pills.some((b) => b.textContent === 'Student Support')).toBe(true);
   });
 
-  it('renders the Updated column with a CST/CDT label, never the browser-local unlabeled toLocaleString() shape', async () => {
-    await renderAgentPage('Tickets');
+  it('renders the ticket timestamp with a CST/CDT label, never the browser-local unlabeled toLocaleString() shape', async () => {
+    await renderAgentPage();
 
     // 2026-08-12T15:00:00Z is 10:00 AM Central during CDT (summer).
     expect(container.textContent).toContain('10:00 AM CDT');
@@ -299,15 +288,14 @@ describe('AgentDetailPage — Ticket activity table: colored status badges + CST
   });
 
   // Ticket Count Sync fix (2026-08-21, session CC-20260818-x4nk continued) —
-  // the "Open tickets" stat used to be tickets.filter(open).length, which
+  // the "Open tickets" fact used to be tickets.filter(open).length, which
   // undercounts once an agent's true ticket volume exceeds the capped tickets
-  // array. Proves the stat now renders the server's independent open_ticket_count.
-  it('renders the "Open tickets" stat from open_ticket_count, not from counting the (capped) tickets array', async () => {
+  // array. Proves it now renders the server's independent open_ticket_count.
+  it('renders "open tickets" from open_ticket_count, not from counting the (capped) tickets array', async () => {
     getAgentDetail.mockResolvedValue({ ...DETAIL, open_ticket_count: 294 }); // far more than the 2-row tickets fixture
-    await renderAgentPage('Tickets');
+    await renderAgentPage();
 
-    const statCards = Array.from(container.querySelectorAll('.admin-stat-card')).map((el) => el.textContent || '');
-    expect(statCards.some((text) => text.includes('Open tickets') && text.includes('294'))).toBe(true);
+    expect(container.textContent).toContain('294 open tickets');
   });
 });
 
@@ -332,16 +320,15 @@ describe('AgentDetailPage — "last activity" indicator on the ticket-activity t
     container.remove();
   });
 
-  it('renders a real, computed "X ago" Last activity column, not a static string', async () => {
+  it('renders a real, computed "X ago" value next to each ticket, not a static string', async () => {
     const fiveHoursAgo = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString();
     getAgentDetail.mockResolvedValue({
       ...DETAIL,
       tickets: [{ ...DETAIL.tickets[0], updated_at: fiveHoursAgo }],
     });
 
-    await renderAgentPage('Tickets');
+    await renderAgentPage();
 
-    expect(container.textContent).toContain('Last activity');
     expect(container.textContent).toContain('5h ago');
   });
 
@@ -351,9 +338,8 @@ describe('AgentDetailPage — "last activity" indicator on the ticket-activity t
       tickets: [{ ...DETAIL.tickets[0], updated_at: null }],
     });
 
-    await renderAgentPage('Tickets');
+    await renderAgentPage();
 
-    expect(container.textContent).toContain('Last activity');
     expect(container.textContent).toContain('unknown');
   });
 });
@@ -383,9 +369,9 @@ describe('AgentDetailPage — "what this agent reads / produces" section', () =>
   it('renders the real reads/produces text derived from tools_granted, and the live produced-ticket-type badges', async () => {
     getAgentDetail.mockResolvedValue(DETAIL);
 
-    await renderAgentPage('Tools');
+    await renderAgentPage();
 
-    expect(container.textContent).toContain('What this agent reads / produces');
+    expect(container.textContent).toContain('Capabilities');
     expect(container.textContent).toContain('ProofDesk learner-progress signals');
     expect(container.textContent).toContain('A reply message in the student DM thread');
     // Ticket-type badges reuse the same getTicketTypeLabel() humanization as the
@@ -400,7 +386,7 @@ describe('AgentDetailPage — "what this agent reads / produces" section', () =>
       capabilities: { reads: [], produces: [], undocumented_tools: ['a_tool_from_the_future'], produced_ticket_types: [], by_tool: [] },
     });
 
-    await renderAgentPage('Tools');
+    await renderAgentPage();
 
     expect(container.textContent).toContain('a_tool_from_the_future');
     expect(container.textContent).toContain('no documented reads/produces yet');
@@ -412,7 +398,7 @@ describe('AgentDetailPage — "what this agent reads / produces" section', () =>
       capabilities: { reads: [], produces: [], undocumented_tools: [], produced_ticket_types: [], by_tool: [] },
     });
 
-    await renderAgentPage('Tools');
+    await renderAgentPage();
 
     expect(container.textContent).toContain("don't read any external data source");
     expect(container.textContent).toContain("don't produce anything on their own");
@@ -487,13 +473,18 @@ describe('AgentDetailPage — "Reports to" section', () => {
     container.remove();
   });
 
-  it('renders the real trail and the resolved human name/email when the chain resolves', async () => {
+  it('renders the real chain and the resolved human name/email when the chain resolves', async () => {
     getAgentDetail.mockResolvedValue(DETAIL);
 
-    await renderAgentPage('Reports to');
+    await renderAgentPage();
 
     expect(container.textContent).toContain('Reports to');
-    expect(container.textContent).toContain('workforce_intelligence_engine (agent) -> [human]');
+    // Checkpoint I (2026-09-11) — the raw trail string ("workforce_intelligence_engine
+    // (agent) -> [human]") is now parsed into a named chain (see
+    // AgentOverviewV2Sidebar.tsx's parseHop) rather than shown verbatim, per
+    // Ali's pasted mockup — the underlying fact (who reports to whom) is the
+    // same real data, just a cleaner view.
+    expect(container.textContent).toContain('workforce_intelligence_engine');
     expect(container.textContent).toContain('Kes');
     expect(container.textContent).toContain('kesetebirhan@gmail.com');
   });
@@ -501,7 +492,7 @@ describe('AgentDetailPage — "Reports to" section', () => {
   it('boundary: reports_to is null -> renders an honest "no chain configured" message, never a blank or fabricated section', async () => {
     getAgentDetail.mockResolvedValue({ ...DETAIL, reports_to: null });
 
-    await renderAgentPage('Reports to');
+    await renderAgentPage();
 
     expect(container.textContent).toContain('No reports-to chain configured');
   });
@@ -512,7 +503,7 @@ describe('AgentDetailPage — "Reports to" section', () => {
       reports_to: { trail: ['OrphanedAgent (agent) -> [dangling]'], resolved_human: null, immediate_agent: null },
     });
 
-    await renderAgentPage('Reports to');
+    await renderAgentPage();
 
     expect(container.textContent).toContain('does not currently resolve to a real human');
   });
@@ -522,7 +513,7 @@ describe('AgentDetailPage — "Reports to" section', () => {
   it('immediate_agent: renders a real clickable link to the next-hop agent\'s own detail page', async () => {
     getAgentDetail.mockResolvedValue(DETAIL); // immediate_agent = { id: 'agent-wie', name: 'workforce_intelligence_engine' }
 
-    await renderAgentPage('Reports to');
+    await renderAgentPage();
 
     const link = Array.from(container.querySelectorAll('a')).find((a) => a.textContent === 'workforce_intelligence_engine');
     expect(link).toBeDefined();
@@ -535,7 +526,7 @@ describe('AgentDetailPage — "Reports to" section', () => {
       reports_to: { trail: ['Reese (agent) -> [human]'], resolved_human: { id: 'ali', name: 'Ali', email: 'ali@colaberry.com' }, immediate_agent: null },
     });
 
-    await renderAgentPage('Reports to');
+    await renderAgentPage();
 
     expect(container.textContent).not.toContain('Reports directly to');
   });
@@ -563,23 +554,27 @@ describe('AgentDetailPage — "Tools & capabilities" per-tool drill-down', () =>
     container.remove();
   });
 
-  it('renders one collapsible <details> per granted tool, named after the real tool string', async () => {
-    await renderAgentPage('Tools');
+  it('renders one row per granted tool, named after the real tool string', async () => {
+    await renderAgentPage();
 
-    const details = Array.from(container.querySelectorAll('details'));
-    const toolNames = details.map((d) => d.querySelector('summary code')?.textContent);
+    // Checkpoint I (2026-09-11) — the per-tool drill-down is no longer a
+    // collapsible <details> (the mockup's own .adv2-tool rows are always
+    // expanded — short enough not to need collapsing); each tool still
+    // gets its own real, named row.
+    const rows = Array.from(container.querySelectorAll('.adv2-tool'));
+    const toolNames = rows.map((d) => d.querySelector('code')?.textContent);
     expect(toolNames).toEqual(['respond_to_dm', 'read_learner_context']);
   });
 
-  it('each tool\'s own reads/produces are nested inside ITS details element, not the flattened aggregate', async () => {
-    await renderAgentPage('Tools');
+  it('each tool\'s own reads/produces are nested inside ITS row, not the flattened aggregate', async () => {
+    await renderAgentPage();
 
-    const details = Array.from(container.querySelectorAll('details'));
-    const readLearnerContext = details.find((d) => d.querySelector('summary code')?.textContent === 'read_learner_context');
+    const rows = Array.from(container.querySelectorAll('.adv2-tool'));
+    const readLearnerContext = rows.find((d) => d.querySelector('code')?.textContent === 'read_learner_context');
     expect(readLearnerContext?.textContent).toContain('ProofDesk learner-progress signals');
-    // respond_to_dm has no reads of its own — its OWN details element must not
-    // claim the other tool's read fact.
-    const respondToDm = details.find((d) => d.querySelector('summary code')?.textContent === 'respond_to_dm');
+    // respond_to_dm has no reads of its own — its OWN row must not claim
+    // the other tool's read fact.
+    const respondToDm = rows.find((d) => d.querySelector('code')?.textContent === 'respond_to_dm');
     expect(respondToDm?.textContent).not.toContain('ProofDesk learner-progress signals');
     expect(respondToDm?.textContent).toContain('A reply message in the student DM thread');
   });
@@ -590,7 +585,7 @@ describe('AgentDetailPage — "Tools & capabilities" per-tool drill-down', () =>
       capabilities: { ...DETAIL.capabilities, by_tool: [{ tool: 'a_tool_from_the_future', reads: [], produces: [], documented: false }] },
     });
 
-    await renderAgentPage('Tools');
+    await renderAgentPage();
 
     expect(container.textContent).toContain('a_tool_from_the_future');
     expect(container.textContent).toContain('undocumented');
@@ -603,7 +598,7 @@ describe('AgentDetailPage — "Tools & capabilities" per-tool drill-down', () =>
       capabilities: { ...DETAIL.capabilities, by_tool: [] },
     });
 
-    await renderAgentPage('Tools');
+    await renderAgentPage();
 
     expect(container.textContent).toContain('No tools recorded.');
   });
@@ -644,9 +639,9 @@ describe('AgentDetailPage — "Scheduled tasks" section', () => {
       ],
     });
 
-    await renderAgentPage('Scheduled tasks');
+    await renderAgentPage();
 
-    expect(container.textContent).toContain('Scheduled tasks');
+    expect(container.textContent).toContain('Scheduled work');
     expect(container.textContent).toContain('ReeseAutonomousOutreachSweep');
     expect(container.textContent).toContain('Daily scan of the approved pilot cohort');
     expect(container.textContent).toContain('0 15 * * *');
@@ -666,7 +661,7 @@ describe('AgentDetailPage — "Scheduled tasks" section', () => {
       ],
     });
 
-    await renderAgentPage('Scheduled tasks');
+    await renderAgentPage();
 
     expect(container.textContent).toContain('Disabled');
     expect(container.textContent).toContain('Never');
@@ -675,7 +670,7 @@ describe('AgentDetailPage — "Scheduled tasks" section', () => {
   it('boundary: no related tasks (the common case — most agents have no module) shows an honest empty state', async () => {
     getAgentDetail.mockResolvedValue(DETAIL); // base fixture: related_tasks: []
 
-    await renderAgentPage('Scheduled tasks');
+    await renderAgentPage();
 
     expect(container.textContent).toContain('No other scheduled tasks are registered');
   });
@@ -704,18 +699,18 @@ describe('AgentDetailPage — "Ticket activity" table: Why column and ticket_bre
   });
 
   it('renders the real ticket.description in the Why column, verbatim', async () => {
-    await renderAgentPage('Tickets');
+    await renderAgentPage();
 
     expect(container.textContent).toContain('Signal: inactivity. Goal: Confirm the student is unblocked');
   });
 
   it("boundary: a ticket with no description shows an em dash, never a blank cell or a fabricated reason", async () => {
-    await renderAgentPage('Tickets');
+    await renderAgentPage();
 
     // t-2 (the fixture's second ticket) has description: null.
-    const rows = Array.from(container.querySelectorAll('tbody tr'));
-    const alexRow = rows.find((r) => r.textContent?.includes('Alex Chen'));
-    expect(alexRow?.querySelectorAll('td')[1].textContent).toBe('—');
+    const whyParagraphs = Array.from(container.querySelectorAll('[data-testid="ticket-why"]'));
+    const alexWhy = whyParagraphs.find((p) => p.closest('div')?.textContent?.includes('Alex Chen'));
+    expect(alexWhy?.textContent).toBe('—');
   });
 
   it('renders the ticket_breakdown summary grouped by type and real signal_type, above the table', async () => {
@@ -730,7 +725,7 @@ describe('AgentDetailPage — "Ticket activity" table: Why column and ticket_bre
       ],
     });
 
-    await renderAgentPage('Tickets');
+    await renderAgentPage();
 
     expect(container.textContent).toContain('Reese Outreach: 3');
     expect(container.textContent).toContain('inactivity: 2');
@@ -741,7 +736,7 @@ describe('AgentDetailPage — "Ticket activity" table: Why column and ticket_bre
   it('boundary: no ticket_breakdown summary rendered when it is empty (no tickets yet)', async () => {
     getAgentDetail.mockResolvedValue({ ...DETAIL, ticket_breakdown: [] });
 
-    await renderAgentPage('Tickets');
+    await renderAgentPage();
 
     expect(container.textContent).not.toContain('Reese Outreach: ');
   });
@@ -772,7 +767,7 @@ describe('AgentDetailPage — "Trust evidence" section', () => {
   it('renders the real cost figure and run count when this agent has tracked ai_events activity', async () => {
     getAgentDetail.mockResolvedValue({ ...DETAIL, cost_summary: { cost_usd: 4.82, runs: 37 } });
 
-    await renderAgentPage('Trust');
+    await renderAgentPage();
 
     expect(container.textContent).toContain('Trust evidence');
     expect(container.textContent).toContain('$4.82');
@@ -782,10 +777,10 @@ describe('AgentDetailPage — "Trust evidence" section', () => {
   it('boundary: an em dash, not $0.00, when this agent has zero cost-tracked events', async () => {
     getAgentDetail.mockResolvedValue({ ...DETAIL, cost_summary: null });
 
-    await renderAgentPage('Trust');
+    await renderAgentPage();
 
-    const statCards = Array.from(container.querySelectorAll('.admin-stat-card')).map((el) => el.textContent || '');
-    expect(statCards.some((text) => text.includes('Cost (30d)') && text.includes('—'))).toBe(true);
+    const stats = Array.from(container.querySelectorAll('.adv2-stat')).map((el) => el.textContent || '');
+    expect(stats.some((text) => text.includes('Cost (30d)') && text.includes('—'))).toBe(true);
     expect(container.textContent).not.toContain('$0.00');
   });
 
@@ -795,7 +790,7 @@ describe('AgentDetailPage — "Trust evidence" section', () => {
       authorization_summary: { window_days: 30, total: 18, allow: 14, approval: 3, block: 1, enforced_count: 0 },
     });
 
-    await renderAgentPage('Trust');
+    await renderAgentPage();
 
     expect(container.textContent).toContain('Allowed: 14');
     expect(container.textContent).toContain('Would require approval: 3');
@@ -808,7 +803,7 @@ describe('AgentDetailPage — "Trust evidence" section', () => {
       authorization_summary: { window_days: 30, total: 5, allow: 5, approval: 0, block: 0, enforced_count: 0 },
     });
 
-    await renderAgentPage('Trust');
+    await renderAgentPage();
 
     expect(container.textContent).toContain('shadow mode');
   });
@@ -816,7 +811,7 @@ describe('AgentDetailPage — "Trust evidence" section', () => {
   it('boundary: no shadow-mode callout when there are zero authorization checks at all — nothing to disclose', async () => {
     getAgentDetail.mockResolvedValue(DETAIL); // base fixture: authorization_summary.total === 0
 
-    await renderAgentPage('Trust');
+    await renderAgentPage();
 
     expect(container.textContent).toContain('No authorization checks recorded');
     expect(container.textContent).not.toContain('shadow mode');
@@ -830,7 +825,7 @@ describe('AgentDetailPage — "Trust evidence" section', () => {
       ],
     });
 
-    await renderAgentPage('Trust');
+    await renderAgentPage();
 
     expect(container.textContent).toContain('2026-08-06');
     expect(container.textContent).toContain('2026-09-01');
@@ -840,7 +835,7 @@ describe('AgentDetailPage — "Trust evidence" section', () => {
   it('boundary: honest empty state when persona_version_history is empty, never fabricated history', async () => {
     getAgentDetail.mockResolvedValue({ ...DETAIL, persona_version_history: [] });
 
-    await renderAgentPage('Trust');
+    await renderAgentPage();
 
     expect(container.textContent).toContain('No version change recorded yet');
   });
@@ -1071,7 +1066,7 @@ describe('AgentDetailPage — "Trust Contract" section', () => {
       },
     });
 
-    await renderAgentPage('Trust');
+    await renderAgentPage();
 
     expect(container.textContent).toContain('Trust Contract');
     expect(container.textContent).toContain('cron');
@@ -1085,7 +1080,7 @@ describe('AgentDetailPage — "Trust Contract" section', () => {
   it('honesty boundary: an identity-only agent (no scheduler tracking) shows its real trigger_type, not a fabricated schedule', async () => {
     getAgentDetail.mockResolvedValue(DETAIL); // base fixture: trigger_type 'event_driven', schedule null
 
-    await renderAgentPage('Trust');
+    await renderAgentPage();
 
     expect(container.textContent).toContain('Trust Contract');
     expect(container.textContent).toContain('event_driven');
@@ -1097,7 +1092,7 @@ describe('AgentDetailPage — "Trust Contract" section', () => {
       trust_contract: { ...DETAIL.trust_contract, trigger_type: null },
     });
 
-    await renderAgentPage('Trust');
+    await renderAgentPage();
 
     expect(container.textContent).toContain("isn't invoked through the");
   });
@@ -1108,11 +1103,11 @@ describe('AgentDetailPage — "Trust Contract" section', () => {
       trust_contract: { ...DETAIL.trust_contract, trigger_type: 'cron', schedule: null, last_error: null },
     });
 
-    await renderAgentPage('Trust');
+    await renderAgentPage();
 
-    // The stat grid renders (trigger_type is set), but no fabricated error banner.
+    // The rows render (trigger_type is set), but no fabricated error banner.
     expect(container.textContent).toContain('Trust Contract');
-    expect(container.querySelector('.alert-warning')).toBeNull();
+    expect(container.textContent).not.toContain('Last error:');
   });
 
   // AI Workforce Reset, Phase C (2026-08-24) — the Permitted dimension: this
@@ -1120,7 +1115,7 @@ describe('AgentDetailPage — "Trust Contract" section', () => {
   it('Permitted: shows "Not yet set" when autonomy_level is null (never reactivated through the Phase C flow)', async () => {
     getAgentDetail.mockResolvedValue(DETAIL); // base fixture: agent.autonomy_level null
 
-    await renderAgentPage('Trust');
+    await renderAgentPage();
 
     expect(container.textContent).toContain('Autonomy level (Permitted)');
     expect(container.textContent).toContain('Not yet set');
@@ -1129,7 +1124,7 @@ describe('AgentDetailPage — "Trust Contract" section', () => {
   it('Permitted: shows the real, previously-chosen autonomy level verbatim', async () => {
     getAgentDetail.mockResolvedValue({ ...DETAIL, agent: { ...DETAIL.agent, autonomy_level: 'act_audited' } });
 
-    await renderAgentPage('Trust');
+    await renderAgentPage();
 
     expect(container.textContent).toContain('Autonomy level (Permitted)');
     expect(container.textContent).toContain('act_audited');
@@ -1139,22 +1134,25 @@ describe('AgentDetailPage — "Trust Contract" section', () => {
   // "Reese has several tickets that have been opened... but this says it's
   // never been run." Fixes the literal complaint: an event-driven agent with
   // real ticket activity must never show a bare "Never".
-  // Scoped to `.admin-stat-card` (not `container.textContent`) throughout —
-  // the Ticket activity table below has its OWN "Last activity" column header
-  // (per-ticket, unrelated), so a page-wide text check would false-positive.
-  function trustContractStatCards(): string[] {
-    return Array.from(container.querySelectorAll('.admin-stat-card')).map((el) => el.textContent || '');
+  // Checkpoint I (2026-09-11) — scoped to the Trust Contract card's own
+  // <dl> (first .adv2-rows on the page) rather than page-wide text: the
+  // Scheduled work section below also has its own "Last run" label per
+  // task (unrelated), so an unscoped check could false-positive once a
+  // test's fixture has related_tasks — none of these three do today, but
+  // scoping removes the trap for whoever edits this next.
+  function trustContractRowsText(): string {
+    return container.querySelector('.adv2-rows')?.textContent || '';
   }
 
-  it('Instant: an event-driven agent with real ticket activity shows a "Last activity" stat (not "Last run"/"Never")', async () => {
+  it('Instant: an event-driven agent with real ticket activity shows a "Last activity" row (not "Last run"/"Never")', async () => {
     getAgentDetail.mockResolvedValue(DETAIL); // base fixture: event_driven, last_run_at null, last_activity_at real
 
-    await renderAgentPage('Trust');
+    await renderAgentPage();
 
-    const cards = trustContractStatCards();
-    expect(cards.some((text) => text.includes('Last activity'))).toBe(true);
-    expect(cards.some((text) => text.includes('Last run'))).toBe(false);
-    expect(cards.some((text) => text.includes('Never'))).toBe(false);
+    const text = trustContractRowsText();
+    expect(text).toContain('Last activity');
+    expect(text).not.toContain('Last run');
+    expect(text).not.toContain('Never');
   });
 
   it('boundary: an event-driven agent with genuinely zero ticket history ever still shows an honest "Last run: Never"', async () => {
@@ -1163,11 +1161,12 @@ describe('AgentDetailPage — "Trust Contract" section', () => {
       trust_contract: { ...DETAIL.trust_contract, last_activity_at: null },
     });
 
-    await renderAgentPage('Trust');
+    await renderAgentPage();
 
-    const cards = trustContractStatCards();
-    expect(cards.some((text) => text.includes('Last run') && text.includes('Never'))).toBe(true);
-    expect(cards.some((text) => text.includes('Last activity'))).toBe(false);
+    const text = trustContractRowsText();
+    expect(text).toContain('Last run');
+    expect(text).toContain('Never');
+    expect(text).not.toContain('Last activity');
   });
 
   it('a scheduler-tracked (cron) agent keeps showing "Last run" from last_run_at, never the ticket-derived fallback', async () => {
@@ -1181,10 +1180,11 @@ describe('AgentDetailPage — "Trust Contract" section', () => {
       },
     });
 
-    await renderAgentPage('Trust');
+    await renderAgentPage();
 
-    const cards = trustContractStatCards();
-    expect(cards.some((text) => text.includes('Last run') && text.includes('5h ago'))).toBe(true);
-    expect(cards.some((text) => text.includes('Last activity'))).toBe(false);
+    const text = trustContractRowsText();
+    expect(text).toContain('Last run');
+    expect(text).toContain('5h ago');
+    expect(text).not.toContain('Last activity');
   });
 });

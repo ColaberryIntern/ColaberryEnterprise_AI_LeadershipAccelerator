@@ -201,6 +201,16 @@ export const startSchema = z.object({
     id: z.string().max(80),
     question: z.string().max(500),
     answer: z.string().max(ANSWER_MAX),
+    // The angle the question came from, so the answer files against a truth
+    // dimension by lookup rather than by guessing from the wording. Optional:
+    // a bundle cached before angles existed still starts a build, and its
+    // answers are reported unmapped rather than misfiled.
+    angle: z.string().max(80).optional(),
+  })).max(20).optional(),
+  // What the description already answered, as the intake service reported it.
+  covered: z.array(z.object({
+    angle: z.string().max(80),
+    evidence: z.string().max(600),
   })).max(20).optional(),
 });
 
@@ -223,6 +233,7 @@ router.post('/api/portal/sbp/builds', requireParticipant, async (req: Request, r
       targetWeeks: body.target_weeks,
       document: body.document,
       answers: body.answers,
+      covered: body.covered,
     });
     res.status(202).json(result);   // 202: accepted, generation continues
   } catch (e) { fail(res, e, next); }
@@ -458,6 +469,39 @@ router.post('/api/portal/sbp/intake/:projectId/corrections', requireParticipant,
 
     await saveCorrectedTruth(projectId, applied.items);
     res.json({ project_id: projectId, ...buildIntakeReview(applied.items) });
+  } catch (e) { fail(res, e, next); }
+});
+
+/*
+ * The case-study hypothesis: what a story COULD say, before anything has
+ * happened. A projection recomputed from the truth revision on every read,
+ * never stored, so it cannot drift from the truth and there is nothing to
+ * publish. Same scoping as every other build route.
+ */
+router.get('/api/portal/sbp/intake/:projectId/case-study-hypothesis', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const projectId = z.string().uuid().parse(req.params.projectId);
+    await requireOwnedProject(req, projectId);
+
+    const { loadIntakeTruthAtRevision } = await import('../services/sbp/intakeTruthStore');
+    const { buildCaseStudyHypothesis, hypothesisCoverage } = await import('../services/sbp/caseStudyHypothesis');
+    const { getPublishedPlan } = await import('../services/sbp/planStore');
+
+    const truth = await loadIntakeTruthAtRevision(projectId);
+    if (!truth) return res.status(404).json({ error: 'No intake for this project' });
+
+    // The published plan supplies planned capability; a draft would be a
+    // capability nobody has accepted yet, and the hypothesis says only what
+    // the project has committed to.
+    const published = await getPublishedPlan(projectId);
+    const hypothesis = buildCaseStudyHypothesis({
+      items: truth.items,
+      truthRevision: truth.revision,
+      plan: published?.plan ?? null,
+    });
+
+    res.json({ project_id: projectId, hypothesis, coverage: hypothesisCoverage(hypothesis) });
   } catch (e) { fail(res, e, next); }
 });
 

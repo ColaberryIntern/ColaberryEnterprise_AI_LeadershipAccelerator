@@ -21,6 +21,18 @@ export const CASE_STATES = [
 ] as const;
 export type CaseState = (typeof CASE_STATES)[number];
 
+// /inbox-zero priority band, stored on inbox_cases.priority_band (VARCHAR(2)
+// + CHECK, like `state`). P0/P1 are the only bands allowed to interrupt an
+// operator mid-item; everything else waits for the next 5-minute refresh.
+export const PRIORITY_BANDS = ['P0', 'P1', 'P2', 'P3'] as const;
+export type PriorityBand = (typeof PRIORITY_BANDS)[number];
+
+// /inbox-zero commitment ledger (T8): what ALI owes. See models/InboxCommitment.ts.
+export const COMMITMENT_STATUSES = ['OPEN', 'FULFILLED', 'CANCELLED'] as const;
+export type CommitmentStatus = (typeof COMMITMENT_STATUSES)[number];
+export const COMMITMENT_SOURCES = ['assessment', 'sent_mail'] as const;
+export type CommitmentSource = (typeof COMMITMENT_SOURCES)[number];
+
 // Valid forward transitions. REOPENED can fall back into ASSESSING via a
 // separate explicit reopen operation (see caseStateMachine.ts) rather than
 // being reachable through this table, since reopening is a special reset,
@@ -225,6 +237,38 @@ export interface TimelineEntry {
   evidence: EvidenceRef[];
 }
 
+// /inbox-zero response-needed contract (T4). Lives on the CASE assessment,
+// never on inbox_classifications.reply_needed — that is a COS table and gate
+// 1's business. YES/NO/UNCERTAIN with a confidence and a reason is what lets
+// the console say "needs response: UNCERTAIN (55%, sender asked a question
+// that Basecamp #123 may already answer)" instead of a bare boolean.
+export const RESPONSE_NEEDED_VERDICTS = ['YES', 'NO', 'UNCERTAIN'] as const;
+export type ResponseNeededVerdict = (typeof RESPONSE_NEEDED_VERDICTS)[number];
+
+// Where the response belongs. INTERNAL_TASK = the real action is a task, a
+// calendar event or a delegation, not a message. NONE = no response needed.
+export const RESPONSE_CHANNELS = ['EMAIL', 'BASECAMP', 'BOTH', 'INTERNAL_TASK', 'NONE'] as const;
+export type ResponseChannel = (typeof RESPONSE_CHANNELS)[number];
+
+// Below this confidence the planner forces individual approval on every
+// proposed action for the case, regardless of action type or risk. 70 is a
+// default, not a measurement: it sits between the classifier's own INBOX
+// band (>=75, llmClassificationService) and its ASK_USER band (>=50), so a
+// verdict the model itself would only rate "ask the human" never bundles.
+// Tune from real correction data once the console has produced some.
+export const RESPONSE_NEEDED_REVIEW_THRESHOLD = 70;
+
+export interface ResponseNeededRead {
+  verdict: ResponseNeededVerdict;
+  confidence: number;
+  reason: string;
+  channel: ResponseChannel | null;
+  channelReason: string;
+  // True when the fields were absent (a legacy assessment) and the read was
+  // normalised to UNCERTAIN rather than invented.
+  legacy: boolean;
+}
+
 export interface CaseAssessment {
   objective: string;
   current_state: string;
@@ -237,13 +281,58 @@ export interface CaseAssessment {
   impact: string;
   people_involved: Array<{ name: string; role: string }>;
   current_owner: string | null;
-  commitments_made: Array<{ statement: string; owner: string; evidence: EvidenceRef[] }>;
+  // due_at added by /inbox-zero T8 (optional: legacy assessments lack it).
+  // Without a date, "overdue" is not computable and a commitment is reported
+  // as undated, never as overdue.
+  commitments_made: Array<{ statement: string; owner: string; due_at?: string | null; evidence: EvidenceRef[] }>;
   deadlines: Array<{ description: string; due_at: string | null; evidence: EvidenceRef[] }>;
   blockers: string[];
   missing_information: string[];
   decisions_required: string[];
   recommended_next_actions: string[];
   confidence: number;
+  // T4 — optional so every assessment persisted before this field existed
+  // still satisfies the type. Read through readResponseNeeded(), never directly.
+  response_needed?: ResponseNeededVerdict;
+  response_needed_confidence?: number;
+  response_needed_reason?: string;
+  response_channel?: ResponseChannel;
+  response_channel_reason?: string;
+}
+
+/**
+ * The one sanctioned way to read the response-needed verdict. A legacy
+ * assessment (fields absent) reads as UNCERTAIN at confidence 0 with an
+ * explicit reason, so it is routed to human review rather than treated as
+ * "no response needed" by accident.
+ */
+export function readResponseNeeded(assessment: CaseAssessment | null | undefined): ResponseNeededRead {
+  const verdict = assessment?.response_needed;
+  if (!verdict) {
+    return {
+      verdict: 'UNCERTAIN',
+      confidence: 0,
+      reason: 'Assessment predates the response-needed contract; no verdict recorded.',
+      channel: null,
+      channelReason: '',
+      legacy: true,
+    };
+  }
+  return {
+    verdict,
+    confidence: assessment.response_needed_confidence ?? 0,
+    reason: assessment.response_needed_reason ?? '',
+    channel: assessment.response_channel ?? null,
+    channelReason: assessment.response_channel_reason ?? '',
+    legacy: false,
+  };
+}
+
+/** True when the verdict is not confident enough to let an action bundle
+ * through without a human looking at it: UNCERTAIN, low confidence, or legacy. */
+export function responseNeedsHumanReview(assessment: CaseAssessment | null | undefined): boolean {
+  const r = readResponseNeeded(assessment);
+  return r.legacy || r.verdict === 'UNCERTAIN' || r.confidence < RESPONSE_NEEDED_REVIEW_THRESHOLD;
 }
 
 export interface TeachMeBrief {

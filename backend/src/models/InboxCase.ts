@@ -1,6 +1,6 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
-import { CASE_STATES, CaseMode, CaseState, CaseAssessment, TeachMeBrief } from '../types/inboxCase';
+import { CASE_STATES, CaseMode, CaseState, CaseAssessment, TeachMeBrief, PriorityBand } from '../types/inboxCase';
 
 // A business case: the unit of resolution for the Inbox Intel — Case
 // Resolution Engine. Groups InboxCaseItem evidence rows (emails, Basecamp
@@ -26,6 +26,13 @@ interface InboxCaseAttributes {
   reopen_count: number;
   source_query: Record<string, unknown>;
   correlation_id: string;
+  // /inbox-zero operator console (additive, all nullable). See ensureInboxCaseSchema.ts.
+  snoozed_until: Date | null;
+  snooze_reason: string | null;
+  waiting_since: Date | null;
+  sla_due_at: Date | null;
+  priority_band: PriorityBand | null;
+  priority_reason: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -49,6 +56,12 @@ class InboxCase extends Model<InboxCaseAttributes> implements InboxCaseAttribute
   declare reopen_count: number;
   declare source_query: Record<string, unknown>;
   declare correlation_id: string;
+  declare snoozed_until: Date | null;
+  declare snooze_reason: string | null;
+  declare waiting_since: Date | null;
+  declare sla_due_at: Date | null;
+  declare priority_band: PriorityBand | null;
+  declare priority_reason: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -73,6 +86,13 @@ InboxCase.init(
     reopen_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     source_query: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
     correlation_id: { type: DataTypes.UUID, allowNull: false },
+    snoozed_until: { type: DataTypes.DATE, allowNull: true },
+    snooze_reason: { type: DataTypes.TEXT, allowNull: true },
+    waiting_since: { type: DataTypes.DATE, allowNull: true },
+    sla_due_at: { type: DataTypes.DATE, allowNull: true },
+    // VARCHAR(2) + CHECK in the DDL, not a PG enum — matches how `state` is stored.
+    priority_band: { type: DataTypes.STRING(2), allowNull: true },
+    priority_reason: { type: DataTypes.TEXT, allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   },
@@ -85,6 +105,8 @@ InboxCase.init(
       { fields: ['mode'], name: 'idx_inbox_cases_mode' },
       { fields: ['normalized_query'], name: 'idx_inbox_cases_normalized_query' },
       { fields: ['correlation_id'], name: 'idx_inbox_cases_correlation_id' },
+      { fields: ['updated_at'], name: 'idx_inbox_cases_updated_at' },
+      { fields: ['state', 'snoozed_until'], name: 'idx_inbox_cases_state_snoozed' },
     ],
   }
 );

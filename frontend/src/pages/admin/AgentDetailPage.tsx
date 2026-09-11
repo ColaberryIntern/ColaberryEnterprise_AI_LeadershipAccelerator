@@ -2,11 +2,12 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { getAgentDetail, AgentDetail } from '../../services/agentDetailApi';
 import { getManagerInboxItems, ManagerInboxItem } from '../../services/managerInboxApi';
-import { resetAgents, reactivateAgent, AUTONOMY_LEVELS, AutonomyLevel, AUTONOMY_LEVEL_DESCRIPTIONS } from '../../services/workforceOrgChartApi';
-import { PageHeader, StatCard } from '../../components/admin/shell';
+import { resetAgents, reactivateAgent, AutonomyLevel } from '../../services/workforceOrgChartApi';
+import '../../styles/agentDetailV2.css';
+import AgentDetailV2Header, { TabKey } from '../../components/admin/agentDetailV2/AgentDetailV2Header';
+import AgentOverviewV2 from '../../components/admin/agentDetailV2/AgentOverviewV2';
 import AgentAtAGlanceTab from '../../components/admin/AgentAtAGlanceTab';
 import AgentLiveStatusTab from '../../components/admin/AgentLiveStatusTab';
-import AgentOverviewTab from '../../components/admin/AgentOverviewTab';
 import AgentWorkDecisionsTab from '../../components/admin/AgentWorkDecisionsTab';
 import AgentTalkTab from '../../components/admin/AgentTalkTab';
 import AgentReportsTab from '../../components/admin/AgentReportsTab';
@@ -110,25 +111,20 @@ import AgentTrustControlTab from '../../components/admin/AgentTrustControlTab';
 // agent's own upward chain, built client-side from the existing
 // reports_to.trail data — no backend change needed. Top-level tab count
 // stays at eight; this checkpoint only restructures what's inside Overview.
-
-type TabKey = 'glance' | 'command' | 'overview' | 'work' | 'talk' | 'reports' | 'performance' | 'trust';
-const TABS: Array<{ key: TabKey; label: string; icon: string }> = [
-  { key: 'glance', label: 'At a Glance', icon: 'dashboard-line' },
-  { key: 'command', label: 'Live Status', icon: 'pulse-line' },
-  { key: 'overview', label: 'Overview', icon: 'profile-line' },
-  { key: 'work', label: 'Work & Decisions', icon: 'list-check-3' },
-  { key: 'talk', label: 'Talk', icon: 'chat-3-line' },
-  { key: 'reports', label: 'Reports', icon: 'mail-send-line' },
-  { key: 'performance', label: 'Performance', icon: 'flag-2-line' },
-  { key: 'trust', label: 'Trust & Control', icon: 'shield-check-line' },
-];
-
-const STATUS_TONE: Record<AgentDetail['live_status'], 'success' | 'warning' | 'neutral'> = {
-  online: 'success',
-  away: 'warning',
-  offline: 'neutral',
-  unknown: 'neutral',
-};
+//
+// Checkpoint I (2026-09-11) — Ali pasted a full mockup ("Reese - agent
+// page redesign") and asked to match its format. Replaced <PageHeader> +
+// the Bootstrap nav-tabs chrome with AgentDetailV2Header (new page-scoped
+// visual language, see styles/agentDetailV2.css) and rebuilt Overview as
+// AgentOverviewV2 — a single flowing two-column page, matching the
+// mockup, instead of Checkpoint H's sub-tabs. Same real content as
+// before (see AgentOverviewV2's own components for the field-by-field
+// mapping); AgentOverviewTab.tsx and its sub-tab files are removed as a
+// result — nothing else referenced them. TabKey now lives in
+// AgentDetailV2Header.tsx since the header owns tab rendering. The other
+// six tabs' own content is intentionally NOT restyled in this pass — a
+// deliberate scoping choice (same "ship the named surface first"
+// precedent as every earlier checkpoint on this page), not an oversight.
 
 export default function AgentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -263,129 +259,52 @@ export default function AgentDetailPage() {
     return <div className="alert alert-danger">{error || 'Agent not found'}</div>;
   }
 
-  const { agent, identity, live_status } = detail;
+  const { agent, identity } = detail;
   // Agent Alias & Identity Fix — same fix as the Live Agents card list: prefer the
   // real AdminUser.display_name over the raw technical agent_name. Falls back to
   // agent_name for a non-blueprint agent (identity is null — no linked AdminUser).
   const displayName = identity?.display_name || agent.agent_name;
 
   return (
-    <>
-      <PageHeader
-        title={displayName}
-        icon="robot-2-line"
-        subtitle={agent.description || undefined}
-        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: displayName }]}
-        actions={
-          <div className="d-flex gap-2">
-            {agent.enabled && (
-              <button className="btn btn-outline-danger btn-sm" onClick={handleDeactivate} disabled={resetting}>
-                <i className="ri-shut-down-line" aria-hidden="true" /> {resetting ? 'Deactivating…' : 'Deactivate'}
-              </button>
-            )}
-            <button className="btn btn-outline-primary btn-sm" onClick={fetchDetail} disabled={loading}>
-              <i className="ri-refresh-line" aria-hidden="true" /> Refresh
-            </button>
-          </div>
-        }
-      >
-        {resetMessage && (
-          <div className={`alert ${resetMessage.startsWith('Failed') ? 'alert-danger' : 'alert-success'} py-2 mb-3`}>
-            {resetMessage}
-          </div>
-        )}
-        {reactivationMessage && (
-          <div className={`alert ${reactivationMessage.startsWith('Failed') ? 'alert-danger' : 'alert-success'} py-2 mb-3`}>
-            {reactivationMessage}
-          </div>
-        )}
-        {/* AI Workforce Reset, Phase C (2026-08-24) — a deactivated agent gets a
-            real form here, not a bare "Reactivate" confirm: an autonomy level
-            must be chosen before the button enables, so bringing an agent back
-            online is always a deliberate, visible act. */}
-        {!agent.enabled && (
-          <div className="alert alert-secondary py-2 mb-3">
-            <div className="d-flex align-items-center gap-2 flex-wrap">
-              <span className="fw-semibold small">This agent is inactive.</span>
-              <select
-                className="form-select form-select-sm"
-                style={{ width: 'auto' }}
-                aria-label="Autonomy level"
-                value={selectedAutonomyLevel}
-                onChange={(e) => setSelectedAutonomyLevel(e.target.value as AutonomyLevel | '')}
-              >
-                <option value="">Choose an autonomy level…</option>
-                {AUTONOMY_LEVELS.map((level) => (
-                  <option key={level} value={level}>{level}</option>
-                ))}
-              </select>
-              <button
-                className="btn btn-success btn-sm"
-                onClick={handleReactivate}
-                disabled={!selectedAutonomyLevel || reactivating}
-              >
-                <i className="ri-play-circle-line" aria-hidden="true" /> {reactivating ? 'Reactivating…' : 'Reactivate'}
-              </button>
-            </div>
-            {selectedAutonomyLevel && (
-              <p className="text-muted small mb-0 mt-2">{AUTONOMY_LEVEL_DESCRIPTIONS[selectedAutonomyLevel]}</p>
-            )}
-          </div>
-        )}
-        <div className="row g-3">
-          <div className="col-6 col-lg-3">
-            <StatCard
-              label="Live status"
-              value={live_status}
-              icon="pulse-line"
-              tone={STATUS_TONE[live_status]}
-            />
-          </div>
-          <div className="col-6 col-lg-3">
-            <StatCard label="Enabled" value={agent.enabled ? 'Yes' : 'No'} icon="toggle-line" tone={agent.enabled ? 'success' : 'neutral'} />
-          </div>
-          <div className="col-6 col-lg-3">
-            <StatCard label="Persona version" value={agent.persona_version || '—'} icon="git-commit-line" tone="neutral" />
-          </div>
-          <div className="col-6 col-lg-3">
-            {/* Ticket Count Sync fix (2026-08-21) — was tickets.filter(open).length,
-                which undercounts for any agent whose true ticket volume exceeds the
-                tickets array's 50-row cap (e.g. InboxCaseEngine). open_ticket_count is
-                the server's true count, via the same shared query the org chart's
-                badges use — see agentDetailApi.ts's AgentDetail.open_ticket_count. */}
-            <StatCard label="Open tickets" value={detail.open_ticket_count} icon="ticket-2-line" tone="neutral" />
-          </div>
-        </div>
-      </PageHeader>
-
-      <ul className="nav nav-tabs nav-tabs-scrollable mb-4">
-        {TABS.map((tab) => (
-          <li key={tab.key} className="nav-item">
-            <button
-              className={`nav-link ${activeTab === tab.key ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.key)}
-            >
-              <i className={`ri-${tab.icon} me-1`} aria-hidden="true" />
-              {tab.label}
-            </button>
-          </li>
-        ))}
-      </ul>
+    <div className="adv2-page">
+      <AgentDetailV2Header
+        detail={detail}
+        displayName={displayName}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onDeactivate={handleDeactivate}
+        onTalk={() => setActiveTab('talk')}
+        resetting={resetting}
+        resetMessage={resetMessage}
+        refreshing={loading}
+        onRefresh={fetchDetail}
+        reactivating={reactivating}
+        reactivationMessage={reactivationMessage}
+        selectedAutonomyLevel={selectedAutonomyLevel}
+        onSelectAutonomyLevel={setSelectedAutonomyLevel}
+        onReactivate={handleReactivate}
+      />
 
       {activeTab === 'glance' && (
-        <AgentAtAGlanceTab agentId={id} detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} onNavigate={setActiveTab} />
+        <div className="adv2-wrap">
+          <AgentAtAGlanceTab agentId={id} detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} onNavigate={setActiveTab} />
+        </div>
       )}
       {activeTab === 'command' && (
-        <AgentLiveStatusTab detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} />
+        <div className="adv2-wrap">
+          <AgentLiveStatusTab detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} />
+        </div>
       )}
-      {activeTab === 'overview' && <AgentOverviewTab detail={detail} />}
+      {activeTab === 'overview' && <AgentOverviewV2 detail={detail} />}
       {activeTab === 'work' && (
-        <AgentWorkDecisionsTab agentId={id} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} onInboxChanged={fetchInbox} />
+        <div className="adv2-wrap">
+          <AgentWorkDecisionsTab agentId={id} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} onInboxChanged={fetchInbox} />
+        </div>
       )}
-      {activeTab === 'talk' && <AgentTalkTab agentId={id} />}
-      {activeTab === 'reports' && <AgentReportsTab agentId={id} />}
-      {activeTab === 'performance' && <AgentPerformanceTab agentId={id} />}
-      {activeTab === 'trust' && <AgentTrustControlTab agentId={id} detail={detail} />}
-    </>
+      {activeTab === 'talk' && <div className="adv2-wrap"><AgentTalkTab agentId={id} /></div>}
+      {activeTab === 'reports' && <div className="adv2-wrap"><AgentReportsTab agentId={id} /></div>}
+      {activeTab === 'performance' && <div className="adv2-wrap"><AgentPerformanceTab agentId={id} /></div>}
+      {activeTab === 'trust' && <div className="adv2-wrap"><AgentTrustControlTab agentId={id} detail={detail} /></div>}
+    </div>
   );
 }

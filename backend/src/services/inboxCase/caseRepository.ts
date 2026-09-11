@@ -135,10 +135,22 @@ export async function reopenCase(caseId: string, opts: TransitionOptions & { rea
   const from = found.state;
   assertReopen(from);
 
+  // /inbox-zero T7: the prior closed_at is captured into the event so a
+  // reopen is reversible (scripts/revertInboxZeroReopens.ts reads it); the
+  // waiting-ledger columns are cleared because the wait this case was in is
+  // over by definition — promoteWaitingFromAction keeps an EXISTING
+  // waiting_since on purpose, so leaving it set would pin a stale SLA on a
+  // reopened case that gets a fresh MARK_WAITING.
+  const previousClosedAt = found.closed_at;
+  const previousWaitingSince = found.waiting_since ?? null;
+  const previousSlaDueAt = found.sla_due_at ?? null;
+
   await found.update({
     state: 'REOPENED',
     reopen_count: found.reopen_count + 1,
     closed_at: null,
+    waiting_since: null,
+    sla_due_at: null,
     updated_at: new Date(),
   });
 
@@ -149,7 +161,13 @@ export async function reopenCase(caseId: string, opts: TransitionOptions & { rea
     actor_id: opts.actor_id,
     previous_state: from,
     new_state: 'REOPENED',
-    details: { reason: opts.reason, ...opts.details },
+    details: {
+      reason: opts.reason,
+      previous_closed_at: previousClosedAt ? new Date(previousClosedAt).toISOString() : null,
+      previous_waiting_since: previousWaitingSince ? new Date(previousWaitingSince).toISOString() : null,
+      previous_sla_due_at: previousSlaDueAt ? new Date(previousSlaDueAt).toISOString() : null,
+      ...opts.details,
+    },
     correlation_id: found.correlation_id,
   });
 
