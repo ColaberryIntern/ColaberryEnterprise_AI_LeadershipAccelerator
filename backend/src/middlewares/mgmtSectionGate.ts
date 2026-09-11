@@ -19,7 +19,8 @@ import { ALL_SECTIONS, type SectionKey } from '../services/access/mgmtRoles';
 // Admin API path prefix → section key. Longest-meaningful prefixes; matched with
 // a segment boundary so '/api/admin/community' never captures '/communications'.
 const PATH_SECTION: Array<[string, SectionKey]> = [
-  ['/api/admin/dashboard', 'dashboard'],
+  ['/api/admin/dashboard', 'dashboard'],
+
   ['/api/admin/trust', 'trust'],
   ['/api/admin/war-room', 'war_room'],
   ['/api/admin/revenue', 'revenue'], ['/api/admin/refunds', 'revenue'], ['/api/admin/pipeline', 'revenue'],
@@ -34,6 +35,11 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // sending identity behind campaigns and communications, both already 'campaigns',
   // so it belongs to the same section rather than a new key.
   ['/api/admin/brands', 'campaigns'],
+  // Marketing content composer (drafts, variants, validation). Same section as the campaigns
+  // and brands it publishes for. Mapped the day the routes landed, for the reason the brands
+  // row above gives. NOTE the prefix matcher is boundary-aware, so this does not swallow
+  // /api/admin/content-queue, which stays inbox_content.
+  ['/api/admin/content', 'campaigns'],
   // Explorer Growth OS Command Center (spec §27; §1381 assigns it
   // `section: 'campaigns'` explicitly, so no new section key is needed).
   //
