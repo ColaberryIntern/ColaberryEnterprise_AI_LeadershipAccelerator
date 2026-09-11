@@ -105,6 +105,36 @@ router.post('/api/admin/campaigns/:id/ghl-sync', requireAdmin, handleGhlSync);
 router.get('/api/admin/campaigns/:id/ghl-status', requireAdmin, handleGhlStatus);
 router.post('/api/admin/campaigns/:id/ghl-test-sms', requireAdmin, handleGhlTestSms);
 router.post('/api/admin/campaigns/:id/ghl-resync-lead', requireAdmin, handleGhlResyncLead);
+
+/**
+ * Campaign 360 Attribution (T019). Three models over the campaign's identified leads, with
+ * identity coverage and the credit-sum guard reported rather than hidden.
+ */
+router.get('/api/admin/campaigns/:id/attribution', requireAdmin, async (req: Request, res: Response) => {
+  const id = String(req.params.id ?? '');
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    res.status(400).json({ error: 'Campaign id must be a UUID', error_class: 'ValidationError' });
+    return;
+  }
+  const rawWindow = Number(req.query.window ?? 30);
+  // Bounded: a window of 0 attributes nothing, a window of years attributes a visit from
+  // another life. 1-365 days is the range in which the answer means something.
+  if (!Number.isInteger(rawWindow) || rawWindow < 1 || rawWindow > 365) {
+    res.status(400).json({ error: 'window must be an integer number of days from 1 to 365', error_class: 'ValidationError' });
+    return;
+  }
+  try {
+    const { getCampaignAttribution } = await import('../../services/marketing/campaignAttributionService');
+    res.json(await getCampaignAttribution(id, rawWindow));
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'marketing',
+      event: 'campaign_attribution_failed', outcome: 'failure',
+      error_class: err?.name ?? 'Error', context: { campaignId: id, message: String(err?.message ?? err).slice(0, 200) },
+    }));
+    res.status(500).json({ error: 'Failed to compute attribution', error_class: 'InternalError' });
+  }
+});
 router.post('/api/admin/campaigns/:id/generate-icp', requireAdmin, handleGenerateICP);
 router.post('/api/admin/campaigns/:id/reverse-engineer', requireAdmin, handleReverseEngineer);
 router.post('/api/admin/campaigns/:id/rebuild', requireAdmin, handleRebuildCampaign);
