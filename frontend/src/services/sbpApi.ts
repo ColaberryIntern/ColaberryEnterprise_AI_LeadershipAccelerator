@@ -289,6 +289,33 @@ export async function previewIntake(input: {
   }
 }
 
+/**
+ * The stored truth, read back after a build exists. Same two halves as the
+ * pre-Confirm preview, plus the revision. Null when the intake never ran, so
+ * a caller can tell "nothing recorded" from "recorded nothing".
+ */
+export interface IntakeReviewRecord {
+  project_id: string;
+  revision: number;
+  items: ReviewItem[];
+  counts: Record<ReviewGroup, number>;
+  contradictions: string[];
+  blocksPlanning: boolean;
+  unanswered: string[];
+}
+
+export async function getIntakeReview(projectId: string): Promise<
+  { ok: true; review: IntakeReviewRecord | null } | { ok: false; error: SbpError }
+> {
+  try {
+    const res = await portalApi.get(`/api/portal/sbp/intake/${encodeURIComponent(projectId)}/review`);
+    return { ok: true, review: res.data as IntakeReviewRecord };
+  } catch (err: any) {
+    if (err?.response?.status === 404) return { ok: true, review: null };
+    return { ok: false, error: toError(err) };
+  }
+}
+
 /** Start a build. Resolves as soon as the intake is durable; generation continues. */
 export async function startBuild(answers: StartBuildAnswers): Promise<
   { ok: true; correlationId: string } | { ok: false; error: SbpError }

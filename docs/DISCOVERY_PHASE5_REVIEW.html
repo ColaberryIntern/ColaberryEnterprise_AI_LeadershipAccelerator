@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unified Project Discovery, Phase 5 — Pre-deploy Review</title>
+<style>
+  :root {
+    --bg: #fafafa; --text: #1f2937; --muted: #6b7280; --primary: #1a365d;
+    --accent: #38a169; --warn: #d97706; --border: #e5e7eb; --card: #ffffff;
+  }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; padding-bottom: 120px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+  h1 { font-size: 28px; color: var(--primary); margin-bottom: .25rem; }
+  h2 { font-size: 20px; color: var(--primary); margin-top: 2.5rem; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 820px; }
+  .notice { border-left: 4px solid var(--warn); background: #fffbeb; padding: 1rem 1.25rem; margin: 1.5rem 0; border-radius: 6px; font-size: 14px; }
+  .notice b { color: #92400e; }
+  .stop { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.75rem; margin: 2rem 0; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .stop-num { display: inline-block; background: var(--primary); color: #fff; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 700; font-size: 13px; margin-right: 8px; vertical-align: middle; }
+  .what { font-size: 14px; color: var(--muted); margin: .5rem 0 1rem; max-width: 820px; }
+  .shots { display: grid; grid-template-columns: 2fr 1fr; gap: 1.25rem; align-items: start; }
+  @media (max-width: 800px) { .shots { grid-template-columns: 1fr; } }
+  .shot { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: #f3f4f6; }
+  .shot img { display: block; width: 100%; height: auto; }
+  .cap { font-size: 12px; color: var(--muted); padding: .5rem .75rem; border-top: 1px solid var(--border); background: #fff; }
+  .checks { font-size: 14px; margin: 1rem 0 0; padding-left: 1.2rem; }
+  .checks li { margin: .25rem 0; }
+  .ok::before { content: "✓ "; color: var(--accent); font-weight: 700; }
+  table { border-collapse: collapse; font-size: 14px; width: 100%; margin-top: 1rem; }
+  th, td { text-align: left; padding: .5rem .75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  code { font-size: 13px; background: #f3f4f6; padding: .1rem .35rem; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Unified Project Discovery, Phase 5</h1>
+  <p class="lede">The review step as a confirmation gate, the fail-closed "have an AI call me" option, the Story 000 handoff on delivery, and the step 1 copy. Rendered at 1440 and 390.</p>
+
+  <div class="notice">
+    <b>These are pre-deploy renders, not production screenshots.</b> Each image is the real component (ProjectWizard, IntakeReviewPane, ProjectBanners) mounted by
+    <code>frontend/src/pages/portal/projects/__tests__/discoveryHarness.dump.test.tsx</code> against a fixture preview, then dressed in the app's real stylesheets and
+    captured by <code>scripts/captureDiscoveryHarness.js</code>. They prove layout at each width. They do not prove production behaviour: no student session, no
+    real backend, no real call. The production walkthrough is a separate step after deploy, with <code>scripts/captureProductionScreenshots.js</code>.
+    Every capture reported <code>horizontalOverflow=false pageErrors=0</code>.
+  </div>
+
+  <div class="stop">
+    <h2><span class="stop-num">1</span>Review &amp; confirm: the gate, with the call offer</h2>
+    <p class="what">What the server will record on Confirm, under human headings in the student's own words; the receipt for the two questions the description already answered; the four things still unanswered, in plain language, with "none of these blocks the build"; and the call offer, shown only because the fixture says a call is available. The consent text is the checkbox label. The number field appears only once ticked.</p>
+    <div class="shots">
+      <div class="shot"><img src="screenshots/2026-09-11-discovery-phase5/01-review-step-1440.png" alt="Review step at 1440"><div class="cap">1440 wide</div></div>
+      <div class="shot"><img src="screenshots/2026-09-11-discovery-phase5/01-review-step-390.png" alt="Review step at 390"><div class="cap">390 wide</div></div>
+    </div>
+    <ul class="checks">
+      <li class="ok">Headings are the dimension in a person's words ("What a person checks before it acts"), never the schema name.</li>
+      <li class="ok">The idea appears once, verbatim, not again as a truncated item.</li>
+      <li class="ok">Consent words are the server's, verbatim, and say "not consent to marketing calls".</li>
+      <li class="ok">At 390 the boxes stack, the consent label wraps cleanly beside its checkbox, and the primary button keeps its label on two lines rather than clipping.</li>
+    </ul>
+  </div>
+
+  <div class="stop">
+    <h2><span class="stop-num">2</span>Review &amp; confirm: the server could not be reached</h2>
+    <p class="what">The fallback. The read-back is unavailable, so the step says so in one line and echoes the raw answers instead of a blank review. Confirm still works: the truth is written from the same inputs either way. No call offer, because the server could not say one was available.</p>
+    <div class="shots">
+      <div class="shot"><img src="screenshots/2026-09-11-discovery-phase5/02-review-fallback-1440.png" alt="Review fallback at 1440"><div class="cap">1440 wide</div></div>
+      <div class="shot"><img src="screenshots/2026-09-11-discovery-phase5/02-review-fallback-390.png" alt="Review fallback at 390"><div class="cap">390 wide</div></div>
+    </div>
+    <ul class="checks">
+      <li class="ok">The notice is amber, not red: a missed connection, not a refusal.</li>
+      <li class="ok">Nothing on the screen claims the server understood anything.</li>
+    </ul>
+  </div>
+
+  <div class="stop">
+    <h2><span class="stop-num">3</span>Delivered: the Story 000 handoff, with a call notice beside it</h2>
+    <p class="what">Replaces the generic "your plan is ready" line. Names Story 000, says what its prompt does (connects the repo so the platform can see pushes) and what it records (what was understood and what was not), quotes the counts from the stored truth when it has them, and opens the story. The call notice below it is the refused case, worded so nobody expects a ring.</p>
+    <div class="shots">
+      <div class="shot"><img src="screenshots/2026-09-11-discovery-phase5/03-handoff-1440.png" alt="Handoff at 1440"><div class="cap">1440 wide</div></div>
+      <div class="shot"><img src="screenshots/2026-09-11-discovery-phase5/03-handoff-390.png" alt="Handoff at 390"><div class="cap">390 wide</div></div>
+    </div>
+    <ul class="checks">
+      <li class="ok">Green rail for the handoff, red rail for the refused call: the two states read differently at a glance.</li>
+      <li class="ok">"4 things you told us, and 4 questions still unanswered" comes from the review endpoint's counts, not from the plan.</li>
+    </ul>
+  </div>
+
+  <div class="stop">
+    <h2><span class="stop-num">4</span>Step 1: why detail matters</h2>
+    <p class="what">One sentence added to the lead: the next step asks only about what it could not find, so the more detail here, the fewer questions.</p>
+    <div class="shots">
+      <div class="shot"><img src="screenshots/2026-09-11-discovery-phase5/04-step1-1440.png" alt="Step 1 at 1440"><div class="cap">1440 wide</div></div>
+      <div class="shot"><img src="screenshots/2026-09-11-discovery-phase5/04-step1-390.png" alt="Step 1 at 390"><div class="cap">390 wide</div></div>
+    </div>
+  </div>
+
+  <h2>What is and is not verified</h2>
+  <table>
+    <tr><th>Claim</th><th>Evidence</th></tr>
+    <tr><td>The surfaces lay out at 1440 and 390 with no horizontal overflow</td><td>Eight captures above, each <code>horizontalOverflow=false pageErrors=0</code></td></tr>
+    <tr><td>The words on screen are the words the server sends</td><td>Wizard and banner suites (25 + 9 tests) assert the labels, the consent text and the counts come from the response</td></tr>
+    <tr><td>Behaviour in production</td><td><b>Not verified.</b> Nothing in Phase 5 is deployed. After deploy: authenticated capture against the live app, and a real intake through the wizard.</td></tr>
+    <tr><td>A call can be placed</td><td><b>Not verified, by design.</b> No agent is configured anywhere; the option does not render until one is.</td></tr>
+  </table>
+</div>
+</body>
+</html>

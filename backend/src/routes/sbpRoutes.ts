@@ -426,16 +426,29 @@ router.get('/api/portal/sbp/intake/:projectId/review', requireParticipant, async
     const projectId = z.string().uuid().parse(req.params.projectId);
     await requireOwnedProject(req, projectId);
 
-    const { loadIntakeTruth } = await import('../services/sbp/intakeTruthStore');
+    const { loadIntakeTruthAtRevision } = await import('../services/sbp/intakeTruthStore');
     const { buildIntakeReview } = await import('../services/sbp/intakeReview');
-    const items = await loadIntakeTruth(projectId);
+    const { remainingAngles } = await import('../services/sbp/projectDiscoveryCall');
+    const { UNANSWERED_COST } = await import('../services/sbp/story000Truth');
+    const stored = await loadIntakeTruthAtRevision(projectId);
 
     // null means the intake never ran; [] means it ran and found nothing
     // quotable. A caller that conflates them cannot tell a student who skipped
     // every question from one who never started, so the wire keeps them apart.
-    if (items === null) return res.status(404).json({ error: 'No intake for this project' });
+    if (stored === null) return res.status(404).json({ error: 'No intake for this project' });
 
-    res.json({ project_id: projectId, ...buildIntakeReview(items) });
+    // The same two halves the preview showed before Confirm and Story 000
+    // renders after it: what was heard, and what is still unanswered, in the
+    // same words. The revision lets a caller tell whether a later correction
+    // has moved the truth on from what a plan was built against.
+    res.json({
+      project_id: projectId,
+      revision: stored.revision,
+      ...buildIntakeReview(stored.items),
+      unanswered: remainingAngles(stored.items)
+        .map((angle) => UNANSWERED_COST[angle])
+        .filter((s): s is string => Boolean(s)),
+    });
   } catch (e) { fail(res, e, next); }
 });
 
