@@ -6,12 +6,19 @@
  */
 
 const mockQuery = jest.fn();
-jest.mock('../../config/database', () => ({
-  sequelize: { query: (...a: unknown[]) => mockQuery(...a) },
-}));
+// A REAL Sequelize instance (never connected) so the models can init against it - the column
+// assertion below reads Visitor/InteractionOutcome's declared attributes - with `query` stubbed.
+jest.mock('../../config/database', () => {
+  const { Sequelize } = jest.requireActual('sequelize');
+  const sequelize = new Sequelize('postgres://never:never@127.0.0.1:1/never', { logging: false });
+  sequelize.query = (...a: unknown[]) => mockQuery(...a);
+  return { sequelize };
+});
 jest.mock('../governanceService', () => ({ logAgentExecution: jest.fn().mockResolvedValue(undefined) }));
 
-import { getCampaignMetrics, totalCampaignMetrics } from '../marketingAnalyticsService';
+import { ACTIVITY_DATE_COLUMNS, buildDateFilter, getCampaignMetrics, totalCampaignMetrics } from '../marketingAnalyticsService';
+import Visitor from '../../models/Visitor';
+import InteractionOutcome from '../../models/InteractionOutcome';
 
 function lastSql(): { sql: string; replacements: Record<string, unknown> } {
   const [sql, opts] = mockQuery.mock.calls.at(-1) as [string, { replacements: Record<string, unknown> }];
@@ -38,12 +45,30 @@ describe('brand scope reaches the SQL', () => {
 });
 
 describe('the date range reaches BOTH activity sources', () => {
-  it('start and end filter interaction outcomes and visitors, each on its own column', async () => {
+  it('the columns the clause names are columns the models DECLARE - a check a mocked query cannot fake', () => {
+    // Attempt 2 of this task shipped `v."createdAt"`: a literal nothing had ever executed,
+    // made live, on a table whose column is `created_at`. The SQL-text test passed because it
+    // pinned the same wrong string. This assertion goes to the model definition instead.
+    expect(Object.keys(Visitor.getAttributes())).toContain(ACTIVITY_DATE_COLUMNS.visitors);
+    expect(Object.keys(InteractionOutcome.getAttributes())).toContain(ACTIVITY_DATE_COLUMNS.interaction_outcomes);
+    // And neither model is a Sequelize-timestamped one, so there is no camelCase alias to fall back on.
+    expect(Object.keys(Visitor.getAttributes())).not.toContain('createdAt');
+    expect(Object.keys(InteractionOutcome.getAttributes())).not.toContain('createdAt');
+  });
+
+  it('start and end filter interaction outcomes and visitors, each on its declared column', async () => {
     await getCampaignMetrics({ start: '2026-08-01', end: '2026-08-31' });
     const { sql, replacements } = lastSql();
-    expect(sql).toContain('AND io.created_at >= :start AND io.created_at <= :end');
-    expect(sql).toContain('AND v."createdAt" >= :start AND v."createdAt" <= :end');
+    expect(sql).toContain(`AND io.${ACTIVITY_DATE_COLUMNS.interaction_outcomes} >= CAST(:start AS date)`);
+    expect(sql).toContain(`AND v.${ACTIVITY_DATE_COLUMNS.visitors} >= CAST(:start AS date)`);
     expect(replacements).toMatchObject({ start: '2026-08-01', end: '2026-08-31' });
+  });
+
+  it('the end day is INCLUSIVE: the bound is strictly before the following day, never <= midnight', () => {
+    const f = buildDateFilter({ start: '2026-08-01', end: '2026-08-31' });
+    const clause = f.clauseFor('x.created_at');
+    expect(clause).toBe("AND x.created_at >= CAST(:start AS date) AND x.created_at < (CAST(:end AS date) + INTERVAL '1 day')");
+    expect(clause).not.toContain('<= :end');
   });
 
   it('no range: no date clause at all', async () => {
@@ -57,7 +82,7 @@ describe('the date range reaches BOTH activity sources', () => {
   it('start only: only the lower bound', async () => {
     await getCampaignMetrics({ start: '2026-08-01' });
     const { sql } = lastSql();
-    expect(sql).toContain('io.created_at >= :start');
+    expect(sql).toContain('io.created_at >= CAST(:start AS date)');
     expect(sql).not.toContain(':end');
   });
 });

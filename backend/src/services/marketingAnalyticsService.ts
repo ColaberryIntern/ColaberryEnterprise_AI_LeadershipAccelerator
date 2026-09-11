@@ -96,6 +96,19 @@ function buildUnavailable(): UnavailableMetric[] {
 
 
 
+/**
+ * The timestamp column of each activity source the date range applies to. Named here, in one
+ * place, and asserted against the models' declared attributes by
+ * marketingCampaignScope.test.ts - because the previous clause named `v."createdAt"`, a column
+ * `visitors` has never had (it is `created_at`, `timestamps: false`), and a test that only
+ * mocked sequelize.query pinned the wrong literal and passed. A column name the model does not
+ * declare cannot pass that suite now.
+ */
+export const ACTIVITY_DATE_COLUMNS = {
+  interaction_outcomes: 'created_at',
+  visitors: 'created_at',
+} as const;
+
 export interface CampaignMetricFilters {
   start?: string;
   end?: string;
@@ -126,7 +139,7 @@ export async function getCampaignMetrics(filters?: CampaignMetricFilters): Promi
         COUNT(*) FILTER (WHERE io.outcome = 'clicked')::int AS total_clicks
       FROM interaction_outcomes io
       WHERE io.campaign_id IS NOT NULL
-        ${dateFilter.clauseFor('io.created_at')}
+        ${dateFilter.clauseFor(`io.${ACTIVITY_DATE_COLUMNS.interaction_outcomes}`)}
       GROUP BY io.campaign_id
     ),
     visitor_data AS (
@@ -137,7 +150,7 @@ export async function getCampaignMetrics(filters?: CampaignMetricFilters): Promi
       FROM visitors v
       LEFT JOIN intent_scores i ON i.visitor_id = v.id
       WHERE v.campaign_id IS NOT NULL AND v.campaign_id != ''
-        ${dateFilter.clauseFor('v."createdAt"')}
+        ${dateFilter.clauseFor(`v.${ACTIVITY_DATE_COLUMNS.visitors}`)}
       GROUP BY v.campaign_id
     )
     SELECT
@@ -226,11 +239,17 @@ export async function getCampaignMetrics(filters?: CampaignMetricFilters): Promi
 
 /**
  * The date range, as a clause for WHICHEVER timestamp column the CTE has. Until this build the
- * builder returned one clause hard-wired to `v."createdAt"` and nothing interpolated it, so the
- * range the scope strip stated was never applied - the verifier's finding, and true on main
- * before this branch. The column is a caller-supplied identifier, never user input.
+ * builder returned one clause hard-wired to a column that does not exist and nothing
+ * interpolated it, so the range the scope strip stated was never applied - the verifier's
+ * finding, and true on main before this branch. The column is a caller-supplied identifier
+ * from ACTIVITY_DATE_COLUMNS, never user input.
+ *
+ * `end` is INCLUSIVE, as the scope strip promises (`DateRange.end` is documented inclusive):
+ * a `YYYY-MM-DD` literal compared with `<=` is midnight at the START of that day and would
+ * drop the whole last day from both the current and the prior window. So the upper bound is
+ * strictly less than the day after.
  */
-function buildDateFilter(filters?: { start?: string; end?: string }): {
+export function buildDateFilter(filters?: { start?: string; end?: string }): {
   clauseFor: (column: string) => string;
   replacements: Record<string, string>;
 } {
@@ -239,8 +258,8 @@ function buildDateFilter(filters?: { start?: string; end?: string }): {
   if (filters?.end) replacements.end = filters.end;
   return {
     clauseFor: (column) => [
-      filters?.start ? `AND ${column} >= :start` : '',
-      filters?.end ? `AND ${column} <= :end` : '',
+      filters?.start ? `AND ${column} >= CAST(:start AS date)` : '',
+      filters?.end ? `AND ${column} < (CAST(:end AS date) + INTERVAL '1 day')` : '',
     ].filter(Boolean).join(' '),
     replacements,
   };
