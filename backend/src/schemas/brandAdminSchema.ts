@@ -1,6 +1,15 @@
 import { z } from 'zod';
 import { BRAND_STATUSES } from '../models/Brand';
 
+function isValidTimeZone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Request contracts for the brand administration API.
  *
@@ -56,6 +65,16 @@ export const BrandPatchSchema = z
     support_email: z.string().email().nullable().optional(),
     default_public_url: z.string().url().nullable().optional(),
     default_theme_key: z.string().trim().min(1).max(100).nullable().optional(),
+    // IANA Area/Location or UTC. Abbreviations like "CST" are refused: ICU would accept them,
+    // and "CST" is Central Standard in one place and China Standard in another.
+    timezone: z
+      .string()
+      .trim()
+      .refine((tz) => tz === 'UTC' || (tz.includes('/') && isValidTimeZone(tz)), {
+        message: 'timezone must be an IANA zone such as America/Chicago',
+      })
+      .nullable()
+      .optional(),
   })
   .strict()
   // An empty patch is a caller bug, not a no-op to absorb quietly. Returning 200 for a request

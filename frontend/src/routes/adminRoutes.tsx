@@ -49,6 +49,7 @@ const MissedOpportunitiesPage = lazy(() => import('../pages/admin/MissedOpportun
 const AgentOrphansPage = lazy(() => import('../pages/admin/AgentOrphansPage'));
 const AdminMarketingDashboardPage = lazy(() => import('../pages/admin/marketing/AdminMarketingDashboardPage'));
 const AdminBrandsPage = lazy(() => import('../pages/admin/marketing/AdminBrandsPage'));
+const AdminMarketingCalendarPage = lazy(() => import('../pages/admin/marketing/AdminMarketingCalendarPage'));
 const AdminCommunicationsPage = lazy(() => import('../pages/admin/AdminCommunicationsPage'));
 const AdminTicketBoardPage = lazy(() => import('../pages/admin/AdminTicketBoardPage'));
 const AgentDetailPage = lazy(() => import('../pages/admin/AgentDetailPage'));
@@ -175,6 +176,7 @@ const adminRoutes = (
             be the duplicate destination the spec forbids. The marketing path exists so the IA
             in the spec resolves; the canonical page is unchanged. */}
         <Route path="/admin/marketing/campaigns/:id" element={<AdminCampaignDetailPage />} />
+        <Route path="/admin/marketing/calendar" element={<AdminMarketingCalendarPage />} />
         <Route path="/admin/tickets" element={<AdminTicketBoardPage />} />
         <Route path="/admin/agents/:id" element={<AgentDetailPage />} />
         <Route path="/admin/governance" element={<GovernanceCommandCenter />} />

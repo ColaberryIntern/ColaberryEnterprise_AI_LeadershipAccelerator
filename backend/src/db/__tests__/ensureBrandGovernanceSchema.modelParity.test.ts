@@ -36,10 +36,25 @@ describe('ensureBrandGovernanceSchema — DDL and model agree', () => {
     for (const sql of BRAND_GOVERNANCE_SCHEMA_STATEMENTS) expect(sql).toMatch(/IF NOT EXISTS/i);
   });
 
-  it('is additive only', () => {
+  it('is additive only - the same guards the other five suites apply', () => {
+    // Not a blanket ban on ALTER TABLE: `ADD COLUMN IF NOT EXISTS` on brands IS additive. What
+    // is banned is every form that could destroy or rewrite live rows.
     const joined = BRAND_GOVERNANCE_SCHEMA_STATEMENTS.join('\n').toUpperCase();
     expect(joined).not.toMatch(/DROP\s+(TABLE|COLUMN|CONSTRAINT|INDEX)/);
-    expect(joined).not.toMatch(/ALTER\s+TABLE/);
-    expect(joined).not.toMatch(/TRUNCATE|DELETE\s+FROM/);
+    expect(joined).not.toMatch(/RENAME/);
+    expect(joined).not.toMatch(/ALTER\s+COLUMN/);
+    expect(joined).not.toMatch(/SET\s+NOT\s+NULL/);
+    expect(joined).not.toMatch(/ADD\s+COLUMN[^\n]*NOT\s+NULL/);
+    expect(joined).not.toMatch(/TRUNCATE|DELETE\s+FROM|UPDATE\s+BRANDS/);
+  });
+
+  it('the brands.timezone column it adds is declared on the Brand model, nullable', () => {
+    // The live-table stakes: a column the model declares and the DB lacks breaks every brand
+    // read in the product, not just the calendar.
+    const brand = modelsByTable()['brands'];
+    expect(brand).toBeDefined();
+    expect(modelColumnNames(brand).has('timezone')).toBe(true);
+    const attr = brand.getAttributes().timezone;
+    expect(attr.allowNull).toBe(true);
   });
 });

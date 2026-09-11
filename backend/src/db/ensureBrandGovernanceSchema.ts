@@ -33,6 +33,12 @@ export const BRAND_GOVERNANCE_SCHEMA_STATEMENTS: readonly string[] = [
   `CREATE UNIQUE INDEX IF NOT EXISTS brand_governance_rules_brand_version_unique
      ON brand_governance_rules (brand_id, version)`,
   `CREATE INDEX IF NOT EXISTS idx_brand_governance_rules_tenant ON brand_governance_rules (tenant_id)`,
+  // Brand-local time for the calendar and the composer's confirmation surface (T023/T025).
+  // NULLABLE with the default applied in code (America/Chicago, the codebase convention),
+  // never `NOT NULL DEFAULT` on the live brands table - the additive-DDL guard in this
+  // workstream's parity suites forbids that form on purpose. IANA Area/Location only;
+  // validated at the write boundary.
+  `ALTER TABLE brands ADD COLUMN IF NOT EXISTS timezone VARCHAR(64)`,
 ];
 
 const REQUIRED_COLUMNS = ['id', 'tenant_id', 'brand_id', 'version', 'rules', 'published_by', 'note', 'created_at'];
