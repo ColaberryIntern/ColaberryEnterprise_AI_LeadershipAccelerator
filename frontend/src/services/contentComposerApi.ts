@@ -202,6 +202,87 @@ export async function runAction(id: string, action: ComposerAction, scheduledFor
   return res.data;
 }
 
+export type ApprovalDecision = 'approved' | 'changes_requested' | 'rejected';
+
+export async function decideApproval(id: string, decision: ApprovalDecision, note: string | null): Promise<{ item: ContentItem }> {
+  const res = await api.post(`/api/admin/content/${id}/approval`, { decision, note });
+  return { item: res.data.item };
+}
+
+// ── Publishing queue and receipts (/api/admin/publishing) ──────────────────────────────────
+
+export type PublishingJobState = 'pending' | 'retrying' | 'claimed' | 'publishing' | 'published' | 'failed' | 'cancelled' | 'dead_lettered';
+
+export interface PublishingJob {
+  id: string;
+  provider: ProviderKey;
+  state: PublishingJobState;
+  publish_at: string;
+  attempts: number;
+  max_attempts: number;
+  next_retry_at: string | null;
+  last_error: string | null;
+  last_error_class: string | null;
+  dead_lettered_at: string | null;
+  dead_letter_reason: string | null;
+}
+
+export interface HandoffPackage {
+  provider: ProviderKey;
+  displayName: string;
+  reasons: string[];
+  text: string;
+  linkUrl: string | null;
+  disclosureText: string | null;
+  mediaRefs: string[];
+  instructions: string;
+}
+
+export interface ExternalPublication {
+  id: string;
+  publishing_job_id: string | null;
+  provider: ProviderKey;
+  external_id: string;
+  permalink: string | null;
+  published_at: string | null;
+  current_status: 'live' | 'handoff_pending' | 'removed' | string;
+  metadata: { mode?: 'live' | 'dry_run' | 'handoff'; handoff?: HandoffPackage; [k: string]: unknown };
+}
+
+export interface WorkerRunResult {
+  halted: boolean; haltReason: string | null; claimed: number; published: number; failed: number; retried: number; deadLettered: number; skipped: number;
+}
+
+export async function listJobs(itemId: string): Promise<PublishingJob[]> {
+  const res = await api.get('/api/admin/publishing/jobs', { params: { item_id: itemId } });
+  return res.data.jobs ?? [];
+}
+
+export async function listPublications(itemId: string): Promise<ExternalPublication[]> {
+  const res = await api.get('/api/admin/publishing/publications', { params: { item_id: itemId } });
+  return res.data.publications ?? [];
+}
+
+export async function retryJob(jobId: string): Promise<PublishingJob> {
+  const res = await api.post(`/api/admin/publishing/jobs/${jobId}/retry`);
+  return res.data.job;
+}
+
+export async function cancelJob(jobId: string, reason: string | null): Promise<PublishingJob> {
+  const res = await api.post(`/api/admin/publishing/jobs/${jobId}/cancel`, { reason });
+  return res.data.job;
+}
+
+export async function completeHandoff(publicationId: string, externalId: string, permalink: string | null): Promise<ExternalPublication> {
+  const res = await api.post(`/api/admin/publishing/publications/${publicationId}/handoff-complete`, { external_id: externalId, permalink });
+  return res.data.publication;
+}
+
+export async function runQueueNow(): Promise<WorkerRunResult> {
+  const res = await api.post('/api/admin/publishing/run');
+  return res.data.result;
+}
+
 /** The message a failed request carries, or a generic one. Never the raw axios error. */
 export function errorMessage(err: unknown, fallback: string): string {
   const e = err as { response?: { data?: { error?: string; details?: unknown } } };

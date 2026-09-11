@@ -40,6 +40,8 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // row above gives. NOTE the prefix matcher is boundary-aware, so this does not swallow
   // /api/admin/content-queue, which stays inbox_content.
   ['/api/admin/content', 'campaigns'],
+  // Publishing queue and receipts (T026): the same surface the composer submits into.
+  ['/api/admin/publishing', 'campaigns'],
   // Explorer Growth OS Command Center (spec §27; §1381 assigns it
   // `section: 'campaigns'` explicitly, so no new section key is needed).
   //

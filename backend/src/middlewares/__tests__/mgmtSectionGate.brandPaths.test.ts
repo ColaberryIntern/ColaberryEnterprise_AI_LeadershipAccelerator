@@ -54,6 +54,12 @@ describe('mgmtSectionGate classifies the brand admin surface', () => {
     expect(pathToSection('/api/admin/content-queue')).toBe('inbox_content');
   });
 
+  it('maps the publishing queue and receipts to campaigns', () => {
+    expect(pathToSection('/api/admin/publishing')).toBe('campaigns');
+    expect(pathToSection('/api/admin/publishing/jobs/abc/retry')).toBe('campaigns');
+    expect(pathToSection('/api/admin/publishing/publications/abc/handoff-complete')).toBe('campaigns');
+  });
+
   it('does not accidentally classify a DIFFERENT surface that merely starts similarly', () => {
     // Guards against a prefix rule that is too greedy. `/api/admin/brand-safety` is not a
     // brand-admin route and must not inherit its section by string accident.

@@ -15,6 +15,7 @@ import { transitionContentItem, WorkflowError } from '../../services/content/con
 import { generateItemLinks } from '../../services/content/composerLinkService';
 import { buildItemConfirmation } from '../../services/content/composerConfirmationService';
 import { COMPOSER_ACTIONS, runComposerAction, type ComposerAction } from '../../services/content/composerActionService';
+import { APPROVAL_DECISIONS, decideApproval, type ApprovalDecision } from '../../services/content/contentApprovalService';
 
 /**
  * Marketing content composer API — spec 8.1 steps 1-7: draft, variants, validation.
@@ -61,6 +62,10 @@ const LinksSchema = z.object({ destination_url: z.string().trim().url().max(2048
 const ActionSchema = z.object({
   action: z.enum(COMPOSER_ACTIONS as unknown as [string, ...string[]]),
   scheduled_for: z.string().datetime({ offset: true }).optional(),
+}).strict();
+const ApprovalSchema = z.object({
+  decision: z.enum(APPROVAL_DECISIONS as unknown as [string, ...string[]]),
+  note: z.string().trim().max(2000).nullable().optional(),
 }).strict();
 const ListSchema = z.object({
   brand_id: UUID.optional(),
@@ -282,6 +287,21 @@ router.post('/api/admin/content/:id/action', requireAdmin, async (req: Request, 
       validation: result.validation ? { ok: result.validation.ok, blockers: result.validation.providers.blockers } : null,
     });
   } catch (err) { fail(res, err, 'composer_action_failed'); }
+});
+
+// The reviewer's decision. Separate from /action because a different person makes it: the
+// author sends for approval, the reviewer decides, and the audit trail keeps them apart.
+router.post('/api/admin/content/:id/approval', requireAdmin, async (req: Request, res: Response) => {
+  const id = UUID.safeParse(req.params.id);
+  if (!id.success) return bad(res, id.error.flatten());
+  const parsed = ApprovalSchema.safeParse(req.body);
+  if (!parsed.success) return bad(res, parsed.error.flatten());
+  try {
+    if (!(await visibleItem(req, id.data))) return void res.status(404).json(NOT_FOUND);
+    const actor = { adminId: req.admin?.sub ?? null, email: req.admin?.email ?? null };
+    const { item, request } = await decideApproval(id.data, parsed.data.decision as ApprovalDecision, actor, parsed.data.note ?? null);
+    res.json({ item, request });
+  } catch (err) { fail(res, err, 'composer_approval_failed'); }
 });
 
 export default router;

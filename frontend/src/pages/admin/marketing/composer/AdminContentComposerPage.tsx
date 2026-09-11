@@ -4,19 +4,21 @@ import { PageHeader, SectionCard } from '../../../../components/admin/shell';
 import { listBrands, type Brand } from '../../../../services/adminBrandApi';
 import api from '../../../../utils/api';
 import * as composer from '../../../../services/contentComposerApi';
-import type { ComposerAction, ConfirmationSummary, ContentItem, ContentVariant, ItemLink, ProviderKey, ProviderSummary, VariantProblem } from '../../../../services/contentComposerApi';
+import type { ComposerAction, ConfirmationSummary, ContentItem, ContentVariant, ExternalPublication, ItemLink, ProviderKey, ProviderSummary, PublishingJob, VariantProblem } from '../../../../services/contentComposerApi';
 import ComposerSetup, { type CampaignOption, type SetupValues } from './ComposerSetup';
 import ComposerVariants from './ComposerVariants';
 import ComposerPreview from './ComposerPreview';
 import ComposerConfirmation from './ComposerConfirmation';
+import ComposerPublishing from './ComposerPublishing';
 
 /**
- * The marketing composer (spec 8.1). One page, four sections, in the order the work happens:
+ * The marketing composer (spec 8.1). One page, five sections, in the order the work happens:
  *
  *   1. Setup      - brand, campaign, title, landing page, canonical message   (steps 1, 3, 4)
  *   2. Channels   - pick providers, generate variants, edit, links, validate  (steps 2, 5-7)
  *   3. Preview    - desktop / mobile per network                              (step 8)
  *   4. Confirm    - the server-built summary and the four actions             (steps 9-10)
+ *   5. Publishing - the queue, handoff packages and receipts                  (section 9)
  *
  * The page owns the item id and the loaded state; every mutation goes to the server and the
  * page re-reads what it needs. Nothing about the content is computed here - variants, limits,
@@ -40,6 +42,8 @@ export default function AdminContentComposerPage() {
   const [selected, setSelected] = useState<ProviderKey[]>([]);
   const [problems, setProblems] = useState<Record<string, VariantProblem[]>>({});
   const [confirmation, setConfirmation] = useState<ConfirmationSummary | null>(null);
+  const [jobs, setJobs] = useState<PublishingJob[]>([]);
+  const [publications, setPublications] = useState<ExternalPublication[]>([]);
   const [scheduledFor, setScheduledFor] = useState<string>('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'success' | 'danger' | 'info'; text: string } | null>(null);
@@ -78,8 +82,10 @@ export default function AdminContentComposerPage() {
     const problemMap: Record<string, VariantProblem[]> = {};
     for (const v of vs) problemMap[v.provider] = Array.isArray(v.validation_errors) ? v.validation_errors : [];
     setProblems(problemMap);
-    const [conf] = await Promise.all([composer.getConfirmation(id)]);
+    const [conf, js, pubs] = await Promise.all([composer.getConfirmation(id), composer.listJobs(id), composer.listPublications(id)]);
     setConfirmation(conf);
+    setJobs(js);
+    setPublications(pubs);
     setLinks(conf.links.map((l) => ({ provider: l.provider, trackedLinkId: '', shortUrl: l.shortUrl, finalUrl: l.finalUrl, utm: l.utm, reused: true })));
   }, []);
 
@@ -159,6 +165,27 @@ export default function AdminContentComposerPage() {
     say('success', `${action.replace(/_/g, ' ')}: item is now ${r.item.status.replace(/_/g, ' ')}.${jobs}`);
   }, 'The action was refused.')();
 
+  // ── Reviewer ────────────────────────────────────────────────────────────────────────────
+  const decide = (decision: 'approved' | 'changes_requested' | 'rejected') => withItem(async (id) => {
+    const r = await composer.decideApproval(id, decision, null);
+    await reload(id);
+    say('success', `Decision recorded: ${decision.replace(/_/g, ' ')}. Item is now ${r.item.status.replace(/_/g, ' ')}.`);
+  }, 'The decision was refused.')();
+
+  // ── Queue ───────────────────────────────────────────────────────────────────────────────
+  const retry = (jobId: string) => withItem(async (id) => { await composer.retryJob(jobId); await reload(id); }, 'Retry was refused.')();
+  const cancel = (jobId: string) => withItem(async (id) => { await composer.cancelJob(jobId, null); await reload(id); }, 'Cancel was refused.')();
+  const complete = (pubId: string, externalId: string, permalink: string | null) => withItem(async (id) => {
+    await composer.completeHandoff(pubId, externalId, permalink);
+    await reload(id);
+    say('success', 'Handoff completed; the post is recorded as live.');
+  }, 'The handoff could not be completed.')();
+  const runNow = withItem(async (id) => {
+    const r = await composer.runQueueNow();
+    await reload(id);
+    say(r.halted ? 'danger' : 'info', r.halted ? `Queue halted: ${r.haltReason}.` : `Queue ran: ${r.published} published, ${r.retried} retrying, ${r.failed + r.deadLettered} failed.`);
+  }, 'The queue could not be run.');
+
   return (
     <div className="admin-page">
       <PageHeader
@@ -213,6 +240,18 @@ export default function AdminContentComposerPage() {
         {confirmation
           ? <ComposerConfirmation summary={confirmation} busy={busy} onAction={act} />
           : <p className="text-muted mb-0">Create the draft to see the confirmation.</p>}
+        {item?.status === 'ready_for_review' && (
+          <div className="d-flex flex-wrap gap-2 align-items-center mt-3 pt-3 border-top" data-testid="reviewer-actions">
+            <span className="small text-muted">Reviewer:</span>
+            <button type="button" className="btn btn-sm btn-success" disabled={busy} onClick={() => decide('approved')}>Approve</button>
+            <button type="button" className="btn btn-sm btn-outline-warning" disabled={busy} onClick={() => decide('changes_requested')}>Request changes</button>
+            <button type="button" className="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => decide('rejected')}>Reject</button>
+          </div>
+        )}
+      </SectionCard>
+
+      <SectionCard title="5. Publishing" subtitle="The queue per network, handoff packages to post by hand, and receipts." icon="send-plane-line">
+        <ComposerPublishing jobs={jobs} publications={publications} busy={busy} onRetry={retry} onCancel={cancel} onCompleteHandoff={complete} onRunNow={runNow} />
       </SectionCard>
     </div>
   );
