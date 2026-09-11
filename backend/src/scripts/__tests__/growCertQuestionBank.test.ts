@@ -72,3 +72,29 @@ describe('growthPlan', () => {
     }
   });
 });
+
+/**
+ * A question key is permanent. Retiring it withdraws the content, not the name.
+ *
+ * Chunk 3 of the scaled run built the taken-key set from live identities only,
+ * so the keys of six drafts retired that morning read as free. Four good new
+ * questions were written as revision 2 under identities marked withdrawn -
+ * invisible to serving, to the sweep, and to the generator's own count. Dead on
+ * arrival, and the count said 25 written.
+ */
+describe('taken keys include retired identities', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const src: string = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'growCertQuestionBank.ts'), 'utf8',
+  );
+
+  it('builds the taken set from every identity, with no liveness filter', () => {
+    expect(src).toMatch(/SELECT question_key FROM cert_questions'/);
+  });
+
+  it('does not derive taken keys from the live-rows query any more', () => {
+    // The old shape: taken.add(r.question_key) inside the loop over rows that
+    // were already filtered to is_retired = false.
+    expect(src).not.toMatch(/taken\.add\(r\.question_key\)/);
+  });
+});

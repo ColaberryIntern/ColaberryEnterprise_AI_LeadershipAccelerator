@@ -361,7 +361,11 @@ async function main(): Promise<void> {
  */
 const settleTelemetry = (): Promise<void> => new Promise((r) => { setTimeout(r, 2000); });
 
-main()
+// Only run when invoked directly. The pure helpers above are imported by tests,
+// and a script that fires main() on import tries to reach a database the test
+// does not have, fails, and sets the process exit code - so every test passes
+// and jest still exits 1. Same guard as `require.main === module` in plain Node.
+if (require.main === module) main()
   .then(settleTelemetry)
   .then(() => sequelize.close())
   .catch(async (err) => {
