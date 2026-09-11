@@ -21,6 +21,7 @@ jest.mock('../reeseTools', () => ({
   REESE_TOOLS: [{ type: 'function', function: { name: 'read_student_success_snapshot', parameters: {} } }],
   executeReeseTool: jest.fn(),
 }));
+jest.mock('../../agentBlueprint/agentActivityLogService', () => ({ logAgentActivity: jest.fn() }));
 
 import RoomMembership from '../../../models/RoomMembership';
 import RoomMessage from '../../../models/RoomMessage';
@@ -31,6 +32,7 @@ import { sendDmMessage } from '../../communityRooms/dmService';
 import { ensureReeseTicketForRoom, logReeseExchangeActivity } from '../reeseTicketLinkService';
 import { maybeRefreshStudentAssessment } from '../../studentHealthAssessment';
 import { executeReeseTool } from '../reeseTools';
+import { logAgentActivity } from '../../agentBlueprint/agentActivityLogService';
 import { maybeTriggerReeseReply } from '../reeseReplyService';
 
 const mockMembershipFindOne = RoomMembership.findOne as unknown as jest.Mock;
@@ -45,6 +47,7 @@ const mockEnsureTicket = ensureReeseTicketForRoom as unknown as jest.Mock;
 const mockLogExchange = logReeseExchangeActivity as unknown as jest.Mock;
 const mockMaybeRefreshAssessment = maybeRefreshStudentAssessment as unknown as jest.Mock;
 const mockExecuteReeseTool = executeReeseTool as unknown as jest.Mock;
+const mockLogAgentActivity = logAgentActivity as unknown as jest.Mock;
 
 const REESE_ADMIN_ID = 'reese-admin-1';
 const REESE_AGENT_ID = 'reese-agent-1';
@@ -83,6 +86,7 @@ beforeEach(() => {
   mockLogExchange.mockResolvedValue(undefined);
   mockMaybeRefreshAssessment.mockResolvedValue(undefined);
   mockExecuteReeseTool.mockResolvedValue('{}');
+  mockLogAgentActivity.mockResolvedValue(undefined);
 });
 
 describe('maybeTriggerReeseReply', () => {
@@ -261,5 +265,48 @@ describe('maybeTriggerReeseReply', () => {
     expect(roles[0]).toBe('system');
     expect(roles).toContain('assistant');
     expect(roles).toContain('user');
+  });
+
+  describe('GOALS scorecard activity logging (Ali: "improve the 3.8/5 Trust score for Reese")', () => {
+    it('happy path: a real reply logs a real AiAgentActivityLog row under Reese\'s OWN agent id, decoupled from ticket-linking', async () => {
+      mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+
+      await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+      expect(mockLogAgentActivity).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: REESE_AGENT_ID, action: 'reese_dm_reply', result: 'success' }),
+      );
+    });
+
+    it('still logs success even when ticket-linking fails (decoupled from the ProofDesk layer)', async () => {
+      mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+      mockEnsureTicket.mockRejectedValue(new Error('ticket service down'));
+
+      await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+      expect(mockLogAgentActivity).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: REESE_AGENT_ID, action: 'reese_dm_reply', result: 'success' }),
+      );
+    });
+
+    it('failure path: a caught LLM error also logs a real "failed" row — real signal for the Solid dimension', async () => {
+      mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+      mockCreateCompletion.mockRejectedValue(new Error('OpenAI is down'));
+
+      await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+      expect(mockLogAgentActivity).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: REESE_AGENT_ID, action: 'reese_dm_reply', result: 'failed', reason: 'OpenAI is down' }),
+      );
+    });
+
+    it('boundary: no messages sent (e.g. empty completion) never logs a reply activity row', async () => {
+      mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+      mockCreateCompletion.mockResolvedValue({ choices: [{ message: { content: '   ' } }] });
+
+      await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+      expect(mockLogAgentActivity).not.toHaveBeenCalled();
+    });
   });
 });
