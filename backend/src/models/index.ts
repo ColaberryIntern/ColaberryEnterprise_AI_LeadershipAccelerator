@@ -517,6 +517,7 @@ import CertQuestionRevision from './CertQuestionRevision';
 import CertSession from './CertSession';
 import ProjectUnderstandingRecord from './ProjectUnderstandingRecord';
 import ProjectDiscoveryCallRequest from './ProjectDiscoveryCallRequest';
+import StoryTruthEnrichmentRecord from './StoryTruthEnrichmentRecord';
 import CertResponse from './CertResponse';
 import CertReadinessSnapshot from './CertReadinessSnapshot';
 import CertEvidenceMapping from './CertEvidenceMapping';
@@ -1277,7 +1278,7 @@ export {
   // Cert Prep (Claude Certified Architect readiness)
   CertTrack, CertDomain, CertQuestion, CertQuestionRevision,
   CertSession, CertResponse, CertReadinessSnapshot, CertEvidenceMapping,
-  ProjectUnderstandingRecord, ProjectDiscoveryCallRequest,
+  ProjectUnderstandingRecord, ProjectDiscoveryCallRequest, StoryTruthEnrichmentRecord,
   Cohort, Enrollment, Podcast, PodcastView, TimelineCardComment, CardSurveyResponse, AssessmentAttempt, ReflectionEntry, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
   SystemSetting, EventLedger, Campaign, CampaignLead,

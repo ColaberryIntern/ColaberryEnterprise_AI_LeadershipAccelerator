@@ -128,6 +128,8 @@ export async function refreshRepoDocuments(
       planVersion: stored.version,
       planSha256: stored.plan_sha256,
       correlationId: opts.correlationId,
+      projectId,
+      truthRevision: stored.truth_revision ?? null,
       schedule,
       progress: snapshot.progress,
       baselineByStory: snapshot.baselineByStory,

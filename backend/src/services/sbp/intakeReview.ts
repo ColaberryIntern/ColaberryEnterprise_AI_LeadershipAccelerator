@@ -27,6 +27,7 @@ import {
  * person can usefully act on:
  *
  *   needsConfirmation  we heard it, nobody has agreed we heard it right
+ *   fromBuild          a story's own work showed it; a person has not agreed
  *   inferences         nothing was said; the system worked it out
  *   openQuestions      it was asked and not answered
  *   unknowns           recorded as unknown, deliberately, and that is allowed
@@ -48,6 +49,7 @@ import {
 export type ReviewGroup =
   | 'confirmed'
   | 'needsConfirmation'
+  | 'fromBuild'
   | 'inferences'
   | 'openQuestions'
   | 'unknowns';
@@ -97,7 +99,10 @@ export function groupOf(item: UnderstandingItem): ReviewGroup {
   if (HUMAN_CONFIRMED.includes(item.provenance)) return 'confirmed';
   if (item.provenance === 'ai_inferred') return 'inferences';
   if (item.dimension === 'unknowns') return 'unknowns';
+  // A question outranks its provenance: a conflict a story raised is still a
+  // question for the person, not a fact from the build.
   if (item.classification === 'QUESTION') return 'openQuestions';
+  if (item.provenance === 'repo_evidence') return 'fromBuild';
   // Everything left traces to something the student said or wrote, and nobody
   // has yet agreed it was heard correctly.
   return 'needsConfirmation';
@@ -105,7 +110,7 @@ export function groupOf(item: UnderstandingItem): ReviewGroup {
 
 /** The order a person reads them in: what they can act on first. */
 const GROUP_ORDER: readonly ReviewGroup[] = [
-  'needsConfirmation', 'inferences', 'openQuestions', 'unknowns', 'confirmed',
+  'needsConfirmation', 'fromBuild', 'inferences', 'openQuestions', 'unknowns', 'confirmed',
 ];
 
 export function buildIntakeReview(items: readonly UnderstandingItem[]): IntakeReview {
@@ -179,12 +184,25 @@ export function applyCorrection(
 
   const value = edited ?? target.value;
   const next = [...items];
+  // The earlier value survives in history. A correction wins, and the record
+  // of what it corrected is what makes "why did this change" answerable later.
+  const changed = value !== target.value || target.provenance !== 'client_confirmed';
   next[input.index] = {
     ...target,
     value,
     classification: 'FACT',
     provenance: 'client_confirmed',
     source_quote: value,
+    ...(changed ? {
+      history: [{
+        value: target.value,
+        classification: target.classification,
+        provenance: target.provenance,
+        ...(target.source_quote ? { source_quote: target.source_quote } : {}),
+        replaced_at: new Date().toISOString(),
+        replaced_by: 'correction' as const,
+      }, ...(target.history ?? [])],
+    } : {}),
   };
   return { ok: true, items: next };
 }

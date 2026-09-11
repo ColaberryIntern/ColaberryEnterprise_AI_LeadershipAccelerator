@@ -196,3 +196,48 @@ export async function loadIntakeTruthAtRevision(
     revision: row.revision ?? 1,
   };
 }
+
+/**
+ * Save truth a story's evidence changed, only if nobody else changed it first.
+ *
+ * Compare-and-set on the revision: the UPDATE carries `revision = expected`
+ * in its WHERE, so two enrichments landing together cannot both build on the
+ * same base and both win. The loser gets `null` and re-merges against the
+ * newer truth, which is cheap because the merge is pure and idempotent.
+ *
+ * `expected` null means "there is no row yet": forward repair for a project
+ * whose intake never wrote one. The create is then the whole write, at
+ * revision 1.
+ */
+export async function saveEnrichedTruth(
+  projectId: string,
+  items: readonly UnderstandingItem[],
+  expected: number | null,
+): Promise<number | null> {
+  if (expected === null) {
+    try {
+      await ProjectUnderstandingRecord.create({
+        lead_id: null,
+        source: STUDENT_INTAKE_SOURCE,
+        source_ref: projectId,
+        status: 'extracted',
+        title: null,
+        proposed_surfaces: [],
+        items: [...items],
+        rejected: [],
+        revision: 1,
+      } as never);
+      return 1;
+    } catch {
+      // Someone created it between our read and this write. Caller re-reads.
+      return null;
+    }
+  }
+
+  const next = expected + 1;
+  const [count] = await ProjectUnderstandingRecord.update(
+    { items: [...items], status: 'extracted', revision: next } as never,
+    { where: { source: STUDENT_INTAKE_SOURCE, source_ref: projectId, revision: expected } },
+  );
+  return count === 1 ? next : null;
+}

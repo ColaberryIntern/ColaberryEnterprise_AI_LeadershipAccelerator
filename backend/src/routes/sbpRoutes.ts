@@ -368,7 +368,7 @@ router.get('/api/portal/sbp/builds/:projectId/stories/:storyId/prompt', requireP
       const schedule = await scheduleForEnrollment(eid(req), stored.plan, null, stored.published_at);
       return res.json({
         story_id: COMMAND_CENTER_STORY_ID,
-        prompt: commandCenterPrompt(stored.plan, schedule),
+        prompt: commandCenterPrompt(stored.plan, schedule, { projectId }),
         has_repo: Boolean(repo),
         paths_verified: manifest.length > 0,
       });
@@ -381,6 +381,7 @@ router.get('/api/portal/sbp/builds/:projectId/stories/:storyId/prompt', requireP
       repoUrl: repo?.url ?? null,
       manifestPaths: manifest,
       notes: typeof req.query.notes === 'string' ? req.query.notes : undefined,
+      projectId,
     });
     res.json({ story_id: story.id, prompt, has_repo: Boolean(repo), paths_verified: manifest.length > 0 });
   } catch (e) { fail(res, e, next); }

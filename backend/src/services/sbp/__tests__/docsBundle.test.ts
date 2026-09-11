@@ -77,6 +77,9 @@ describe('buildDocsBundle', () => {
     const bundle = await buildDocsBundle(PRJ, { generatedAt: AT });
     const inRepo = renderDocs(pilot, {
       repoUrl: null, generatedAt: AT.toISOString(), planVersion: 3, planSha256: 'abc123', correlationId: 'corr-1',
+      // The manifest now names the project and the truth revision (Phase 6),
+      // and the bundle must carry the same manifest the repo would.
+      projectId: PRJ, truthRevision: (stored() as any).truth_revision ?? null,
     });
 
     const entries = readZip(bundle.bytes);

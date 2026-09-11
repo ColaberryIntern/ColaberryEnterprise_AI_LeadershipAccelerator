@@ -185,6 +185,8 @@ export async function buildDocsBundle(projectId: string, opts: { generatedAt?: D
     planVersion: stored.version,
     planSha256: stored.plan_sha256,
     correlationId: stored.correlation_id ?? undefined,
+    projectId,
+    truthRevision: stored.truth_revision ?? null,
     repoWriteAccess,
   });
 
