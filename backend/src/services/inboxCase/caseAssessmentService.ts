@@ -3,7 +3,7 @@ import InboxCaseItem from '../../models/InboxCaseItem';
 import InboxCaseQuestion from '../../models/InboxCaseQuestion';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { caseAssessmentOutputSchema, CaseAssessmentOutput } from '../../schemas/inboxCaseSchema';
-import { detectPromptInjectionSignals, wrapAsUntrustedEvidence } from './promptSafety';
+import { itemInjectionSignals, wrapAsUntrustedEvidence } from './promptSafety';
 import { logCaseEvent } from './caseEventLog';
 import { transitionCase, getCaseOrThrow } from './caseRepository';
 import { CaseAssessment, TeachMeBrief } from '../../types/inboxCase';
@@ -114,8 +114,8 @@ function buildEvidenceBlock(items: InboxCaseItem[]): { text: string; boundedItem
 function collectInjectionFlags(items: InboxCaseItem[]): Array<{ item_id: string; signals: string[] }> {
   const flags: Array<{ item_id: string; signals: string[] }> = [];
   for (const item of items) {
-    const text = `${item.title} ${String((item.snapshot as any)?.body_excerpt || '')}`;
-    const signals = detectPromptInjectionSignals(text);
+    // Title + body excerpt + attachment names, via the one shared scanner.
+    const signals = itemInjectionSignals(item);
     if (signals.length > 0) flags.push({ item_id: item.id, signals: signals.map((s) => s.label) });
   }
   return flags;

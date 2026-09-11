@@ -240,3 +240,18 @@ export type CaseAssessmentOutput = z.infer<typeof caseAssessmentOutputSchema>;
 export const assessCaseSchema = z.object({
   requested_by: z.string().max(100).default('admin'),
 });
+
+// ─── /inbox-zero operator API (T9a) ──────────────────────────────────────────
+export const inboxZeroStartSchema = z.object({ tab: z.string().trim().min(1).max(255) });
+export const inboxZeroLeaseSchema = z.object({ lease_id: z.string().uuid() });
+export const inboxZeroCursorSchema = z.object({
+  lease_id: z.string().uuid(),
+  to: z.string().datetime({ offset: true }),
+  processing_succeeded: z.boolean(),
+});
+export const inboxZeroOverviewQuerySchema = z.object({ cursor: z.string().datetime({ offset: true }).optional() });
+export const inboxZeroDeltaQuerySchema = z.object({ since: z.string().datetime({ offset: true }) });
+export const inboxZeroNextQuerySchema = z.object({ focus: z.enum(['urgent', 'vip', 'waiting', 'basecamp', 'email']).optional() });
+export const inboxZeroQueueQuerySchema = z.object({
+  view: z.enum(['urgency', 'mailbox', 'person', 'topic', 'destination', 'owner', 'age', 'due', 'confidence']).default('urgency'),
+});
