@@ -15,6 +15,8 @@ const mockGetPublishedPlan = jest.fn();
 const mockMarkVerified = jest.fn();
 const mockRecordEvidence = jest.fn();
 const mockGetBudgetPerUnitXp = jest.fn();
+const mockRecompute = jest.fn();
+const mockEvaluatePromotion = jest.fn();
 
 jest.mock('../../../../models/Project', () => ({
   __esModule: true,
@@ -42,6 +44,12 @@ jest.mock('../../../progression/evidenceEngine', () => ({
 }));
 jest.mock('../../../progression/pointsConfigService', () => ({
   getBudgetPerUnitXp: (...a: any[]) => mockGetBudgetPerUnitXp(...a),
+}));
+jest.mock('../../../progression/competencyEngine', () => ({
+  recomputeForEnrollment: (...a: any[]) => mockRecompute(...a),
+}));
+jest.mock('../../../progression/promotionService', () => ({
+  evaluateForEnrollment: (...a: any[]) => mockEvaluatePromotion(...a),
 }));
 
 import { verifyBuildFromRepo, STORY_XP_KEY, VERIFIER_SOURCE } from '../buildVerificationService';
@@ -134,6 +142,11 @@ beforeEach(() => {
   mockRecordEvidence.mockResolvedValue({ builder_xp: 0, created: true });
   // The 2-story PLAN against an 800 budget: 400 a story.
   mockGetBudgetPerUnitXp.mockResolvedValue({ per_unit: 400, budget: 800, reason: null });
+  mockRecompute.mockResolvedValue([]);
+  mockEvaluatePromotion.mockResolvedValue({
+    promoted: false, level: 'builder', rank: 0, readiness: 0,
+    verdict: { eligible: false, gaps: [] },
+  });
 });
 
 describe('verifyBuildFromRepo — the happy path', () => {
@@ -398,5 +411,47 @@ describe('STORY-000 is verifiable even though the plan does not list it', () => 
 
     expect(summary.stories.filter((s) => s.story_id === 'STORY-000')).toHaveLength(1);
     expect(summary.stories[0].criteria_total).toBe(1);
+  });
+});
+
+describe('shipping moves your rank', () => {
+  /**
+   * Until this landed, evaluateForEnrollment was reachable ONLY from the
+   * curriculum-card path. A student could verify every story in their build and
+   * stay at rank 0 indefinitely, and ten people were found doing exactly that.
+   */
+  it('evaluates promotion when a story is newly verified', async () => {
+    await verifyBuildFromRepo(PROJECT_ID, { fetchImpl: githubFetch() });
+    expect(mockRecompute).toHaveBeenCalledWith(ENROLLMENT_ID);
+    expect(mockEvaluatePromotion).toHaveBeenCalledWith(ENROLLMENT_ID);
+  });
+
+  it('does NOT evaluate on a re-sync that confirms nothing new', async () => {
+    // The workspace syncs on arrival. Evaluating unconditionally would put two
+    // writes behind every page load.
+    const fetchImpl = githubFetch();
+    await verifyBuildFromRepo(PROJECT_ID, { fetchImpl });
+    expect(mockEvaluatePromotion).toHaveBeenCalledTimes(1);
+
+    mockTaskFindOne.mockImplementation(async ({ where }: any) =>
+      taskRow(where.story_id, where.story_id === 'STORY-001' ? new Date('2026-08-10T12:05:00Z') : null));
+
+    const second = await verifyBuildFromRepo(PROJECT_ID, { fetchImpl });
+    expect(second.rollup.newly_verified).toEqual([]);
+    expect(mockEvaluatePromotion).toHaveBeenCalledTimes(1); // still 1
+  });
+
+  it('a promotion that throws does not fail the verification', async () => {
+    // Reading the repo is what the caller asked for. Losing a student their
+    // confirmed stories because the promotion step threw would be a far worse
+    // bug than a late promotion, and the next sync re-evaluates them anyway.
+    mockEvaluatePromotion.mockRejectedValue(new Error('promotion blew up'));
+
+    const summary = await verifyBuildFromRepo(PROJECT_ID, { fetchImpl: githubFetch() });
+
+    expect(summary.ok).toBe(true);
+    expect(summary.rollup.stories_verified).toBe(1);
+    expect(summary.rollup.newly_verified).toEqual(['STORY-001']);
+    expect(mockMarkVerified).toHaveBeenCalledTimes(1);
   });
 });
