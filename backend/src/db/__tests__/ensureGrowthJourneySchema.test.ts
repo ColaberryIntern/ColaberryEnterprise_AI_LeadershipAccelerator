@@ -36,6 +36,30 @@ const serverSource = fs.readFileSync(
   'utf8',
 );
 
+/**
+ * Offset of an ACTIVE occurrence of a boot call — one that is not commented out.
+ *
+ * A plain `indexOf` matches the text, not the call. An independent review proved
+ * it: commenting out the seed invocation while leaving the line in place passed
+ * all 40 tests. The shape was inherited from the T201/T202 assertions in this
+ * same file, so all four now go through here.
+ *
+ * The consequence of a disabled boot call is fail-closed — an empty registry,
+ * and every brand resolving `program_not_active` — but "fails safe" is not the
+ * same as "noticed", and a boot step silently switched off is exactly the kind
+ * of thing that stays switched off.
+ */
+function activeBootCall(needle: string): number {
+  let from = 0;
+  for (;;) {
+    const at = serverSource.indexOf(needle, from);
+    if (at === -1) return -1;
+    const lineStart = serverSource.lastIndexOf('\n', at) + 1;
+    if (!serverSource.slice(lineStart, at).includes('//')) return at;
+    from = at + needle.length;
+  }
+}
+
 describe('the schema is additive, and provably so', () => {
   it('every statement carries IF NOT EXISTS', () => {
     for (const s of GROWTH_JOURNEY_STATEMENTS) {
@@ -267,8 +291,8 @@ describe('the foreign keys point at the multi-tenant tables', () => {
 
 describe('boot ordering — the criterion that would fail silently', () => {
   it('registers ensureGrowthJourneySchema AFTER ensureMultiTenantSchema', () => {
-    const multi = serverSource.indexOf('await ensureMultiTenantSchema()');
-    const journey = serverSource.indexOf('await ensureGrowthJourneySchema()');
+    const multi = activeBootCall('await ensureMultiTenantSchema()');
+    const journey = activeBootCall('await ensureGrowthJourneySchema()');
 
     expect(multi).toBeGreaterThan(-1);
     expect(journey).toBeGreaterThan(-1);
@@ -280,8 +304,8 @@ describe('boot ordering — the criterion that would fail silently', () => {
     // so it would surface as warnings and an EMPTY policy table, which then
     // denies every brand every family because the resolver fails closed. Safe,
     // silent, and wrong.
-    const ensure = serverSource.indexOf('await ensureGrowthJourneySchema()');
-    const seed = serverSource.indexOf('await seedBrandOfferPolicy()');
+    const ensure = activeBootCall('await ensureGrowthJourneySchema()');
+    const seed = activeBootCall('await seedBrandOfferPolicy()');
     expect(ensure).toBeGreaterThan(-1);
     expect(seed).toBeGreaterThan(-1);
     expect(seed).toBeGreaterThan(ensure);
@@ -298,9 +322,9 @@ describe('boot ordering — the criterion that would fail silently', () => {
     // compile-time definitions, not from policy ROWS) but it is asserted anyway
     // so the two steps stay readable in the order that shows section 4
     // governing section 5.
-    const ensure = serverSource.indexOf('await ensureGrowthJourneySchema()');
-    const policy = serverSource.indexOf('await seedBrandOfferPolicy()');
-    const programs = serverSource.indexOf('await seedJourneyPrograms()');
+    const ensure = activeBootCall('await ensureGrowthJourneySchema()');
+    const policy = activeBootCall('await seedBrandOfferPolicy()');
+    const programs = activeBootCall('await seedJourneyPrograms()');
 
     expect(ensure).toBeGreaterThan(-1);
     expect(policy).toBeGreaterThan(-1);
@@ -312,8 +336,8 @@ describe('boot ordering — the criterion that would fail silently', () => {
   it('registers it after the Explorer ensure step too, not beside it', () => {
     // ensureExplorerGrowthSchema runs well before the tenancy tables exist.
     // Landing next to it is the specific mistake this asserts against.
-    const explorer = serverSource.indexOf('await ensureExplorerGrowthSchema()');
-    const journey = serverSource.indexOf('await ensureGrowthJourneySchema()');
+    const explorer = activeBootCall('await ensureExplorerGrowthSchema()');
+    const journey = activeBootCall('await ensureGrowthJourneySchema()');
     expect(journey).toBeGreaterThan(explorer);
   });
 });

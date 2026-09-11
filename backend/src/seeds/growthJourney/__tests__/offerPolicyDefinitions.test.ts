@@ -95,9 +95,15 @@ describe('deny outranks allow HERE too, not only in the resolver', () => {
   });
 
   it('the injected table is actually reaching the function', () => {
-    // Non-vacuity: if the parameter were ignored and the real table used, this
-    // would return CPN's families rather than an empty list.
-    expect(allowedFamiliesFor('nobody', 'nobody', CONTRADICTORY)).toEqual([]);
+    // THE SECOND ASSERTION IS THE ONE THAT WORKS, and the comment here used to
+    // credit the first. It claimed that ignoring the parameter "would return
+    // CPN's families" for ('nobody','nobody') - false: the real table returns
+    // [] for that pair too, so that line passes either way and proves nothing.
+    //
+    // The ('t','b') assertion is what kills a mutation that swaps `table` for
+    // the module constant, because that pair exists ONLY in the injected table.
+    // Kept both, with the first relabelled as what it is.
+    expect(allowedFamiliesFor('nobody', 'nobody', CONTRADICTORY)).toEqual([]); // shape only
     expect(allowedFamiliesFor('t', 'b', CONTRADICTORY).length).toBeGreaterThan(0);
   });
 

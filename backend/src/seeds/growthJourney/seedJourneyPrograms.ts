@@ -24,6 +24,15 @@ import {
  *                  brand at a different programme has made a decision, and the
  *                  next boot must not quietly undo it.
  *
+ * ─── ONE FAILURE MODE THIS DOES NOT DISTINGUISH ─────────────────────────────
+ *
+ * `resolveBrandBySlug` returns `null` for a missing tenant, a missing brand AND
+ * a database error - it is fail-soft by design. So a database outage at boot
+ * lands every brand in `skipped_brands` and logs "brands absent", which is the
+ * wrong label for an outage. It is safe (nothing is written, the next boot
+ * retries) and it is shared with T202's policy seed, but it is stated here so
+ * the count is not read as evidence that four brands are genuinely missing.
+ *
  * ─── THE PROGRAMME IS THE SWITCH; THE PATHS ARE NOT ─────────────────────────
  *
  * Programs are seeded `draft` and paths `active`. That looks inconsistent and is

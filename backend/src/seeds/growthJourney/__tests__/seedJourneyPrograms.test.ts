@@ -157,10 +157,19 @@ describe('the programme is the switch, and it is seeded OFF', () => {
 });
 
 describe('it never overwrites a human', () => {
-  it('writes no status on an existing program', async () => {
+  it('writes no status on an existing program — and in fact does not update it at all', async () => {
     const row = programRow({ status: 'paused' });
     programFindOne.mockResolvedValue(row);
     await seedJourneyPrograms();
+
+    // The loop below iterates an EMPTY array today, because the seed never
+    // updates an existing programme at all. A review flagged that as
+    // structurally vacuous, and it was right: a mutation adding
+    // `update({ status: 'active' })` does fail this, but only because the loop
+    // then has something to iterate. The stronger statement is the one worth
+    // asserting, so both are here — the flat "never called", plus the loop that
+    // stays correct if a legitimate non-status update is ever added.
+    expect(row.update).not.toHaveBeenCalled();
     for (const call of row.update.mock.calls) {
       expect(Object.keys(call[0])).not.toContain('status');
     }
@@ -248,6 +257,23 @@ describe('§4:287 holds against what was actually WRITTEN', () => {
     );
     // 2 for CPN + 5 for Colaberry Training = 7, and none for the other two.
     expect(learnerPaths).toHaveLength(7);
+  });
+});
+
+describe('brand resolution goes through the tenancy module', () => {
+  it('calls resolveBrandBySlug with BOTH slugs, for the four §5 brands', () => {
+    // Carried forward from T202's seed test, which pins this and T212's did
+    // not. A typo would in practice be caught transitively by the policy join,
+    // but "caught somewhere else" is not the same as asserted here.
+    return seedJourneyPrograms().then(() => {
+      const pairs = [...new Set(resolveBrand.mock.calls.map((c) => `${c[0]}/${c[1]}`))].sort();
+      expect(pairs).toEqual([
+        'ai-flotation/ai-flotation',
+        'colaberry/colaberry-enterprise',
+        'colaberry/colaberry-training',
+        'cpn/cpn',
+      ]);
+    });
   });
 });
 
