@@ -18,6 +18,12 @@
  * What survives is minted as a NEW revision — never an edit in place, because
  * `cert_responses` pins every recorded answer to the revision it was served.
  *
+ * IT ALSO REPAIRS ITS OWN MISTAKE. Four of the first twenty-three lengthened
+ * options came back as "D. Allocate ..." — the model reciting the list — and
+ * were minted that way. An option that begins with its own letter is stripped
+ * and re-minted here without a model call, so the repair is idempotent and
+ * needs no reviewer beyond the one who approves the run.
+ *
  * AUTHORED ITEMS ARE NEVER TOUCHED. Their text lives in the per-domain
  * TypeScript files, and a revision minted here would register as drift against
  * them. They are counted and skipped.
@@ -34,7 +40,7 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { HAND_AUTHORED_ITEMS } from '../data/certBlueprints/items';
-import { lengthPlan } from '../services/certPrep/certOptionLength';
+import { lengthPlan, stripOptionLabels } from '../services/certPrep/certOptionLength';
 import { lengthenDistractor } from '../services/certPrep/certDistractorLengthener';
 import { ImproverItem } from '../services/certPrep/certQuestionImprover';
 import { triageQuestion } from '../services/certPrep/certQuestionTriage';
@@ -81,6 +87,27 @@ const toItem = (r: Row): ImproverItem => ({
   scenario_family: r.scenario_family,
 });
 
+/** A new revision carrying the item's current text; never an edit in place. */
+async function mint(row: Row, item: ImproverItem): Promise<number> {
+  const rev = await createDraftRevision({
+    question_key: row.question_key,
+    track_id: row.track_id,
+    blueprint_version: row.blueprint_version,
+    domain_id: row.domain_id,
+    objective_id: row.objective_id ?? undefined,
+    scenario_family: row.scenario_family ?? undefined,
+    stem: item.stem,
+    options: item.options,
+    correct_keys: item.correct_keys,
+    select_count: 1,
+    rationale: item.rationale ?? '',
+    distractor_rationales: item.distractor_rationales ?? {},
+    difficulty: (row.difficulty ?? 'medium') as any,
+    author: 'colaberry',
+  });
+  return rev.revision;
+}
+
 async function main(): Promise<void> {
   const [{ db }] = await sequelize.query<{ db: string }>(
     'SELECT current_database() AS db', { type: QueryTypes.SELECT },
@@ -110,7 +137,7 @@ async function main(): Promise<void> {
   );
 
   let skippedAuthored = 0; let notLongest = 0; let kept = 0; let multi = 0;
-  let lengthened = 0; let refused = 0; let discarded = 0; let planned = 0;
+  let lengthened = 0; let refused = 0; let discarded = 0; let planned = 0; let relabelled = 0;
   const minted: { key: string; revision: number }[] = [];
 
   for (const row of rows) {
@@ -118,15 +145,34 @@ async function main(): Promise<void> {
     if (authored.has(row.question_key)) { skippedAuthored += 1; continue; }
     if (row.correct_keys.length !== 1) { multi += 1; continue; }
 
-    const item = toItem(row);
+    // Labels first, so the plan measures the words and not the "D. " in front.
+    const stripped = stripOptionLabels(toItem(row));
+    const item = stripped.item;
     const plan = lengthPlan(item);
-    if (!plan.keyIsLongest) { notLongest += 1; continue; }
-    if (plan.keep) { kept += 1; continue; }
+    const needsLength = plan.keyIsLongest && !plan.keep;
+    if (!plan.keyIsLongest) notLongest += 1;
+    else if (plan.keep) kept += 1;
+
+    if (!needsLength && stripped.changed.length === 0) continue;
     if (planned >= limit) break;
     planned += 1;
 
     if (!write) {
-      log(`${row.question_key.padEnd(14)} key ${row.correct_keys[0]} longest; would lengthen ${plan.target} to ${plan.minChars}-${plan.maxChars} chars`);
+      const what = [
+        stripped.changed.length ? `would strip label from ${stripped.changed.join(',')}` : '',
+        needsLength ? `would lengthen ${plan.target} to ${plan.minChars}-${plan.maxChars} chars` : '',
+      ].filter(Boolean).join('; ');
+      log(`${row.question_key.padEnd(14)} ${what}`);
+      continue;
+    }
+
+    // A label strip alone is not a content change and needs no model and no
+    // triage: the words are the reviewer's own, minus the letter in front.
+    if (!needsLength) {
+      const rev = await mint(row, item);
+      minted.push({ key: row.question_key, revision: rev });
+      relabelled += 1;
+      log(`${row.question_key.padEnd(14)} label stripped from ${stripped.changed.join(',')}  minted r${rev}`);
       continue;
     }
 
@@ -164,26 +210,12 @@ async function main(): Promise<void> {
       continue;
     }
 
-    const rev = await createDraftRevision({
-      question_key: row.question_key,
-      track_id: row.track_id,
-      blueprint_version: row.blueprint_version,
-      domain_id: row.domain_id,
-      objective_id: row.objective_id ?? undefined,
-      scenario_family: row.scenario_family ?? undefined,
-      stem: out.item.stem,
-      options: out.item.options,
-      correct_keys: out.item.correct_keys,
-      select_count: 1,
-      rationale: out.item.rationale ?? '',
-      distractor_rationales: out.item.distractor_rationales ?? {},
-      difficulty: (row.difficulty ?? 'medium') as any,
-      author: 'colaberry',
-    });
-    minted.push({ key: row.question_key, revision: rev.revision });
+    const rev = await mint(row, out.item);
+    minted.push({ key: row.question_key, revision: rev });
     lengthened += 1;
     const note = triage.verdict === 'needs_human' ? `  [triage ${triage.severity}]` : '';
-    log(`${row.question_key.padEnd(14)} ${plan.target} ${out.before} -> ${out.after} chars  minted r${rev.revision}${note}`);
+    const label = stripped.changed.length ? `  [label stripped from ${stripped.changed.join(',')}]` : '';
+    log(`${row.question_key.padEnd(14)} ${plan.target} ${out.before} -> ${out.after} chars  minted r${rev}${note}${label}`);
   }
 
   log('');
@@ -193,6 +225,7 @@ async function main(): Promise<void> {
   log(`kept        : ${kept} keep the key longest by hash (one in three)`);
   log(`planned     : ${planned}`);
   if (write) {
+    log(`relabelled  : ${relabelled} (letter label stripped, no other change)`);
     log(`lengthened  : ${lengthened}`);
     log(`refused     : ${refused} (bounds, invariants or rubric)`);
     log(`discarded   : ${discarded} (triage)`);
