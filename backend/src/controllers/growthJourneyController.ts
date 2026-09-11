@@ -72,7 +72,7 @@ import {
  * own reads; that is deliberately NOT adopted for a brand-scoped route.
  */
 
-function badRequest(res: Response, err: ZodError): void {
+export function badRequest(res: Response, err: ZodError): void {
   res.status(400).json({
     error: 'Invalid request',
     details: err.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
@@ -92,13 +92,13 @@ function badRequest(res: Response, err: ZodError): void {
  *
  * A 403 keeps its class: by then the caller already knows the row exists.
  */
-function accessDenied(req: Request, res: Response, err: TenantAccessError): void {
+export function accessDenied(req: Request, res: Response, err: TenantAccessError, event = 'participation_read_refused'): void {
   if (err.status === 404) {
     console.warn(
       JSON.stringify({
         level: 'warn',
         service: 'growth-journey-admin',
-        event: 'participation_read_refused',
+        event,
         error_class: err.errorClass,
         outcome: 'failure',
         path: req.path,
@@ -118,10 +118,10 @@ function accessDenied(req: Request, res: Response, err: TenantAccessError): void
  * rule. Also refuses when a brand was requested without a tenant to scope it
  * under, since `buildRequestContext` cannot grant a brand without one.
  */
-async function scopedContext(
+export async function scopedContext(
   req: Request,
   res: Response,
-  query: Pick<ParticipationsQuery, 'tenant_id' | 'brand_id'>,
+  query: { tenant_id?: string; brand_id?: string },
 ): Promise<PlatformRequestContext | null> {
   const ctx = await contextFromAdminRequest(req.admin, {
     requestedTenantId: query.tenant_id ?? null,
@@ -139,7 +139,7 @@ async function scopedContext(
   return ctx;
 }
 
-function logReadFailure(req: Request, err: unknown): string {
+export function logReadFailure(req: Request, err: unknown, event = 'participation_read_failed'): string {
   const errorClass = classifyError(err);
   // No learner identifier in this line: the params are a participation id and
   // scope ids, not an email. The message is truncated rather than dropped.
@@ -147,7 +147,7 @@ function logReadFailure(req: Request, err: unknown): string {
     JSON.stringify({
       level: 'error',
       service: 'growth-journey-admin',
-      event: 'participation_read_failed',
+      event,
       error_class: errorClass,
       outcome: 'failure',
       path: req.path,
