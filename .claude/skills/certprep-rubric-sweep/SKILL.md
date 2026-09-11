@@ -262,6 +262,23 @@ Weaknesses found by running it, and what was done. Add to this every time.
   distractor can become an arguable one. The generator runs the same step at
   birth; `balanceCertOptionLengths` backfills. Authored items are never
   touched by the script: their text lives in the repo.
+- *(2026-09-11)* **Four of the first twenty-three lengthened options came back
+  as "D. Allocate ..." and were minted that way.** Asked to rewrite option D,
+  the model recites the list. Rendered, the student sees "D. D. Allocate",
+  which marks the option as the one that was edited: a new tell introduced by
+  the tool that removes an old one. It passed the bounds check (the label is
+  three characters), the invariants (nothing empty), the rubric (shape) and
+  the triage (correctness). **Every text a model returns needs a check for
+  the model's habits, not just for the property you asked for.** Now: the
+  lengthener strips the label before measuring; `checkInvariants` refuses any
+  option that begins with its own letter, which covers the improver and the
+  generator too; the bank audit has a hard `option_labels` check; and the
+  balancer strips and re-mints what was already written, without a model
+  call. Also found on the same read: the triage-medium rate on lengthened
+  items looked alarming (19 of 23 against 15% at generation) until both
+  versions were re-triaged side by side: the same concern on the same
+  untouched option, before and after. **Compare against the baseline before
+  believing a rate.**
 - *(2026-09-10)* **Do not write source containing backslashes through a shell
   heredoc.** Building the schema parser that way put a literal CR and a real
   newline where `` and `

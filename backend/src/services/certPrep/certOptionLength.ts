@@ -44,6 +44,30 @@ export interface LengthPlan {
 
 const len = (t: string | null | undefined): number => (t ?? '').trim().length;
 
+/**
+ * An option that begins with its own letter — "D. Allocate more capacity" —
+ * is a model habit: asked to rewrite option D it answers as if reciting the
+ * list. Rendered, the student sees "D. D. Allocate", and the doubled label
+ * marks the option as the one that was edited. Four of the first twenty-three
+ * lengthened options came back this way.
+ */
+export const OPTION_LABEL_PREFIX = /^\s*[A-Ea-e]\s*[.):\-–]\s+/;
+
+export function hasOptionLabel(text: string | null | undefined): boolean {
+  return OPTION_LABEL_PREFIX.test(text ?? '');
+}
+
+/** Strip a leading letter label from every option; reports which changed. */
+export function stripOptionLabels<T extends { options: { key: string; text: string }[] }>(item: T): { item: T; changed: string[] } {
+  const changed: string[] = [];
+  const options = item.options.map((o) => {
+    if (!hasOptionLabel(o.text)) return o;
+    changed.push(o.key);
+    return { ...o, text: o.text.replace(OPTION_LABEL_PREFIX, '') };
+  });
+  return changed.length ? { item: { ...item, options }, changed } : { item, changed };
+}
+
 export function longestOptionKey(item: Pick<RubricItem, 'options'>): string | null {
   let best: { key: string; n: number } | null = null;
   for (const o of item.options ?? []) {
