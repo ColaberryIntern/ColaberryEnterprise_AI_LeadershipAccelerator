@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import { resolveExplorerGrowthFlags } from './explorerGrowthFlags';
+import { resolveGrowthJourneyFlags } from './growthJourneyFlags';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
@@ -167,6 +168,11 @@ export const env = {
   // default OFF; sub-flags are subordinate to the master and must be read via
   // isExplorerFeatureEnabled(), never directly.
   explorerGrowth: resolveExplorerGrowthFlags(process.env),
+  // Growth Journey OS (T209). Same shape as explorerGrowth - one parse site, every
+  // flag default OFF, sub-flags subordinate to the master and read only via
+  // isGrowthJourneyCapabilityEnabled(). Distinct property names from Explorer's
+  // on purpose: the Explorer flag guard scans every file for Explorer's names.
+  growthJourney: resolveGrowthJourneyFlags(process.env),
   // Today Timeline v2 — the never-ending engagement feed (Phase 1). Default OFF;
   // set TODAY_FEED_V2_ENABLED=true to expose GET /api/portal/runtime/today.
   todayFeedV2Enabled: process.env.TODAY_FEED_V2_ENABLED === 'true',
