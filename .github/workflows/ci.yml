@@ -66,9 +66,21 @@ jobs:
           npm install --no-audit --no-fund
           # WHAT IS EXCLUDED, AND WHY — one line per suite, mirroring the rule in
           # backend/jest.ci.config.ts. Turning this job on revealed 7 red suites beyond the
-          # one already known, so the choice was: leave the frontend unenforced, or enforce
-          # the 192 suites that pass and NAME the rest as debt. Named debt wins; an
-          # unenforced test file is worth nothing at all.
+          # one already known: leave the frontend unenforced, or enforce what passes and NAME
+          # the rest as debt. Named debt wins; an unenforced test file is worth nothing.
+          #
+          # SIX OF THE ORIGINAL EIGHT ARE GONE, and every one was a stale test rather than a
+          # broken page: linkIntegrity and claimsRegistry pinned copy (verified live in a
+          # browser); PlatformV2 described a showroom Ali removed on 2026-08-20; the
+          # subscription fixture never carried `plans`, a field the API always sends; and the
+          # preview test clicked a single Publish button that became one button per surface.
+          # Each was rewritten to guard the PROPERTY, not the snapshot, so it cannot go stale
+          # the same way twice.
+          #
+          # HomeV2 is the one that is NOT a stale test. Its ten-section budget was raised from
+          # nine at Ali's direction with the note "the next section should replace one, not
+          # extend this again", and the page is at twelve. That is the test doing its job;
+          # whether twelve stands is a design decision, so it waits here for one.
           #
           # testEnv/ is NOT a failure. It holds jest helpers that live under __tests__ and
           # contain no test, so jest fails them for being empty. Excluding the directory is
@@ -77,7 +89,7 @@ jobs:
           # MAINTENANCE: nothing joins this list without a reason beside it. Every entry
           # below is a real red suite in main, not a flaky one, and each shrinks the list
           # when fixed.
-          npx react-scripts test --watchAll=false             --testPathIgnorePatterns               "/testEnv/"               "src/pages/publicV2/__tests__/storyDetailV2Contract.test.ts"               "src/components/publicV2/__tests__/linkIntegrity.test.tsx"               "src/config/__tests__/claimsRegistry.test.ts"               "src/pages/admin/__tests__/caseStudyRenderedPreview.test.tsx"               "src/pages/portal/settings/__tests__/SubscriptionSection.lapsed.test.tsx"               "src/pages/publicV2/__tests__/HomeV2.test.tsx"               "src/pages/publicV2/__tests__/PlatformV2.test.tsx"
+          npx react-scripts test --watchAll=false             --testPathIgnorePatterns               "/testEnv/"               "src/pages/publicV2/__tests__/storyDetailV2Contract.test.ts"               "src/pages/publicV2/__tests__/HomeV2.test.tsx"
 
   # A typecheck is NOT a build. On 2026-08-15 commit 2f0a72dd left main
   # unbuildable for hours with every check green: an eslint-disable comment in a

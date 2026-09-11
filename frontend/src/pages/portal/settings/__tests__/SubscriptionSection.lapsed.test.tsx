@@ -81,8 +81,32 @@ function subscription(overrides: Record<string, unknown>) {
   };
 }
 
+/**
+ * THE PLANS THE REAL API ALWAYS SENDS.
+ *
+ * `SubscriptionView.plans` is a required field, and `subscriptionService` builds it
+ * unconditionally — `[PLANS.annual, PLANS.monthly]`, returned from every branch. The component
+ * came to rely on that (`plans.find(...)` to resolve the current plan's config) and these
+ * fixtures, written earlier, never carried it. Every case in this file then died on a
+ * TypeError that no production user can hit, because no production response omits `plans`.
+ *
+ * Mirrors the shape in `services/subscriptionApi.ts` rather than inventing one, so a change to
+ * PlanConfig fails here at the type rather than at runtime.
+ */
+const PLANS = [
+  {
+    id: 'annual', label: 'Annual', price: 1788, amount_cents: 178800, cadence: 'year',
+    per_month: 149, period_days: 365, blurb: 'Billed once a year.',
+  },
+  {
+    id: 'monthly', label: 'Monthly', price: 199, amount_cents: 19900, cadence: 'month',
+    per_month: 199, period_days: 30, blurb: 'Billed every month.',
+  },
+];
+
 async function render(view: any): Promise<{ html: string; cleanup: () => void }> {
-  mockView = view;
+  // A fixture may still override `plans`; it just no longer has to remember to supply it.
+  mockView = { plans: PLANS, ...view };
   const host = document.createElement('div');
   document.body.appendChild(host);
   let root: Root;
