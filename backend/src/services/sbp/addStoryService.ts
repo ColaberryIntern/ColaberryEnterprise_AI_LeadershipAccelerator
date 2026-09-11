@@ -1,0 +1,284 @@
+/**
+ * addStoryService — a student adds ONE story to a build that is already published.
+ *
+ * ── WHY THIS IS SMALL ────────────────────────────────────────────────────────
+ *
+ * Everything that makes a story real already exists on the publish path, and
+ * all of it is safe to run again:
+ *
+ *   - `publishPlan` versions the plan behind an `expected_sha256` lock, so a
+ *     concurrent edit already has a 409.
+ *   - `materializePlanAsTasks` is `findOrCreate` throughout with no `destroy`.
+ *     Re-running it with one new story creates only that story's rows; every
+ *     existing task, verified or not, is untouched by construction.
+ *   - Build prompts are assembled at read time from the plan and the repo
+ *     manifest. Nothing is pre-generated, nothing is asked of a model.
+ *   - The verifier reads its spec from the published plan, so the new story
+ *     becomes verifiable the moment it is published.
+ *   - `writeDocsToRepo` commits only the documents whose content changed.
+ *
+ * So this service builds a revised plan, saves it as the next draft version,
+ * and hands it to `publishBuild` — the same function the first publish used.
+ * The repo path, the schedule, the Command Center render and the task
+ * materialization are inherited, not reimplemented.
+ *
+ * ── WHAT IS DELIBERATELY NOT HERE ───────────────────────────────────────────
+ *
+ * No editing and no deleting of existing stories. A story's acceptance lines
+ * ARE the verification contract — the verifier matches them by name against the
+ * student's `progress.json` — so changing them on a verified story would either
+ * silently un-verify it or leave a stamp on a criterion that no longer exists.
+ * That needs a rule ("editable until verified, frozen after") before it needs
+ * code, and it is not this change.
+ *
+ * ── THE TRACEABILITY GATE ───────────────────────────────────────────────────
+ *
+ * The plan gate blocks any story that cites no requirement (`dangling_requirement`)
+ * and any must-have requirement no story covers (`must_uncovered`). A feature the
+ * student thought of after publishing has no requirement yet, so one is minted
+ * alongside the story, at `should` priority, and the story fulfils it. The pair
+ * is what keeps the traceability invariant true rather than special-cased.
+ */
+import { z } from 'zod';
+import type { BuildPlan, PlanStory, PlanRequirement } from './planContract';
+import { getPublishedPlan, savePlanDraft } from './planStore';
+import { gatePlan, blockingViolations, GateViolation } from './planGate';
+import { publishBuild, PublishResult } from './sbpOrchestrator';
+
+/** A build stops accepting stories here. Generated plans run 12–18; a plan
+ *  growing past thirty is a scoping problem, not a feature request. */
+export const MAX_STORIES_PER_BUILD = 30;
+
+export const addStorySchema = z.object({
+  title: z.string().trim().min(4).max(120),
+  /** "As a <role>, I want <capability>, so that <outcome>." — not enforced as a
+   *  template, only as a sentence long enough to mean something. */
+  narrative: z.string().trim().min(20).max(600),
+  /** Gherkin-style lines. Exactly one must start with "Trust" — the trust spine
+   *  is the programme's method, and a student story is held to the same bar as
+   *  a generated one. Checked in `buildStoryRevision`, not here, so the message
+   *  can say which rule rather than "invalid". */
+  acceptance: z.array(z.string().trim().min(8).max(300)).min(3).max(7),
+  /** r1, r2, … — r0 is the walking skeleton and is closed to additions. */
+  release: z.string().trim().regex(/^r[1-9]\d*$/, 'release must be r1 or later'),
+  /** AGENT-nnn from the plan. Defaults to the plan's first agent. */
+  owner_agent: z.string().trim().regex(/^AGENT-\d+$/).optional(),
+  task_guidance: z.string().trim().min(10).max(600).optional(),
+  failure_paths: z.array(z.string().trim().min(4).max(200)).max(5).optional(),
+  /** The sha of the published plan the student is looking at. */
+  expected_sha256: z.string().regex(/^[0-9a-f]{64}$/, 'expected_sha256 must be a sha256 hex'),
+});
+export type AddStoryInput = z.infer<typeof addStorySchema>;
+
+export type AddStoryErrorClass =
+  | 'NotPublished'
+  | 'HashMismatch'
+  | 'StoryCap'
+  | 'UnknownRelease'
+  | 'ReleaseLocked'
+  | 'UnknownAgent'
+  | 'NoAgents'
+  | 'NoTrustLine'
+  | 'PlanPredatesGate'
+  | 'GateBlocked';
+
+export class AddStoryError extends Error {
+  constructor(
+    public readonly status: 404 | 409 | 422,
+    public readonly error_class: AddStoryErrorClass,
+    message: string,
+    public readonly details: unknown = null,
+  ) {
+    super(message);
+    this.name = 'AddStoryError';
+  }
+}
+
+export interface StoryRevision {
+  plan: BuildPlan;
+  story: PlanStory;
+  requirement: PlanRequirement;
+}
+
+/** STORY-016 after STORY-015; REQ-023 after REQ-022. Never reuses a number. */
+function nextId(prefix: 'STORY' | 'REQ', ids: string[]): string {
+  const re = new RegExp(`^${prefix}-(\\d+)$`, 'i');
+  let max = 0;
+  for (const id of ids) {
+    const m = re.exec(id);
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  return `${prefix}-${String(max + 1).padStart(3, '0')}`;
+}
+
+const TRUST_LINE = /^\s*trust\b/i;
+
+/**
+ * Pure. Given the published plan and the student's input, return the revised
+ * plan plus the story and requirement it now carries. Throws `AddStoryError`
+ * for every refusal a student can cause, so the route can answer with the
+ * rule that fired rather than "invalid".
+ *
+ * Does NOT run the gate. The caller gates the result, because "your story is
+ * malformed" and "this plan predates a gate rule" are different answers and
+ * only the caller sees both plans.
+ */
+export function buildStoryRevision(plan: BuildPlan, input: AddStoryInput): StoryRevision {
+  const stories = plan.stories ?? [];
+  const requirements = plan.requirements ?? [];
+  const releases = plan.releases ?? [];
+  const agents = plan.agents ?? [];
+
+  if (stories.length >= MAX_STORIES_PER_BUILD) {
+    throw new AddStoryError(422, 'StoryCap',
+      `this build already has ${stories.length} stories; the cap is ${MAX_STORIES_PER_BUILD}`);
+  }
+  if (!releases.some((r) => r.key === input.release)) {
+    throw new AddStoryError(422, 'UnknownRelease',
+      `release ${input.release} is not in this plan`, { releases: releases.map((r) => r.key) });
+  }
+  if (input.release === 'r0') {
+    // Unreachable through the schema regex, kept so a caller bypassing it
+    // still cannot grow the walking skeleton.
+    throw new AddStoryError(422, 'ReleaseLocked', 'r0 is the walking skeleton and is closed to additions');
+  }
+
+  const trustLines = input.acceptance.filter((a) => TRUST_LINE.test(a)).length;
+  if (trustLines !== 1) {
+    throw new AddStoryError(422, 'NoTrustLine',
+      trustLines === 0
+        ? 'one acceptance line must start with "Trust" — what makes this story safe to trust'
+        : `exactly one acceptance line may start with "Trust"; found ${trustLines}`);
+  }
+
+  let ownerAgent = input.owner_agent;
+  if (ownerAgent) {
+    if (!agents.some((a) => a.id === ownerAgent)) {
+      throw new AddStoryError(422, 'UnknownAgent',
+        `agent ${ownerAgent} is not in this plan`, { agents: agents.map((a) => a.id) });
+    }
+  } else {
+    ownerAgent = agents[0]?.id;
+    if (!ownerAgent) {
+      throw new AddStoryError(422, 'NoAgents', 'this plan has no agents to own a story');
+    }
+  }
+
+  const storyId = nextId('STORY', stories.map((s) => s.id));
+  const requirementId = nextId('REQ', requirements.map((r) => r.id));
+
+  // The requirement's cluster becomes a task-list grouping. Borrow the first
+  // existing cluster so the new story files with the rest of the build rather
+  // than under a lone heading; a plan with no requirements gets a truthful one.
+  const cluster = requirements[0]?.cluster ?? 'student_added';
+
+  const requirement: PlanRequirement = {
+    id: requirementId,
+    statement: input.title,
+    kind: 'FUNC',
+    priority: 'should',
+    cluster,
+  };
+
+  const story: PlanStory = {
+    id: storyId,
+    release: input.release,
+    title: input.title,
+    narrative: input.narrative,
+    fulfills: [requirementId],
+    owner_agent: ownerAgent,
+    acceptance: input.acceptance,
+    task_guidance: input.task_guidance
+      ?? 'Implement exactly what the acceptance lines describe for this story, and nothing that belongs to another one.',
+    failure_paths: input.failure_paths ?? [],
+  };
+
+  return {
+    plan: {
+      ...plan,
+      requirements: [...requirements, requirement],
+      stories: [...stories, story],
+    },
+    story,
+    requirement,
+  };
+}
+
+export interface AddStoryResult extends PublishResult {
+  story_id: string;
+  requirement_id: string;
+  /** The sha of the NEW published plan — what the client must send next time. */
+  plan_sha256: string;
+}
+
+/**
+ * Add a story to a published build and publish the revision.
+ *
+ * Failure modes, in order:
+ *   404 NotPublished     — nothing published to add to
+ *   409 HashMismatch     — the plan changed since the student loaded it
+ *   422 (see class)      — the story itself is refused
+ *   422 PlanPredatesGate — the EXISTING plan fails a blocking rule added after
+ *                          it was published; not the student's story, said so
+ *   422 GateBlocked      — the revised plan fails a blocking rule
+ *
+ * Nothing is written before the gate passes: a refused story leaves no draft
+ * behind. After `savePlanDraft`, `publishBuild` owns every remaining step and
+ * every remaining failure, exactly as on the first publish.
+ */
+export async function addStoryToPublishedBuild(
+  projectId: string,
+  input: AddStoryInput,
+  opts: {
+    enrollmentId: string;
+    repo: { owner: string; repo: string; url: string } | null;
+    correlationId?: string;
+  },
+): Promise<AddStoryResult> {
+  const published = await getPublishedPlan(projectId);
+  if (!published) {
+    throw new AddStoryError(404, 'NotPublished', 'this build has no published plan to add a story to');
+  }
+  if (published.plan_sha256 !== input.expected_sha256) {
+    throw new AddStoryError(409, 'HashMismatch',
+      'the plan changed since you loaded it; reload and try again',
+      { current_sha256: published.plan_sha256 });
+  }
+
+  // A plan published before a blocking rule existed can fail the gate today
+  // through no act of the student's. Say that, rather than blaming the story.
+  const priorBlocking = blockingViolations(gatePlan(published.plan).violations);
+  if (priorBlocking.length) {
+    throw new AddStoryError(422, 'PlanPredatesGate',
+      'this plan no longer passes the publish gate on its own; a story cannot be added until it is repaired',
+      { violations: priorBlocking });
+  }
+
+  const revision = buildStoryRevision(published.plan, input);
+
+  const gate = gatePlan(revision.plan);
+  const blocking: GateViolation[] = blockingViolations(gate.violations);
+  if (blocking.length) {
+    throw new AddStoryError(422, 'GateBlocked', 'the revised plan fails the publish gate', { violations: blocking });
+  }
+
+  const draft = await savePlanDraft(projectId, revision.plan, {
+    gate,
+    model: 'student',
+    correlationId: opts.correlationId,
+    truthRevision: published.truth_revision,
+  });
+
+  const result = await publishBuild(projectId, {
+    enrollmentId: opts.enrollmentId,
+    expectedSha: draft.plan_sha256,
+    repo: opts.repo,
+  });
+
+  return {
+    ...result,
+    story_id: revision.story.id,
+    requirement_id: revision.requirement.id,
+    plan_sha256: draft.plan_sha256,
+  };
+}
