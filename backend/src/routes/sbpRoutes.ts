@@ -505,4 +505,34 @@ router.get('/api/portal/sbp/intake/:projectId/case-study-hypothesis', requirePar
   } catch (e) { fail(res, e, next); }
 });
 
+/*
+ * The confirmation gate BEFORE the build exists. The wizard's review step runs
+ * ahead of startBuild, so there is no truth row yet; this computes the review
+ * from the same pure functions that will write it. No database, no project
+ * needed, no persistence - which is why it is scoped to a participant token
+ * only and not to an owned project.
+ */
+const previewSchema = z.object({
+  idea: z.string().min(1).max(20_000),
+  answers: z.array(z.object({
+    id: z.string().max(80),
+    question: z.string().max(500),
+    answer: z.string().max(ANSWER_MAX),
+    angle: z.string().max(80).optional(),
+  })).max(20).optional(),
+  covered: z.array(z.object({
+    angle: z.string().max(80),
+    evidence: z.string().max(600),
+  })).max(20).optional(),
+});
+
+router.post('/api/portal/sbp/intake/preview', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const body = previewSchema.parse(req.body ?? {});
+    const { previewIntake } = await import('../services/sbp/intakePreview');
+    res.json(previewIntake(body));
+  } catch (e) { fail(res, e, next); }
+});
+
 export default router;

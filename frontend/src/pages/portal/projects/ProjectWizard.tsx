@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NewBuildAnswers, BuildSize } from './projectsStore';
 import { useIsExplorer } from '../useIsExplorer';
-import { fetchIntakeQuestions, IntakeQuestion, CoveredAngle } from '../../../services/sbpApi';
+import { fetchIntakeQuestions, previewIntake, IntakeQuestion, CoveredAngle, IntakePreview } from '../../../services/sbpApi';
 
 // "Start a new build" — the questionnaire that shapes an idea into a project.
 // Three steps: (1) idea + size, (2) interview questions generated from THAT
@@ -13,9 +13,10 @@ import { fetchIntakeQuestions, IntakeQuestion, CoveredAngle } from '../../../ser
 // robot was asked about their Zendesk. It now asks the server, which reads the
 // idea and writes the questions. Step 3 used to render a fabricated plan (four
 // invented requirements, three invented tasks) that called nothing; the real
-// plan only exists minutes after Confirm, so step 3 now shows the student their
-// own inputs and what actually happens next. Nothing here is presented as
-// generated unless it was.
+// plan only exists minutes after Confirm, so step 3 now shows the student what
+// the server UNDERSTOOD from their inputs (the same statements it will record
+// when they confirm), what it still does not know, and what actually happens
+// next. Nothing here is presented as generated unless it was.
 
 // Tier copy states DEPTH, not a duration. It used to advertise a fixed number
 // of minutes per tier — figures with no telemetry behind them, on a pipeline
@@ -85,6 +86,14 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
   // Next again doesn't re-ask the server for the same thing.
   const [askedFor, setAskedFor] = useState<string | null>(null);
 
+  // Step 3 is the confirmation gate. The server computes what it WOULD record
+  // from these exact inputs, using the same code that records it, so what the
+  // student confirms is what gets written. Nothing is stored until Confirm.
+  const [preview, setPreview] = useState<IntakePreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewedFor, setPreviewedFor] = useState<string | null>(null);
+
   // `angle` rides along with each answer. Without it the server cannot file
   // the answer against a truth dimension and reports it unmapped, which is
   // what happened to every answer before this line existed.
@@ -119,6 +128,36 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
     setStep(2);
     void loadQuestions();
   }
+
+  async function loadPreview(): Promise<void> {
+    const input = { idea: idea.trim(), answers: answered, covered };
+    const key = JSON.stringify(input);
+    if (previewedFor === key && preview) return;
+    setPreviewLoading(true);
+    setPreviewError(null);
+    const res = await previewIntake(input);
+    setPreviewLoading(false);
+    if (res.ok) {
+      setPreview(res.preview);
+      setPreviewedFor(key);
+    } else {
+      // Not a refusal, a missed connection. The fallback below shows the raw
+      // answers instead, and Confirm still works: the truth is written from
+      // the same inputs either way, the student just loses the read-back.
+      setPreview(null);
+      setPreviewError(res.error.message);
+    }
+  }
+
+  function goReview(): void {
+    setStep(3);
+    void loadPreview();
+  }
+
+  // The idea is shown verbatim above the list, so its own item (dimension
+  // `problem`, truncated server-side to a quote) would only repeat it.
+  const heard = (preview?.review.items ?? []).filter((i) => i.dimension !== 'problem');
+  const blocked = preview?.review.blocksPlanning === true;
 
   return (
     <div>
@@ -166,7 +205,7 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
               <div className="pjw-actions">
                 <button className="btn ghost" onClick={() => setStep(1)}>Back</button>
                 <button className="btn ghost" onClick={() => { void loadQuestions(true); }}>Try again</button>
-                <button className="btn primary grow" onClick={() => setStep(3)}>Continue without them</button>
+                <button className="btn primary grow" onClick={goReview}>Continue without them</button>
               </div>
             </>
           )}
@@ -243,7 +282,7 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
                     <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                   </button>
                 ) : (
-                  <button className="btn primary grow" onClick={() => setStep(3)}>Review &amp; confirm
+                  <button className="btn primary grow" onClick={goReview}>Review &amp; confirm
                     <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                   </button>
                 )}
@@ -256,20 +295,91 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
       {step === 3 && (
         <div className="card pjw-pane">
           <h3>Review &amp; confirm</h3>
-          <p className="lead">This is what we'll build from. Nothing has been generated yet — that starts when you confirm.</p>
+          <p className="lead">This is what we understood, and what we still don't know. Nothing has been generated yet — that starts when you confirm. If something is wrong, go back and change your answer.</p>
 
           <div className="section-title" style={{ margin: '4px 0 10px' }}>Your idea</div>
           <div className="pjw-review">{idea.trim()}</div>
 
-          {answered.length > 0 && (
+          {previewLoading && (
+            <div className="small" style={{ margin: '18px 0 0', opacity: .75 }}>Checking what we understood…</div>
+          )}
+
+          {/* Fallback: the server could not be reached, so the read-back is
+              unavailable. Show the raw answers rather than nothing, and say
+              why, so a blank review does not read as "we heard nothing". */}
+          {!previewLoading && previewError && (
             <>
-              <div className="section-title" style={{ margin: '18px 0 10px' }}>What you told us</div>
-              {answered.map((a) => (
-                <div className="pjw-review" key={a.id}>
-                  <div className="small" style={{ opacity: .75 }}>{a.question}</div>
-                  <div>{a.answer}</div>
+              <div className="small" style={{ margin: '18px 0 10px', color: '#B5710A' }}>
+                We couldn't check this with the server just now. Here is what you wrote; it is still recorded when you confirm.
+              </div>
+              {answered.length > 0 && (
+                <>
+                  <div className="section-title" style={{ margin: '4px 0 10px' }}>What you told us</div>
+                  {answered.map((a) => (
+                    <div className="pjw-review" key={a.id}>
+                      <div className="small" style={{ opacity: .75 }}>{a.question}</div>
+                      <div>{a.answer}</div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </>
+          )}
+
+          {!previewLoading && preview && (
+            <>
+              {/* THE GATE. Every line here is one the server will write as
+                  truth on Confirm, grouped by the same rule the publish path
+                  uses. Labels are the dimension in a person's words, sent by
+                  the server so the wizard and Story 000 say the same thing. */}
+              {heard.length > 0 && (
+                <>
+                  <div className="section-title" style={{ margin: '18px 0 10px' }}>What we heard</div>
+                  <div className="small" style={{ opacity: .75, marginBottom: 10 }}>In your own words, not yet confirmed by you. Confirming builds from these.</div>
+                  {heard.map((item) => (
+                    <div className="pjw-review" key={item.index} data-group={item.group}>
+                      <div className="small" style={{ opacity: .75 }}>{item.label}</div>
+                      <div>{item.value}</div>
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {preview.covered.length > 0 && (
+                <div className="small" style={{ margin: '10px 0 0', opacity: .75 }}>
+                  Your description already answered {preview.covered.length} of our questions, which is why the interview was short. Those answers are quoted above.
                 </div>
-              ))}
+              )}
+
+              <div className="section-title" style={{ margin: '18px 0 10px' }}>Still unanswered</div>
+              {preview.unanswered.length > 0 ? (
+                <>
+                  <div className="small" style={{ opacity: .75, marginBottom: 8 }}>None of these blocks the build, and none of them is a mistake. A gap you can see now is cheaper than the same gap found by a story in week six.</div>
+                  <ul className="pjw-next" data-testid="unanswered">
+                    {preview.unanswered.map((line) => <li key={line}>{line}</li>)}
+                  </ul>
+                </>
+              ) : (
+                <div className="small" style={{ opacity: .75 }}>Nothing is outstanding: every question the plan needed has an answer.</div>
+              )}
+
+              {preview.unmapped > 0 && (
+                <div className="small" style={{ margin: '10px 0 0', color: '#B5710A' }}>
+                  {preview.unmapped === 1 ? 'One of your answers' : `${preview.unmapped} of your answers`} could not be filed against a question. {preview.unmapped === 1 ? 'It still shapes the build; it just will not' : 'They still shape the build; they just will not'} appear in the list above.
+                </div>
+              )}
+
+              {/* Only a contradiction blocks. Nothing on this path produces
+                  one today, but the server may in future, and the rule is
+                  that a contradiction it names is one the student must see. */}
+              {blocked && (
+                <div className="pjw-review" style={{ margin: '18px 0 0', borderColor: '#B5710A' }} data-testid="contradictions">
+                  <div className="small" style={{ color: '#B5710A' }}>Two of your answers contradict each other. Go back and settle it before we build from them.</div>
+                  <ul className="pjw-next" style={{ marginBottom: 0 }}>
+                    {preview.review.contradictions.map((c) => <li key={c}>{c}</li>)}
+                  </ul>
+                </div>
+              )}
             </>
           )}
 
@@ -294,7 +404,7 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
           {demo && <div className="small" style={{ margin: '4px 0 -2px', color: '#B5710A' }}>This is a demo — you can shape the whole build, but enroll to actually create it.</div>}
           <div className="pjw-actions">
             <button className="btn ghost" onClick={() => setStep(2)}>Back</button>
-            <button className="btn primary grow" onClick={() => { void onCreate(answers); }} disabled={demo} title={demo ? 'Demo — enroll to build for real' : undefined}>
+            <button className="btn primary grow" onClick={() => { void onCreate(answers); }} disabled={demo || blocked} title={demo ? 'Demo — enroll to build for real' : blocked ? 'Settle the contradiction above first' : undefined}>
               <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg> {demo ? 'Enroll to build for real' : 'Confirm & build in background'}
             </button>
           </div>

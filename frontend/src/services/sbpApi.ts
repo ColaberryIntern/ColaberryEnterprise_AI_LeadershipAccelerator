@@ -170,6 +170,70 @@ export async function fetchIntakeQuestions(input: {
   }
 }
 
+/**
+ * One statement the server understood, grouped by how much a person can trust
+ * it. Mirrors `ReviewItem` in backend/src/services/sbp/intakeReview.ts.
+ *
+ *   needsConfirmation  we heard it, nobody has agreed we heard it right
+ *   inferences         nothing was said; the system worked it out
+ *   openQuestions      it was asked and not answered
+ *   unknowns           recorded as unknown, deliberately, and that is allowed
+ *   confirmed          already corrected or agreed
+ */
+export type ReviewGroup = 'confirmed' | 'needsConfirmation' | 'inferences' | 'openQuestions' | 'unknowns';
+
+export interface ReviewItem {
+  index: number;
+  dimension: string;
+  /** The dimension as a person would say it, e.g. "What good looks like". */
+  label: string;
+  value: string;
+  group: ReviewGroup;
+  quote: string | null;
+}
+
+/**
+ * What the server will record if the student confirms. Computed by the same
+ * code that stores it, so this is a preview of the write, not a second opinion.
+ */
+export interface IntakePreview {
+  review: {
+    items: ReviewItem[];
+    counts: Record<ReviewGroup, number>;
+    /** Only these block. Everything else is informational. */
+    contradictions: string[];
+    blocksPlanning: boolean;
+  };
+  /** Still unanswered, in plain words, so the gaps are visible before confirm. */
+  unanswered: string[];
+  /** Angles the description already answered, quoted back as a receipt. */
+  covered: CoveredAngle[];
+  /** Answers the server could not file by angle. Reported, never guessed. */
+  unmapped: number;
+}
+
+/**
+ * Show the student what the server understood, BEFORE it is stored.
+ *
+ * Runs pre-project and touches no database: the truth row is written by
+ * `startBuild`, and writing it earlier would leave a row behind for a student
+ * who goes back and changes an answer. A failure here is a failure to reach
+ * the server, never a refusal; the wizard falls back to echoing the raw
+ * answers so nobody is stranded on the review step.
+ */
+export async function previewIntake(input: {
+  idea: string;
+  answers: Array<{ id: string; question: string; answer: string; angle?: string }>;
+  covered?: CoveredAngle[];
+}): Promise<{ ok: true; preview: IntakePreview } | { ok: false; error: SbpError }> {
+  try {
+    const res = await portalApi.post('/api/portal/sbp/intake/preview', input);
+    return { ok: true, preview: res.data as IntakePreview };
+  } catch (err) {
+    return { ok: false, error: toError(err) };
+  }
+}
+
 /** Start a build. Resolves as soon as the intake is durable; generation continues. */
 export async function startBuild(answers: StartBuildAnswers): Promise<
   { ok: true; correlationId: string } | { ok: false; error: SbpError }
