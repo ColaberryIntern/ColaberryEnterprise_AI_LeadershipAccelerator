@@ -25,6 +25,16 @@
  * records a named person. A generated question has had no human read it at all,
  * which is a stronger reason for the gate rather than a weaker one.
  *
+ * TWO GATES, NOT ONE. The first live batch produced questions that scored 6/6 and
+ * read as mediocre: an unmeasured observation, options at the seven-word floor,
+ * a "disable the feature" distractor nobody would pick, and a key that fixed a
+ * failed call when the stem described an inaccurate one. The rubric measures
+ * SHAPE and the model found the cheapest shape that passes. So after the shape
+ * gate, every candidate goes through `triageQuestion` - the adversarial reviewer
+ * that argues against the marked answer - and a high-severity concern discards
+ * it. Lower-severity concerns are logged beside the draft for the human who
+ * reads it; the triage script can persist them afterwards.
+ *
  * Usage (inside the backend container):
  *   node dist/scripts/growCertQuestionBank.js --plan
  *   node dist/scripts/growCertQuestionBank.js --objective D5.5 --count 3
@@ -39,6 +49,7 @@ import {
   generateItem, improveItem, achievableScore, ImproverItem,
 } from '../services/certPrep/certQuestionImprover';
 import { createDraftRevision } from '../services/certPrep/certQuestionBankService';
+import { triageQuestion } from '../services/certPrep/certQuestionTriage';
 import { CCAR_FOUNDATIONS_BLUEPRINT } from '../data/certBlueprints/ccarFoundations';
 import { MOCK_DEMAND } from '../data/certBlueprints/items';
 
@@ -249,10 +260,46 @@ async function main(): Promise<void> {
     if (score.met < ceiling) {
       // Discarded, not written weaker. See the header: a bank that grows by
       // adding worse items has a better count and a worse average.
+      //
+      // Say WHICH dimension missed. The first run reported two discards at 5/6
+      // and nothing else, which made it impossible to tell whether the prompt
+      // was failing on framing, length, or rationales - three different fixes.
+      const missed = score.dimensions.filter((x) => x.verdict !== 'meets').map((x) => x.id).join(', ');
       discarded += 1;
-      log(`${key.padEnd(14)} ${score.met}/${score.of}  DISCARDED (below ceiling ${ceiling})`);
+      log(`${key.padEnd(14)} ${score.met}/${score.of}  DISCARDED (below ceiling ${ceiling}: ${missed})`);
       continue;
     }
+
+    // Second gate: is the answer defensible? The rubric cannot tell, and the
+    // first batch proved the model will satisfy the rubric with a question whose
+    // key does not follow from its own stem.
+    const triage = await triageQuestion({
+      question_key: key,
+      stem: item.stem,
+      options: item.options,
+      correct_keys: item.correct_keys,
+      rationale: item.rationale,
+      distractor_rationales: item.distractor_rationales,
+      domain_id: w.domain.domain_id,
+      objective_id: w.objective.objective_id,
+    });
+    if (triage.verdict === 'error') {
+      // A reviewer that could not read the item is not a pass. Treated as a
+      // discard rather than a write, because "unreviewed" and "reviewed clean"
+      // must never look the same downstream.
+      discarded += 1;
+      log(`${key.padEnd(14)} ${score.met}/${score.of}  DISCARDED (triage error: ${triage.errorClass ?? 'unknown'})`);
+      continue;
+    }
+    if (triage.verdict === 'needs_human' && triage.severity === 'high') {
+      discarded += 1;
+      const why = triage.concerns[0]?.detail?.slice(0, 90) ?? 'unspecified';
+      log(`${key.padEnd(14)} ${score.met}/${score.of}  DISCARDED (triage high: ${why})`);
+      continue;
+    }
+    const triageNote = triage.verdict === 'needs_human'
+      ? `  [triage ${triage.severity}: ${triage.concerns[0]?.detail?.slice(0, 70) ?? ''}]`
+      : '';
 
     if (write) {
       await createDraftRevision({
@@ -274,7 +321,7 @@ async function main(): Promise<void> {
     }
     made += 1;
     log(`${key.padEnd(14)} ${score.met}/${score.of}  ${w.objective.objective_id} · ${w.scenario.scenario_id} · ${w.difficulty}`
-      + `  ${write ? 'draft written' : 'would write'}`);
+      + `  ${write ? 'draft written' : 'would write'}${triageNote}`);
   }
 
   log('');

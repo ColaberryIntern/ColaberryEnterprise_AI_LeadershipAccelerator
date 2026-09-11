@@ -41,7 +41,7 @@ import { REFERENCE, RUBRIC } from '../../data/certBlueprints/ccarRubric';
  */
 
 export const IMPROVER_MODEL = 'gpt-4o';
-export const IMPROVER_PROMPT_VERSION = 'v1-rubric-directed';
+export const IMPROVER_PROMPT_VERSION = 'v2-median-and-measured';
 
 const TIMEOUT_MS = 30_000;
 const MAX_ATTEMPTS = 2;
@@ -269,19 +269,31 @@ export async function generateItem(spec: {
     `  ${spec.scenario_summary}`,
     `DIFFICULTY: ${spec.difficulty}`,
     '',
-    'SHAPE, measured from the published sample items:',
-    `- stem ${REFERENCE.stemWords.min}-${REFERENCE.stemWords.max} words, aim for ${REFERENCE.stemWords.target}`,
+    'SHAPE, measured from the published sample items. These are TARGETS, not floors:',
+    `- stem about ${REFERENCE.stemWords.target} words (the published range is ${REFERENCE.stemWords.min}-${REFERENCE.stemWords.max})`,
     `- exactly ${REFERENCE.optionCount} options, exactly ONE correct`,
-    `- each option ${REFERENCE.optionWords.min}-${REFERENCE.optionWords.max} words, aim for ${REFERENCE.optionWords.target}`,
-    '- the stem opens by reporting something OBSERVED — a measured rate, a log line,',
-    '  a user complaint, an intermittent failure — and says WHO observed it, before it',
-    '  asks anything. Never a definitional stem.',
-    '- every option is a complete course of action, not a label',
-    '- at least one wrong option must be genuinely defensible: a competent person',
-    '  should have to think. An item whose distractors nobody would pick measures',
-    '  nothing.',
+    `- each option about ${REFERENCE.optionWords.target} words (published range ${REFERENCE.optionWords.min}-${REFERENCE.optionWords.max}).`,
+    '  An option of seven words is a label with a verb in front of it. Write the',
+    '  full course of action: what is done, to what, and what that changes.',
+    '',
+    'THE STEM MUST CONTAIN A MEASUREMENT. Open with a specific thing somebody',
+    'observed, and quantify it: a rate ("about one run in six"), a count ("two',
+    'changes merged last week without review"), a duration, a log line. "Occasionally',
+    'fails" is not an observation, it is a summary of one. Say who saw it.',
+    '',
+    'THE KEY MUST RESOLVE THE STEM. Read your own stem back and confirm the correct',
+    'option addresses the thing that was actually observed. A retry fixes a call',
+    'that failed; it does not fix a call that succeeded with a wrong answer. If the',
+    'key does not follow from the observation, rewrite the stem.',
+    '',
+    'AT LEAST ONE WRONG OPTION MUST BE GENUINELY DEFENSIBLE. A competent engineer',
+    'should have to think. "Disable the feature" is never a defensible distractor;',
+    'nobody picks it, so it measures nothing. The best distractor is a real approach',
+    'that addresses a nearby problem, or the right approach applied one layer too',
+    'early or too late.',
+    '',
     '- the rationale explains why the key wins; every wrong option gets its own',
-    '  one-line explanation of why it loses',
+    '  one-line explanation of why it loses, naming what the option would have fixed',
     '',
     'HARD RULES:',
     '- do not invent a product, a version number, a price or a date',
