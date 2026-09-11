@@ -14,11 +14,12 @@ jest.mock('../../../services/agentReportSubscriptionApi', () => ({
   createReportSubscription: jest.fn(),
   updateReportSubscription: jest.fn(),
   getReportRuns: jest.fn(),
+  getReportPreview: jest.fn(),
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { listReportSubscriptions, createReportSubscription, updateReportSubscription, getReportRuns } = require('../../../services/agentReportSubscriptionApi') as {
-  listReportSubscriptions: jest.Mock; createReportSubscription: jest.Mock; updateReportSubscription: jest.Mock; getReportRuns: jest.Mock;
+const { listReportSubscriptions, createReportSubscription, updateReportSubscription, getReportRuns, getReportPreview } = require('../../../services/agentReportSubscriptionApi') as {
+  listReportSubscriptions: jest.Mock; createReportSubscription: jest.Mock; updateReportSubscription: jest.Mock; getReportRuns: jest.Mock; getReportPreview: jest.Mock;
 };
 
 const REAL_SUBSCRIPTION: ReportSubscription = {
@@ -98,6 +99,58 @@ describe('AgentReportsTab — subscriptions', () => {
     await act(async () => { subscribeButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
 
     expect(createReportSubscription).toHaveBeenCalledWith('agent-1', { contentScope: ['cost'], cadence: 'daily', deliveryHourLocal: 8 });
+  });
+});
+
+describe('AgentReportsTab — Preview', () => {
+  it('requires at least one section before calling the preview API', async () => {
+    await renderTab();
+    const previewButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Preview')!;
+    await act(async () => { previewButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
+    expect(getReportPreview).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Choose at least one section.');
+  });
+
+  it('renders the real subject and HTML content returned by the API for the currently checked sections', async () => {
+    getReportPreview.mockResolvedValue({ subject: 'Agent report: Reese', html: '<h2>Reese</h2><h3>Cost</h3><p>$1.20 over 3 run(s)</p>', text: 'Reese' });
+    await renderTab();
+
+    const costCheckbox = container.querySelector('#section-cost') as HTMLInputElement;
+    await act(async () => { costCheckbox.click(); });
+
+    const previewButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Preview')!;
+    await act(async () => { previewButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
+
+    expect(getReportPreview).toHaveBeenCalledWith('agent-1', ['cost']);
+    expect(container.textContent).toContain('Agent report: Reese');
+    expect(container.textContent).toContain('$1.20 over 3 run(s)');
+  });
+
+  it('shows a real error, never a blank panel, when the preview call fails', async () => {
+    getReportPreview.mockRejectedValue({ response: { data: { error: 'Report generation failed' } } });
+    await renderTab();
+
+    const costCheckbox = container.querySelector('#section-cost') as HTMLInputElement;
+    await act(async () => { costCheckbox.click(); });
+    const previewButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Preview')!;
+    await act(async () => { previewButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
+
+    expect(container.textContent).toContain('Report generation failed');
+  });
+
+  it('clears a stale preview when the section selection changes after previewing', async () => {
+    getReportPreview.mockResolvedValue({ subject: 'Agent report: Reese', html: '<h3>Cost</h3>', text: 'Reese' });
+    await renderTab();
+
+    const costCheckbox = container.querySelector('#section-cost') as HTMLInputElement;
+    await act(async () => { costCheckbox.click(); });
+    const previewButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Preview')!;
+    await act(async () => { previewButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
+    expect(container.textContent).toContain('Agent report: Reese');
+
+    const ticketsCheckbox = container.querySelector('#section-tickets') as HTMLInputElement;
+    await act(async () => { ticketsCheckbox.click(); });
+    expect(container.textContent).not.toContain('Agent report: Reese');
   });
 });
 

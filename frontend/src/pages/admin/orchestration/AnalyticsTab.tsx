@@ -275,7 +275,7 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
                         {expandedStudentId === s.enrollment_id ? '\u25BC' : '\u25B6'}
                       </td>
                       <td className="fw-medium">
-                        <PersonLink name={s.name} email={s.email}
+                        <PersonLink tab="class" name={s.name} email={s.email}
                           enrollmentId={s.enrollment_id} stopPropagation />
                       </td>
                       <td style={{ fontSize: 12 }}>{s.email}</td>
@@ -638,7 +638,7 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
                       title={`Click to see ${s.name}'s full detail`}
                     >
                       <td className="fw-medium" style={{ position: 'sticky', left: 0, background: 'var(--orch-bg-card)', zIndex: 1, fontSize: 11 }}>
-                        <PersonLink name={s.name} enrollmentId={s.enrollment_id} stopPropagation />
+                        <PersonLink tab="class" name={s.name} enrollmentId={s.enrollment_id} stopPropagation />
                       </td>
                       {artifactData.artifacts.map(a => (
                         <td key={a.id} className="text-center">

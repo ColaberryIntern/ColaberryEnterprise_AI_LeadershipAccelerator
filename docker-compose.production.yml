@@ -20,12 +20,28 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-accelerator}"]
+      # -d is REQUIRED. Without it libpq defaults the database to the USERNAME,
+      # so this probed a database called "accelerator" that has never existed.
+      # pg_isready still reported "accepting connections" (the postmaster answers
+      # either way), so the healthcheck passed while Postgres logged a FATAL every
+      # 5 seconds: 16,960 a day, 53% of everything it logged. Measured 2026-09-10.
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-accelerator} -d ${DB_NAME:-accelerator_prod}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   backend:
+    # Registry image built by .github/workflows/build-images.yml on every push to
+    # main. `build:` is deliberately KEPT alongside it: with both present, Compose
+    # names the locally-built image the same thing, so `up -d --build` behaves
+    # exactly as it always has, while `pull && up -d` now works too. That makes this
+    # change additive and reversible rather than a cutover.
+    #
+    # The package is PUBLIC because the repository is, so the prod host needs no
+    # registry credential to pull it. Verified 2026-09-10: an anonymous client can
+    # fetch the manifest (HTTP 200). Nothing secret is baked in — .dockerignore
+    # excludes .env, .env.local and .env.production.
+    image: ghcr.io/colaberryintern/accelerator-backend:main
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -93,6 +109,7 @@ services:
       - "3001"
 
   intelligence:
+    image: ghcr.io/colaberryintern/accelerator-intelligence:main
     build:
       context: ./intelligence/ai_engine
       dockerfile: Dockerfile
@@ -113,6 +130,7 @@ services:
       - "5000"
 
   nginx:
+    image: ghcr.io/colaberryintern/accelerator-nginx:main
     build:
       context: .
       dockerfile: nginx/Dockerfile

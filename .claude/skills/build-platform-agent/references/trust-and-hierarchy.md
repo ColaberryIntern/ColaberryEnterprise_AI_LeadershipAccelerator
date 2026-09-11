@@ -192,7 +192,27 @@ conversation. It is NOT sufficient for a working student conversation — that n
 the separate persona-block file this skill already builds in Derivation rule 2 /
 step B.
 
-## The 5 manager-authored tables — not part of initial onboarding
+## Manager-conversation ACTIONS are free — no per-agent wiring required
+
+Capability 8 (2026-09-08 through 2026-09-10) added six real, generic manager-intent
+classifiers on top of the Talk tab's conversation loop
+(`agentManagerConversationService.ts`'s `handleNewGenericIntentDetection()`/
+`handlePendingGenericIntentConfirmation()`): **CHANGE_GOAL**, **SCHEDULE_ONE_ON_ONE**,
+**INSTRUCT**, **ASSIGN_WORK**, **APPROVE**, **REJECT** (plus the earlier
+**QUARANTINE_METRIC**/**RESTORE_METRIC** reliability pair). Every one of these is
+keyed on `agentId` alone — none of them contain a single agent-specific branch, string
+literal, or config lookup. This means **a brand-new agent gets all eight of these the
+moment it has a working Talk tab (a real `system_prompt` set, per the section above) —
+zero additional wiring, zero new files, zero registry changes.** A manager can say
+"Set a goal: ...", "Let's schedule a 1:1...", "From now on, always...", "New task:
+...", or "Approve/Reject it" to ANY newly-built agent on day one and get the real
+deterministic confirmation-card flow, not a "not supported" reply. (ASSIGN_WORK's
+`assignTaskToAgent()` does still require the CONFIRMING MANAGER to have a real
+`org_members` row — that's about the human, not the new agent, and isn't something
+this skill's build steps affect.) Do not add a "wire up manager intents" step to this
+skill's build flow — there is nothing to wire.
+
+## The 6 manager-authored tables — not part of initial onboarding
 
 None of these are created when an agent is onboarded — all are added later, by a
 manager, through their own controllers/routes, once the agent exists. Every one FKs
@@ -205,6 +225,15 @@ manager, through their own controllers/routes, once the agent exists. Every one 
 | `agent_report_subscriptions` (`AgentReportSubscription`) | A recurring digest | `content_scope` (JSONB array of `'cost'\|'activity'\|'trust'\|'tickets'`), `cadence` (`'daily'\|'weekly'`), `delivery_hour_local`, `timezone` default `'America/Chicago'`, `channel` — only `'email'` is live (Slack code exists, dormant, deliberately not selectable) |
 | `agent_memory_proposals` (`AgentMemoryProposal`) | The governed-memory approval queue | `content`, `evidence`, `status` default `'pending'`; only `status='approved'` rows are ever injected into a live prompt |
 | `manager_directives` (`ManagerDirective`) | A standing instruction | `directive_text`, `status` default `'active'` (`'active'\|'revoked'`) — append-only/versioned, never edited, only superseded; restrict-only by construction, never read to grant a tool or raise autonomy |
+| `agent_role_charters` (`AgentRoleCharter`) | The agent's own job description, one row per agent (unique `agent_id`) | `role_title` (required, ≤255 chars), `mission` (required, ≤2000 chars), `responsibilities` (JSONB array, ≤20 items, ≤500 chars each), `kpis` (JSONB array, ≤20 items, ≤200 chars each); `PUT /api/admin/agents/:id/charter` upserts, `GET` returns `charter: null` (never a fabricated default) until a manager writes one. Rendered on the Trust & Control tab's Charter panel (`AgentCharterTab.tsx`) |
+
+Unlike the other 5, an empty `agent_role_charters` row isn't neutral — it's the one
+piece of manager-authored content that reads as a genuine gap on a new agent's Trust &
+Control tab rather than an honest "nothing yet" empty state, since a charter is what
+tells a HUMAN what this agent is actually for. Consider filling it out as part of a
+new agent's close-out (step H) when the agent's purpose is already well understood at
+build time — see `docs/sessions/CC-20260818-x4nk.md`'s 2026-09-10 entry for a real
+worked example (Reese's own charter, written and verified live).
 
 If hardening this skill further, a reasonable next step is proactively seeding a
 starter `ManagerDirective` or `AgentGoal` at onboarding time for agents that clearly

@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import api from '../../utils/api';
 import { PageHeader, SectionCard, StatCard, StatusBadge } from '../../components/admin/shell';
 // The SAME component the Lead detail page renders. Reused rather than rebuilt:
@@ -19,6 +19,7 @@ import LeadStrategyPrep from '../../components/admin/lead/LeadStrategyPrep';
 // Each is its own module: the page was already 934 lines before they arrived.
 import ClassActivityTab from '../../components/admin/person/ClassActivityTab';
 import WorkTab from '../../components/admin/person/WorkTab';
+import CommunicationsTab from '../../components/admin/person/CommunicationsTab';
 import AccountTab from '../../components/admin/person/AccountTab';
 import GrowthTab from '../../components/admin/person/GrowthTab';
 import { Field, Unknown, fmtDate, fmtDateTime } from '../../components/admin/person/primitives';
@@ -67,7 +68,7 @@ const DOMAIN_TONE: Record<string, string> = {
 };
 
 type TabKey = 'timeline' | 'journey' | 'acquisition' | 'notes' | 'strategy'
-  | 'class' | 'work' | 'account' | 'growth'
+  | 'communications' | 'class' | 'work' | 'account' | 'growth'
   | 'engagement' | 'learning' | 'billing' | 'activity' | 'trust';
 
 export default function PersonProfilePage() {
@@ -76,6 +77,10 @@ export default function PersonProfilePage() {
   // route segment is opaque here and `profile.email` is the resolved identity.
   const { ref: rawRef } = useParams<{ ref: string }>();
   const personRef = refForApi(rawRef);
+  // ?tab= is a DEFAULT chosen by whoever linked here, not a lock. An unknown
+  // tab, or one this caller may not see, falls through to the usual first tab.
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -143,12 +148,39 @@ export default function PersonProfilePage() {
     if (!profile) return [] as Array<{ key: TabKey; label: string; count?: number }>;
     const t: Array<{ key: TabKey; label: string; count?: number }> = [];
     if (profile.timeline !== undefined) t.push({ key: 'timeline', label: 'Timeline', count: profile.timeline.length });
-    if (profile.acquisition !== undefined) t.push({ key: 'acquisition', label: 'Acquisition' });
+    if (profile.acquisition !== undefined) {
+      // How much of the acquisition record is actually filled in. A lead
+      // captured from a one-field form and one from a full brief request are
+      // different objects, and the count says which this is.
+      const acq = profile.acquisition;
+      const filled = acq
+        ? Object.entries(acq).filter(([k, v]) =>
+            k !== 'leadScoreMax' && v !== null && v !== undefined && v !== '').length
+        : undefined;
+      t.push({ key: 'acquisition', label: 'Acquisition', count: filled });
+    }
     // Journey needs a lead: the analysis is built from lead touchpoints.
-    if (profile.acquisition?.leadId) t.push({ key: 'journey', label: 'Journey' });
+    // The count is TOUCHPOINTS, the same figure the campaign modal shows.
+    if (profile.acquisition?.leadId) {
+      const j = profile.journey;
+      const touchpoints = j
+        ? j.sessions + j.pageEvents + j.emailsSent + j.campaigns
+        : undefined;
+      t.push({ key: 'journey', label: 'Journey', count: touchpoints });
+    }
     // The Lead page's Activity tab, moved across whole.
-    if (profile.acquisition?.leadId) t.push({ key: 'notes', label: 'Notes & activity' });
+    if (profile.acquisition?.leadId) {
+      t.push({ key: 'notes', label: 'Notes & activity', count: tempHistory?.length ?? undefined });
+    }
     if (profile.acquisition?.leadId) t.push({ key: 'strategy', label: 'Strategy prep' });
+    // Every communication, threaded by campaign.
+    if (profile.communications) {
+      t.push({
+        key: 'communications',
+        label: 'Communications',
+        count: profile.communications.totalMessages,
+      });
+    }
     if (profile.appointments !== undefined || profile.automation !== undefined) {
       t.push({
         key: 'engagement',
@@ -164,7 +196,8 @@ export default function PersonProfilePage() {
       t.push({
         key: 'class',
         label: 'Class & curriculum',
-        count: profile.curriculum?.completed ?? undefined,
+        count: (profile.curriculum?.total ?? 0)
+          + (profile.classActivity?.attendanceTotal ?? 0) || undefined,
       });
     }
     if (profile.work) {
@@ -183,19 +216,40 @@ export default function PersonProfilePage() {
       });
     }
     if (profile.skills || profile.mentor || profile.content || profile.community || profile.profileContext) {
-      t.push({ key: 'growth', label: 'Skills & context' });
+      t.push({
+        key: 'growth',
+        label: 'Skills & context',
+        count: (profile.skills?.skillEvidence ?? 0)
+          + (profile.mentor?.mentorTurns ?? 0)
+          + (profile.content?.podcasts ?? 0) + (profile.content?.blogPosts ?? 0)
+          + (profile.content?.videos ?? 0) || undefined,
+      });
     }
     if (profile.billing !== undefined) t.push({ key: 'billing', label: 'Payment record', count: profile.billing.length });
-    if (profile.engagement !== undefined) t.push({ key: 'activity', label: 'Site activity' });
+    if (profile.engagement !== undefined) {
+      t.push({ key: 'activity', label: 'Site activity', count: profile.engagement?.sessions ?? undefined });
+    }
     // Last, because it is about the data rather than the person — but present
     // for everyone, because "how much of this should I believe" always applies.
     if (profile.trust) t.push({ key: 'trust', label: 'Data & trust', count: profile.trust.gaps.length });
     return t;
-  }, [profile]);
+  }, [profile, tempHistory]);
 
+  // Applied ONCE per load. Without the ref the effect would re-apply ?tab= every
+  // time `tab` changed, so clicking away from the requested tab would snap
+  // straight back to it. A ref rather than an eslint-disable: every dependency
+  // stays declared, and `react-hooks/exhaustive-deps` is not registered in this
+  // project's config, so suppressing it is itself a build error.
+  const deepLinkApplied = useRef(false);
   useEffect(() => {
-    if (tabs.length && !tabs.some((t) => t.key === tab)) setTab(tabs[0].key);
-  }, [tabs, tab]);
+    if (!tabs.length) return;
+    if (!deepLinkApplied.current && requestedTab && tabs.some((t) => t.key === requestedTab)) {
+      deepLinkApplied.current = true;
+      setTab(requestedTab as TabKey);
+      return;
+    }
+    if (!tabs.some((t) => t.key === tab)) setTab(tabs[0].key);
+  }, [tabs, tab, requestedTab]);
 
   const acq = profile?.acquisition;
 
@@ -237,11 +291,6 @@ export default function PersonProfilePage() {
                 onClick={() => setShowAppointment(true)}>
                 Schedule appointment
               </button>
-            )}
-            {acq?.leadId && (
-              <Link className="btn btn-sm btn-outline-secondary" to={`/admin/leads/${acq.leadId}`}>
-                Lead record
-              </Link>
             )}
           </div>
         }
@@ -650,6 +699,8 @@ export default function PersonProfilePage() {
             <ClassActivityTab classActivity={profile.classActivity} curriculum={profile.curriculum} />
           )}
 
+          {tab === 'communications' && <CommunicationsTab communications={profile.communications} />}
+
           {tab === 'work' && <WorkTab work={profile.work} />}
 
           {tab === 'account' && (
@@ -863,11 +914,19 @@ export default function PersonProfilePage() {
             <>
               <div className="modal d-block" tabIndex={-1} role="dialog"
                 style={{ background: 'rgba(0,0,0,.4)' }} onClick={() => setRawEvent(null)}>
-                <div className="modal-dialog modal-dialog-centered" role="document"
+                <div className="modal-dialog modal-dialog-centered modal-lg" role="document"
                   onClick={(e) => e.stopPropagation()}>
                   <div className="modal-content">
                     <div className="modal-header">
-                      <h5 className="modal-title">{rawEvent.type}</h5>
+                      <div>
+                        <h5 className="modal-title mb-0">{rawEvent.type}</h5>
+                        <div className="text-muted small">
+                          <span className={`badge bg-${DOMAIN_TONE[rawEvent.domain] || 'secondary'}-subtle text-${DOMAIN_TONE[rawEvent.domain] || 'secondary'}-emphasis me-2`}>
+                            {rawEvent.domain}
+                          </span>
+                          {fmtDateTime(rawEvent.occurredAt)}
+                        </div>
+                      </div>
                       <button type="button" className="btn-close" aria-label="Close"
                         onClick={() => setRawEvent(null)} />
                     </div>
@@ -876,8 +935,34 @@ export default function PersonProfilePage() {
                         <Field label="When" value={fmtDateTime(rawEvent.occurredAt)} />
                         <Field label="Domain" value={rawEvent.domain} />
                         <Field label="Source table" value={<code>{rawEvent.source}</code>} />
+                        <Field label="Event type" value={<code>{rawEvent.type}</code>} />
+                        {/* A collapsed fan-out says how many it stands for, so the
+                            reader is never left wondering what the row hides. */}
+                        <Field
+                          label="Identical events collapsed"
+                          value={rawEvent.occurrences > 1
+                            ? `${rawEvent.occurrences} in the same second`
+                            : 'None — this is a single event'} />
+                        <Field label="Person" value={profile.name || profile.email} />
                         <Field label="Detail" wide value={rawEvent.summary} />
                       </div>
+
+                      {/* A communication event has a whole thread behind it, and
+                          the reader almost always wants to read the message
+                          rather than admire its metadata. */}
+                      {rawEvent.domain === 'communication' && profile.communications && (
+                        <div className="alert alert-light border d-flex justify-content-between align-items-center gap-2">
+                          <span className="small">
+                            This is a communication. The full message, its campaign and any reply
+                            are on the Communications tab.
+                          </span>
+                          <button type="button" className="btn btn-sm btn-outline-primary flex-shrink-0"
+                            onClick={() => { setTab('communications'); setRawEvent(null); }}>
+                            Open thread
+                          </button>
+                        </div>
+                      )}
+
                       {/* Naming the table is the point: any figure on this page
                           can be traced to the rows behind it. */}
                       <p className="text-muted small mb-0">

@@ -202,7 +202,14 @@ export async function ensureInternshipSchema(): Promise<void> {
        application_id UUID NOT NULL,
        channel VARCHAR(20) NOT NULL,
        status VARCHAR(30) NOT NULL DEFAULT 'in_progress',
-       question_set_id UUID NOT NULL,
+       -- NULLABLE. The question bank lives in CODE
+       -- (services/internship/internshipQuestionBank.ts), and the version of
+       -- record is stamped per ANSWER as
+       -- internship_interview_responses.question_set_version. Nothing ever
+       -- populates internship_interview_question_sets, so a NOT NULL here made
+       -- every session insert fail — which broke BOTH saving an answer and
+       -- placing a call, since openSession() runs before the dial.
+       question_set_id UUID,
        scheduled_for TIMESTAMPTZ,
        started_at TIMESTAMPTZ,
        completed_at TIMESTAMPTZ,
@@ -219,6 +226,11 @@ export async function ensureInternshipSchema(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS uq_internship_session_provider_call
        ON internship_interview_sessions (provider_call_id)
        WHERE provider_call_id IS NOT NULL`,
+    // Repair databases created before question_set_id was made nullable. A
+    // CREATE TABLE IF NOT EXISTS cannot relax an existing column, so without this
+    // an already-deployed environment stays broken after the code is fixed.
+    // Idempotent: dropping a NOT NULL that is already dropped is a no-op.
+    `ALTER TABLE internship_interview_sessions ALTER COLUMN question_set_id DROP NOT NULL`,
     `CREATE INDEX IF NOT EXISTS idx_internship_sessions_app ON internship_interview_sessions (application_id, created_at)`,
 
     // ── The normalized answer — where "ask once" is actually enforced ──────

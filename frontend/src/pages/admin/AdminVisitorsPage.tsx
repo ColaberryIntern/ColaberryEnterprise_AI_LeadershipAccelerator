@@ -815,7 +815,7 @@ function AdminVisitorsPage() {
                 signedIn.map((p) => (
                   <tr key={p.enrollment_id}>
                     <td>
-                      <PersonLink name={p.name} enrollmentId={p.enrollment_id} />
+                      <PersonLink tab="activity" name={p.name} enrollmentId={p.enrollment_id} />
                     </td>
                     <td><StatusBadge label="Signed in" tone="success" /></td>
                     <td className="small text-muted">{formatRelative(p.last_active_at)}</td>
@@ -1480,7 +1480,7 @@ function AdminVisitorsPage() {
                 {v.lead_id && (
                   <div className="mb-3">
                     <Link
-                      to={personPath({ leadId: v.lead_id }) ?? '/admin/people'}
+                      to={personPath({ leadId: v.lead_id }, 'activity') ?? '/admin/people'}
                       className="btn btn-sm btn-outline-primary"
                     >
                       View Lead Profile

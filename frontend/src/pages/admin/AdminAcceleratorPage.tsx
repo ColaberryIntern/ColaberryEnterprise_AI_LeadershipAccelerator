@@ -1120,7 +1120,7 @@ function AdminAcceleratorPage() {
                       return (
                       <tr key={e.id}>
                         <td className="fw-medium">
-                          <PersonLink name={e.full_name} email={e.email} enrollmentId={e.id} />
+                          <PersonLink tab="class" name={e.full_name} email={e.email} enrollmentId={e.id} />
                           <button
                             className="btn btn-link p-0 ms-2 align-baseline text-muted"
                             onClick={() => setHistoryTarget({ id: e.id, name: e.full_name })}
@@ -1245,7 +1245,7 @@ function AdminAcceleratorPage() {
                             return (
                               <tr key={e.id}>
                                 <td className="fw-medium">
-                                  <PersonLink name={e.full_name} email={e.email} enrollmentId={e.id} />
+                                  <PersonLink tab="class" name={e.full_name} email={e.email} enrollmentId={e.id} />
                                 </td>
                                 <td>{e.company}</td>
                                 <td>

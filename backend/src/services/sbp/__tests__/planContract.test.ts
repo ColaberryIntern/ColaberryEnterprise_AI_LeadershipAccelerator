@@ -10,6 +10,7 @@
  *
  * This test makes that class of drift impossible to reintroduce silently.
  */
+import { DECOMPOSE_SYSTEM_PROMPT } from '../decomposePrompt';
 import {
   BUILD_PLAN_JSON_SCHEMA,
   BuildPlan,
@@ -29,7 +30,7 @@ import {
  * without adding it here will surface in review as an untested change.
  */
 const TYPE_FIELDS = {
-  requirement: ['id', 'statement', 'kind', 'priority', 'cluster'] as (keyof PlanRequirement)[],
+  requirement: ['id', 'statement', 'kind', 'priority', 'cluster', 'from_dimensions',] as (keyof PlanRequirement)[],
   release: ['key', 'name', 'goal', 'demo', 'week_start', 'week_end'] as (keyof PlanRelease)[],
   story: [
     'id', 'release', 'title', 'narrative', 'fulfills', 'owner_agent',
@@ -120,5 +121,64 @@ describe('coverage predicates', () => {
   it('requires coverage for a non-constraint must, and not for a should', () => {
     expect(requiresStoryCoverage(r({ kind: 'FUNC', priority: 'must' }))).toBe(true);
     expect(requiresStoryCoverage(r({ kind: 'FUNC', priority: 'should' }))).toBe(false);
+  });
+});
+
+/**
+ * Traceability, and the two ways it can be a lie.
+ *
+ * A requirement citing a dimension nobody uses is unusable downstream; a
+ * requirement citing something plausible it cannot point at is worse, because
+ * it reads as evidence. The prompt asks for an empty array in that case and
+ * these pin both halves of the contract that makes that answer safe.
+ */
+describe('requirement traceability', () => {
+  const requirementSchema = (BUILD_PLAN_JSON_SCHEMA as any).properties.requirements.items;
+
+  it('is required in the schema so the model must answer, even with nothing', () => {
+    // Optional in TypeScript, required on the wire: strict structured output
+    // demands every property appear in `required`, so the model emits [] rather
+    // than omitting the key and leaving us unable to tell "none" from "not asked".
+    expect(requirementSchema.required).toContain('from_dimensions');
+    expect(requirementSchema.properties.from_dimensions.type).toBe('array');
+  });
+
+  it('names the canonical dimensions in the prompt, so a citation is checkable', () => {
+    for (const dimension of ['approval_points', 'systems', 'current_workflow', 'unknowns']) {
+      expect(DECOMPOSE_SYSTEM_PROMPT).toContain(dimension);
+    }
+  });
+
+  it('tells the model that citing nothing is a correct answer', () => {
+    // Without this the model invents a citation for every requirement, and a
+    // plausible-looking citation is worse than none: it reads as evidence.
+    // Whitespace-tolerant: the prompt is hard-wrapped, so a phrase that reads as
+    // one sentence spans a newline and an indent. Asserting the literal string
+    // would fail on a reflow that changed nothing about the instruction.
+    const flat = DECOMPOSE_SYSTEM_PROMPT.replace(/\s+/g, ' ');
+    expect(flat).toMatch(/empty array is the correct and expected answer/i);
+    expect(flat).toMatch(/would not be able to point at the sentence, cite nothing/i);
+  });
+
+  it('survives a round trip through JSON, which is how it reaches the repo docs', () => {
+    const requirement = {
+      id: 'REQ-001',
+      statement: 'The system flags an invoice that disagrees with its purchase order.',
+      kind: 'FUNC' as const,
+      priority: 'must' as const,
+      cluster: 'Reconciliation',
+      from_dimensions: ['approval_points', 'systems'],
+    };
+    expect(JSON.parse(JSON.stringify(requirement)).from_dimensions)
+      .toEqual(['approval_points', 'systems']);
+  });
+
+  it('a plan with no citations still parses, because old plans have none', () => {
+    const legacy = {
+      id: 'REQ-001', statement: 'A statement.', kind: 'FUNC' as const,
+      priority: 'must' as const, cluster: 'Some cluster',
+    };
+    expect(legacy).not.toHaveProperty('from_dimensions');
+    expect(JSON.parse(JSON.stringify(legacy)).from_dimensions).toBeUndefined();
   });
 });

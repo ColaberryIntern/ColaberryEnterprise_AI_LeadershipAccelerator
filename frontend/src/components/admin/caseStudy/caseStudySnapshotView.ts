@@ -135,6 +135,14 @@ export interface SnapshotView {
     readonly embedUrl: string;
     readonly provider: string;
     readonly watchUrl: string;
+    /**
+     * The section EXACTLY as stored, so an editor can change one key without destroying
+     * the rest. Writing `walkthroughVideo` replaces the whole section — the panel's first
+     * version sent `{embedUrl, title}` and silently dropped the generated file, its
+     * captions and its poster, which is what left a record with no way back to its own
+     * walkthrough.
+     */
+    readonly raw: Record<string, unknown>;
   } | null;
 }
 
@@ -248,6 +256,7 @@ function walkthroughOf(content: Record<string, unknown>): SnapshotView['walkthro
     title: str(v.title),
     provider: str(v.provider),
     watchUrl: str(v.watchUrl),
+    raw: v,
   };
 }
 

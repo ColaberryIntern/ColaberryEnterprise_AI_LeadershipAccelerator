@@ -5,6 +5,7 @@ import {
   handleCreateReportSubscription,
   handleUpdateReportSubscription,
   handleListReportRuns,
+  handleReportPreview,
 } from '../../controllers/agentReportSubscriptionController';
 
 // AI Workforce Management, Checkpoint D — a manager's standing request to
@@ -21,5 +22,6 @@ router.patch(
   handleUpdateReportSubscription
 );
 router.get('/api/admin/agents/:id/report-runs', requireAgentManagerOrAdmin(), handleListReportRuns);
+router.get('/api/admin/agents/:id/report-preview', requireAgentManagerOrAdmin(), handleReportPreview);
 
 export default router;

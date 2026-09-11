@@ -9,14 +9,14 @@ import {
   AgentNotFoundError,
   ReportSubscriptionNotFoundError,
 } from '../../services/agentReportSubscriptionService';
-import { listReportRunsForAgent } from '../../services/agentReportRunService';
+import { listReportRunsForAgent, renderReportContent } from '../../services/agentReportRunService';
 import agentReportSubscriptionRoutes from '../../routes/admin/agentReportSubscriptionRoutes';
 
 jest.mock('../../services/agentReportSubscriptionService', () => {
   const actual = jest.requireActual('../../services/agentReportSubscriptionService');
   return { ...actual, createReportSubscription: jest.fn(), listReportSubscriptions: jest.fn(), updateReportSubscription: jest.fn() };
 });
-jest.mock('../../services/agentReportRunService', () => ({ listReportRunsForAgent: jest.fn() }));
+jest.mock('../../services/agentReportRunService', () => ({ listReportRunsForAgent: jest.fn(), renderReportContent: jest.fn() }));
 
 const mockOrgMemberFindOne = jest.fn();
 jest.mock('../../models/OrgMember', () => ({
@@ -33,6 +33,7 @@ const mockCreateReportSubscription = createReportSubscription as unknown as jest
 const mockListReportSubscriptions = listReportSubscriptions as unknown as jest.Mock;
 const mockUpdateReportSubscription = updateReportSubscription as unknown as jest.Mock;
 const mockListReportRunsForAgent = listReportRunsForAgent as unknown as jest.Mock;
+const mockRenderReportContent = renderReportContent as unknown as jest.Mock;
 
 function buildApp() {
   const app = express();
@@ -231,6 +232,76 @@ describe('GET /api/admin/agents/:id/report-runs', () => {
 
     const res = await request(buildApp())
       .get('/api/admin/agents/agent-1/report-runs')
+      .set('Authorization', `Bearer ${superAdminToken()}`);
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).not.toMatch(/db unavailable/);
+  });
+});
+
+describe('GET /api/admin/agents/:id/report-preview', () => {
+  it('happy path: 200s with the real subject/html/text, parsing the comma-separated contentScope', async () => {
+    mockRenderReportContent.mockResolvedValue({
+      subject: 'Agent report: Reese', html: '<h2>Reese</h2><h3>Cost</h3>', text: 'Reese\n\nCost: $1.20',
+      snapshot: { agentName: 'Reese' },
+    });
+
+    const res = await request(buildApp())
+      .get('/api/admin/agents/agent-1/report-preview?contentScope=cost,activity')
+      .set('Authorization', `Bearer ${superAdminToken()}`);
+
+    expect(res.status).toBe(200);
+    expect(mockRenderReportContent).toHaveBeenCalledWith('agent-1', ['cost', 'activity']);
+    expect(res.body).toEqual({ subject: 'Agent report: Reese', html: '<h2>Reese</h2><h3>Cost</h3>', text: 'Reese\n\nCost: $1.20' });
+    // Never leaks the internal snapshot object — it's not part of this endpoint's contract.
+    expect(res.body.snapshot).toBeUndefined();
+  });
+
+  it('boundary: a nonexistent agent 404s', async () => {
+    mockRenderReportContent.mockResolvedValue(null);
+
+    const res = await request(buildApp())
+      .get('/api/admin/agents/does-not-exist/report-preview?contentScope=cost')
+      .set('Authorization', `Bearer ${superAdminToken()}`);
+
+    expect(res.status).toBe(404);
+  });
+
+  it('BREAK: a missing contentScope query param 400s before the service is ever called', async () => {
+    const res = await request(buildApp())
+      .get('/api/admin/agents/agent-1/report-preview')
+      .set('Authorization', `Bearer ${superAdminToken()}`);
+
+    expect(res.status).toBe(400);
+    expect(mockRenderReportContent).not.toHaveBeenCalled();
+  });
+
+  it('BREAK: an invalid contentScope value outside the closed enum 400s', async () => {
+    const res = await request(buildApp())
+      .get('/api/admin/agents/agent-1/report-preview?contentScope=made_up_section')
+      .set('Authorization', `Bearer ${superAdminToken()}`);
+
+    expect(res.status).toBe(400);
+    expect(mockRenderReportContent).not.toHaveBeenCalled();
+  });
+
+  it("auth: an admin outside this agent's reporting chain is 403d and the service is never called", async () => {
+    mockOrgMemberFindOne.mockResolvedValue({ id: 'org-member-1' });
+    mockIsAgentInHumanDownstream.mockResolvedValue(false);
+
+    const res = await request(buildApp())
+      .get('/api/admin/agents/agent-1/report-preview?contentScope=cost')
+      .set('Authorization', `Bearer ${managerToken()}`);
+
+    expect(res.status).toBe(403);
+    expect(mockRenderReportContent).not.toHaveBeenCalled();
+  });
+
+  it('failure: an unexpected service error 500s without leaking the raw message', async () => {
+    mockRenderReportContent.mockRejectedValue(new Error('db unavailable'));
+
+    const res = await request(buildApp())
+      .get('/api/admin/agents/agent-1/report-preview?contentScope=cost')
       .set('Authorization', `Bearer ${superAdminToken()}`);
 
     expect(res.status).toBe(500);

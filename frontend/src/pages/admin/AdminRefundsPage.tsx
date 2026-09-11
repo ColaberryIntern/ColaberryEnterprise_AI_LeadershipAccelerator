@@ -117,7 +117,7 @@ export default function AdminRefundsPage() {
         {lookup && (
           <div className="mt-3 border-top pt-3">
             <div className="row g-3">
-              <div className="col-md-3"><div className="small text-muted">Payer</div><div className="fw-semibold"><PersonLink name={lookup.name} email={lookup.email} /></div><div className="small text-muted">{lookup.email || 'no email on file'}</div></div>
+              <div className="col-md-3"><div className="small text-muted">Payer</div><div className="fw-semibold"><PersonLink tab="account" name={lookup.name} email={lookup.email} /></div><div className="small text-muted">{lookup.email || 'no email on file'}</div></div>
               <div className="col-md-2"><div className="small text-muted">Amount</div><div className="fw-semibold">{money(lookup.amount_cents)}</div></div>
               <div className="col-md-2"><div className="small text-muted">Status</div><div><StatusBadge label={lookup.status} tone="neutral" /></div></div>
               <div className="col-md-2"><div className="small text-muted">Refundable</div><div className="fw-semibold">{money(lookup.refundable_cents)}</div></div>
@@ -157,7 +157,7 @@ export default function AdminRefundsPage() {
                 <tr key={r.id}>
                   <td className="small text-muted">{fmtDate(r.created_at)}</td>
                   <td>
-                    <PersonLink
+                    <PersonLink tab="account"
                       name={r.customer_name}
                       email={r.customer_email}
                       enrollmentId={r.enrollment_id}

@@ -109,7 +109,7 @@ export default function MemberRosterModal({ title, subtitle, fetcher, onClose }:
                       <tr key={r.enrollment_id}>
                         <td>
                           <div className="fw-medium">
-                            <PersonLink name={r.payer_name} email={r.payer_email}
+                            <PersonLink tab="account" name={r.payer_name} email={r.payer_email}
                               enrollmentId={r.enrollment_id} />
                           </div>
                           <div className="small text-muted"><code>{r.payer_email}</code></div>

@@ -310,7 +310,7 @@ function AdminBusinessAccountDetailPage(): React.ReactElement {
                           <div className="fw-bold">{m.full_name || m.email}</div>
                           {m.full_name && (
                             <div className="small text-muted">
-                              <PersonLink name={m.email} email={m.email} className="text-muted text-decoration-none" />
+                              <PersonLink tab="account" name={m.email} email={m.email} className="text-muted text-decoration-none" />
                             </div>
                           )}
                         </td>
@@ -508,7 +508,7 @@ function AdminBusinessAccountDetailPage(): React.ReactElement {
               <dl className="mb-0 small">
                 <dt className="text-muted">Lead</dt>
                 <dd>
-                  <Link to={personPath({ leadId: lead.id }) ?? '/admin/people'}>#{lead.id}</Link>
+                  <Link to={personPath({ leadId: lead.id }, 'account') ?? '/admin/people'}>#{lead.id}</Link>
                 </dd>
                 <dt className="text-muted">Email</dt>
                 <dd>{lead.email}</dd>

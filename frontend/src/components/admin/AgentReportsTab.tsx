@@ -2,8 +2,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { SectionCard, StatusBadge } from './shell';
 import { timeAgo } from './shell/trust';
 import {
-  ReportSubscription, ReportRunHistory, ReportContentSection, ReportCadence,
-  listReportSubscriptions, createReportSubscription, updateReportSubscription, getReportRuns,
+  ReportSubscription, ReportRunHistory, ReportContentSection, ReportCadence, ReportPreview,
+  listReportSubscriptions, createReportSubscription, updateReportSubscription, getReportRuns, getReportPreview,
 } from '../../services/agentReportSubscriptionApi';
 
 // AI Agent Dashboard redesign, Checkpoint C, Reports slice (2026-09-02) —
@@ -37,6 +37,14 @@ export default function AgentReportsTab({ agentId }: Props) {
   const [formHour, setFormHour] = useState(8);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  // Checkpoint G (2026-09-10) — Ali: "you can schedule a report but have no
+  // idea what it even looks like." Renders the real content for exactly
+  // the sections currently checked in the form, via the same code path the
+  // real delivery cron uses — never a mockup.
+  const [preview, setPreview] = useState<ReportPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const fetchSubscriptions = useCallback(async () => {
     setSubsLoading(true);
@@ -79,7 +87,25 @@ export default function AgentReportsTab({ agentId }: Props) {
 
   const toggleSection = (section: ReportContentSection) => {
     setFormSections((prev) => (prev.includes(section) ? prev.filter((s) => s !== section) : [...prev, section]));
+    setPreview(null);
+    setPreviewError(null);
   };
+
+  const handlePreview = useCallback(async () => {
+    if (formSections.length === 0) {
+      setPreviewError('Choose at least one section.');
+      return;
+    }
+    setPreviewLoading(true);
+    setPreviewError(null);
+    try {
+      setPreview(await getReportPreview(agentId, formSections));
+    } catch (err: any) {
+      setPreviewError(err?.response?.data?.error || 'Failed to render preview');
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [agentId, formSections]);
 
   const handleCreate = useCallback(async () => {
     if (formSections.length === 0) {
@@ -93,6 +119,8 @@ export default function AgentReportsTab({ agentId }: Props) {
       setFormSections([]);
       setFormCadence('daily');
       setFormHour(8);
+      setPreview(null);
+      setPreviewError(null);
       await fetchSubscriptions();
     } catch (err: any) {
       setCreateError(err?.response?.data?.error || 'Failed to create subscription');
@@ -147,11 +175,29 @@ export default function AgentReportsTab({ agentId }: Props) {
               <input type="number" min={0} max={23} className="form-control form-control-sm" style={{ width: '5rem' }} value={formHour} onChange={(e) => setFormHour(Number(e.target.value))} />
             </div>
             <div className="col-auto">
+              <button className="btn btn-outline-secondary btn-sm" disabled={previewLoading} onClick={handlePreview}>
+                {previewLoading ? 'Rendering…' : 'Preview'}
+              </button>
+            </div>
+            <div className="col-auto">
               <button className="btn btn-primary btn-sm" disabled={creating} onClick={handleCreate}>
                 {creating ? 'Creating…' : 'Subscribe'}
               </button>
             </div>
           </div>
+          {previewError && <div className="alert alert-warning py-2 small mt-2 mb-0">{previewError}</div>}
+          {preview && (
+            <div className="border rounded mt-3">
+              <div className="px-3 py-2 border-bottom bg-light small">
+                <span className="fw-semibold">Preview</span> — this is what the email actually looks like, rendered live from this agent's real data. Subject: <span className="fw-semibold">{preview.subject}</span>
+              </div>
+              {/* Real, server-rendered report content — every interpolated
+                  value is HTML-escaped server-side (agentReportRunService.ts's
+                  escapeHtml()) before this string is ever built, and this is
+                  the exact HTML the real email send uses. Not user input. */}
+              <div className="p-3" dangerouslySetInnerHTML={{ __html: preview.html }} />
+            </div>
+          )}
         </div>
       </SectionCard>
 

@@ -68,6 +68,39 @@ DIRTY_ALLOW="${DIRTY_ALLOW:-}"
 # Long enough to queue behind a real build, short enough to fail rather than hang
 # forever if a lock is somehow orphaned.
 LOCK_WAIT="${LOCK_WAIT:-600}"
+
+# build | registry.
+#
+# `registry` pulls the images CI already built instead of building on this host.
+# That matters because building here is the largest recurring memory spike on a
+# box that also runs five Postgres instances: the kernel journal recorded 344 OOM
+# kills, and the 2026-09-08 cascade opens with "docker-buildx invoked oom-killer".
+#
+# It stays OPT-IN rather than becoming the default, because the build path has
+# years of mileage and this one has a single proven run (2026-09-10, all three
+# services, digests verified against origin/main).
+#
+# DECISION, Ali, 2026-09-10: leave it opt-in and flip the default after it has
+# more runs behind it. "More runs" is deliberately not left to memory — every
+# successful registry deploy appends a line to REGISTRY_DEPLOY_LOG below, so the
+# bar is checkable rather than felt:
+#
+#   THE BAR: flip DEPLOY_MODE's default to `registry` once that log shows at
+#   least 5 successful registry deploys spanning at least 14 days. Until then a
+#   deploy that does not pass DEPLOY_MODE=registry still builds on the host.
+#
+# The 2026-09-10 run is deliberately NOT seeded into that log: it happened before
+# this recording existed, and back-writing a line for it would be inventing
+# evidence. The count therefore starts at zero and the real bar is six runs.
+#
+# Check it with: wc -l < /var/log/colaberry-registry-deploys.log
+DEPLOY_MODE="${DEPLOY_MODE:-build}"
+# Durable record of registry-mode deploys. Only successful ones are recorded, so
+# the count means "this path worked", not "this path was attempted".
+REGISTRY_DEPLOY_LOG="${REGISTRY_DEPLOY_LOG:-/var/log/colaberry-registry-deploys.log}"
+# Where CI publishes. Public packages, so no registry credential is needed here.
+REGISTRY_PREFIX="${REGISTRY_PREFIX:-ghcr.io/colaberryintern/accelerator-}"
+
 SERVICES=("$@")
 if [ ${#SERVICES[@]} -eq 0 ]; then
   SERVICES=(backend nginx)
@@ -124,17 +157,58 @@ MAIN_SHA="$(git rev-parse origin/main)"
 if [ "$HEAD_SHA" != "$MAIN_SHA" ] && [ "$ALLOW_DETACHED_HEAD" != "1" ]; then
   fail "HEAD ($HEAD_SHA) is not origin/main ($MAIN_SHA). Refusing to build."
 fi
-log "building $HEAD_SHA"
-
-# ---------------------------------------------------------------------------
-# The build. NOT piped — a pipe makes $? the exit code of the pipe's last
-# command, which has already reported a build failure as success in this repo.
-# ---------------------------------------------------------------------------
 BUILD_LOG="$(mktemp /tmp/deploy-XXXXXX.log)"
-set +e
-docker compose $COMPOSE_ARGS up -d --build --no-deps "${SERVICES[@]}" >"$BUILD_LOG" 2>&1
-BUILD_EXIT=$?
-set -e
+
+if [ "$DEPLOY_MODE" = "registry" ]; then
+  # -------------------------------------------------------------------------
+  # THE GUARD THAT MAKES THIS SAFE. `:main` is a moving tag. If CI has not yet
+  # finished publishing for THIS commit, pulling `:main` deploys an OLDER build
+  # while every other check in this script still passes — HEAD matches
+  # origin/main, the tree is clean, the containers come up. Nothing would look
+  # wrong. So the digest behind `:main` must equal the digest behind the tag for
+  # this exact commit, or we refuse.
+  # -------------------------------------------------------------------------
+  log "registry mode: verifying published images match $HEAD_SHA"
+  for svc in "${SERVICES[@]}"; do
+    IMAGE="${REGISTRY_PREFIX}${svc}"
+    D_MOVING="$(docker manifest inspect "${IMAGE}:main" 2>/dev/null | sha256sum | awk '{print $1}')"
+    D_PINNED="$(docker manifest inspect "${IMAGE}:sha-${HEAD_SHA}" 2>/dev/null | sha256sum | awk '{print $1}')"
+    if [ -z "$D_PINNED" ]; then
+      fail "no image ${IMAGE}:sha-${HEAD_SHA}. CI has not published this commit yet — wait for the Build images workflow, or use the default build mode."
+    fi
+    if [ "$D_MOVING" != "$D_PINNED" ]; then
+      fail "${IMAGE}:main does not match sha-${HEAD_SHA}. Pulling :main would deploy a different commit."
+    fi
+    log "  $svc: :main matches sha-${HEAD_SHA}"
+  done
+
+  log "pulling images for $HEAD_SHA"
+  set +e
+  docker compose $COMPOSE_ARGS pull "${SERVICES[@]}" >"$BUILD_LOG" 2>&1
+  BUILD_EXIT=$?
+  set -e
+  if [ "$BUILD_EXIT" -ne 0 ]; then
+    tail -n 20 "$BUILD_LOG"
+    fail "docker compose pull failed (exit $BUILD_EXIT) — full log at $BUILD_LOG"
+  fi
+
+  log "recreating containers from pulled images"
+  set +e
+  docker compose $COMPOSE_ARGS up -d --no-deps "${SERVICES[@]}" >>"$BUILD_LOG" 2>&1
+  BUILD_EXIT=$?
+  set -e
+else
+  log "building $HEAD_SHA"
+
+  # -------------------------------------------------------------------------
+  # The build. NOT piped — a pipe makes $? the exit code of the pipe's last
+  # command, which has already reported a build failure as success in this repo.
+  # -------------------------------------------------------------------------
+  set +e
+  docker compose $COMPOSE_ARGS up -d --build --no-deps "${SERVICES[@]}" >"$BUILD_LOG" 2>&1
+  BUILD_EXIT=$?
+  set -e
+fi
 
 tail -n 20 "$BUILD_LOG"
 
@@ -171,6 +245,16 @@ done
 [ "$BAD" -eq 0 ] || fail "one or more services are not running. Production may be degraded."
 
 log "all requested services are running"
+
+# Recorded only here, AFTER the running-state check, so the count cannot include
+# a deploy that pulled cleanly and then failed to come up. Never allowed to fail
+# the deploy: an unwritable log is a bookkeeping problem, not a production one.
+if [ "$DEPLOY_MODE" = "registry" ]; then
+  printf '%s %s services=%s
+' "$(date -u +%FT%TZ)" "$HEAD_SHA" "${SERVICES[*]}"     >>"$REGISTRY_DEPLOY_LOG" 2>/dev/null || log "note: could not write $REGISTRY_DEPLOY_LOG"
+  RUNS="$(wc -l <"$REGISTRY_DEPLOY_LOG" 2>/dev/null || echo '?')"
+  log "registry-mode deploys recorded: $RUNS (default flips at 5 spanning 14 days)"
+fi
 log "NOTE: this proves the containers are up, not that the app is healthy."
 log "Verify the surface through the real hostname — localhost does not match"
 log "server_name and falls through to a default block that 404s /api."

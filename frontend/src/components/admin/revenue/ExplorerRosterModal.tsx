@@ -105,7 +105,7 @@ export default function ExplorerRosterModal({ onClose }: Props) {
                       <tr key={r.enrollment_id}>
                         <td>
                           <div className="fw-medium">
-                            <PersonLink name={r.full_name} email={r.email}
+                            <PersonLink tab="growth" name={r.full_name} email={r.email}
                               enrollmentId={r.enrollment_id} />
                           </div>
                           <div className="small text-muted"><code>{r.email}</code></div>

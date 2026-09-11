@@ -111,10 +111,20 @@ async function main(): Promise<void> {
   const eligibility = await import('../services/internship/internshipEligibility');
 
   step(0, 'Schema');
-  // sync() creates the core model tables; ensureInternshipSchema adds the
-  // internship DDL exactly as it does at boot.
-  await sequelize.sync();
+  // ORDER MATTERS, AND GETTING IT WRONG HID A PRODUCTION BUG.
+  //
+  // ensureInternshipSchema() runs FIRST so the internship tables come from the
+  // real DDL — exactly as they do at boot, where no global sync() runs at all.
+  // sequelize.sync() then uses CREATE TABLE IF NOT EXISTS, so it fills in the
+  // core model tables and leaves the internship ones untouched.
+  //
+  // The original order was reversed. sync() built the internship tables from the
+  // MODELS, ensureInternshipSchema's CREATE TABLE IF NOT EXISTS then did nothing,
+  // and the journey tested a schema production does not have. It passed 57/57
+  // while prod could not insert a single interview session, because the DDL had
+  // question_set_id NOT NULL and the model had it nullable.
   await ensureInternshipSchema();
+  await sequelize.sync();
   // QueryTypes.SELECT, NOT the bare `[rows] = await query()` destructure. On these
   // catalog queries Sequelize returns the ROWS at the outer level, so destructuring
   // hands back the FIRST ROW and `.length` becomes the column count. That read as

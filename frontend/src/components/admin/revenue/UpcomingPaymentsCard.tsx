@@ -43,7 +43,7 @@ export default function UpcomingPaymentsCard({ payments, limit = 12 }: Props) {
                 <tr key={p.enrollment_id}>
                   <td>
                     <div className="fw-medium">
-                      <PersonLink name={p.payer_name} email={p.payer_email}
+                      <PersonLink tab="account" name={p.payer_name} email={p.payer_email}
                         enrollmentId={p.enrollment_id} />
                     </div>
                     <div className="small text-muted"><code>{p.payer_email}</code></div>

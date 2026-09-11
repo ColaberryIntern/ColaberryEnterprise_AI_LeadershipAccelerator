@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { SectionCard, StatusBadge } from './shell';
 import { timeAgo } from './shell/trust';
-import AgentCharterTab from './AgentCharterTab';
 import { AgentDetail } from '../../services/agentDetailApi';
 import {
   AgentMemoryProposal,
@@ -13,23 +12,27 @@ import {
 import { ManagerDirective, listDirectives, revokeDirective } from '../../services/managerDirectiveApi';
 
 // AI Agent Dashboard redesign, Checkpoint E: Trust & Control, slice 1
-// (2026-09-03) — the fifth and last design section. Consolidates the
-// previously-standalone Charter tab (reused wholesale, unchanged) plus two
-// genuinely new-to-any-UI pieces: Governed Memory (the approval gate that
-// makes an agent's runtime memory real rather than a dead flag — status
-// must visually read as an actual gate, not decoration) and a consolidated
-// Directives view (view + revoke; creating a new directive stays in Talk's
-// Ask/Direct composer, its natural home). Deliberately does NOT re-render
-// authorization_summary/tools capabilities/persona_version_history a second
-// time — AgentOverviewTab's AgentTrustSummaryCard + tools cards already show
-// all of that, live and tested; duplicating it here would drift. An
-// Architecture Drawer (execution limits, department/scope — real AiAgent
-// columns not yet surfaced anywhere) is real, deliberately deferred scope
-// for the next slice.
+// (2026-09-03) — the fifth and last design section. Consolidated Governed
+// Memory (the approval gate that makes an agent's runtime memory real
+// rather than a dead flag — status must visually read as an actual gate,
+// not decoration) and a consolidated Directives view (view + revoke;
+// creating a new directive stays in Talk's Ask/Direct composer, its natural
+// home). Deliberately does NOT re-render authorization_summary/tools
+// capabilities/persona_version_history a second time — AgentOverviewTab's
+// AgentTrustSummaryCard + tools cards already show all of that, live and
+// tested; duplicating it here would drift. An Architecture Drawer
+// (execution limits, department/scope — real AiAgent columns not yet
+// surfaced anywhere) is real, deliberately deferred scope for the next
+// slice.
+//
+// Overview sub-tabs (2026-09-10) — Ali: "The role character stored in
+// Trust & Control shoudl be moved to Identify." The Charter tab that
+// Checkpoint E folded in above is moved out again — it now lives on
+// Overview's Identity sub-tab (AgentOverviewTab.tsx via
+// overview/OverviewIdentityTab.tsx), a real relocation, not a duplicate.
 
 interface Props {
   agentId: string;
-  agentName: string;
   detail: AgentDetail;
 }
 
@@ -58,7 +61,7 @@ function memoryStatusBadge(status: AgentMemoryProposal['status']) {
   return <StatusBadge label="Rejected" tone="neutral" />;
 }
 
-export default function AgentTrustControlTab({ agentId, agentName, detail }: Props) {
+export default function AgentTrustControlTab({ agentId, detail }: Props) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [proposals, setProposals] = useState<AgentMemoryProposal[]>([]);
   const [proposalsLoading, setProposalsLoading] = useState(true);
@@ -184,8 +187,6 @@ export default function AgentTrustControlTab({ agentId, agentName, detail }: Pro
           G-O-A-L-S maps back to the book's own INPACT™ needs: Governance→Permitted, Observability→Transparent, Availability→Instant, Lexicon→Natural/Contextual, Solid→Adaptive.
         </p>
       </SectionCard>
-
-      <AgentCharterTab agentId={agentId} agentName={agentName} />
 
       <SectionCard
         title="Governed Memory"

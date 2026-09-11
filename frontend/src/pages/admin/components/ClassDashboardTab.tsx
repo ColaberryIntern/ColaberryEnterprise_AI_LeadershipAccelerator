@@ -212,7 +212,7 @@ export default function ClassDashboardTab({ cohortId }: Props) {
               ) : data.students.map((s) => (
                 <tr key={s.enrollment_id}>
                   <td className="fw-medium">
-                    <PersonLink name={s.full_name} enrollmentId={s.enrollment_id} />
+                    <PersonLink tab="class" name={s.full_name} enrollmentId={s.enrollment_id} />
                   </td>
                   <td className={scoreColor(s.prework_score)}>{s.prework_score != null ? `${s.prework_score}%` : '-'}</td>
                   <td className={scoreColor(s.attendance_score)}>{s.attendance_score != null ? `${s.attendance_score}%` : '-'}</td>

@@ -48,6 +48,12 @@ export async function ensureProjectUnderstandingSchema(): Promise<void> {
     // a model call, and it is NOT deterministic, so a customer refreshing the page would
     // watch the scope of their project quietly change. A scope that shifts while you read
     // it is worse than one that took a moment to appear.
+    // Revision, so a plan can record WHICH understanding it was built from.
+    // ADD COLUMN as well as the CREATE above, because CREATE TABLE IF NOT
+    // EXISTS is a no-op on a table that already exists - a column added only
+    // to the CREATE is reported missing on every boot forever.
+    `ALTER TABLE project_understandings ADD COLUMN IF NOT EXISTS revision INTEGER NOT NULL DEFAULT 1`,
+    `ALTER TABLE project_understandings ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ`,
     `ALTER TABLE project_understandings ADD COLUMN IF NOT EXISTS scope JSONB`,
     `ALTER TABLE project_understandings ADD COLUMN IF NOT EXISTS scope_generated_at TIMESTAMPTZ`,
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_project_understandings_source_ref

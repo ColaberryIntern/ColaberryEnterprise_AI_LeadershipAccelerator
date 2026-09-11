@@ -29,22 +29,46 @@ export interface PersonRef {
   enrollmentId?: string | null;
 }
 
-/** The 360 URL for whatever this row knows, or null when it knows nothing usable. */
-export function personPath(ref: PersonRef): string | null {
+/**
+ * Which tab the 360 should open on.
+ *
+ * Ali, 2026-09-10: "depending on where you are clicking from ... take them and
+ * default them to the tab that makes sense based on where the user is in the
+ * app when they are clicking on the link."
+ *
+ * A reader clicking a name inside a CAMPAIGN wants the communications; the same
+ * name clicked in the revenue ledger wants billing. The destination is one
+ * page either way — the tab is the context they arrived with.
+ */
+export type PersonTab =
+  | 'timeline' | 'journey' | 'acquisition' | 'notes' | 'strategy'
+  | 'communications' | 'class' | 'work' | 'account' | 'growth'
+  | 'engagement' | 'learning' | 'billing' | 'activity' | 'trust';
+
+/**
+ * The 360 URL for whatever this row knows, or null when it knows nothing usable.
+ *
+ * `tab` becomes `?tab=`, which the profile reads as its initial tab. It is a
+ * DEFAULT, not a lock: the reader can move off it, and a tab the caller may not
+ * see is ignored rather than showing an empty page.
+ */
+export function personPath(ref: PersonRef, tab?: PersonTab): string | null {
+  const suffix = tab ? `?tab=${encodeURIComponent(tab)}` : '';
+
   const email = typeof ref.email === 'string' ? ref.email.trim() : '';
   // A usable address, not merely a non-empty string. Rows carry '' and 'null'.
   if (email && email.includes('@') && !email.startsWith('@')) {
-    return `/admin/people/${encodeURIComponent(email.toLowerCase())}`;
+    return `/admin/people/${encodeURIComponent(email.toLowerCase())}${suffix}`;
   }
 
   if (ref.leadId !== null && ref.leadId !== undefined && String(ref.leadId).trim() !== '') {
     const id = String(ref.leadId).trim();
-    if (/^\d+$/.test(id)) return `/admin/people/${encodeURIComponent(`lead:${id}`)}`;
+    if (/^\d+$/.test(id)) return `/admin/people/${encodeURIComponent(`lead:${id}`)}${suffix}`;
   }
 
   const enrollmentId = typeof ref.enrollmentId === 'string' ? ref.enrollmentId.trim() : '';
   if (/^[0-9a-fA-F-]{36}$/.test(enrollmentId)) {
-    return `/admin/people/${encodeURIComponent(`enrollment:${enrollmentId}`)}`;
+    return `/admin/people/${encodeURIComponent(`enrollment:${enrollmentId}`)}${suffix}`;
   }
 
   return null;

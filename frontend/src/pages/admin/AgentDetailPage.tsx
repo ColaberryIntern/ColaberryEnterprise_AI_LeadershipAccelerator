@@ -5,7 +5,8 @@ import { getManagerInboxItems, ManagerInboxItem } from '../../services/managerIn
 import { resetAgents, reactivateAgent, AUTONOMY_LEVELS, AutonomyLevel, AUTONOMY_LEVEL_DESCRIPTIONS } from '../../services/workforceOrgChartApi';
 import { PageHeader, StatCard } from '../../components/admin/shell';
 import AgentAtAGlanceTab from '../../components/admin/AgentAtAGlanceTab';
-import AgentCommandCenterTab from '../../components/admin/AgentCommandCenterTab';
+import AgentLiveStatusTab from '../../components/admin/AgentLiveStatusTab';
+import AgentOverviewTab from '../../components/admin/AgentOverviewTab';
 import AgentWorkDecisionsTab from '../../components/admin/AgentWorkDecisionsTab';
 import AgentTalkTab from '../../components/admin/AgentTalkTab';
 import AgentReportsTab from '../../components/admin/AgentReportsTab';
@@ -82,16 +83,39 @@ import AgentTrustControlTab from '../../components/admin/AgentTrustControlTab';
 // conditionally formatted KPI... for each section... easy to navigate."
 // Approved as an HTML mockup first, then built here. "Overview" is no
 // longer a standalone tab — its real content (identity, tools, reports-to,
-// system prompt) moved into AgentCommandCenterTab.tsx, unchanged, just
-// relocated (same pattern as folding Charter into Trust & Control).
-// "At a Glance" takes Overview's old slot as the new default: one real KPI
-// per section, color-coded by what needs attention, click-through to that
-// tab via `onNavigate`. Tab count stays at seven.
+// system prompt) moved into Command Center, unchanged, just relocated
+// (same pattern as folding Charter into Trust & Control). "At a Glance"
+// takes Overview's old slot as the new default: one real KPI per section,
+// color-coded by what needs attention, click-through to that tab via
+// `onNavigate`. Tab count stays at seven.
+//
+// Checkpoint G (2026-09-10) — Ali, on Reese's own page: "The command
+// center is too big and can be broken out into more tabs." Command Center
+// unfolds back into two tabs, reversing Checkpoint F's fold the same way
+// Checkpoint F reversed Checkpoint B's: "command" keeps its real-time
+// content (operational state, attention required, current work, recent
+// outcome, the stat row) under the new label "Live Status"
+// (AgentLiveStatusTab.tsx, renamed from AgentCommandCenterTab.tsx — same
+// tab key, so At a Glance's click-through target needed no change), and
+// "Overview" (AgentOverviewTab.tsx, unchanged) returns to being its own
+// top-level tab. Tab count goes to eight.
+//
+// Checkpoint H (2026-09-10) — same session, Ali's next request: "Overview
+// should have subtabs." AgentOverviewTab.tsx's nine flat sections become
+// seven sub-tabs (Identity, Trust, System prompt, Reports to, Tools,
+// Scheduled tasks, Tickets) — see that file for the full breakdown. Role
+// Charter moves from Trust & Control into Identity (a real relocation,
+// Ali's own wording); AgentTrustControlTab no longer takes an `agentName`
+// prop as a result. Reports to gains a real Mermaid diagram of this
+// agent's own upward chain, built client-side from the existing
+// reports_to.trail data — no backend change needed. Top-level tab count
+// stays at eight; this checkpoint only restructures what's inside Overview.
 
-type TabKey = 'glance' | 'command' | 'work' | 'talk' | 'reports' | 'performance' | 'trust';
+type TabKey = 'glance' | 'command' | 'overview' | 'work' | 'talk' | 'reports' | 'performance' | 'trust';
 const TABS: Array<{ key: TabKey; label: string; icon: string }> = [
   { key: 'glance', label: 'At a Glance', icon: 'dashboard-line' },
-  { key: 'command', label: 'Command Center', icon: 'compass-3-line' },
+  { key: 'command', label: 'Live Status', icon: 'pulse-line' },
+  { key: 'overview', label: 'Overview', icon: 'profile-line' },
   { key: 'work', label: 'Work & Decisions', icon: 'list-check-3' },
   { key: 'talk', label: 'Talk', icon: 'chat-3-line' },
   { key: 'reports', label: 'Reports', icon: 'mail-send-line' },
@@ -352,15 +376,16 @@ export default function AgentDetailPage() {
         <AgentAtAGlanceTab agentId={id} detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} onNavigate={setActiveTab} />
       )}
       {activeTab === 'command' && (
-        <AgentCommandCenterTab detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} />
+        <AgentLiveStatusTab detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} />
       )}
+      {activeTab === 'overview' && <AgentOverviewTab detail={detail} />}
       {activeTab === 'work' && (
         <AgentWorkDecisionsTab agentId={id} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} onInboxChanged={fetchInbox} />
       )}
       {activeTab === 'talk' && <AgentTalkTab agentId={id} />}
       {activeTab === 'reports' && <AgentReportsTab agentId={id} />}
       {activeTab === 'performance' && <AgentPerformanceTab agentId={id} />}
-      {activeTab === 'trust' && <AgentTrustControlTab agentId={id} agentName={displayName} detail={detail} />}
+      {activeTab === 'trust' && <AgentTrustControlTab agentId={id} detail={detail} />}
     </>
   );
 }
