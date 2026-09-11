@@ -113,6 +113,7 @@ import { ensureMarketingCampaignSchema } from './db/ensureMarketingCampaignSchem
 import { ensureContentOsSchema } from './db/ensureContentOsSchema';
 import { ensurePublishingSchema } from './db/ensurePublishingSchema';
 import { ensureMarketingAttributionSchema } from './db/ensureMarketingAttributionSchema';
+import { ensureBrandGovernanceSchema } from './db/ensureBrandGovernanceSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapstoneSchema } from './db/ensureCapstoneSchema';
 import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
@@ -2584,6 +2585,9 @@ async function start(): Promise<void> {
   // platform click IDs (absent from the codebase entirely). Additive columns on the LIVE
   // visitor_sessions table; nothing NOT NULL, no backfill.
   await ensureMarketingAttributionSchema();
+  // Versioned per-brand governance rules (T022). Rows, not a column, so an approval given
+  // under version N can still be read against what N said after N+1 is published.
+  await ensureBrandGovernanceSchema();
   // CAPE (Colaberry Adaptive Path Engine) Phase 0-1 — skill ontology, evidence-band
   // weights, append-only skill-evidence ledger, derived skill state (idempotent DDL,
   // additive only, parallel to the existing XP/promotion tables).

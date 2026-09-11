@@ -421,6 +421,7 @@ import ContentItemMedia from './ContentItemMedia';
 import ContentTemplate from './ContentTemplate';
 import ContentApprovalRequest from './ContentApprovalRequest';
 import ContentApprovalEvent from './ContentApprovalEvent';
+import BrandGovernanceRule from './BrandGovernanceRule';
 
 // --- Marketing Operations: publishing queue ---
 import PublishingJob from './PublishingJob';
@@ -1576,6 +1577,7 @@ export {
   ContentTemplate,
   ContentApprovalRequest,
   ContentApprovalEvent,
+  BrandGovernanceRule,
   // Marketing Operations: publishing queue
   PublishingJob,
   ExternalPublication,
