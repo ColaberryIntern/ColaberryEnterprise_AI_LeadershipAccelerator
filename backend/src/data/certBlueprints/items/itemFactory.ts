@@ -68,7 +68,7 @@ export type Difficulty = 'easy' | 'medium' | 'hard';
  * answer" is not a question with one answer when two options are correct, and
  * there are three of them in the bank.
  */
-const fnv1a = (text: string): number => {
+export const fnv1a = (text: string): number => {
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i += 1) {
     h ^= text.charCodeAt(i);

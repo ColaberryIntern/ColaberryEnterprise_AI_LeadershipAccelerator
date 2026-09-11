@@ -3,6 +3,7 @@ import { sequelize } from '../../config/database';
 import CertQuestion from '../../models/CertQuestion';
 import CertQuestionRevision from '../../models/CertQuestionRevision';
 import { scoreItem } from './certQuestionRubric';
+import { auditBank, BankAudit } from './certBankRubric';
 import CertReadinessSnapshot from '../../models/CertReadinessSnapshot';
 import CertEvidenceMapping from '../../models/CertEvidenceMapping';
 
@@ -238,6 +239,12 @@ export interface BankHealth {
   domains_with_no_approved: string[];
   /** Advisory quality signal; gates nothing. */
   rubric: BankRubricSummary;
+  /**
+   * Whole-bank properties no single question can have: answer-position
+   * balance, length cue, mocks supported, scenario spread. The per-item rubric
+   * passed 150 questions with the key at A in 144 of them; this is what sees it.
+   */
+  audit: BankAudit;
 }
 
 /**
@@ -267,7 +274,38 @@ export async function getBankHealth(blueprintVersion: string, allDomainIds: stri
     approved_by_domain: approvedByDomain,
     domains_with_no_approved: allDomainIds.filter((d) => !approvedByDomain[d]),
     rubric: await getBankRubricSummary(blueprintVersion),
+    audit: await getBankAudit(blueprintVersion),
   };
+}
+
+/**
+ * The whole-bank audit over the latest revision of each live question. Same
+ * function the scripts run after a change and CI runs against the repo, so the
+ * admin sees the same verdict they would.
+ */
+export async function getBankAudit(blueprintVersion: string): Promise<BankAudit> {
+  const rows = await CertQuestionRevision.findAll({ where: { blueprint_version: blueprintVersion } });
+  const retired = new Set(
+    (await CertQuestion.findAll({ where: { is_retired: true }, attributes: ['question_key'] })).map((q) => q.question_key),
+  );
+  const latest = new Map<string, typeof rows[number]>();
+  for (const r of rows) {
+    if (retired.has(r.question_key)) continue;
+    const seen = latest.get(r.question_key);
+    if (!seen || r.revision > seen.revision) latest.set(r.question_key, r);
+  }
+  return auditBank([...latest.values()].map((r) => ({
+    question_key: r.question_key,
+    domain_id: r.domain_id,
+    objective_id: r.objective_id ?? '',
+    scenario_family: null,
+    stem: r.stem,
+    options: (r.options ?? []).map((o) => ({ key: o.key, text: o.text })),
+    correct_keys: r.correct_keys ?? [],
+    rationale: r.rationale ?? null,
+    distractor_rationales: r.distractor_rationales ?? null,
+    review_status: r.review_status,
+  })));
 }
 
 /**

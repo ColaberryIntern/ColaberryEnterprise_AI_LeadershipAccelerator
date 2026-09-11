@@ -73,6 +73,39 @@ export default function CertBankPanel({ health }: { health: BankHealth | null })
       </div>
 
       {/*
+        The whole-bank audit. Per-question scores cannot see that 144 answers sit
+        at A; this can. Hard failures are red because a bank where one letter
+        wins is not a measurement instrument; advisory ones are amber because a
+        thin objective is thin, not broken, and a scorecard that is all red
+        teaches people to stop reading it.
+      */}
+      {health?.audit && (
+        <div className={`border rounded p-3 mb-3 ${health.audit.pass ? '' : 'border-danger'}`}>
+          <div className="d-flex align-items-center gap-2 mb-2">
+            <span className={`badge ${health.audit.pass ? 'text-bg-success' : 'text-bg-danger'}`}>
+              Bank audit {health.audit.pass ? 'PASS' : 'FAIL'}
+            </span>
+            <span className="small text-muted">
+              {health.audit.items} items · {health.audit.hardFailures} hard, {health.audit.advisoryFailures} advisory
+            </span>
+          </div>
+          <ul className="list-unstyled small mb-0">
+            {health.audit.checks.map((c) => (
+              <li key={c.id} className="d-flex gap-2 mb-1">
+                <span
+                  className={`badge ${c.pass ? 'text-bg-success' : c.severity === 'hard' ? 'text-bg-danger' : 'text-bg-warning'}`}
+                  style={{ minWidth: 44 }}
+                >
+                  {c.pass ? 'ok' : c.severity === 'hard' ? 'FAIL' : 'warn'}
+                </span>
+                <span><strong>{c.label}</strong> — {c.note}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/*
         The rubric summary sits with bank health rather than with the item
         statistics below, because the two answer different questions at different
         times. Item statistics come from student RESPONSES and stay empty until a
