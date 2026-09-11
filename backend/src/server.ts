@@ -791,6 +791,30 @@ async function ensureCommunityWinsSchema() {
   }
 }
 
+async function ensureTodayMediaWatchSchema() {
+  // Ambient media watch progress (ambientMediaGateService): podcasts and
+  // testimonials on the Today feed have no timeline_card row, so the card watch
+  // gate cannot track them. One row per (student, media ref) holding the same
+  // WatchState shape the card gate stores in TimelineCardProgress.analytics.
+  // Additive + idempotent, like the blocks above; no manual migration.
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS today_media_watch (
+       enrollment_id UUID NOT NULL,
+       ref TEXT NOT NULL,
+       watch_state JSONB NOT NULL DEFAULT '{}'::jsonb,
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       PRIMARY KEY (enrollment_id, ref)
+     )`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] today media watch schema stmt skipped:', err?.message);
+    }
+  }
+}
+
 async function ensureOrgSchema() {
   // Free-trial Organization / Manager layer. A manager registers free → gets a
   // management org + their own free enrollment; teammates join as free members.
@@ -2615,6 +2639,8 @@ async function start(): Promise<void> {
   await ensureCommunityMemberRoleSchema();
   // Peer Wins — community_posts curriculum tether columns (idempotent, additive).
   await ensureCommunityWinsSchema();
+  // Podcast / testimonial listen-to-earn progress (today_media_watch).
+  await ensureTodayMediaWatchSchema();
   // Comment moderation (Community Organizer role) — status/removed_at/removed_by
   // on community_comments, mirroring the existing post-moderation columns.
   await ensureCommunityCommentModerationSchema();

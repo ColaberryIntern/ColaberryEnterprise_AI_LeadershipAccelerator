@@ -8,6 +8,7 @@ import { runtimeApi } from '../../pages/portal/runtime/runtimeApi';
 import CardSurveyExperience from './CardSurveyExperience';
 import PeerWinsPanel from './PeerWinsPanel';
 import CommunityThreadPanel from './CommunityThreadPanel';
+import { ambientMediaOf } from './ambientMedia';
 import AssessmentPanel from '../../pages/portal/runtime/AssessmentPanel';
 import { toTitleCase } from '../../utils/titleCase';
 import { useReaderProgress } from './useReaderProgress';
@@ -302,9 +303,27 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   // unlock threshold rather than measured. Preview is still excluded: admin
   // previews must never write progress.
   const reportBeats = !preview;
+  // Ambient podcast/testimonial items (ref `podcast:<id>`) have no card row, so
+  // their beats go to the ambient media gate rather than the card watch gate —
+  // same verdict shape, same 75% bar, different key. See ambientMedia.ts.
+  const ambientMedia = ambientMediaOf(card);
   const handleWatchBeat = reportBeats
-    ? (beat: WatchBeatPayload) => { runtimeApi.watch(card.id, beat).then(setWatch).catch(() => { /* best-effort heartbeat */ }); }
+    ? (beat: WatchBeatPayload) => {
+        const req = ambientMedia
+          ? runtimeApi.mediaWatch(ambientMedia.kind, ambientMedia.id, beat)
+          : runtimeApi.watch(card.id, beat);
+        req.then(setWatch).catch(() => { /* best-effort heartbeat */ });
+      }
     : undefined;
+  // Hydrate the ambient verdict on open: the student may have crossed 75% on the
+  // tile's inline player, and the Collect button here must reflect that without
+  // waiting for another beat.
+  useEffect(() => {
+    if (!ambientMedia || !live) return;
+    let alive = true;
+    runtimeApi.mediaVerdict(ambientMedia.kind, ambientMedia.id).then((v) => { if (alive) setWatch(v); }).catch(() => { /* best-effort */ });
+    return () => { alive = false; };
+  }, [ambientMedia?.kind, ambientMedia?.id, live]);   // eslint-disable-line react-hooks/exhaustive-deps
   const completeSafely = onComplete
     ? async () => {
         setGateMsg(null);

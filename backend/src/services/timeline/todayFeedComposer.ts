@@ -39,6 +39,7 @@ import { resolve as resolveType } from './typeRegistry';
 import { pickAmbientBatch, AMBIENT_PROVIDERS, AMBIENT_REPEAT_COOLDOWN_DAYS, type AmbientProviderSlug, type AmbientItem } from './ambientPool';
 import { planSlots, interleaveGroups, groupByType, isPrecedenceImpression, isWithinAmbientCooldown, type TodayItemKind } from './todayFeedPlan';
 import { gatherAnchored, rehydrateCardItems, rehydrateCommunityItems, rehydrateProjectItems, rehydrateSessionItems } from './todayAnchoredSources';
+import { stampAmbientMediaPoints } from '../runtime/ambientMediaPoints';
 import { orderForVisit } from './todayFeedShuffle';
 import { isDailyRefreshDue } from './todayDailyRefreshService';
 import { getAmbientDistinctSeenCounts } from './ambientTypeExposureService';
@@ -463,6 +464,7 @@ export async function getTodayPage(enrollmentId: string, cursor = 0, pageSize = 
     await rehydrateCommunityItems(items);
     await rehydrateProjectItems(items);
     await rehydrateSessionItems(items);
+    stampAmbientMediaPoints(items);
     return { items, nextCursor: from + items.length, exhausted: items.length < size };
   }
 
@@ -505,6 +507,10 @@ export async function getTodayPage(enrollmentId: string, cursor = 0, pageSize = 
   await rehydrateCommunityItems(items);
   await rehydrateProjectItems(items);
   await rehydrateSessionItems(items);
+  // Ambient podcast/testimonial items advertise the reward the media gate pays.
+  // Pure + synchronous, so it repairs the thousands of frozen `points: {}`
+  // impressions on every serve with no backfill and nothing to fail soft.
+  stampAmbientMediaPoints(items);
   return { items, nextCursor: from + items.length, exhausted: exhausted && items.length < size };
 }
 

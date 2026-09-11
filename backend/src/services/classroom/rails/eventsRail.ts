@@ -39,13 +39,17 @@ function daysUntil(startsAt: Date, now: Date): number {
   return Math.round((startsAt.getTime() - now.getTime()) / 86_400_000);
 }
 
-export async function resolveEventsRail(_ctx: RailContext, now: Date = new Date()): Promise<Rail | null> {
+/** Today shows the next 7 (Ali, 2026-09-11); Classroom keeps its 8. Same rail, one knob. */
+export interface EventsRailOptions { limit?: number }
+
+export async function resolveEventsRail(_ctx: RailContext, now: Date = new Date(), opts: EventsRailOptions = {}): Promise<Rail | null> {
+  const limit = Math.max(1, Math.min(TILE_LIMIT, Math.floor(opts.limit ?? TILE_LIMIT)));
   const events = await getUpcomingPublicEvents(WINDOW_DAYS);
 
   const upcoming = events
     .filter((e) => e.starts_at instanceof Date && e.starts_at.getTime() > now.getTime())
     .sort((a, b) => a.starts_at.getTime() - b.starts_at.getTime())
-    .slice(0, TILE_LIMIT);
+    .slice(0, limit);
 
   const tiles: RailTile[] = upcoming.map((e, i) => {
     const soon = daysUntil(e.starts_at, now) <= 7;
