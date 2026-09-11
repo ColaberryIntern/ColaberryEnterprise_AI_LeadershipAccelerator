@@ -108,6 +108,7 @@ import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema'
 import { ensureOrgAccountSchema } from './db/ensureOrgAccountSchema';
 import { ensureMultiTenantSchema } from './db/ensureMultiTenantSchema';
 import { ensureGrowthJourneySchema } from './db/ensureGrowthJourneySchema';
+import { ensureRoutingAuditSchema } from './db/ensureRoutingAuditSchema';
 import { ensureRefactoredDeliverySchema } from './db/ensureRefactoredDeliverySchema';
 import { ensureCareerPublicationSchema } from './db/ensureCareerPublicationSchema';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
@@ -2437,6 +2438,9 @@ async function start(): Promise<void> {
 
   // Ingestion schema first — so the leads.source_id FK can resolve during alter sync.
   await ensureIngestionSchema();
+  // Phase 2 (T226): routing_rules.version + routing_rule_executions. Must follow
+  // ensureIngestionSchema, which creates the table the ALTER names.
+  await ensureRoutingAuditSchema();
   // Ops Command Center schema — explicit creation because alter sync hits
   // pre-existing index conflicts elsewhere and never reaches the ops_* models.
   await ensureOpsCommandCenterSchema();

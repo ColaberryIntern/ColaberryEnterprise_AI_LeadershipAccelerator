@@ -14,6 +14,8 @@ interface RoutingRuleAttributes {
   actions: RoutingAction[];
   continue_on_match: boolean;
   is_active: boolean;
+  /** Bumped by the admin controller when conditions or actions change (T226). */
+  version?: number;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -26,6 +28,7 @@ class RoutingRule extends Model<RoutingRuleAttributes> implements RoutingRuleAtt
   declare actions: RoutingAction[];
   declare continue_on_match: boolean;
   declare is_active: boolean;
+  declare version: number;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -65,6 +68,11 @@ RoutingRule.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: true,
+    },
+    version: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1,
     },
     created_at: {
       type: DataTypes.DATE,

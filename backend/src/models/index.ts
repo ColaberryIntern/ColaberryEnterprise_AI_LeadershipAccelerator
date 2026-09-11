@@ -216,6 +216,7 @@ import LeadSource from './LeadSource';
 import EntryPoint from './EntryPoint';
 import FormDefinition from './FormDefinition';
 import RoutingRule from './RoutingRule';
+import RoutingRuleExecution from './RoutingRuleExecution';
 import RawLeadPayload from './RawLeadPayload';
 import ScholarshipInterview from './ScholarshipInterview';
 
@@ -1456,6 +1457,7 @@ export {
   EntryPoint,
   FormDefinition,
   RoutingRule,
+  RoutingRuleExecution,
   RawLeadPayload,
   ScholarshipInterview,
   AiCompany,

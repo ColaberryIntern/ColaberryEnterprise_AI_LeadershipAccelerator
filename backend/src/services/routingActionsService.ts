@@ -24,9 +24,28 @@ export interface ActionContext {
   entry_slug: string;
   raw_payload_id: string;
   normalized: Record<string, any>;
+  /**
+   * Brand and tenant of the SOURCE the lead arrived through (T226). Optional so
+   * every existing caller keeps compiling; null when the source is unclassified.
+   * Rules can match on `brand_slug`; growth-journey actions scope by `brand_id`.
+   */
+  tenant_id?: string | null;
+  brand_id?: string | null;
+  brand_slug?: string | null;
 }
 
-export type ActionHandler = (action: Record<string, any>, ctx: ActionContext) => Promise<{ ok: true; detail?: Record<string, any> } | { ok: false; error: string }>;
+/**
+ * What a handler may say. `ok` and `error` are the original contract;
+ * `deferred` is Phase 2's third answer for an action that WOULD contact
+ * someone or create an account and is therefore recorded, not applied. It is
+ * never mapped to `ok` — a rule author reads "deferred", not a green light.
+ */
+export type ActionResult =
+  | { ok: true; detail?: Record<string, any> }
+  | { ok: false; error: string }
+  | { ok: 'deferred'; detail: Record<string, any> };
+
+export type ActionHandler = (action: Record<string, any>, ctx: ActionContext) => Promise<ActionResult>;
 
 /* ── Action handlers ────────────────────────────────────────────── */
 
@@ -36,8 +55,14 @@ const tagLead: ActionHandler = async (action, ctx) => {
   const existing = (ctx.lead as any).metadata || {};
   const tags: string[] = Array.isArray(existing.tags) ? existing.tags.slice() : [];
   if (!tags.includes(tag)) tags.push(tag);
-  await ctx.lead.update({ interest_level: ctx.lead.interest_level || tag } as any);
-  return { ok: true, detail: { tag } };
+  // T226: the tags list used to be computed and then dropped on the floor —
+  // only `interest_level` was written. `leads` has no tags column, so the list
+  // lives in the metadata the handler was already reading it from.
+  await ctx.lead.update({
+    metadata: { ...existing, tags },
+    interest_level: ctx.lead.interest_level || tag,
+  } as any);
+  return { ok: true, detail: { tag, tags } };
 };
 
 /**
@@ -205,18 +230,20 @@ const requestCallback: ActionHandler = async (action, ctx) => {
   return { ok: false, error: `${result.status}${result.reason ? `:${result.reason}` : ''}` };
 };
 
-const sendPdf: ActionHandler = async (action, ctx) => {
-  // Stub for the PDF delivery integration. Logs the intent so we can audit
-  // which leads should have received which asset. Downstream worker will
-  // read `activities` to dispatch the actual email.
+/**
+ * THREE HANDLERS THAT USED TO LIE. `send_pdf`, `create_deal` and
+ * `trigger_booking_flow` wrote an Activity row saying the thing was "queued"
+ * and returned `ok: true`, and nothing ever read the queue. That is the exact
+ * failure the notify_sales comment above legislates against: silent AND green.
+ * Until an integration exists they return `not_implemented`, which `runAction`
+ * records as `failed` with the reason — visible, arguable, not a green light.
+ * No production rule uses any of the three (checked 2026-09-11).
+ */
+const NOT_IMPLEMENTED = 'not_implemented';
+
+const sendPdf: ActionHandler = async (action) => {
   if (!action.pdf_slug) return { ok: false, error: 'pdf_slug is required' };
-  await logActivity({
-    lead_id: ctx.lead.id,
-    type: 'system',
-    subject: `PDF send queued: ${action.pdf_slug}`,
-    metadata: { subtype: 'routing_action', action_type: 'send_pdf', pdf_slug: action.pdf_slug },
-  });
-  return { ok: true, detail: { pdf_slug: action.pdf_slug } };
+  return { ok: false, error: `${NOT_IMPLEMENTED}: no PDF delivery integration exists` };
 };
 
 const enrollCampaign: ActionHandler = async (action, ctx) => {
@@ -239,27 +266,15 @@ const enrollCampaign: ActionHandler = async (action, ctx) => {
   return { ok: true, detail: { campaign_id: (campaign as any).id, campaign_name: (campaign as any).name } };
 };
 
-const createDeal: ActionHandler = async (action, ctx) => {
-  // Stub for CRM integration. Logs a structured Activity so the ops worker
-  // can pick it up when the deal sync lands.
-  await logActivity({
-    lead_id: ctx.lead.id,
-    type: 'system',
-    subject: `Deal creation queued (${action.pipeline || 'default'})`,
-    metadata: { subtype: 'routing_action', action_type: 'create_deal', ...action },
-  });
-  return { ok: true, detail: { pipeline: action.pipeline || 'default' } };
-};
+const createDeal: ActionHandler = async () => ({
+  ok: false,
+  error: `${NOT_IMPLEMENTED}: no CRM deal integration exists`,
+});
 
-const triggerBookingFlow: ActionHandler = async (action, ctx) => {
-  await logActivity({
-    lead_id: ctx.lead.id,
-    type: 'system',
-    subject: `Booking flow triggered`,
-    metadata: { subtype: 'routing_action', action_type: 'trigger_booking_flow', ...action },
-  });
-  return { ok: true, detail: {} };
-};
+const triggerBookingFlow: ActionHandler = async () => ({
+  ok: false,
+  error: `${NOT_IMPLEMENTED}: no booking-flow integration exists`,
+});
 
 export const ACTION_HANDLERS: Record<string, ActionHandler> = {
   tag_lead: tagLead,
@@ -271,10 +286,17 @@ export const ACTION_HANDLERS: Record<string, ActionHandler> = {
   trigger_booking_flow: triggerBookingFlow,
 };
 
+export type RunActionStatus = 'ok' | 'failed' | 'unknown' | 'deferred';
+
+/** Every action type the engine knows. The registry is the single source. */
+export function knownActionTypes(): string[] {
+  return Object.keys(ACTION_HANDLERS);
+}
+
 export async function runAction(
   action: Record<string, any>,
   ctx: ActionContext
-): Promise<{ type: string; status: 'ok' | 'failed' | 'unknown'; detail?: any; error?: string }> {
+): Promise<{ type: string; status: RunActionStatus; detail?: any; error?: string }> {
   const type = String(action?.type || '');
   const handler = ACTION_HANDLERS[type];
 
@@ -290,6 +312,16 @@ export async function runAction(
 
   try {
     const result = await handler(action, ctx);
+    if (result.ok === 'deferred') {
+      // Recorded, not applied. The activity row says so in plain words.
+      await logActivity({
+        lead_id: ctx.lead.id,
+        type: 'system',
+        subject: `Routing action deferred: ${type}`,
+        metadata: { subtype: 'routing_action_deferred', action_type: type, detail: result.detail },
+      });
+      return { type, status: 'deferred', detail: result.detail };
+    }
     if (result.ok) {
       return { type, status: 'ok', detail: result.detail };
     }

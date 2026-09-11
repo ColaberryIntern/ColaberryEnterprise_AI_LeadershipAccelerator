@@ -4,6 +4,20 @@ import { ensureProspectAccount } from './leads/prospectAccount';
 import { logActivity } from './activityService';
 import { verifyHmacSignature } from '../utils/hmac';
 import { normalizeWithFieldMap, validateNormalized, NormalizedLead } from '../utils/normalizeFields';
+import { resolveContextBySourceSlug } from '../modules/tenancy/tenantResolver';
+
+/**
+ * The source's brand slug for routing facts (T226), through the cached tenant
+ * resolver. Fail-soft: an unresolved or failing lookup is null, and a rule that
+ * names a brand then simply does not match.
+ */
+async function sourceBrandSlug(sourceSlug: string): Promise<string | null> {
+  try {
+    return (await resolveContextBySourceSlug(sourceSlug))?.brandSlug ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export interface IngestRequest {
   sourceSlug?: string;
@@ -232,8 +246,10 @@ export async function handleIngest(req: IngestRequest): Promise<IngestResult> {
       },
     });
 
-    // 11. Evaluate routing rules (async; does not block response).
-    //     Dispatched here; engine + action runner arrive in Gate 4.
+    // 11. Evaluate routing rules. SYNCHRONOUS and awaited inside this request —
+    //     an earlier comment here said "async; does not block response", which
+    //     was never true. Each action is claimed in `routing_rule_executions`
+    //     before it runs (T226), so a replay of this payload cannot fire it twice.
     let routingActions: Array<{ type: string; status: string }> = [];
     try {
       const { evaluateAndDispatch } = require('./routingEngineService');
@@ -242,9 +258,25 @@ export async function handleIngest(req: IngestRequest): Promise<IngestResult> {
         entry_slug: entry.slug,
         raw_payload_id: raw.id,
         normalized,
+        tenant_id: sourceTenantId,
+        brand_id: sourceBrandId,
+        brand_slug: await sourceBrandSlug(source.slug),
       });
-    } catch {
-      // Routing engine may not be loaded yet (Gate 4). Safe to skip.
+    } catch (err: unknown) {
+      // Non-fatal by design: the lead row and the raw payload already exist and
+      // the raw row still becomes `accepted` below. But an engine-level failure
+      // used to be swallowed by an empty catch, dropping every remaining rule
+      // for this lead with no line anywhere. Now it is logged with its class —
+      // and no person identifier, only the payload id.
+      const { classifyError } = require('../utils/errorClassifier');
+      console.error(
+        JSON.stringify({
+          event: 'routing_dispatch_failed',
+          raw_payload_id: raw.id,
+          source_slug: source.slug,
+          error_class: classifyError(err),
+        }),
+      );
     }
 
     await raw.update({ status: 'accepted', resulting_lead_id: lead.id } as any);
