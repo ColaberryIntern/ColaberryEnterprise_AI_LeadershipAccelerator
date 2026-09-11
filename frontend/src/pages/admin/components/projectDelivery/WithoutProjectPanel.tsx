@@ -47,7 +47,13 @@ export function intervention(rows: WithoutProjectRow[]): WithoutProjectRow[] {
 
 export default function WithoutProjectPanel({ data }: { data: WithoutProjectSummary | null }) {
   const [open, setOpen] = useState(false);
-  if (!data) return null;
+  // Absent OR malformed. This is a supplementary panel on the delivery board and
+  // must never take the board down: the view already fetches it with
+  // Promise.allSettled for exactly that reason, but a fulfilled response of the
+  // wrong shape slipped past that guard and `intervention(data.rows)` threw on
+  // `undefined.filter` -- which is how two suites went red on main. Validate the
+  // shape here, where the fields are actually read, rather than trust the caller.
+  if (!data || !Array.isArray(data.rows) || typeof data.without_project !== 'number') return null;
 
   // Nothing to report is worth saying plainly — an absent panel is ambiguous
   // between "everyone has a project" and "this never loaded".
