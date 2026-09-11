@@ -54,6 +54,11 @@ export interface CampaignMetric {
   lead_to_call_pct: number;
   call_to_enroll_pct: number;
   campaign_type: string | null;
+  /** The objective the ranking ladder is chosen by. Null when never set. */
+  funnel_stage: string | null;
+  /** opens + clicks + replies (distinct leads each). The 'governed engagement' a consideration
+   * campaign ranks on. A plain sum of three trusted counts, so trusted itself. */
+  engagement_count: number;
   /**
    * Metrics that CANNOT be computed, with the reason - never a zero standing in for one.
    * Callers must render these as an explicit unavailable state and must not feed them to a
@@ -128,6 +133,7 @@ export async function getCampaignMetrics(filters?: {
       c.id AS campaign_id,
       c.name AS campaign_name,
       c.type AS campaign_type,
+      c.funnel_stage AS funnel_stage,
       GREATEST(COALESCE(vd.visitors_count, 0), COALESCE(ce.unique_clicks, 0))::int AS visitors_count,
       COALESCE(vd.high_intent_count, 0)::int AS high_intent_count,
       COALESCE(ce.emails_sent, 0)::int AS leads_count,
@@ -146,7 +152,7 @@ export async function getCampaignMetrics(filters?: {
     LEFT JOIN enrollments e ON LOWER(e.email) = LOWER(l.email) AND e.status = 'active'
     WHERE c.status = 'active'
       AND (ce.emails_sent > 0 OR vd.visitors_count > 0)
-    GROUP BY c.id, c.name, c.type, vd.visitors_count, vd.high_intent_count,
+    GROUP BY c.id, c.name, c.type, c.funnel_stage, vd.visitors_count, vd.high_intent_count,
       ce.emails_sent, ce.unique_opens, ce.unique_clicks, ce.replies, ce.meetings,
       ce.total_opens, ce.total_clicks
     ORDER BY COALESCE(ce.emails_sent, 0) DESC
@@ -194,6 +200,8 @@ export async function getCampaignMetrics(filters?: {
       lead_to_call_pct: leads > 0 ? Math.round((strategyCalls / leads) * 10000) / 100 : 0,
       call_to_enroll_pct: strategyCalls > 0 ? Math.round((enrollments / strategyCalls) * 10000) / 100 : 0,
       campaign_type: row.campaign_type || null,
+      funnel_stage: row.funnel_stage || null,
+      engagement_count: opens + clicks + (Number(row.replies_count) || 0),
       unavailable: unavailable_,
     };
   });

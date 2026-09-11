@@ -13,6 +13,10 @@ import { listBrands, type Brand as ScopeBrand } from '../../../services/adminBra
 import NeedsAttentionQueue, { type AttentionItem, type ExcludedSignal } from './NeedsAttentionQueue';
 import { getNeedsAttention } from '../../../services/marketingOpsApi';
 import { ALL_BRANDS } from './marketingScope';
+import {
+  ALL_COLUMNS, DEFAULT_COLUMNS, OBJECTIVE_LABELS, loadViews, rankCampaigns, saveViews, upsertView,
+  type ResolvedRanking, type SavedView,
+} from './campaignTableViews';
 
 const MarketingFunnelGraph = lazy(() => import('../../../components/admin/marketing/MarketingFunnelGraph'));
 const OpenclawTab = lazy(() => import('../../../components/admin/intelligence/tabs/OpenclawTab'));
@@ -33,6 +37,15 @@ interface CampaignMetric {
   lead_to_call_pct: number;
   call_to_enroll_pct: number;
   campaign_type: string | null;
+  /** The objective the ranking ladder is chosen by. Null when never set. */
+  funnel_stage: string | null;
+  /** opens + clicks + replies - the governed engagement a consideration campaign ranks on. */
+  engagement_count: number;
+  // The backend has always returned these three; the interface simply never declared them,
+  // which is why they could not be offered as columns until now.
+  opens_count: number;
+  clicks_count: number;
+  replies_count: number;
   /**
    * Metrics the server says it cannot compute, with reasons. Revenue used to live on this
    * interface as a plain number; the server derived it from a hardcoded $4,500 price times an
@@ -154,6 +167,30 @@ function conversionTone(rate: number): BadgeTone {
   if (rate >= 5) return 'success';
   if (rate >= 2) return 'warning';
   return 'danger';
+}
+
+/**
+ * Render one cell for one column key. Column visibility is data-driven, so rendering has to be
+ * too - a hand-written row of <td>s would silently misalign the moment a column was toggled.
+ */
+function renderCampaignCell(c: CampaignMetric, key: string): React.ReactNode {
+  switch (key) {
+    case 'campaign_type': return <span className="text-muted">{c.campaign_type || '\u2014'}</span>;
+    case 'visitors_count': return c.visitors_count.toLocaleString();
+    case 'high_intent_pct': return <StatusBadge label={`${c.high_intent_pct}%`} tone={intentTone(c.high_intent_pct)} />;
+    case 'leads_count': return c.leads_count;
+    case 'engagement_count': return c.engagement_count;
+    case 'opens_count': return c.opens_count;
+    case 'clicks_count': return c.clicks_count;
+    case 'replies_count': return c.replies_count;
+    case 'strategy_calls': return <span className={c.strategy_calls > 0 ? 'fw-bold' : ''}>{c.strategy_calls}</span>;
+    case 'enrollments_count': return c.enrollments_count;
+    case 'visitor_to_lead_pct': return `${c.visitor_to_lead_pct}%`;
+    case 'lead_to_call_pct': return `${c.lead_to_call_pct}%`;
+    case 'call_to_enroll_pct': return `${c.call_to_enroll_pct}%`;
+    case 'conversion_rate': return <StatusBadge label={`${c.conversion_rate}%`} tone={conversionTone(c.conversion_rate)} />;
+    default: return '\u2014';
+  }
 }
 
 function fmt$(n: number) {
@@ -927,8 +964,27 @@ function RevenueIntelligenceTab(
   const [campaigns, setCampaigns] = useState<CampaignMetric[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>('visitors_count');
-  const [sortAsc, setSortAsc] = useState(false);
+  /* ---------- objective-aware ranking ----------
+   * `manualSort` null means "rank each objective on its own metric, grouped" - the default,
+   * and the reason this table exists in this form. Clicking a header switches to a flat manual
+   * sort on that column; the reset button returns to objective ranking. The old behaviour
+   * (everything sorted by visitor count) is what "ranked on likes" looked like here. */
+  const [ranking, setRanking] = useState<Record<string, ResolvedRanking>>({});
+  const [manualSort, setManualSort] = useState<{ key: SortKey; asc: boolean } | null>(null);
+  const sortKey = manualSort?.key ?? 'visitors_count';
+  const sortAsc = manualSort?.asc ?? false;
+
+  /* ---------- columns and saved views (per-viewer convenience, localStorage) ---------- */
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => new Set(DEFAULT_COLUMNS));
+  const [showColumnPicker, setShowColumnPicker] = useState(false);
+  const [views, setViews] = useState<SavedView[]>(() =>
+    loadViews(typeof window !== 'undefined' ? window.localStorage : null));
+  const [newViewName, setNewViewName] = useState('');
+
+  const persistViews = (next: SavedView[]) => {
+    setViews(next);
+    saveViews(typeof window !== 'undefined' ? window.localStorage : null, next);
+  };
   // Dates come from the page-level scope strip. This tab used to own a second pair of date
   // inputs, which meant the strip could say one range while the table below showed another -
   // two controls for one concept, disagreeing silently.
@@ -959,6 +1015,8 @@ function RevenueIntelligenceTab(
       const res = await api.get('/api/admin/marketing/campaigns', { params });
       const rows: CampaignMetric[] = res.data.campaigns || [];
       setCampaigns(rows);
+      // Resolved server-side from the registry. The table applies these; it never decides them.
+      setRanking(res.data.ranking || {});
       // Report the REAL fetch time and the server's own unavailable list to the page badge.
       // Reported here rather than during render so the badge cannot claim freshness for a
       // render that fetched nothing.
@@ -981,6 +1039,7 @@ function RevenueIntelligenceTab(
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  /** Flat manual sort - only used when the operator has clicked a column header. */
   const sorted = useMemo(() => {
     const copy = [...campaigns];
     copy.sort((a, b) => {
@@ -991,6 +1050,14 @@ function RevenueIntelligenceTab(
     });
     return copy;
   }, [campaigns, sortKey, sortAsc]);
+
+  /** Objective-ranked groups - the default view. Unlike objectives are never interleaved. */
+  const grouped = useMemo(() => rankCampaigns(campaigns, ranking), [campaigns, ranking]);
+
+  const activeColumns = useMemo(
+    () => ALL_COLUMNS.filter((c) => visibleColumns.has(c.key)),
+    [visibleColumns],
+  );
 
   const totals = useMemo(() => {
     return campaigns.reduce(
@@ -1017,12 +1084,8 @@ function RevenueIntelligenceTab(
   const unavailable = useMemo<UnavailableMetric[]>(() => campaigns[0]?.unavailable ?? [], [campaigns]);
 
   const handleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortAsc(!sortAsc);
-    } else {
-      setSortKey(key);
-      setSortAsc(false);
-    }
+    setManualSort((cur) =>
+      cur && cur.key === key ? { key, asc: !cur.asc } : { key, asc: false });
   };
 
   const sortIndicator = (key: SortKey) => {
@@ -1169,49 +1232,131 @@ function RevenueIntelligenceTab(
               No campaign-attributed visitors found. Visitors need a <code>campaign_id</code> to appear here.
             </div>
           ) : (
-            <div className="table-responsive">
-              <table className="table table-hover mb-0" style={{ fontSize: '0.82rem' }}>
-                <thead className="table-light">
-                  <tr>
-                    <SortTh k="campaign_id">Campaign</SortTh>
-                    {hasMetadata && <SortTh k="campaign_type">Type</SortTh>}
-                    <SortTh k="visitors_count">Visitors</SortTh>
-                    <SortTh k="high_intent_pct">Intent %</SortTh>
-                    <SortTh k="leads_count">Leads</SortTh>
-                    <SortTh k="strategy_calls">Calls</SortTh>
-                    <SortTh k="enrollments_count">Enrolled</SortTh>
-                    <SortTh k="visitor_to_lead_pct"><span title="Visitor to Lead conversion rate">Visitor{'\u2192'}Lead %</span></SortTh>
-                    <SortTh k="lead_to_call_pct"><span title="Lead to Strategy Call conversion rate">Lead{'\u2192'}Call %</span></SortTh>
-                    <SortTh k="call_to_enroll_pct"><span title="Strategy Call to Enrollment conversion rate">Call{'\u2192'}Enroll %</span></SortTh>
-                    <SortTh k="conversion_rate"><span title="Overall visitor to enrollment conversion rate">Overall Conv %</span></SortTh>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sorted.map((c) => (
-                    <tr key={c.campaign_id} style={{ cursor: 'pointer' }} onClick={() => openCampaignDetail(c.campaign_id)}>
-                      <td className="fw-medium text-primary">
-                        {c.campaign_name || c.campaign_id}
-                      </td>
-                      {hasMetadata && <td className="text-muted">{c.campaign_type || '\u2014'}</td>}
-                      <td>{c.visitors_count.toLocaleString()}</td>
-                      <td>
-                        <StatusBadge label={`${c.high_intent_pct}%`} tone={intentTone(c.high_intent_pct)} />
-                      </td>
-                      <td>{c.leads_count}</td>
-                      <td className={c.strategy_calls > 0 ? 'fw-bold' : ''}>
-                        {c.strategy_calls}
-                      </td>
-                      <td>{c.enrollments_count}</td>
-                      <td>{c.visitor_to_lead_pct}%</td>
-                      <td>{c.lead_to_call_pct}%</td>
-                      <td>{c.call_to_enroll_pct}%</td>
-                      <td>
-                        <StatusBadge label={`${c.conversion_rate}%`} tone={conversionTone(c.conversion_rate)} />
-                      </td>
+            <div>
+              {/* ---- view controls: objective ranking / manual sort, columns, saved views ---- */}
+              <div className="d-flex flex-wrap align-items-center gap-2 px-3 py-2 border-bottom small">
+                {manualSort ? (
+                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setManualSort(null)}>
+                    Sorted by {ALL_COLUMNS.find((c) => c.key === manualSort.key)?.label ?? manualSort.key} - reset to objective ranking
+                  </button>
+                ) : (
+                  <span className="text-muted">Ranked by each campaign's own objective. Click a column to sort manually.</span>
+                )}
+                <div className="ms-auto d-flex gap-2 align-items-center">
+                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setShowColumnPicker((v) => !v)}>
+                    Columns ({activeColumns.length})
+                  </button>
+                  {views.length > 0 && (
+                    <select
+                      className="form-select form-select-sm"
+                      style={{ width: 'auto' }}
+                      value=""
+                      onChange={(e) => {
+                        const v = views.find((x) => x.name === e.target.value);
+                        if (v) setVisibleColumns(new Set(v.columns));
+                      }}
+                    >
+                      <option value="">Saved views...</option>
+                      {views.map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
+                    </select>
+                  )}
+                </div>
+              </div>
+
+              {showColumnPicker && (
+                <div className="px-3 py-2 border-bottom bg-light small">
+                  <div className="d-flex flex-wrap gap-3 mb-2">
+                    {ALL_COLUMNS.map((col) => (
+                      <label key={col.key} className="form-check-label d-flex align-items-center gap-1">
+                        <input
+                          type="checkbox"
+                          className="form-check-input"
+                          checked={visibleColumns.has(col.key)}
+                          onChange={(e) => {
+                            const next = new Set(visibleColumns);
+                            if (e.target.checked) next.add(col.key); else next.delete(col.key);
+                            setVisibleColumns(next);
+                          }}
+                        />
+                        {col.label}
+                      </label>
+                    ))}
+                  </div>
+                  <div className="d-flex gap-2 align-items-center">
+                    <input
+                      className="form-control form-control-sm"
+                      style={{ maxWidth: 220 }}
+                      placeholder="Save this column set as..."
+                      value={newViewName}
+                      onChange={(e) => setNewViewName(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-primary"
+                      disabled={!newViewName.trim()}
+                      onClick={() => {
+                        persistViews(upsertView(views, { name: newViewName.trim(), columns: Array.from(visibleColumns) }));
+                        setNewViewName('');
+                      }}
+                    >
+                      Save view
+                    </button>
+                    <button type="button" className="btn btn-sm btn-link" onClick={() => setVisibleColumns(new Set(DEFAULT_COLUMNS))}>
+                      Reset columns
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="table-responsive">
+                <table className="table table-hover mb-0" style={{ fontSize: '0.82rem' }}>
+                  <thead className="table-light">
+                    <tr>
+                      <SortTh k="campaign_id">Campaign</SortTh>
+                      {activeColumns.map((col) => (
+                        <SortTh key={col.key} k={col.key as SortKey}>{col.label}</SortTh>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {(manualSort
+                      ? [{ objective: null as string | null, ranking: null as ResolvedRanking | null, campaigns: sorted }]
+                      : grouped
+                    ).map((group) => (
+                      <React.Fragment key={group.objective ?? '__flat'}>
+                        {/* One header row per objective group, carrying the ranking reason. This
+                            is the line that makes a fallback VISIBLE: an acquisition group today
+                            reads "ranked by leads instead of cost per lead (no ad-spend source)". */}
+                        {group.ranking && (
+                          <tr className="table-secondary">
+                            <td colSpan={activeColumns.length + 1} className="small py-1">
+                              <span className="fw-semibold">{OBJECTIVE_LABELS[group.ranking.objective]}</span>
+                              <span className={`ms-2 ${group.ranking.fallback ? 'text-warning-emphasis' : 'text-muted'}`}>
+                                {group.ranking.fallback && <i className="ri-error-warning-line me-1" aria-hidden="true" />}
+                                {group.ranking.reason}
+                              </span>
+                            </td>
+                          </tr>
+                        )}
+                        {group.campaigns.map((c) => (
+                          <tr key={c.campaign_id} style={{ cursor: 'pointer' }} onClick={() => openCampaignDetail(c.campaign_id)}>
+                            <td className="fw-medium text-primary">{c.campaign_name || c.campaign_id}</td>
+                            {activeColumns.map((col) => (
+                              <td
+                                key={col.key}
+                                className={group.ranking?.rung?.column === col.key ? 'fw-semibold' : undefined}
+                                title={group.ranking?.rung?.column === col.key ? 'This group is ranked on this column' : undefined}
+                              >
+                                {renderCampaignCell(c, col.key)}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

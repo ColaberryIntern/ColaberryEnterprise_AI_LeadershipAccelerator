@@ -45,6 +45,7 @@ const ROW = {
   total_opens: 55,
   total_clicks: 25,
   enrollments_count: 10,
+  funnel_stage: 'consideration',
 };
 
 /**
@@ -59,6 +60,11 @@ const ALLOWED_KEYS = [
   'strategy_calls', 'enrollments_count', 'open_rate', 'click_rate', 'high_intent_pct',
   'conversion_rate', 'visitor_to_lead_pct', 'lead_to_call_pct', 'call_to_enroll_pct',
   'campaign_type', 'unavailable',
+  // Added by T016 for objective-aware ranking. Both deliberate: funnel_stage is the objective
+  // the ranking ladder is chosen by, and engagement_count is a plain sum of three trusted
+  // counts already on the row. This list is exact ON PURPOSE - adding a key here is a
+  // conscious act, which is what keeps a renamed fabricated field from sneaking back in.
+  'funnel_stage', 'engagement_count',
 ].sort();
 
 describe('getCampaignMetrics returns no invented money', () => {

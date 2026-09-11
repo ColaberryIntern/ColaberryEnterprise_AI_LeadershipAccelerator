@@ -464,6 +464,40 @@ export const METRICS: Record<string, MetricDef> = {
     drilldown: { target: 'marketing.links', requiredFilters: ['status'] },
   },
 
+  // The two columns objective-aware ranking may sort by TODAY. Both trusted, and both for the
+  // same reason as the queue metrics above: they are counts of rows in interaction_outcomes,
+  // a table this system writes. Cost-per-lead and ROAS would be the right measure for an
+  // acquisition campaign and are registered unavailable, so the ranking ladder falls through
+  // to these with the fallback stated - see campaignRanking.ts.
+
+  'marketing.campaign_leads': {
+    key: 'marketing.campaign_leads',
+    name: 'Campaign leads',
+    domain: 'marketing',
+    unit: 'count',
+    definition: 'Distinct leads a campaign has sent to.',
+    formula: "COUNT(DISTINCT lead_id) FROM interaction_outcomes WHERE outcome = 'sent' GROUP BY campaign_id",
+    sources: ['interaction_outcomes'],
+    grain: 'person',
+    dimensions: ['campaign', 'brand', 'period'],
+    status: 'trusted',
+    drilldown: { target: 'people.roster', requiredFilters: ['campaign'] },
+  },
+
+  'marketing.campaign_engagement': {
+    key: 'marketing.campaign_engagement',
+    name: 'Campaign engagement',
+    domain: 'marketing',
+    unit: 'count',
+    definition: 'Distinct leads who opened, clicked or replied, summed across the three.',
+    formula: 'unique_opens + unique_clicks + replies FROM interaction_outcomes GROUP BY campaign_id',
+    sources: ['interaction_outcomes'],
+    grain: 'person',
+    dimensions: ['campaign', 'brand', 'period'],
+    status: 'trusted',
+    drilldown: { target: 'people.roster', requiredFilters: ['campaign', 'engaged'] },
+  },
+
   'marketing.publish_success_rate': {
     key: 'marketing.publish_success_rate',
     name: 'Publish success rate',
