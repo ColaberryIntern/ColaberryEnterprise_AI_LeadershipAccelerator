@@ -14,6 +14,7 @@ import { ClassActivityPanel, CurriculumPanel, loadClassActivity, loadCurriculum 
 import { WorkPanel, loadWork } from './panels/workPanels';
 import { AccountPanel, BillingDetailPanel, loadAccount, loadBillingDetail } from './panels/accountPanels';
 import { CommunicationsPanel, loadCommunications } from './panels/communicationPanels';
+import { CcppHistory, loadCcppHistory } from './panels/historyPanels';
 import {
   CommunityPanel, ContentPanel, MentorPanel, ProfileContextPanel, SkillsPanel,
   loadCommunity, loadContent, loadMentor, loadProfileContext, loadSkills,
@@ -61,6 +62,7 @@ export type { AccountPanel, BillingDetailPanel, SubscriptionRow } from './panels
 export type {
   CommunicationsPanel, CommunicationThread, CommunicationMessage,
 } from './panels/communicationPanels';
+export type { CcppHistory, CcppEnrolment, CcppDisc } from './panels/historyPanels';
 export type {
   SkillsPanel, MentorPanel, ContentPanel, CommunityPanel, ProfileContextPanel,
 } from './panels/growthPanels';
@@ -130,6 +132,8 @@ export interface PersonProfile {
   billingDetail?: BillingDetailPanel | null;
   /** Every communication, threaded by campaign. Added 2026-09-10. */
   communications?: CommunicationsPanel | null;
+  /** What they did with Colaberry BEFORE this platform. Added 2026-09-10. */
+  history?: CcppHistory | null;
   skills?: SkillsPanel | null;
   mentor?: MentorPanel | null;
   content?: ContentPanel | null;
@@ -174,6 +178,9 @@ const PANEL_SECTIONS: Record<string, readonly string[]> = {
   // Mirrors the timeline's `communication` domain, so a caller who may read
   // communication events on the timeline may also read them threaded.
   communications: ['leads', 'revenue', 'campaigns', 'inbox_content'],
+  // Pre-platform customer history. Carries fees and placement outcomes, so it
+  // reads to the commercial and programme sides, not to a bare support role.
+  history: ['leads', 'revenue', 'students', 'program'],
 };
 
 function may(panel: string, sections: readonly string[]): boolean {
@@ -409,6 +416,16 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
     profile.communications = await loadCommunications(leadIds);
   } else {
     profile.withheldPanels.push('communications');
+  }
+
+  // ── Pre-platform history from CCPP ────────────────────────────────────────
+  //
+  // Degraded, never fatal: loadCcppHistory returns `available: false` with a
+  // reason rather than throwing, so a CCPP outage cannot take the profile down.
+  if (may('history', query.sections)) {
+    profile.history = await loadCcppHistory(email);
+  } else {
+    profile.withheldPanels.push('history');
   }
 
   // ── Journey summary and the unified timeline ──────────────────────────────

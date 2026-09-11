@@ -282,6 +282,48 @@ export interface CommunicationsPanel {
   truncated: boolean;
 }
 
+export interface CcppEnrolment {
+  className: string | null; courseName: string | null;
+  classStartDate: string | null; enrollmentDate: string | null;
+  fee: number | null; hired: boolean; certified: boolean;
+  cancelled: boolean; courseFormat: string | null; reenrolled: boolean;
+}
+
+export interface CcppDisc {
+  dominance: number | null; influencer: number | null;
+  steadiness: number | null; compliance: number | null;
+  leadership: number | null; negotiation: number | null;
+  flexibility: number | null; goalOrientation: number | null;
+  dominantTrait: string | null;
+}
+
+/** What they did with Colaberry BEFORE this platform. */
+export interface CcppHistory {
+  /** False when CCPP could not be reached — not the same as "no history". */
+  available: boolean;
+  unavailableReason: string | null;
+  enrolments: CcppEnrolment[];
+  totalListedFees: number | null;
+  everHired: boolean | null;
+  everCertified: boolean | null;
+  firstEnrolledAt: string | null;
+  lastEnrolledAt: string | null;
+  payments: {
+    paysimpleCount: number | null; paysimpleAmount: number | null;
+    paypalCount: number | null; paypalAmount: number | null;
+  } | null;
+  disc: CcppDisc | null;
+}
+
+export interface StrategyBrief {
+  mode: 'sales' | 'coaching' | 'winback';
+  modeReason: string;
+  markdown: string;
+  basis: string[];
+  gaps: string[];
+  generatedAt: string;
+}
+
 export interface Profile {
   email: string; name: string | null; stage: string; tracedToLead: boolean;
   company: string | null; title: string | null;
@@ -297,6 +339,7 @@ export interface Profile {
   account?: AccountPanel | null;
   billingDetail?: BillingDetailPanel | null;
   communications?: CommunicationsPanel | null;
+  history?: CcppHistory | null;
   skills?: SkillsPanel | null;
   mentor?: MentorPanel | null;
   content?: ContentPanel | null;
