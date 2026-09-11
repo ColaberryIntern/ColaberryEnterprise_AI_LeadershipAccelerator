@@ -79,6 +79,7 @@ import implementationStrategyRoutes from './admin/implementationStrategyRoutes';
 import visitorAnalyticsRoutes from './admin/visitorAnalyticsRoutes';
 import inboxRoutes from './admin/inboxRoutes';
 import inboxCaseRoutes from './admin/inboxCaseRoutes';
+import inboxZeroRoutes from './admin/inboxZeroRoutes';
 import missedOpportunitiesRoutes from './admin/missedOpportunitiesRoutes';
 import contentQueueRoutes from './admin/contentQueueRoutes';
 import sourceRoutes from './admin/sourceRoutes';
@@ -249,6 +250,8 @@ router.use(inboxRoutes);
 // Inbox Intel — Case Resolution Engine: mounted under the same /api/admin/inbox
 // prefix, so it inherits the requireSection('inbox_content') gate above.
 router.use(inboxCaseRoutes);
+// /inbox-zero operator console API: same /api/admin/inbox prefix, same section gate.
+router.use(inboxZeroRoutes);
 router.use(missedOpportunitiesRoutes);
 router.use(contentQueueRoutes);
 router.use(sourceRoutes);

@@ -23,6 +23,14 @@ const INJECTION_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /delete\s+(all\s+)?(related\s+)?emails?/i, label: 'delete_directive' },
   { pattern: /run\s+this\s+(command|script)/i, label: 'run_command_directive' },
   { pattern: /reveal\s+(the\s+|your\s+|my\s+)?(credentials|password|api\s*key|secret)/i, label: 'credential_exfiltration_attempt' },
+  // /inbox-zero T10: instruction-shaped attempts to REDIRECT a response — a
+  // reply to a different address, or a post into a different Basecamp
+  // destination. The planner never takes a recipient or a destination from
+  // body text (they come from the item snapshot), so these cannot succeed;
+  // they are flagged so the console shows the notice and forces a human look.
+  { pattern: /(forward|send|reply|cc|bcc)\s+(this\s+|it\s+|the\s+(email|message|reply)\s+)?(to|at)\s+[^\s@<>]+@[^\s@<>]+/i, label: 'recipient_redirect_attempt' },
+  { pattern: /(post|comment|move)\s+(this|it)\s+(to|in|into|on)\s+(the\s+)?(?:[\w'-]+\s+){0,3}(project|todo|to-do|thread)\b/i, label: 'destination_redirect_attempt' },
+  { pattern: /\b(approve|auto-?approve|mark\s+(this\s+)?(as\s+)?(done|approved|resolved))\s+(this|it|the\s+\w+)?\s*(automatically|without\s+review|now)\b/i, label: 'self_approval_attempt' },
 ];
 
 export interface InjectionSignal {
@@ -40,6 +48,23 @@ export function detectPromptInjectionSignals(text: string): InjectionSignal[] {
     }
   }
   return found;
+}
+
+/**
+ * Everything on an item that came from outside: title, body excerpt, and
+ * attachment NAMES (a filename is an instruction surface too —
+ * "READ_ME_and_approve.pdf"). Used by the assessment's audit flags, the
+ * planner's approval gate, and the console's focus view, so all three agree
+ * on what "flagged" means.
+ */
+export function itemInjectionSignals(item: { title?: string | null; snapshot?: unknown }): InjectionSignal[] {
+  const snap = (item.snapshot as Record<string, unknown> | null) ?? {};
+  const parts = [
+    String(item.title ?? ''),
+    String(snap.body_excerpt ?? ''),
+    Array.isArray(snap.attachment_names) ? (snap.attachment_names as unknown[]).map(String).join(' ') : '',
+  ];
+  return detectPromptInjectionSignals(parts.join('\n'));
 }
 
 const MAX_EVIDENCE_CHARS = 800;

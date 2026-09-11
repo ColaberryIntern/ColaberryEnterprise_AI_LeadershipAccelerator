@@ -217,6 +217,13 @@ jest.mock('../../../models/EvidenceRecord', () => foreignModelMock());
 jest.mock('../../../models/PortfolioArtifact', () => foreignModelMock());
 jest.mock('../../../models/Project', () => foreignModelMock());
 jest.mock('../../../models/GitHubConnection', () => foreignModelMock());
+// The gate's Phase 7 maturity rule reads the linked student project's
+// foundation. Mocked to "none" here, which is every record not linked to a
+// project; the rule itself is exercised through the gate input below.
+const mockFoundationForGate = jest.fn();
+jest.mock('../../sbp/caseStudyFoundationLoader', () => ({
+  loadCaseStudyFoundationForGate: (...a: any[]) => mockFoundationForGate(...a),
+}));
 
 import EvidenceRecord from '../../../models/EvidenceRecord';
 import PortfolioArtifact from '../../../models/PortfolioArtifact';
@@ -367,10 +374,12 @@ const gateInput = (
     provenance?: CaseStudyProvenance;
     snapshot?: Partial<{ status: string; approvedBy: string | null; approvedAt: string | null }>;
     noSnapshot?: boolean;
+    foundation?: { maturity: string; openQuestions: number } | null;
   } = {},
 ): CaseStudyPublishGateInput => ({
   surfaceKey: patch.surfaceKey ?? 'enterprise',
   caseStudy: { ...publishableRecord(), ...(patch.record ?? {}) },
+  ...(patch.foundation !== undefined ? { foundation: patch.foundation } : {}),
   snapshot: patch.noSnapshot ? null : {
     id: 'snap-1',
     version: 3,
@@ -406,6 +415,7 @@ const GATE_FILES = [
   'caseStudyPublishGate.ts',
   'caseStudyPublishRules.ts',
   'caseStudyPublishClaimScan.ts',
+  'caseStudyPublishMaturityRule.ts',
 ];
 
 let logSpy: jest.SpyInstance;
@@ -1080,6 +1090,12 @@ describe('the refusal is actionable and complete', () => {
           };
         }),
       },
+      // maturity_below_operational_result — a linked student project that has
+      // built and demonstrated, and measured nothing in use.
+      { foundation: { maturity: 'capability_demonstration', openQuestions: 0 } },
+      // project_truth_has_open_questions — a story disagreed with the student
+      // and nobody settled it.
+      { foundation: { maturity: 'operational_result', openQuestions: 2 } },
       // metric_collected_sha_mismatch — computed at a commit nobody is reading
       // about, under a command that therefore does not reproduce the number.
       {
@@ -1482,5 +1498,60 @@ describe('the service boundary', () => {
     const decision = evaluate({ record: { status: 'live_somehow' as any } });
     expect(decision.allowed).toBe(false);
     expect(codes(decision)).toContain('case_study_not_approved');
+  });
+});
+
+/* ═══════════ Phase 7: the line between a build record and a case study ═══ */
+
+describe('a linked student project carries its maturity into the gate', () => {
+  it('is a no-op with no foundation: the library this was added to is untouched', () => {
+    expect(evaluate({}).allowed).toBe(true);
+    expect(evaluate({ foundation: null }).allowed).toBe(true);
+  });
+
+  it.each(['story_hypothesis', 'build_record', 'capability_demonstration'])(
+    'refuses %s: nothing measured in use is a build record, not a case study',
+    (maturity) => {
+      const d = evaluate({ foundation: { maturity, openQuestions: 0 } });
+      expect(d.allowed).toBe(false);
+      expect(codes(d)).toEqual(['maturity_below_operational_result']);
+      expect(messages(d)).toMatch(new RegExp(`"${maturity}", below "operational_result"`));
+      expect(withCode(d, 'maturity_below_operational_result')[0].remedy).toMatch(/approved measurement definition/);
+    },
+  );
+
+  it.each(['operational_result', 'impact_case_study'])('does not block on %s alone', (maturity) => {
+    const d = evaluate({ foundation: { maturity, openQuestions: 0 } });
+    expect(codes(d)).not.toContain('maturity_below_operational_result');
+  });
+
+  it('refuses while a story-raised question is unsettled, naming the count', () => {
+    const d = evaluate({ foundation: { maturity: 'operational_result', openQuestions: 1 } });
+    expect(codes(d)).toEqual(['project_truth_has_open_questions']);
+    expect(messages(d)).toMatch(/1 question a story raised is unsettled/);
+  });
+
+  it('the publication service passes the linked project foundation, and only when there is a project', async () => {
+    mockFoundationForGate.mockResolvedValue({ maturity: 'build_record', openQuestions: 0 });
+    const linked = seedPublishable();
+    (caseStudies.rows.find((r) => r.id === linked.caseStudyId) as any).project_id = 'cce94c20-a398-45b3-a6fb-b3fc87b6b1ef';
+    const d = await evaluateCaseStudyPublication({ caseStudyId: linked.caseStudyId, surfaceKey: 'enterprise', actor: 'ali@colaberry.com' });
+    expect(mockFoundationForGate).toHaveBeenCalledWith('cce94c20-a398-45b3-a6fb-b3fc87b6b1ef');
+    expect(codes(d)).toContain('maturity_below_operational_result');
+
+    mockFoundationForGate.mockClear();
+    const unlinked = seedPublishable();
+    const d2 = await evaluateCaseStudyPublication({ caseStudyId: unlinked.caseStudyId, surfaceKey: 'enterprise', actor: 'ali@colaberry.com' });
+    expect(mockFoundationForGate).not.toHaveBeenCalled();
+    expect(d2.allowed).toBe(true);
+  });
+
+  it('a foundation read failure does not become a 500; the other rules decide', async () => {
+    mockFoundationForGate.mockRejectedValue(new Error('database away'));
+    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const linked = seedPublishable();
+    (caseStudies.rows.find((r) => r.id === linked.caseStudyId) as any).project_id = 'cce94c20-a398-45b3-a6fb-b3fc87b6b1ef';
+    const d = await evaluateCaseStudyPublication({ caseStudyId: linked.caseStudyId, surfaceKey: 'enterprise', actor: 'ali@colaberry.com' });
+    expect(d.allowed).toBe(true);
   });
 });

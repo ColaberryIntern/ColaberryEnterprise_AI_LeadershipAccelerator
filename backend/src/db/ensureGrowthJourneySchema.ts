@@ -9,10 +9,13 @@ import { sequelize } from '../config/database';
  * a no-op. `sync({alter:true})` is not an option on a 215-model production
  * graph — see `ensureWorkLedgerSchema.ts`'s header for that history.
  *
- * ADDITIVE ONLY. Creates two tables and their indexes. Never alters, renames or
- * drops an existing column, table or constraint. That is not a style
- * preference: AD-1 settled that Explorer Growth is extended beside rather than
- * reshaped, and a rename anywhere in `explorer_*` is a hard stop for this run.
+ * ADDITIVE ONLY. Creates the run's tables and their indexes (seven as of Phase
+ * 2: five from Phase 1, `growth_journey_classifications` and
+ * `growth_journey_transitions` from T222) plus ONE `ADD COLUMN IF NOT EXISTS`
+ * on `brands`, kept last. Never alters, renames or drops an existing column,
+ * table or constraint. That is not a style preference: AD-1 settled that
+ * Explorer Growth is extended beside rather than reshaped, and a rename
+ * anywhere in `explorer_*` is a hard stop for this run.
  *
  * MUST BE CALLED AFTER `ensureMultiTenantSchema()`, and this ordering is
  * load-bearing rather than cosmetic. That function is what creates `brands`
@@ -23,13 +26,13 @@ import { sequelize } from '../config/database';
  * console warning at boot rather than a crash — a missing table nobody notices
  * until a query needs it.
  *
- * Columns must match these models EXACTLY:
- *   backend/src/models/JourneyProgram.ts
- *   backend/src/models/JourneyPath.ts
- * This module's own test parses the column names out of the CREATE TABLE
- * statements and asserts SET EQUALITY against a literal expected list, then
- * asserts the models map that same set. Drift on either side fails a test
- * rather than a live query.
+ * Every table's columns must match its model EXACTLY (`models/JourneyProgram`,
+ * `JourneyPath`, `OfferFamily`, `BrandOfferPolicy`, `GrowthJourneyEnrollment`,
+ * `GrowthJourneyClassification`, `GrowthJourneyTransition`). The tests in
+ * `db/__tests__/ensureGrowthJourneySchema.{statements,parity,phase2}.test.ts`
+ * parse the column names out of each CREATE TABLE statement and assert SET
+ * EQUALITY against a literal expected list, then assert the model maps that
+ * same set. Drift on either side fails a test rather than a live query.
  *
  * That comparison must stay a set equality in both directions. The first
  * version of the test looped `expect(sqlBlock).toContain(col)` over the model's
@@ -207,6 +210,91 @@ export const GROWTH_JOURNEY_STATEMENTS: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS idx_gj_enrollments_lead ON growth_journey_enrollments (lead_id)`,
   `CREATE INDEX IF NOT EXISTS idx_gj_enrollments_enrollment ON growth_journey_enrollments (enrollment_id)`,
   `CREATE INDEX IF NOT EXISTS idx_gj_enrollments_status ON growth_journey_enrollments (status)`,
+
+  // ── Phase 2, T222 ─────────────────────────────────────────────────────────
+  // growth_journey_classifications — one answer to "which brand relationship,
+  // which programme, which path?" with the evidence that produced it (§6.1,
+  // §7.1). APPEND-ONLY: no updated_at, no update path anywhere; a
+  // reclassification or a human override is a new row (`override_of`).
+  //
+  // `primary_path` has already been checked against brand_offer_policies by the
+  // writer and `eligibility` stores that decision — model, rule table and human
+  // are all subject to the same check. `source_step` is the §7.1 step (1-8)
+  // that answered; `ai_involved` + `model_version` say whether and which model
+  // took part. `idempotency_key` is unique so a replay with identical inputs
+  // lands on the existing row rather than a second one.
+  `CREATE TABLE IF NOT EXISTS growth_journey_classifications (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+     brand_id UUID NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+     subject_ref VARCHAR(128) NOT NULL,
+     lead_id INTEGER,
+     enrollment_id UUID,
+     trigger VARCHAR(24) NOT NULL,
+     input_hash TEXT NOT NULL,
+     brand_relationship VARCHAR(64),
+     journey_program_slug VARCHAR(64),
+     primary_path VARCHAR(64),
+     secondary_paths JSONB NOT NULL DEFAULT '[]'::jsonb,
+     intent TEXT,
+     confidence NUMERIC(4,3),
+     evidence JSONB NOT NULL DEFAULT '[]'::jsonb,
+     source_step SMALLINT NOT NULL,
+     requires_human_review BOOLEAN NOT NULL DEFAULT false,
+     status VARCHAR(16) NOT NULL,
+     locked BOOLEAN NOT NULL DEFAULT false,
+     eligibility JSONB,
+     referral_target_brand_id UUID,
+     ai_involved BOOLEAN NOT NULL DEFAULT false,
+     model_version TEXT,
+     ruleset_version VARCHAR(16) NOT NULL,
+     override_of UUID,
+     decided_by TEXT,
+     idempotency_key TEXT NOT NULL,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS growth_journey_classifications_idempotency_unique
+     ON growth_journey_classifications (idempotency_key)`,
+  `CREATE INDEX IF NOT EXISTS idx_gj_classifications_subject
+     ON growth_journey_classifications (subject_ref, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_gj_classifications_brand_status
+     ON growth_journey_classifications (brand_id, status, created_at DESC)`,
+  // The review queue reads this partial index; everything else stays out of it.
+  `CREATE INDEX IF NOT EXISTS idx_gj_classifications_review
+     ON growth_journey_classifications (brand_id, created_at DESC)
+     WHERE requires_human_review`,
+
+  // growth_journey_transitions — how a subject moved between programmes, paths
+  // and brands (§6.1). Also the home of a cross-brand referral REQUEST: a brand
+  // transition asked for and not yet made is `transition_type
+  // 'brand_referral_requested'`, `status 'requested'`. Phase 2 writes only the
+  // request; the approval that creates the second lead_tenant_contexts row is
+  // Phase 4's, independently gated, and lands as a new row referencing this one.
+  // APPEND-ONLY, same as classifications.
+  `CREATE TABLE IF NOT EXISTS growth_journey_transitions (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+     brand_id UUID NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+     program_id UUID REFERENCES journey_programs(id) ON DELETE SET NULL,
+     subject_ref VARCHAR(128) NOT NULL,
+     lead_id INTEGER,
+     enrollment_id UUID,
+     transition_type VARCHAR(32) NOT NULL,
+     from_value JSONB,
+     to_value JSONB,
+     status VARCHAR(16) NOT NULL,
+     reason TEXT NOT NULL,
+     evidence JSONB NOT NULL DEFAULT '[]'::jsonb,
+     requested_by TEXT NOT NULL,
+     idempotency_key TEXT NOT NULL,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS growth_journey_transitions_idempotency_unique
+     ON growth_journey_transitions (idempotency_key)`,
+  `CREATE INDEX IF NOT EXISTS idx_gj_transitions_subject
+     ON growth_journey_transitions (subject_ref, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_gj_transitions_brand_type_status
+     ON growth_journey_transitions (brand_id, transition_type, status)`,
 
   // ── T203 ──────────────────────────────────────────────────────────────────
   // THE ONE STATEMENT IN THIS MODULE THAT REACHES INTO SOMEONE ELSE'S TABLE.

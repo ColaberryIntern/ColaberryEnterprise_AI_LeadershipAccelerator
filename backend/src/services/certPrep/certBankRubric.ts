@@ -2,6 +2,7 @@
 // and, through it, Sequelize models - which the admin service's tests mock away
 // and which a bank-level audit has no business needing.
 import { scoreItem, RubricItem, achievableScore } from './certQuestionRubric';
+import { hasOptionLabel } from './certOptionLength';
 import { MOCK_DEMAND } from '../../data/certBlueprints/items';
 import { CCAR_FOUNDATIONS_BLUEPRINT } from '../../data/certBlueprints/ccarFoundations';
 
@@ -186,6 +187,18 @@ export function auditBank(items: BankItem[]): BankAudit {
     id: 'domain_position_skew', label: 'No domain is skewed to one position', severity: 'hard',
     pass: domainSkew < T.DOMAIN_POSITION_MAX, measured: domainSkew, threshold: T.DOMAIN_POSITION_MAX,
     note: `Worst is ${skewDomain} at ${pct(domainSkew)} on one letter (ceiling ${pct(T.DOMAIN_POSITION_MAX)}).`,
+  });
+
+  // ── option labels ────────────────────────────────────────────────────────
+  // "D. Allocate more capacity" as option D renders as "D. D. Allocate" and
+  // marks the option as the one a model edited. Four of the first twenty-three
+  // lengthened options came back this way and passed every other check.
+  const labelled = items.filter((i) => (i.options ?? []).some((o) => hasOptionLabel(o.text)));
+  checks.push({
+    id: 'option_labels', label: 'No option carries its own letter label', severity: 'hard',
+    pass: labelled.length === 0, measured: labelled.length, threshold: 0,
+    note: labelled.length === 0 ? 'No option begins with a letter label.'
+      : `${labelled.length} item(s) have an option beginning with a letter label (${labelled.slice(0, 5).map((i) => i.question_key).join(', ')}). Run balanceCertOptionLengths.`,
   });
 
   // ── length cue ───────────────────────────────────────────────────────────

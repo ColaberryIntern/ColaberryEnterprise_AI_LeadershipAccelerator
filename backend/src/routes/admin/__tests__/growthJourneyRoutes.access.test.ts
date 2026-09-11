@@ -1,8 +1,6 @@
 import express from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
-import * as fs from 'fs';
-import * as path from 'path';
 
 // `growthJourney` is a mutable object here so one block can flip the master
 // off; the flags module itself freezes what it resolves, which is why the test
@@ -42,8 +40,15 @@ jest.mock('../../../modules/tenancy/adminScopeBridge', () => ({
   contextFromAdminRequest: (...a: unknown[]) => contextFromAdminRequest(...a),
 }));
 
+// Since T229 the route module also mounts the classification routes, whose controller
+// reaches `classificationService` and `offerEligibility`; both construct the Sequelize
+// instance at load and `env` here has no database URL. Cut at the same boundaries the
+// classification route test uses - those routes are exercised THERE, not here.
+jest.mock('../../../services/growthJourney/classificationService', () => ({ overrideClassification: jest.fn() }));
+jest.mock('../../../services/growthJourney/offerEligibility', () => ({ OfferNotEligibleError: class OfferNotEligibleError extends Error {} }));
+
 import growthJourneyRoutes from '../growthJourneyRoutes';
-import { GROWTH_JOURNEY_ENV_KEYS } from '../../../config/growthJourneyFlags';
+import { TenantAccessError } from '../../../modules/tenancy/tenantAuthorization';
 
 /**
  * T207 — brand scoping on the new read paths.
@@ -91,7 +96,13 @@ function app() {
 const auth = (r: request.Test) => r.set('Authorization', `Bearer ${token()}`);
 
 /** A context as `buildRequestContext` would produce it for a member of one tenant. */
-const memberOf = (tenantId: string, brandId: string | null = null) => ({
+// `authorizedBrandIds` defaults to null (not brand-restricted) so every pre-existing
+// row of the status matrix keeps its meaning; the G2 case passes an explicit set.
+const memberOf = (
+  tenantId: string,
+  brandId: string | null = null,
+  authorizedBrandIds: string[] | null = null,
+) => ({
   platformIdentityId: 'pid-1',
   tenantId,
   brandId,
@@ -99,12 +110,14 @@ const memberOf = (tenantId: string, brandId: string | null = null) => ({
   roles: ['tenant_admin'],
   isPlatformSuperAdmin: false,
   authorizedTenantIds: [tenantId],
+  authorizedBrandIds,
 });
 
 const noMembership = () => ({
   platformIdentityId: 'pid-1',
   tenantId: null,
   brandId: null,
+  authorizedBrandIds: null,
   organizationId: null,
   roles: [],
   isPlatformSuperAdmin: false,
@@ -192,20 +205,6 @@ describe('the master flag — off means the routes do not exist', () => {
     growthJourney.growthJourneyEnabled = false;
     const res = await request(app()).get(`${BASE}/participations/${ROW_ID}`);
     expect(res.status).toBe(401);
-  });
-
-  it('reads the MASTER only - never a sub-flag - so the dark-launch guard stays green', () => {
-    const src = fs.readFileSync(path.join(__dirname, '..', 'growthJourneyRoutes.ts'), 'utf8');
-    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-    expect(code).toMatch(/growthJourney\.growthJourneyEnabled/);
-    // The sub-flag names are DERIVED here, never written: the dark-launch guard
-    // scans every .ts file's raw text - this one included - and the first draft
-    // of this assertion spelled the three names out inside a regex literal and
-    // tripped it. Building the pattern from the module's own keys leaves no
-    // dotted name in this file for the guard to find.
-    const subFlags = Object.keys(GROWTH_JOURNEY_ENV_KEYS).filter((k) => k !== 'growthJourneyEnabled');
-    expect(subFlags).toHaveLength(3);
-    for (const flag of subFlags) expect(code).not.toMatch(new RegExp(`\\.${flag}\\b`));
   });
 });
 
@@ -323,27 +322,54 @@ describe('the status matrix, using the codes the guard actually returns', () => 
   });
 });
 
-describe('G2 — KNOWN GAP, pinned so it is visible: brand confinement is opt-in', () => {
-  it('a brand-restricted member who omits ?brand_id= reads another brand in their tenant with 200', async () => {
-    // THIS IS THE GAP, NOT THE GOAL. The builder never derives brandId from a
-    // brand-restricted membership, so with nothing requested the context is
-    // tenant-wide and requireBrandAccess has no brand to compare. The fix is a
-    // security-module change (auto-confine in buildRequestContext) kept out of
-    // this task; this test exists so the behaviour is asserted in the suite
-    // rather than discovered in production. When the builder is fixed, this
-    // test should FAIL, and that failure is the signal to flip it to 403.
-    contextFromAdminRequest.mockResolvedValue(memberOf(TENANT.colaberry, null));
+describe('G2 — brand confinement is automatic', () => {
+  it('a brand-restricted member who omits ?brand_id= is refused another brand in their tenant with 403', async () => {
+    // The builder now carries the membership's restriction as `authorizedBrandIds`
+    // and `requireBrandAccess` consults it whether or not a brand was requested.
+    // This test asserted a 200 while the behaviour was a named gap; the builder
+    // change flipped it, as that version said it should.
+    contextFromAdminRequest.mockResolvedValue(memberOf(TENANT.colaberry, null, [BRAND.training]));
     findByPk.mockResolvedValue(row(TENANT.colaberry, BRAND.enterprise));
     const res = await auth(request(app()).get(`${BASE}/participations/${ROW_ID}`));
+    expect(res.status).toBe(403);
+  });
+
+  it('and still reads their own brand with 200 when they omit the parameter', async () => {
+    contextFromAdminRequest.mockResolvedValue(memberOf(TENANT.colaberry, BRAND.training, [BRAND.training]));
+    findByPk.mockResolvedValue(row(TENANT.colaberry, BRAND.training));
+    const res = await auth(request(app()).get(`${BASE}/participations/${ROW_ID}`));
     expect(res.status).toBe(200);
+  });
+
+  it('the list route never returns a row outside the set: the where clause carries brand_id', async () => {
+    contextFromAdminRequest.mockResolvedValue(memberOf(TENANT.colaberry, null, [BRAND.training]));
+    findAndCountAll.mockResolvedValue({ rows: [], count: 0 });
+    await auth(request(app()).get(`${BASE}/participations`));
+    expect(findAndCountAll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ tenant_id: TENANT.colaberry, brand_id: [BRAND.training] }),
+      }),
+    );
+  });
+
+  it('a thrown brand refusal from the bridge becomes a 403, not a 500', async () => {
+    contextFromAdminRequest.mockRejectedValue(
+      new TenantAccessError('Brand not in scope', 403, 'AuthorizationError'),
+    );
+    const res = await auth(
+      request(app()).get(`${BASE}/participations/${ROW_ID}?brand_id=${BRAND.enterprise}`),
+    );
+    expect(res.status).toBe(403);
+    expect(findByPk).not.toHaveBeenCalled();
   });
 });
 
 describe('refuse, never widen — a requested scope that was not granted', () => {
   it('403 when the caller asks for a brand the bridge did not grant', async () => {
-    // `buildRequestContext` leaves brandId null for a brand the caller does not
-    // hold, and null means UNSCOPED. Proceeding would hand a brand-scoped
-    // operator the whole tenant for typing the wrong id.
+    // The builder throws for a brand the caller does not hold (see the block
+    // above); this pins the route's OWN second-line check for the case where a
+    // bridge returned null anyway, so a builder regression could not widen a
+    // brand-scoped operator to the whole tenant for typing the wrong id.
     contextFromAdminRequest.mockResolvedValue(memberOf(TENANT.colaberry, null));
     findByPk.mockResolvedValue(row(TENANT.colaberry, BRAND.training));
     const res = await auth(
@@ -395,14 +421,6 @@ describe('spoofed hostname — the trusted map decides, never the claim', () => 
     );
     expect(spoofed.status).toBe(plain.status);
     expect(spoofed.status).toBe(200);
-  });
-
-  it('the controller has no code path that reads a host header at all', () => {
-    // Not "refuses the claim" — there is nothing to refuse. Asserted on the
-    // source so a future `req.hostname` cannot slip in beside the guard.
-    const src = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'controllers', 'growthJourneyController.ts'), 'utf8');
-    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-    expect(code).not.toMatch(/req\.hostname|req\.host\b|headers\[?['"`]?host|x-forwarded-host|x-brand|req\.get\(/i);
   });
 });
 

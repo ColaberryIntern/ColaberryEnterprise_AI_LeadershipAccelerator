@@ -9,6 +9,7 @@ import {
   clientIpFrom,
 } from '../services/marketing/clickClassification';
 import { getLinkableHostnames } from '../services/journeyLinkRewriter';
+import { sequelize } from '../config/database';
 
 /**
  * `GET /r/:shortCode` — the public tracked-link redirect.
@@ -151,7 +152,22 @@ router.get('/r/:shortCode', redirectRateLimiter, async (req: Request, res: Respo
         msclkid: clickIds.msclkid,
         ttclid: clickIds.ttclid,
         click_ids: clickIds.click_ids,
-      })?.catch?.((err: Error) => {
+      })
+        // The link's own counters. Declared on the model since T001 and written by nothing
+        // until the live verification of T032 showed a human click leaving click_count at 0:
+        // a column with no writer, exactly the producer-without-consumer shape this build
+        // kept finding. Bot clicks are recorded above but not counted here, so the count
+        // means "people", the same rule the registry's trusted click metrics follow. The
+        // increment is a SQL expression, not a read-modify-write, so concurrent clicks add.
+        ?.then?.(() => (verdict.isBot ? undefined : TrackedLink.update(
+          {
+            click_count: sequelize.literal('click_count + 1'),
+            first_click_at: sequelize.literal('COALESCE(first_click_at, NOW())'),
+            last_click_at: new Date(),
+          },
+          { where: { id: link.id } },
+        )))
+        ?.catch?.((err: Error) => {
         logJson('error', 'click_write_failed', {
           shortCode,
           error_class: err?.constructor?.name ?? 'Error',

@@ -57,7 +57,11 @@ export type CaseStudyPublishBlockerCode =
   | 'metric_shape_payload_mismatch'
   | 'metric_ratio_missing_denominator'
   | 'metric_members_count_mismatch'
-  | 'metric_collected_sha_mismatch';
+  | 'metric_collected_sha_mismatch'
+  // Unified Project Discovery, Phase 7: a record linked to a student project
+  // carries that project's computed maturity. See caseStudyPublishMaturityRule.
+  | 'maturity_below_operational_result'
+  | 'project_truth_has_open_questions';
 
 export const CASE_STUDY_PUBLISH_BLOCKER_CODES = [
   'surface_not_publishable',
@@ -75,6 +79,8 @@ export const CASE_STUDY_PUBLISH_BLOCKER_CODES = [
   'metric_ratio_missing_denominator',
   'metric_members_count_mismatch',
   'metric_collected_sha_mismatch',
+  'maturity_below_operational_result',
+  'project_truth_has_open_questions',
 ] as const;
 
 /** One reason a publish was refused. `message` names the FIELD and its VALUE. */
@@ -113,6 +119,12 @@ export interface CaseStudyPublishGateInput {
   readonly surfaceKey: CaseStudySurfaceKey;
   readonly caseStudy: CaseStudyPublishRecord;
   readonly snapshot: CaseStudyPublishSnapshot | null;
+  /**
+   * The linked student project's computed maturity and open questions, when
+   * the record has one. Absent or null means "nothing to judge" and the
+   * maturity rule is a no-op, so every record that predates this is untouched.
+   */
+  readonly foundation?: { readonly maturity: string; readonly openQuestions: number } | null;
 }
 
 export interface CaseStudyPublishDecision {

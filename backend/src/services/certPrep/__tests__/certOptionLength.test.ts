@@ -1,5 +1,6 @@
 import {
-  lengthPlan, longestOptionKey, KEEP_EVERY, MIN_MARGIN_CHARS, MAX_MARGIN_CHARS,
+  lengthPlan, longestOptionKey, hasOptionLabel, stripOptionLabels,
+  KEEP_EVERY, MIN_MARGIN_CHARS, MAX_MARGIN_CHARS,
 } from '../certOptionLength';
 import { assignAnswerPosition } from '../../../data/certBlueprints/items/itemFactory';
 
@@ -15,6 +16,30 @@ const item = (key: string, texts: [string, string, string, string], correct = 'A
   question_key: key,
   options: ['A', 'B', 'C', 'D'].map((k, i) => ({ key: k, text: texts[i] })),
   correct_keys: [correct],
+});
+
+describe('option labels — "D. Allocate more capacity" as option D', () => {
+  it('recognises the ways a model writes the letter in front', () => {
+    for (const t of ['D. Allocate more capacity', 'b) lower the threshold', 'C - add logging', 'A: retry it', '  D.  spaced']) {
+      expect(hasOptionLabel(t)).toBe(true);
+    }
+  });
+
+  it('does not mistake ordinary English for a label', () => {
+    for (const t of ['A retry fixes a call that failed', 'E.g. something', 'Disable the step', 'B2B integrations first', 'C++ tooling']) {
+      expect(hasOptionLabel(t)).toBe(false);
+    }
+  });
+
+  it('strips every labelled option and names them; returns the same object when clean', () => {
+    const dirty = item('k', ['fine', 'B. lower the threshold', 'fine', 'D) allocate']);
+    const out = stripOptionLabels(dirty);
+    expect(out.changed).toEqual(['B', 'D']);
+    expect(out.item.options.map((o) => o.text)).toEqual(['fine', 'lower the threshold', 'fine', 'allocate']);
+    expect(dirty.options[1].text).toBe('B. lower the threshold'); // input untouched
+    const clean = item('k', ['a', 'b', 'c', 'd']);
+    expect(stripOptionLabels(clean).item).toBe(clean);
+  });
 });
 
 describe('longestOptionKey', () => {

@@ -7,6 +7,7 @@ import NextSessionStrip from './NextSessionStrip';
 import { CorySpark } from '../../../components/portal/CoryMark';
 import { useIsExplorer } from '../useIsExplorer';
 import ProjectsNextStepHero from './ProjectsNextStepHero';
+import CaseStudyReadinessCard from './CaseStudyReadinessCard';
 import TimelineCard, { type TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import TimelineFeed from '../../../components/timeline/TimelineFeed';
 // Every rule for the Classroom card is scoped `.tl-de …` in timeline.css, and
@@ -271,6 +272,13 @@ const ProjectInterior: React.FC<{
             <div className="te-stat"><span className="lab">Requirements verified</span><span className="num">{rv.v}/{rv.total}</span></div>
             <div className="te-ribbon" style={{ marginTop: 6 }}><i style={{ width: `${prog.pct}%`, background: '#5BA63C' }} /></div>
           </div>
+
+          {/* Where this build sits between an idea and a case study. Only for
+              a real pipeline build: the browser template has no truth to sit
+              on the ladder, and the training example is nobody's project. */}
+          {!project.sample && project.origin === 'pipeline' && (
+            <CaseStudyReadinessCard projectId={project.pipelineProjectId || project.id} />
+          )}
         </aside>
       </div>
     </>

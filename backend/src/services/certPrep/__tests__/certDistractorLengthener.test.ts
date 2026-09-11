@@ -72,6 +72,19 @@ describe('lengthenDistractor', () => {
     expect(JSON.stringify(before)).toBe(snapshot);
   });
 
+  it('strips a letter label the model put in front, and measures the words without it', async () => {
+    const before = itemWithLongKey();
+    const plan = lengthPlan(before);
+    const words = 'Increase the timeout on the step so slow runs have time to finish, and record how long each one took';
+    expect(words.length).toBeGreaterThanOrEqual(plan.minChars);
+    mCreate.mockResolvedValueOnce(reply(`${plan.target}. ${words}`));
+    const out = await lengthenDistractor(before, plan);
+    expect(out.status).toBe('lengthened');
+    if (out.status !== 'lengthened') return;
+    expect(out.item.options.find((o) => o.key === plan.target)!.text).toBe(words);
+    expect(out.after).toBe(words.length);
+  });
+
   it('tries once more on a reply outside the bounds, then refuses', async () => {
     const before = itemWithLongKey();
     const plan = lengthPlan(before);

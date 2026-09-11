@@ -97,6 +97,9 @@ async function main(): Promise<void> {
   log(`weights         : ${weights}`);
   log(`blueprint source: ${blueprint.track.blueprint_source} (${blueprint.track.blueprint_version})`);
 
+  // Every revision this run creates, so approval can be scoped to exactly these.
+  const minted: { question_key: string; revision: number }[] = [];
+
   if (withItems) {
     const problems = CCAR_F_ALL_ITEMS.flatMap((i) =>
       validateRevision(i).map((p) => `${i.question_key}: ${p}`));
@@ -112,13 +115,13 @@ async function main(): Promise<void> {
         order: [['revision', 'DESC']],
       });
       if (!latest) {
-        await createDraftRevision(input);
+        minted.push(await createDraftRevision(input));
         created += 1;
         continue;
       }
       if (!revise) continue;               // never a second revision by accident
       if (sameContent(latest, input)) { unchanged += 1; continue; }
-      await createDraftRevision(input);    // mints revision N+1, as a DRAFT
+      minted.push(await createDraftRevision(input));    // mints revision N+1, as a DRAFT
       revised += 1;
     }
     if (revise) {
@@ -134,11 +137,15 @@ async function main(): Promise<void> {
   }
 
   if (approveAs) {
-    const drafts = await CertQuestionRevision.findAll({ where: { review_status: 'draft' } });
-    for (const d of drafts) {
+    // ONLY what this run minted. This used to approve every draft in the table,
+    // which on 2026-09-11 would have stamped 149 superseded drafts - revisions
+    // already replaced by a later approved one - with a real reviewer's name.
+    // A reviewer's name on a revision they never saw is a false audit trail.
+    for (const d of minted) {
       await setReviewStatus(d.question_key, d.revision, 'approved', approveAs);
     }
-    log(`approved        : ${drafts.length} revision(s) as "${approveAs}"`);
+    log(`approved        : ${minted.length} revision(s) minted by this run as "${approveAs}"`);
+    if (minted.length === 0) log('                  (nothing was minted, so nothing was approved)');
     if (/@[^@]*\.(test|invalid|example|local)$/i.test(approveAs)) {
       log('                  ^ a fixture reviewer — the admin queue will flag every one of these in red');
     }

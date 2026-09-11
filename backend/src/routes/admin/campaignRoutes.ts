@@ -87,6 +87,35 @@ router.get('/api/admin/campaigns/assignable-brands', requireAdmin, handleListAss
 router.get('/api/admin/campaigns/sequence-templates', requireAdmin, handleGetSequenceTemplates);
 router.get('/api/admin/campaigns/:id', requireAdmin, handleGetCampaign);
 router.patch('/api/admin/campaigns/:id', requireAdmin, handleUpdateCampaign);
+
+// Assign (or confirm) the campaign's canonical UTM slug. The composer needs one before it
+// can mint tracked links; until this endpoint existed nothing in the app wrote the column.
+const SlugParams = z.object({ id: z.string().uuid() });
+const SlugBody = z.object({ offer: z.string().trim().max(80).nullable().optional(), audience: z.string().trim().max(80).nullable().optional() }).strict();
+router.post('/api/admin/campaigns/:id/slug', requireAdmin, async (req: Request, res: Response) => {
+  const params = SlugParams.safeParse(req.params);
+  if (!params.success) return void res.status(400).json({ error: 'Campaign id must be a UUID', error_class: 'ValidationError' });
+  const body = SlugBody.safeParse(req.body ?? {});
+  if (!body.success) return void res.status(400).json({ error: 'Validation failed', error_class: 'ValidationError', details: body.error.flatten() });
+  try {
+    const { assignCampaignSlug } = await import('../../services/marketing/campaignSlugService');
+    const { WorkflowError } = await import('../../services/content/contentWorkflowService');
+    try {
+      const result = await assignCampaignSlug(params.data.id, body.data);
+      res.json({ campaign_id: result.campaign.id, utm_campaign_slug: result.slug, unchanged: result.unchanged });
+    } catch (err) {
+      if (err instanceof WorkflowError) return void res.status(err.status).json({ error: err.message, error_class: err.errorClass });
+      throw err;
+    }
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'marketing',
+      event: 'campaign_slug_failed', outcome: 'failure',
+      error_class: err?.name ?? 'Error', context: { campaignId: params.data.id, message: String(err?.message ?? err).slice(0, 200) },
+    }));
+    res.status(500).json({ error: 'Failed to assign the campaign slug', error_class: 'InternalError' });
+  }
+});
 router.delete('/api/admin/campaigns/:id', requireAdmin, handleDeleteCampaign);
 router.post('/api/admin/campaigns/:id/activate', requireAdmin, handleActivateCampaign);
 router.post('/api/admin/campaigns/:id/pause', requireAdmin, handlePauseCampaign);
