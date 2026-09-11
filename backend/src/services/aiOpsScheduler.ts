@@ -464,6 +464,21 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
     },
     label: 'Intelligence data retention (daily 03:15)',
   },
+  // Marketing Operations - the social publishing queue tick (T026). Every minute, because a
+  // scheduled post's minute is the whole point. Gated by the agent row's `enabled` flag
+  // (seeded FALSE - hold until reviewed) via instrumentCronJob, and by the global kill
+  // switch inside runDueJobs itself, checked before any claim and again before any
+  // external action. With every provider in handoff mode today a tick mints handoff
+  // packages for an operator; it publishes nothing to a network.
+  {
+    agentName: 'MarketingPublishingWorker',
+    hardcodedSchedule: '* * * * *',
+    dynamicImport: async () => {
+      const { runDueJobs } = await import('./publishing/publishingWorker');
+      await runDueJobs();
+    },
+    label: 'Marketing publishing queue tick (every minute)',
+  },
 ];
 
 /** Create + register the cron task for a standard registry entry. */

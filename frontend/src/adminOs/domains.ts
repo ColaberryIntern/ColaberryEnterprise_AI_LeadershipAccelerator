@@ -99,6 +99,10 @@ export const DOMAINS: readonly DomainDef[] = [
       '/admin/apollo',
       '/admin/import',
       '/admin/tracking-estate',
+      // Brand administration (T012/T013). The section row in adminNav's UNLISTED_PATH_SECTIONS
+      // landed without this one, and domains.test.ts caught it: a classified path with no
+      // domain is reachable and unplaced, the state the domain pass exists to end.
+      '/admin/brands',
     ],
   },
   {

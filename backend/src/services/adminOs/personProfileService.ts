@@ -187,24 +187,39 @@ function may(panel: string, sections: readonly string[]): boolean {
   return (PANEL_SECTIONS[panel] ?? []).some((s) => sections.includes(s));
 }
 
+/** Whether a caller with these sections may read a named panel. The one rule, exported for per-panel endpoints. */
+export function mayReadPanel(panel: string, sections: readonly string[]): boolean {
+  return may(panel, sections);
+}
+
+export interface PersonIdentity {
+  email: string;
+  name: string | null;
+  stage: LifecycleStage;
+  company: string | null;
+  title: string | null;
+  traced: boolean;
+}
+
 /**
- * Read one person's profile, or null when this caller may not see them.
+ * Who this is and whether the caller may see them — the gate every per-person
+ * read passes through, extracted so a panel-scoped endpoint (one message's
+ * content, say) enforces the SAME stage scope as the full profile without
+ * loading the full profile to do it.
  *
- * Returns null rather than an empty profile for someone outside scope: an empty
- * profile confirms the person EXISTS, which is itself a disclosure. "Not found"
- * and "not yours" must look identical from outside.
+ * Returns null for "not found" and "not yours" alike; see getPersonProfile.
  */
-export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfile | null> {
-  const email = normalizeEmail(query.email);
+export async function resolvePersonIdentity(
+  rawEmail: string,
+  sections: readonly string[],
+): Promise<PersonIdentity | null> {
+  const email = normalizeEmail(rawEmail);
   if (!email) return null;
 
-  const visibleStages = visibleStagesForSections(query.sections);
+  const visibleStages = visibleStagesForSections(sections);
   if (visibleStages.length === 0) return null;
 
-  const rows = await sequelize.query<{
-    email: string; name: string | null; stage: LifecycleStage;
-    company: string | null; title: string | null; traced: boolean;
-  }>(
+  const rows = await sequelize.query<PersonIdentity>(
     `SELECT COALESCE(l.email, e.email) AS email,
             COALESCE(e.name, l.name) AS name,
             COALESCE(e.company, l.company) AS company,
@@ -247,6 +262,20 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
   // Stage scope. A support identity must not reach a lead's profile by typing
   // the address, even though it may open the People surface.
   if (!visibleStages.includes(person.stage)) return null;
+  return person;
+}
+
+/**
+ * Read one person's profile, or null when this caller may not see them.
+ *
+ * Returns null rather than an empty profile for someone outside scope: an empty
+ * profile confirms the person EXISTS, which is itself a disclosure. "Not found"
+ * and "not yours" must look identical from outside.
+ */
+export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfile | null> {
+  const person = await resolvePersonIdentity(query.email, query.sections);
+  if (!person) return null;
+  const email = person.email;
 
   const profile: PersonProfile = {
     email: person.email,

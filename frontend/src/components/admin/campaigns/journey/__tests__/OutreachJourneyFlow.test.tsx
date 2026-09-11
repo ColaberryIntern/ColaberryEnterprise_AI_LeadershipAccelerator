@@ -195,7 +195,9 @@ describe('OutreachJourneyFlow — filters drive one population', () => {
   it('asks for all time and no brand on first load', async () => {
     await render(<OutreachJourneyFlow />);
     await settle();
-    expect(mockedApi.getCampaignGraph).toHaveBeenCalledWith('all', false, undefined);
+    // Fourth argument is the campaign scope added for the Campaign 360 Journey tab (T018);
+    // undefined here because the Campaigns page is not campaign-scoped.
+    expect(mockedApi.getCampaignGraph).toHaveBeenCalledWith('all', false, undefined, undefined);
   });
 
   it('refetches when the time window changes', async () => {
@@ -203,7 +205,7 @@ describe('OutreachJourneyFlow — filters drive one population', () => {
     await settle();
     await change(select('journey-time'), '30d');
     await settle();
-    expect(mockedApi.getCampaignGraph).toHaveBeenLastCalledWith('30d', false, undefined);
+    expect(mockedApi.getCampaignGraph).toHaveBeenLastCalledWith('30d', false, undefined, undefined);
   });
 
   it('offers only the windows the backend actually implements', async () => {
@@ -219,8 +221,17 @@ describe('OutreachJourneyFlow — filters drive one population', () => {
     await settle();
     await change(select('journey-brand'), 'b1');
     await settle();
-    expect(mockedApi.getCampaignGraph).toHaveBeenLastCalledWith('all', false, 'b1');
+    expect(mockedApi.getCampaignGraph).toHaveBeenLastCalledWith('all', false, 'b1', undefined);
     expect(text()).toContain('Brand: Colaberry Enterprise');
+  });
+
+  it('forwards a campaignId to the API and locks the brand selector to that campaign', async () => {
+    // The Campaign 360 Journey tab hands its campaign down; before this test nothing checked
+    // that the id reached the request (the T018 verifier's finding).
+    await render(<OutreachJourneyFlow campaignId="c0000000-0000-4000-8000-000000000001" />);
+    await settle();
+    expect(mockedApi.getCampaignGraph).toHaveBeenLastCalledWith('all', false, undefined, 'c0000000-0000-4000-8000-000000000001');
+    expect((select('journey-brand') as HTMLSelectElement).disabled).toBe(true);
   });
 
   it('keeps every brand option after one is selected', async () => {

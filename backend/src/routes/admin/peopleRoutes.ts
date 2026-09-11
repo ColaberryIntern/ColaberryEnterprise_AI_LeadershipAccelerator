@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { requireAdmin, adminAllowedSections } from '../../middlewares/authMiddleware';
 import { LIFECYCLE_STAGES } from '../../services/adminOs/lifecycle';
-import { getPeopleRoster } from '../../services/adminOs/peopleService';
+import { CAMPAIGN_LEAD_STATUSES, getPeopleRoster } from '../../services/adminOs/peopleService';
 import { hasAnyPersonScope } from '../../services/adminOs/personScope';
 
 /**
@@ -22,6 +22,11 @@ const querySchema = z.object({
   // Matches the drill-down contract's `untraced` filter, which the identity
   // coverage metric opens into.
   untraced: z.coerce.boolean().optional(),
+  // The Campaign 360 KPI drill-down: campaign id plus a comma list of campaign_leads statuses.
+  campaign: z.string().uuid().optional(),
+  status: z.string().max(80).optional()
+    .transform((v) => (v ? v.split(',').map((s) => s.trim()).filter(Boolean) : undefined))
+    .pipe(z.array(z.enum(CAMPAIGN_LEAD_STATUSES)).optional()),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 });
@@ -52,6 +57,8 @@ router.get('/api/admin/people', requireAdmin, async (req: Request, res: Response
       search: parsed.data.search,
       stage: parsed.data.stage,
       untracedOnly: parsed.data.untraced === true,
+      campaignId: parsed.data.campaign,
+      campaignStatuses: parsed.data.status,
       limit: parsed.data.limit,
       offset: parsed.data.offset,
     });

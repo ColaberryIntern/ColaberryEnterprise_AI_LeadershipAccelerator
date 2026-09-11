@@ -132,6 +132,17 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'Evaluates behavioral trigger rules and automatically enrolls qualifying leads in behavior-triggered campaigns. Creates CampaignLead records and queues initial outreach actions.',
   },
   {
+    agent_name: 'MandrillOpenClickPoll',
+    agent_type: 'scheduled_processor',
+    module: 'schedulerService',
+    source_file: 'backend/src/services/mandrillEngagementPoll.ts',
+    trigger_type: 'cron',
+    schedule: '5,35 * * * *',
+    category: 'outbound',
+    description:
+      'Mandrill open/click poll, the backstop for webhooks the school system consumes first. Every 30 minutes asks Mandrill for campaign-tagged mail (X-MC-Tags campaign-sequence) over a two-day window at the API cap of 1,000, attributes each open and click to the SENT EMAIL WHOSE SUBJECT MATCHES (never the most recent send - 40% of rows were mis-pinned before 2026-09-11), and records unmatched opens against the lead with no campaign. Dedup on (lead, outcome, subject, day). Registered here on 2026-09-11 so its runs, errors and misses are visible to cron-health alerting; until then it ran untracked.',
+  },
+  {
     agent_name: 'PageEventCleanup',
     agent_type: 'maintenance',
     module: 'schedulerService',
@@ -2892,6 +2903,31 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'close_bpos_tickets_on_capability_verified_or_deleted',
     ],
   },
+  {
+    agent_name: 'MarketingPublishingWorker',
+    agent_type: 'scheduled_processor',
+    module: 'publishing',
+    source_file: 'backend/src/services/publishing/publishingWorker.ts',
+    trigger_type: 'cron',
+    schedule: '* * * * *',
+    category: 'outbound',
+    // Seeded DISABLED on purpose (the hold-until-reviewed gate other cron resolvers use):
+    // findOrCreate() honours `enabled` only at first creation, so this ships off and is
+    // turned on by one documented production UPDATE once the queue has been watched on
+    // dev. Even when on, every provider currently resolves to the Handoff adapter - the
+    // tick produces packages for a person and never posts to a network - and the global
+    // kill switch halts it before any claim.
+    enabled: false,
+    description:
+      'Takes due rows off publishing_jobs (T005 queue) and hands each to its provider ' +
+      'adapter: DryRun in dev, Handoff for every provider without an approved app and a ' +
+      'connected account, which today is all of them. Records a platform_delivery_events ' +
+      'trail and an external_publications row per receipt, classifies failures as ' +
+      'permanent (dead-letter, no retry) or transient (exponential backoff with jitter), ' +
+      'and reconciles the content item to published / partially_published / ' +
+      'publish_failed. Checks launchSafety.isKillSwitchActive() before claiming and again ' +
+      'before every external action. No LLM.',
+  },
 ];
 
 /**
@@ -3021,7 +3057,7 @@ export async function seedAgentRegistry(): Promise<void> {
 
 const AGENT_GROUP_MAP: Record<string, string[]> = {
   campaign_ops: [
-    'CampaignHealthScanner', 'CampaignRepairAgent', 'CampaignQAAgent',
+    'CampaignHealthScanner', 'CampaignRepairAgent', 'CampaignQAAgent', 'MandrillOpenClickPoll',
     'CampaignSelfHealingAgent', 'ContentOptimizationAgent', 'ConversationOptimizationAgent',
   ],
   lead_intelligence: [

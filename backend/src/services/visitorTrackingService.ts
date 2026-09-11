@@ -1,6 +1,7 @@
 import { Op } from 'sequelize';
 import { Visitor, VisitorSession, PageEvent, Lead, Activity, EventLedger } from '../models';
 import { env } from '../config/env';
+import { extractAttributionFromUrl } from './marketing/clickClassification';
 import { categorizeForBrand } from './pageCategoryMaps';
 
 /**
@@ -218,6 +219,29 @@ export async function getOrCreateSession(
     entry_page: pagePath,
     exit_page: pagePath,
     referrer_url: data.referrer_url || null,
+    // Attribution read from the LANDING PAGE URL, server-side, rather than from separate body
+    // fields. The UTMs and click IDs are already in `page_url` - the ad platform put them
+    // there - so parsing here means adopting a new click ID is a backend change alone, with
+    // no frontend release and no wait for cached tracker copies to refresh.
+    //
+    // That is not hypothetical: the tracker has always sent utm_source/campaign/medium as body
+    // fields and never utm_term/utm_content, so those two have been unavailable server-side for
+    // as long as the tracker has existed, despite being present in the URL of every click that
+    // carried them.
+    //
+    // Body values still win when present, so nothing that works today changes behaviour.
+    ...(() => {
+      const a = extractAttributionFromUrl(data.page_url);
+      return {
+        utm_content: a.utm_content,
+        utm_term: a.utm_term,
+        fbclid: a.fbclid,
+        gclid: a.gclid,
+        msclkid: a.msclkid,
+        ttclid: a.ttclid,
+        click_ids: Object.keys(a.click_ids).length > 0 ? a.click_ids : null,
+      };
+    })(),
     utm_source: data.utm_source || null,
     utm_campaign: data.utm_campaign || null,
     utm_medium: data.utm_medium || null,

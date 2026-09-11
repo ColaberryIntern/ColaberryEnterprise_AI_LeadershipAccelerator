@@ -5,6 +5,31 @@ export type CampaignType = 'warm_nurture' | 'cold_outbound' | 're_engagement' | 
 export type CampaignStatus = 'draft' | 'active' | 'paused' | 'completed';
 export type CampaignMode = 'standard' | 'autonomous';
 export type CampaignChannel = 'email' | 'sms' | 'social' | 'paid_search' | 'paid_social' | 'direct_mail' | 'referral' | 'organic';
+/**
+ * Where a campaign sits in the funnel. Drives objective-aware ranking: an awareness
+ * campaign must not be ranked on cost-per-lead, and an acquisition campaign must not be
+ * ranked on likes.
+ *
+ * THE ARRAY IS THE SOURCE OF TRUTH and the union is derived from it, rather than the two
+ * being written out separately and kept in step by hand. That ordering is deliberate:
+ *
+ *  - `as const` makes this a tuple of string literals, which is what `z.enum()` requires. A
+ *    `readonly CampaignFunnelStage[]` - what this was - cannot be passed to `z.enum()` at all,
+ *    so the request contract had to restate the five values, and a sixth stage added here
+ *    would have been silently rejected by a validator nobody remembered to update.
+ *  - Deriving the type means the model, the DDL check and the Zod enum cannot disagree. There
+ *    is nothing to assert, because there is only one list.
+ */
+export const CAMPAIGN_FUNNEL_STAGES = [
+  'awareness',
+  'consideration',
+  'conversion',
+  'retention',
+  'advocacy',
+] as const;
+
+export type CampaignFunnelStage = (typeof CAMPAIGN_FUNNEL_STAGES)[number];
+
 export type CampaignApprovalStatus = 'draft' | 'pending_approval' | 'approved' | 'live' | 'paused' | 'completed';
 
 interface CampaignAttributes {
@@ -44,8 +69,30 @@ interface CampaignAttributes {
   organization_id?: string | null;
   sender_profile_id?: string | null;
   created_by?: string;
-  capability_id?: string;
-  mode_override?: string;
+  /**
+   * Both nullable in the database (`allowNull: true`), and `mode_override`'s null is
+   * meaningful — it means "inherit from project", not "unset". Typed `| null` to match,
+   * consistent with tenant_id/brand_id/organization_id above. Previously typed as bare
+   * `string`, which was one half of the defect where neither column appeared in the class
+   * `declare` block at all.
+   */
+  capability_id?: string | null;
+  mode_override?: string | null;
+  // --- Marketing Operations planning + taxonomy (ensureMarketingCampaignSchema) ---
+  funnel_stage?: CampaignFunnelStage | null;
+  /** Accountable owner. Distinct from created_by, which records who typed it in. */
+  owner_admin_id?: string | null;
+  /** Required approver. Distinct from approved_by, which records who already approved. */
+  approver_admin_id?: string | null;
+  planned_start_at?: Date | null;
+  planned_end_at?: Date | null;
+  /** Stable tracking identity, unique per tenant. Never the freely-editable display name. */
+  utm_campaign_slug?: string | null;
+  /** Typed targets. The legacy `goals` TEXT column is free prose and stays untouched. */
+  goals_json?: Record<string, any> | null;
+  parent_campaign_id?: string | null;
+  archived_at?: Date | null;
+  archived_reason?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -87,6 +134,22 @@ class Campaign extends Model<CampaignAttributes> implements CampaignAttributes {
   declare organization_id: string | null;
   declare sender_profile_id: string | null;
   declare created_by: string;
+  // capability_id and mode_override were present in CampaignAttributes and in .init() but
+  // missing here, so `campaign.capability_id` did not resolve through the typed model and
+  // read as undefined. backend/CLAUDE.md requires all three declarations to agree.
+  declare capability_id: string | null;
+  declare mode_override: string | null;
+  // --- Marketing Operations planning + taxonomy ---
+  declare funnel_stage: CampaignFunnelStage | null;
+  declare owner_admin_id: string | null;
+  declare approver_admin_id: string | null;
+  declare planned_start_at: Date | null;
+  declare planned_end_at: Date | null;
+  declare utm_campaign_slug: string | null;
+  declare goals_json: Record<string, any> | null;
+  declare parent_campaign_id: string | null;
+  declare archived_at: Date | null;
+  declare archived_reason: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -263,6 +326,52 @@ Campaign.init(
     mode_override: {
       type: DataTypes.STRING(20),
       allowNull: true,  // null = inherit from project
+    },
+    // --- Marketing Operations planning + taxonomy ---
+    // Columns must match backend/src/db/ensureMarketingCampaignSchema.ts EXACTLY.
+    // All nullable: `campaigns` is a live table and the DDL adds nothing NOT NULL.
+    funnel_stage: {
+      type: DataTypes.STRING(30),
+      allowNull: true,
+    },
+    owner_admin_id: {
+      // No `references` on purpose. The DDL adds a bare UUID: adding an FK to a live table
+      // with existing rows risks a validation failure at boot, and the ALTER only warns,
+      // which would leave the column silently absent.
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    approver_admin_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    planned_start_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    planned_end_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    utm_campaign_slug: {
+      type: DataTypes.STRING(200),
+      allowNull: true,
+    },
+    goals_json: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    parent_campaign_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    archived_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    archived_reason: {
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
     created_at: {
       type: DataTypes.DATE,

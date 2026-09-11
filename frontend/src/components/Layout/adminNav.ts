@@ -213,6 +213,14 @@ export const UNLISTED_PATH_SECTIONS: ReadonlyArray<readonly [string, string]> = 
   ['/admin/tracking-estate', 'campaigns'],
   // Executive summary — the Command Center's own job, so the landing section.
   ['/admin/executive-narrative', 'dashboard'],
+  // Brand administration. Registered BEFORE its page exists (that is T013), because the
+  // classification and the page are separate obligations and only one of them is urgent:
+  // `mgmtSectionGate` already maps `/api/admin/brands` to 'campaigns', and while this side
+  // returns null the two gates disagree — ProtectedRoute computes
+  // `allowed = section ? canSection(section) : !isScopedRep`, so a scoped identity is bounced
+  // off a page the API would have served, with nothing explaining why. Caught by
+  // adminNavMarketing.test.ts asserting the two sides agree, not by review.
+  ['/admin/brands', 'campaigns'],
   // Audit ledger. Classified from what it QUERIES (event_type, actor,
   // entity_type, entity_id, payload) rather than from its name — it is a
   // system audit trail, not a marketing events page.

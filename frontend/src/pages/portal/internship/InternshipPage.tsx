@@ -177,28 +177,11 @@ const InternshipPage: React.FC = () => {
 
         {error && <div className="ip-alert" role="alert">{error}</div>}
 
-        {/* Requirements. Shown on the overview per the brief, and repeated later
-            in the interview, the summary and the activation checklist. */}
-        <section className="ip-card" aria-labelledby="ip-req">
-          <h2 id="ip-req">Before you apply</h2>
-          <ul className="ip-list">
-            <li>You can commit at least <strong>25 hours a week</strong> and attend the required meetings.</li>
-            <li>You are <strong>not currently employed full time</strong>.</li>
-            <li>
-              You have, or will get, <strong>your own Claude Code account</strong> and
-              {' '}<strong>your own API key with billing available</strong>. These are required for
-              the class and the internship, and you pay for them directly — roughly $30/month.
-            </li>
-            <li>
-              The internship is included with membership: <strong>$149/month billed annually</strong>,
-              or <strong>$199 month to month</strong>. It is waived if you already pay Colaberry.
-            </li>
-          </ul>
-          <p className="ip-warn">
-            <strong>We will never ask for your password or API key.</strong> There is no field on this
-            site to enter one, and no member of Colaberry staff will ask you for it. Keep those secret.
-          </p>
-        </section>
+        {/* Two columns, matching Today and Classroom: the application flow on the
+            left, the requirements in a sticky rail on the right. The rail collapses
+            below the flow on a narrow screen (see .te-grid at max-width:1300px). */}
+        <div className="te-grid ip-layout">
+          <div className="ip-flow">
 
         {showIntake && (
           <form className="ip-card" onSubmit={submitIntake} aria-labelledby="ip-intake">
@@ -441,6 +424,33 @@ const InternshipPage: React.FC = () => {
             </p>
           </section>
         )}
+          </div>
+
+          <aside className="te-side">
+            {/* Requirements. Shown on the overview per the brief, and repeated
+                later in the interview, the summary and the activation checklist. */}
+            <section className="ip-card ip-railcard" aria-labelledby="ip-req">
+              <h2 id="ip-req">Before you apply</h2>
+              <ul className="ip-list">
+                <li>You can commit at least <strong>25 hours a week</strong> and attend the required meetings.</li>
+                <li>You are <strong>not currently employed full time</strong>.</li>
+                <li>
+                  You have, or will get, <strong>your own Claude Code account</strong> and
+                  {' '}<strong>your own API key with billing available</strong>. These are required for
+                  the class and the internship, and you pay for them directly — roughly $30/month.
+                </li>
+                <li>
+                  The internship is included with membership: <strong>$149/month billed annually</strong>,
+                  or <strong>$199 month to month</strong>. It is waived if you already pay Colaberry.
+                </li>
+              </ul>
+              <p className="ip-warn">
+                <strong>We will never ask for your password or API key.</strong> There is no field on this
+                site to enter one, and no member of Colaberry staff will ask you for it. Keep those secret.
+              </p>
+            </section>
+          </aside>
+        </div>
       </div>
     </PortalShell>
   );

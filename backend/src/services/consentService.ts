@@ -14,6 +14,7 @@
  */
 import { Op, QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
+import { normalizePhone } from '../utils/phone';
 import ConsentRecord from '../models/ConsentRecord';
 import type {
   ConsentChannel,
@@ -92,44 +93,17 @@ export function normalizeEmail(email?: string | null): string | null {
 }
 
 /**
- * E.164-ish key for a consent row.
- *
- * THE BUG THIS FIXES: the previous version prefixed '+' to the bare digits with
- * no country code, so `214-555-0100` keyed as `+2145550100` while
- * `+1 214-555-0100` keyed as `+12145550100`. The same person, two keys — and a
- * consent lookup finds a row only under the key it was written with. Shipped
- * code never noticed because a write and its lookup normalize the same string
- * inside one request; it would have surfaced the first time someone consented on
- * one form and was checked from another.
- *
- * The rules, in order:
- *  - the caller wrote '+', so they stated the country code: trust it
- *  - 10 bare digits: assume US/CA (+1). This IS an assumption, and it is the
- *    right one for a Texas business whose forms collect US mobiles — but it
- *    would key a bare 10-digit foreign number wrongly. A caller who knows better
- *    should pass the '+'.
- *  - 11 bare digits starting 1: a US number written without the plus
- *  - anything else: prefix '+' unchanged, rather than guess
+ * normalizePhone lives in utils/phone now, so callers that must not pull in this
+ * module's database graph (synthflowService, dialing a voice call) can share it.
+ * Re-exported here because consent code and its tests import it from this module.
  *
  * MIGRATION FOOTPRINT, measured on production 2026-08-27: consent_records has
  * exactly ONE phone-keyed row and it is already `+1##########`. There are ZERO
  * `missing_country_code` rows and ZERO phone-keyed unsubscribes — every one of
  * the 361 suppressions is email-keyed. So this changes how nothing existing is
- * found. It was scoped as a migration that could silently un-suppress people;
- * the query showed there is nothing to un-suppress. Re-measure before assuming
- * that still holds.
+ * found. Re-measure before assuming that still holds.
  */
-export function normalizePhone(phone?: string | null): string | null {
-  if (!phone) return null;
-  const trimmed = String(phone).trim();
-  const statedCountryCode = trimmed.startsWith('+');
-  const digits = trimmed.replace(/[^\d]/g, '');
-  if (digits.length < 7) return null;
-  if (statedCountryCode) return `+${digits}`;
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
-  return `+${digits}`;
-}
+export { normalizePhone };
 
 interface SubjectKey {
   subject_type: ConsentSubjectType;

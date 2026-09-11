@@ -38,7 +38,7 @@ import { setReviewStatus } from '../../services/certPrep/certQuestionBankService
 import { scoreItem } from '../../services/certPrep/certQuestionRubric';
 import { setMappingState, listPendingForReview } from '../../services/certPrep/certEvidenceService';
 import CertQuestionRevision from '../../models/CertQuestionRevision';
-import { Op } from 'sequelize';
+import { Op, literal } from 'sequelize';
 
 const router = Router();
 
@@ -140,11 +140,39 @@ router.get('/api/admin/cert-prep/questions', requireAdmin, async (req, res, next
   if (!gate(res)) return;
   try {
     const status = req.query.status ? String(req.query.status) : 'draft';
+    // Superseded revisions are hidden by DEFAULT. After the 2026-09-10 approval
+    // run the draft queue held 149 rows and not one of them was the current
+    // version of anything — every one had an approved newer revision that is what
+    // students actually receive. A queue that lists 149 items when the true
+    // number needing judgement is zero has stopped being a work list.
+    //
+    // Worse than useless: approving one would make PRE-REWRITE text servable
+    // again, because the serving path takes the highest APPROVED revision. That
+    // is exactly how CCARF-A1 ended up serving its old stem.
+    //
+    // `?include_superseded=1` still returns them, because they are history rather
+    // than rubbish and someone will eventually need to look.
+    const includeSuperseded = String(req.query.include_superseded ?? '') === '1';
+    const latestOnly = {
+      revision: {
+        [Op.eq]: literal(
+          '(SELECT MAX(v.revision) FROM cert_question_revisions v '
+          + 'WHERE v.question_key = "CertQuestionRevision"."question_key")',
+        ),
+      },
+    };
     const rows = await CertQuestionRevision.findAll({
-      where: { review_status: status },
+      where: includeSuperseded
+        ? { review_status: status }
+        : { review_status: status, ...latestOnly },
       order: [['created_at', 'ASC']],
       limit: 200,
     });
+    // Counted, not inferred. The queue says how many it is not showing, because
+    // hiding rows and saying nothing is the same failure as listing rows nobody
+    // needs to read — the reader cannot tell what they are looking at either way.
+    const totalForStatus = await CertQuestionRevision.count({ where: { review_status: status } });
+    const supersededHidden = includeSuperseded ? 0 : totalForStatus - rows.length;
     const questions = rows.map((row) => ({
       // Spread the PLAIN row, never the Sequelize instance: spreading an instance
       // drops every column, which this repo has been bitten by before.
@@ -160,7 +188,7 @@ router.get('/api/admin/cert-prep/questions', requireAdmin, async (req, res, next
         distractor_rationales: row.distractor_rationales ?? null,
       }),
     }));
-    res.json({ questions });
+    res.json({ questions, superseded_hidden: supersededHidden });
   } catch (err) { fail(res, err, next); }
 });
 
