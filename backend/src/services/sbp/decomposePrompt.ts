@@ -47,6 +47,18 @@ ANTI-INVENTION RULES (violating these makes the plan worse than useless):
 - If the brief calls something a selling point, a guarantee, or "has to be real", it is priority
   'must', not 'should'.
 
+TRACEABILITY - say what caused each requirement:
+- Every requirement carries "from_dimensions": the canonical parts of what the owner told you
+  that produced it. Use only these names: problem, desired_outcome, actors, current_workflow,
+  inputs, outputs, data, systems, integrations, pain_points, exceptions, approval_points,
+  security_context, ai_opportunities, human_only_decisions, assumptions, unknowns, constraints,
+  success_definition, delivery_profile.
+- Cite ONLY what they actually said. An empty array is the correct and expected answer for a
+  requirement that follows from good practice rather than from anything in the inputs, and it is
+  more useful to us than a plausible-looking citation.
+- Do not cite a dimension to justify a requirement after the fact. If you would not be able to
+  point at the sentence, cite nothing.
+
 REQUIREMENT KINDS - read this carefully, it is the most commonly got wrong:
 - Use CONSTRAINT for an implementation constraint: a named technology, vendor, datastore or
   protocol the system must use ("must use PaySimple for payments", "must store data in Postgres",

@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { runtimeApi, PublicRitual, RitualTile, RitualField, RitualValues } from '../../pages/portal/runtime/runtimeApi';
 import CommunityThreadPanel from './CommunityThreadPanel';
+import { checkPost, MIN_POST_WORDS } from './contributionQuality';
+import { emitPointsEarned } from '../../services/pointsFx';
+
+/** Mirrors POINTS_PER_POST in backend/src/services/communityService.ts. The
+ *  badge advertises this; the celebration uses the server's actual award. */
+const POST_POINTS = 5;
 
 /**
  * PeerWinsPanel — the bespoke, self-contained Community Ritual experience for the
@@ -72,6 +78,7 @@ const PeerWinsPanel: React.FC<Props> = ({ cardId, preview }) => {
   // thread. Kept here rather than opening a second drawer so the way back is a
   // single obvious control and the wall's loaded state survives the round trip.
   const [thread, setThread] = useState<{ id: string; name: string } | null>(null);
+  const [earnedBurst, setEarnedBurst] = useState<number | null>(null);
 
   const load = React.useCallback(async () => {
     if (preview) { setLoading(false); return; }
@@ -103,7 +110,13 @@ const PeerWinsPanel: React.FC<Props> = ({ cardId, preview }) => {
   const shipped = wall.length;
   const setF = (k: string, v: string) => setForm((m) => ({ ...m, [k]: v }));
   const requiredMet = ritual ? ritual.fields.filter((f) => f.required).every((f) => (form[f.key] || '').trim()) : false;
-  const canPost = requiredMet && !saving;
+  // The same thoughtfulness bar the server applies, measured across the
+  // student's OWN answers (link fields excluded — a URL is not prose).
+  const answered = ritual
+    ? ritual.fields.filter((f) => f.kind !== 'link').map((f) => form[f.key] || '').filter(Boolean).join(' ')
+    : '';
+  const postQuality = checkPost(answered);
+  const canPost = requiredMet && postQuality.ok && !saving;
 
   const submit = async () => {
     if (!canPost || !ritual) return;
@@ -112,8 +125,16 @@ const PeerWinsPanel: React.FC<Props> = ({ cardId, preview }) => {
     try {
       const values: RitualValues = {};
       for (const f of ritual.fields) { const raw = (form[f.key] || '').trim(); if (raw) values[f.key] = raw; }
-      const { post, created } = await runtimeApi.postRitual(cardId, values);
+      const { post, created, points_awarded } = await runtimeApi.postRitual(cardId, values);
       setMyPost(post); setEditing(false); if (created) setJustPosted(true);
+      // Celebrate the server's actual award (0 on an edit, or clamped once the
+      // daily community cap is hit) — never the nominal value.
+      const earned = typeof points_awarded === 'number' ? points_awarded : 0;
+      emitPointsEarned(earned);
+      if (earned > 0) {
+        setEarnedBurst(earned);
+        window.setTimeout(() => setEarnedBurst(null), 3000);
+      }
       // Re-load so the wall order, counts, and debate split stay authoritative.
       load();
     } catch (e: any) {
@@ -140,9 +161,9 @@ const PeerWinsPanel: React.FC<Props> = ({ cardId, preview }) => {
 
   const styleBlock = (
     <style>{`
-      .pw{--pw-accent:#367895;--pw-gold:#E8920C;--pw-ink:#1A1A1A;--pw-muted:#6B6B6B;--pw-line:#E4E4E3;--pw-panel:#FFFFFF;--pw-sunken:#F6F7F8;font-family:inherit;color:var(--pw-ink)}
-      @media (prefers-color-scheme:dark){.pw{--pw-ink:#FFFFFF;--pw-muted:#B4B4B4;--pw-line:rgba(255,255,255,.14);--pw-panel:#141414;--pw-sunken:#1C1C1C}}
-      :root[data-theme="dark"] .pw,.tl-de[data-theme="dark"] .pw{--pw-ink:#FFFFFF;--pw-muted:#B4B4B4;--pw-line:rgba(255,255,255,.14);--pw-panel:#141414;--pw-sunken:#1C1C1C}
+      .pw{--pw-accent:#367895;--pw-gold:#E8920C;--pw-cherry:#FB2832;--pw-cherry-deep:#C20E1E;--pw-leaf:#3F7A2E;--pw-ink:#1A1A1A;--pw-muted:#6B6B6B;--pw-line:#E4E4E3;--pw-panel:#FFFFFF;--pw-sunken:#F6F7F8;font-family:inherit;color:var(--pw-ink)}
+      @media (prefers-color-scheme:dark){.pw{--pw-ink:#FFFFFF;--pw-muted:#B4B4B4;--pw-line:rgba(255,255,255,.14);--pw-panel:#141414;--pw-sunken:#1C1C1C;--pw-cherry:#FF4A52;--pw-cherry-deep:#E5121D;--pw-leaf:#7FC06A}}
+      :root[data-theme="dark"] .pw,.tl-de[data-theme="dark"] .pw{--pw-ink:#FFFFFF;--pw-muted:#B4B4B4;--pw-line:rgba(255,255,255,.14);--pw-panel:#141414;--pw-sunken:#1C1C1C;--pw-cherry:#FF4A52;--pw-cherry-deep:#E5121D;--pw-leaf:#7FC06A}
       .tl-de[data-theme="light"] .pw,:root[data-theme="light"] .pw{--pw-ink:#1A1A1A;--pw-muted:#6B6B6B;--pw-line:#E4E4E3;--pw-panel:#FFFFFF;--pw-sunken:#F6F7F8}
       .pw-head{margin-bottom:14px}
       .pw-eyebrow{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--pw-accent);margin-bottom:6px;display:flex;align-items:center;gap:7px}
@@ -163,9 +184,15 @@ const PeerWinsPanel: React.FC<Props> = ({ cardId, preview }) => {
       .pw-choice{border:1.5px solid var(--pw-line);border-radius:10px;padding:9px 15px;font-size:13px;font-weight:700;background:var(--pw-panel);color:var(--pw-muted);cursor:pointer}
       .pw-choice.sel{border-color:var(--pw-accent);color:var(--pw-accent);background:color-mix(in srgb,var(--pw-accent) 10%,transparent)}
       .pw-hint{font-size:11.5px;color:var(--pw-muted);margin:4px 2px 0}
-      .pw-post{width:100%;margin-top:4px;padding:13px;border:none;border-radius:12px;background:var(--pw-accent);color:#fff;font-size:15px;font-weight:750;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+      .pw-post{width:100%;margin-top:4px;padding:13px;border:none;border-radius:12px;background:var(--pw-cherry);color:#fff;font-size:15px;font-weight:750;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+      .pw-post:hover:not(:disabled){background:var(--pw-cherry-deep)}
       .pw-post:disabled{opacity:.45;cursor:not-allowed}
-      .pw-pts{font-size:12px;font-weight:800;background:rgba(255,255,255,.22);padding:2px 8px;border-radius:999px}
+      .pw-pts{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;font-weight:800;background:rgba(255,255,255,.24);padding:2px 8px;border-radius:999px}
+      .pw-need{font-size:12px;font-weight:600;color:var(--pw-gold);margin:8px 2px 0;text-align:center}
+      .pw-wc{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:800;opacity:.85}
+      .pw-burst{margin:9px 2px 0;text-align:center;font-size:13.5px;font-weight:750;color:var(--pw-leaf);animation:pw-pop .34s ease-out}
+      @keyframes pw-pop{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+      @media (prefers-reduced-motion:reduce){.pw-burst{animation:none}}
       .pw-err{color:#C20E1E;font-size:12.5px;margin-top:8px;text-align:center}
       .pw-mine{border:1.5px solid var(--pw-accent);border-radius:16px;padding:14px 16px;margin:16px 0 20px;background:linear-gradient(180deg,color-mix(in srgb,var(--pw-accent) 9%,transparent),transparent)}
       .pw-mine-top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
@@ -264,9 +291,17 @@ const PeerWinsPanel: React.FC<Props> = ({ cardId, preview }) => {
       ))}
       <button type="button" className="pw-post" disabled={!canPost} onClick={submit}>
         {saving ? 'Posting…' : myPost ? 'Update my post' : ritual.postCta}
-        {!saving && !myPost && <span className="pw-pts">+ points</span>}
+        {/* The real number, not a vague "+ points". An edit re-awards nothing,
+            so the badge is hidden once a post exists. */}
+        {!saving && !myPost && <span className="pw-pts">+{POST_POINTS}</span>}
       </button>
       {error && <div className="pw-err">{error}</div>}
+      {postQuality.hint && requiredMet && (
+        <div className="pw-need">{postQuality.hint} <span className="pw-wc">{postQuality.words}/{MIN_POST_WORDS} words</span></div>
+      )}
+      {earnedBurst !== null && (
+        <div className="pw-burst" role="status">🎉 Posted to the wall — you earned +{earnedBurst} {earnedBurst === 1 ? 'point' : 'points'}</div>
+      )}
       <div className="pw-hint">Posts to the cohort wall (auto-tagged Week {ritual.week}) and your Community feed. Optional.</div>
     </div>
   );

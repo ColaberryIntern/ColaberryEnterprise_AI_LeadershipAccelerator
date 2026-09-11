@@ -28,6 +28,17 @@ export interface BrandAttributes {
   /** Key into the application's theme registry. Themes themselves are app-owned. */
   default_theme_key?: string | null;
   support_email?: string | null;
+  /**
+   * The journey program this brand's entry points default to (T203).
+   *
+   * DECLARED HERE BECAUSE SEQUELIZE ONLY TOUCHES ATTRIBUTES A MODEL KNOWS
+   * ABOUT. The column is added by `ensureGrowthJourneySchema`, and omitting it
+   * from this model would not raise anything - reads would return `undefined`
+   * and writes would be silently dropped. That exact failure already happened
+   * once in this repo, on the tenancy columns, and is documented in
+   * `db/__tests__/ensureMultiTenantSchema.modelParity.test.ts`.
+   */
+  default_journey_program_id?: string | null;
   metadata?: Record<string, any> | null;
   created_at?: Date;
   updated_at?: Date;
@@ -42,6 +53,7 @@ class Brand extends Model<BrandAttributes> implements BrandAttributes {
   declare default_public_url: string | null;
   declare default_theme_key: string | null;
   declare support_email: string | null;
+  declare default_journey_program_id: string | null;
   declare metadata: Record<string, any> | null;
   declare created_at: Date;
   declare updated_at: Date;
@@ -83,6 +95,11 @@ Brand.init(
     support_email: {
       type: DataTypes.STRING(255),
       allowNull: true,
+    },
+    default_journey_program_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: 'journey_programs', key: 'id' },
     },
     metadata: {
       type: DataTypes.JSONB,

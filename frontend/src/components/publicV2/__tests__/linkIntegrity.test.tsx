@@ -196,14 +196,28 @@ describe('link integrity — the specific paths that were broken', () => {
     expect(html).not.toMatch(/class="cbv2-brand" href="\/"/);
   });
 
-  it('homepage hero CTAs resolve', () => {
+  /**
+   * THE NEGATIVE IS THE WHOLE TEST NOW.
+   *
+   * This used to also assert `href="/platform"` and `href="/lab"` were present, and it
+   * broke the day the hero CTAs deliberately became "Open the Free Company Workspace"
+   * (/try) and "Talk to an Architect" (/contact) — both of which resolve, verified live.
+   *
+   * Naming which two CTAs the hero has is exactly the mistake this file was written to
+   * correct: its header records that the original outage happened because tests "asserted
+   * that links RENDERED and that their labels were right -- never that their destinations
+   * existed". HomeV2 is already in PAGES, so the exhaustive walk above proves every href it
+   * renders resolves, whatever marketing puts in the hero next.
+   *
+   * `/opportunity-lab` stays, because that one is history rather than copy: it is a path
+   * that never existed, and a regression to it would resolve to nothing.
+   */
+  it('the homepage never links to the path that never existed', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter initialEntries={['/']}>
         <HomeV2 />
       </MemoryRouter>,
     );
-    expect(html).toContain('href="/platform"');
-    expect(html).toContain('href="/lab"');
     expect(html).not.toContain('href="/opportunity-lab"');
   });
 });

@@ -121,8 +121,16 @@ describe('compact portfolio row — visible without expanding', () => {
       data: { projects: [project(), project({ project_id: 'p2', name: 'Ambit' }), project({ project_id: 'p3', name: 'Ledgerly' })] },
     });
     await renderView();
-    expect(mockGet).toHaveBeenCalledTimes(1);
-    expect(String(mockGet.mock.calls[0][0])).toContain('/api/admin/projects/delivery');
+    // The board now makes TWO fixed requests -- the delivery list and the
+    // without-project panel (#2420) -- and that is still not an N+1. What this
+    // guard protects is that the count does not GROW with the number of
+    // projects, so assert the delivery list is fetched exactly once and nothing
+    // per-project is fetched, rather than pinning a total that a legitimate
+    // second panel would break.
+    const urls = mockGet.mock.calls.map((c) => String(c[0]));
+    expect(urls.filter((u) => u.includes('/api/admin/projects/delivery'))).toHaveLength(1);
+    expect(urls.some((u) => u.includes('/gantt') || u.includes('/evidence'))).toBe(false);
+    expect(mockGet.mock.calls.length).toBeLessThanOrEqual(2);
   });
 
   it('never renders the case score as an unexplained number', async () => {

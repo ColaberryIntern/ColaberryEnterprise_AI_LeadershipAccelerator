@@ -134,7 +134,19 @@ export interface StartBuildInput {
  * better than a build that hangs, so every failure here - slow, thrown, or
  * missing - records `null`, which already means "we do not know".
  */
-const TRUTH_REVISION_TIMEOUT_MS = 2_000;
+/*
+ * 750ms, lowered from 2000.
+ *
+ * NOT because it fixed a test - it did not. The auto-publish suite fails under
+ * parallel load on a contended machine with or without this read, verified by
+ * stashing the change and reproducing the same single failure. The number came
+ * down because looking at it honestly, two seconds was never a budget for the
+ * happy path: this is one indexed lookup of one row, milliseconds when the
+ * database is healthy. Two seconds only ever bought time for an unhealthy one,
+ * and spending that much of a student's build waiting on a value we are
+ * explicitly willing to lose is the wrong trade.
+ */
+const TRUTH_REVISION_TIMEOUT_MS = 750;
 
 async function readTruthRevision(projectId: string): Promise<number | null> {
   let timer: NodeJS.Timeout | undefined;
