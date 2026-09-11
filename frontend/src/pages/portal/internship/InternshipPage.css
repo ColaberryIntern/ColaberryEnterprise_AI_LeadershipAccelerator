@@ -5,9 +5,29 @@
  */
 
 .ip-root {
-  max-width: 780px;
+  /* Wide enough for the flow column plus the requirements rail. PortalShell's
+     .te-main already supplies the side gutter, so this adds none of its own. */
+  max-width: 1080px;
   margin: 0 auto;
-  padding: 24px 16px 64px;
+  padding: 24px 0 64px;
+}
+
+/* The two-column split, reusing PortalShell's shared .te-grid / .te-side so the
+   proportions and the 1300px collapse match Today and Classroom exactly. */
+.ip-flow {
+  min-width: 0;   /* lets the intake field grid shrink and wrap in the column */
+}
+.ip-flow > .ip-card:last-child,
+.ip-flow > form.ip-card:last-child {
+  margin-bottom: 0;
+}
+/* The requirements card sits in the rail; it keeps the page's card styling. */
+.ip-railcard {
+  margin-bottom: 0;
+}
+@media (max-width: 1300px) {
+  /* Once the rail drops below the flow, give it a little air above. */
+  .ip-layout .te-side { margin-top: 4px; }
 }
 
 .ip-head h1 {
