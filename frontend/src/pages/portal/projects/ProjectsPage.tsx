@@ -8,8 +8,9 @@ import ProjectInterior from './ProjectInterior';
 import NextSessionStrip from './NextSessionStrip';
 import {
   resolveBackendProjectId, startBuild as startServerBuild, pollBuild,
-  isDelivered, blockingReasons, describeFailure, type SbpError,
+  isDelivered, blockingReasons, describeFailure, requestDiscoveryCall, type SbpError,
 } from '../../../services/sbpApi';
+import { describeCallOutcome, type CallNotice } from './describeCallOutcome';
 import ProjectsNextStepHero from './ProjectsNextStepHero';
 import FeedCard, { FeedItem } from '../feed/FeedCard';
 import {
@@ -221,6 +222,21 @@ type PipelineState =
  * A warning nobody can see is the same as no warning, which is precisely how a
  * silent fallback stayed silent.
  */
+/**
+ * What became of "have an AI call me". Rendered beside the pipeline banner
+ * for the same reason the banner is: a notice mounted for one frame is a
+ * notice nobody reads. Says a call is coming only when the server said so.
+ */
+const CallBanner: React.FC<{ notice: CallNotice | null }> = ({ notice }) => {
+  if (!notice) return null;
+  return (
+    <div className={`card pjw-pane pj-pipe ${notice.tone}`} role="status" aria-live="polite" data-testid="call-notice">
+      <strong>{notice.tone === 'ok' ? 'About the call you asked for' : 'We could not set up the call'}</strong>
+      <p className="lead" style={{ marginBottom: 0 }}>{notice.text}</p>
+    </div>
+  );
+};
+
 const PipelineBanner: React.FC<{ pipeline: PipelineState }> = ({ pipeline }) => {
   if (pipeline.state === 'idle') return null;
 
@@ -315,6 +331,7 @@ const ProjectsPage: React.FC = () => {
   // Which path produced the student's plan, and why. Surfaced rather than
   // hidden: a student is entitled to know whether they got the real thing.
   const [pipeline, setPipeline] = useState<PipelineState>({ state: 'idle' });
+  const [callNotice, setCallNotice] = useState<CallNotice | null>(null);
   /** True while a build is being created, so a second confirm cannot start one. */
   const creatingRef = useRef(false);
 
@@ -510,6 +527,18 @@ const ProjectsPage: React.FC = () => {
     if (!started.ok) { setPipeline({ state: 'local', error: started.error }); return; }
 
     setPipeline({ state: 'generating', projectId: resolved.projectId });
+
+    // The call, if asked for, goes AFTER the build has started: the server
+    // refuses to open an interview by phone and only continues one, and the
+    // truth it continues from is written by startBuild. Its outcome is
+    // reported in the server's own terms and never blocks the build.
+    if (a.call) {
+      const phone = a.call.phone;
+      const asked = await requestDiscoveryCall(resolved.projectId, {
+        phone, consent: true, consent_version: a.call.consentVersion,
+      });
+      setCallNotice(describeCallOutcome(asked.ok ? asked.outcome : { placed: false, reason: 'unreachable' }, phone));
+    }
     const result = await pollBuild(resolved.projectId, {
       onUpdate: (st) => setPipeline({ state: 'generating', projectId: resolved.projectId, status: st.status }),
     });
@@ -652,6 +681,7 @@ const ProjectsPage: React.FC = () => {
             banner used to render only in the wizard branch they had already
             left, so every degraded path arrived here saying nothing at all. */}
         <PipelineBanner pipeline={pipeline} />
+        <CallBanner notice={callNotice} />
         <ProjectPreview project={active} onOpen={() => openInterior(active.id)} onExplore={() => { setView({ kind: 'overview' }); window.scrollTo(0, 0); }} />
       </div></PortalShell>
     );
@@ -663,6 +693,7 @@ const ProjectsPage: React.FC = () => {
         <div className="page-h"><div className="crumbs0">Where work happens</div><h1>Start a new build</h1><div className="sub">Turn a raw idea into a scheduled build with lists and tasks — created in the background, right here in your portal.</div></div>
         <button className="pj-back" onClick={() => setView({ kind: 'overview' })}><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Back to projects</button>
         <PipelineBanner pipeline={pipeline} />
+        <CallBanner notice={callNotice} />
         <ProjectWizard onCreate={handleCreate} />
       </div></PortalShell>
     );
@@ -695,6 +726,7 @@ const ProjectsPage: React.FC = () => {
           build is generating (or after it degraded) must not lose the only
           explanation they were given. */}
       <PipelineBanner pipeline={pipeline} />
+      <CallBanner notice={callNotice} />
 
       {demo && (
         <div className="te-card" style={{ borderLeft: '3px solid var(--cherry)', padding: '12px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
