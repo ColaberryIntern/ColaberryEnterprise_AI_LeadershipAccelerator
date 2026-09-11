@@ -290,7 +290,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
     let alive = true;
     runtimeApi.mediaVerdict(ambient.kind, ambient.id).then((r) => { if (alive) setWatch(r); }).catch(() => { /* best-effort */ });
     return () => { alive = false; };
-  }, [mediaTracked, ambient?.kind, ambient?.id]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mediaTracked, ambient?.kind, ambient?.id]);
 
   // A Today-feed community post. Its `id` is the feed ref (`community:<uuid>`),
   // so every card-scoped affordance on this tile has to route to the post's own
