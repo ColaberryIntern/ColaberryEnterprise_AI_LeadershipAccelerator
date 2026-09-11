@@ -30,7 +30,7 @@ import { deriveAttentionItems } from '../../utils/agentAttentionRequired';
 // Promise.all: one slow/failing endpoint must not blank out the other three
 // tiles' real data.
 
-type NavTarget = 'command' | 'work' | 'talk' | 'reports' | 'performance' | 'trust';
+type NavTarget = 'command' | 'overview' | 'work' | 'talk' | 'reports' | 'performance' | 'trust';
 type StatTone = 'primary' | 'success' | 'danger' | 'warning' | 'info' | 'neutral';
 
 interface Props {
@@ -245,7 +245,7 @@ export default function AgentAtAGlanceTab({ agentId, detail, inboxItems, inboxLo
               icon="briefcase-4-line"
               tone={charterTone}
               hint={charterHint}
-              onClick={() => onNavigate('trust')}
+              onClick={() => onNavigate('overview')}
             />
           </div>
         </div>
