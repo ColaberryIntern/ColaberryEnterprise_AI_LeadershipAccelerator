@@ -1,5 +1,7 @@
 import {
   decidePublishMode,
+  type ProviderKey,
+  LIVE_CONNECTORS,
   getProviderCapabilities,
   isStale,
   publishButtonFor,
@@ -82,9 +84,11 @@ describe('an unapproved app yields Handoff even for a supported action', () => {
     const mode = decidePublishMode(caps, 'publish');
     expect(mode.mode).toBe('handoff');
     if (mode.mode === 'handoff') {
-      expect(mode.reasons).toHaveLength(1);
+      // Two problems with two fixes: submit the app, and build the connector.
+      expect(mode.reasons).toHaveLength(2);
       expect(mode.reasons[0]).toMatch(/not approved/);
       expect(mode.reasons[0]).toMatch(/not_submitted/);
+      expect(mode.reasons[1]).toMatch(/No live connector/);
     }
   });
 
@@ -93,36 +97,51 @@ describe('an unapproved app yields Handoff even for a supported action', () => {
     const mode = decidePublishMode(getProviderCapabilities('tiktok'), 'publish');
     expect(mode.mode).toBe('handoff');
     if (mode.mode === 'handoff') {
-      expect(mode.reasons).toHaveLength(2);
+      expect(mode.reasons).toHaveLength(3);
       expect(mode.reasons[0]).toMatch(/does not support/);
       expect(mode.reasons[1]).toMatch(/not approved/);
+      expect(mode.reasons[2]).toMatch(/No live connector/);
     }
   });
 
-  it('LinkedIn member posting is the ONE direct path today, because it is self-serve', () => {
-    // Share on LinkedIn needs no review. This is the sole provider/action pair that resolves
-    // to direct against the registry as it stands - and it is the honest answer, not a gap in
-    // the guard.
+  it('LinkedIn member posting is self-serve, and STILL a handoff until a live connector exists', () => {
+    // Share on LinkedIn needs no app review, so the registry alone would call it direct.
+    // But nothing in this codebase can carry the request yet (LIVE_CONNECTORS is empty), and
+    // "Direct publish" over no connector is the fake Publish button spec 8.2 forbids. The
+    // first dev deploy showed exactly that label; this pins the fix.
     const mode = decidePublishMode(getProviderCapabilities('linkedin_member'), 'publish');
-    expect(mode).toEqual({ mode: 'direct' });
-    expect(publishButtonFor(mode).label).toBe('Publish');
+    expect(mode.mode).toBe('handoff');
+    if (mode.mode === 'handoff') {
+      expect(mode.reasons).toHaveLength(1);
+      expect(mode.reasons[0]).toMatch(/No live connector is implemented/);
+    }
+    expect(publishButtonFor(mode).label).toBe('Handoff required');
+    // With a connector registered it becomes the one direct path.
+    const withConnector = decidePublishMode(getProviderCapabilities('linkedin_member'), 'publish', new Set<ProviderKey>(['linkedin_member']));
+    expect(withConnector).toEqual({ mode: 'direct' });
   });
 
-  it('every OTHER provider resolves publish to Handoff against the registry as it stands', () => {
-    // Pinned so a change in review status is a deliberate edit to this test, not a surprise.
+  it('NO provider resolves publish to direct against the registry as it stands', () => {
+    // Pinned so the first live connector is a deliberate edit to this test, not a surprise.
+    expect(LIVE_CONNECTORS.size).toBe(0);
     const direct = PROVIDER_KEYS.filter((k) => decidePublishMode(getProviderCapabilities(k), 'publish').mode === 'direct');
-    expect(direct).toEqual(['linkedin_member']);
+    expect(direct).toEqual([]);
   });
 
-  it('flipping a status to approved flips the decision - the registry drives it', () => {
+  it('flipping a status to approved flips the decision once a connector exists - the registry drives it', () => {
     // Proves the decision reads the data rather than a hardcoded list of provider names.
     const caps: ProviderCapabilities = {
       ...getProviderCapabilities('meta_facebook_page'),
       appReview: { status: 'approved', reviewedAt: '2026-10-01', note: 'approved' },
     };
-    expect(decidePublishMode(caps, 'publish')).toEqual({ mode: 'direct' });
+    const live = new Set<ProviderKey>(['meta_facebook_page']);
+    expect(decidePublishMode(caps, 'publish', live)).toEqual({ mode: 'direct' });
+    // Approved but no connector: handoff, with only that reason.
+    const noConnector = decidePublishMode(caps, 'publish');
+    expect(noConnector.mode).toBe('handoff');
+    if (noConnector.mode === 'handoff') expect(noConnector.reasons).toEqual([expect.stringMatching(/No live connector/)]);
     // But not for an action the provider still does not support.
-    expect(decidePublishMode({ ...caps, supports: { ...caps.supports, edit: false } }, 'edit').mode).toBe('handoff');
+    expect(decidePublishMode({ ...caps, supports: { ...caps.supports, edit: false } }, 'edit', live).mode).toBe('handoff');
   });
 });
 
