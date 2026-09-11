@@ -8,6 +8,7 @@ import { ManagerDirective } from '../../../services/managerDirectiveApi';
 import { ReportSubscription } from '../../../services/agentReportSubscriptionApi';
 import { AgentGoal } from '../../../services/agentGoalApi';
 import { AgentOneOnOne } from '../../../services/agentOneOnOneApi';
+import { AgentRoleCharter } from '../../../services/agentRoleCharterApi';
 
 // AI Agent Dashboard redesign, Checkpoint F: At a Glance (2026-09-03) —
 // pins the real, conditional tone/KPI computation per tile (never a
@@ -15,11 +16,20 @@ import { AgentOneOnOne } from '../../../services/agentOneOnOneApi';
 // real target tab. Live Status's tile reuses deriveOperationalState()/
 // deriveAttentionItems() verbatim — this file trusts those already-tested
 // pure functions and only checks the tile renders their real output.
+//
+// Checkpoint H (2026-09-10) — Ali: "Role Character should be moved to the
+// At a glance tab under the dashboard." Added as a 7th tile, same
+// tile+click-through pattern as every other section (the full edit form
+// stays on Trust & Control — this tile is a real summary, not a duplicate
+// editor). Unlike every other tile, an honest-empty charter is a real gap
+// (tone 'warning', not 'neutral') — see build-platform-agent skill's own
+// framing of this in references/trust-and-hierarchy.md.
 
 jest.mock('../../../services/managerDirectiveApi', () => ({ listDirectives: jest.fn() }));
 jest.mock('../../../services/agentReportSubscriptionApi', () => ({ listReportSubscriptions: jest.fn() }));
 jest.mock('../../../services/agentGoalApi', () => ({ listGoals: jest.fn() }));
 jest.mock('../../../services/agentOneOnOneApi', () => ({ listOneOnOnes: jest.fn() }));
+jest.mock('../../../services/agentRoleCharterApi', () => ({ getAgentRoleCharter: jest.fn() }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { listDirectives } = require('../../../services/managerDirectiveApi') as { listDirectives: jest.Mock };
@@ -29,6 +39,8 @@ const { listReportSubscriptions } = require('../../../services/agentReportSubscr
 const { listGoals } = require('../../../services/agentGoalApi') as { listGoals: jest.Mock };
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { listOneOnOnes } = require('../../../services/agentOneOnOneApi') as { listOneOnOnes: jest.Mock };
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { getAgentRoleCharter } = require('../../../services/agentRoleCharterApi') as { getAgentRoleCharter: jest.Mock };
 
 const DETAIL: AgentDetail = {
   agent: {
@@ -80,6 +92,7 @@ beforeEach(() => {
   listReportSubscriptions.mockResolvedValue([]);
   listGoals.mockResolvedValue([]);
   listOneOnOnes.mockResolvedValue([]);
+  getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-1', charter: null });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -195,6 +208,31 @@ describe('AgentAtAGlanceTab — Trust & Control tile', () => {
   });
 });
 
+describe('AgentAtAGlanceTab — Role Charter tile', () => {
+  it('shows the honest "Not written" state, tone warning (a real gap, not a neutral non-event), when no charter exists', async () => {
+    getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-1', charter: null });
+    await renderTab();
+    expect(container.textContent).toContain('Role Charter');
+    expect(container.textContent).toContain('Not written');
+    expect(container.textContent).toContain('No charter written yet');
+  });
+
+  it('shows the real role title and attribution when a charter exists', async () => {
+    const charter: AgentRoleCharter = {
+      roleTitle: 'AI Mentor — Student Success & Retention',
+      mission: 'Real mission text.',
+      responsibilities: ['Real responsibility.'],
+      kpis: ['Real KPI.'],
+      updatedByEmail: 'ali@colaberry.com',
+      updatedAt: '2026-09-10T15:48:53.702Z',
+    };
+    getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-1', charter });
+    await renderTab();
+    expect(container.textContent).toContain('Written');
+    expect(container.textContent).toContain('AI Mentor — Student Success & Retention');
+  });
+});
+
 describe('AgentAtAGlanceTab — navigation', () => {
   it('clicking each tile calls onNavigate with the real target tab', async () => {
     const onNavigate = await renderTab();
@@ -209,12 +247,16 @@ describe('AgentAtAGlanceTab — navigation', () => {
     clickByLabel('Reports');
     clickByLabel('Performance');
     clickByLabel('Trust & Control');
+    clickByLabel('Role Charter');
     expect(onNavigate).toHaveBeenCalledWith('command');
     expect(onNavigate).toHaveBeenCalledWith('work');
     expect(onNavigate).toHaveBeenCalledWith('talk');
     expect(onNavigate).toHaveBeenCalledWith('reports');
     expect(onNavigate).toHaveBeenCalledWith('performance');
     expect(onNavigate).toHaveBeenCalledWith('trust');
+    // Checkpoint H (2026-09-10) — Role Charter moved to Overview's Identity
+    // sub-tab, so its tile now navigates to 'overview', not 'trust'.
+    expect(onNavigate).toHaveBeenCalledWith('overview');
   });
 });
 

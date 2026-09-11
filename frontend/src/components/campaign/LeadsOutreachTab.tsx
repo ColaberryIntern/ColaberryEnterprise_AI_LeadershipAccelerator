@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import TemperatureBadge from '../TemperatureBadge';
 import LeadDetailModal from './LeadDetailModal';
+import PersonLink from '../../components/admin/person/PersonLink';
 
 const GHL_LOCATION_ID = 'JFWwp8q7l6T12NWTIOKG';
 const ghlContactUrl = (contactId: string) =>
@@ -229,12 +230,24 @@ export default function LeadsOutreachTab({
                     <td>
                       <input type="checkbox" checked={selectedIds.has(cl.lead_id)} onChange={() => toggleSelect(cl.lead_id)} />
                     </td>
-                    <td
-                      className="fw-medium"
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => setSelectedLead(cl)}
-                    >
-                      {cl.lead?.name}
+                    <td className="fw-medium">
+                      {/* The name opens the 360 on Communications: every campaign
+                          this person is in, both directions, in one history. The
+                          campaign-scoped modal stays on the icon beside it. */}
+                      <PersonLink
+                        name={cl.lead?.name}
+                        email={(cl.lead as { email?: string } | undefined)?.email}
+                        leadId={cl.lead_id}
+                        tab="communications"
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-link p-0 ms-2 align-baseline text-muted"
+                        onClick={(e) => { e.stopPropagation(); setSelectedLead(cl); }}
+                        title="This campaign's own timeline (the 360 shows every campaign)"
+                      >
+                        <i className="ri-history-line" aria-hidden="true"></i>
+                      </button>
                       {cl.lead?.ghl_contact_id && (
                         <a
                           href={ghlContactUrl(cl.lead.ghl_contact_id)}

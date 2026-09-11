@@ -76,7 +76,7 @@ export default function PaymentsLedgerTable({ summary, txns, onRefund, refunding
               <tr key={t.id} style={t.counted ? undefined : { opacity: 0.62 }}>
                 <td className="small text-muted text-nowrap" title={fmtAbs(t.date)}>{timeAgo(t.date)}</td>
                 <td>
-                  <PersonLink name={t.payer_name} email={t.payer_email}
+                  <PersonLink tab="account" name={t.payer_name} email={t.payer_email}
                     leadId={t.lead_id} enrollmentId={t.enrollment_id} />
                   {t.enrollment_id && (
                     <button
@@ -91,7 +91,7 @@ export default function PaymentsLedgerTable({ summary, txns, onRefund, refunding
                   <div className="small text-muted"><code>{t.payer_email}</code></div>
                   <div className="d-flex gap-3 mt-1">
                     {t.lead_id != null ? (
-                      <Link to={personPath({ leadId: t.lead_id }) ?? '/admin/people'} className="small text-decoration-none d-inline-flex align-items-center gap-1" title={`Open lead profile for ${t.payer_name}`}>
+                      <Link to={personPath({ leadId: t.lead_id }, 'account') ?? '/admin/people'} className="small text-decoration-none d-inline-flex align-items-center gap-1" title={`Open lead profile for ${t.payer_name}`}>
                         <i className="ri-contacts-line" aria-hidden="true"></i>Lead
                       </Link>
                     ) : (

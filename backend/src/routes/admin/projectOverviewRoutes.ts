@@ -7,6 +7,7 @@ import { resolveProjectRepos } from '../../services/projectRepoResolver';
 import {
   getProjectDelivery, getProjectGantt, getProjectEvidence, getProjectArtifacts,
 } from '../../services/projectDeliveryService';
+import { getEnrollmentsWithoutProjects } from '../../services/enrollmentsWithoutProjects';
 import { Op } from 'sequelize';
 import { sequelize } from '../../config/database';
 
@@ -317,6 +318,25 @@ router.get('/api/admin/projects/delivery', requireAdmin, async (req: Request, re
     res.json({ projects: await getProjectDelivery({ cohortId }) });
   } catch (err: any) {
     console.error('[AdminProjectOverview] GET /delivery error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/projects/without-project
+ * The students the delivery board structurally cannot show: still enrolled, and
+ * holding no project at all. Measured on production 2026-09-10, this was 24 of 49
+ * active July enrollments, 9 of them paying external students — none of whom
+ * appeared anywhere on the board being used to judge cohort health.
+ */
+router.get('/api/admin/projects/without-project', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const cohortId = typeof req.query.cohort_id === 'string' && req.query.cohort_id
+      ? req.query.cohort_id
+      : undefined;
+    res.json(await getEnrollmentsWithoutProjects({ cohortId }));
+  } catch (err: any) {
+    console.error('[AdminProjectOverview] GET /without-project error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

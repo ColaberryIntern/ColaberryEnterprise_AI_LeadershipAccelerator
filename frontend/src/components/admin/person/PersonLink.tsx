@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { PersonRef, personPath } from '../../../adminOs/personLink';
+import { PersonRef, PersonTab, personPath } from '../../../adminOs/personLink';
 
 /**
  * A person's name, linked to their 360 profile.
@@ -37,13 +37,15 @@ export interface PersonLinkProps extends PersonRef {
    * drawer's state update lands on an unmounting component.
    */
   stopPropagation?: boolean;
+  /** Which tab to open on, chosen by where the link is being rendered. */
+  tab?: PersonTab;
   children?: React.ReactNode;
 }
 
 export default function PersonLink({
-  name, email, leadId, enrollmentId, className, title, stopPropagation, children,
+  name, email, leadId, enrollmentId, className, title, stopPropagation, tab, children,
 }: PersonLinkProps) {
-  const to = personPath({ email, leadId, enrollmentId });
+  const to = personPath({ email, leadId, enrollmentId }, tab);
 
   const label = children
     ?? (name && name.trim())
