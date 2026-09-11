@@ -1,7 +1,7 @@
 /**
  * T226 — the three stubs that used to return `ok: true` while doing nothing
  * now say so; `runAction` maps a handler's `deferred` answer to `deferred`,
- * never `ok`; `tag_lead` persists the tags it computes; and the registry
+ * never `ok`; `tag_lead` persists only what `leads` can hold and says so; and the registry
  * exposes its keys so the admin schema can validate against them.
  */
 const mockLogActivity = jest.fn();
@@ -66,18 +66,40 @@ describe('deferred is its own status', () => {
   });
 });
 
-describe('tag_lead persists what it computes', () => {
-  it('writes the tags list into metadata and keeps interest_level', async () => {
+describe('tag_lead persists only what leads can hold, and says so', () => {
+  // `leads` has no tags/metadata column (live table checked 2026-09-11); the
+  // Lead model declares none either, so a write to `metadata` would be dropped
+  // by Sequelize with no error — exactly the silent green this file legislates
+  // against. The one column it can write is interest_level.
+  it('the first tag lands in interest_level', async () => {
     const update = jest.fn(async () => ({}));
-    const r = await ACTION_HANDLERS.tag_lead({ type: 'tag_lead', tag: 'hot' }, ctx({ metadata: { tags: ['old'], other: 1 }, interest_level: 'warm', update }));
-    expect(r).toEqual({ ok: true, detail: { tag: 'hot', tags: ['old', 'hot'] } });
-    expect(update).toHaveBeenCalledWith({ metadata: { tags: ['old', 'hot'], other: 1 }, interest_level: 'warm' });
+    const r = await ACTION_HANDLERS.tag_lead({ type: 'tag_lead', tag: 'hot' }, ctx({ interest_level: null, update }));
+    expect(r).toEqual({ ok: true, detail: { tag: 'hot', persisted_as: 'interest_level' } });
+    expect(update).toHaveBeenCalledWith({ interest_level: 'hot' });
   });
 
-  it('is idempotent on the tag', async () => {
+  it('the same tag again is an idempotent no-op', async () => {
     const update = jest.fn(async () => ({}));
-    await ACTION_HANDLERS.tag_lead({ type: 'tag_lead', tag: 'hot' }, ctx({ metadata: { tags: ['hot'] }, update }));
-    expect(update).toHaveBeenCalledWith(expect.objectContaining({ metadata: { tags: ['hot'] } }));
+    const r = await ACTION_HANDLERS.tag_lead({ type: 'tag_lead', tag: 'hot' }, ctx({ interest_level: 'hot', update }));
+    expect(r).toEqual({ ok: true, detail: { tag: 'hot', persisted_as: 'interest_level', already: true } });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('a different tag on a lead that already has one is NOT silently dropped', async () => {
+    const update = jest.fn(async () => ({}));
+    const r = await ACTION_HANDLERS.tag_lead({ type: 'tag_lead', tag: 'hot' }, ctx({ interest_level: 'warm', update }));
+    expect(r.ok).toBe(false);
+    expect((r as { error: string }).error).toMatch(/not_persisted/);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('never writes a column the Lead model does not declare', () => {
+    // The guard for the write-to-nowhere: whatever tag_lead writes must be a real attribute.
+    const Lead = jest.requireActual('../../models/Lead').default;
+    const attrs = Object.keys(Lead.getAttributes());
+    expect(attrs).toContain('interest_level');
+    expect(attrs).not.toContain('metadata');
+    expect(attrs).not.toContain('tags');
   });
 });
 

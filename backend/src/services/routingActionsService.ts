@@ -49,20 +49,25 @@ export type ActionHandler = (action: Record<string, any>, ctx: ActionContext) =>
 
 /* ── Action handlers ────────────────────────────────────────────── */
 
+/**
+ * `leads` has NO tags column and NO metadata column (checked against the live
+ * table, 2026-09-11). The only thing this handler can persist is
+ * `interest_level`, a single varchar. It used to compute a tags list from a
+ * `metadata` field that does not exist and drop it, then write interest_level
+ * only when empty — a second tag vanished with `ok: true`. Now it says so: the
+ * first tag lands in interest_level, the same tag again is a no-op, and a
+ * DIFFERENT tag on a lead that already has one is reported as not persisted.
+ */
 const tagLead: ActionHandler = async (action, ctx) => {
   const tag = String(action.tag || '').trim();
   if (!tag) return { ok: false, error: 'tag is required' };
-  const existing = (ctx.lead as any).metadata || {};
-  const tags: string[] = Array.isArray(existing.tags) ? existing.tags.slice() : [];
-  if (!tags.includes(tag)) tags.push(tag);
-  // T226: the tags list used to be computed and then dropped on the floor —
-  // only `interest_level` was written. `leads` has no tags column, so the list
-  // lives in the metadata the handler was already reading it from.
-  await ctx.lead.update({
-    metadata: { ...existing, tags },
-    interest_level: ctx.lead.interest_level || tag,
-  } as any);
-  return { ok: true, detail: { tag, tags } };
+  const current = String(ctx.lead.interest_level || '').trim();
+  if (!current) {
+    await ctx.lead.update({ interest_level: tag } as any);
+    return { ok: true, detail: { tag, persisted_as: 'interest_level' } };
+  }
+  if (current === tag) return { ok: true, detail: { tag, persisted_as: 'interest_level', already: true } };
+  return { ok: false, error: `not_persisted: interest_level is already '${current}' and leads has no tags column` };
 };
 
 /**
