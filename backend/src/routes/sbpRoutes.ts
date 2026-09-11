@@ -461,4 +461,37 @@ router.post('/api/portal/sbp/intake/:projectId/corrections', requireParticipant,
   } catch (e) { fail(res, e, next); }
 });
 
+/*
+ * The case-study hypothesis: what a story COULD say, before anything has
+ * happened. A projection recomputed from the truth revision on every read,
+ * never stored, so it cannot drift from the truth and there is nothing to
+ * publish. Same scoping as every other build route.
+ */
+router.get('/api/portal/sbp/intake/:projectId/case-study-hypothesis', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const projectId = z.string().uuid().parse(req.params.projectId);
+    await requireOwnedProject(req, projectId);
+
+    const { loadIntakeTruthAtRevision } = await import('../services/sbp/intakeTruthStore');
+    const { buildCaseStudyHypothesis, hypothesisCoverage } = await import('../services/sbp/caseStudyHypothesis');
+    const { getPublishedPlan } = await import('../services/sbp/planStore');
+
+    const truth = await loadIntakeTruthAtRevision(projectId);
+    if (!truth) return res.status(404).json({ error: 'No intake for this project' });
+
+    // The published plan supplies planned capability; a draft would be a
+    // capability nobody has accepted yet, and the hypothesis says only what
+    // the project has committed to.
+    const published = await getPublishedPlan(projectId);
+    const hypothesis = buildCaseStudyHypothesis({
+      items: truth.items,
+      truthRevision: truth.revision,
+      plan: published?.plan ?? null,
+    });
+
+    res.json({ project_id: projectId, hypothesis, coverage: hypothesisCoverage(hypothesis) });
+  } catch (e) { fail(res, e, next); }
+});
+
 export default router;
