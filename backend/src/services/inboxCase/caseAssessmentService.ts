@@ -58,6 +58,8 @@ Respond with a single JSON object matching this exact shape (no markdown, no pro
   "deadlines": [{ "description": string, "due_at": string|null, "evidence": [...] }],
   "blockers": [string], "missing_information": [string], "decisions_required": [string],
   "recommended_next_actions": [string], "confidence": number(0-100),
+  "response_needed": "YES"|"NO"|"UNCERTAIN", "response_needed_confidence": number(0-100), "response_needed_reason": string,
+  "response_channel": "EMAIL"|"BASECAMP"|"BOTH"|"INTERNAL_TASK"|"NONE", "response_channel_reason": string,
   "questions": [{ "question": string, "why_required": string, "choices": [{ "label": string, "consequence": string }], "recommended_answer": string|null }],
   "candidate_item_assessments": [{ "item_id": string, "recommendation": "INCLUDE"|"EXCLUDE", "reasoning": string }],
   "basecamp_close_recommendations": [{ "item_id": string, "recommend_close": boolean, "reasoning": string }],
@@ -73,6 +75,8 @@ Rules:
 - Never state an inference as a confirmed fact — use "assumptions" with a confidence score instead.
 - "questions" must be CONSOLIDATED at the case level (do not ask one question per evidence item) and limited to what actually blocks resolution.
 - If evidence is thin, say so in missing_information rather than inventing detail.
+- "response_needed": YES only if there is a direct question, request, commitment, deadline, escalation, approval, introduction, meeting decision, payment issue, or customer/student risk that has NOT already been answered elsewhere in the evidence. NO if it was already answered, is FYI-only, or the sender merely notified Ali about a Basecamp discussion. UNCERTAIN when the evidence cannot settle it, or whenever money, legal, HR, refunds, contracts, employment, or a sensitive student matter is involved — those always get a human.
+- "response_channel": reply where the active work and the authoritative record live. If an email points at an active Basecamp item, BASECAMP. If Basecamp is only background and the sender asked by email, EMAIL. BOTH only when two audiences genuinely require it. INTERNAL_TASK when the real action is a task, calendar event, or delegation rather than a message. NONE when response_needed is NO.
 - Each evidence block is tagged CANDIDATE or INCLUDED. For every CANDIDATE item, take a deeper look at its
   actual content (not just its title/match reasons) and add an entry to "candidate_item_assessments" with
   your honest verdict — INCLUDE if it genuinely belongs to this case's story, EXCLUDE if it's a false match

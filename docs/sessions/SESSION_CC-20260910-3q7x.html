@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260910-3q7x — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Friday, September 11, 2026 at 7:27 AM</div>
+    <div><span class="sid">CC-20260910-3q7x</span><span class="count">5 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Operator session: one durable lease, one resume cursor (T1)</h2>
+          <span class="badge">2026-09-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`services/inboxCase/operatorSessionService.ts` (new). The lease REUSES `resource_leases` + `workCoordinatorService` — that table already carries the partial unique index `(resource_key) WHERE status=&#39;active&#39;`, so &quot;exactly one active operator&quot; is enforced by Postgres. The only new state is the cursor, in `system_settings[&#39;inbox_zero_operator_cursor&#39;]`, matching the `inbox_cos_sync_state` precedent. `idempotency_key` is a fresh UUID per acquire (the tab id lives in `lease_owner`): `acquireLease` short-circuits on that key and returns `acquired: status===&#39;active&#39;`, so using the tab id would have made `/inbox-zero resume` fail forever on second use. The cursor advances only when the caller reports durable processing succeeded, and never backwards.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`operatorSessionService.test.ts` 9/9 under `jest.ci.config.ts`, running the REAL `workCoordinatorService` against a fake that enforces both unique indexes; includes the resume regression (same tab re-acquires after release). Reused service&#39;s own suite 19/19 unchanged. Independent `loop-task-verifier`: 12/12 PASS.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The plan auditor caught that cycle-1 was about to build this lease from scratch; the primitive already existed and the inbox engine was already wired into it.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Snooze, SLA, priority and verification-attempt columns, with a post-condition that fires (T2)</h2>
+          <span class="badge">2026-09-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`db/ensureInboxCaseSchema.ts` adds `inbox_cases.{snoozed_until, snooze_reason, waiting_since, sla_due_at, priority_band, priority_reason}` and `inbox_case_actions.verification_attempt_count` via `ADD COLUMN IF NOT EXISTS` (the `CREATE TABLE IF NOT EXISTS` above it is a no-op on the live table), two indexes (`updated_at` for the delta cursor, `(state, snoozed_until)` for the queue), and `assertInboxZeroCaseColumns()` — a catalog check exported so a test can prove it fires, because the statement loop swallows failures and that is exactly how a missing column 500s in prod. Models updated in interface, `declare` and `init`. `PRIORITY_BANDS` in `types/inboxCase.ts`. `handleListCases` now hides cases snoozed into the future by default (`include_snoozed=true` shows them; an explicit `state` filter is unaffected), with `include_snoozed` added to the Zod query schema.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`ensureInboxCaseSchema.inboxZero.test.ts` 7/7 including the assertion firing against an un-migrated catalog and a swallowed DDL failure still surfacing; `inboxCaseController.listCases.test.ts` +4. Verifier rendered the snooze clause through real Sequelize 6.37.7 to `(&quot;snoozed_until&quot; IS NULL OR &quot;snoozed_until&quot; &lt;= ...)`. Independent verifier: 11/12 PASS (the one point: spec said &quot;throws&quot;, code logs — logging is correct, a throw at `server.ts:2435` aborts backend boot; spec amended). No COS table touched.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Cycle-3 audit found these columns had three readers and no writer. The writer (`PATCH /cases/:caseId/operator`) is planned as T2b and is not in this entry.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>Waiting-on ledger: the planner&#39;s follow-up date finally has a reader (T3)</h2>
+          <span class="badge">2026-09-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`services/inboxCase/waitingLedgerService.ts` (new). `caseActionPlanner.buildWaitingActions` computes a `follow_up_date` for every MARK_WAITING action and buried it in the action payload and preview; nothing read it back, so &quot;waiting on someone&quot; was a state the engine could enter but never query. `caseVerificationService.verifyCase` now calls `promoteWaitingFromAction` when a MARK_WAITING verifies, writing `waiting_since` and `sla_due_at` onto the case (idempotent: an existing wait is never made to look fresh). `listWaiting()` and `listStaleWaiting(asOf)` are the two console reads. `followUpDateToDueAt` rejects `Date.UTC` rollover (`2026-13-40` no longer becomes Feb 2027). The shared test fake gained `Op.is/lt/lte/gt/gte` and recursive `Op.or`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`waitingLedgerService.test.ts` 12/12 including the verify-loop integration and the stale/fresh/closed/never-promoted partition; existing `caseVerificationService` and `caseKnowledgeService` suites still green on the extended fake. Whole `services/inboxCase` tree 26 suites / 409 tests green.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>Response-needed contract: YES / NO / UNCERTAIN with confidence, reason and channel (T4)</h2>
+          <span class="badge">2026-09-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Five optional fields on the case assessment — `response_needed`, `response_needed_confidence`, `response_needed_reason`, `response_channel` (EMAIL | BASECAMP | BOTH | INTERNAL_TASK | NONE), `response_channel_reason` — declared in all three places that matter: `types/inboxCase.ts`, `caseAssessmentOutputSchema` in `schemas/inboxCaseSchema.ts` (a plain `z.object` that STRIPS unknown keys, so a field missing here vanishes at `safeParse`), and the assessment SYSTEM_PROMPT wire shape plus two routing rules taken from the build brief. `readResponseNeeded()` is the one sanctioned reader: a legacy assessment normalises to UNCERTAIN at confidence 0, flagged `legacy`, never to NO. `responseNeedsHumanReview()` (UNCERTAIN, below 70, or legacy) is OR-ed into `requires_individual_approval` at `createActionIfNew`, the single persistence choke point for planner, quick-resolve and override proposals. `ALWAYS_INDIVIDUAL_APPROVAL` is not weakened. Nothing touches `inbox_classifications.reply_needed` — that is gate 1&#39;s.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`responseNeeded.test.ts` 12/12: each verdict survives `safeParse` with reason and channel intact (the test that would have caught the stripping bug), legacy parses and reads UNCERTAIN, out-of-contract values rejected, and the approval gate proven for confident-YES (bundleable), low-confidence (individual), UNCERTAIN (individual), legacy (individual), and EMAIL_SEND (still individual). `caseActionPlanner.test.ts` fixture given a confident verdict; suite 25/25.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Deliberate production consequence: every case assessed before this deploy is &quot;legacy&quot; and its newly planned actions will require individual approval. That is more approval, never less — the REVIEW_REQUIRED posture the brief mandates — and it lapses naturally as cases are re-assessed.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>Basecamp client: a timeout on every request, and a paginator (T6)</h2>
+          <span class="badge">2026-09-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`services/ops/basecampClient.ts` rewritten around one `bcSend(method, url, send)` loop: every `fetch` (GET, POST, PUT) now carries `AbortSignal.timeout(bcTimeoutMs())` (15s default, `BC_TIMEOUT_MS` override read at call time). An abort is classified `TimeoutError`, retried inside the same `BC_MAX_RETRIES=5` budget as a 429, then thrown as `BcTimeoutError` with a stable `error_class` and a failure event. `bcGetAll&lt;T&gt;` follows `Link: rel=&quot;next&quot;` with a hard page cap (20) that logs `basecamp_pagination_capped` rather than truncating silently. `bcRetry.ts` gained `bcTimeoutMs`, `isAbortError`, `parseNextLink` (pure, tested). `bcPut` now emits the same failure event on non-ok as GET/POST did; public signatures unchanged.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`basecampClient.test.ts` 18/18 (signal on every verb, timed-out attempt retried then succeeds, `BcTimeoutError` with `attempts:6` after the cap, non-abort rejection not treated as timeout, one request for a single page, three pages in order, page cap logged) + `bcRetry.test.ts` 6/6. Full backend `tsc --noEmit` = exactly the 2 baseline `@anthropic-ai/sdk` errors, nothing new.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Before this, no TypeScript read of a Basecamp collection could see past page one, and a Basecamp stall would hang an operator session forever. Both are direct `CLAUDE.md` requirements (&quot;every outbound call has an explicit timeout&quot;).</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20260910-3q7x.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

@@ -4,6 +4,7 @@ import { ActionType } from '../../types/inboxCase';
 import { logCaseEvent } from './caseEventLog';
 import { getCaseOrThrow, transitionCase } from './caseRepository';
 import { postCaseProgressNote } from './caseTicketService';
+import { promoteWaitingFromAction } from './waitingLedgerService';
 
 // Verify (root directive section 12/24 — "Execution is verified"). For each
 // SUCCEEDED action, confirms the external effect actually landed rather
@@ -130,6 +131,11 @@ export async function verifyCase(caseId: string, requestedBy: string): Promise<V
     });
     if (ok) verified++;
     else verificationFailed++;
+
+    // /inbox-zero waiting-on ledger: a verified MARK_WAITING is the moment the
+    // wait officially starts. Promote the planner's follow_up_date out of the
+    // action payload onto the case's queryable columns (idempotent inside).
+    if (ok) await promoteWaitingFromAction(action, caseRow);
   }
 
   await applyAutoDispositions(caseId, caseRow.correlation_id, actions);

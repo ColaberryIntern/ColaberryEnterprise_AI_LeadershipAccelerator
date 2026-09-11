@@ -4,7 +4,7 @@ import InboxCase from '../../models/InboxCase';
 import InboxCaseItem from '../../models/InboxCaseItem';
 import InboxCaseAction from '../../models/InboxCaseAction';
 import InboxCaseQuestion from '../../models/InboxCaseQuestion';
-import { ActionRiskLevel, ActionType, ALWAYS_INDIVIDUAL_APPROVAL, CaseAssessment } from '../../types/inboxCase';
+import { ActionRiskLevel, ActionType, ALWAYS_INDIVIDUAL_APPROVAL, CaseAssessment, responseNeedsHumanReview } from '../../types/inboxCase';
 import { computeIdempotencyKey, isBasecampDigestSender } from './textNormalization';
 import { getCaseOrThrow, transitionCase } from './caseRepository';
 import { logCaseEvent } from './caseEventLog';
@@ -352,7 +352,13 @@ export async function createActionIfNew(
       preview: proposal.preview,
       payload: proposal.payload,
       risk_level: proposal.risk_level,
-      requires_individual_approval: requiresIndividualApproval(proposal.action_type, proposal.risk_level),
+      // T4: a case whose response-needed verdict is UNCERTAIN, low-confidence,
+      // or predates the contract cannot have ANY of its actions bundled into
+      // a bulk approval — every one gets an individual human look. This is
+      // the single persistence choke point for planner, quick-resolve and
+      // override proposals alike, which is why the gate lives here.
+      requires_individual_approval:
+        requiresIndividualApproval(proposal.action_type, proposal.risk_level) || responseNeedsHumanReview(caseRow.assessment),
       status: 'PROPOSED',
       depends_on_action_ids: dependsOn,
       idempotency_key,

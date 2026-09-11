@@ -30,6 +30,10 @@ export const listCasesQuerySchema = z.object({
   // behavior is skipped and every state is returned, matching the frontend's
   // "All states (incl. resolved)" option.
   include_resolved: z.coerce.boolean().optional(),
+  // When true (and no explicit `state` filter), cases snoozed into the future
+  // are returned too. Default view hides them: a snoozed case is, by
+  // definition, one Ali asked not to see until its snoozed_until passes.
+  include_snoozed: z.coerce.boolean().optional(),
 });
 
 export const caseIdParamSchema = z.object({ caseId: z.string().uuid() });
@@ -149,6 +153,16 @@ export const caseAssessmentOutputSchema = z.object({
   decisions_required: z.array(z.string()).default([]),
   recommended_next_actions: z.array(z.string()).default([]),
   confidence: z.number().min(0).max(100),
+  // T4 /inbox-zero response-needed contract. OPTIONAL, deliberately: this is
+  // a plain z.object, which STRIPS unknown keys, so any field not declared
+  // here is silently discarded at safeParse — and optional so assessments
+  // produced before the field existed still parse. Read via
+  // readResponseNeeded(), which normalises absence to UNCERTAIN.
+  response_needed: z.enum(['YES', 'NO', 'UNCERTAIN']).optional(),
+  response_needed_confidence: z.number().min(0).max(100).optional(),
+  response_needed_reason: z.string().optional(),
+  response_channel: z.enum(['EMAIL', 'BASECAMP', 'BOTH', 'INTERNAL_TASK', 'NONE']).optional(),
+  response_channel_reason: z.string().optional(),
   // Consolidated, case-level questions — never one per email. Each must be
   // answerable with a short list of choices plus a free-text write-in.
   questions: z

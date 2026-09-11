@@ -43,7 +43,7 @@ export async function handleListCases(req: Request, res: Response) {
   if (!parsed.success) {
     return res.status(400).json({ error: 'ValidationError', details: parsed.error.issues });
   }
-  const { state, mode, page, limit, include_resolved } = parsed.data;
+  const { state, mode, page, limit, include_resolved, include_snoozed } = parsed.data;
   const where: Record<string, unknown> = {};
   if (state) {
     where.state = state;
@@ -52,6 +52,13 @@ export async function handleListCases(req: Request, res: Response) {
     // list — still reachable via state=RESOLVED or include_resolved=true.
     // An explicit `state` filter above is completely unaffected by this.
     where.state = { [Op.ne]: 'RESOLVED' };
+  }
+  if (!state && !include_snoozed) {
+    // Default view also hides cases snoozed into the future (/inbox-zero).
+    // NULL means never snoozed; a past snoozed_until has expired and the case
+    // is back in the queue. Same shape as the RESOLVED rule above: an explicit
+    // `state` filter is unaffected, and include_snoozed=true shows everything.
+    where.snoozed_until = { [Op.or]: [{ [Op.is]: null }, { [Op.lte]: new Date() }] };
   }
   if (mode) where.mode = mode;
 

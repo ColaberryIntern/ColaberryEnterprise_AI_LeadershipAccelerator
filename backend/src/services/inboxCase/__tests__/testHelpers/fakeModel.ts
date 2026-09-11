@@ -41,7 +41,33 @@ function matchesWhere(row: any, where: any): boolean {
       }
       if (symbolKeys.includes(Op.or)) {
         const alt = (value as any)[Op.or];
-        if (!alt.some((v: any) => row[key] === v)) return false;
+        // Each alternative may itself be an operator clause (e.g. { [Op.is]: null }
+        // or { [Op.lte]: date }), not only a bare value — recurse per alternative.
+        if (!alt.some((v: any) => matchesWhere(row, { [key]: v }))) return false;
+        continue;
+      }
+      if (symbolKeys.includes(Op.is)) {
+        if (row[key] !== (value as any)[Op.is]) return false;
+        continue;
+      }
+      // Comparison operators, added for the /inbox-zero waiting/snooze reads
+      // (waitingLedgerService.listStaleWaiting uses Op.lt on sla_due_at).
+      // Dates compare by epoch so `new Date() < new Date()` behaves.
+      const cmp = (a: any, b: any) => (a instanceof Date ? a.getTime() : a) - (b instanceof Date ? b.getTime() : b);
+      if (symbolKeys.includes(Op.lt)) {
+        if (row[key] == null || !(cmp(row[key], (value as any)[Op.lt]) < 0)) return false;
+        continue;
+      }
+      if (symbolKeys.includes(Op.lte)) {
+        if (row[key] == null || !(cmp(row[key], (value as any)[Op.lte]) <= 0)) return false;
+        continue;
+      }
+      if (symbolKeys.includes(Op.gt)) {
+        if (row[key] == null || !(cmp(row[key], (value as any)[Op.gt]) > 0)) return false;
+        continue;
+      }
+      if (symbolKeys.includes(Op.gte)) {
+        if (row[key] == null || !(cmp(row[key], (value as any)[Op.gte]) >= 0)) return false;
         continue;
       }
     }

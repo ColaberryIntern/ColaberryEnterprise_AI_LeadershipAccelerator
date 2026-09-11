@@ -118,6 +118,13 @@ async function seedCase(overrides: Partial<any> = {}) {
       recommended_next_actions: ['Reply asking for the W9 to be resent'],
       commitments_made: [{ statement: 'Vendor will resend the W9', owner: 'vendor@example.com', evidence: [] }],
       missing_information: [],
+      // /inbox-zero T4: a confident verdict, so the "LOW risk, bundleable"
+      // assertions below still hold. An assessment WITHOUT a verdict is a
+      // legacy one and now forces individual approval on every action —
+      // covered in responseNeeded.test.ts.
+      response_needed: 'YES',
+      response_needed_confidence: 90,
+      response_needed_reason: 'Vendor asked for the W9 directly.',
     },
     ...overrides,
   });
