@@ -11,7 +11,7 @@ import {
   revertItemVariant,
   validateItem,
 } from '../../services/content/composerService';
-import { transitionContentItem, WorkflowError } from '../../services/content/contentWorkflowService';
+import { assertWritable, transitionContentItem, WorkflowError } from '../../services/content/contentWorkflowService';
 import { generateItemLinks } from '../../services/content/composerLinkService';
 import { buildItemConfirmation } from '../../services/content/composerConfirmationService';
 import { COMPOSER_ACTIONS, runComposerAction, type ComposerAction } from '../../services/content/composerActionService';
@@ -183,6 +183,7 @@ router.patch('/api/admin/content/:id', requireAdmin, async (req: Request, res: R
   try {
     const item = await visibleItem(req, id.data);
     if (!item) return void res.status(404).json(NOT_FOUND);
+    assertWritable(item);
     const { scheduled_for, ...rest } = parsed.data;
     await item.update({
       ...rest,

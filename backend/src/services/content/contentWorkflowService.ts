@@ -10,6 +10,7 @@ import {
   type InvalidationPolicy,
   type InvalidationResult,
   type TransitionResult,
+  isReadOnlyImport,
 } from './contentWorkflow';
 
 /**
@@ -34,6 +35,17 @@ export class WorkflowError extends Error {
   }
 }
 
+/** Refuse any write to an imported, read-only item. Thrown as a 409 with a stable class. */
+export function assertWritable(item: ContentItem): void {
+  if (isReadOnlyImport(item.metadata)) {
+    throw new WorkflowError(
+      `This item is imported history (${String(item.metadata.provenance)}) and is read-only.`,
+      409,
+      'ReadOnlyImport',
+    );
+  }
+}
+
 export interface Actor {
   adminId?: string | null;
   email?: string | null;
@@ -52,6 +64,7 @@ export async function transitionContentItem(
 ): Promise<{ item: ContentItem; result: TransitionResult }> {
   const item = await ContentItem.findByPk(itemId);
   if (!item) throw new WorkflowError('Content item not found', 404, 'NotFound');
+  assertWritable(item);
 
   const result = transition(item.status, to);
   if (!result.ok) throw new WorkflowError(result.reason, 409, 'IllegalTransition');
@@ -80,6 +93,7 @@ export async function recordEdit(
 ): Promise<{ item: ContentItem; invalidation: InvalidationResult }> {
   const item = await ContentItem.findByPk(itemId);
   if (!item) throw new WorkflowError('Content item not found', 404, 'NotFound');
+  assertWritable(item);
 
   // Every edit bumps the revision, invalidating or not. The revision is what an approval
   // request pins to (revision_at_request / revision_at_decision), so a later reader can tell

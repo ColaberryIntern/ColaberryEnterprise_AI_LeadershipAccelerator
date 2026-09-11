@@ -5,7 +5,7 @@ import { applyEdit, fingerprint, generateVariants, revertToGenerated, type Varia
 import { validateSubmission, type SubmissionValidation } from './composerValidation';
 import { checkContentForBrand } from './brandGovernanceService';
 import type { GovernanceResult } from './brandGovernance';
-import { WorkflowError } from './contentWorkflowService';
+import { assertWritable, WorkflowError } from './contentWorkflowService';
 
 /**
  * composerService — persists what the pure composer modules decide.
@@ -38,9 +38,10 @@ function rowToVariant(row: ContentVariant, canonical: string): Variant | null {
   };
 }
 
-async function loadItem(itemId: string): Promise<ContentItem> {
+async function loadItem(itemId: string, forWrite: boolean): Promise<ContentItem> {
   const item = await ContentItem.findByPk(itemId);
   if (!item) throw new WorkflowError('Content item not found', 404, 'NotFound');
+  if (forWrite) assertWritable(item);
   return item;
 }
 
@@ -54,7 +55,7 @@ async function loadVariants(itemId: string, canonical: string): Promise<{ rows: 
  * Generate (or regenerate) variants for the given providers. Edited variants survive.
  */
 export async function generateItemVariants(itemId: string, providers: readonly ProviderKey[]): Promise<Variant[]> {
-  const item = await loadItem(itemId);
+  const item = await loadItem(itemId, true);
   const canonical = item.canonical_body ?? '';
   const { rows, variants: existing } = await loadVariants(itemId, canonical);
   const next = generateVariants(canonical, providers, existing);
@@ -83,7 +84,7 @@ export async function editItemVariant(
   text: string,
   actorEmail: string | null,
 ): Promise<Variant> {
-  const item = await loadItem(itemId);
+  const item = await loadItem(itemId, true);
   const canonical = item.canonical_body ?? '';
   const row = await ContentVariant.findOne({ where: { content_item_id: itemId, provider } });
   if (!row) throw new WorkflowError(`No ${provider} variant exists yet; generate first.`, 404, 'NotFound');
@@ -100,7 +101,7 @@ export async function editItemVariant(
 }
 
 export async function revertItemVariant(itemId: string, provider: ProviderKey): Promise<Variant> {
-  const item = await loadItem(itemId);
+  const item = await loadItem(itemId, true);
   const canonical = item.canonical_body ?? '';
   const row = await ContentVariant.findOne({ where: { content_item_id: itemId, provider } });
   if (!row) throw new WorkflowError(`No ${provider} variant exists.`, 404, 'NotFound');
@@ -126,7 +127,7 @@ export interface ItemValidation {
  * so the state survives a reload and the queue can read it.
  */
 export async function validateItem(itemId: string): Promise<ItemValidation> {
-  const item = await loadItem(itemId);
+  const item = await loadItem(itemId, false);
   const canonical = item.canonical_body ?? '';
   const { rows, variants } = await loadVariants(itemId, canonical);
   const mediaCount = await ContentItemMedia.count({ where: { content_item_id: itemId } });

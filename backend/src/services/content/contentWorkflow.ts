@@ -189,3 +189,13 @@ export const STATUS_AFTER_INVALIDATION: ContentItemStatus = 'draft';
 
 /** Statuses in which an approval exists to be invalidated at all. */
 export const STATUSES_HOLDING_AN_APPROVAL: readonly ContentItemStatus[] = ['approved', 'scheduled'];
+
+/**
+ * Imported history is read-only (spec 18 Stage B). A Loomly post that already went out is a
+ * record of something that happened, not a draft; editing or transitioning it would rewrite
+ * history that the platform never produced. The flag lives on the row so it survives
+ * whatever the status column says.
+ */
+export function isReadOnlyImport(metadata: Record<string, unknown> | null | undefined): boolean {
+  return Boolean(metadata && metadata.readOnly === true && typeof metadata.provenance === 'string');
+}
