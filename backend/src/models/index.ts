@@ -440,6 +440,8 @@ import JourneyPath from './JourneyPath';
 import OfferFamily from './OfferFamily';
 import BrandOfferPolicy from './BrandOfferPolicy';
 import GrowthJourneyEnrollment from './GrowthJourneyEnrollment';
+import GrowthJourneyClassification from './GrowthJourneyClassification';
+import GrowthJourneyTransition from './GrowthJourneyTransition';
 import SenderProfile from './SenderProfile';
 import PlatformIdentity from './PlatformIdentity';
 import PlatformIdentityLink from './PlatformIdentityLink';
@@ -1603,6 +1605,8 @@ export {
   OfferFamily,
   BrandOfferPolicy,
   GrowthJourneyEnrollment,
+  GrowthJourneyClassification,
+  GrowthJourneyTransition,
   SenderProfile,
   PlatformIdentity,
   PlatformIdentityLink,
