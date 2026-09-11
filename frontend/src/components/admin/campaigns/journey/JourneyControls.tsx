@@ -33,6 +33,13 @@ interface Props {
   onTimeWindow: (v: string) => void;
   brandId: string;
   brands: BrandSummary[];
+  /**
+   * When set, the brand selector is disabled with THIS reason. Used by the Campaign 360
+   * Journey tab: a campaign belongs to one brand, so the filter is not merely unhelpful there,
+   * it could contradict the campaign scope. Kept as a reason rather than hiding the control,
+   * matching the convention already followed for the empty-brands case below.
+   */
+  brandLockedReason?: string;
   onBrand: (v: string) => void;
   journeyView: JourneyView;
   onJourneyView: (v: JourneyView) => void;
@@ -48,6 +55,7 @@ export default function JourneyControls({
   onTimeWindow,
   brandId,
   brands,
+  brandLockedReason,
   onBrand,
   journeyView,
   onJourneyView,
@@ -88,11 +96,13 @@ export default function JourneyControls({
         onChange={(e) => onBrand(e.target.value)}
         // Disabled with a reason rather than hidden: an absent control looks like a
         // missing feature, a disabled one with a title explains itself.
-        disabled={disabled || brands.length === 0}
+        disabled={disabled || brands.length === 0 || Boolean(brandLockedReason)}
         title={
-          brands.length === 0
-            ? 'No campaigns in this view, so there is no brand to filter by.'
-            : 'Filter every stage to leads who touched a campaign of this brand.'
+          brandLockedReason
+            ? brandLockedReason
+            : brands.length === 0
+              ? 'No campaigns in this view, so there is no brand to filter by.'
+              : 'Filter every stage to leads who touched a campaign of this brand.'
         }
       >
         <option value={ALL_BRANDS}>All brands</option>
