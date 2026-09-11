@@ -169,12 +169,27 @@ async function main(): Promise<void> {
 
   let work: { domain: any; objective: any; scenario: any; difficulty: 'easy' | 'medium' | 'hard' }[] = [];
 
+  // How many questions each scenario holds, kept current as the run writes, so
+  // twenty-five picks in one chunk spread out rather than all landing on the
+  // scenario that was thinnest at the start.
+  const byScenario: Record<string, number> = {};
+  for (const r of rows) byScenario[r.scenario_family ?? ''] = (byScenario[r.scenario_family ?? ''] ?? 0) + 1;
+
   const pickScenario = (domainId: string, override: string | null) => {
     if (override) return BP.scenarios.find((s) => s.scenario_id === override) ?? BP.scenarios[0];
     // Prefer a scenario that names this domain as primary, so the setting fits
-    // the skill rather than being decorative.
+    // the skill rather than being decorative — and among those, the one with the
+    // FEWEST questions. The first chunk of the scaled run wrote 25 D1 items and
+    // every one was S1, because this picked the first fit rather than the
+    // thinnest. The exam draws four scenarios of six at random; a student who
+    // lands the thin one is measured against a shallower pool, and the plan was
+    // making that worse with every question it added.
     const fits = BP.scenarios.filter((s) => s.primary_domains.includes(domainId));
-    return (fits.length > 0 ? fits : BP.scenarios)[0];
+    const pool = fits.length > 0 ? fits : BP.scenarios;
+    const pick = pool.reduce((best, s) =>
+      ((byScenario[s.scenario_id] ?? 0) < (byScenario[best.scenario_id] ?? 0) ? s : best));
+    byScenario[pick.scenario_id] = (byScenario[pick.scenario_id] ?? 0) + 1;
+    return pick;
   };
 
   if (onlyObjective) {

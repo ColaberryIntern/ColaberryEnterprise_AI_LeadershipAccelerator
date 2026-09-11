@@ -319,7 +319,20 @@ async function main(): Promise<void> {
      * a dimension no rewrite can change is as good as it is allowed to be, and
      * refusing to approve it is refusing to approve the bank.
      */
-    const approvable = outcomes.filter((x) => x.after >= x.ceiling);
+    // Never approve a revision that is itself retired. Retiring the six
+    // untriaged first-batch drafts left each as a question whose LATEST revision
+    // is retired, and this filter would have approved them straight back —
+    // un-retiring content that was withdrawn on purpose, under a human's name.
+    const retiredKeys = new Set(
+      (await sequelize.query<{ question_key: string }>(
+        `SELECT question_key FROM cert_question_revisions r
+          WHERE review_status = 'retired'
+            AND revision = (SELECT MAX(v.revision) FROM cert_question_revisions v WHERE v.question_key = r.question_key)`,
+        { type: QueryTypes.SELECT },
+      )).map((r) => r.question_key),
+    );
+    const approvable = outcomes.filter((x) => x.after >= x.ceiling && !retiredKeys.has(x.key));
+    if (retiredKeys.size > 0) log(`  (${retiredKeys.size} question(s) skipped: latest revision is retired)`);
     log(`Approving ${approvable.length} item(s) at their ceiling as ${approveAs}`);
     let approved = 0;
     for (const o of approvable) {
