@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { NewBuildAnswers, BuildSize } from './projectsStore';
 import { useIsExplorer } from '../useIsExplorer';
 import { fetchIntakeQuestions, previewIntake, IntakeQuestion, CoveredAngle, IntakePreview } from '../../../services/sbpApi';
+import IntakeReviewPane, { phoneLooksValid, type CallChoice } from './IntakeReviewPane';
 
 // "Start a new build" — the questionnaire that shapes an idea into a project.
 // Three steps: (1) idea + size, (2) interview questions generated from THAT
@@ -93,6 +94,11 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewedFor, setPreviewedFor] = useState<string | null>(null);
+  // "Have an AI call me about what is still unanswered." Offered only when the
+  // preview says a call can happen; carried up with the answers and sent by
+  // the parent once the build has started, because the call continues the
+  // stored interview rather than opening one.
+  const [call, setCall] = useState<CallChoice>({ wanted: false, phone: '' });
 
   // `angle` rides along with each answer. Without it the server cannot file
   // the answer against a truth dimension and reports it unmapped, which is
@@ -103,7 +109,14 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
 
   const currentQ = questions[qIndex] ?? null;
 
-  const answers: NewBuildAnswers = { idea, name, size, weeks, answers: answered, covered };
+  const callOffer = preview?.callOffer;
+  const callRequested = call.wanted && Boolean(callOffer?.available);
+  const answers: NewBuildAnswers = {
+    idea, name, size, weeks, answers: answered, covered,
+    call: callRequested && callOffer && phoneLooksValid(call.phone)
+      ? { phone: call.phone.trim(), consentVersion: callOffer.consentVersion }
+      : undefined,
+  };
 
   async function loadQuestions(force = false): Promise<void> {
     const current = idea.trim();
@@ -154,10 +167,10 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
     void loadPreview();
   }
 
-  // The idea is shown verbatim above the list, so its own item (dimension
-  // `problem`, truncated server-side to a quote) would only repeat it.
-  const heard = (preview?.review.items ?? []).filter((i) => i.dimension !== 'problem');
   const blocked = preview?.review.blocksPlanning === true;
+  // A ticked call box with no usable number is an unfinished intention, not a
+  // request. Confirm waits for one rather than quietly dropping the call.
+  const callIncomplete = callRequested && !phoneLooksValid(call.phone);
 
   return (
     <div>
@@ -172,7 +185,7 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
       {step === 1 && (
         <div className="card pjw-pane">
           <h3>What do you want to build?</h3>
-          <p className="lead">Tell us everything — the whole idea, who it's for, what it should do, every capability and edge you can think of. Don't hold back or worry about being precise; the more you pour out here, the better we shape it. The next step reads what you wrote and asks you about it.</p>
+          <p className="lead">Tell us everything — the whole idea, who it's for, what it should do, every capability and edge you can think of. Don't hold back or worry about being precise. The next step reads what you wrote and asks only about what it could not find: the more detail you give here, the fewer questions we ask.</p>
           <textarea value={idea} maxLength={IDEA_MAX} onChange={(e) => setIdea(e.target.value)} style={{ minHeight: 240 }} placeholder={"e.g. An AI agent that triages my support inbox and drafts replies.\n\nGo further — what would make it great? Who uses it, what data would it touch, what should it automate, what would 'done' look like, what have you always wished existed? Brain-dump it all."} />
           <Counter value={idea} max={IDEA_MAX} />
           <label className="pjw-label">Give it a name (optional)</label>
@@ -297,91 +310,15 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
           <h3>Review &amp; confirm</h3>
           <p className="lead">This is what we understood, and what we still don't know. Nothing has been generated yet — that starts when you confirm. If something is wrong, go back and change your answer.</p>
 
-          <div className="section-title" style={{ margin: '4px 0 10px' }}>Your idea</div>
-          <div className="pjw-review">{idea.trim()}</div>
-
-          {previewLoading && (
-            <div className="small" style={{ margin: '18px 0 0', opacity: .75 }}>Checking what we understood…</div>
-          )}
-
-          {/* Fallback: the server could not be reached, so the read-back is
-              unavailable. Show the raw answers rather than nothing, and say
-              why, so a blank review does not read as "we heard nothing". */}
-          {!previewLoading && previewError && (
-            <>
-              <div className="small" style={{ margin: '18px 0 10px', color: '#B5710A' }}>
-                We couldn't check this with the server just now. Here is what you wrote; it is still recorded when you confirm.
-              </div>
-              {answered.length > 0 && (
-                <>
-                  <div className="section-title" style={{ margin: '4px 0 10px' }}>What you told us</div>
-                  {answered.map((a) => (
-                    <div className="pjw-review" key={a.id}>
-                      <div className="small" style={{ opacity: .75 }}>{a.question}</div>
-                      <div>{a.answer}</div>
-                    </div>
-                  ))}
-                </>
-              )}
-            </>
-          )}
-
-          {!previewLoading && preview && (
-            <>
-              {/* THE GATE. Every line here is one the server will write as
-                  truth on Confirm, grouped by the same rule the publish path
-                  uses. Labels are the dimension in a person's words, sent by
-                  the server so the wizard and Story 000 say the same thing. */}
-              {heard.length > 0 && (
-                <>
-                  <div className="section-title" style={{ margin: '18px 0 10px' }}>What we heard</div>
-                  <div className="small" style={{ opacity: .75, marginBottom: 10 }}>In your own words, not yet confirmed by you. Confirming builds from these.</div>
-                  {heard.map((item) => (
-                    <div className="pjw-review" key={item.index} data-group={item.group}>
-                      <div className="small" style={{ opacity: .75 }}>{item.label}</div>
-                      <div>{item.value}</div>
-                    </div>
-                  ))}
-                </>
-              )}
-
-              {preview.covered.length > 0 && (
-                <div className="small" style={{ margin: '10px 0 0', opacity: .75 }}>
-                  Your description already answered {preview.covered.length} of our questions, which is why the interview was short. Those answers are quoted above.
-                </div>
-              )}
-
-              <div className="section-title" style={{ margin: '18px 0 10px' }}>Still unanswered</div>
-              {preview.unanswered.length > 0 ? (
-                <>
-                  <div className="small" style={{ opacity: .75, marginBottom: 8 }}>None of these blocks the build, and none of them is a mistake. A gap you can see now is cheaper than the same gap found by a story in week six.</div>
-                  <ul className="pjw-next" data-testid="unanswered">
-                    {preview.unanswered.map((line) => <li key={line}>{line}</li>)}
-                  </ul>
-                </>
-              ) : (
-                <div className="small" style={{ opacity: .75 }}>Nothing is outstanding: every question the plan needed has an answer.</div>
-              )}
-
-              {preview.unmapped > 0 && (
-                <div className="small" style={{ margin: '10px 0 0', color: '#B5710A' }}>
-                  {preview.unmapped === 1 ? 'One of your answers' : `${preview.unmapped} of your answers`} could not be filed against a question. {preview.unmapped === 1 ? 'It still shapes the build; it just will not' : 'They still shape the build; they just will not'} appear in the list above.
-                </div>
-              )}
-
-              {/* Only a contradiction blocks. Nothing on this path produces
-                  one today, but the server may in future, and the rule is
-                  that a contradiction it names is one the student must see. */}
-              {blocked && (
-                <div className="pjw-review" style={{ margin: '18px 0 0', borderColor: '#B5710A' }} data-testid="contradictions">
-                  <div className="small" style={{ color: '#B5710A' }}>Two of your answers contradict each other. Go back and settle it before we build from them.</div>
-                  <ul className="pjw-next" style={{ marginBottom: 0 }}>
-                    {preview.review.contradictions.map((c) => <li key={c}>{c}</li>)}
-                  </ul>
-                </div>
-              )}
-            </>
-          )}
+          <IntakeReviewPane
+            idea={idea.trim()}
+            answered={answered}
+            preview={preview}
+            loading={previewLoading}
+            error={previewError}
+            call={call}
+            onCallChange={setCall}
+          />
 
           <div className="section-title" style={{ margin: '18px 0 10px' }}>What happens next</div>
           <ol className="pjw-next">
@@ -402,9 +339,10 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
           </div>
 
           {demo && <div className="small" style={{ margin: '4px 0 -2px', color: '#B5710A' }}>This is a demo — you can shape the whole build, but enroll to actually create it.</div>}
+          {callIncomplete && <div className="small" style={{ margin: '4px 0 -2px', color: '#B5710A' }}>Add your phone number for the call, or untick the box.</div>}
           <div className="pjw-actions">
             <button className="btn ghost" onClick={() => setStep(2)}>Back</button>
-            <button className="btn primary grow" onClick={() => { void onCreate(answers); }} disabled={demo || blocked} title={demo ? 'Demo — enroll to build for real' : blocked ? 'Settle the contradiction above first' : undefined}>
+            <button className="btn primary grow" onClick={() => { void onCreate(answers); }} disabled={demo || blocked || callIncomplete} title={demo ? 'Demo — enroll to build for real' : blocked ? 'Settle the contradiction above first' : callIncomplete ? 'Add a phone number or untick the call box' : undefined}>
               <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg> {demo ? 'Enroll to build for real' : 'Confirm & build in background'}
             </button>
           </div>

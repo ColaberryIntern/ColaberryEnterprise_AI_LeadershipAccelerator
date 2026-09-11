@@ -531,7 +531,62 @@ router.post('/api/portal/sbp/intake/preview', requireParticipant, async (req: Re
     if (!gate(res)) return;
     const body = previewSchema.parse(req.body ?? {});
     const { previewIntake } = await import('../services/sbp/intakePreview');
-    res.json(previewIntake(body));
+    const { callAvailability } = await import('../services/sbp/projectDiscoveryCallRequest');
+    // The call offer rides on the preview so the wizard learns in one round
+    // trip whether to show the option and which consent words to show. It is
+    // configuration, not truth, and the preview itself stays pure.
+    res.json({ ...previewIntake(body), callOffer: callAvailability() });
+  } catch (e) { fail(res, e, next); }
+});
+
+/*
+ * "Have an AI call me about what is still unanswered."
+ *
+ * Fail-closed end to end: the decision refuses without a configured agent,
+ * and no agent is configured in any environment until an operator sets one.
+ * Consent is recorded scoped to the project (never to the marketing ledger),
+ * before anything is dialled. The response says what happened in the
+ * decision's own words so the client never has to guess whether a call is
+ * coming. Same ownership scoping as every other build route.
+ */
+const callSchema = z.object({
+  phone: z.string().min(7).max(32),
+  consent: z.literal(true),
+  consent_version: z.string().max(20),
+  name: z.string().max(120).optional(),
+});
+
+router.post('/api/portal/sbp/intake/:projectId/call', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const projectId = z.string().uuid().parse(req.params.projectId);
+    await requireOwnedProject(req, projectId);
+    const body = callSchema.parse(req.body ?? {});
+
+    // Guarded: `req.get` has thrown on a malformed header before, and the
+    // student's request must be answered whatever the header looked like.
+    let userAgent: string | null = null;
+    let ip: string | null = null;
+    try { userAgent = req.get('user-agent') ?? null; ip = req.ip ?? null; } catch { /* unavailable is fine */ }
+
+    const { requestProjectDiscoveryCall } = await import('../services/sbp/projectDiscoveryCallRequest');
+    const outcome = await requestProjectDiscoveryCall({
+      projectId,
+      enrollmentId: eid(req),
+      phone: body.phone,
+      consent: body.consent,
+      consentVersion: body.consent_version,
+      name: body.name ?? null,
+      ip,
+      userAgent,
+    });
+
+    if (!outcome.placed && outcome.reason === 'consent_text_stale') {
+      // 422: well-formed, refused. The client rendered older consent words
+      // than the server would record, so nothing was recorded.
+      return res.status(422).json({ error: 'consent_text_stale', ...outcome });
+    }
+    res.json({ project_id: projectId, ...outcome });
   } catch (e) { fail(res, e, next); }
 });
 

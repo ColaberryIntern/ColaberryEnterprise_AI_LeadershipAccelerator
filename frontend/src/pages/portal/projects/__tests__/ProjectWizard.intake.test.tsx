@@ -432,3 +432,113 @@ describe('step 3 — the confirmation gate shows what will be recorded', () => {
     expect(mockPreview).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('step 3 — "have an AI call me" is offered only when it can happen', () => {
+  const OFFER = { available: true, consentText: 'I agree to one automated call about this project, recorded. Not marketing.', consentVersion: '2026-09-11' };
+
+  function previewWith(over: Partial<any> = {}) {
+    return {
+      ok: true,
+      preview: {
+        review: {
+          items: [{ index: 0, dimension: 'problem', label: 'What you are building', value: IDEA, group: 'needsConfirmation', quote: IDEA }],
+          counts: { needsConfirmation: 1, inferences: 0, openQuestions: 0, unknowns: 0, confirmed: 0 },
+          contradictions: [],
+          blocksPlanning: false,
+        },
+        unanswered: ['who actually uses this is unrecorded', 'what starts it, and how often, is unknown'],
+        covered: [],
+        unmapped: 0,
+        callOffer: OFFER,
+        ...over,
+      },
+    };
+  }
+
+  async function reachStep3(onCreate = jest.fn()) {
+    mockQuestions.mockResolvedValue({
+      ok: true,
+      result: { generated: true, model: 'gpt-4o', attempts: 1, questions: [{ ...q('g1', 'Who checks it?'), angle: 'THE GUARDRAIL' }] },
+    });
+    await mount(<ProjectWizard onCreate={onCreate} />);
+    await setValue(container.querySelector('textarea')!, IDEA);
+    await click(buttonByText('Sharpen my idea')!);
+    await setValue(container.querySelector('#q-g1') as HTMLTextAreaElement, 'Priya does');
+    await click(buttonByText('Review & confirm')!);
+    return onCreate;
+  }
+
+  const consentBox = () => container.querySelector('[data-testid="call-consent"]') as HTMLInputElement | null;
+
+  it('shows no call option when the server says none is available', async () => {
+    mockPreview.mockResolvedValue(previewWith({ callOffer: { ...OFFER, available: false } }));
+    await reachStep3();
+    expect(container.querySelector('[data-testid="call-offer"]')).toBeNull();
+    expect(container.textContent).not.toContain('Prefer to talk it through');
+  });
+
+  it('shows no call option when an older server sends no offer at all', async () => {
+    mockPreview.mockResolvedValue(previewWith({ callOffer: undefined }));
+    await reachStep3();
+    expect(container.querySelector('[data-testid="call-offer"]')).toBeNull();
+  });
+
+  it('shows no call option when nothing is left to ask, even with a call available', async () => {
+    mockPreview.mockResolvedValue(previewWith({ unanswered: [] }));
+    await reachStep3();
+    expect(container.querySelector('[data-testid="call-offer"]')).toBeNull();
+  });
+
+  it('shows the server\'s exact consent words as the label, and a number field only once ticked', async () => {
+    mockPreview.mockResolvedValue(previewWith());
+    await reachStep3();
+
+    expect(container.textContent).toContain('Prefer to talk it through?');
+    expect(container.textContent).toContain(OFFER.consentText);
+    expect(container.querySelector('#call-phone')).toBeNull();
+
+    await click(consentBox()!);
+    expect(container.querySelector('#call-phone')).toBeTruthy();
+  });
+
+  it('holds Confirm until a number is given, rather than dropping the call silently', async () => {
+    mockPreview.mockResolvedValue(previewWith());
+    const onCreate = await reachStep3();
+
+    await click(consentBox()!);
+    const confirm = buttonByText('Confirm & build in background')!;
+    expect(confirm.disabled).toBe(true);
+    expect(container.textContent).toContain('Add your phone number for the call, or untick the box.');
+
+    await setValue(container.querySelector('#call-phone') as HTMLInputElement, '214 555 0143');
+    expect(buttonByText('Confirm & build in background')!.disabled).toBe(false);
+
+    await click(buttonByText('Confirm & build in background')!);
+    expect(onCreate.mock.calls[0][0].call).toEqual({ phone: '214 555 0143', consentVersion: '2026-09-11' });
+  });
+
+  it('sends no call when the box is left unticked', async () => {
+    mockPreview.mockResolvedValue(previewWith());
+    const onCreate = await reachStep3();
+    await click(buttonByText('Confirm & build in background')!);
+    expect(onCreate.mock.calls[0][0].call).toBeUndefined();
+  });
+
+  it('unticking the box after entering a number withdraws the request', async () => {
+    mockPreview.mockResolvedValue(previewWith());
+    const onCreate = await reachStep3();
+    await click(consentBox()!);
+    await setValue(container.querySelector('#call-phone') as HTMLInputElement, '2145550143');
+    await click(consentBox()!);
+    expect(container.querySelector('#call-phone')).toBeNull();
+    await click(buttonByText('Confirm & build in background')!);
+    expect(onCreate.mock.calls[0][0].call).toBeUndefined();
+  });
+});
+
+describe('step 1 — the copy says why detail matters', () => {
+  it('tells the student that more detail means fewer questions', async () => {
+    await mount(<ProjectWizard onCreate={() => {}} />);
+    expect(container.textContent).toContain('the more detail you give here, the fewer questions we ask');
+  });
+});
