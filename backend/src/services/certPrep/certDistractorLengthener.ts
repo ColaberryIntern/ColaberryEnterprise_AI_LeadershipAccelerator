@@ -2,7 +2,7 @@ import type OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { scoreItem } from './certQuestionRubric';
 import { checkInvariants, errorClass, isRetryable, ImproverItem } from './certQuestionImprover';
-import { LengthPlan } from './certOptionLength';
+import { LengthPlan, OPTION_LABEL_PREFIX } from './certOptionLength';
 
 /**
  * certDistractorLengthener — rewrite ONE wrong option so it is longer than the
@@ -84,6 +84,7 @@ export function buildLengthenPrompt(item: ImproverItem, plan: LengthPlan): strin
     '  better answer, a partial version of the correct answer, or a hedge',
     '- keep its approach and meaning; you are adding detail, not changing the idea',
     '- do not mention the correct option, the stem, or that it is wrong',
+    `- return the option TEXT only: do not begin it with "${target.key}." or any letter`,
     '- do not invent a product, a version number, a price or a date',
     '',
     'Return ONLY JSON: {"text": string}',
@@ -113,7 +114,10 @@ export async function lengthenDistractor(item: ImproverItem, plan: LengthPlan): 
         ],
       });
       const parsed = JSON.parse(res.choices?.[0]?.message?.content ?? '{}');
-      const text = String(parsed.text ?? '').trim();
+      // The model often answers "D. <text>" when asked to rewrite option D.
+      // Stripped here rather than refused: it is a habit, not a defect in the
+      // words, and refusing would spend a second attempt on the same habit.
+      const text = String(parsed.text ?? '').replace(OPTION_LABEL_PREFIX, '').trim();
       const got = text.length;
       if (got < plan.minChars || got > plan.maxChars) {
         lastBounds = { got };
