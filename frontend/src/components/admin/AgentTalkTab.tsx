@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { SectionCard, StatusBadge } from './shell';
 import { timeAgo } from './shell/trust';
 import { Conversation, getConversation, sendMessage } from '../../services/agentManagerConversationApi';
@@ -40,6 +40,7 @@ export default function AgentTalkTab({ agentId }: Props) {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const fetchConversation = useCallback(async () => {
     setConversationLoading(true);
@@ -68,6 +69,14 @@ export default function AgentTalkTab({ agentId }: Props) {
 
   useEffect(() => { fetchConversation(); }, [fetchConversation]);
   useEffect(() => { fetchDirectives(); }, [fetchDirectives]);
+
+  // Ali, live: "I have to scroll every time I type something new... make it
+  // more like ChatGPT." The message list never auto-scrolled to the newest
+  // message — every new send/reply landed below the fold. Jump to the
+  // bottom on initial load and whenever the message count changes.
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ block: 'end' });
+  }, [conversation?.messages.length]);
 
   const activeDirectives = directives.filter((d) => d.status === 'active');
 
@@ -129,7 +138,7 @@ export default function AgentTalkTab({ agentId }: Props) {
           </div>
         )}
         {!conversationLoading && conversation && (
-          <div className="mb-3" style={{ maxHeight: '360px', overflowY: 'auto' }}>
+          <div className="mb-3" style={{ maxHeight: '540px', overflowY: 'auto' }}>
             {conversation.messages.length === 0 ? (
               <p className="text-muted small text-center py-4 mb-0">No messages yet — say hello.</p>
             ) : (
@@ -144,6 +153,7 @@ export default function AgentTalkTab({ agentId }: Props) {
                 </div>
               ))
             )}
+            <div ref={messagesEndRef} />
           </div>
         )}
 

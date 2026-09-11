@@ -152,7 +152,16 @@ export default function AgentDetailV2Header({
           <div>Autonomy <b>{agent.autonomy_level || 'Not set'}</b></div>
           <div>Last active <b>{lastActive ? timeAgo(lastActive) : 'Never'}</b></div>
           <div>Persona <b className="adv2-mono">{agent.persona_version || '—'}</b></div>
-          <div><Link className="adv2-link" to="#tickets" onClick={() => onTabChange('overview')}>{detail.open_ticket_count} open tickets</Link></div>
+          <div>
+            <a
+              className="adv2-link"
+              href={`/admin/tickets?creator=${encodeURIComponent(agent.agent_name)}&range=all&status=open`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {detail.open_ticket_count} open tickets
+            </a>
+          </div>
         </div>
 
         <nav className="adv2-tabs" role="tablist">
