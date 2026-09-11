@@ -159,6 +159,55 @@ export const GROWTH_JOURNEY_STATEMENTS: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS idx_brand_offer_policies_tenant ON brand_offer_policies (tenant_id)`,
   `CREATE INDEX IF NOT EXISTS idx_brand_offer_policies_decision ON brand_offer_policies (decision)`,
 
+  // ── T205 ──────────────────────────────────────────────────────────────────
+  // §6.1's participation record: a subject's governed participation in one
+  // program. Plan cycle 1's backfill had no destination for this.
+  //
+  // `subject_ref` IS THE PRICE OF AD-2, AND IT IS WORTH STATING WHY IT EXISTS.
+  // There is no `subjects` table — AD-2 settled that a fifth identity beside
+  // `leads`, `enrollments`, `visitors` and `org_members` would drift invisibly.
+  // So a participation row cannot point at a subject id, because none exists.
+  // Instead it carries a DERIVED, STABLE key of the form `enrollment:<uuid>` or
+  // `lead:<id>`, built from the strongest anchor available, plus the raw anchors
+  // beside it.
+  //
+  // That key is what makes the backfill idempotent: the unique index on
+  // `(program_id, subject_ref)` is what stops a re-run creating a second
+  // participation row for the same person in the same programme. An application
+  // "have we done this already?" check loses that race; the index does not.
+  //
+  // Both anchors are nullable and at least one is always set, per §6.2's
+  // "require at least one valid identity anchor". `enrollment_id` is
+  // deliberately NOT a foreign key to `enrollments`: Explorer profiles are keyed
+  // on it, the backfill reads them, and a hard FK would make this table's
+  // integrity depend on a row another system may archive.
+  `CREATE TABLE IF NOT EXISTS growth_journey_enrollments (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+     brand_id UUID NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+     program_id UUID NOT NULL REFERENCES journey_programs(id) ON DELETE CASCADE,
+     path_id UUID REFERENCES journey_paths(id) ON DELETE SET NULL,
+     subject_ref VARCHAR(128) NOT NULL,
+     lead_id INTEGER,
+     enrollment_id UUID,
+     status VARCHAR(20) NOT NULL DEFAULT 'active',
+     source VARCHAR(64) NOT NULL,
+     enrolled_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     metadata JSONB,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+
+  // The idempotency key. One participation per subject per programme, enforced
+  // by the database so a concurrent backfill cannot double-write.
+  `CREATE UNIQUE INDEX IF NOT EXISTS growth_journey_enrollments_program_subject_unique
+     ON growth_journey_enrollments (program_id, subject_ref)`,
+  `CREATE INDEX IF NOT EXISTS idx_gj_enrollments_tenant ON growth_journey_enrollments (tenant_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_gj_enrollments_brand ON growth_journey_enrollments (brand_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_gj_enrollments_lead ON growth_journey_enrollments (lead_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_gj_enrollments_enrollment ON growth_journey_enrollments (enrollment_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_gj_enrollments_status ON growth_journey_enrollments (status)`,
+
   // ── T203 ──────────────────────────────────────────────────────────────────
   // THE ONE STATEMENT IN THIS MODULE THAT REACHES INTO SOMEONE ELSE'S TABLE.
   //

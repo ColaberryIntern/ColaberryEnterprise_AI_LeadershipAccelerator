@@ -5,6 +5,7 @@ import { JourneyProgram } from '../../models/JourneyProgram';
 import { JourneyPath } from '../../models/JourneyPath';
 import { BrandOfferPolicy } from '../../models/BrandOfferPolicy';
 import Brand from '../../models/Brand';
+import { GrowthJourneyEnrollment } from '../../models/GrowthJourneyEnrollment';
 import {
   OfferFamily,
   OFFER_FAMILIES,
@@ -155,7 +156,16 @@ describe('the schema is additive, and provably so', () => {
     // ADDITIVE IS ABOUT WHAT A STATEMENT DOES, NOT WHAT IT STARTS WITH. Every
     // index this module creates must therefore name a table this module
     // created.
-    const RUN_OWNED = ['brand_offer_policies', 'journey_paths', 'journey_programs', 'offer_families'];
+    // T205's table had to be ADDED here before its indexes were accepted, which
+    // is this guard working rather than a chore: an index on a table the run
+    // does not own is now a deliberate edit, not a line that slides in.
+    const RUN_OWNED = [
+      'brand_offer_policies',
+      'growth_journey_enrollments',
+      'journey_paths',
+      'journey_programs',
+      'offer_families',
+    ];
 
     const indexed = [
       ...SQL.matchAll(/CREATE\s+(?:UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\s+\w+\s+ON\s+(\w+)/gi),
@@ -225,7 +235,7 @@ describe('the schema is additive, and provably so', () => {
     expect(SQL).not.toMatch(/explorer_/i);
   });
 
-  it('creates exactly the four tables Phase 1 owns so far', () => {
+  it('creates exactly the five tables Phase 1 owns so far', () => {
     // An explicit list rather than a count. T203 adds a column to `brands` and
     // T205 adds `growth_journey_enrollments`, so this list will grow again -
     // the assertion exists to catch a table nobody meant to add, and a count
@@ -233,6 +243,7 @@ describe('the schema is additive, and provably so', () => {
     const tables = [...SQL.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/gi)].map((m) => m[1]);
     expect(tables.sort()).toEqual([
       'brand_offer_policies',
+      'growth_journey_enrollments',
       'journey_paths',
       'journey_programs',
       'offer_families',
@@ -413,6 +424,23 @@ const EXPECTED_POLICY_COLUMNS = [
   'updated_at',
 ];
 
+const EXPECTED_ENROLLMENT_COLUMNS = [
+  'id',
+  'tenant_id',
+  'brand_id',
+  'program_id',
+  'path_id',
+  'subject_ref',
+  'lead_id',
+  'enrollment_id',
+  'status',
+  'source',
+  'enrolled_at',
+  'metadata',
+  'created_at',
+  'updated_at',
+];
+
 /** Column names actually declared by a CREATE TABLE statement. */
 function columnsDeclaredIn(table: string): string[] {
   const sqlBlock = GROWTH_JOURNEY_STATEMENTS.find((s) =>
@@ -444,6 +472,9 @@ describe('the models match the SQL, in both directions', () => {
     );
     expect(columnsDeclaredIn('brand_offer_policies').length).toBe(
       EXPECTED_POLICY_COLUMNS.length,
+    );
+    expect(columnsDeclaredIn('growth_journey_enrollments').length).toBe(
+      EXPECTED_ENROLLMENT_COLUMNS.length,
     );
   });
 
@@ -527,6 +558,64 @@ describe('the models match the SQL, in both directions', () => {
     expect(Object.keys(BrandOfferPolicy.getAttributes()).sort()).toEqual(
       [...EXPECTED_POLICY_COLUMNS].sort(),
     );
+  });
+
+  it('growth_journey_enrollments: SQL and model agree on the same expected set', () => {
+    expect(columnsDeclaredIn('growth_journey_enrollments').sort()).toEqual(
+      [...EXPECTED_ENROLLMENT_COLUMNS].sort(),
+    );
+    expect(Object.keys(GrowthJourneyEnrollment.getAttributes()).sort()).toEqual(
+      [...EXPECTED_ENROLLMENT_COLUMNS].sort(),
+    );
+  });
+
+  it('every index NAMED _unique is DECLARED UNIQUE — and vice versa', () => {
+    // A mutation that changed `CREATE UNIQUE INDEX` to `CREATE INDEX` on the
+    // backfill's idempotency key passed all 75 tests, because the assertion
+    // below matched the index NAME and its columns and never the keyword. A
+    // non-unique index called `..._unique` is the worst kind of lie: every
+    // reader trusts the name, and duplicates land anyway. This is inherited -
+    // all five `_unique` indexes in this module were asserted the same way - so
+    // it is closed for all of them at once, both directions.
+    const declaredUnique = [...SQL.matchAll(/CREATE\s+UNIQUE\s+INDEX\s+IF\s+NOT\s+EXISTS\s+(\w+)/gi)].map(
+      (m) => m[1],
+    );
+    const namedUnique = [...SQL.matchAll(/CREATE\s+(?:UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\s+(\w+_unique)\b/gi)].map(
+      (m) => m[1],
+    );
+
+    // Non-vacuity: there are five today, and a parse that found none would
+    // satisfy both loops below.
+    expect(declaredUnique.length).toBeGreaterThanOrEqual(5);
+    expect(namedUnique.length).toBeGreaterThanOrEqual(5);
+
+    for (const name of namedUnique) expect(declaredUnique).toContain(name);
+    for (const name of declaredUnique) expect(name).toMatch(/_unique$/);
+  });
+
+  it('the backfill idempotency key is a UNIQUE index, not an application check', () => {
+    // A backfill over 217 rows that checked "have we done this already?" in
+    // application code would lose to a concurrent run - two boots, or a boot and
+    // a manual invocation - and produce duplicate participations that every
+    // later count would report as real.
+    expect(SQL).toMatch(
+      /growth_journey_enrollments_program_subject_unique[\s\S]*?\(program_id, subject_ref\)/i,
+    );
+  });
+
+  it('growth_journey_enrollments does NOT foreign-key enrollment_id', () => {
+    // Deliberate: Explorer profiles are keyed on the enrollment id and the
+    // backfill reads them, so a hard FK would make this table's integrity depend
+    // on a row another system may archive. Asserted so the absence reads as a
+    // decision rather than an oversight.
+    const stmt = GROWTH_JOURNEY_STATEMENTS.find((x) =>
+      /CREATE TABLE IF NOT EXISTS growth_journey_enrollments/i.test(x),
+    )!;
+    expect(stmt).toMatch(/enrollment_id UUID,/);
+    expect(stmt).not.toMatch(/enrollment_id UUID[^,]*REFERENCES/i);
+    // The FKs it DOES carry.
+    expect(stmt).toMatch(/program_id UUID NOT NULL REFERENCES journey_programs\(id\)/i);
+    expect(stmt).toMatch(/path_id UUID REFERENCES journey_paths\(id\) ON DELETE SET NULL/i);
   });
 
   it('brand_offer_policies carries all EIGHT attributes §4:278 requires', () => {

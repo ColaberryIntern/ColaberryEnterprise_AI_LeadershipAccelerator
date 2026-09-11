@@ -417,6 +417,7 @@ import JourneyProgram from './JourneyProgram';
 import JourneyPath from './JourneyPath';
 import OfferFamily from './OfferFamily';
 import BrandOfferPolicy from './BrandOfferPolicy';
+import GrowthJourneyEnrollment from './GrowthJourneyEnrollment';
 import SenderProfile from './SenderProfile';
 import PlatformIdentity from './PlatformIdentity';
 import PlatformIdentityLink from './PlatformIdentityLink';
@@ -1561,6 +1562,7 @@ export {
   JourneyPath,
   OfferFamily,
   BrandOfferPolicy,
+  GrowthJourneyEnrollment,
   SenderProfile,
   PlatformIdentity,
   PlatformIdentityLink,
