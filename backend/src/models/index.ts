@@ -412,6 +412,25 @@ import ExplorerScoreSnapshot from './ExplorerScoreSnapshot';
 import ExplorerExperimentAssignment from './ExplorerExperimentAssignment';
 import ExplorerContentAsset from './ExplorerContentAsset';
 
+// --- Marketing Operations: tracked links and click capture ---
+import TrackedLink from './TrackedLink';
+import LinkClick from './LinkClick';
+
+// --- Marketing Operations: Content OS ---
+import ContentItem from './ContentItem';
+import ContentVariant from './ContentVariant';
+import MediaAsset from './MediaAsset';
+import ContentItemMedia from './ContentItemMedia';
+import ContentTemplate from './ContentTemplate';
+import ContentApprovalRequest from './ContentApprovalRequest';
+import ContentApprovalEvent from './ContentApprovalEvent';
+import BrandGovernanceRule from './BrandGovernanceRule';
+
+// --- Marketing Operations: publishing queue ---
+import PublishingJob from './PublishingJob';
+import ExternalPublication from './ExternalPublication';
+import PlatformDeliveryEvent from './PlatformDeliveryEvent';
+
 // --- Multi-tenant ecosystem foundation ---
 import Tenant from './Tenant';
 import Brand from './Brand';
@@ -1559,6 +1578,22 @@ export {
   // CAPE — Colaberry Adaptive Path Engine (Phase 6: Feed Control governance board)
   CapeGovernancePolicy,
   CapeLifecycleModePolicy,
+  // Marketing Operations: tracked links and click capture
+  TrackedLink,
+  LinkClick,
+  // Marketing Operations: Content OS
+  ContentItem,
+  ContentVariant,
+  MediaAsset,
+  ContentItemMedia,
+  ContentTemplate,
+  ContentApprovalRequest,
+  ContentApprovalEvent,
+  BrandGovernanceRule,
+  // Marketing Operations: publishing queue
+  PublishingJob,
+  ExternalPublication,
+  PlatformDeliveryEvent,
   // Multi-tenant ecosystem foundation
   Tenant,
   Brand,
@@ -1865,6 +1900,70 @@ Lead.hasMany(CommunicationPreference, {
 CommunicationPreference.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
 CommunicationPreference.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
 CommunicationPreference.belongsTo(Brand, { foreignKey: 'brand_id', as: 'brand' });
+
+// --- Marketing Operations: tracked links and clicks ---
+// The click -> link edge IS a real foreign key, so it gets a real association.
+//
+// An earlier draft declared none and justified it as "the high-write tracking-table choice
+// page_events and visitor_sessions already make". That was checked and is false:
+// `PageEvent.ts:65,70` declares real `references` to visitor_sessions and visitors, and
+// `seedQrTracking.ts:32` gives `qr_scan_events.qr_code_id` a `REFERENCES qr_codes(id)` —
+// and qr_scan_events is the exact analogue of link_clicks. The convention is narrower than
+// that draft assumed: the edge to the IMMEDIATE PARENT is constrained and associated, and
+// only CROSS-DOMAIN references are left bare.
+TrackedLink.hasMany(LinkClick, { foreignKey: 'tracked_link_id', as: 'clicks' });
+LinkClick.belongsTo(TrackedLink, { foreignKey: 'tracked_link_id', as: 'trackedLink' });
+
+// --- Marketing Operations: Content OS ---
+// Every edge below is backed by a real FK in ensureContentOsSchema.ts, so every one gets an
+// association. The rule is applied per EDGE: constrain and associate the immediate parent,
+// leave cross-domain references bare and unassociated.
+ContentItem.hasMany(ContentVariant, { foreignKey: 'content_item_id', as: 'variants' });
+ContentVariant.belongsTo(ContentItem, { foreignKey: 'content_item_id', as: 'contentItem' });
+
+// A join table has TWO immediate parents, so both edges are constrained and associated.
+ContentItem.hasMany(ContentItemMedia, { foreignKey: 'content_item_id', as: 'mediaLinks' });
+ContentItemMedia.belongsTo(ContentItem, { foreignKey: 'content_item_id', as: 'contentItem' });
+MediaAsset.hasMany(ContentItemMedia, { foreignKey: 'media_asset_id', as: 'contentLinks' });
+ContentItemMedia.belongsTo(MediaAsset, { foreignKey: 'media_asset_id', as: 'mediaAsset' });
+
+ContentItem.hasMany(ContentApprovalRequest, { foreignKey: 'content_item_id', as: 'approvalRequests' });
+ContentApprovalRequest.belongsTo(ContentItem, { foreignKey: 'content_item_id', as: 'contentItem' });
+
+ContentApprovalRequest.hasMany(ContentApprovalEvent, { foreignKey: 'approval_request_id', as: 'events' });
+ContentApprovalEvent.belongsTo(ContentApprovalRequest, { foreignKey: 'approval_request_id', as: 'approvalRequest' });
+
+// Self-referential: a derivative (crop, resize) points at the original.
+MediaAsset.belongsTo(MediaAsset, { foreignKey: 'derived_from_id', as: 'derivedFrom' });
+MediaAsset.hasMany(MediaAsset, { foreignKey: 'derived_from_id', as: 'derivatives' });
+
+// --- Marketing Operations: publishing queue ---
+// Every edge is backed by a real FK in ensurePublishingSchema.ts.
+ContentItem.hasMany(PublishingJob, { foreignKey: 'content_item_id', as: 'publishingJobs' });
+PublishingJob.belongsTo(ContentItem, { foreignKey: 'content_item_id', as: 'contentItem' });
+ContentVariant.hasMany(PublishingJob, { foreignKey: 'content_variant_id', as: 'publishingJobs' });
+PublishingJob.belongsTo(ContentVariant, { foreignKey: 'content_variant_id', as: 'variant' });
+
+PublishingJob.hasMany(ExternalPublication, { foreignKey: 'publishing_job_id', as: 'publications' });
+ExternalPublication.belongsTo(PublishingJob, { foreignKey: 'publishing_job_id', as: 'job' });
+
+PublishingJob.hasMany(PlatformDeliveryEvent, { foreignKey: 'publishing_job_id', as: 'deliveryEvents' });
+PlatformDeliveryEvent.belongsTo(PublishingJob, { foreignKey: 'publishing_job_id', as: 'job' });
+
+// Deliberately NOT associated in the publishing queue: `publishing_jobs.channel_account_id`
+// (marketing_channel_accounts does not exist yet - T003 is gated on ESC-001), plus tenant_id
+// and brand_id. All bare UUIDs with no FK.
+
+// Deliberately NOT associated in the Content OS: `content_items.campaign_id` /
+// `tenant_id` / `brand_id` / `template_id`, `content_variants.channel_account_id` /
+// `tracked_link_id`, and `content_approval_events.content_item_id` (denormalized for
+// item-scoped audit reads). All bare UUIDs with no FK, all cross-domain.
+
+// Deliberately NOT associated: `tracked_links.campaign_id` / `brand_id` / `tenant_id` and
+// the same denormalized columns on `link_clicks`. Those are bare UUIDs with no FK, exactly
+// as ensureMultiTenantSchema leaves the tenancy columns it adds to tracking tables and as
+// `PageEvent.ts:72` does for `lead_id` ("No `references` here on purpose"). Associating them
+// would assert an integrity the schema does not have. Reporting joins them explicitly.
 
 // --- Case Study OS associations ---
 // Both directions with a named `as` so an eager `include` reads the same way from

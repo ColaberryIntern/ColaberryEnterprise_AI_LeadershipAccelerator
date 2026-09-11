@@ -28,6 +28,8 @@ export interface BrandAttributes {
   /** Key into the application's theme registry. Themes themselves are app-owned. */
   default_theme_key?: string | null;
   support_email?: string | null;
+  /** IANA zone, e.g. America/Chicago. Null means the code default applies. */
+  timezone?: string | null;
   /**
    * The journey program this brand's entry points default to (T203).
    *
@@ -53,6 +55,7 @@ class Brand extends Model<BrandAttributes> implements BrandAttributes {
   declare default_public_url: string | null;
   declare default_theme_key: string | null;
   declare support_email: string | null;
+  declare timezone: string | null;
   declare default_journey_program_id: string | null;
   declare metadata: Record<string, any> | null;
   declare created_at: Date;
@@ -94,6 +97,10 @@ Brand.init(
     },
     support_email: {
       type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    timezone: {
+      type: DataTypes.STRING(64),
       allowNull: true,
     },
     default_journey_program_id: {

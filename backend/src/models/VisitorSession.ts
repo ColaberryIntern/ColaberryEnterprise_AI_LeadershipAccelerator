@@ -17,6 +17,19 @@ interface VisitorSessionAttributes {
   utm_source?: string | null;
   utm_campaign?: string | null;
   utm_medium?: string | null;
+  // --- Marketing Operations attribution (ensureMarketingAttributionSchema) ---
+  // utm_term and utm_content were already being VALIDATED at the ingest boundary and then
+  // packed into the strapi_attribution JSONB blob, where nothing could query them. The click
+  // IDs were never columns and were never persisted - `gclid` and `fbclid` existed in the
+  // codebase only as examples of query keys that get deliberately ignored.
+  utm_content?: string | null;
+  utm_term?: string | null;
+  fbclid?: string | null;
+  gclid?: string | null;
+  msclkid?: string | null;
+  ttclid?: string | null;
+  /** Overflow for click IDs from platforms not yet promoted to their own column. */
+  click_ids?: Record<string, any> | null;
   ip_address?: string | null;
   device_type?: string | null;
   is_bounce: boolean;
@@ -50,6 +63,13 @@ class VisitorSession extends Model<VisitorSessionAttributes> implements VisitorS
   declare utm_source: string | null;
   declare utm_campaign: string | null;
   declare utm_medium: string | null;
+  declare utm_content: string | null;
+  declare utm_term: string | null;
+  declare fbclid: string | null;
+  declare gclid: string | null;
+  declare msclkid: string | null;
+  declare ttclid: string | null;
+  declare click_ids: Record<string, any> | null;
   declare ip_address: string | null;
   declare device_type: string | null;
   declare is_bounce: boolean;
@@ -133,6 +153,37 @@ VisitorSession.init(
     },
     utm_medium: {
       type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    // --- Marketing Operations attribution ---
+    // All nullable: visitor_sessions is a live, high-write table and the DDL adds nothing
+    // NOT NULL. Columns must match ensureMarketingAttributionSchema.ts EXACTLY.
+    utm_content: {
+      type: DataTypes.STRING(200),
+      allowNull: true,
+    },
+    utm_term: {
+      type: DataTypes.STRING(200),
+      allowNull: true,
+    },
+    fbclid: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    gclid: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    msclkid: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    ttclid: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    click_ids: {
+      type: DataTypes.JSONB,
       allowNull: true,
     },
     ip_address: {

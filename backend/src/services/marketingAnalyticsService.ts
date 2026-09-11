@@ -1,8 +1,45 @@
 import { sequelize } from '../config/database';
 import { QueryTypes } from 'sequelize';
 import { logAgentExecution } from './governanceService';
+import { mayComputeWith, getMetric } from './adminOs/metricRegistry';
 
-const PRICE_PER_ENROLLMENT = 4500;
+/**
+ * MARKETING ANALYTICS - what this service will and will not claim to know.
+ *
+ * Every figure here is gated on the metric registry. The registry's own header describes the
+ * failure this guards: "a missing field became 0, a 500 became 'no data', a NULL column became
+ * 'Direct'". This file previously did all three.
+ *
+ * WHAT WAS REMOVED AND WHY:
+ *
+ * 1. REVENUE. This service used to compute `total_revenue = enrollments x 4500` from a
+ *    hardcoded constant and present it on a tab labelled "Revenue Intelligence". That number was
+ *    an assumption wearing a measurement's clothes, and it was wrong three ways at once: the
+ *    price is not 4500 (the current offer is $149/mo), an enrollment is not a payment, and the
+ *    operating rule for this business is that revenue means app-originated checkout ONLY. A
+ *    campaign with ten enrollments and zero collected dollars reported $45,000.
+ *
+ *    It is now reported as `unavailable` with the reason attached, because "we do not have
+ *    payment data joined to campaigns" is a true and useful statement, and "$45,000" is not.
+ *
+ * 2. platform / creative. The query selected `NULL AS platform, NULL AS creative` - declaring
+ *    two dimensions it never populated. Every row came back null, so any consumer grouping by
+ *    platform got one bucket holding everything, labelled as though it were a finding. A
+ *    dimension we cannot populate is removed from the contract rather than served empty.
+ *
+ * WHAT WAS DELIBERATELY LEFT ALONE: `visitors_count` is GREATEST(site visitors, email clickers),
+ * which is not a count of any real population. It is registered as `invalid` rather than
+ * silently corrected, because changing it changes numbers people have been reading for months.
+ * See metricRegistry 'marketing.campaign_visitors' and
+ * docs/marketing/ESCALATION-002-fabricated-metrics.md. Escalated, not patched.
+ */
+
+/** A figure the registry says we cannot honestly report, and the reason. */
+export interface UnavailableMetric {
+  key: string;
+  name: string;
+  reason: string;
+}
 
 export interface CampaignMetric {
   campaign_id: string;
@@ -13,23 +50,80 @@ export interface CampaignMetric {
   enrollments_count: number;
   high_intent_pct: number;
   conversion_rate: number;
-  total_revenue: number;
-  revenue_per_visitor: number;
-  revenue_per_lead: number;
   visitor_to_lead_pct: number;
   lead_to_call_pct: number;
   call_to_enroll_pct: number;
   campaign_type: string | null;
-  platform: string | null;
-  creative: string | null;
+  /** The objective the ranking ladder is chosen by. Null when never set. */
+  funnel_stage: string | null;
+  /** opens + clicks + replies (distinct leads each). The 'governed engagement' a consideration
+   * campaign ranks on. A plain sum of three trusted counts, so trusted itself. */
+  engagement_count: number;
+  /**
+   * Metrics that CANNOT be computed, with the reason - never a zero standing in for one.
+   * Callers must render these as an explicit unavailable state and must not feed them to a
+   * health score, an average, or an AI narrative.
+   */
+  unavailable: UnavailableMetric[];
 }
 
-export async function getCampaignMetrics(filters?: {
+/**
+ * The metrics this surface would like to show and the registry forbids computing.
+ *
+ * Derived by ASKING the registry, not by hand-listing - so when an ad-spend connector lands and
+ * `marketing.roas` flips to trusted, this list shrinks on its own. A hand-written list would
+ * keep saying "unavailable" after the data arrived, which is the same class of lie in the
+ * opposite direction.
+ */
+const REVENUE_METRIC_KEYS = ['marketing.roas', 'marketing.ad_spend', 'marketing.cost_per_lead'] as const;
+
+function buildUnavailable(): UnavailableMetric[] {
+  const out: UnavailableMetric[] = [];
+  for (const key of REVENUE_METRIC_KEYS) {
+    if (mayComputeWith(key)) continue; // trusted now - the caller may compute it for real
+    const def = getMetric(key);
+    out.push({
+      key,
+      name: def?.name ?? key,
+      // A registered metric always carries a reason when it is not trusted (the registry's own
+      // test enforces that). The fallback exists only so an unregistered key cannot produce an
+      // empty explanation, which would read as "no reason" rather than "not registered".
+      reason: def?.statusReason ?? 'Not registered in the metric registry.',
+    });
+  }
+  return out;
+}
+
+
+
+/**
+ * The timestamp column of each activity source the date range applies to. Named here, in one
+ * place, and asserted against the models' declared attributes by
+ * marketingCampaignScope.test.ts - because the previous clause named `v."createdAt"`, a column
+ * `visitors` has never had (it is `created_at`, `timestamps: false`), and a test that only
+ * mocked sequelize.query pinned the wrong literal and passed. A column name the model does not
+ * declare cannot pass that suite now.
+ */
+export const ACTIVITY_DATE_COLUMNS = {
+  interaction_outcomes: 'created_at',
+  visitors: 'created_at',
+} as const;
+
+export interface CampaignMetricFilters {
   start?: string;
   end?: string;
-}): Promise<CampaignMetric[]> {
+  /** Scope to one brand. Omitted = every brand the caller may see (the route decides that). */
+  brandId?: string;
+}
+
+export async function getCampaignMetrics(filters?: CampaignMetricFilters): Promise<CampaignMetric[]> {
   const startTime = Date.now();
   const dateFilter = buildDateFilter(filters);
+  // Brand is a WHERE on campaigns, not a join: a campaign with no brand belongs to no brand
+  // scope and drops out when one is chosen. That is the truthful answer, not a leak.
+  const brandClause = filters?.brandId ? 'AND c.brand_id = :brandId' : '';
+  const replacements: Record<string, string> = { ...dateFilter.replacements };
+  if (filters?.brandId) replacements.brandId = filters.brandId;
 
   // Combine visitor tracking data with interaction outcome data for full picture
   const query = `
@@ -45,6 +139,7 @@ export async function getCampaignMetrics(filters?: {
         COUNT(*) FILTER (WHERE io.outcome = 'clicked')::int AS total_clicks
       FROM interaction_outcomes io
       WHERE io.campaign_id IS NOT NULL
+        ${dateFilter.clauseFor(`io.${ACTIVITY_DATE_COLUMNS.interaction_outcomes}`)}
       GROUP BY io.campaign_id
     ),
     visitor_data AS (
@@ -55,12 +150,14 @@ export async function getCampaignMetrics(filters?: {
       FROM visitors v
       LEFT JOIN intent_scores i ON i.visitor_id = v.id
       WHERE v.campaign_id IS NOT NULL AND v.campaign_id != ''
+        ${dateFilter.clauseFor(`v.${ACTIVITY_DATE_COLUMNS.visitors}`)}
       GROUP BY v.campaign_id
     )
     SELECT
       c.id AS campaign_id,
       c.name AS campaign_name,
       c.type AS campaign_type,
+      c.funnel_stage AS funnel_stage,
       GREATEST(COALESCE(vd.visitors_count, 0), COALESCE(ce.unique_clicks, 0))::int AS visitors_count,
       COALESCE(vd.high_intent_count, 0)::int AS high_intent_count,
       COALESCE(ce.emails_sent, 0)::int AS leads_count,
@@ -70,9 +167,7 @@ export async function getCampaignMetrics(filters?: {
       COALESCE(ce.meetings, 0)::int AS strategy_calls,
       COALESCE(ce.total_opens, 0)::int AS total_opens,
       COALESCE(ce.total_clicks, 0)::int AS total_clicks,
-      COUNT(DISTINCT e.id)::int AS enrollments_count,
-      NULL AS platform,
-      NULL AS creative
+      COUNT(DISTINCT e.id)::int AS enrollments_count
     FROM campaigns c
     LEFT JOIN campaign_engagement ce ON ce.campaign_id = c.id
     LEFT JOIN visitor_data vd ON vd.campaign_id = c.id::text
@@ -80,17 +175,25 @@ export async function getCampaignMetrics(filters?: {
     LEFT JOIN leads l ON l.id = cl.lead_id
     LEFT JOIN enrollments e ON LOWER(e.email) = LOWER(l.email) AND e.status = 'active'
     WHERE c.status = 'active'
+      ${brandClause}
       AND (ce.emails_sent > 0 OR vd.visitors_count > 0)
-    GROUP BY c.id, c.name, c.type, vd.visitors_count, vd.high_intent_count,
+    GROUP BY c.id, c.name, c.type, c.funnel_stage, vd.visitors_count, vd.high_intent_count,
       ce.emails_sent, ce.unique_opens, ce.unique_clicks, ce.replies, ce.meetings,
       ce.total_opens, ce.total_clicks
     ORDER BY COALESCE(ce.emails_sent, 0) DESC
   `;
 
   const rows = await sequelize.query(query, {
-    replacements: dateFilter.replacements,
+    replacements,
     type: QueryTypes.SELECT,
   }) as any[];
+
+  // Computed per call, NOT memoised at module load. The comment on buildUnavailable claims
+  // this list "shrinks on its own" once a metric flips to trusted; with a module-level constant
+  // that was true only after a process restart, which makes the claim misleading in exactly the
+  // way this file exists to avoid. campaignLinkService already recomputes per call; this now
+  // matches it. The cost is a five-element array per request.
+  const unavailable_ = buildUnavailable();
 
   const result = rows.map((row) => {
     const visitors = Number(row.visitors_count) || 0;
@@ -100,7 +203,6 @@ export async function getCampaignMetrics(filters?: {
     const clicks = Number(row.clicks_count) || 0;
     const strategyCalls = Number(row.strategy_calls) || 0;
     const enrollments = Number(row.enrollments_count) || 0;
-    const totalRevenue = enrollments * PRICE_PER_ENROLLMENT;
 
     return {
       campaign_id: row.campaign_id,
@@ -119,15 +221,13 @@ export async function getCampaignMetrics(filters?: {
       click_rate: leads > 0 ? Math.round((clicks / leads) * 10000) / 100 : 0,
       high_intent_pct: visitors > 0 ? Math.round((highIntent / visitors) * 100) : 0,
       conversion_rate: leads > 0 ? Math.round((enrollments / leads) * 10000) / 100 : 0,
-      total_revenue: totalRevenue,
-      revenue_per_visitor: visitors > 0 ? Math.round(totalRevenue / visitors) : 0,
-      revenue_per_lead: leads > 0 ? Math.round(totalRevenue / leads) : 0,
       visitor_to_lead_pct: visitors > 0 ? Math.round((leads / visitors) * 10000) / 100 : 0,
       lead_to_call_pct: leads > 0 ? Math.round((strategyCalls / leads) * 10000) / 100 : 0,
       call_to_enroll_pct: strategyCalls > 0 ? Math.round((enrollments / strategyCalls) * 10000) / 100 : 0,
       campaign_type: row.campaign_type || null,
-      platform: row.platform || null,
-      creative: row.creative || null,
+      funnel_stage: row.funnel_stage || null,
+      engagement_count: opens + clicks + (Number(row.replies_count) || 0),
+      unavailable: unavailable_,
     };
   });
 
@@ -137,21 +237,49 @@ export async function getCampaignMetrics(filters?: {
   return result;
 }
 
-function buildDateFilter(filters?: { start?: string; end?: string }): {
-  clause: string;
+/**
+ * The date range, as a clause for WHICHEVER timestamp column the CTE has. Until this build the
+ * builder returned one clause hard-wired to a column that does not exist and nothing
+ * interpolated it, so the range the scope strip stated was never applied - the verifier's
+ * finding, and true on main before this branch. The column is a caller-supplied identifier
+ * from ACTIVITY_DATE_COLUMNS, never user input.
+ *
+ * `end` is INCLUSIVE, as the scope strip promises (`DateRange.end` is documented inclusive):
+ * a `YYYY-MM-DD` literal compared with `<=` is midnight at the START of that day and would
+ * drop the whole last day from both the current and the prior window. So the upper bound is
+ * strictly less than the day after.
+ */
+export function buildDateFilter(filters?: { start?: string; end?: string }): {
+  clauseFor: (column: string) => string;
   replacements: Record<string, string>;
 } {
   const replacements: Record<string, string> = {};
-  const parts: string[] = [];
+  if (filters?.start) replacements.start = filters.start;
+  if (filters?.end) replacements.end = filters.end;
+  return {
+    clauseFor: (column) => [
+      filters?.start ? `AND ${column} >= CAST(:start AS date)` : '',
+      filters?.end ? `AND ${column} < (CAST(:end AS date) + INTERVAL '1 day')` : '',
+    ].filter(Boolean).join(' '),
+    replacements,
+  };
+}
 
-  if (filters?.start) {
-    parts.push('AND v."createdAt" >= :start');
-    replacements.start = filters.start;
-  }
-  if (filters?.end) {
-    parts.push('AND v."createdAt" <= :end');
-    replacements.end = filters.end;
-  }
+/** Totals of the trusted counts, for a period-over-period comparison. Pure. */
+export interface CampaignTotals {
+  campaigns: number;
+  visitors_count: number;
+  leads_count: number;
+  engagement_count: number;
+  enrollments_count: number;
+}
 
-  return { clause: parts.join(' '), replacements };
+export function totalCampaignMetrics(rows: readonly Pick<CampaignMetric, 'visitors_count' | 'leads_count' | 'engagement_count' | 'enrollments_count'>[]): CampaignTotals {
+  return rows.reduce<CampaignTotals>((acc, r) => ({
+    campaigns: acc.campaigns + 1,
+    visitors_count: acc.visitors_count + r.visitors_count,
+    leads_count: acc.leads_count + r.leads_count,
+    engagement_count: acc.engagement_count + r.engagement_count,
+    enrollments_count: acc.enrollments_count + r.enrollments_count,
+  }), { campaigns: 0, visitors_count: 0, leads_count: 0, engagement_count: 0, enrollments_count: 0 });
 }
