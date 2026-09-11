@@ -212,6 +212,20 @@ Weaknesses found by running it, and what was done. Add to this every time.
   approved them straight back under a human's name. Retirement now means BOTH
   the revision status and the identity's `is_retired`, and the sweep skips any
   key whose latest revision is retired and says how many it skipped.
+- *(2026-09-11)* **Chunk 3 wrote four good questions that were dead on arrival.**
+  The generator built its taken-key set from live identities only, so the keys
+  of six drafts retired that morning read as free, and four new questions landed
+  as revision 2 under identities marked `is_retired`. Serving, the sweep and the
+  generator's own count all exclude retired identities. The count said 25
+  written; the bank was four short of that. **A question key is permanent:
+  retiring it withdraws the content, not the name.** Taken keys now come from
+  every identity. The four were revived (identity live, old revision still
+  retired).
+- *(2026-09-11)* **"11 passed" and "jest exit 1" in the same run.** The scripts
+  fired `main()` on import, so a test importing a pure helper also started a
+  generation run, which failed without a database and set the process exit
+  code. Every test passed and CI would have gone red on a suite with no failing
+  test. All three scripts now guard on `require.main === module`.
 - *(2026-09-10)* **Do not write source containing backslashes through a shell
   heredoc.** Building the schema parser that way put a literal CR and a real
   newline where `` and `

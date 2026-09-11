@@ -139,12 +139,22 @@ async function main(): Promise<void> {
 
   const byDomain: Record<string, number> = {};
   const byObjective: Record<string, Existing[]> = {};
-  const taken = new Set<string>();
   for (const r of rows) {
     byDomain[r.domain_id] = (byDomain[r.domain_id] ?? 0) + 1;
     (byObjective[r.objective_id] ??= []).push(r);
-    taken.add(r.question_key);
   }
+
+  // Taken keys come from EVERY identity, retired or not. A question key is
+  // permanent: retiring it withdraws the content, it does not free the name.
+  // Chunk 3 of the scaled run built this set from live identities only, so the
+  // keys of six drafts retired that morning read as free, and four good new
+  // questions were written as revision 2 under identities marked withdrawn -
+  // invisible to serving, to the sweep, and to this script's own count.
+  const taken = new Set<string>(
+    (await sequelize.query<{ question_key: string }>(
+      'SELECT question_key FROM cert_questions', { type: QueryTypes.SELECT },
+    )).map((r) => r.question_key),
+  );
 
   log(`bank        : ${rows.length} question(s), supporting ${nonOverlappingMocks(byDomain)} non-overlapping mock(s)`);
   log('');
@@ -349,7 +359,11 @@ async function main(): Promise<void> {
 /** Let instrumentation finish before the connection goes; see the sweep script. */
 const settleTelemetry = (): Promise<void> => new Promise((r) => { setTimeout(r, 2000); });
 
-main()
+// Only run when invoked directly. The pure helpers above are imported by tests,
+// and a script that fires main() on import tries to reach a database the test
+// does not have, fails, and sets the process exit code - so every test passes
+// and jest still exits 1. Same guard as `require.main === module` in plain Node.
+if (require.main === module) main()
   .then(settleTelemetry)
   .then(() => sequelize.close())
   .catch(async (err) => {
