@@ -10,6 +10,9 @@ import { formatMoneyOrUnavailable, formatRatioOrUnavailable, formatSpend } from 
 import MarketingScopeStrip from './MarketingScopeStrip';
 import { defaultScope, scopeToQuery, type MarketingScope } from './marketingScope';
 import { listBrands, type Brand as ScopeBrand } from '../../../services/adminBrandApi';
+import NeedsAttentionQueue, { type AttentionItem, type ExcludedSignal } from './NeedsAttentionQueue';
+import { getNeedsAttention } from '../../../services/marketingOpsApi';
+import { ALL_BRANDS } from './marketingScope';
 
 const MarketingFunnelGraph = lazy(() => import('../../../components/admin/marketing/MarketingFunnelGraph'));
 const OpenclawTab = lazy(() => import('../../../components/admin/intelligence/tabs/OpenclawTab'));
@@ -1246,6 +1249,35 @@ function AdminMarketingDashboardPage() {
   const [scope, setScope] = useState<MarketingScope>(() =>
     defaultScope(new Date().toISOString().slice(0, 10)));
   const [scopeBrands, setScopeBrands] = useState<ScopeBrand[]>([]);
+
+  /* ---------- Needs-Attention queue ----------
+   * Refetched whenever the brand scope changes. The queue is the one thing on this page that
+   * tells the operator what to DO, so it follows the same scope as the numbers - a queue for
+   * all brands sitting above a table filtered to one would be two views disagreeing. */
+  const [attentionItems, setAttentionItems] = useState<AttentionItem[]>([]);
+  const [attentionExcluded, setAttentionExcluded] = useState<ExcludedSignal[]>([]);
+  const [attentionLoading, setAttentionLoading] = useState(true);
+  const [attentionError, setAttentionError] = useState<string | null>(null);
+
+  const fetchAttention = useCallback(async (brand: string) => {
+    setAttentionLoading(true);
+    setAttentionError(null);
+    try {
+      const q = await getNeedsAttention(brand === ALL_BRANDS ? undefined : { brand_id: brand });
+      setAttentionItems(q.items);
+      setAttentionExcluded(q.excluded);
+    } catch {
+      // Cleared rather than left stale: a queue from the previous brand shown under a failed
+      // fetch for the new one would be the wrong brand's to-do list wearing the new label.
+      setAttentionItems([]);
+      setAttentionExcluded([]);
+      setAttentionError('The attention queue could not be loaded.');
+    } finally {
+      setAttentionLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchAttention(scope.brand); }, [fetchAttention, scope.brand]);
   const [brandsLoading, setBrandsLoading] = useState(true);
 
   useEffect(() => {
@@ -1315,6 +1347,18 @@ function AdminMarketingDashboardPage() {
         now={Date.now()}
         onScopeChange={setScope}
       />
+
+      <div className="px-3 pt-3">
+        <SectionCard title="Needs attention" icon="alarm-warning-line" padded={false}>
+          <NeedsAttentionQueue
+            loading={attentionLoading}
+            error={attentionError}
+            items={attentionItems}
+            excluded={attentionExcluded}
+            onRetry={() => fetchAttention(scope.brand)}
+          />
+        </SectionCard>
+      </div>
 
       {activeTab === 'funnel' && (
         <div style={{ height: 'calc(100vh - 170px)', minHeight: 400 }}>

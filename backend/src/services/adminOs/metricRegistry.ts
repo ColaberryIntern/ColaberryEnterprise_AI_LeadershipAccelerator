@@ -405,6 +405,65 @@ export const METRICS: Record<string, MetricDef> = {
       'docs/marketing/ESCALATION-002-fabricated-metrics.md.',
   },
 
+  // The three signals the Needs-Attention queue may raise. All `trusted`, and it is worth
+  // being precise about why: each is a COUNT OF ROWS in a table this system owns and writes.
+  // That is a fact, not an estimate - there is no sampling, no heuristic and no external
+  // source that could be stale. Contrast marketing.bot_click_share, which is a count too but
+  // of a HEURISTIC classification, and is therefore only partial.
+  //
+  // The queue consults mayComputeWith() before raising anything, so if one of these is ever
+  // downgraded (say the approval table gains a second writer with different semantics) the
+  // signal disappears from the queue automatically rather than raising on a number nobody
+  // can vouch for.
+
+  'marketing.pending_approvals': {
+    key: 'marketing.pending_approvals',
+    name: 'Content awaiting approval',
+    domain: 'marketing',
+    unit: 'count',
+    definition: 'Content approval requests currently in the pending state.',
+    formula: "COUNT(*) FROM content_approval_requests WHERE status = 'pending'",
+    sources: ['content_approval_requests'],
+    grain: 'event',
+    dimensions: ['brand', 'period'],
+    status: 'trusted',
+    drilldown: { target: 'marketing.content', requiredFilters: ['status'] },
+  },
+
+  'marketing.failed_publishing_jobs': {
+    key: 'marketing.failed_publishing_jobs',
+    name: 'Failed or overdue publishing jobs',
+    domain: 'marketing',
+    unit: 'count',
+    definition:
+      'Publishing jobs that failed, were dead-lettered, or are past their publish time and ' +
+      'still unpublished.',
+    formula:
+      "COUNT(*) FROM publishing_jobs WHERE state IN ('failed','dead_lettered') OR " +
+      "(state IN ('pending','retrying') AND publish_at < now() - grace)",
+    sources: ['publishing_jobs'],
+    grain: 'event',
+    dimensions: ['brand', 'provider', 'period'],
+    status: 'trusted',
+    drilldown: { target: 'marketing.publishing', requiredFilters: ['state'] },
+  },
+
+  'marketing.broken_tracked_links': {
+    key: 'marketing.broken_tracked_links',
+    name: 'Broken tracking links',
+    domain: 'marketing',
+    unit: 'count',
+    definition:
+      'Active tracked links whose stored destination no longer passes the allowlist, so the ' +
+      'public redirect refuses them and a click lands on a 410.',
+    formula: 'COUNT(active tracked_links WHERE validateDestination(destination_url) fails)',
+    sources: ['tracked_links'],
+    grain: 'event',
+    dimensions: ['brand', 'campaign'],
+    status: 'trusted',
+    drilldown: { target: 'marketing.links', requiredFilters: ['status'] },
+  },
+
   'marketing.publish_success_rate': {
     key: 'marketing.publish_success_rate',
     name: 'Publish success rate',
