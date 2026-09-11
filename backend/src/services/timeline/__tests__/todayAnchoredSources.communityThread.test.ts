@@ -88,11 +88,23 @@ describe('communityFieldsFromPost', () => {
     expect(plain.week).toBeNull();
   });
 
-  it('never leaves a text-only post without artwork', () => {
+  it('gives a text-only ritual post its WEEK’S banner, never a blank tile', () => {
     // The blank teal slab in the feed: community items only ever took `image`
-    // from media_urls, so a text post rendered as an empty tile.
-    const f = communityFieldsFromPost(mkPost({ media_urls: [] }));
-    expect(f.image).toBe('/thumbnails/curriculum-types/community_discussion.jpg');
+    // from media_urls, so a text post rendered as an empty tile. Now a Week 2
+    // post carries the Skill Drop banner — the per-ritual mapping reaches the
+    // feed item, which is the whole point of twelve pictures.
+    const f = communityFieldsFromPost(mkPost({ media_urls: [], week: 2 }));
+    expect(f.image).toBe('/thumbnails/curriculum-types/ritual_skill_drop.jpg');
+    expect(communityFieldsFromPost(mkPost({ media_urls: [], week: 10 })).image)
+      .toBe('/thumbnails/curriculum-types/ritual_hot_take.jpg');
+  });
+
+  it('still never renders blank when the week is unknown', () => {
+    // ritualArt(null) → DEFAULT_RITUAL (Cohort Wins) → its own art. The shared
+    // community_discussion.jpg remains the fallback only for a ritual with no
+    // art of its own, which as of this commit is none of them.
+    const f = communityFieldsFromPost(mkPost({ media_urls: [], week: null }));
+    expect(f.image).toBe('/thumbnails/curriculum-types/ritual_cohort_wins.jpg');
   });
 
   it('lets the post’s own media win over the ritual banner', () => {
