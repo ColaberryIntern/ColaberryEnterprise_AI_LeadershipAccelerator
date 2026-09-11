@@ -4,7 +4,8 @@ import ReeseOutreach from '../../models/ReeseOutreach';
 import type { ReeseOutreachSignalType } from '../../models/ReeseOutreach';
 import { createTicket } from '../ticketService';
 import { authorizeTicketDispatch } from '../workLedger/agentActionAuthorizationBridge';
-import { getReeseAdminUserId } from './reeseIdentitySeed';
+import { logAgentActivity } from '../agentBlueprint/agentActivityLogService';
+import { getReeseAdminUserId, getReeseAgentId } from './reeseIdentitySeed';
 import { isEligibleForAutonomousOutreach } from './reeseEligibilityService';
 import {
   getPilotCohortStudentEnrollmentIds,
@@ -160,6 +161,25 @@ async function sendNewOutreach(
   });
 
   await initiateDm(enrollmentId, message);
+
+  // GOALS scorecard fix (Ali: "improve the 3.8/5 Trust score for Reese") —
+  // record this real send under Reese's OWN AiAgent.id so
+  // agentGoalsDimensionsService.ts's observability/availability/solid
+  // dimensions have real data to compute from instead of their zero-row
+  // fallback constants. See agentActivityLogService.ts's header for why this
+  // was missing. Fail-open (logAgentActivity never throws) — a bookkeeping
+  // failure here must never be mistaken for the real send having failed.
+  const reeseAgentId = await getReeseAgentId();
+  if (reeseAgentId) {
+    await logAgentActivity({
+      agentId: reeseAgentId,
+      action: 'reese_autonomous_outreach',
+      result: 'success',
+      reason: `${signalType}_signal_fired`,
+      traceId: eventId,
+      details: { ticket_id: ticket.id, signal_type: signalType },
+    });
+  }
 
   const nextFollowUpDueAt = new Date(Date.now() + FOLLOW_UP_DAYS * 24 * 60 * 60 * 1000);
   await ReeseOutreach.create({
