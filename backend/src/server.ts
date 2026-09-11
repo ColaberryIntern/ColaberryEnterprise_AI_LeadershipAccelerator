@@ -104,6 +104,7 @@ import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
 import { ensureOrgAccountSchema } from './db/ensureOrgAccountSchema';
 import { ensureMultiTenantSchema } from './db/ensureMultiTenantSchema';
+import { ensureGrowthJourneySchema } from './db/ensureGrowthJourneySchema';
 import { ensureRefactoredDeliverySchema } from './db/ensureRefactoredDeliverySchema';
 import { ensureCareerPublicationSchema } from './db/ensureCareerPublicationSchema';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
@@ -2504,6 +2505,20 @@ async function start(): Promise<void> {
   // were reversed. Additive only; no NOT NULL, no backfill (backfills are separate
   // explicitly-invoked scripts, never boot work).
   await ensureMultiTenantSchema();
+  // Growth Journey OS — Phase 1: journey_programs and journey_paths, the shared
+  // framework Explorer Growth becomes the first program on.
+  //
+  // MUST run after ensureMultiTenantSchema, and this ordering is load-bearing rather
+  // than tidy: journey_programs carries foreign keys to tenants(id) and brands(id), and
+  // ensureMultiTenantSchema is what creates both. Registering it beside
+  // ensureExplorerGrowthSchema (line 2444) would reference tables that do not exist yet
+  // — and because each statement is individually caught, that failure surfaces as a
+  // console warning at boot, not a crash. The tables would simply be absent until
+  // something queried them.
+  //
+  // Additive only. Creates two tables; alters nothing. Nothing reads them until the
+  // Growth Journey flags are set, which they are not.
+  await ensureGrowthJourneySchema();
   // Refactored AI Delivery OS — Gate 1: 7 delivery tables (engagements, projects, the
   // student-project bridge, project membership, contracts, the decision ledger and the
   // append-only event stream), plus the ESC-1 relaxation of
@@ -2997,6 +3012,70 @@ async function start(): Promise<void> {
   seedAllCampaigns().catch((err) =>
     console.error('[Seed] Campaign seeding failed:', err?.message)
   );
+
+  // Growth Journey OS T202: §4's offer catalog and brand-offer policy.
+  //
+  // AWAITED, not backgrounded like the campaign seed above: this is local
+  // database work with no external API call, so there is nothing slow to keep
+  // off the boot path. Wrapped because `start()` is called bare with
+  // `app.listen()` as its last statement — an uncontained throw here would stop
+  // the backend binding its port.
+  //
+  // MUST RUN AFTER `ensureGrowthJourneySchema()` (line ~2521), which creates the
+  // two tables it writes to. Seeding first is not a crash: every write is
+  // individually caught, so it would surface as a handful of warnings and an
+  // empty policy table — which then DENIES every brand every family, because
+  // the resolver fails closed. Silent and safe, but wrong.
+  //
+  // Unflagged deliberately. An empty table denies everything; seeding is what
+  // makes §4's intent true, and the denies land before the allows. Nothing
+  // reads the table yet.
+  try {
+    const { seedBrandOfferPolicy } = await import('./seeds/growthJourney/seedBrandOfferPolicy');
+    const policy = await seedBrandOfferPolicy();
+    console.log(
+      `[GrowthJourney] offer policy seeded: ${policy.families_created} families created, ` +
+        `${policy.policies_created} policies created, ${policy.policies_updated} denies restored` +
+        (policy.skipped_brands.length ? `, brands absent: ${policy.skipped_brands.join(',')}` : '') +
+        (policy.failed.length ? `, failed: ${policy.failed.length}` : ''),
+    );
+  } catch (err: any) {
+    console.warn('[GrowthJourney] offer policy seed failed (non-fatal):', err?.message);
+  }
+
+  // Growth Journey OS T212: §5's four journey programs, their paths, and each
+  // brand's default pointer.
+  //
+  // AFTER the policy seed above, and that order is meaningful even though it is
+  // not a database dependency: a programme's paths are DERIVED from the same
+  // brand-offer policy definitions, so reading the two steps in this order is
+  // how the next person sees that §4 governs §5 rather than the reverse.
+  //
+  // EVERY PROGRAMME IS SEEDED `draft`, so `resolveDefaultJourney` returns
+  // `program_not_active` for every brand until a human activates one. That is
+  // the intended resting state, not an unfinished one: T201 made `draft` the
+  // default precisely so a programme seeded by mistake cannot be resolved as a
+  // brand's default, and T203 enforces it. This step builds the structure and
+  // stops. Turning a journey on stays a decision.
+  //
+  // Nothing here can send anything - these rows describe structure, and a path
+  // existing does not mean an offer may be made: T202's eligibility gate is a
+  // separate check at the moment of use.
+  try {
+    const { seedJourneyPrograms } = await import('./seeds/growthJourney/seedJourneyPrograms');
+    const programs = await seedJourneyPrograms();
+    console.log(
+      `[GrowthJourney] journey programs seeded: ${programs.programs_created} created, ` +
+        `${programs.paths_created} paths created, ${programs.defaults_set} brand defaults set` +
+        (programs.defaults_left_alone
+          ? `, ${programs.defaults_left_alone} defaults left as an operator set them`
+          : '') +
+        (programs.skipped_brands.length ? `, brands absent: ${programs.skipped_brands.join(',')}` : '') +
+        (programs.failed.length ? `, failed: ${programs.failed.length}` : ''),
+    );
+  } catch (err: any) {
+    console.warn('[GrowthJourney] journey program seed failed (non-fatal):', err?.message);
+  }
 
   // Intelligence OS: ensure tables exist and start autonomous discovery
   try { await ensureIntelligenceTables(); } catch (err: any) { console.warn('[Intelligence] ensure tables failed (non-fatal):', err?.message); }

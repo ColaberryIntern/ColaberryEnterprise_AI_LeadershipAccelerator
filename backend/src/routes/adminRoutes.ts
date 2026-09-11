@@ -13,6 +13,7 @@ import caseStudyAdminRoutes from './admin/caseStudyAdminRoutes';
 import caseStudyStudioRoutes from './admin/caseStudyStudioRoutes';
 import caseStudyMetricRoutes from './admin/caseStudyMetricRoutes';
 import explorerGrowthRoutes from './admin/explorerGrowthRoutes';
+import growthJourneyRoutes from './admin/growthJourneyRoutes';
 import campaignRoutes from './admin/campaignRoutes';
 import insightRoutes from './admin/insightRoutes';
 import settingsRoutes from './admin/settingsRoutes';
@@ -172,6 +173,7 @@ router.use(caseStudyMetricRoutes);
 // deny-by-default for every scoped management role while legacy admin passed,
 // which is a surface that half-works and looks fine.
 router.use(explorerGrowthRoutes);
+router.use(growthJourneyRoutes);
 router.use(campaignRoutes);
 router.use(insightRoutes);
 router.use(settingsRoutes);
