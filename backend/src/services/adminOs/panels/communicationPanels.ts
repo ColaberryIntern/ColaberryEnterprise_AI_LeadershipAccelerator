@@ -1,5 +1,6 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../../config/database';
+import { maskUrlSecrets as maskSecrets } from '../../../utils/piiRedaction';
 
 /**
  * Every communication with this person, threaded by campaign.
@@ -52,6 +53,12 @@ export interface CommunicationOutcome {
    * metadata subject is the truth; the FK is a guess.
    */
   attributed: boolean;
+  /**
+   * The URLs Mandrill saw clicked, secrets masked. Present on click rows the
+   * poll wrote from 2026-09-11; absent (not empty) before that, when the poll
+   * did not keep them.
+   */
+  clickedUrls?: string[];
 }
 
 export interface CommunicationMessage {
@@ -71,6 +78,11 @@ export interface CommunicationMessage {
   /** The table this came from, so any row can be traced back. */
   source: string;
   outcomes: CommunicationOutcome[];
+  /**
+   * Mandrill's id for the sent message, when a poll row recorded it. Lets the
+   * modal fetch the message as sent for mail this platform never stored.
+   */
+  mandrillId: string | null;
 }
 
 export interface CommunicationThread {
@@ -119,7 +131,21 @@ interface MessageRow {
 interface OutcomeRow {
   scheduled_email_id: string | null; campaign_id: string | null;
   outcome: string; channel: string | null; created_at: string | null;
-  metadata: { subject?: string | null } | null;
+  metadata: { subject?: string | null; mandrill_id?: string | null; clicked_urls?: unknown } | null;
+}
+
+/** Click URLs off a poll row, masked and bounded; undefined when the row has none. */
+function clickedUrlsOf(metadata: OutcomeRow['metadata']): string[] | undefined {
+  const raw = metadata?.clicked_urls;
+  if (!Array.isArray(raw)) return undefined;
+  const out: string[] = [];
+  for (const u of raw) {
+    if (typeof u !== 'string') continue;
+    const masked = maskSecrets(u.slice(0, 500));
+    if (masked && !out.includes(masked)) out.push(masked);
+    if (out.length >= 10) break;
+  }
+  return out;
 }
 
 /**
@@ -218,9 +244,11 @@ export async function loadCommunications(leadIds: number[]): Promise<Communicati
     const recorded = o.metadata?.subject ?? null;
     const fkSubject = o.scheduled_email_id ? subjectOf.get(o.scheduled_email_id) : undefined;
     const agrees = !recorded || fkSubject === undefined || norm(recorded) === norm(fkSubject);
+    const clickedUrls = clickedUrlsOf(o.metadata);
     const entry: CommunicationOutcome = {
       outcome: o.outcome, at: o.created_at, channel: o.channel,
       subject: recorded, attributed: agrees,
+      ...(clickedUrls ? { clickedUrls } : {}),
     };
     if (o.scheduled_email_id && agrees && subjectOf.has(o.scheduled_email_id)) {
       const list = byMessage.get(o.scheduled_email_id) ?? [];
@@ -288,6 +316,8 @@ export async function loadCommunications(leadIds: number[]): Promise<Communicati
       toAddress: m.to_address,
       source: m.source,
       outcomes: byMessage.get(m.id) ?? [],
+      // A held message renders from its own body; Mandrill is not consulted.
+      mandrillId: null,
     });
   }
 
@@ -298,6 +328,7 @@ export async function loadCommunications(leadIds: number[]): Promise<Communicati
     const t = threads.get(keyOf(o.campaign_id));
     if (!t) continue;
     const recorded = o.metadata?.subject ?? null;
+    const clickedUrls = clickedUrlsOf(o.metadata);
     t.messages.push({
       id: `outcome-${o.created_at}-${o.outcome}`,
       direction: o.outcome === 'replied' ? 'inbound' : 'outbound',
@@ -311,7 +342,12 @@ export async function loadCommunications(leadIds: number[]): Promise<Communicati
       stepIndex: null,
       toAddress: null,
       source: 'interaction_outcomes',
-      outcomes: [{ outcome: o.outcome, at: o.created_at, channel: o.channel, subject: recorded, attributed: true }],
+      outcomes: [{
+        outcome: o.outcome, at: o.created_at, channel: o.channel, subject: recorded, attributed: true,
+        ...(clickedUrls ? { clickedUrls } : {}),
+      }],
+      // Nothing held here; the modal can fetch the message as sent from Mandrill.
+      mandrillId: typeof o.metadata?.mandrill_id === 'string' ? o.metadata.mandrill_id : null,
     });
   }
 

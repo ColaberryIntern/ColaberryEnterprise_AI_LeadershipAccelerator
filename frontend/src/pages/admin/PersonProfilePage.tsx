@@ -773,7 +773,7 @@ export default function PersonProfilePage() {
             <ClassActivityTab classActivity={profile.classActivity} curriculum={profile.curriculum} />
           )}
 
-          {tab === 'communications' && <CommunicationsTab communications={profile.communications} />}
+          {tab === 'communications' && <CommunicationsTab communications={profile.communications} personRef={personRef} />}
 
           {tab === 'work' && <WorkTab work={profile.work} />}
 
