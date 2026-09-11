@@ -24,6 +24,7 @@ import PriorHistoryPanel from '../../components/admin/person/PriorHistoryPanel';
 import StrategyBriefPanel from '../../components/admin/person/StrategyBriefPanel';
 import AccountTab from '../../components/admin/person/AccountTab';
 import GrowthTab from '../../components/admin/person/GrowthTab';
+import PersonActivityChart from '../../components/admin/person/PersonActivityChart';
 import { Field, Unknown, fmtDate, fmtDateTime } from '../../components/admin/person/primitives';
 import type { Journey, Profile, TempEntry, TimelineEvent, VisitorData } from '../../adminOs/personTypes';
 import { refForApi } from '../../adminOs/personLink';
@@ -69,6 +70,8 @@ const DOMAIN_TONE: Record<string, string> = {
   commerce: 'success', learning: 'warning', community: 'dark',
 };
 
+const TIMELINE_VIEW_KEY = 'admin_person_timeline_view';
+
 type TabKey = 'timeline' | 'journey' | 'acquisition' | 'notes' | 'strategy'
   | 'communications' | 'class' | 'work' | 'account' | 'growth'
   | 'engagement' | 'learning' | 'billing' | 'activity' | 'trust';
@@ -89,6 +92,16 @@ export default function PersonProfilePage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<TabKey>('timeline');
   const [domainFilter, setDomainFilter] = useState('all');
+  // The timeline draws as a chart by default; the table is one click away and
+  // the choice sticks, because a reader who wants rows wants them every time.
+  // Storage can throw (private window, blocked site data); the page must not.
+  const [timelineView, setTimelineView] = useState<'chart' | 'table'>(() => {
+    try { return localStorage.getItem(TIMELINE_VIEW_KEY) === 'table' ? 'table' : 'chart'; } catch { return 'chart'; }
+  });
+  const chooseTimelineView = (v: 'chart' | 'table') => {
+    setTimelineView(v);
+    try { localStorage.setItem(TIMELINE_VIEW_KEY, v); } catch { /* preference simply does not persist */ }
+  };
   // Website activity and temperature history come from the lead endpoints the
   // Lead page already uses, so the two surfaces cannot disagree. Fetched only
   // when this person HAS a lead, and failing soft: these endpoints are
@@ -425,7 +438,30 @@ export default function PersonProfilePage() {
 
           {/* ── Timeline ─────────────────────────────────────────────────── */}
           {tab === 'timeline' && profile.timeline && (
-            <SectionCard title="Activity timeline" padded={false}>
+            <SectionCard
+              title="Activity timeline"
+              padded={false}
+              actions={(
+                <div className="btn-group btn-group-sm" role="group" aria-label="Timeline view">
+                  <button
+                    type="button"
+                    className={`btn ${timelineView === 'chart' ? 'btn-dark' : 'btn-outline-secondary'}`}
+                    onClick={() => chooseTimelineView('chart')}
+                    aria-pressed={timelineView === 'chart'}
+                  >
+                    <i className="ri-bar-chart-horizontal-line me-1" aria-hidden="true" />Chart
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn ${timelineView === 'table' ? 'btn-dark' : 'btn-outline-secondary'}`}
+                    onClick={() => chooseTimelineView('table')}
+                    aria-pressed={timelineView === 'table'}
+                  >
+                    <i className="ri-list-check me-1" aria-hidden="true" />Table
+                  </button>
+                </div>
+              )}
+            >
               <div className="d-flex flex-wrap gap-1 p-3 border-bottom">
                 {['all', ...(profile.timelineDomains ?? [])].map((d) => (
                   <button
@@ -440,7 +476,14 @@ export default function PersonProfilePage() {
                 ))}
               </div>
 
-              {profile.timeline.length === 0 ? (
+              {timelineView === 'chart' ? (
+                <PersonActivityChart
+                  events={profile.timeline}
+                  domains={profile.timelineDomains ?? []}
+                  domainFilter={domainFilter}
+                  onSelect={setRawEvent}
+                />
+              ) : profile.timeline.length === 0 ? (
                 <p className="text-muted small p-4 mb-0 text-center">
                   No recorded activity in the areas you can see.
                 </p>
@@ -730,7 +773,7 @@ export default function PersonProfilePage() {
             <ClassActivityTab classActivity={profile.classActivity} curriculum={profile.curriculum} />
           )}
 
-          {tab === 'communications' && <CommunicationsTab communications={profile.communications} />}
+          {tab === 'communications' && <CommunicationsTab communications={profile.communications} personRef={personRef} />}
 
           {tab === 'work' && <WorkTab work={profile.work} />}
 

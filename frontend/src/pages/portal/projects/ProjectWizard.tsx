@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { NewBuildAnswers, BuildSize } from './projectsStore';
 import { useIsExplorer } from '../useIsExplorer';
-import { fetchIntakeQuestions, IntakeQuestion } from '../../../services/sbpApi';
+import { fetchIntakeQuestions, previewIntake, IntakeQuestion, CoveredAngle, IntakePreview } from '../../../services/sbpApi';
+import IntakeReviewPane, { phoneLooksValid, type CallChoice } from './IntakeReviewPane';
 
 // "Start a new build" — the questionnaire that shapes an idea into a project.
 // Three steps: (1) idea + size, (2) interview questions generated from THAT
@@ -13,9 +14,10 @@ import { fetchIntakeQuestions, IntakeQuestion } from '../../../services/sbpApi';
 // robot was asked about their Zendesk. It now asks the server, which reads the
 // idea and writes the questions. Step 3 used to render a fabricated plan (four
 // invented requirements, three invented tasks) that called nothing; the real
-// plan only exists minutes after Confirm, so step 3 now shows the student their
-// own inputs and what actually happens next. Nothing here is presented as
-// generated unless it was.
+// plan only exists minutes after Confirm, so step 3 now shows the student what
+// the server UNDERSTOOD from their inputs (the same statements it will record
+// when they confirm), what it still does not know, and what actually happens
+// next. Nothing here is presented as generated unless it was.
 
 // Tier copy states DEPTH, not a duration. It used to advertise a fixed number
 // of minutes per tier — figures with no telemetry behind them, on a pipeline
@@ -75,6 +77,9 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
   // tailored.
   const [questions, setQuestions] = useState<IntakeQuestion[]>([]);
   const [generated, setGenerated] = useState(true);
+  // What the description already answered, as the server reported it. Shown
+  // in the review so a short interview reads as deliberate rather than broken.
+  const [covered, setCovered] = useState<CoveredAngle[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [replies, setReplies] = useState<Record<string, string>>({});
@@ -82,13 +87,36 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
   // Next again doesn't re-ask the server for the same thing.
   const [askedFor, setAskedFor] = useState<string | null>(null);
 
+  // Step 3 is the confirmation gate. The server computes what it WOULD record
+  // from these exact inputs, using the same code that records it, so what the
+  // student confirms is what gets written. Nothing is stored until Confirm.
+  const [preview, setPreview] = useState<IntakePreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewedFor, setPreviewedFor] = useState<string | null>(null);
+  // "Have an AI call me about what is still unanswered." Offered only when the
+  // preview says a call can happen; carried up with the answers and sent by
+  // the parent once the build has started, because the call continues the
+  // stored interview rather than opening one.
+  const [call, setCall] = useState<CallChoice>({ wanted: false, phone: '' });
+
+  // `angle` rides along with each answer. Without it the server cannot file
+  // the answer against a truth dimension and reports it unmapped, which is
+  // what happened to every answer before this line existed.
   const answered = questions
-    .map((q) => ({ id: q.id, question: q.question, answer: (replies[q.id] || '').trim() }))
+    .map((q) => ({ id: q.id, question: q.question, answer: (replies[q.id] || '').trim(), angle: q.angle }))
     .filter((a) => a.answer.length > 0);
 
   const currentQ = questions[qIndex] ?? null;
 
-  const answers: NewBuildAnswers = { idea, name, size, weeks, answers: answered };
+  const callOffer = preview?.callOffer;
+  const callRequested = call.wanted && Boolean(callOffer?.available);
+  const answers: NewBuildAnswers = {
+    idea, name, size, weeks, answers: answered, covered,
+    call: callRequested && callOffer && phoneLooksValid(call.phone)
+      ? { phone: call.phone.trim(), consentVersion: callOffer.consentVersion }
+      : undefined,
+  };
 
   async function loadQuestions(force = false): Promise<void> {
     const current = idea.trim();
@@ -100,6 +128,7 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
     if (res.ok) {
       setQuestions(res.result.questions);
       setGenerated(res.result.generated !== false);
+      setCovered(res.result.covered ?? []);
       setAskedFor(current);
     } else {
       // The server degrades internally, so a failure here means the request
@@ -112,6 +141,36 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
     setStep(2);
     void loadQuestions();
   }
+
+  async function loadPreview(): Promise<void> {
+    const input = { idea: idea.trim(), answers: answered, covered };
+    const key = JSON.stringify(input);
+    if (previewedFor === key && preview) return;
+    setPreviewLoading(true);
+    setPreviewError(null);
+    const res = await previewIntake(input);
+    setPreviewLoading(false);
+    if (res.ok) {
+      setPreview(res.preview);
+      setPreviewedFor(key);
+    } else {
+      // Not a refusal, a missed connection. The fallback below shows the raw
+      // answers instead, and Confirm still works: the truth is written from
+      // the same inputs either way, the student just loses the read-back.
+      setPreview(null);
+      setPreviewError(res.error.message);
+    }
+  }
+
+  function goReview(): void {
+    setStep(3);
+    void loadPreview();
+  }
+
+  const blocked = preview?.review.blocksPlanning === true;
+  // A ticked call box with no usable number is an unfinished intention, not a
+  // request. Confirm waits for one rather than quietly dropping the call.
+  const callIncomplete = callRequested && !phoneLooksValid(call.phone);
 
   return (
     <div>
@@ -126,7 +185,7 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
       {step === 1 && (
         <div className="card pjw-pane">
           <h3>What do you want to build?</h3>
-          <p className="lead">Tell us everything — the whole idea, who it's for, what it should do, every capability and edge you can think of. Don't hold back or worry about being precise; the more you pour out here, the better we shape it. The next step reads what you wrote and asks you about it.</p>
+          <p className="lead">Tell us everything — the whole idea, who it's for, what it should do, every capability and edge you can think of. Don't hold back or worry about being precise. The next step reads what you wrote and asks only about what it could not find: the more detail you give here, the fewer questions we ask.</p>
           <textarea value={idea} maxLength={IDEA_MAX} onChange={(e) => setIdea(e.target.value)} style={{ minHeight: 240 }} placeholder={"e.g. An AI agent that triages my support inbox and drafts replies.\n\nGo further — what would make it great? Who uses it, what data would it touch, what should it automate, what would 'done' look like, what have you always wished existed? Brain-dump it all."} />
           <Counter value={idea} max={IDEA_MAX} />
           <label className="pjw-label">Give it a name (optional)</label>
@@ -159,7 +218,7 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
               <div className="pjw-actions">
                 <button className="btn ghost" onClick={() => setStep(1)}>Back</button>
                 <button className="btn ghost" onClick={() => { void loadQuestions(true); }}>Try again</button>
-                <button className="btn primary grow" onClick={() => setStep(3)}>Continue without them</button>
+                <button className="btn primary grow" onClick={goReview}>Continue without them</button>
               </div>
             </>
           )}
@@ -236,7 +295,7 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
                     <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                   </button>
                 ) : (
-                  <button className="btn primary grow" onClick={() => setStep(3)}>Review &amp; confirm
+                  <button className="btn primary grow" onClick={goReview}>Review &amp; confirm
                     <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                   </button>
                 )}
@@ -249,22 +308,17 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
       {step === 3 && (
         <div className="card pjw-pane">
           <h3>Review &amp; confirm</h3>
-          <p className="lead">This is what we'll build from. Nothing has been generated yet — that starts when you confirm.</p>
+          <p className="lead">This is what we understood, and what we still don't know. Nothing has been generated yet — that starts when you confirm. If something is wrong, go back and change your answer.</p>
 
-          <div className="section-title" style={{ margin: '4px 0 10px' }}>Your idea</div>
-          <div className="pjw-review">{idea.trim()}</div>
-
-          {answered.length > 0 && (
-            <>
-              <div className="section-title" style={{ margin: '18px 0 10px' }}>What you told us</div>
-              {answered.map((a) => (
-                <div className="pjw-review" key={a.id}>
-                  <div className="small" style={{ opacity: .75 }}>{a.question}</div>
-                  <div>{a.answer}</div>
-                </div>
-              ))}
-            </>
-          )}
+          <IntakeReviewPane
+            idea={idea.trim()}
+            answered={answered}
+            preview={preview}
+            loading={previewLoading}
+            error={previewError}
+            call={call}
+            onCallChange={setCall}
+          />
 
           <div className="section-title" style={{ margin: '18px 0 10px' }}>What happens next</div>
           <ol className="pjw-next">
@@ -285,9 +339,10 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
           </div>
 
           {demo && <div className="small" style={{ margin: '4px 0 -2px', color: '#B5710A' }}>This is a demo — you can shape the whole build, but enroll to actually create it.</div>}
+          {callIncomplete && <div className="small" style={{ margin: '4px 0 -2px', color: '#B5710A' }}>Add your phone number for the call, or untick the box.</div>}
           <div className="pjw-actions">
             <button className="btn ghost" onClick={() => setStep(2)}>Back</button>
-            <button className="btn primary grow" onClick={() => { void onCreate(answers); }} disabled={demo} title={demo ? 'Demo — enroll to build for real' : undefined}>
+            <button className="btn primary grow" onClick={() => { void onCreate(answers); }} disabled={demo || blocked || callIncomplete} title={demo ? 'Demo — enroll to build for real' : blocked ? 'Settle the contradiction above first' : callIncomplete ? 'Add a phone number or untick the call box' : undefined}>
               <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg> {demo ? 'Enroll to build for real' : 'Confirm & build in background'}
             </button>
           </div>

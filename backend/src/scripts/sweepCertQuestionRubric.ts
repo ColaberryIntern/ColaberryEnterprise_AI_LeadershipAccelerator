@@ -319,7 +319,20 @@ async function main(): Promise<void> {
      * a dimension no rewrite can change is as good as it is allowed to be, and
      * refusing to approve it is refusing to approve the bank.
      */
-    const approvable = outcomes.filter((x) => x.after >= x.ceiling);
+    // Never approve a revision that is itself retired. Retiring the six
+    // untriaged first-batch drafts left each as a question whose LATEST revision
+    // is retired, and this filter would have approved them straight back —
+    // un-retiring content that was withdrawn on purpose, under a human's name.
+    const retiredKeys = new Set(
+      (await sequelize.query<{ question_key: string }>(
+        `SELECT question_key FROM cert_question_revisions r
+          WHERE review_status = 'retired'
+            AND revision = (SELECT MAX(v.revision) FROM cert_question_revisions v WHERE v.question_key = r.question_key)`,
+        { type: QueryTypes.SELECT },
+      )).map((r) => r.question_key),
+    );
+    const approvable = outcomes.filter((x) => x.after >= x.ceiling && !retiredKeys.has(x.key));
+    if (retiredKeys.size > 0) log(`  (${retiredKeys.size} question(s) skipped: latest revision is retired)`);
     log(`Approving ${approvable.length} item(s) at their ceiling as ${approveAs}`);
     let approved = 0;
     for (const o of approvable) {
@@ -348,7 +361,11 @@ async function main(): Promise<void> {
  */
 const settleTelemetry = (): Promise<void> => new Promise((r) => { setTimeout(r, 2000); });
 
-main()
+// Only run when invoked directly. The pure helpers above are imported by tests,
+// and a script that fires main() on import tries to reach a database the test
+// does not have, fails, and sets the process exit code - so every test passes
+// and jest still exits 1. Same guard as `require.main === module` in plain Node.
+if (require.main === module) main()
   .then(settleTelemetry)
   .then(() => sequelize.close())
   .catch(async (err) => {

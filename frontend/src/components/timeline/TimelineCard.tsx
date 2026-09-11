@@ -5,10 +5,18 @@ import CardComments from './CardComments';
 import { toTitleCase } from '../../utils/titleCase';
 import portalApi from '../../utils/portalApi';
 import { getPodcastMuted, setPodcastMuted } from '../../utils/podcastMutePreference';
+import { runtimeApi } from '../../pages/portal/runtime/runtimeApi';
+import { ambientMediaOf } from './ambientMedia';
+import { useMediaBeats, type WatchBeatPayload } from './useMediaBeats';
 
 // Server-derived watch state for a card (the video watch gate). watched_pct is
 // the ratcheted server total; the collect button unlocks when met.
 interface WatchState { watched_pct: number; required_pct: number | null; met: boolean; }
+
+/** Mirrors POINTS_PER_COMMENT in backend/src/services/communityService.ts and
+ *  REPLY_POINTS in CommunityThreadPanel — what a reply earns, advertised on the
+ *  tile so the student knows before opening. The award itself is server-side. */
+const REPLY_POINTS = 2;
 
 // Community byline helpers — a card carrying `author` renders as a post (avatar +
 // name + level badge) instead of the generic curriculum header.
@@ -262,6 +270,28 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   const anchored = !card.id.includes(':');
   const watchable = playable && !podcastAudio && anchored && pts > 0 && !!onComplete;
 
+  // Listen-to-earn (Ali, 2026-09-11): a podcast or testimonial on the Today feed
+  // is ambient — no card row — so it was never watch-gated and never paid. The
+  // server now stamps its points (35 / 10) onto the item and tracks playback
+  // through the ambient media gate, keyed on the provider id. The tile's job is
+  // to emit beats from the inline player and preview the %; collection happens
+  // in the drawer, gated server-side at 75%, exactly like a video card.
+  const ambient = ambientMediaOf(card);
+  const mediaTracked = !!ambient && pts > 0 && !!onComplete && !done;
+  const mediaBeat = (beat: WatchBeatPayload) => {
+    if (!ambient) return;
+    runtimeApi.mediaWatch(ambient.kind, ambient.id, beat).then((r) => setWatch(r)).catch(() => { /* best-effort */ });
+  };
+  const audioBeats = useMediaBeats(mediaTracked && ambient?.kind === 'podcast' ? mediaBeat : undefined, 'audio');
+  // Hydrate the % on mount so a half-listened episode shows its progress before
+  // the student presses play again (and "points unlocked" if they already crossed 75%).
+  useEffect(() => {
+    if (!mediaTracked || !ambient) return;
+    let alive = true;
+    runtimeApi.mediaVerdict(ambient.kind, ambient.id).then((r) => { if (alive) setWatch(r); }).catch(() => { /* best-effort */ });
+    return () => { alive = false; };
+  }, [mediaTracked, ambient?.kind, ambient?.id]);
+
   // A Today-feed community post. Its `id` is the feed ref (`community:<uuid>`),
   // so every card-scoped affordance on this tile has to route to the post's own
   // endpoints instead — see community_post_id on TimelineFeedCard.
@@ -375,7 +405,9 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
         // capped at the unlock threshold instead of measuring real playback.
         onWatchBeat={watchable
           ? (beat) => { portalApi.post(`/api/portal/runtime/cards/${card.id}/watch`, beat).then((r) => setWatch(r.data)).catch(() => { /* best-effort */ }); }
-          : undefined}
+          : mediaTracked && ambient?.kind === 'testimonial'
+            ? mediaBeat   // ambient testimonial: same beats, the media gate instead of the card gate
+            : undefined}
       />
     </div>
   ) : podcastAudio ? (
@@ -416,7 +448,12 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
             // unmuted. See podcastMutePreference for the sticky cross-episode contract.
             muted={getPodcastMuted()}
             onVolumeChange={(e) => setPodcastMuted(e.currentTarget.muted)}
-            onEnded={() => setPlayingInline(false)}
+            // Listen-to-earn: the same accumulator VideoEmbed uses, so a podcast's
+            // 75% means what a video's does. Pause/end flush the tail so the last
+            // stretch before the student stops is not lost.
+            onTimeUpdate={audioBeats.onTimeUpdate}
+            onPause={audioBeats.onPauseOrEnd}
+            onEnded={() => { audioBeats.onPauseOrEnd(); setPlayingInline(false); }}
           />
         </span>
       ) : (
@@ -494,13 +531,17 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
         {/* On-card watch progress — the video watch gate, shown right on the tile
             (was drawer-only). Fills as the inline preview plays; turns green +
             "points unlocked" at the required %. */}
-        {watchable && watch && watch.required_pct != null && !done && (
+        {(watchable || mediaTracked) && watch && watch.required_pct != null && !done && (
           <div className="tc-watchrow" style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'rgba(0,0,0,.10)', overflow: 'hidden' }}>
               <i style={{ display: 'block', height: '100%', width: `${Math.min(100, watch.watched_pct)}%`, background: watch.met ? '#5BA63C' : v.color, transition: 'width .4s ease' }} />
             </div>
             <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', color: watch.met ? '#5BA63C' : 'var(--text-muted,#6B6B6B)' }}>
-              {watch.met ? '✓ Watched — points unlocked' : `Watched ${watch.watched_pct}% · reach ${watch.required_pct}%`}
+              {(() => {
+                // "Listened" for a podcast, "Watched" for everything else.
+                const verb = ambient?.kind === 'podcast' ? 'Listened' : 'Watched';
+                return watch.met ? `✓ ${verb} — points unlocked` : `${verb} ${watch.watched_pct}% · reach ${watch.required_pct}%`;
+              })()}
             </span>
           </div>
         )}
@@ -549,13 +590,20 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
               // behind the type's completion gate. Points cards advertise the reward.
               <button
                 type="button"
-                className={`fc-cta ${pts > 0 || v.kind === 'lab' ? 'cherry' : 'berry'}`}
+                className={`fc-cta ${pts > 0 || v.kind === 'lab' || isCommunityPost ? 'cherry' : 'berry'}`}
                 onClick={() => { setPlayingInline(false); onOpen?.(card); }}
-                title={card.project_task_id ? 'Open this task in your project workspace' : pts > 0 ? `Open to collect +${pts} pts` : undefined}
+                title={card.project_task_id ? 'Open this task in your project workspace'
+                  : isCommunityPost ? `Reply to earn +${REPLY_POINTS} pts`
+                    : pts > 0 ? `Open to collect +${pts} pts` : undefined}
               >
                 {pts > 0
                   ? <><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Collect +{pts} pts</>
-                  : <><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {v.kind === 'lab' ? 'Start' : 'Open'}</>}
+                  : isCommunityPost
+                    // A community post pays for the REPLY, not for opening. Say so on the
+                    // button (Ali, 2026-09-11) — "Open" told the student nothing about why
+                    // they might want to.
+                    ? <><svg viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Reply · +{REPLY_POINTS} pts</>
+                    : <><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {v.kind === 'lab' ? 'Start' : 'Open'}</>}
               </button>
             )}
       </div>

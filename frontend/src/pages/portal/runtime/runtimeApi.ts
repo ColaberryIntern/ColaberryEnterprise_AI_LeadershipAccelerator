@@ -200,6 +200,17 @@ export const runtimeApi = {
     portalApi.post(`/api/portal/runtime/today/blog/${blogId}/read`, beat).then((r) => r.data as { read_s: number; required_s: number; met: boolean }),
   blogCollect: (blogId: string) =>
     portalApi.post(`/api/portal/runtime/today/blog/${blogId}/collect`, {}).then((r) => r.data as { points_awarded: number; already: boolean }),
+  // Podcast / testimonial listen-to-earn (ambient media, keyed on the provider id):
+  // playback beat → verdict → collect. 75% bar, 35 / 10 points, server-authoritative.
+  mediaWatch: (kind: 'podcast' | 'testimonial', id: string, beat: { delta_s: number; position_s?: number | null; duration_s?: number | null; provider?: string | null }) =>
+    portalApi.post(`/api/portal/runtime/today/media/${kind}/${encodeURIComponent(id)}/watch`, beat)
+      .then((r) => r.data as { watched_pct: number; required_pct: number; met: boolean }),
+  mediaVerdict: (kind: 'podcast' | 'testimonial', id: string) =>
+    portalApi.get(`/api/portal/runtime/today/media/${kind}/${encodeURIComponent(id)}/watch`)
+      .then((r) => r.data as { watched_pct: number; required_pct: number; met: boolean }),
+  mediaCollect: (kind: 'podcast' | 'testimonial', id: string) =>
+    portalApi.post(`/api/portal/runtime/today/media/${kind}/${encodeURIComponent(id)}/collect`, {})
+      .then((r) => r.data as { points_awarded: number; already: boolean; watched_pct: number }),
   // In-Workspace reader: the post's article fetched + sanitized server-side so it can be
   // framed (the training site sends X-Frame-Options: DENY). ok:false ⇒ fall back to link.
   blogReader: (blogId: string) =>

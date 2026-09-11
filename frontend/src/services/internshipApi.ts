@@ -88,6 +88,12 @@ export interface InterviewView {
   channel: 'form' | 'phone' | null;
   progress: InterviewProgressView;
   scheduled_call: { session_id: string; scheduled_for: string } | null;
+  /**
+   * A phone call that has been placed and is not yet finished. Present from the
+   * moment the call is requested until it reconciles to a terminal state, so the
+   * interview screen can show the "on the call" overlay and advance when it clears.
+   */
+  live_call: { session_id: string; started_at: string } | null;
   questions: InterviewQuestionView[];
 }
 

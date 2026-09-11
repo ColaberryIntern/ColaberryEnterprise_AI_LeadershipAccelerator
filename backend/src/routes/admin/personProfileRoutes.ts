@@ -7,6 +7,9 @@ import { visibleEnrollmentIds } from '../../services/career/careerMentorScopeSer
 import { resolveRefToEmail } from '../../services/adminOs/personRef';
 import { generateStrategyBrief } from '../../services/adminOs/strategyBriefService';
 import { loadCcppHistory } from '../../services/adminOs/panels/historyPanels';
+import { mayReadPanel, resolvePersonIdentity } from '../../services/adminOs/personProfileService';
+import { fetchMessageAsSent, mandrillPoster } from '../../services/adminOs/mandrillMessageContent';
+import { env } from '../../config/env';
 
 /**
  * One person's 360° profile.
@@ -144,6 +147,67 @@ router.post('/api/admin/people/strategy-brief', requireAdmin, async (req: Reques
   } catch (error) {
     res.status(500).json({
       error: 'Could not write a brief for this person.',
+      error_class: error instanceof Error ? error.constructor.name : 'Unknown',
+    });
+  }
+});
+
+/**
+ * GET /api/admin/people/message-as-sent — one email exactly as Mandrill sent
+ * it, for a message this platform never stored (portal links, reminders,
+ * digests) whose open or click is on the 360.
+ *
+ * Gated three ways, all server-side: the caller's person scope, the
+ * `communications` panel (the same rule that decides whether the tab exists),
+ * and the person's lifecycle-stage scope via resolvePersonIdentity — the exact
+ * gate the profile passes through, without loading the profile. On the
+ * Mandrill side the lookup is scoped to the recipient again.
+ *
+ * On demand only (a button), never prefetched: each call is two Mandrill
+ * requests.
+ */
+const asSentSchema = z.object({
+  email: z.string().trim().min(3).max(320).optional(),
+  ref: z.string().trim().min(1).max(320).optional(),
+  subject: z.string().trim().min(1).max(500),
+  at: z.string().trim().datetime({ offset: true }),
+  mandrillId: z.string().trim().regex(/^[a-f0-9]{16,64}$/i).optional(),
+}).refine((v) => !!(v.email || v.ref), { message: 'An email or ref is required.' });
+
+router.get('/api/admin/people/message-as-sent', requireAdmin, async (req: Request, res: Response) => {
+  const parsed = asSentSchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'A person, a subject and a timestamp are required.' });
+    return;
+  }
+
+  const sections = adminAllowedSections(req.admin!);
+  if (!hasAnyPersonScope(sections) || !mayReadPanel('communications', sections)) {
+    res.status(403).json({ error: 'Your role does not include access to communications.' });
+    return;
+  }
+
+  try {
+    const email = parsed.data.email ?? await resolveRefToEmail(parsed.data.ref);
+    const person = email ? await resolvePersonIdentity(email, sections) : null;
+    if (!person) {
+      res.status(404).json({ error: 'No such person, or not visible to your role.' });
+      return;
+    }
+
+    const result = await fetchMessageAsSent(
+      {
+        email: person.email,
+        subject: parsed.data.subject,
+        at: new Date(parsed.data.at),
+        mandrillId: parsed.data.mandrillId ?? null,
+      },
+      mandrillPoster(env.mandrillApiKey),
+    );
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({
+      error: 'Could not fetch this message.',
       error_class: error instanceof Error ? error.constructor.name : 'Unknown',
     });
   }

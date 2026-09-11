@@ -14,10 +14,11 @@
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
-import { fetchIntakeQuestions } from '../../../../services/sbpApi';
+import { fetchIntakeQuestions, previewIntake } from '../../../../services/sbpApi';
 
 jest.mock('../../../../services/sbpApi', () => ({
   fetchIntakeQuestions: jest.fn(),
+  previewIntake: jest.fn(),
 }));
 
 jest.mock('../../useIsExplorer', () => ({ useIsExplorer: () => false }));
@@ -29,12 +30,16 @@ import ProjectWizard from '../ProjectWizard';
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 const mockQuestions = fetchIntakeQuestions as unknown as jest.Mock;
+const mockPreview = previewIntake as unknown as jest.Mock;
 
 let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Default: the preview cannot be reached, so step 3 takes its fallback path
+  // and echoes the raw answers. The gate itself is exercised explicitly below.
+  mockPreview.mockResolvedValue({ ok: false, error: { status: 503, kind: 'server_error', message: 'unreachable' } });
   container = document.createElement('div');
   document.body.appendChild(container);
 });
@@ -275,5 +280,265 @@ describe('step 3 — nothing fabricated is presented as generated (A4)', () => {
     await click(buttonByText('Confirm & build in background')!);
 
     expect(onCreate.mock.calls[0][0].answers).toHaveLength(1);
+  });
+});
+
+describe('step 3 — the confirmation gate shows what will be recorded', () => {
+  const COVERED = [{ angle: 'THE TOOLS', evidence: 'our WMS and the dock scales' }];
+
+  function previewOf(over: Partial<any> = {}) {
+    return {
+      ok: true,
+      preview: {
+        review: {
+          items: [
+            { index: 0, dimension: 'problem', label: 'What you are building', value: IDEA, group: 'needsConfirmation', quote: IDEA },
+            { index: 1, dimension: 'approval_points', label: 'What a person checks before it acts', value: 'A supervisor signs off any pallet over 800kg', group: 'needsConfirmation', quote: 'A supervisor signs off any pallet over 800kg' },
+            { index: 2, dimension: 'systems', label: 'What it has to work with', value: 'our WMS and the dock scales', group: 'needsConfirmation', quote: 'our WMS and the dock scales' },
+          ],
+          counts: { needsConfirmation: 3, inferences: 0, openQuestions: 0, unknowns: 0, confirmed: 0 },
+          contradictions: [],
+          blocksPlanning: false,
+        },
+        unanswered: [
+          'there is no baseline, so nothing can be measured against it later',
+          'who actually uses this is unrecorded',
+        ],
+        covered: COVERED,
+        unmapped: 0,
+        ...over,
+      },
+    };
+  }
+
+  async function reachStep3() {
+    mockQuestions.mockResolvedValue({
+      ok: true,
+      result: {
+        generated: true, model: 'gpt-4o', attempts: 1,
+        covered: COVERED,
+        questions: [{ ...q('g1', 'What would you want a person to check before it acts?'), angle: 'THE GUARDRAIL' }],
+      },
+    });
+    await reachStep2();
+    await setValue(container.querySelector('#q-g1') as HTMLTextAreaElement, 'A supervisor signs off any pallet over 800kg');
+    await click(buttonByText('Review & confirm')!);
+  }
+
+  it('asks the server what it understood, sending the angle and the covered receipt', async () => {
+    mockPreview.mockResolvedValue(previewOf());
+    await reachStep3();
+
+    expect(mockPreview).toHaveBeenCalledTimes(1);
+    const sent = mockPreview.mock.calls[0][0];
+    expect(sent.idea).toBe(IDEA);
+    expect(sent.answers).toEqual([
+      { id: 'g1', question: 'What would you want a person to check before it acts?', answer: 'A supervisor signs off any pallet over 800kg', angle: 'THE GUARDRAIL' },
+    ]);
+    expect(sent.covered).toEqual(COVERED);
+  });
+
+  it('renders each understood statement under a human heading, in the student\'s words', async () => {
+    mockPreview.mockResolvedValue(previewOf());
+    await reachStep3();
+
+    const text = container.textContent || '';
+    expect(text).toContain('What we heard');
+    expect(text).toContain('What a person checks before it acts');
+    expect(text).toContain('A supervisor signs off any pallet over 800kg');
+    expect(text).toContain('What it has to work with');
+    expect(text).toContain('our WMS and the dock scales');
+    // Not the raw schema name.
+    expect(text).not.toContain('approval_points');
+    // The idea is shown once, verbatim, not again as a truncated item.
+    expect(text.split(IDEA).length - 1).toBe(1);
+  });
+
+  it('lists what is still unanswered in plain words and says it does not block', async () => {
+    mockPreview.mockResolvedValue(previewOf());
+    await reachStep3();
+
+    const text = container.textContent || '';
+    expect(text).toContain('Still unanswered');
+    expect(text).toContain('there is no baseline, so nothing can be measured against it later');
+    expect(text).toContain('who actually uses this is unrecorded');
+    expect(text).toContain('None of these blocks the build');
+    // and the receipt for the short interview
+    expect(text).toContain('already answered 1 of our questions');
+    // Confirm is live: gaps are informational.
+    expect(buttonByText('Confirm & build in background')!.disabled).toBe(false);
+  });
+
+  it('says so plainly when nothing is outstanding', async () => {
+    mockPreview.mockResolvedValue(previewOf({ unanswered: [], covered: [] }));
+    await reachStep3();
+
+    const text = container.textContent || '';
+    expect(text).toContain('Nothing is outstanding');
+    expect(text).not.toContain('None of these blocks the build');
+    expect(text).not.toContain('already answered');
+  });
+
+  it('reports answers the server could not file rather than hiding them', async () => {
+    mockPreview.mockResolvedValue(previewOf({ unmapped: 1 }));
+    await reachStep3();
+    expect(container.textContent).toContain('One of your answers could not be filed');
+  });
+
+  it('blocks Confirm only on a contradiction, and shows it', async () => {
+    mockPreview.mockResolvedValue(previewOf({
+      review: {
+        ...previewOf().preview.review,
+        contradictions: ['item 1: an "unknowns" item cannot be a FACT'],
+        blocksPlanning: true,
+      },
+    }));
+    await reachStep3();
+
+    expect(container.textContent).toContain('contradict each other');
+    expect(container.textContent).toContain('an "unknowns" item cannot be a FACT');
+    expect(buttonByText('Confirm & build in background')!.disabled).toBe(true);
+  });
+
+  it('falls back to the raw answers when the server cannot be reached, and Confirm still works', async () => {
+    // beforeEach already makes the preview fail.
+    const onCreate = jest.fn();
+    mockQuestions.mockResolvedValue({
+      ok: true,
+      result: { generated: true, model: 'gpt-4o', attempts: 1, questions: [{ ...q('g1', 'Who checks it?'), angle: 'THE GUARDRAIL' }] },
+    });
+    await mount(<ProjectWizard onCreate={onCreate} />);
+    await setValue(container.querySelector('textarea')!, IDEA);
+    await click(buttonByText('Sharpen my idea')!);
+    await setValue(container.querySelector('#q-g1') as HTMLTextAreaElement, 'Priya does');
+    await click(buttonByText('Review & confirm')!);
+
+    const text = container.textContent || '';
+    expect(text).toContain("couldn't check this with the server");
+    expect(text).toContain('Who checks it?');
+    expect(text).toContain('Priya does');
+    expect(text).not.toContain('What we heard');
+
+    await click(buttonByText('Confirm & build in background')!);
+    expect(onCreate).toHaveBeenCalledTimes(1);
+    expect(onCreate.mock.calls[0][0].answers[0].angle).toBe('THE GUARDRAIL');
+  });
+
+  it('does not re-ask for the same inputs when the student goes back and returns unchanged', async () => {
+    mockPreview.mockResolvedValue(previewOf());
+    await reachStep3();
+    await click(buttonByText('Back')!);
+    await click(buttonByText('Review & confirm')!);
+    expect(mockPreview).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('step 3 — "have an AI call me" is offered only when it can happen', () => {
+  const OFFER = { available: true, consentText: 'I agree to one automated call about this project, recorded. Not marketing.', consentVersion: '2026-09-11' };
+
+  function previewWith(over: Partial<any> = {}) {
+    return {
+      ok: true,
+      preview: {
+        review: {
+          items: [{ index: 0, dimension: 'problem', label: 'What you are building', value: IDEA, group: 'needsConfirmation', quote: IDEA }],
+          counts: { needsConfirmation: 1, inferences: 0, openQuestions: 0, unknowns: 0, confirmed: 0 },
+          contradictions: [],
+          blocksPlanning: false,
+        },
+        unanswered: ['who actually uses this is unrecorded', 'what starts it, and how often, is unknown'],
+        covered: [],
+        unmapped: 0,
+        callOffer: OFFER,
+        ...over,
+      },
+    };
+  }
+
+  async function reachStep3(onCreate = jest.fn()) {
+    mockQuestions.mockResolvedValue({
+      ok: true,
+      result: { generated: true, model: 'gpt-4o', attempts: 1, questions: [{ ...q('g1', 'Who checks it?'), angle: 'THE GUARDRAIL' }] },
+    });
+    await mount(<ProjectWizard onCreate={onCreate} />);
+    await setValue(container.querySelector('textarea')!, IDEA);
+    await click(buttonByText('Sharpen my idea')!);
+    await setValue(container.querySelector('#q-g1') as HTMLTextAreaElement, 'Priya does');
+    await click(buttonByText('Review & confirm')!);
+    return onCreate;
+  }
+
+  const consentBox = () => container.querySelector('[data-testid="call-consent"]') as HTMLInputElement | null;
+
+  it('shows no call option when the server says none is available', async () => {
+    mockPreview.mockResolvedValue(previewWith({ callOffer: { ...OFFER, available: false } }));
+    await reachStep3();
+    expect(container.querySelector('[data-testid="call-offer"]')).toBeNull();
+    expect(container.textContent).not.toContain('Prefer to talk it through');
+  });
+
+  it('shows no call option when an older server sends no offer at all', async () => {
+    mockPreview.mockResolvedValue(previewWith({ callOffer: undefined }));
+    await reachStep3();
+    expect(container.querySelector('[data-testid="call-offer"]')).toBeNull();
+  });
+
+  it('shows no call option when nothing is left to ask, even with a call available', async () => {
+    mockPreview.mockResolvedValue(previewWith({ unanswered: [] }));
+    await reachStep3();
+    expect(container.querySelector('[data-testid="call-offer"]')).toBeNull();
+  });
+
+  it('shows the server\'s exact consent words as the label, and a number field only once ticked', async () => {
+    mockPreview.mockResolvedValue(previewWith());
+    await reachStep3();
+
+    expect(container.textContent).toContain('Prefer to talk it through?');
+    expect(container.textContent).toContain(OFFER.consentText);
+    expect(container.querySelector('#call-phone')).toBeNull();
+
+    await click(consentBox()!);
+    expect(container.querySelector('#call-phone')).toBeTruthy();
+  });
+
+  it('holds Confirm until a number is given, rather than dropping the call silently', async () => {
+    mockPreview.mockResolvedValue(previewWith());
+    const onCreate = await reachStep3();
+
+    await click(consentBox()!);
+    const confirm = buttonByText('Confirm & build in background')!;
+    expect(confirm.disabled).toBe(true);
+    expect(container.textContent).toContain('Add your phone number for the call, or untick the box.');
+
+    await setValue(container.querySelector('#call-phone') as HTMLInputElement, '214 555 0143');
+    expect(buttonByText('Confirm & build in background')!.disabled).toBe(false);
+
+    await click(buttonByText('Confirm & build in background')!);
+    expect(onCreate.mock.calls[0][0].call).toEqual({ phone: '214 555 0143', consentVersion: '2026-09-11' });
+  });
+
+  it('sends no call when the box is left unticked', async () => {
+    mockPreview.mockResolvedValue(previewWith());
+    const onCreate = await reachStep3();
+    await click(buttonByText('Confirm & build in background')!);
+    expect(onCreate.mock.calls[0][0].call).toBeUndefined();
+  });
+
+  it('unticking the box after entering a number withdraws the request', async () => {
+    mockPreview.mockResolvedValue(previewWith());
+    const onCreate = await reachStep3();
+    await click(consentBox()!);
+    await setValue(container.querySelector('#call-phone') as HTMLInputElement, '2145550143');
+    await click(consentBox()!);
+    expect(container.querySelector('#call-phone')).toBeNull();
+    await click(buttonByText('Confirm & build in background')!);
+    expect(onCreate.mock.calls[0][0].call).toBeUndefined();
+  });
+});
+
+describe('step 1 — the copy says why detail matters', () => {
+  it('tells the student that more detail means fewer questions', async () => {
+    await mount(<ProjectWizard onCreate={() => {}} />);
+    expect(container.textContent).toContain('the more detail you give here, the fewer questions we ask');
   });
 });

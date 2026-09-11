@@ -19,6 +19,7 @@ import { getActiveProjectTree } from '../projects/projectReadService';
 import TimelineCard from '../../models/TimelineCard';
 import CommunityPost from '../../models/CommunityPost';
 import CommunityMember from '../../models/CommunityMember';
+import StudentTask from '../../models/StudentTask';
 import LiveSession from '../../models/LiveSession';
 import AttendanceRecord from '../../models/AttendanceRecord';
 import { resolveCohortId } from '../communityService';
@@ -275,6 +276,48 @@ export async function rehydrateCommunityItems(items: TodayFeedItem[]): Promise<v
     }
   } catch (err: any) {
     console.warn('[todayAnchoredSources] community rehydrate failed:', err?.message?.split('\n')[0]);
+  }
+}
+
+/**
+ * Serve-time re-hydration for `project:` items — the SAME repair community
+ * items got, which project items were missed on.
+ *
+ * Found on prod 2026-09-11 after the routing fix in #2426 shipped: 360
+ * project-task impressions across 26 students, and not one carried
+ * project_id / project_task_id. The ids were added at compose time only, so
+ * every impression placed before that deploy still resolved to the card
+ * drawer — exactly the defect the fix was for. The feed is an append-only
+ * snapshot store; a generator-only change never reaches rows already placed.
+ *
+ * One batched query, only when project items are present. Stamps the task's
+ * current project_id and its own id, and refreshes title/description/status
+ * from the live task so a renamed or completed task does not show stale.
+ * Fail-soft: on error the snapshot is left untouched. Mutates `items` in place.
+ */
+export async function rehydrateProjectItems(items: TodayFeedItem[]): Promise<void> {
+  const project = items.filter((i) => typeof i.ref === 'string' && i.ref.startsWith('project:'));
+  if (!project.length) return;
+  try {
+    const ids = Array.from(new Set(project.map((i) => i.ref.slice('project:'.length))));
+    const tasks = await StudentTask.findAll({
+      where: { id: ids },
+      attributes: ['id', 'project_id', 'title', 'description', 'status', 'release_key'],
+    });
+    const byId = new Map(tasks.map((t) => { const plain = t.get({ plain: true }) as any; return [plain.id as string, plain]; }));
+    for (const it of project) {
+      const taskId = it.ref.slice('project:'.length);
+      const t = byId.get(taskId);
+      if (!t) continue;
+      it.project_id = t.project_id ?? null;
+      it.project_task_id = taskId;
+      if (t.title) it.title = t.title;
+      if (t.description !== undefined) it.description = t.description ?? null;
+      if (t.release_key !== undefined) it.subtitle = t.release_key ?? null;
+      it.status = t.status === 'complete' ? 'completed' : t.status === 'in_progress' ? 'in_progress' : 'available';
+    }
+  } catch (err: any) {
+    console.warn('[todayAnchoredSources] project rehydrate failed:', err?.message?.split('\n')[0]);
   }
 }
 

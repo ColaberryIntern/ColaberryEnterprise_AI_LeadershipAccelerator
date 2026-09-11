@@ -152,7 +152,15 @@ export type NewBuildAnswers = {
   dataSources?: string;
   done?: string;
   /** The interview: questions generated from this student's idea, and their replies. */
-  answers?: Array<{ id: string; question: string; answer: string }>;
+  answers?: Array<{ id: string; question: string; answer: string; angle?: string }>;
+  /** Angles the description already answered, quoted. From the intake result. */
+  covered?: Array<{ angle: string; evidence: string }>;
+  /**
+   * "Have an AI call me about what is still unanswered." Present only when the
+   * student ticked the box on the review step; the parent sends it once the
+   * build has started, because the call continues the stored interview.
+   */
+  call?: { phone: string; consentVersion: string };
   weeks: number;
 };
 

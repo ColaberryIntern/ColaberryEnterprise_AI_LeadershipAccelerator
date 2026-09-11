@@ -201,6 +201,16 @@ export const startSchema = z.object({
     id: z.string().max(80),
     question: z.string().max(500),
     answer: z.string().max(ANSWER_MAX),
+    // The angle the question came from, so the answer files against a truth
+    // dimension by lookup rather than by guessing from the wording. Optional:
+    // a bundle cached before angles existed still starts a build, and its
+    // answers are reported unmapped rather than misfiled.
+    angle: z.string().max(80).optional(),
+  })).max(20).optional(),
+  // What the description already answered, as the intake service reported it.
+  covered: z.array(z.object({
+    angle: z.string().max(80),
+    evidence: z.string().max(600),
   })).max(20).optional(),
 });
 
@@ -223,6 +233,7 @@ router.post('/api/portal/sbp/builds', requireParticipant, async (req: Request, r
       targetWeeks: body.target_weeks,
       document: body.document,
       answers: body.answers,
+      covered: body.covered,
     });
     res.status(202).json(result);   // 202: accepted, generation continues
   } catch (e) { fail(res, e, next); }
@@ -415,16 +426,29 @@ router.get('/api/portal/sbp/intake/:projectId/review', requireParticipant, async
     const projectId = z.string().uuid().parse(req.params.projectId);
     await requireOwnedProject(req, projectId);
 
-    const { loadIntakeTruth } = await import('../services/sbp/intakeTruthStore');
+    const { loadIntakeTruthAtRevision } = await import('../services/sbp/intakeTruthStore');
     const { buildIntakeReview } = await import('../services/sbp/intakeReview');
-    const items = await loadIntakeTruth(projectId);
+    const { remainingAngles } = await import('../services/sbp/projectDiscoveryCall');
+    const { UNANSWERED_COST } = await import('../services/sbp/story000Truth');
+    const stored = await loadIntakeTruthAtRevision(projectId);
 
     // null means the intake never ran; [] means it ran and found nothing
     // quotable. A caller that conflates them cannot tell a student who skipped
     // every question from one who never started, so the wire keeps them apart.
-    if (items === null) return res.status(404).json({ error: 'No intake for this project' });
+    if (stored === null) return res.status(404).json({ error: 'No intake for this project' });
 
-    res.json({ project_id: projectId, ...buildIntakeReview(items) });
+    // The same two halves the preview showed before Confirm and Story 000
+    // renders after it: what was heard, and what is still unanswered, in the
+    // same words. The revision lets a caller tell whether a later correction
+    // has moved the truth on from what a plan was built against.
+    res.json({
+      project_id: projectId,
+      revision: stored.revision,
+      ...buildIntakeReview(stored.items),
+      unanswered: remainingAngles(stored.items)
+        .map((angle) => UNANSWERED_COST[angle])
+        .filter((s): s is string => Boolean(s)),
+    });
   } catch (e) { fail(res, e, next); }
 });
 
@@ -458,6 +482,124 @@ router.post('/api/portal/sbp/intake/:projectId/corrections', requireParticipant,
 
     await saveCorrectedTruth(projectId, applied.items);
     res.json({ project_id: projectId, ...buildIntakeReview(applied.items) });
+  } catch (e) { fail(res, e, next); }
+});
+
+/*
+ * The case-study hypothesis: what a story COULD say, before anything has
+ * happened. A projection recomputed from the truth revision on every read,
+ * never stored, so it cannot drift from the truth and there is nothing to
+ * publish. Same scoping as every other build route.
+ */
+router.get('/api/portal/sbp/intake/:projectId/case-study-hypothesis', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const projectId = z.string().uuid().parse(req.params.projectId);
+    await requireOwnedProject(req, projectId);
+
+    const { loadIntakeTruthAtRevision } = await import('../services/sbp/intakeTruthStore');
+    const { buildCaseStudyHypothesis, hypothesisCoverage } = await import('../services/sbp/caseStudyHypothesis');
+    const { getPublishedPlan } = await import('../services/sbp/planStore');
+
+    const truth = await loadIntakeTruthAtRevision(projectId);
+    if (!truth) return res.status(404).json({ error: 'No intake for this project' });
+
+    // The published plan supplies planned capability; a draft would be a
+    // capability nobody has accepted yet, and the hypothesis says only what
+    // the project has committed to.
+    const published = await getPublishedPlan(projectId);
+    const hypothesis = buildCaseStudyHypothesis({
+      items: truth.items,
+      truthRevision: truth.revision,
+      plan: published?.plan ?? null,
+    });
+
+    res.json({ project_id: projectId, hypothesis, coverage: hypothesisCoverage(hypothesis) });
+  } catch (e) { fail(res, e, next); }
+});
+
+/*
+ * The confirmation gate BEFORE the build exists. The wizard's review step runs
+ * ahead of startBuild, so there is no truth row yet; this computes the review
+ * from the same pure functions that will write it. No database, no project
+ * needed, no persistence - which is why it is scoped to a participant token
+ * only and not to an owned project.
+ */
+const previewSchema = z.object({
+  idea: z.string().min(1).max(20_000),
+  answers: z.array(z.object({
+    id: z.string().max(80),
+    question: z.string().max(500),
+    answer: z.string().max(ANSWER_MAX),
+    angle: z.string().max(80).optional(),
+  })).max(20).optional(),
+  covered: z.array(z.object({
+    angle: z.string().max(80),
+    evidence: z.string().max(600),
+  })).max(20).optional(),
+});
+
+router.post('/api/portal/sbp/intake/preview', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const body = previewSchema.parse(req.body ?? {});
+    const { previewIntake } = await import('../services/sbp/intakePreview');
+    const { callAvailability } = await import('../services/sbp/projectDiscoveryCallRequest');
+    // The call offer rides on the preview so the wizard learns in one round
+    // trip whether to show the option and which consent words to show. It is
+    // configuration, not truth, and the preview itself stays pure.
+    res.json({ ...previewIntake(body), callOffer: callAvailability() });
+  } catch (e) { fail(res, e, next); }
+});
+
+/*
+ * "Have an AI call me about what is still unanswered."
+ *
+ * Fail-closed end to end: the decision refuses without a configured agent,
+ * and no agent is configured in any environment until an operator sets one.
+ * Consent is recorded scoped to the project (never to the marketing ledger),
+ * before anything is dialled. The response says what happened in the
+ * decision's own words so the client never has to guess whether a call is
+ * coming. Same ownership scoping as every other build route.
+ */
+const callSchema = z.object({
+  phone: z.string().min(7).max(32),
+  consent: z.literal(true),
+  consent_version: z.string().max(20),
+  name: z.string().max(120).optional(),
+});
+
+router.post('/api/portal/sbp/intake/:projectId/call', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const projectId = z.string().uuid().parse(req.params.projectId);
+    await requireOwnedProject(req, projectId);
+    const body = callSchema.parse(req.body ?? {});
+
+    // Guarded: `req.get` has thrown on a malformed header before, and the
+    // student's request must be answered whatever the header looked like.
+    let userAgent: string | null = null;
+    let ip: string | null = null;
+    try { userAgent = req.get('user-agent') ?? null; ip = req.ip ?? null; } catch { /* unavailable is fine */ }
+
+    const { requestProjectDiscoveryCall } = await import('../services/sbp/projectDiscoveryCallRequest');
+    const outcome = await requestProjectDiscoveryCall({
+      projectId,
+      enrollmentId: eid(req),
+      phone: body.phone,
+      consent: body.consent,
+      consentVersion: body.consent_version,
+      name: body.name ?? null,
+      ip,
+      userAgent,
+    });
+
+    if (!outcome.placed && outcome.reason === 'consent_text_stale') {
+      // 422: well-formed, refused. The client rendered older consent words
+      // than the server would record, so nothing was recorded.
+      return res.status(422).json({ error: 'consent_text_stale', ...outcome });
+    }
+    res.json({ project_id: projectId, ...outcome });
   } catch (e) { fail(res, e, next); }
 });
 

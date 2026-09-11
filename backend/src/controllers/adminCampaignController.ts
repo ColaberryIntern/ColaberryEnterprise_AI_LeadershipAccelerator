@@ -41,6 +41,8 @@ import {
   listAssignableBrands,
   resolveCampaignBrand,
 } from '../services/campaignBrandAssignment';
+import { CampaignFunnelStageSchema } from '../schemas/campaignPlanningSchema';
+import { CAMPAIGN_FUNNEL_STAGES } from '../models/Campaign';
 
 // ── Campaign CRUD ────────────────────────────────────────────────────
 
@@ -161,6 +163,24 @@ export async function handleUpdateCampaign(req: Request, res: Response, next: Ne
     // Re-resolved on update too, so correcting a campaign's brand is possible and
     // an invalid one is still refused rather than written.
     const patch = { ...req.body };
+
+    // funnel_stage is an enum the ranking logic branches on, so an unrecognised value is
+    // refused here rather than stored and discovered later by whatever tries to rank on it.
+    // The allowed set comes from CAMPAIGN_FUNNEL_STAGES itself - see the note on that
+    // constant for why it is the source of truth rather than a copy.
+    if (patch.funnel_stage !== undefined && patch.funnel_stage !== null) {
+      const parsed = CampaignFunnelStageSchema.safeParse(patch.funnel_stage);
+      if (!parsed.success) {
+        res.status(400).json({
+          error: 'Invalid funnel_stage',
+          error_class: 'ValidationError',
+          allowed: CAMPAIGN_FUNNEL_STAGES,
+        });
+        return;
+      }
+      patch.funnel_stage = parsed.data;
+    }
+
     if ('brand_id' in patch || 'sender_profile_id' in patch) {
       try {
         const brand = await resolveCampaignBrand({

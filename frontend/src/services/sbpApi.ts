@@ -91,7 +91,9 @@ export interface StartBuildAnswers {
    * pairs, so the requirements are shaped by what this student actually said
    * rather than by three fixed fields.
    */
-  answers?: Array<{ id: string; question: string; answer: string }>;
+  answers?: Array<{ id: string; question: string; answer: string; angle?: string }>;
+  /** Carried through from the intake result so the truth store files them. */
+  covered?: CoveredAngle[];
   target_weeks?: number;
 }
 
@@ -116,10 +118,28 @@ export interface IntakeQuestion {
    * an older cached response has none — the UI must not assume they exist.
    */
   suggestions?: string[];
+  /**
+   * The angle this question came from. Sent back with the answer so the
+   * server files it against a truth dimension by lookup rather than by
+   * guessing from the wording. Optional: an older cached response has none.
+   */
+  angle?: string;
+}
+
+/** An angle the description already answered, with the student's own phrase. */
+export interface CoveredAngle {
+  angle: string;
+  evidence: string;
 }
 
 export interface IntakeQuestionsResult {
   questions: IntakeQuestion[];
+  /**
+   * What was NOT asked, and why. The receipt for a short interview: a student
+   * who wrote three paragraphs and got two questions can see the other eight
+   * quoted back. Optional because an older server omits it.
+   */
+  covered?: CoveredAngle[];
   /**
    * false when the model failed and the server substituted its generic set.
    * The UI must not claim these were tailored when this is false.
@@ -146,6 +166,152 @@ export async function fetchIntakeQuestions(input: {
     const res = await portalApi.post('/api/portal/sbp/intake/questions', input);
     return { ok: true, result: res.data };
   } catch (err) {
+    return { ok: false, error: toError(err) };
+  }
+}
+
+/**
+ * One statement the server understood, grouped by how much a person can trust
+ * it. Mirrors `ReviewItem` in backend/src/services/sbp/intakeReview.ts.
+ *
+ *   needsConfirmation  we heard it, nobody has agreed we heard it right
+ *   inferences         nothing was said; the system worked it out
+ *   openQuestions      it was asked and not answered
+ *   unknowns           recorded as unknown, deliberately, and that is allowed
+ *   confirmed          already corrected or agreed
+ */
+export type ReviewGroup = 'confirmed' | 'needsConfirmation' | 'inferences' | 'openQuestions' | 'unknowns';
+
+export interface ReviewItem {
+  index: number;
+  dimension: string;
+  /** The dimension as a person would say it, e.g. "What good looks like". */
+  label: string;
+  value: string;
+  group: ReviewGroup;
+  quote: string | null;
+}
+
+/**
+ * What the server will record if the student confirms. Computed by the same
+ * code that stores it, so this is a preview of the write, not a second opinion.
+ */
+export interface IntakePreview {
+  review: {
+    items: ReviewItem[];
+    counts: Record<ReviewGroup, number>;
+    /** Only these block. Everything else is informational. */
+    contradictions: string[];
+    blocksPlanning: boolean;
+  };
+  /** Still unanswered, in plain words, so the gaps are visible before confirm. */
+  unanswered: string[];
+  /** Angles the description already answered, quoted back as a receipt. */
+  covered: CoveredAngle[];
+  /** Answers the server could not file by angle. Reported, never guessed. */
+  unmapped: number;
+  /**
+   * Whether "have an AI call me" can be offered, and the exact consent words
+   * to show if so. Optional: an older server omits it, and the wizard then
+   * offers nothing, which is the safe reading.
+   */
+  callOffer?: CallOffer;
+}
+
+export interface CallOffer {
+  /** True only when every switch a call needs is on. Otherwise show no option. */
+  available: boolean;
+  /** The words the student agrees to. Shown verbatim; stored verbatim. */
+  consentText: string;
+  consentVersion: string;
+}
+
+/** What the student asked for on the review step, sent after the build starts. */
+export interface DiscoveryCallRequest {
+  phone: string;
+  consent: true;
+  consent_version: string;
+  name?: string;
+}
+
+/**
+ * Why a call was not placed, in the server's words. The UI maps these to
+ * plain language; it never invents a reason the server did not give.
+ */
+export type DiscoveryCallReason =
+  | 'no_consent' | 'no_phone' | 'nothing_to_ask' | 'no_agent_configured' | 'no_intake_yet'
+  | 'cooling_down' | 'consent_text_stale' | 'consent_not_recorded' | 'dial_skipped' | 'dial_failed';
+
+export type DiscoveryCallOutcome =
+  | { placed: true; requestId: string; angles: string[]; callId: string | null }
+  | { placed: false; reason: DiscoveryCallReason; requestId: string | null };
+
+/**
+ * Ask for the call. Runs AFTER startBuild, because the call continues an
+ * interview and the server refuses to open one: there is no truth to continue
+ * from until the build has stored it. The server decides; this reports.
+ */
+export async function requestDiscoveryCall(projectId: string, body: DiscoveryCallRequest): Promise<
+  { ok: true; outcome: DiscoveryCallOutcome } | { ok: false; error: SbpError }
+> {
+  try {
+    const res = await portalApi.post(`/api/portal/sbp/intake/${encodeURIComponent(projectId)}/call`, body);
+    return { ok: true, outcome: res.data as DiscoveryCallOutcome };
+  } catch (err: any) {
+    // 422 is a decision, not a transport failure: the consent words were
+    // stale. Report it as an outcome so the UI can say so.
+    if (err?.response?.status === 422 && err.response.data?.reason) {
+      return { ok: true, outcome: { placed: false, reason: err.response.data.reason, requestId: null } };
+    }
+    return { ok: false, error: toError(err) };
+  }
+}
+
+/**
+ * Show the student what the server understood, BEFORE it is stored.
+ *
+ * Runs pre-project and touches no database: the truth row is written by
+ * `startBuild`, and writing it earlier would leave a row behind for a student
+ * who goes back and changes an answer. A failure here is a failure to reach
+ * the server, never a refusal; the wizard falls back to echoing the raw
+ * answers so nobody is stranded on the review step.
+ */
+export async function previewIntake(input: {
+  idea: string;
+  answers: Array<{ id: string; question: string; answer: string; angle?: string }>;
+  covered?: CoveredAngle[];
+}): Promise<{ ok: true; preview: IntakePreview } | { ok: false; error: SbpError }> {
+  try {
+    const res = await portalApi.post('/api/portal/sbp/intake/preview', input);
+    return { ok: true, preview: res.data as IntakePreview };
+  } catch (err) {
+    return { ok: false, error: toError(err) };
+  }
+}
+
+/**
+ * The stored truth, read back after a build exists. Same two halves as the
+ * pre-Confirm preview, plus the revision. Null when the intake never ran, so
+ * a caller can tell "nothing recorded" from "recorded nothing".
+ */
+export interface IntakeReviewRecord {
+  project_id: string;
+  revision: number;
+  items: ReviewItem[];
+  counts: Record<ReviewGroup, number>;
+  contradictions: string[];
+  blocksPlanning: boolean;
+  unanswered: string[];
+}
+
+export async function getIntakeReview(projectId: string): Promise<
+  { ok: true; review: IntakeReviewRecord | null } | { ok: false; error: SbpError }
+> {
+  try {
+    const res = await portalApi.get(`/api/portal/sbp/intake/${encodeURIComponent(projectId)}/review`);
+    return { ok: true, review: res.data as IntakeReviewRecord };
+  } catch (err: any) {
+    if (err?.response?.status === 404) return { ok: true, review: null };
     return { ok: false, error: toError(err) };
   }
 }

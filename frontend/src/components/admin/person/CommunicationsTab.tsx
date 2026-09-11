@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CommunicationMessage, CommunicationOutcome, CommunicationsPanel } from '../../../adminOs/personTypes';
 import { EmptyPanel, Stat, fmtDateTime } from './primitives';
+import AsSentPanel, { RenderedBody, highlightClicked } from './MessageAsSent';
 
 /**
  * Every communication with this person, threaded by campaign.
@@ -25,7 +26,7 @@ const CHANNEL_ICON: Record<string, string> = {
   linkedin: 'ri-linkedin-box-line',
 };
 
-function MessageRow({ m }: { m: CommunicationMessage }) {
+function MessageRow({ m, personRef }: { m: CommunicationMessage; personRef: string }) {
   const [open, setOpen] = useState(false);
   const inbound = m.direction === 'inbound';
   const when = m.sentAt ?? m.scheduledFor;
@@ -44,7 +45,7 @@ function MessageRow({ m }: { m: CommunicationMessage }) {
             {/* Inbound is the half a campaign-scoped view never showed. */}
             {engagementOnly ? (
               <span className={`badge bg-${OUTCOME_TONE[m.status ?? ''] ?? 'info'}-subtle text-${OUTCOME_TONE[m.status ?? ''] ?? 'info'}-emphasis`}
-                title="Recorded by Mandrill on a message this platform did not send">
+                title="Recorded by Mandrill on a message this platform did not store. Open it to fetch the email as it was sent.">
                 {m.status} · message not held
               </span>
             ) : (
@@ -91,36 +92,16 @@ function MessageRow({ m }: { m: CommunicationMessage }) {
         </button>
       </div>
 
-      {open && <MessageModal m={m} onClose={() => setOpen(false)} />}
+      {open && <MessageModal m={m} personRef={personRef} onClose={() => setOpen(false)} />}
     </div>
   );
 }
 
-/**
- * The message as the recipient saw it.
- *
- * Email bodies are HTML. Showing the source (the first version did) tells a
- * reader nothing about what landed in the inbox, and Ali's ask was "exactly how
- * it looked to her". Rendered in a SANDBOXED iframe via srcDoc, never
- * dangerouslySetInnerHTML: the body came from a template engine and Mandrill,
- * and an iframe with no scripts and no same-origin keeps anything in it from
- * reaching the admin session. Plain-text bodies are wrapped so they still read.
- */
-function RenderedBody({ body }: { body: string }) {
-  const looksHtml = /<\s*(html|body|div|table|p|a|br|span)\b/i.test(body);
-  const doc = looksHtml
-    ? body
-    : `<!doctype html><html><body style="font:14px/1.5 system-ui, sans-serif; margin:16px; white-space:pre-wrap">${
-        body.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</body></html>`;
-  return (
-    <iframe
-      title="Message as delivered"
-      sandbox=""
-      srcDoc={doc}
-      className="w-100 border rounded bg-white"
-      style={{ height: 520 }}
-    />
-  );
+/** Every clicked URL the outcomes on this message know about, masked, distinct. */
+function clickedUrlsOf(outcomes: CommunicationOutcome[]): string[] {
+  const out: string[] = [];
+  for (const o of outcomes) for (const u of o.clickedUrls ?? []) if (!out.includes(u)) out.push(u);
+  return out;
 }
 
 /**
@@ -136,8 +117,9 @@ function RenderedBody({ body }: { body: string }) {
  *      that writes these pins every open to the most recent sent email, so a
  *      login-email open lands here -- and a solid dot would claim she opened
  *      THIS email when she did not.
- *   2. "Clicked" says a link was clicked, not which. Mandrill's poll does not
- *      record the URL, so the modal says so rather than highlighting a guess.
+ *   2. "Clicked" says WHICH link only when the poll kept the URL (rows from
+ *      2026-09-11 on). Before that the modal says a link was clicked and that
+ *      the URL was not recorded, rather than highlighting a guess.
  */
 function OutcomeTimeline({ sentAt, outcomes }: { sentAt: string | null; outcomes: CommunicationOutcome[] }) {
   const events = [
@@ -181,14 +163,22 @@ function OutcomeTimeline({ sentAt, outcomes }: { sentAt: string | null; outcomes
         ))}
       </div>
 
-      {clicks.length > 0 && (
+      {clicks.length > 0 && (clickedUrlsOf(clicks).length > 0 ? (
+        <div className="small mb-1 mt-2">
+          <i className="ri-cursor-line me-1 text-success" aria-hidden="true" />
+          Clicked {clicks.length === 1 ? 'once' : `${clicks.length} times`}, on:
+          <ul className="mb-0 mt-1">
+            {clickedUrlsOf(clicks).map((u) => <li key={u}><code style={{ fontSize: '.75rem' }}>{u}</code></li>)}
+          </ul>
+        </div>
+      ) : (
         <p className="small text-muted mb-1 mt-2">
           <i className="ri-cursor-line me-1" aria-hidden="true" />
-          A link was clicked {clicks.length === 1 ? 'once' : `${clicks.length} times`}. Mandrill records
-          <em> that</em> a link was clicked, not <em>which</em> one, so nothing in the message is highlighted —
+          A link was clicked {clicks.length === 1 ? 'once' : `${clicks.length} times`}, but the tracking
+          poll did not keep the URL before 2026-09-11, so nothing in the message is highlighted —
           highlighting a guess would be worse than saying we do not know.
         </p>
-      )}
+      ))}
 
       {misattributed.length > 0 && (
         <div className="alert alert-warning small py-2 mb-0 mt-2">
@@ -213,8 +203,9 @@ function OutcomeTimeline({ sentAt, outcomes }: { sentAt: string | null; outcomes
  * (step progress, touchpoints, enrolment status): that sits on the thread
  * header above, and printing it again in every message is noise.
  */
-function MessageModal({ m, onClose }: { m: CommunicationMessage; onClose: () => void }) {
+function MessageModal({ m, personRef, onClose }: { m: CommunicationMessage; personRef: string; onClose: () => void }) {
   const inbound = m.direction === 'inbound';
+  const clicked = clickedUrlsOf(m.outcomes);
   return (
     <div className="modal d-block" tabIndex={-1} role="dialog"
       style={{ background: 'rgba(0,0,0,.4)' }} onClick={onClose}>
@@ -271,13 +262,22 @@ function MessageModal({ m, onClose }: { m: CommunicationMessage; onClose: () => 
               Message — as it looked to them
             </div>
             {m.body ? (
-              <RenderedBody body={m.body} />
+              <>
+                {clicked.length > 0 && (
+                  <p className="small mb-2">
+                    <span className="badge bg-success-subtle text-success-emphasis me-1">
+                      <i className="ri-cursor-line me-1" aria-hidden="true" />clicked
+                    </span>
+                    The highlighted {clicked.length === 1 ? 'link is the one' : 'links are the ones'} they clicked.
+                  </p>
+                )}
+                <RenderedBody body={highlightClicked(m.body, clicked)} />
+              </>
             ) : (
-              /* Absent, stated. Cancelled sends and some logged mail genuinely
-                 store no body -- that is not a rendering failure. */
-              <p className="text-muted small mb-0">
-                No body was stored for this message, so there is nothing to read.
-              </p>
+              /* Not held here. A cancelled send has nothing to fetch; a
+                 message Mandrill sent can be fetched from Mandrill, as sent,
+                 on demand -- the panel says which it is. */
+              <AsSentPanel personRef={personRef} m={m} />
             )}
 
             <p className="text-muted small mb-0 mt-3">
@@ -290,8 +290,10 @@ function MessageModal({ m, onClose }: { m: CommunicationMessage; onClose: () => 
   );
 }
 
-export default function CommunicationsTab({ communications }: {
+export default function CommunicationsTab({ communications, personRef }: {
   communications: CommunicationsPanel | null | undefined;
+  /** The ref this page was opened with; the modal sends it back to fetch a message as sent. */
+  personRef: string;
 }) {
   if (!communications) {
     return <EmptyPanel>No lead record, so there is no communication history to show.</EmptyPanel>;
@@ -343,7 +345,7 @@ export default function CommunicationsTab({ communications }: {
             {t.messages.length === 0 ? (
               <EmptyPanel>Enrolled, but nothing has been sent yet.</EmptyPanel>
             ) : (
-              t.messages.map((m) => <MessageRow key={m.id} m={m} />)
+              t.messages.map((m) => <MessageRow key={m.id} m={m} personRef={personRef} />)
             )}
           </div>
         </div>

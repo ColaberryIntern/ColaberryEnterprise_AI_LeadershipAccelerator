@@ -5,16 +5,12 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import AgentDetailPage from '../AgentDetailPage';
 import { AgentDetail } from '../../../services/agentDetailApi';
 
-// Checkpoint G (2026-09-10) — Command Center unfolded into "Live Status"
-// and "Overview" (see AgentLiveStatusTab.tsx / AgentDetailPage.tsx's own
-// header comment for the full history). This is the dedicated test file
-// for the re-promoted "Overview" tab — the Identity/tools/reports-to/
-// system-prompt content that used to be covered inside
-// AgentDetailPage.commandCenter.test.tsx before the split. AgentOverviewTab
-// itself takes `detail` only (no inbox dependency), so this file needs no
-// inbox mocking — only the "At a Glance" default landing tab's own 4
-// summary fetches, which still fire on mount regardless of which tab this
-// file clicks into afterward.
+// Checkpoint I (2026-09-11) — Ali pasted a full mockup and asked to match
+// its format for Overview. Replaces the Checkpoint H sub-tabbed version:
+// Overview is now one flowing page (AgentOverviewV2), so every section's
+// real content shows with a single "Overview" tab click, no further
+// sub-tab clicks needed. This file's own mocking setup is unchanged from
+// before — AgentOverviewV2 still takes only `detail`, no inbox dependency.
 
 jest.mock('../../../services/agentDetailApi', () => ({ getAgentDetail: jest.fn() }));
 jest.mock('../../../services/managerInboxApi', () => ({ getManagerInboxItems: jest.fn() }));
@@ -30,7 +26,7 @@ jest.mock('../../../services/managerDirectiveApi', () => ({ listDirectives: jest
 jest.mock('../../../services/agentReportSubscriptionApi', () => ({ listReportSubscriptions: jest.fn() }));
 jest.mock('../../../services/agentGoalApi', () => ({ listGoals: jest.fn() }));
 jest.mock('../../../services/agentOneOnOneApi', () => ({ listOneOnOnes: jest.fn() }));
-jest.mock('../../../services/agentRoleCharterApi', () => ({ getAgentRoleCharter: jest.fn() }));
+jest.mock('../../../services/agentRoleCharterApi', () => ({ getAgentRoleCharter: jest.fn(), saveAgentRoleCharter: jest.fn() }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getAgentDetail } = require('../../../services/agentDetailApi') as { getAgentDetail: jest.Mock };
@@ -99,20 +95,6 @@ async function openOverviewTab() {
   });
 }
 
-// Checkpoint H (2026-09-10) — Overview's nine flat sections became seven
-// sub-tabs (see AgentOverviewTab.tsx). Every sub-tab's own nav-pill label
-// text is always present in the DOM (it's the button text), so asserting
-// on a label alone no longer proves that section's real content rendered —
-// the sub-tab has to actually be clicked first.
-async function openOverviewSubTab(label: string) {
-  const subTabButton = Array.from(container.querySelectorAll('.nav-pills button')).find((b) => b.textContent?.trim() === label);
-  if (!subTabButton) throw new Error(`Overview sub-tab "${label}" not found`);
-  await act(async () => {
-    subTabButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-}
-
 beforeEach(() => {
   jest.clearAllMocks();
   listDirectives.mockResolvedValue([]);
@@ -132,26 +114,26 @@ afterEach(() => {
   container.remove();
 });
 
-describe('AgentDetailPage — Overview tab', () => {
-  it('is not shown on mount (At a Glance is the default), and Identity is the default sub-tab once opened', async () => {
+describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
+  it('is not shown on mount (At a Glance is the default)', async () => {
     await renderAgentPage();
     expect(container.textContent).not.toContain('Identity');
-
-    await openOverviewTab();
-    // Identity is the default sub-tab: its real content shows with no sub-tab click.
-    // DETAIL's identity is null, so the honest "no linked identity" state is
-    // the real content here — still proof the Identity sub-tab, not some
-    // other sub-tab, rendered by default.
-    expect(container.textContent).toContain('No linked staff identity yet.');
-    // The other sub-tabs' real content is not rendered until clicked.
     expect(container.textContent).not.toContain('You are CoryBrain.');
   });
 
-  it('shows the real system prompt once the System prompt sub-tab is opened', async () => {
+  it('shows Identity, System prompt, and Trust content all at once — no sub-tab clicks needed', async () => {
     await renderAgentPage();
     await openOverviewTab();
-    await openOverviewSubTab('System prompt');
+
+    // Identity (sidebar)
+    expect(container.textContent).toContain('Identity');
+    expect(container.textContent).toContain('ai_leadership');
+    // System prompt is inside a closed <details> but its text is still in
+    // the DOM (native <details> content isn't removed, just visually hidden).
     expect(container.textContent).toContain('You are CoryBrain.');
+    // Trust Contract (main column) — real autonomy ladder + real evidence.
+    expect(container.textContent).toContain('Trust Contract');
+    expect(container.textContent).toContain('Trust evidence');
   });
 
   it('never fetches the manager inbox — Overview has no dependency on pending-approval data', async () => {

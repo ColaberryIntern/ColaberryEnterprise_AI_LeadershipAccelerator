@@ -110,7 +110,13 @@ export interface StartBuildInput {
    * above for any client new enough to send them; both are supported so a
    * cached older bundle still produces a build.
    */
-  answers?: Array<{ id: string; question: string; answer: string }>;
+  answers?: Array<{ id: string; question: string; answer: string; angle?: string }>;
+  /**
+   * Angles the description already answered, quoted, as the intake service
+   * reported them. Carried through so the truth store files them as facts
+   * rather than losing the one thing that made the short interview honest.
+   */
+  covered?: Array<{ angle: string; evidence: string }>;
 }
 
 /**
@@ -192,6 +198,39 @@ export async function startBuild(input: StartBuildInput): Promise<{ projectId: s
     status: 'generating',
   });
   log('sbp_build_started', correlationId, 'success', { projectId: input.projectId, idea_chars: input.idea.length });
+
+  /*
+   * THE INTAKE BECOMES TRUTH HERE, and here is the only place it can.
+   *
+   * Everything downstream reads `project_understandings` for this project - the
+   * confirmation gate, the plan's truth revision, Story 000's own section, the
+   * case-study hypothesis. On 2026-09-11 every one of those was found to be
+   * correct in isolation and unreachable in practice, because nothing on the
+   * real wizard path wrote the row they read. This is the write.
+   *
+   * IT CANNOT FAIL A BUILD. A student whose truth could not be recorded still
+   * gets their plan; they lose the review screen, not the pipeline. Failure is
+   * one classified log line and nothing else, because a thrown error here
+   * would turn a nice-to-have into a build that never starts.
+   */
+  try {
+    const { saveIntakeTruth } = await import('./intakeTruthStore');
+    const truth = await saveIntakeTruth({
+      projectId: input.projectId,
+      idea: input.idea,
+      answers: input.answers,
+      covered: input.covered,
+    });
+    log('sbp_intake_truth_saved', correlationId, 'success', {
+      projectId: input.projectId, outcome: truth.outcome, revision: truth.revision,
+      items: truth.items.length, unmapped: truth.unmapped,
+    });
+  } catch (err) {
+    log('sbp_intake_truth_failed', correlationId, 'failure', {
+      projectId: input.projectId,
+      error_class: (err as { name?: string })?.name ?? 'Error',
+    });
+  }
 
   // Name the project from what the student just typed. THIS IS THE FIRST MOMENT
   // THE NAME IS KNOWABLE: the `projects` row is created by POST /api/portal/

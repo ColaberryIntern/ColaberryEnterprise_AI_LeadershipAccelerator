@@ -45,9 +45,15 @@ import { buildKpis, deriveInsights } from './journeyMetrics';
 interface Props {
   /** Chart height in px. The page gives this component a fixed viewport slot. */
   height?: number;
+  /**
+   * Scope the journey to leads who entered ONE campaign. Set by the Campaign 360 Journey tab.
+   * When present the brand selector is hidden, because a campaign belongs to exactly one
+   * brand and offering a second filter would let the two contradict each other.
+   */
+  campaignId?: string;
 }
 
-export default function OutreachJourneyFlow({ height = 520 }: Props): React.ReactElement {
+export default function OutreachJourneyFlow({ height = 520, campaignId }: Props): React.ReactElement {
   const [data, setData] = useState<CampaignGraphData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -83,7 +89,9 @@ export default function OutreachJourneyFlow({ height = 520 }: Props): React.Reac
       const res = await getCampaignGraph(
         timeWindow,
         false,
-        brandId === ALL_BRANDS ? undefined : brandId,
+        // Campaign scope supersedes brand scope - see the Props note.
+        campaignId ? undefined : (brandId === ALL_BRANDS ? undefined : brandId),
+        campaignId,
       );
       if (seq !== requestSeq.current) return;
       setData(res.data);
@@ -97,7 +105,7 @@ export default function OutreachJourneyFlow({ height = 520 }: Props): React.Reac
     } finally {
       if (seq === requestSeq.current) setLoading(false);
     }
-  }, [timeWindow, brandId]);
+  }, [timeWindow, brandId, campaignId]);
 
   useEffect(() => {
     load();
@@ -205,6 +213,7 @@ export default function OutreachJourneyFlow({ height = 520 }: Props): React.Reac
           brandId={brandId}
           brands={brands}
           onBrand={setBrandId}
+          brandLockedReason={campaignId ? 'This journey is scoped to one campaign, which belongs to one brand.' : undefined}
           journeyView={journeyView}
           onJourneyView={setJourneyView}
           display={display}
