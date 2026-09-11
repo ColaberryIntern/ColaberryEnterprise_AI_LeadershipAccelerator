@@ -72,6 +72,21 @@ const byRole = (role: string) => Array.from(container.querySelectorAll(role));
 const buttonNamed = (name: string) =>
   (byRole('button') as HTMLButtonElement[]).find((b) => (b.textContent || '').includes(name));
 
+// Replies must clear the 5-word thoughtfulness bar (contributionQuality), so
+// fixtures here are real sentences rather than "ok" — a two-word fixture would
+// be testing the gate, not the send path.
+const REAL_REPLY = 'Trying this on my pipeline tomorrow morning.';
+const REAL_THREADED_REPLY = 'Same here, mine broke on the schema step.';
+
+async function typeReply(value: string) {
+  const ta = container.querySelector('.ct-ta') as HTMLTextAreaElement;
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!;
+    setter.call(ta, value);
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mFetchPost.mockResolvedValue(POST);
@@ -120,6 +135,24 @@ describe('showing the thread', () => {
     expect(container.querySelector('.ct-ta')).toBeTruthy();   // composer still there
   });
 
+  it('does not repeat the ritual name when the drawer crumb already says it', async () => {
+    // Live on prod the drawer read "STEAL THIS PROMPT" in the crumb and
+    // "✂️ STEAL THIS PROMPT · WEEK 4" directly beneath it — the same words twice
+    // within about 40px. In the drawer the panel drops its own eyebrow and folds
+    // the week into the byline instead.
+    await render({ postId: POST_ID, variant: 'drawer' });
+
+    expect(container.querySelector('.ct-eyebrow')).toBeNull();
+    expect(container.querySelector('.ct-sub')?.textContent).toContain('Week 2');
+    expect(text()).toContain('Hellen Muhonja');
+    expect(text()).toContain('My 3 skills');
+  });
+
+  it('still carries the ritual name in its eyebrow when nothing above it does', async () => {
+    await render({ postId: POST_ID, variant: 'standalone' });
+    expect(container.querySelector('.ct-eyebrow')?.textContent).toContain('Skill Drop');
+  });
+
   it('falls back to the feed label for a plain post with no ritual heading', async () => {
     mFetchPost.mockResolvedValue({ ...POST, body: 'Anyone free to pair this afternoon?' });
     await render({ postId: POST_ID, fallbackLabel: 'Community Post' });
@@ -132,55 +165,39 @@ describe('showing the thread', () => {
 describe('replying', () => {
   it('posts a top-level reply and shows it immediately', async () => {
     const created: CommunityComment = {
-      ...COMMENT, id: 'c3', body: 'Trying this tomorrow.', replies: [],
+      ...COMMENT, id: 'c3', body: REAL_REPLY, replies: [], points_awarded: 2,
       member: { id: 'me', display_name: 'You', avatar_url: null, level: 1 },
     };
     mCreateComment.mockResolvedValue(created);
     await render({ postId: POST_ID });
 
-    const ta = container.querySelector('.ct-ta') as HTMLTextAreaElement;
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!;
-      setter.call(ta, 'Trying this tomorrow.');
-      ta.dispatchEvent(new Event('input', { bubbles: true }));
-    });
+    await typeReply(REAL_REPLY);
     await act(async () => { buttonNamed('Send')!.click(); });
 
-    expect(mCreateComment).toHaveBeenCalledWith(POST_ID, 'Trying this tomorrow.', undefined);
-    expect(text()).toContain('Trying this tomorrow.');
+    expect(mCreateComment).toHaveBeenCalledWith(POST_ID, REAL_REPLY, undefined);
+    expect(text()).toContain(REAL_REPLY);
     // The composer clears, so a second send cannot repeat the first.
     expect((container.querySelector('.ct-ta') as HTMLTextAreaElement).value).toBe('');
   });
 
   it('threads a reply under the comment it answers', async () => {
-    mCreateComment.mockResolvedValue({ ...COMMENT, id: 'c4', body: 'Same here.', parent_comment_id: 'c1', replies: [] });
+    mCreateComment.mockResolvedValue({ ...COMMENT, id: 'c4', body: REAL_THREADED_REPLY, parent_comment_id: 'c1', replies: [] });
     await render({ postId: POST_ID });
 
     await act(async () => { buttonNamed('Reply')!.click(); });
     expect(text()).toContain('Replying to Marcus Lee');
 
-    const ta = container.querySelector('.ct-ta') as HTMLTextAreaElement;
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!;
-      setter.call(ta, 'Same here.');
-      ta.dispatchEvent(new Event('input', { bubbles: true }));
-    });
+    await typeReply(REAL_THREADED_REPLY);
     await act(async () => { buttonNamed('Send')!.click(); });
 
-    expect(mCreateComment).toHaveBeenCalledWith(POST_ID, 'Same here.', 'c1');
+    expect(mCreateComment).toHaveBeenCalledWith(POST_ID, REAL_THREADED_REPLY, 'c1');
   });
 
   it('refuses to send an empty or whitespace-only reply', async () => {
     await render({ postId: POST_ID });
-    const send = buttonNamed('Send') as HTMLButtonElement;
-    expect(send.disabled).toBe(true);
+    expect((buttonNamed('Send') as HTMLButtonElement).disabled).toBe(true);
 
-    const ta = container.querySelector('.ct-ta') as HTMLTextAreaElement;
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!;
-      setter.call(ta, '   ');
-      ta.dispatchEvent(new Event('input', { bubbles: true }));
-    });
+    await typeReply('   ');
     expect((buttonNamed('Send') as HTMLButtonElement).disabled).toBe(true);
     expect(mCreateComment).not.toHaveBeenCalled();
   });
@@ -189,17 +206,62 @@ describe('replying', () => {
     mCreateComment.mockRejectedValue({ response: { data: { error: 'Too many comments — please slow down' } } });
     await render({ postId: POST_ID });
 
-    const ta = container.querySelector('.ct-ta') as HTMLTextAreaElement;
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!;
-      setter.call(ta, 'my reply');
-      ta.dispatchEvent(new Event('input', { bubbles: true }));
-    });
+    await typeReply(REAL_REPLY);
     await act(async () => { buttonNamed('Send')!.click(); });
 
     expect(text()).toContain('Too many comments');
     // The student's words are not thrown away on a failed send.
-    expect((container.querySelector('.ct-ta') as HTMLTextAreaElement).value).toBe('my reply');
+    expect((container.querySelector('.ct-ta') as HTMLTextAreaElement).value).toBe(REAL_REPLY);
+  });
+});
+
+describe('points and the thoughtfulness bar', () => {
+  it('states the reward on the control that earns it', async () => {
+    await render({ postId: POST_ID });
+    expect((buttonNamed('Send') as HTMLButtonElement).textContent).toContain('+2');
+  });
+
+  it('blocks a one-word reply and says what is missing, without scolding', async () => {
+    await render({ postId: POST_ID });
+    await typeReply('nice');
+
+    expect((buttonNamed('Send') as HTMLButtonElement).disabled).toBe(true);
+    expect(text()).toContain('few more words');
+    expect(text()).toContain('1/5 words');
+    expect(text()).not.toMatch(/invalid|rejected|error/i);
+    expect(mCreateComment).not.toHaveBeenCalled();
+  });
+
+  it('enables Send the moment the reply clears the bar', async () => {
+    await render({ postId: POST_ID });
+    await typeReply('one two three four');
+    expect((buttonNamed('Send') as HTMLButtonElement).disabled).toBe(true);
+    await typeReply('one two three four five');
+    expect((buttonNamed('Send') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('celebrates the points the SERVER awarded, not the advertised number', async () => {
+    // Past the daily community cap the award is clamped to 1. Advertising +2
+    // and then celebrating +2 would be telling the student something untrue.
+    mCreateComment.mockResolvedValue({ ...COMMENT, id: 'c9', body: REAL_REPLY, replies: [], points_awarded: 1 });
+    await render({ postId: POST_ID });
+
+    await typeReply(REAL_REPLY);
+    await act(async () => { buttonNamed('Send')!.click(); });
+
+    expect(text()).toContain('you earned +1 point');
+    expect(text()).not.toContain('+2 points');
+  });
+
+  it('stays silent when the award was clamped to zero', async () => {
+    mCreateComment.mockResolvedValue({ ...COMMENT, id: 'c10', body: REAL_REPLY, replies: [], points_awarded: 0 });
+    await render({ postId: POST_ID });
+
+    await typeReply(REAL_REPLY);
+    await act(async () => { buttonNamed('Send')!.click(); });
+
+    expect(text()).not.toMatch(/you earned/i);
+    expect(text()).toContain(REAL_REPLY);   // the reply still posted
   });
 });
 

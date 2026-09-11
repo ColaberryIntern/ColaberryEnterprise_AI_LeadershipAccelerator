@@ -4,6 +4,8 @@ import {
   CommunityPost, CommunityComment,
 } from '../../services/communityApi';
 import { parseRitualBody } from './ritualPostBody';
+import { checkReply, MIN_REPLY_WORDS } from './contributionQuality';
+import { emitPointsEarned } from '../../services/pointsFx';
 
 /**
  * CommunityThreadPanel — the discussion experience for ONE community post,
@@ -30,9 +32,20 @@ interface Props {
   /** Ritual identity from the feed item, used until the post itself loads. */
   fallbackLabel?: string | null;
   preview?: boolean;   // admin Studio: sample thread, non-interactive
+  /**
+   * 'drawer' — the card drawer already prints the ritual name in its crumb, so
+   * the panel suppresses its own eyebrow and folds the week into the author
+   * byline instead. Printing "Skill Drop" twice within 40px reads as a bug.
+   * 'standalone' — nothing above us names the ritual, so the eyebrow carries it.
+   */
+  variant?: 'drawer' | 'standalone';
 }
 
 const LEVEL_NAMES: Record<number, string> = { 1: 'Apprentice', 2: 'Builder', 3: 'Architect', 4: 'Principal' };
+/** Mirrors POINTS_PER_COMMENT in backend/src/services/communityService.ts. The
+ *  button advertises this; the CELEBRATION always uses the server's actual
+ *  award, which can be lower once the daily community cap clamps it. */
+const REPLY_POINTS = 2;
 
 const avColor = (n: string) => {
   let h = 0;
@@ -80,7 +93,7 @@ const Avatar: React.FC<{ name: string; src: string | null; size: number }> = ({ 
     : <span className="ct-av" style={{ width: size, height: size, background: avColor(name), fontSize: size * 0.36 }}>{initialsOf(name)}</span>
 );
 
-const CommunityThreadPanel: React.FC<Props> = ({ postId, fallbackLabel, preview }) => {
+const CommunityThreadPanel: React.FC<Props> = ({ postId, fallbackLabel, preview, variant = 'standalone' }) => {
   const [post, setPost] = useState<CommunityPost | null>(preview ? SAMPLE_POST : null);
   const [comments, setComments] = useState<CommunityComment[]>(preview ? SAMPLE_COMMENTS : []);
   const [loading, setLoading] = useState(!preview);
@@ -91,7 +104,12 @@ const CommunityThreadPanel: React.FC<Props> = ({ postId, fallbackLabel, preview 
   const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
+  const [earnedBurst, setEarnedBurst] = useState<number | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // Live thoughtfulness check — the same rule the server enforces, run as they
+  // type so Send is honest about whether this reply will count.
+  const quality = checkReply(draft);
 
   const load = useCallback(async () => {
     if (preview) return;
@@ -167,7 +185,7 @@ const CommunityThreadPanel: React.FC<Props> = ({ postId, fallbackLabel, preview 
 
   const send = async () => {
     const body = draft.trim();
-    if (!body || sending || preview || !post) return;
+    if (!quality.ok || sending || preview || !post) return;
     setSending(true); setSendError('');
     try {
       const created = await createComment(post.id, body, replyTo?.id);
@@ -178,6 +196,17 @@ const CommunityThreadPanel: React.FC<Props> = ({ postId, fallbackLabel, preview 
       ));
       setPost((p) => (p ? { ...p, comment_count: p.comment_count + 1 } : p));
       setDraft(''); setReplyTo(null);
+
+      // Celebrate with the number the SERVER actually awarded, not the nominal
+      // one — the community award is daily-cap clamped, so a student past the
+      // cap must not be shown points they did not receive. emitPointsEarned is
+      // a no-op at 0, so a clamped reply simply stays quiet.
+      const earned = typeof created.points_awarded === 'number' ? created.points_awarded : 0;
+      emitPointsEarned(earned);
+      if (earned > 0) {
+        setEarnedBurst(earned);
+        window.setTimeout(() => setEarnedBurst(null), 2600);
+      }
     } catch (e: any) {
       setSendError(e?.response?.data?.error || 'Couldn’t post your reply — try again.');
     } finally {
@@ -191,9 +220,9 @@ const CommunityThreadPanel: React.FC<Props> = ({ postId, fallbackLabel, preview 
 
   const styleBlock = (
     <style>{`
-      .ct{--ct-accent:#367895;--ct-gold:#E8920C;--ct-ink:#1A1A1A;--ct-muted:#6B6B6B;--ct-line:#E4E4E3;--ct-panel:#FFFFFF;--ct-sunken:#F6F7F8;font-family:inherit;color:var(--ct-ink);display:flex;flex-direction:column;min-height:100%}
-      @media (prefers-color-scheme:dark){.ct{--ct-ink:#FFFFFF;--ct-muted:#B4B4B4;--ct-line:rgba(255,255,255,.14);--ct-panel:#141414;--ct-sunken:#1C1C1C}}
-      :root[data-theme="dark"] .ct,.tl-de[data-theme="dark"] .ct{--ct-ink:#FFFFFF;--ct-muted:#B4B4B4;--ct-line:rgba(255,255,255,.14);--ct-panel:#141414;--ct-sunken:#1C1C1C}
+      .ct{--ct-accent:#367895;--ct-gold:#E8920C;--ct-cherry:#FB2832;--ct-cherry-deep:#C20E1E;--ct-leaf:#3F7A2E;--ct-ink:#1A1A1A;--ct-muted:#6B6B6B;--ct-line:#E4E4E3;--ct-panel:#FFFFFF;--ct-sunken:#F6F7F8;font-family:inherit;color:var(--ct-ink);display:flex;flex-direction:column;min-height:100%}
+      @media (prefers-color-scheme:dark){.ct{--ct-ink:#FFFFFF;--ct-muted:#B4B4B4;--ct-line:rgba(255,255,255,.14);--ct-panel:#141414;--ct-sunken:#1C1C1C;--ct-cherry:#FF4A52;--ct-cherry-deep:#E5121D;--ct-leaf:#7FC06A}}
+      :root[data-theme="dark"] .ct,.tl-de[data-theme="dark"] .ct{--ct-ink:#FFFFFF;--ct-muted:#B4B4B4;--ct-line:rgba(255,255,255,.14);--ct-panel:#141414;--ct-sunken:#1C1C1C;--ct-cherry:#FF4A52;--ct-cherry-deep:#E5121D;--ct-leaf:#7FC06A}
       :root[data-theme="light"] .ct,.tl-de[data-theme="light"] .ct{--ct-ink:#1A1A1A;--ct-muted:#6B6B6B;--ct-line:#E4E4E3;--ct-panel:#FFFFFF;--ct-sunken:#F6F7F8}
       .ct-eyebrow{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ct-accent);display:flex;align-items:center;gap:7px;margin-bottom:12px}
       .ct-av{flex:none;border-radius:50%;color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;object-fit:cover}
@@ -235,9 +264,16 @@ const CommunityThreadPanel: React.FC<Props> = ({ postId, fallbackLabel, preview 
       .ct-crow:focus-within{border-color:var(--ct-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--ct-accent) 18%,transparent)}
       .ct-replyto + .ct-crow{border-top-left-radius:0;border-top-right-radius:0}
       .ct-ta{flex:1;border:none;outline:none;resize:none;background:transparent;color:var(--ct-ink);font-family:inherit;font-size:14px;line-height:1.5;min-height:38px;max-height:150px;padding:5px 4px}
-      .ct-send{flex:none;border:none;border-radius:10px;background:var(--ct-accent);color:#fff;font-size:13.5px;font-weight:750;padding:9px 17px;cursor:pointer}
+      .ct-send{flex:none;border:none;border-radius:10px;background:var(--ct-cherry);color:#fff;font-size:13.5px;font-weight:750;padding:9px 15px;cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+      .ct-send:hover:not(:disabled){background:var(--ct-cherry-deep)}
       .ct-send:disabled{opacity:.4;cursor:not-allowed}
+      .ct-pts{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;font-weight:800;background:rgba(255,255,255,.24);padding:2px 7px;border-radius:999px}
       .ct-hint{font-size:11px;color:var(--ct-muted);margin:6px 4px 0}
+      .ct-need{color:var(--ct-gold);font-weight:600}
+      .ct-wc{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:800;opacity:.85;margin-left:3px}
+      .ct-burst{margin:9px 4px 0;font-size:13px;font-weight:750;color:var(--ct-leaf);animation:ct-pop .34s ease-out}
+      @keyframes ct-pop{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+      @media (prefers-reduced-motion:reduce){.ct-burst{animation:none}}
       .ct-err{color:#C20E1E;font-size:12.5px;margin-top:8px}
       .ct-state{padding:30px 14px;text-align:center;color:var(--ct-muted);font-size:13.5px}
       .ct-retry{margin-top:12px;border:1px solid var(--ct-line);background:var(--ct-panel);color:var(--ct-ink);border-radius:10px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer}
@@ -298,7 +334,7 @@ const CommunityThreadPanel: React.FC<Props> = ({ postId, fallbackLabel, preview 
   return (
     <div className="ct">
       {styleBlock}
-      <div className="ct-eyebrow">{label}</div>
+      {variant !== 'drawer' && <div className="ct-eyebrow">{label}</div>}
 
       <article className="ct-post">
         <header className="ct-who">
@@ -306,7 +342,9 @@ const CommunityThreadPanel: React.FC<Props> = ({ postId, fallbackLabel, preview 
           <div>
             <div className="ct-name">{post.member.display_name}</div>
             <div className="ct-sub">
-              Level {post.member.level} · {LEVEL_NAMES[post.member.level] || 'Builder'} · {timeAgo(post.created_at)}
+              Level {post.member.level} · {LEVEL_NAMES[post.member.level] || 'Builder'}
+              {variant === 'drawer' && parsed.week != null && <> · Week {parsed.week}</>}
+              {' · '}{timeAgo(post.created_at)}
             </div>
           </div>
         </header>
@@ -378,12 +416,22 @@ const CommunityThreadPanel: React.FC<Props> = ({ postId, fallbackLabel, preview 
             placeholder={replyTo ? `Reply to ${replyTo.name}…` : 'Write a reply…'}
             onChange={(e) => setDraft(e.target.value)} onKeyDown={onKeyDown} disabled={preview}
           />
-          <button type="button" className="ct-send" disabled={!draft.trim() || sending || preview} onClick={send}>
-            {sending ? 'Posting…' : 'Send'}
+          {/* The reward is stated on the control that earns it, in the same
+              cherry the feed uses for "Collect +N pts" — a student should never
+              have to guess whether replying counts for anything. */}
+          <button type="button" className="ct-send" disabled={!quality.ok || sending || preview} onClick={send}>
+            {sending ? 'Posting…' : <>Send<span className="ct-pts">+{REPLY_POINTS}</span></>}
           </button>
         </div>
         {sendError && <div className="ct-err">{sendError}</div>}
-        <div className="ct-hint">Enter to send · Shift + Enter for a new line</div>
+        <div className="ct-hint">
+          {draft.trim() && !quality.ok
+            ? <span className="ct-need">{quality.hint} <span className="ct-wc">{quality.words}/{MIN_REPLY_WORDS} words</span></span>
+            : <>Enter to send · Shift + Enter for a new line</>}
+        </div>
+        {earnedBurst !== null && (
+          <div className="ct-burst" role="status">🎉 Nice one — you earned +{earnedBurst} {earnedBurst === 1 ? 'point' : 'points'}</div>
+        )}
       </div>
     </div>
   );
