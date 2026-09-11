@@ -10,6 +10,7 @@ import { getColaberryGmailClient, getPersonalGmailClient } from '../inbox/inboxS
 import { isConfigured as isHotmailConfigured } from '../inbox/graphMailService';
 import { getBcToken } from '../ops/basecampToken';
 import { bcGet } from '../ops/basecampClient';
+import { itemInjectionSignals } from './promptSafety';
 import InboxClassification from '../../models/InboxClassification';
 
 // /inbox-zero operator service (T9a). The read model behind the console:
@@ -333,6 +334,10 @@ export interface FocusPayload {
   owner: 'ALI' | 'TEAM_MEMBER' | 'SENDER' | 'SYSTEM';
   current_owner: string | null;
   degraded: boolean;
+  /** Instruction-shaped content found on the case's items. Non-empty means the
+   * console shows the notice, renders the verdict as UNCERTAIN, and every
+   * action is already individual-approval (planner gate). Data, not blocking. */
+  injection: { flagged: boolean; signals: Array<{ item_id: string; labels: string[] }> };
 }
 
 async function vipAddresses(): Promise<Set<string>> {
@@ -387,6 +392,9 @@ export async function buildFocus(c: InboxCase, now: Date = new Date()): Promise<
   ]);
   const summary = summarise(c, now);
   const currentOwner = c.assessment?.current_owner ?? null;
+  const injectionSignals = items
+    .map((i) => ({ item_id: i.id, labels: itemInjectionSignals(i).map((s) => s.label) }))
+    .filter((x) => x.labels.length > 0);
   const owner: FocusPayload['owner'] =
     c.state === 'WAITING' ? 'SENDER' : c.state === 'DELEGATED' ? 'TEAM_MEMBER' : c.state === 'EXECUTING' ? 'SYSTEM' : 'ALI';
 
@@ -410,5 +418,9 @@ export async function buildFocus(c: InboxCase, now: Date = new Date()): Promise<
     owner,
     current_owner: currentOwner,
     degraded: getHealth().degraded, // mailbox health only; the overview carries the Basecamp probe
+    injection: {
+      flagged: injectionSignals.length > 0,
+      signals: injectionSignals,
+    },
   };
 }
