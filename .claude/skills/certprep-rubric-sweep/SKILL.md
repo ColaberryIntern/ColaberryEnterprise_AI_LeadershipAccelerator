@@ -174,6 +174,18 @@ Weaknesses found by running it, and what was done. Add to this every time.
   ceiling is now stored on each outcome rather than re-derived in two places,
   because the summary and the approval disagreed precisely because each guessed
   separately. **Before a run that writes, read what it will actually select.**
+- *(2026-09-11)* **The first GENERATED batch scored 6/6 and read as mediocre.**
+  Six of eight written, and the one I read had an unmeasured observation
+  ("occasionally fails"), options at the seven-word floor, a "disable the feature"
+  distractor nobody would pick, and a key that fixed a FAILED call when the stem
+  described an INACCURATE one. The rubric measures shape, and the model found the
+  cheapest shape that passes. Three changes: the prompt now aims at the reference
+  MEDIAN rather than the floor and requires a measurement in the stem;
+  `triageQuestion` runs as a second gate after the rubric, discarding on a
+  high-severity concern; and a rubric discard now names the dimension it missed,
+  because "5/6, discarded" twice told me nothing about which of three fixes to
+  make. **A shape gate alone will be satisfied minimally. Pair it with a
+  reviewer that argues against the answer.**
 - *(2026-09-10)* **Do not write source containing backslashes through a shell
   heredoc.** Building the schema parser that way put a literal CR and a real
   newline where `` and `

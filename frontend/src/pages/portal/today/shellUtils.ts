@@ -75,3 +75,18 @@ export function countdown(targetMs: number | null, nowMs: number): { d: number; 
 // The daily streak is now server-authoritative (see backend streakService +
 // `/api/portal/streak`). The old localStorage streak helpers were removed —
 // TodayShell reads `fetchStreak()` / `claimDailyStreak()` from onboardingApi.
+
+/**
+ * PURE — where "Open" on a Today card should go, if not the drawer.
+ *
+ * A project task is not a curriculum card: `card.id` is its feed ref
+ * (`project:<uuid>`) and its real home is the project workspace. Returns the
+ * workspace route for one, and null for everything else (which opens the
+ * drawer as before). Kept out of TimelineCard on purpose — the tile renders in
+ * containers with no Router — and out of TodayShell's body so the decision can
+ * be tested without mounting the shell.
+ */
+export function projectWorkspacePath(card: { project_id?: string | null; project_task_id?: string | null }): string | null {
+  if (!card.project_id || !card.project_task_id) return null;
+  return `/portal/projects/workspace/${card.project_id}/${card.project_task_id}`;
+}

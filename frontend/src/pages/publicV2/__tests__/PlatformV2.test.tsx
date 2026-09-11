@@ -1,15 +1,23 @@
 /**
  * PlatformV2.test.tsx
  *
- * The load-bearing assertion: the showroom depicts ONLY surfaces that exist.
- * The four-view console is unbuilt, so it must be described as in development
- * and never rendered as a product surface.
+ * WHAT THIS GUARDS NOW. The page was rebuilt on Ali's call of 2026-08-20: the surface
+ * showroom, the role-based-views notice, the maturity ladder, the roadmap and the Experience
+ * Studio block were all removed, and the argument carries the page. Five assertions here
+ * kept describing that removed showroom and sat red for weeks, unnoticed, because nothing
+ * ran them. They are gone.
+ *
+ * What survives is everything that is about HONESTY rather than layout, because none of it
+ * changed when the layout did: the unbuilt four-view console is never depicted as a product,
+ * no admin route reaches a public page, no blocked claim and no price is rendered, and the
+ * page still says readiness is earned rather than self-reported. Two claim boundaries the
+ * page header records as settled with Ali are now asserted too.
  */
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import PlatformV2 from '../PlatformV2';
-import { SHOWROOM_SURFACES, DATA_EARNED } from '../../../config/v2Platform';
+import { SHOWROOM_SURFACES } from '../../../config/v2Platform';
 
 const html = (): string =>
   renderToStaticMarkup(
@@ -35,18 +43,9 @@ describe('PlatformV2 — only live surfaces are depicted', () => {
     expect(text).not.toContain('Four roles, one system');
   });
 
-  it('states plainly that role-based views are in development', () => {
-    expect(textOf(html())).toMatch(/In development/i);
-  });
-
-  it('describes Experience Studio without exposing or linking it', () => {
-    const h = html();
-    expect(textOf(h)).toContain('Experience Studio');
-    // never link an admin surface from a public page
-    expect(h).not.toContain('/admin/orchestration');
-    expect(h).not.toContain('href="/admin');
-    expect(textOf(h)).toContain('deliberately not shown or linked');
-  });
+  /* The "In development" notice and the Experience Studio description were both removed
+     with the showroom. The one thing those two tests guarded that still matters — that no
+     admin surface is ever linked from a public page — is covered by the next case. */
 
   it('exposes no admin route anywhere on the page', () => {
     expect(html()).not.toMatch(/\/admin\b/);
@@ -58,12 +57,33 @@ describe('PlatformV2 — labelling and claims', () => {
     expect(textOf(html())).toContain('Sample data');
   });
 
-  it('gives every metric an evidence class', () => {
+  /**
+   * CONDITIONAL, NOT VACUOUS. This required at least one metric on the page and then that
+   * every one carried an evidence class. The showroom that held the metrics is gone, so
+   * "at least one" now fails on a page that is telling no lies at all. The honesty property
+   * — a figure never appears without its evidence class — is kept for the day metrics
+   * return; the demand that the page HAVE metrics was layout, and layout is Ali's call.
+   */
+  it('never renders a metric without an evidence class', () => {
     const h = html();
     const metrics = (h.match(/data-metric="true"/g) || []).length;
     const labelled = (h.match(/data-evidence="/g) || []).length;
-    expect(metrics).toBeGreaterThan(0);
     expect(labelled).toBeGreaterThanOrEqual(metrics);
+  });
+
+  /**
+   * THE TWO CLAIM BOUNDARIES the page header records as settled with Ali on 2026-08-19.
+   * Neither was asserted before; both are the kind of sentence that drifts back in during a
+   * copy edit and is very hard to spot in review.
+   */
+  it('never calls the work production-grade', () => {
+    expect(textOf(html())).not.toMatch(/production-grade/i);
+  });
+
+  it('never claims Claude Code as an embedded runtime', () => {
+    // The honest claim is a Claude Code PROMPT shipped with every story. "Built on",
+    // "powered by" and "runs on" would each promise the runtime instead.
+    expect(textOf(html())).not.toMatch(/(built|powered|runs|running)\s+on\s+Claude\s+Code/i);
   });
 
   it('renders no blocked claim', () => {
@@ -85,25 +105,22 @@ describe('PlatformV2 — labelling and claims', () => {
   });
 });
 
-describe('PlatformV2 — the how-it-is-earned explainer', () => {
-  it('explains every way readiness is earned', () => {
-    const text = textOf(html());
-    DATA_EARNED.forEach((d) => expect(text).toContain(d.title));
-  });
+describe('PlatformV2 — the evidence-not-completion argument', () => {
+  /* The DATA_EARNED explainer block was removed with the showroom; its titles no longer
+     appear and asserting them would pin a section Ali took out. */
 
   /**
-   * The heading was changed to "When your CIO logs in, they see momentum, not
-   * courses" -- the sharpest phrasing of this argument from the old site, carried
-   * over during the cutover inventory. The assertion follows the wording, but the
-   * substance it protects is unchanged: the page must still state that readiness
-   * is earned rather than self-reported, or the whole Platform argument collapses
-   * into a training-report claim.
+   * THE SUBSTANCE, NOT THE SENTENCE. The page must still say readiness is earned rather than
+   * self-reported, or the whole Platform argument collapses into a training-report claim.
+   * The rebuilt page says it as "Earned, not self-reported" and "Capability, not course
+   * completion"; the old assertion also demanded the literal words "training report", which
+   * was the phrasing of a paragraph that no longer exists. Pinning the phrase is what made
+   * this go red while the claim itself was intact on the page.
    */
   it('makes the evidence-not-completion point explicitly', () => {
     const text = textOf(html());
-    expect(text).toMatch(/momentum, not courses|not course completion/);
-    expect(text).toContain('self-reported');
-    expect(text).toContain('training report');
+    expect(text).toMatch(/momentum, not courses|not course completion/i);
+    expect(text).toMatch(/self-reported/i);
   });
 });
 

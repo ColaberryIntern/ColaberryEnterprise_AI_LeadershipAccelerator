@@ -41,7 +41,7 @@ import { REFERENCE, RUBRIC } from '../../data/certBlueprints/ccarRubric';
  */
 
 export const IMPROVER_MODEL = 'gpt-4o';
-export const IMPROVER_PROMPT_VERSION = 'v1-rubric-directed';
+export const IMPROVER_PROMPT_VERSION = 'v2-median-and-measured';
 
 const TIMEOUT_MS = 30_000;
 const MAX_ATTEMPTS = 2;
@@ -223,6 +223,142 @@ function parseCandidate(raw: string, before: ImproverItem): ImproverItem {
     correct_keys: Array.isArray(parsed.correct_keys) ? parsed.correct_keys.map(String) : [],
     rationale: parsed.rationale ? String(parsed.rationale) : null,
     distractor_rationales: parsed.distractor_rationales ?? null,
+  };
+}
+
+/**
+ * Write a BRAND NEW item for a given objective and scenario.
+ *
+ * Same contract as `improveItem`: proposes, never writes, never approves. The
+ * caller scores it, decides whether it is good enough, and persists it as a
+ * draft if so.
+ *
+ * WHY GENERATION AND IMPROVEMENT SHARE THIS FILE. They share the thing that
+ * matters — the rubric decides, not the model — and they share `checkInvariants`
+ * for everything except the "did the answer change" comparisons, which have no
+ * meaning when there is no previous version. Splitting them would have produced
+ * two prompts describing the same target shape, and they would have drifted.
+ *
+ * WHAT IT IS NOT ALLOWED TO DO. The prompt forbids inventing a product, a
+ * version number, a price or a date, for the same reason the improver does: an
+ * exam item that asserts a fact about the world is wrong the moment the world
+ * moves, and nothing downstream re-checks it.
+ */
+export async function generateItem(spec: {
+  question_key: string;
+  domain_id: string;
+  domain_label: string;
+  objective_id: string;
+  objective_label: string;
+  scenario_id: string;
+  scenario_label: string;
+  scenario_summary: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  avoidStems: string[];
+}): Promise<
+  | { status: 'generated'; item: ImproverItem; score: RubricScore }
+  | { status: 'invariant_violated'; reason: string }
+  | { status: 'failed'; error_class: string; message: string }
+> {
+  const prompt = [
+    'Write ONE multiple-choice item for a professional certification exam.',
+    '',
+    `DOMAIN: ${spec.domain_id} — ${spec.domain_label}`,
+    `OBJECTIVE (this is what the question must test): ${spec.objective_id} — ${spec.objective_label}`,
+    `SCENARIO (the world it is set in): ${spec.scenario_id} — ${spec.scenario_label}`,
+    `  ${spec.scenario_summary}`,
+    `DIFFICULTY: ${spec.difficulty}`,
+    '',
+    'SHAPE, measured from the published sample items. These are TARGETS, not floors:',
+    `- stem about ${REFERENCE.stemWords.target} words (the published range is ${REFERENCE.stemWords.min}-${REFERENCE.stemWords.max})`,
+    `- exactly ${REFERENCE.optionCount} options, exactly ONE correct`,
+    `- each option about ${REFERENCE.optionWords.target} words (published range ${REFERENCE.optionWords.min}-${REFERENCE.optionWords.max}).`,
+    '  An option of seven words is a label with a verb in front of it. Write the',
+    '  full course of action: what is done, to what, and what that changes.',
+    '',
+    'THE STEM MUST CONTAIN A MEASUREMENT. Open with a specific thing somebody',
+    'observed, and quantify it: a rate ("about one run in six"), a count ("two',
+    'changes merged last week without review"), a duration, a log line. "Occasionally',
+    'fails" is not an observation, it is a summary of one. Say who saw it.',
+    '',
+    'THE KEY MUST RESOLVE THE STEM. Read your own stem back and confirm the correct',
+    'option addresses the thing that was actually observed. A retry fixes a call',
+    'that failed; it does not fix a call that succeeded with a wrong answer. If the',
+    'key does not follow from the observation, rewrite the stem.',
+    '',
+    'AT LEAST ONE WRONG OPTION MUST BE GENUINELY DEFENSIBLE. A competent engineer',
+    'should have to think. "Disable the feature" is never a defensible distractor;',
+    'nobody picks it, so it measures nothing. The best distractor is a real approach',
+    'that addresses a nearby problem, or the right approach applied one layer too',
+    'early or too late.',
+    '',
+    '- the rationale explains why the key wins; every wrong option gets its own',
+    '  one-line explanation of why it loses, naming what the option would have fixed',
+    '',
+    'HARD RULES:',
+    '- do not invent a product, a version number, a price or a date',
+    '- do not reproduce or paraphrase any existing certification question',
+    '- the question must be answerable from the objective above, not from trivia',
+    '',
+    spec.avoidStems.length > 0
+      ? `DO NOT REPEAT these existing questions in this objective:
+${spec.avoidStems.map((s) => `- ${s}`).join('\n')}`
+      : '',
+    '',
+    'Return ONLY JSON: {"stem": string, "options": [{"key":"A","text":string}, ...],',
+    '"correct_keys": [string], "rationale": string, "distractor_rationales": {key: string}}',
+  ].filter(Boolean).join('\n');
+
+  let lastErr: any = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const res = await openai().chat.completions.create({
+        model: IMPROVER_MODEL,
+        temperature: 0.7,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: 'You write certification exam items. You return only JSON.' },
+          { role: 'user', content: prompt },
+        ],
+      });
+      const parsed = JSON.parse(res.choices?.[0]?.message?.content ?? '{}');
+      const item: ImproverItem = {
+        question_key: spec.question_key,
+        domain_id: spec.domain_id,
+        objective_id: spec.objective_id,
+        stem: String(parsed.stem ?? ''),
+        options: Array.isArray(parsed.options)
+          ? parsed.options.map((o: any) => ({ key: String(o.key), text: String(o.text ?? '') }))
+          : [],
+        correct_keys: Array.isArray(parsed.correct_keys) ? parsed.correct_keys.map(String) : [],
+        rationale: parsed.rationale ? String(parsed.rationale) : null,
+        distractor_rationales: parsed.distractor_rationales ?? null,
+        difficulty: spec.difficulty,
+        scenario_family: spec.scenario_id,
+      };
+
+      // A generated item has no "before", so the shape rules are checked against
+      // itself: four options, exactly one correct, nothing empty, every wrong
+      // option explained.
+      const violation = checkInvariants(item, item)
+        ?? (item.options.length !== REFERENCE.optionCount
+          ? `expected ${REFERENCE.optionCount} options, got ${item.options.length}`
+          : null)
+        ?? (item.correct_keys.length !== 1
+          ? `expected exactly one correct answer, got ${item.correct_keys.length}`
+          : null);
+      if (violation) return { status: 'invariant_violated', reason: violation };
+
+      return { status: 'generated', item, score: scoreItem(item) };
+    } catch (err: any) {
+      lastErr = err;
+      if (!isRetryable(err) || attempt === MAX_ATTEMPTS) break;
+    }
+  }
+  return {
+    status: 'failed',
+    error_class: errorClass(lastErr),
+    message: String(lastErr?.message ?? 'unknown'),
   };
 }
 

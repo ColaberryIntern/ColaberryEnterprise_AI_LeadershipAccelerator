@@ -62,6 +62,11 @@ export interface TimelineFeedCard {
   community_post_id?: string | null;
   comment_count?: number | null;   // community posts: replies on the thread
   like_count?: number | null;      // community posts: cheers on the post
+  // Project-task items ONLY. When set, `id` is the `project:<uuid>` feed ref and
+  // the tile must navigate to /portal/projects/workspace/:project_id/:project_task_id
+  // rather than open the card drawer.
+  project_id?: string | null;
+  project_task_id?: string | null;
 }
 
 export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone' | 'setuplab' | 'timemachine';
@@ -261,6 +266,14 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   // so every card-scoped affordance on this tile has to route to the post's own
   // endpoints instead — see community_post_id on TimelineFeedCard.
   const isCommunityPost = !!card.community_post_id;
+
+  // A project task's destination is the project workspace, not the drawer. The
+  // routing decision deliberately does NOT live here: this tile is rendered by
+  // several containers, some outside a <Router>, so it stays a pure
+  // presentational component and hands the card up through onOpen/onWorkspace.
+  // TodayShell — the only container that ever receives a project task — reads
+  // project_id/project_task_id and navigates. (A useNavigate() here broke four
+  // test suites that render the tile without a Router; CI caught it.)
 
   // Viewport autoplay: a media card (video OR podcast audio) starts playing while
   // it is in view and stops when scrolled away — so only what you're looking at
@@ -538,7 +551,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
                 type="button"
                 className={`fc-cta ${pts > 0 || v.kind === 'lab' ? 'cherry' : 'berry'}`}
                 onClick={() => { setPlayingInline(false); onOpen?.(card); }}
-                title={pts > 0 ? `Open to collect +${pts} pts` : undefined}
+                title={card.project_task_id ? 'Open this task in your project workspace' : pts > 0 ? `Open to collect +${pts} pts` : undefined}
               >
                 {pts > 0
                   ? <><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Collect +{pts} pts</>

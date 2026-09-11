@@ -416,6 +416,11 @@ import ExplorerContentAsset from './ExplorerContentAsset';
 import Tenant from './Tenant';
 import Brand from './Brand';
 import BrandDomain from './BrandDomain';
+import JourneyProgram from './JourneyProgram';
+import JourneyPath from './JourneyPath';
+import OfferFamily from './OfferFamily';
+import BrandOfferPolicy from './BrandOfferPolicy';
+import GrowthJourneyEnrollment from './GrowthJourneyEnrollment';
 import SenderProfile from './SenderProfile';
 import PlatformIdentity from './PlatformIdentity';
 import PlatformIdentityLink from './PlatformIdentityLink';
@@ -1557,6 +1562,11 @@ export {
   Tenant,
   Brand,
   BrandDomain,
+  JourneyProgram,
+  JourneyPath,
+  OfferFamily,
+  BrandOfferPolicy,
+  GrowthJourneyEnrollment,
   SenderProfile,
   PlatformIdentity,
   PlatformIdentityLink,

@@ -36,6 +36,30 @@ export interface PlanRequirement {
   priority: Priority;
   /** Capability this belongs to; becomes a Capability row and a task list grouping. */
   cluster: string;
+  /**
+   * Which parts of the student's confirmed truth caused this requirement.
+   *
+   * ## Why dimensions and not per-item ids
+   *
+   * Truth items are stored as a JSONB array with no stable id, so "fact key"
+   * here means the canonical DIMENSION - `approval_points`, `systems`,
+   * `current_workflow`. Those names are stable, shared with AI Flotation, and
+   * already the vocabulary the whole contract is built on. Citing a
+   * per-item id would be more precise and would break the first time a student
+   * corrected a word.
+   *
+   * ## What this is for
+   *
+   * A student reading a requirement they do not recognise can see which of
+   * their own answers produced it, and a requirement citing nothing is visible
+   * as exactly that: something the model added on its own. The brief asks that
+   * generated artefacts retain traceability to the facts that caused them, and
+   * this is the honest granularity available today.
+   *
+   * OPTIONAL, permanently. Every plan generated before this existed carries
+   * none, and absence means "unknown", never "caused by nothing".
+   */
+  from_dimensions?: string[];
 }
 
 export interface PlanRelease {
@@ -144,7 +168,7 @@ export const BUILD_PLAN_JSON_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['id', 'statement', 'kind', 'priority', 'cluster'],
+        required: ['id', 'statement', 'kind', 'priority', 'cluster', 'from_dimensions'],
         properties: {
           id: { type: 'string', description: 'REQ-001, REQ-002, … sequential' },
           statement: {
@@ -163,6 +187,24 @@ export const BUILD_PLAN_JSON_SCHEMA = {
           },
           priority: { type: 'string', enum: [...PRIORITIES] },
           cluster: { type: 'string', description: 'Capability name this belongs to' },
+          /*
+           * Required in the SCHEMA and optional in TypeScript, which is the
+           * house pattern: OpenAI strict output demands every property appear
+           * in `required`, so the model emits [] when a requirement traces to
+           * nothing rather than omitting the key.
+           *
+           * An empty array is meaningful and is NOT the same as absent. Empty
+           * says the model was asked and cited nothing, which is worth seeing:
+           * a requirement nobody's answer produced is one the model invented.
+           */
+          from_dimensions: {
+            type: 'array',
+            items: { type: 'string' },
+            description:
+              'Canonical truth dimensions that caused this requirement, e.g. '
+              + '["approval_points","systems"]. Cite only what the student actually said. '
+              + 'Empty is correct when nothing they told you produced this.',
+          },
         },
       },
     },

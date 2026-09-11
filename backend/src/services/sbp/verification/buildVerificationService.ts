@@ -37,6 +37,9 @@ import { getPublishedPlan } from '../planStore';
 import { COMMAND_CENTER_STORY_ID, COMMAND_CENTER_ACCEPTANCE } from '../commandCenterStory';
 import { markTaskVerifiedComplete } from '../../projects/projectWriteService';
 import { recordEvidence } from '../../progression/evidenceEngine';
+import { recomputeForEnrollment } from '../../progression/competencyEngine';
+import { evaluateForEnrollment } from '../../progression/promotionService';
+import { classifyError } from '../../../utils/errorClassifier';
 import { getBudgetPerUnitXp } from '../../progression/pointsConfigService';
 import { parseProgressFile, ProgressParseErrorClass } from './progressContract';
 import {
@@ -464,6 +467,45 @@ export async function verifyBuildFromRepo(
     if (awarded.created) {
       newlyVerified.push(verdict.story_id);
       xpAwarded += awarded.builder_xp;
+    }
+  }
+
+  // ── PROMOTION ───────────────────────────────────────────────────────────
+  //
+  // Shipping is what this program asks of a student, and until now it moved
+  // nobody's rank. `evaluateForEnrollment` was reachable only from the
+  // curriculum-card path, so someone could verify every story in their build and
+  // sit at rank 0 forever. They did: ten people were found eligible and
+  // unpromoted, two of whom had cleared every gate long before and had simply
+  // never been looked at.
+  //
+  // ONLY ON NEW VERIFICATION. `newlyVerified` is empty on a re-sync that confirms
+  // nothing new, and the workspace syncs on arrival, so evaluating unconditionally
+  // would put two writes behind every page load.
+  //
+  // NON-FATAL BY DESIGN. Reading the repo is what the caller actually asked for. A
+  // promotion that throws must not turn a successful verification into a failed
+  // sync and lose the student their confirmed stories. Nothing is lost by
+  // deferring: the evidence that makes someone eligible is already durable, so the
+  // next verification re-evaluates them.
+  if (newlyVerified.length > 0 && enrollmentId) {
+    try {
+      await recomputeForEnrollment(enrollmentId);
+      const promotion = await evaluateForEnrollment(enrollmentId);
+      log('sbp_promotion_evaluated', opts.correlationId, 'success', {
+        projectId,
+        newly_verified: newlyVerified.length,
+        promoted: promotion.promoted,
+        level: promotion.level,
+        rank: promotion.rank,
+      });
+    } catch (err: any) {
+      log('sbp_promotion_failed', opts.correlationId, 'partial', {
+        projectId,
+        error_class: classifyError(err),
+        error: err?.message,
+        reason: 'verification stands; the next sync re-evaluates',
+      });
     }
   }
 

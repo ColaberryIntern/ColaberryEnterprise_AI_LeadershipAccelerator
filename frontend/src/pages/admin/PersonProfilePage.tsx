@@ -20,6 +20,8 @@ import LeadStrategyPrep from '../../components/admin/lead/LeadStrategyPrep';
 import ClassActivityTab from '../../components/admin/person/ClassActivityTab';
 import WorkTab from '../../components/admin/person/WorkTab';
 import CommunicationsTab from '../../components/admin/person/CommunicationsTab';
+import PriorHistoryPanel from '../../components/admin/person/PriorHistoryPanel';
+import StrategyBriefPanel from '../../components/admin/person/StrategyBriefPanel';
 import AccountTab from '../../components/admin/person/AccountTab';
 import GrowthTab from '../../components/admin/person/GrowthTab';
 import { Field, Unknown, fmtDate, fmtDateTime } from '../../components/admin/person/primitives';
@@ -93,6 +95,11 @@ export default function PersonProfilePage() {
   // requireSalesOrAdmin, so a scoped identity simply does not get the panels.
   const [visitor, setVisitor] = useState<VisitorData | null>(null);
   const [tempHistory, setTempHistory] = useState<TempEntry[] | null>(null);
+  // The Journey card's OWN touchpoint figure. Counted differently from
+  // anything in the profile payload -- it is the length of the journey event
+  // set -- so the badge has to read the same number rather than approximate
+  // it, or the tab says 2 while the card behind it says 15.
+  const [journeyTouchpoints, setJourneyTouchpoints] = useState<number | null>(null);
   const [showAppointment, setShowAppointment] = useState(false);
   // Bumped after any write so the activity timeline reflects it immediately.
   const [activityKey, setActivityKey] = useState(0);
@@ -127,7 +134,7 @@ export default function PersonProfilePage() {
   // get those panels rather than breaking the profile.
   const leadId = profile?.acquisition?.leadId ?? null;
   useEffect(() => {
-    if (leadId === null) { setVisitor(null); setTempHistory(null); return; }
+    if (leadId === null) { setVisitor(null); setTempHistory(null); setJourneyTouchpoints(null); return; }
     let cancelled = false;
     (async () => {
       try {
@@ -139,6 +146,11 @@ export default function PersonProfilePage() {
         const rows = Array.isArray(res.data) ? res.data : res.data?.history;
         if (!cancelled) setTempHistory(Array.isArray(rows) ? rows : null);
       } catch { if (!cancelled) setTempHistory(null); }
+      try {
+        const res = await api.get(`/api/admin/leads/${leadId}/journey`);
+        const n = res.data?.metrics?.total_touchpoints;
+        if (!cancelled) setJourneyTouchpoints(typeof n === 'number' ? n : null);
+      } catch { if (!cancelled) setJourneyTouchpoints(null); }
     })();
     return () => { cancelled = true; };
   }, [leadId]);
@@ -162,17 +174,19 @@ export default function PersonProfilePage() {
     // Journey needs a lead: the analysis is built from lead touchpoints.
     // The count is TOUCHPOINTS, the same figure the campaign modal shows.
     if (profile.acquisition?.leadId) {
-      const j = profile.journey;
-      const touchpoints = j
-        ? j.sessions + j.pageEvents + j.emailsSent + j.campaigns
-        : undefined;
-      t.push({ key: 'journey', label: 'Journey', count: touchpoints });
+      // The Journey card's own figure, not a sum assembled here. The earlier
+      // version added sessions + page events + emails + campaigns and read 2
+      // against a card showing 15 -- two different definitions of the same
+      // word on one screen.
+      t.push({ key: 'journey', label: 'Journey', count: journeyTouchpoints ?? undefined });
     }
     // The Lead page's Activity tab, moved across whole.
     if (profile.acquisition?.leadId) {
       t.push({ key: 'notes', label: 'Notes & activity', count: tempHistory?.length ?? undefined });
     }
-    if (profile.acquisition?.leadId) t.push({ key: 'strategy', label: 'Strategy prep' });
+    // Not gated on a lead: a student has no lead record and is precisely who
+    // the coaching brief is written for.
+    t.push({ key: 'strategy', label: 'Strategy prep' });
     // Every communication, threaded by campaign.
     if (profile.communications) {
       t.push({
@@ -196,8 +210,14 @@ export default function PersonProfilePage() {
       t.push({
         key: 'class',
         label: 'Class & curriculum',
-        count: (profile.curriculum?.total ?? 0)
-          + (profile.classActivity?.attendanceTotal ?? 0) || undefined,
+        // Cards they COMPLETED plus register entries and written work.
+        // `curriculum.total` counts cards available to them -- 1,131 for a
+        // learner who has finished 10 -- so it promised a full report and
+        // opened on an almost empty one.
+        count: (profile.curriculum?.completed ?? 0)
+          + (profile.classActivity?.attendanceTotal ?? 0)
+          + (profile.curriculum?.reflections ?? 0)
+          + (profile.curriculum?.surveys ?? 0) || undefined,
       });
     }
     if (profile.work) {
@@ -231,9 +251,15 @@ export default function PersonProfilePage() {
     }
     // Last, because it is about the data rather than the person — but present
     // for everyone, because "how much of this should I believe" always applies.
-    if (profile.trust) t.push({ key: 'trust', label: 'Data & trust', count: profile.trust.gaps.length });
+    if (profile.trust) {
+      t.push({
+        key: 'trust',
+        label: 'Data & trust',
+        count: profile.trust.gaps.length + (profile.history?.enrolments.length ?? 0),
+      });
+    }
     return t;
-  }, [profile, tempHistory]);
+  }, [profile, tempHistory, journeyTouchpoints]);
 
   // Applied ONCE per load. Without the ref the effect would re-apply ?tab= every
   // time `tab` changed, so clicking away from the requested tab would snap
@@ -693,7 +719,12 @@ export default function PersonProfilePage() {
           )}
 
           {/* ── Strategy prep ────────────────────────────────────────────── */}
-          {tab === 'strategy' && acq?.leadId && <LeadStrategyPrep leadId={acq.leadId} />}
+          {tab === 'strategy' && (
+            <>
+              <StrategyBriefPanel personRef={personRef} stage={profile.stage} />
+              {acq?.leadId && <LeadStrategyPrep leadId={acq.leadId} />}
+            </>
+          )}
 
           {tab === 'class' && (
             <ClassActivityTab classActivity={profile.classActivity} curriculum={profile.curriculum} />
@@ -904,6 +935,15 @@ export default function PersonProfilePage() {
                       ))}
                     </ul>
                   )}
+                </SectionCard>
+              </div>
+
+              {/* Pre-platform history. In Data & trust because that is where the
+                  profile answers "how much of this should you believe": for a
+                  third of the database this platform's record starts mid-story. */}
+              <div className="col-12">
+                <SectionCard title="Before this platform">
+                  <PriorHistoryPanel history={profile.history} />
                 </SectionCard>
               </div>
             </div>

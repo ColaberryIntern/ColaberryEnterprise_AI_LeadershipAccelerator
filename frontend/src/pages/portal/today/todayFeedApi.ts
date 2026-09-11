@@ -34,6 +34,10 @@ export interface TodayFeedItem {
   student_label?: string | null;
   like_count?: number | null;
   comment_count?: number | null;
+  // Project-task items: their real destination is the project workspace, not a
+  // card drawer. Both ids are needed for /portal/projects/workspace/:p/:t.
+  project_id?: string | null;
+  project_task_id?: string | null;
 }
 
 export interface TodayPage {
