@@ -226,6 +226,19 @@ Weaknesses found by running it, and what was done. Add to this every time.
   generation run, which failed without a database and set the process exit
   code. Every test passed and CI would have gone red on a suite with no failing
   test. All three scripts now guard on `require.main === module`.
+- *(2026-09-11)* **144 of the 150 generated questions had the correct answer at A.**
+  A student answering A throughout would have scored 96% on that half. It got
+  past every gate because the rubric measures shape, triage measures
+  defensibility, and neither looks at WHERE the key sits. The authored bank never
+  had the problem because `item()` places the key from a hash of the question
+  key; the generator bypassed the factory and inherited the model's habit of
+  writing the right answer first. Caught the instant the items were exported into
+  the repo, by the same position guard that found 110-of-150-at-B in the
+  authored bank weeks earlier. **Anything that writes a question must go through
+  `assignAnswerPosition`.** The generator now does; `rebalanceCertAnswerPositions`
+  mints reordered revisions for what was already written, idempotently. The
+  length tell (correct-is-longest 61%, +1.2 words) is real but milder and is
+  next.
 - *(2026-09-10)* **Do not write source containing backslashes through a shell
   heredoc.** Building the schema parser that way put a literal CR and a real
   newline where `` and `

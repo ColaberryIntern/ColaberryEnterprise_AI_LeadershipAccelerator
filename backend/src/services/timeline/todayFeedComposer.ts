@@ -82,9 +82,10 @@ function ambientItemFrom(a: AmbientItem, position: number): TodayFeedItem {
     week: null,
     estimated_time: def?.est_minutes ?? null,
     status: null,
-    // Blogs are the one collectible ambient type: they award points via the read
-    // gate (podcasts/testimonials stay ambient with no points). The badge + the
-    // drawer read-gate key off this.
+    // Blogs carry their reward from generation (read gate). Podcasts and
+    // testimonials get theirs at SERVE time from stampAmbientMediaPoints, so the
+    // thousands of impressions frozen before 2026-09-11 pay out too — leave
+    // them null here; the stamp is the single source of truth for those two.
     points: a.provider === 'blog' ? { learning: def?.learning_xp || 10 } : null,
     interacted: false,
   };
@@ -164,6 +165,15 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
         if (r.provider in placedMedia) placedMedia[r.provider as AmbientProviderSlug].push(mediaId);
       }
     }
+  }
+  // The one all-time exclusion: media the student has already COLLECTED points
+  // for. Without it the least-recently-seen recycling re-places exactly those
+  // episodes after the cooldown, buildServed drops them again, and the podcast
+  // slots fill with items nobody can see. Collected items are not pool
+  // exhaustion — there is nothing left to earn on them.
+  for (const ref of await collectedAmbientRefs(enrollmentId)) {
+    const provider = ref.slice(0, ref.indexOf(':')) as AmbientProviderSlug;
+    if (provider in placedMedia) placedMedia[provider].push(ref.slice(ref.indexOf(':') + 1));
   }
 
   // Cadence + active ambient providers come from the editable policy when the
@@ -364,20 +374,37 @@ async function unservableCardIds(cardIds: string[]): Promise<Set<string>> {
   }
 }
 
-/** Blog refs the student has already collected points for — dropped from the feed
- *  so a read blog disappears (award is keyed on the same `blog:<id>` ref). */
-async function collectedBlogRefs(enrollmentId: string, refs: string[]): Promise<Set<string>> {
-  const blogRefs = Array.from(new Set(refs.filter((r) => r.startsWith('blog:'))));
-  if (!blogRefs.length) return new Set();
+/** Ambient kinds whose points award is keyed on the feed ref itself — `blog:<id>`
+ *  (blogReadGateService), `podcast:<id>` and `testimonial:<id>`
+ *  (ambientMediaGateService). The points event and the impression share the
+ *  exact string, which is what lets "collected" be decided without a join. */
+const COLLECTIBLE_AMBIENT_PREFIXES = ['blog:', 'podcast:', 'testimonial:'] as const;
+const isCollectibleAmbientRef = (ref: string) => COLLECTIBLE_AMBIENT_PREFIXES.some((p) => ref.startsWith(p));
+
+/** Ambient refs the student has already collected points for. Restricted to
+ *  `refs` when given (serve-time: "is this placed item collected?"), otherwise
+ *  every collected ref on record (generation: "never place these again").
+ *  A collected item leaves the feed for good — Ali, 2026-09-11: "a collected
+ *  podcast should be removed from the timeline for ever." Fails open to an
+ *  empty set: a lookup error must never blank a feed. */
+async function collectedAmbientRefs(enrollmentId: string, refs?: string[]): Promise<Set<string>> {
+  const keys = refs ? Array.from(new Set(refs.filter(isCollectibleAmbientRef))) : null;
+  if (keys && !keys.length) return new Set();
   try {
-    const rows = await sequelize.query<{ event_key: string }>(
-      `SELECT event_key FROM student_points_events
-         WHERE enrollment_id = :eid AND event_key IN (:keys)`,
-      { replacements: { eid: enrollmentId, keys: blogRefs }, type: QueryTypes.SELECT },
-    );
-    return new Set(rows.map((r) => r.event_key));   // 'blog:<id>' — same string as the impression ref
+    const rows = keys
+      ? await sequelize.query<{ event_key: string }>(
+        `SELECT event_key FROM student_points_events
+           WHERE enrollment_id = :eid AND event_key IN (:keys)`,
+        { replacements: { eid: enrollmentId, keys }, type: QueryTypes.SELECT },
+      )
+      : await sequelize.query<{ event_key: string }>(
+        `SELECT event_key FROM student_points_events
+           WHERE enrollment_id = :eid AND (${COLLECTIBLE_AMBIENT_PREFIXES.map((_, i) => `event_key LIKE :p${i}`).join(' OR ')})`,
+        { replacements: { eid: enrollmentId, ...Object.fromEntries(COLLECTIBLE_AMBIENT_PREFIXES.map((p, i) => [`p${i}`, `${p}%`])) }, type: QueryTypes.SELECT },
+      );
+    return new Set(rows.map((r) => r.event_key).filter(isCollectibleAmbientRef));   // same string as the impression ref
   } catch (err: any) {
-    console.warn('[todayFeedComposer] collected-blog lookup failed:', err?.message?.split('\n')[0]);
+    console.warn('[todayFeedComposer] collected-ambient lookup failed:', err?.message?.split('\n')[0]);
     return new Set();
   }
 }
@@ -390,15 +417,15 @@ async function collectedBlogRefs(enrollmentId: string, refs: string[]): Promise<
  */
 async function buildServed(enrollmentId: string, existing: ImpressionRow[], seed?: number): Promise<TodayFeedItem[]> {
   const cardIds = existing.map((r) => r.card_id).filter((x): x is string => !!x);
-  const [completed, collectedBlogs, unservable] = await Promise.all([
+  const [completed, collectedAmbient, unservable] = await Promise.all([
     completedCardIds(enrollmentId, cardIds),
-    collectedBlogRefs(enrollmentId, existing.map((r) => r.ref)),
+    collectedAmbientRefs(enrollmentId, existing.map((r) => r.ref)),
     unservableCardIds(cardIds),
   ]);
   const items = existing
     .filter((r) => !(r.card_id && completed.has(r.card_id)))                        // completed via progress
     .filter((r) => !(r.card_id && unservable.has(r.card_id)))                       // no longer published — every action would 404
-    .filter((r) => !collectedBlogs.has(r.ref))                                      // blog points already collected
+    .filter((r) => !collectedAmbient.has(r.ref))                                   // blog/podcast/testimonial points already collected
     .filter((r) => (r.item as TodayFeedItem | null)?.status !== 'completed')        // snapshot already completed (project/etc.)
     .map((r): TodayFeedItem => ({ ...(r.item as TodayFeedItem), position: r.position, interacted: r.interacted_at != null }));
   return seed != null ? orderForVisit(items, seed) : items;
@@ -435,12 +462,12 @@ async function composeReadOnlyPage(enrollmentId: string, from: number, size: num
   const combined = [...weekBound, ...interleaveGroups(varietyGroups)];
   const ordered = (seed != null ? orderForVisit(combined, seed) : combined)
     .map((it, i): TodayFeedItem => ({ ...it, position: i, interacted: false }));
-  const [completed, collectedBlogs] = await Promise.all([
+  const [completed, collectedAmbient] = await Promise.all([
     completedCardIds(enrollmentId, ordered.map((i) => i.card_id).filter((x): x is string => !!x)),
-    collectedBlogRefs(enrollmentId, ordered.map((i) => i.ref)),
+    collectedAmbientRefs(enrollmentId, ordered.map((i) => i.ref)),
   ]);
   const survivors = ordered.filter((i) =>
-    !(i.card_id && completed.has(i.card_id)) && !collectedBlogs.has(i.ref) && i.status !== 'completed');
+    !(i.card_id && completed.has(i.card_id)) && !collectedAmbient.has(i.ref) && i.status !== 'completed');
   return survivors.slice(from, targetEnd);
 }
 

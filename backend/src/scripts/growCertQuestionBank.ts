@@ -51,6 +51,7 @@ import {
 import { createDraftRevision } from '../services/certPrep/certQuestionBankService';
 import { triageQuestion } from '../services/certPrep/certQuestionTriage';
 import { CCAR_FOUNDATIONS_BLUEPRINT } from '../data/certBlueprints/ccarFoundations';
+import { assignAnswerPosition } from '../data/certBlueprints/items/itemFactory';
 import { MOCK_DEMAND } from '../data/certBlueprints/items';
 
 const args = process.argv.slice(2);
@@ -326,6 +327,23 @@ async function main(): Promise<void> {
       ? `  [triage ${triage.severity}: ${triage.concerns[0]?.detail?.slice(0, 70) ?? ''}]`
       : '';
 
+    // WHERE THE ANSWER SITS IS DECIDED HERE, NOT BY THE MODEL. The first 150
+    // generated items went out with the key at A in 144 of them - a student who
+    // answered A throughout scored 96% on that half. The authored bank never had
+    // this problem because `item()` places the key from a hash of the question
+    // key; generated items bypassed the factory and inherited the model's habit
+    // of writing the right answer first. Same placement, same remap of the
+    // distractor rationales so each explanation stays with its option.
+    const placed = assignAnswerPosition(
+      key,
+      item.options.map((o) => [o.key, o.text] as [string, string]),
+      item.correct_keys,
+    );
+    const placedRationales: Record<string, string> = {};
+    for (const [oldKey, text] of Object.entries(item.distractor_rationales ?? {})) {
+      placedRationales[placed.remap[oldKey] ?? oldKey] = text;
+    }
+
     if (write) {
       await createDraftRevision({
         question_key: key,
@@ -335,11 +353,11 @@ async function main(): Promise<void> {
         objective_id: w.objective.objective_id,
         scenario_family: w.scenario.scenario_id,
         stem: item.stem,
-        options: item.options,
-        correct_keys: item.correct_keys,
-        select_count: item.correct_keys.length,
+        options: placed.options.map(([k, text]) => ({ key: k, text })),
+        correct_keys: placed.correct,
+        select_count: placed.correct.length,
         rationale: item.rationale as string,
-        distractor_rationales: item.distractor_rationales ?? undefined,
+        distractor_rationales: placedRationales,
         difficulty: w.difficulty,
         author: 'colaberry',
       });

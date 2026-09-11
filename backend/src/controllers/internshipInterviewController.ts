@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { Op } from 'sequelize';
 import { z } from 'zod';
 import {
   confirmSummarySchema, saveAnswersSchema, scheduleCallSchema,
@@ -9,6 +10,7 @@ import {
   openSession, progress, remainingQuestions, saveAnswers,
 } from '../services/internship/internshipInterviewService';
 import { callNow, cancelScheduledCall, scheduleCall } from '../services/internship/internshipCallService';
+import { reconcileInternshipCall } from '../services/internship/internshipCallReconcile';
 import { buildRecommendation } from '../services/internship/internshipRecommendation';
 import { InvalidInternshipTransitionError } from '../services/internship/internshipStateMachine';
 import { SECTION_TITLES } from '../services/internship/internshipQuestionBank';
@@ -86,11 +88,33 @@ export async function handleGetInterview(req: Request, res: Response): Promise<v
     const ctx = await requireOpenApplication(req, res);
     if (!ctx) return;
 
-    const [remaining, p, scheduled] = await Promise.all([
+    // Complete a finished phone call from Synthflow's record before reading state,
+    // so the applicant's own poll drives their interview forward even when the
+    // call-complete webhook never arrives. Best-effort: a reconcile failure must
+    // never stop the interview loading. See internshipCallReconcile.
+    try {
+      await reconcileInternshipCall(ctx.application.id);
+      await ctx.application.reload();
+    } catch { /* the poll still returns the live view below */ }
+
+    const [remaining, p, scheduled, live] = await Promise.all([
       remainingQuestions(ctx.application.id),
       progress(ctx.application.id),
       InternshipInterviewSession.findOne({
         where: { application_id: ctx.application.id, channel: 'phone', status: 'scheduled' },
+        order: [['created_at', 'DESC']],
+      }),
+      // A call that is placed but not yet reconciled to a terminal state. The client
+      // shows the "on the call" overlay while this is present and advances when it
+      // clears. Bounded to the last 30 minutes so a call whose completion we never
+      // learn of (webhook lost AND the record unreadable) cannot trap the overlay.
+      InternshipInterviewSession.findOne({
+        where: {
+          application_id: ctx.application.id,
+          channel: 'phone',
+          status: 'in_progress',
+          started_at: { [Op.gte]: new Date(Date.now() - 30 * 60 * 1000) },
+        },
         order: [['created_at', 'DESC']],
       }),
     ]);
@@ -101,6 +125,9 @@ export async function handleGetInterview(req: Request, res: Response): Promise<v
       progress: p,
       scheduled_call: scheduled?.scheduled_for
         ? { session_id: scheduled.id, scheduled_for: new Date(scheduled.scheduled_for).toISOString() }
+        : null,
+      live_call: live
+        ? { session_id: live.id, started_at: new Date(live.started_at ?? live.created_at).toISOString() }
         : null,
       // The client renders one at a time, but gets the list so it can show a
       // section heading and a truthful "3 of 21" without a round trip per answer.

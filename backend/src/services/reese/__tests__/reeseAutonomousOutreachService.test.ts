@@ -11,7 +11,8 @@ jest.mock('../../../models/ReeseOutreach', () => ({
 }));
 jest.mock('../../ticketService', () => ({ createTicket: jest.fn() }));
 jest.mock('../../workLedger/agentActionAuthorizationBridge', () => ({ authorizeTicketDispatch: jest.fn() }));
-jest.mock('../reeseIdentitySeed', () => ({ getReeseAdminUserId: jest.fn() }));
+jest.mock('../reeseIdentitySeed', () => ({ getReeseAdminUserId: jest.fn(), getReeseAgentId: jest.fn() }));
+jest.mock('../../agentBlueprint/agentActivityLogService', () => ({ logAgentActivity: jest.fn() }));
 jest.mock('../reeseEligibilityService', () => ({ isEligibleForAutonomousOutreach: jest.fn() }));
 jest.mock('../reeseSignalService', () => ({
   getPilotCohortStudentEnrollmentIds: jest.fn(),
@@ -26,7 +27,8 @@ jest.mock('../outreachChecklist', () => ({ createOutreachChecklistInstance: jest
 import ReeseOutreach from '../../../models/ReeseOutreach';
 import { createTicket } from '../../ticketService';
 import { authorizeTicketDispatch } from '../../workLedger/agentActionAuthorizationBridge';
-import { getReeseAdminUserId } from '../reeseIdentitySeed';
+import { getReeseAdminUserId, getReeseAgentId } from '../reeseIdentitySeed';
+import { logAgentActivity } from '../../agentBlueprint/agentActivityLogService';
 import { isEligibleForAutonomousOutreach } from '../reeseEligibilityService';
 import {
   getPilotCohortStudentEnrollmentIds,
@@ -45,6 +47,8 @@ const mockReeseOutreachCreate = ReeseOutreach.create as unknown as jest.Mock;
 const mockCreateTicket = createTicket as unknown as jest.Mock;
 const mockAuthorizeTicketDispatch = authorizeTicketDispatch as unknown as jest.Mock;
 const mockGetReeseAdminUserId = getReeseAdminUserId as unknown as jest.Mock;
+const mockGetReeseAgentId = getReeseAgentId as unknown as jest.Mock;
+const mockLogAgentActivity = logAgentActivity as unknown as jest.Mock;
 const mockIsEligible = isEligibleForAutonomousOutreach as unknown as jest.Mock;
 const mockGetPilotCohortStudentIds = getPilotCohortStudentEnrollmentIds as unknown as jest.Mock;
 const mockEvaluateInactivity = evaluateInactivitySignal as unknown as jest.Mock;
@@ -66,6 +70,8 @@ beforeEach(() => {
   mockCreateTicket.mockResolvedValue({ ...TICKET, update: jest.fn().mockResolvedValue(undefined) });
   mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_allow', reason: 'ok' });
   mockGetReeseAdminUserId.mockResolvedValue('reese-admin-1');
+  mockGetReeseAgentId.mockResolvedValue('reese-agent-1');
+  mockLogAgentActivity.mockResolvedValue(undefined);
   mockIsEligible.mockResolvedValue({ eligible: true, reason: 'in_pilot_cohort_and_active' });
   mockGetPilotCohortStudentIds.mockResolvedValue([STUDENT_ID]);
   mockEvaluateInactivity.mockResolvedValue(null);
@@ -110,6 +116,34 @@ describe('runReeseAutonomousOutreachSweep — happy path', () => {
     await runReeseAutonomousOutreachSweep(false);
 
     expect(mockInitiateDm).toHaveBeenCalledWith(STUDENT_ID, 'A completely different, specifically-generated message this time.');
+  });
+});
+
+describe('runReeseAutonomousOutreachSweep — GOALS scorecard activity logging (Ali: "improve the 3.8/5 Trust score for Reese")', () => {
+  it('happy path: a real send logs a real AiAgentActivityLog row under Reese\'s OWN agent id, not the cron sweep\'s sibling row', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+
+    await runReeseAutonomousOutreachSweep(false);
+
+    expect(mockGetReeseAgentId).toHaveBeenCalled();
+    expect(mockLogAgentActivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'reese-agent-1',
+        action: 'reese_autonomous_outreach',
+        result: 'success',
+        reason: 'inactivity_signal_fired',
+      }),
+    );
+  });
+
+  it('boundary: no resolvable Reese agent id skips the log call rather than throwing', async () => {
+    mockGetReeseAgentId.mockResolvedValue(null);
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(result.sent).toBe(1);
+    expect(mockLogAgentActivity).not.toHaveBeenCalled();
   });
 });
 
