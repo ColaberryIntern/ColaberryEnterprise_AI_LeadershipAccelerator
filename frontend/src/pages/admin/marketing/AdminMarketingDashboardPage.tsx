@@ -7,6 +7,9 @@ import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../../compone
 import { TrustSignal } from '../../../components/admin/shell/trust';
 import { deriveMarketingTrust, MarketingDataState } from './marketingTrust';
 import { formatMoneyOrUnavailable, formatRatioOrUnavailable, formatSpend } from './marketingFormat';
+import MarketingScopeStrip from './MarketingScopeStrip';
+import { defaultScope, scopeToQuery, type MarketingScope } from './marketingScope';
+import { listBrands, type Brand as ScopeBrand } from '../../../services/adminBrandApi';
 
 const MarketingFunnelGraph = lazy(() => import('../../../components/admin/marketing/MarketingFunnelGraph'));
 const OpenclawTab = lazy(() => import('../../../components/admin/intelligence/tabs/OpenclawTab'));
@@ -915,14 +918,17 @@ function CampaignLinkRegistryTab() {
 
 // ─── Revenue Intelligence Tab (Original Content) ────────────────────────────
 
-function RevenueIntelligenceTab({ onDataState }: { onDataState?: (s: MarketingDataState) => void }) {
+function RevenueIntelligenceTab(
+  { onDataState, scope }: { onDataState?: (s: MarketingDataState) => void; scope: MarketingScope },
+) {
   const [campaigns, setCampaigns] = useState<CampaignMetric[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('visitors_count');
   const [sortAsc, setSortAsc] = useState(false);
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  // Dates come from the page-level scope strip. This tab used to own a second pair of date
+  // inputs, which meant the strip could say one range while the table below showed another -
+  // two controls for one concept, disagreeing silently.
   const [selectedCampaign, setSelectedCampaign] = useState<RegisteredCampaign | null>(null);
 
   const openCampaignDetail = async (campaignId: string) => {
@@ -944,9 +950,9 @@ function RevenueIntelligenceTab({ onDataState }: { onDataState?: (s: MarketingDa
     setLoading(true);
     setError(null);
     try {
-      const params: Record<string, string> = {};
-      if (startDate) params.start = startDate;
-      if (endDate) params.end = endDate;
+      // Built by the tested helper rather than assembled here, so the brand sentinel and the
+      // comparison window cannot be encoded two different ways on two different screens.
+      const params = scopeToQuery(scope);
       const res = await api.get('/api/admin/marketing/campaigns', { params });
       const rows: CampaignMetric[] = res.data.campaigns || [];
       setCampaigns(rows);
@@ -968,7 +974,7 @@ function RevenueIntelligenceTab({ onDataState }: { onDataState?: (s: MarketingDa
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, onDataState]);
+  }, [scope, onDataState]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -1071,33 +1077,6 @@ function RevenueIntelligenceTab({ onDataState }: { onDataState?: (s: MarketingDa
         </button>
       </div>
 
-      {/* Date Range Filter */}
-      <div className="d-flex gap-2 mb-3 flex-wrap align-items-center">
-        <label className="form-label small fw-medium mb-0">From</label>
-        <input
-          type="date"
-          className="form-control form-control-sm"
-          style={{ maxWidth: 160 }}
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-        />
-        <label className="form-label small fw-medium mb-0">To</label>
-        <input
-          type="date"
-          className="form-control form-control-sm"
-          style={{ maxWidth: 160 }}
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-        />
-        {(startDate || endDate) && (
-          <button
-            className="btn btn-sm btn-outline-secondary"
-            onClick={() => { setStartDate(''); setEndDate(''); }}
-          >
-            Clear
-          </button>
-        )}
-      </div>
 
       {/* KPI Summary Cards */}
       <div className="row g-3 mb-4">
@@ -1257,6 +1236,28 @@ function AdminMarketingDashboardPage() {
    * reported the component's MOUNT TIME as the data's freshness and read "live" even when the
    * fetch had failed. See marketingTrust.ts for the full account. */
   const [dataState, setDataState] = useState<MarketingDataState>({});
+
+  /**
+   * Scope owned here, at the page, because it governs every tab. `defaultScope` is seeded from
+   * today's date ONCE rather than recomputed each render - a scope that silently shifted its
+   * own window between renders would make two figures on the same screen describe different
+   * periods.
+   */
+  const [scope, setScope] = useState<MarketingScope>(() =>
+    defaultScope(new Date().toISOString().slice(0, 10)));
+  const [scopeBrands, setScopeBrands] = useState<ScopeBrand[]>([]);
+  const [brandsLoading, setBrandsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    listBrands()
+      .then((r) => { if (!cancelled) setScopeBrands(r.brands); })
+      // A failed brand list leaves the selector on "All authorized brands", which is the
+      // correct fallback: it narrows nothing and claims nothing.
+      .catch(() => { if (!cancelled) setScopeBrands([]); })
+      .finally(() => { if (!cancelled) setBrandsLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
   const handleDataState = useCallback((next: MarketingDataState) => setDataState(next), []);
   const trust: TrustSignal = useMemo(() => deriveMarketingTrust(dataState), [dataState]);
 
@@ -1306,6 +1307,15 @@ function AdminMarketingDashboardPage() {
         </ul>
       </PageHeader>
 
+      <MarketingScopeStrip
+        scope={scope}
+        brands={scopeBrands}
+        brandsLoading={brandsLoading}
+        fetchedAt={dataState.fetchedAt ?? null}
+        now={Date.now()}
+        onScopeChange={setScope}
+      />
+
       {activeTab === 'funnel' && (
         <div style={{ height: 'calc(100vh - 170px)', minHeight: 400 }}>
           <Suspense fallback={
@@ -1319,7 +1329,7 @@ function AdminMarketingDashboardPage() {
           </Suspense>
         </div>
       )}
-      {activeTab === 'revenue' && <RevenueIntelligenceTab onDataState={handleDataState} />}
+      {activeTab === 'revenue' && <RevenueIntelligenceTab onDataState={handleDataState} scope={scope} />}
       {activeTab === 'registry' && <CampaignLinkRegistryTab />}
       {activeTab === 'outreach' && (
         <Suspense fallback={
