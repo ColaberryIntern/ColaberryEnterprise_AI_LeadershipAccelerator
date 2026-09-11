@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Friday, September 11, 2026 at 10:52 AM</div>
-    <div><span class="sid">CC-20260909-4k2p</span><span class="count">10 changes</span></div>
+    <div class="meta">Generated Friday, September 11, 2026 at 11:32 AM</div>
+    <div><span class="sid">CC-20260909-4k2p</span><span class="count">11 changes</span></div>
   </header>
   <main>
     
@@ -206,6 +206,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">`intakePreview` 8 backend tests; `sbpRoutes.intakePreview` 8</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">The preview is a read, not a write, on purpose. Writing the truth row</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">11</span>
+          <h2>Phase 5, slice 3: &quot;Have an AI call me&quot;, fail-closed, with consent scoped to the project</h2>
+          <span class="badge">2026-09-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`projectDiscoveryCallRequest.ts` runs the request end to end:</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`projectDiscoveryCallRequest` 17 tests (the dial mock THROWS if</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Consent is deliberately NOT written to `consent_records`: that ledger</span></div>
           
         </div>
       </article>

@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { buildOverviewKpis, kpiHref } from './campaignOverviewKpis';
 import TemperatureBadge from '../TemperatureBadge';
 import LeadDetailModal from './LeadDetailModal';
 
@@ -55,11 +57,11 @@ export default function OverviewTab({ campaignId, stats, leads, headers }: Props
   const [selectedLead, setSelectedLead] = useState<CampaignLead | null>(null);
 
   const statusCounts = stats?.leads_by_status || {};
-  const activeCount = statusCounts['active'] || 0;
   const completedCount = statusCounts['completed'] || 0;
-  const removedCount = statusCounts['removed'] || statusCounts['dnc'] || 0;
-  const pausedCount = statusCounts['paused'] || 0;
   const totalEnrolled = stats?.total_leads || leads.length;
+  // KPIs as data, each with a drill-down into the exact rows it counted. Also fixes the
+  // DNC/Removed count, which used `removed || dnc` and dropped one bucket when both were set.
+  const kpis = buildOverviewKpis(campaignId, statusCounts, totalEnrolled);
   const progressPct = totalEnrolled > 0 ? ((completedCount / totalEnrolled) * 100).toFixed(0) : '0';
 
   const relTime = (d: string | null | undefined) => {
@@ -102,48 +104,24 @@ export default function OverviewTab({ campaignId, stats, leads, headers }: Props
 
   return (
     <>
-      {/* KPI Cards */}
+      {/* KPI Cards - every one is a drill-down into the rows it counted. A headline number
+          the reader cannot open is a number they have to take on faith. */}
       <div className="row g-3 mb-4">
-        <div className="col">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body text-center p-3">
-              <div className="fs-4 fw-bold">{totalEnrolled}</div>
-              <div className="text-muted small">Total Enrolled</div>
-            </div>
+        {kpis.map((kpi) => (
+          <div className="col" key={kpi.key}>
+            <Link
+              to={kpiHref(kpi)}
+              className="card border-0 shadow-sm text-decoration-none text-reset d-block"
+              title={`Open the ${kpi.label.toLowerCase()} leads behind this number`}
+              data-testid={`kpi-${kpi.key}`}
+            >
+              <div className="card-body text-center p-3">
+                <div className={`fs-4 fw-bold ${kpi.tone === 'default' ? '' : `text-${kpi.tone}`}`}>{kpi.value}</div>
+                <div className="text-muted small">{kpi.label} <i className="ri-arrow-right-up-line" aria-hidden="true" /></div>
+              </div>
+            </Link>
           </div>
-        </div>
-        <div className="col">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body text-center p-3">
-              <div className="fs-4 fw-bold text-success">{activeCount}</div>
-              <div className="text-muted small">Active</div>
-            </div>
-          </div>
-        </div>
-        <div className="col">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body text-center p-3">
-              <div className="fs-4 fw-bold text-info">{completedCount}</div>
-              <div className="text-muted small">Completed</div>
-            </div>
-          </div>
-        </div>
-        <div className="col">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body text-center p-3">
-              <div className="fs-4 fw-bold text-danger">{removedCount}</div>
-              <div className="text-muted small">DNC / Removed</div>
-            </div>
-          </div>
-        </div>
-        <div className="col">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body text-center p-3">
-              <div className="fs-4 fw-bold text-warning">{pausedCount}</div>
-              <div className="text-muted small">Paused</div>
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
 
       {/* Progress Bar */}

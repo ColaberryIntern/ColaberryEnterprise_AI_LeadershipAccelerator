@@ -6,9 +6,26 @@ import Campaign from '../models/Campaign';
 import { sequelize } from '../config/database';
 import { QueryTypes, Op } from 'sequelize';
 import { emitExecutiveEvent } from './executiveAwarenessService';
+import { getMetric, mayComputeWith } from './adminOs/metricRegistry';
 
 const DEFAULT_BASE_URL = 'https://enterprise.colaberry.ai';
-const PRICE_PER_ENROLLMENT = 4500;
+/**
+ * REVENUE IS NOT COMPUTED HERE ANY MORE.
+ *
+ * This service used to derive revenue as `enrollments * 4500` from a hardcoded constant. Three
+ * things were wrong with that at once: 4500 is not the price (the current offer is $149/mo), an
+ * enrollment is not a payment, and revenue in this business means app-originated checkout only.
+ * The figure fed the Channel ROI cards and an ROI percentage, so a channel that had collected no
+ * money at all still reported revenue and a return.
+ *
+ * Cost-per-lead and cost-per-enrollment went the same way for a different reason: they divide
+ * `campaigns.budget_spent`, and the ONLY write to that column in the entire codebase is the `0`
+ * default set at creation (campaignService.ts). Nothing ever increments it. So every
+ * cost-per-lead this service returned was `0 / leads = 0` - an assertion that acquiring a lead
+ * costs nothing, rendered as a real currency figure.
+ *
+ * All four are now null with a stated reason. See metricRegistry 'marketing.*'.
+ */
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -20,13 +37,18 @@ export interface CampaignROIReport {
   leads: number;
   engaged: number;
   enrollments: number;
-  revenue: number;
+  /** null = not knowable (no payment data joined to campaigns), NOT zero revenue. */
+  revenue: number | null;
   budget_spent: number;
   budget_cap: number | null;
-  roi: number;
-  cost_per_lead: number;
-  cost_per_enrollment: number;
+  /** null = not knowable. Depends on both revenue and a spend figure nothing populates. */
+  roi: number | null;
+  /** null = not knowable, because budget_spent is never written. NOT "free". */
+  cost_per_lead: number | null;
+  cost_per_enrollment: number | null;
   approval_status: string;
+  /** Why the null fields are null, for direct display next to them. */
+  unavailable: { key: string; name: string; reason: string }[];
 }
 
 export interface ChannelROI {
@@ -37,8 +59,30 @@ export interface ChannelROI {
   total_visitors: number;
   total_leads: number;
   total_enrollments: number;
-  total_revenue: number;
-  roi: number;
+  /** null = not knowable, NOT zero. */
+  total_revenue: number | null;
+  roi: number | null;
+  unavailable: { key: string; name: string; reason: string }[];
+}
+
+/**
+ * The money metrics this service cannot honestly report, straight from the registry.
+ *
+ * Asking the registry rather than hard-coding the list means these entries disappear on their
+ * own once a spend connector lands and the metrics flip to trusted - a hand-written list would
+ * go on claiming "unavailable" after the data arrived.
+ */
+const MONEY_KEYS = ['marketing.roas', 'marketing.ad_spend', 'marketing.cost_per_lead'] as const;
+
+function moneyUnavailable(): { key: string; name: string; reason: string }[] {
+  return MONEY_KEYS.filter((k) => !mayComputeWith(k)).map((key) => {
+    const def = getMetric(key);
+    return {
+      key,
+      name: def?.name ?? key,
+      reason: def?.statusReason ?? 'Not registered in the metric registry.',
+    };
+  });
 }
 
 // ─── Link Generation ────────────────────────────────────────────────────────
@@ -133,9 +177,7 @@ export async function getCampaignROI(campaignId: string): Promise<CampaignROIRep
   const leads = Number(row?.leads) || 0;
   const enrollments = Number(row?.enrollments) || 0;
   const engaged = Number(row?.engaged) || 0;
-  const revenue = enrollments * PRICE_PER_ENROLLMENT;
   const budgetSpent = Number(campaign.budget_spent) || 0;
-  const roi = budgetSpent > 0 ? Math.round(((revenue - budgetSpent) / budgetSpent) * 100) / 100 : 0;
 
   return {
     campaign_id: campaignId,
@@ -145,13 +187,20 @@ export async function getCampaignROI(campaignId: string): Promise<CampaignROIRep
     leads,
     engaged,
     enrollments,
-    revenue,
+    revenue: null,
     budget_spent: budgetSpent,
     budget_cap: campaign.budget_cap != null ? Number(campaign.budget_cap) : null,
-    roi,
-    cost_per_lead: leads > 0 ? Math.round((budgetSpent / leads) * 100) / 100 : 0,
-    cost_per_enrollment: enrollments > 0 ? Math.round((budgetSpent / enrollments) * 100) / 100 : 0,
+    roi: null,
+    // Guarded on budgetSpent > 0, not just leads > 0. Dividing a spend of zero yields zero,
+    // and a cost-per-lead of $0 is a claim, not a blank.
+    cost_per_lead:
+      budgetSpent > 0 && leads > 0 ? Math.round((budgetSpent / leads) * 100) / 100 : null,
+    cost_per_enrollment:
+      budgetSpent > 0 && enrollments > 0
+        ? Math.round((budgetSpent / enrollments) * 100) / 100
+        : null,
     approval_status: campaign.approval_status || 'draft',
+    unavailable: moneyUnavailable(),
   };
 }
 
@@ -188,7 +237,6 @@ export async function getChannelROIAggregation(): Promise<ChannelROI[]> {
   return rows.map((row) => {
     const totalSpent = Number(row.total_budget_spent) || 0;
     const totalEnrollments = Number(row.total_enrollments) || 0;
-    const totalRevenue = totalEnrollments * PRICE_PER_ENROLLMENT;
 
     return {
       channel: row.channel,
@@ -198,8 +246,9 @@ export async function getChannelROIAggregation(): Promise<ChannelROI[]> {
       total_visitors: Number(row.total_visitors) || 0,
       total_leads: Number(row.total_leads) || 0,
       total_enrollments: totalEnrollments,
-      total_revenue: totalRevenue,
-      roi: totalSpent > 0 ? Math.round(((totalRevenue - totalSpent) / totalSpent) * 100) / 100 : 0,
+      total_revenue: null,
+      roi: null,
+      unavailable: moneyUnavailable(),
     };
   });
 }

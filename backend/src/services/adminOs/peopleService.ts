@@ -78,9 +78,19 @@ export interface PeopleQuery {
   stage?: LifecycleStage;
   /** Only people with no acquisition record. Powers the identity-coverage drill-down. */
   untracedOnly?: boolean;
+  /**
+   * Only people enrolled in this campaign (campaign_leads), optionally in one of these
+   * statuses. Powers the Campaign 360 KPI drill-downs: the roster must count exactly what the
+   * card counted, which is campaign_leads rows by status.
+   */
+  campaignId?: string;
+  campaignStatuses?: readonly CampaignLeadStatus[];
   limit?: number;
   offset?: number;
 }
+
+export const CAMPAIGN_LEAD_STATUSES = ['enrolled', 'active', 'paused', 'completed', 'removed'] as const;
+export type CampaignLeadStatus = (typeof CAMPAIGN_LEAD_STATUSES)[number];
 
 const MAX_LIMIT = 200;
 
@@ -179,6 +189,17 @@ export async function getPeopleRoster(query: PeopleQuery): Promise<PeopleRoster>
   if (query.untracedOnly) {
     // The 86: an enrolment with no matching lead.
     filters.push('e.email IS NOT NULL AND l.email IS NULL');
+  }
+  if (query.campaignId) {
+    // Membership is by campaign_leads, joined back to the lead's email so it lines up with
+    // the roster's own identity key. Statuses are an IN over a bound list, never text.
+    const statuses = (query.campaignStatuses ?? []).filter((s) => (CAMPAIGN_LEAD_STATUSES as readonly string[]).includes(s));
+    filters.push(
+      `l.email IN (SELECT lower(btrim(ld.email)) FROM campaign_leads cl JOIN leads ld ON ld.id = cl.lead_id`
+      + ` WHERE cl.campaign_id = :campaignId${statuses.length > 0 ? ' AND cl.status IN (:campaignStatuses)' : ''})`,
+    );
+    replacements.campaignId = query.campaignId;
+    if (statuses.length > 0) replacements.campaignStatuses = statuses;
   }
   if (query.search && query.search.trim()) {
     filters.push('(COALESCE(l.email, e.email) ILIKE :search OR COALESCE(e.name, l.name) ILIKE :search)');

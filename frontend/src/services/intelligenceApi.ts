@@ -519,7 +519,7 @@ const adminHeaders = () => ({
   headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` },
 });
 
-export const getCampaignGraph = (timeWindow?: string, timeline?: boolean, brandId?: string | null) =>
+export const getCampaignGraph = (timeWindow?: string, timeline?: boolean, brandId?: string | null, campaignId?: string | null) =>
   axios.get<CampaignGraphData>('/api/admin/campaign-intelligence/graph', {
     ...adminHeaders(),
     params: {
@@ -529,6 +529,9 @@ export const getCampaignGraph = (timeWindow?: string, timeline?: boolean, brandI
       // sees the same request the unfiltered call has always made and keeps using
       // its cache.
       ...(brandId ? { brandId } : {}),
+    
+      // Campaign scope, omitted when absent for the same cache reason as brandId.
+      ...(campaignId ? { campaignId } : {}),
     },
   });
 

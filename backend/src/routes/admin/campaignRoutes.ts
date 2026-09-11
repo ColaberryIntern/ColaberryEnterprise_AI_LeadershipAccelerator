@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import { getRampStatus, manualAdvanceRamp } from '../../services/autonomousRampService';
 import {
@@ -105,6 +106,42 @@ router.post('/api/admin/campaigns/:id/ghl-sync', requireAdmin, handleGhlSync);
 router.get('/api/admin/campaigns/:id/ghl-status', requireAdmin, handleGhlStatus);
 router.post('/api/admin/campaigns/:id/ghl-test-sms', requireAdmin, handleGhlTestSms);
 router.post('/api/admin/campaigns/:id/ghl-resync-lead', requireAdmin, handleGhlResyncLead);
+
+/**
+ * Campaign 360 Attribution (T019). Three models over the campaign's identified leads, with
+ * identity coverage and the credit-sum guard reported rather than hidden.
+ */
+// Bounded window: 0 attributes nothing, years attribute a visit from another life. 1-365 days
+// is the range in which the answer means something. Zod, per the contract rule - the hand-written
+// regex and Number() checks this replaces were the T019 verifier's convention finding.
+const AttributionParams = z.object({ id: z.string().uuid() });
+const AttributionQuery = z.object({ window: z.coerce.number().int().min(1).max(365).default(30) });
+
+router.get('/api/admin/campaigns/:id/attribution', requireAdmin, async (req: Request, res: Response) => {
+  const params = AttributionParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: 'Campaign id must be a UUID', error_class: 'ValidationError', details: params.error.flatten() });
+    return;
+  }
+  const query = AttributionQuery.safeParse(req.query);
+  if (!query.success) {
+    res.status(400).json({ error: 'window must be an integer number of days from 1 to 365', error_class: 'ValidationError', details: query.error.flatten() });
+    return;
+  }
+  const id = params.data.id;
+  const rawWindow = query.data.window;
+  try {
+    const { getCampaignAttribution } = await import('../../services/marketing/campaignAttributionService');
+    res.json(await getCampaignAttribution(id, rawWindow));
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'marketing',
+      event: 'campaign_attribution_failed', outcome: 'failure',
+      error_class: err?.name ?? 'Error', context: { campaignId: id, message: String(err?.message ?? err).slice(0, 200) },
+    }));
+    res.status(500).json({ error: 'Failed to compute attribution', error_class: 'InternalError' });
+  }
+});
 router.post('/api/admin/campaigns/:id/generate-icp', requireAdmin, handleGenerateICP);
 router.post('/api/admin/campaigns/:id/reverse-engineer', requireAdmin, handleReverseEngineer);
 router.post('/api/admin/campaigns/:id/rebuild', requireAdmin, handleRebuildCampaign);
@@ -122,9 +159,10 @@ router.patch('/api/admin/campaigns/:id/mode', requireAdmin, async (req: Request,
     const { Campaign } = await import('../../models');
     const campaign = await Campaign.findByPk(req.params.id as string);
     if (!campaign) { res.status(404).json({ error: 'Campaign not found' }); return; }
-    (campaign as any).mode_override = mode || null;
+    // Typed write, no cast — see the note in autonomousRequirementExpansionService.
+    campaign.mode_override = mode || null;
     await campaign.save();
-    res.json({ id: campaign.id, mode_override: (campaign as any).mode_override });
+    res.json({ id: campaign.id, mode_override: campaign.mode_override });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 

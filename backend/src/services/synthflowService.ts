@@ -1,4 +1,5 @@
 import { env } from '../config/env';
+import { normalizePhone } from '../utils/phone';
 import { getTestOverrides } from './settingsService';
 import { isKillSwitchActive } from './launchSafety';
 import { redactForLogs } from '../utils/piiRedaction';
@@ -205,6 +206,22 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
   } catch {
     // If settings DB fails, don't block the call
   }
+
+  // Normalize to E.164 before it leaves for Synthflow. Synthflow forwards the
+  // number to Twilio as-is, only prepending a bare '+' if there is none — so a
+  // 10-digit US number typed on the form ('6825975784') went out as
+  // '+6825975784', which Twilio reads as country code +682 (Cook Islands) and
+  // rejects with 32205 "No International Permission". A US internship applicant's
+  // interview call therefore never connected. normalizePhone turns that into
+  // '+16825975784'; an already-'+'-prefixed number is left as it is.
+  const dialPhone = normalizePhone(actualPhone);
+  if (!dialPhone) {
+    // Fewer than 7 digits, or otherwise unusable. Dialing it would burn a call on
+    // a guaranteed telephony error, so skip with a reason the caller can surface.
+    console.warn(`[Synthflow] Phone ${redactForLogs(actualPhone)} is not a dialable number. Skipping.`);
+    return { success: true, data: { skipped: true, reason: 'invalid_phone' } };
+  }
+  actualPhone = dialPhone;
 
   // Build custom_variables array per Synthflow V2 API docs
   const customVariables: { key: string; value: string }[] = [];
