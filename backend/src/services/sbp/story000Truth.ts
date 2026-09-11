@@ -68,6 +68,8 @@ export function story000TruthSection(input: Story000TruthInput): string[] {
 
   const confirmed = items.filter((i) => groupOf(i) === 'confirmed');
   const unconfirmed = items.filter((i) => groupOf(i) === 'needsConfirmation');
+  const fromBuild = items.filter((i) => groupOf(i) === 'fromBuild');
+  const questions = items.filter((i) => groupOf(i) === 'openQuestions');
   const inferred = items.filter((i) => groupOf(i) === 'inferences');
   const missing = remainingAngles(items);
 
@@ -93,6 +95,22 @@ export function story000TruthSection(input: Story000TruthInput): string[] {
 
   say('Confirmed by you', confirmed);
   say('From what you told us, not yet confirmed', unconfirmed);
+  say('Found in your build, not yet confirmed by you', fromBuild);
+
+  if (questions.length > 0) {
+    lines.push(
+      '### Questions a story raised',
+      '',
+      'A story found something that disagrees with what you confirmed. Neither value was',
+      'replaced; settle each one on the review screen.',
+      '',
+    );
+    for (const item of questions) {
+      const label = DIMENSION_HEADING[item.dimension] ?? item.dimension;
+      lines.push(`- **${label}.** ${trim(item.value.trim())}`);
+    }
+    lines.push('');
+  }
 
   if (inferred.length > 0) {
     lines.push(
@@ -122,6 +140,13 @@ export function story000TruthSection(input: Story000TruthInput): string[] {
       const cost = UNANSWERED_COST[angle];
       if (cost) lines.push(`- ${cost}`);
     }
+    lines.push(
+      '',
+      'Forward repair, not backfill: if the plan or the repository already answers one of',
+      'these, record it in `.colaberry/enrichment/STORY-000.json` with the file or commit that',
+      'shows it, and the platform files it against the right question on your next push. Do',
+      'not invent an answer; an honest gap is worth more than a plausible one.',
+    );
     lines.push('');
   } else {
     lines.push('Nothing is outstanding: every question the plan needed has an answer.', '');

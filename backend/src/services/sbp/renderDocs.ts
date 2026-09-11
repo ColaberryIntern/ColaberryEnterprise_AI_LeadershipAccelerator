@@ -53,6 +53,13 @@ export interface RenderContext {
   planVersion?: number;
   planSha256?: string;
   correlationId?: string;
+  /**
+   * Manifest only, like the clock. The agent copies both into the enrichment
+   * file it writes when a story finishes: the project it is evidence for, and
+   * the truth revision it read before starting.
+   */
+  projectId?: string | null;
+  truthRevision?: number | null;
   /** Real cohort dates. Null ⇒ the plan renders without due dates, as before. */
   schedule?: Schedule | null;
   /**
@@ -524,6 +531,8 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
       plan_version: ctx.planVersion ?? null,
       plan_sha256: ctx.planSha256 ?? null,
       correlation_id: ctx.correlationId ?? null,
+      project_id: ctx.projectId ?? null,
+      truth_revision: ctx.truthRevision ?? null,
       files: files.map((f) => ({ path: f.path, sha256: sha256(f.content) })),
     }, null, 2)}\n`,
   });

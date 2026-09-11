@@ -121,7 +121,8 @@ describe('recordMandrillEngagement', () => {
     }
     // What was clicked is now recorded, so the question can be answered.
     const click = created.find((r) => r.outcome === 'clicked')!;
-    expect(click.metadata.clicked_urls).toEqual(['https://app.colaberry.com/login?t=abc']);
+    // Masked at write time: the login token never reaches the row.
+    expect(click.metadata.clicked_urls).toEqual(['https://app.colaberry.com/login?t=***']);
     expect(created.find((r) => r.outcome === 'opened')!.metadata.clicked_urls).toBeUndefined();
   });
 

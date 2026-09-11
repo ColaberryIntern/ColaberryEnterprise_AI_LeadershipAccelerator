@@ -8,9 +8,10 @@ import ProjectInterior from './ProjectInterior';
 import NextSessionStrip from './NextSessionStrip';
 import {
   resolveBackendProjectId, startBuild as startServerBuild, pollBuild,
-  isDelivered, blockingReasons, describeFailure, requestDiscoveryCall, type SbpError,
+  isDelivered, blockingReasons, requestDiscoveryCall, getIntakeReview,
 } from '../../../services/sbpApi';
 import { describeCallOutcome, type CallNotice } from './describeCallOutcome';
+import { PipelineBanner, CallBanner, type PipelineState, type HandoffCounts } from './ProjectBanners';
 import ProjectsNextStepHero from './ProjectsNextStepHero';
 import FeedCard, { FeedItem } from '../feed/FeedCard';
 import {
@@ -192,129 +193,6 @@ export function BuildCard({ p, onOpen, onRemove, repoSync }: {
   );
 }
 
-type PipelineState =
-  | { state: 'idle' }
-  | { state: 'generating'; projectId: string; status?: string }
-  /** Generated, gate-clean, AND materialized into the portal. The real thing. */
-  | { state: 'delivered'; projectId: string }
-  /**
-   * Generated and gate-clean, but not promoted. Rare and always a server-side
-   * problem — it is the state five students were silently parked in. It is a
-   * failure and is worded as one.
-   */
-  | { state: 'stalled'; projectId: string }
-  | { state: 'gate_failed'; projectId: string; reasons: string[] }
-  /**
-   * Fell back to the browser template. `error` carries WHY, classified — a
-   * refused request and an unreachable server are different failures needing
-   * different actions, and this used to hold only a message string, so the
-   * banner narrated every one of them as an outage.
-   */
-  | { state: 'local'; error: SbpError };
-
-/**
- * Tells the student which path produced their plan, and why.
- *
- * Deliberately visible, and deliberately rendered on EVERY view rather than
- * only inside the wizard. It used to live on the wizard screen alone, while
- * `handleCreate` switched to the preview screen on its very first line — so the
- * banner was mounted for about one frame and no student ever read a word of it.
- * A warning nobody can see is the same as no warning, which is precisely how a
- * silent fallback stayed silent.
- */
-/**
- * What became of "have an AI call me". Rendered beside the pipeline banner
- * for the same reason the banner is: a notice mounted for one frame is a
- * notice nobody reads. Says a call is coming only when the server said so.
- */
-const CallBanner: React.FC<{ notice: CallNotice | null }> = ({ notice }) => {
-  if (!notice) return null;
-  return (
-    <div className={`card pjw-pane pj-pipe ${notice.tone}`} role="status" aria-live="polite" data-testid="call-notice">
-      <strong>{notice.tone === 'ok' ? 'About the call you asked for' : 'We could not set up the call'}</strong>
-      <p className="lead" style={{ marginBottom: 0 }}>{notice.text}</p>
-    </div>
-  );
-};
-
-const PipelineBanner: React.FC<{ pipeline: PipelineState }> = ({ pipeline }) => {
-  if (pipeline.state === 'idle') return null;
-
-  if (pipeline.state === 'generating') {
-    return (
-      <div className="card pjw-pane pj-pipe" role="status" aria-live="polite">
-        <strong>Designing your system…</strong>
-        <p className="lead" style={{ marginBottom: 0 }}>
-          We are writing your requirements and breaking them into releases and stories.
-          This takes a few minutes — you can keep working and come back.
-        </p>
-      </div>
-    );
-  }
-
-  if (pipeline.state === 'delivered') {
-    return (
-      <div className="card pjw-pane pj-pipe ok" role="status" aria-live="polite">
-        <strong>Your plan is ready, and it is in your build.</strong>
-        <p className="lead" style={{ marginBottom: 0 }}>
-          Built from your own answers, with every requirement traced to a story,
-          scheduled against your cohort's dates, and each task carrying its own
-          Claude Code prompt.
-        </p>
-      </div>
-    );
-  }
-
-  if (pipeline.state === 'stalled') {
-    return (
-      <div className="card pjw-pane pj-pipe warn" role="alert" aria-live="assertive">
-        <strong>Your plan generated, but we could not open it up for you.</strong>
-        <p className="lead" style={{ marginBottom: 0 }}>
-          Nothing is lost — the plan is saved and the gate passed it. What failed
-          is the step that turns it into your tasks and dates, so what you are
-          looking at right now is the starter template, not your plan. Reload in
-          a few minutes; we are told about this automatically.
-        </p>
-      </div>
-    );
-  }
-
-  if (pipeline.state === 'gate_failed') {
-    return (
-      <div className="card pjw-pane pj-pipe warn" role="alert" aria-live="assertive">
-        <strong>Your plan has a gap, so we have not opened it up yet.</strong>
-        <p className="lead" style={{ marginBottom: 8 }}>
-          We would rather tell you than hand you a plan that quietly misses
-          something. Until it is fixed you are looking at the starter template.
-        </p>
-        <ul className="lead" style={{ margin: 0, paddingLeft: 20 }}>
-          {pipeline.reasons.map((r) => <li key={r}>{r}</li>)}
-        </ul>
-        <p className="lead" style={{ margin: '8px 0 0' }}>
-          Start the build again with more detail on the missing part, and it
-          should close.
-        </p>
-      </div>
-    );
-  }
-
-  // Fell back to the browser template. What we say depends on WHY, because the
-  // action differs: a refused payload is fixed by editing an answer, and an
-  // unreachable service is fixed by waiting. Telling a refused student to wait
-  // is how Taiwo Oludimimu spent three days believing he had done something
-  // wrong with his connection.
-  const copy = describeFailure(pipeline.error);
-  return (
-    <div className="card pjw-pane pj-pipe warn" role="alert" aria-live="assertive">
-      <strong>{copy.title}</strong>
-      <p className="lead" style={{ marginBottom: 0 }}>
-        {copy.body} You are looking at a general ten-task template — no schedule,
-        no Command Center, generic prompts. {copy.action}
-      </p>
-    </div>
-  );
-};
-
 const ProjectsPage: React.FC = () => {
   const navigate = useNavigate();
   const projects = useProjectsList();
@@ -332,6 +210,10 @@ const ProjectsPage: React.FC = () => {
   // hidden: a student is entitled to know whether they got the real thing.
   const [pipeline, setPipeline] = useState<PipelineState>({ state: 'idle' });
   const [callNotice, setCallNotice] = useState<CallNotice | null>(null);
+  // What Story 000 will say, in numbers, for the handoff on delivery. Null
+  // until the plan is delivered, and stays null if the review cannot be read:
+  // the handoff renders without counts rather than not at all.
+  const [handoff, setHandoff] = useState<HandoffCounts | null>(null);
   /** True while a build is being created, so a second confirm cannot start one. */
   const creatingRef = useRef(false);
 
@@ -466,6 +348,18 @@ const ProjectsPage: React.FC = () => {
     const t = p?.lists.flatMap((l) => l.tasks).find((x) => x.id === taskId) ?? null;
     openTaskWorkspace(projectId, t);
   };
+  /**
+   * The handoff's one action. STORY-000 is slotted first by projectHydrate,
+   * so it is normally present the moment the plan is delivered; if a stale
+   * cache has not adopted it yet, the interior is the honest fallback and
+   * the story is at the top of it.
+   */
+  const openStory000 = (projectId: string) => {
+    const p = projects.find((x) => x.id === projectId || x.pipelineProjectId === projectId);
+    const t = p?.lists.flatMap((l) => l.tasks).find((x) => x.storyId === 'STORY-000') ?? null;
+    if (p && t) openTaskWorkspace(p.id, t);
+    else if (p) openInterior(p.id);
+  };
 
   /**
    * Start a build.
@@ -574,6 +468,18 @@ const ProjectsPage: React.FC = () => {
     // was a no-op — the plan existed on the server and still did not appear.
     await refreshProjectsFromBackend();
     setPipeline({ state: 'delivered', projectId: resolved.projectId });
+    // The counts for the handoff, best effort: the truth this plan was built
+    // from, read back from the same store Story 000 renders. A failure here
+    // costs the numbers, not the handoff.
+    const review = await getIntakeReview(resolved.projectId);
+    if (review.ok && review.review) {
+      const c = review.review.counts;
+      setHandoff({
+        told: (c.needsConfirmation ?? 0) + (c.confirmed ?? 0),
+        inferred: c.inferences ?? 0,
+        unanswered: review.review.unanswered.length,
+      });
+    }
     // The placeholder has been superseded by the real project, which carries
     // the backend id. Point the view at it so the student lands on their plan.
     setView({ kind: 'preview', id: resolved.projectId });
@@ -680,7 +586,7 @@ const ProjectsPage: React.FC = () => {
         {/* The screen the student is actually on after creating a build. The
             banner used to render only in the wizard branch they had already
             left, so every degraded path arrived here saying nothing at all. */}
-        <PipelineBanner pipeline={pipeline} />
+        <PipelineBanner pipeline={pipeline} handoff={handoff} onOpenStory000={pipeline.state === 'delivered' ? () => openStory000(pipeline.projectId) : null} />
         <CallBanner notice={callNotice} />
         <ProjectPreview project={active} onOpen={() => openInterior(active.id)} onExplore={() => { setView({ kind: 'overview' }); window.scrollTo(0, 0); }} />
       </div></PortalShell>
@@ -692,7 +598,7 @@ const ProjectsPage: React.FC = () => {
       <PortalShell><div className="pj-root">
         <div className="page-h"><div className="crumbs0">Where work happens</div><h1>Start a new build</h1><div className="sub">Turn a raw idea into a scheduled build with lists and tasks — created in the background, right here in your portal.</div></div>
         <button className="pj-back" onClick={() => setView({ kind: 'overview' })}><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Back to projects</button>
-        <PipelineBanner pipeline={pipeline} />
+        <PipelineBanner pipeline={pipeline} handoff={handoff} onOpenStory000={pipeline.state === 'delivered' ? () => openStory000(pipeline.projectId) : null} />
         <CallBanner notice={callNotice} />
         <ProjectWizard onCreate={handleCreate} />
       </div></PortalShell>
@@ -725,7 +631,7 @@ const ProjectsPage: React.FC = () => {
       {/* Also here: a student who navigates back to the overview while their
           build is generating (or after it degraded) must not lose the only
           explanation they were given. */}
-      <PipelineBanner pipeline={pipeline} />
+      <PipelineBanner pipeline={pipeline} handoff={handoff} onOpenStory000={pipeline.state === 'delivered' ? () => openStory000(pipeline.projectId) : null} />
       <CallBanner notice={callNotice} />
 
       {demo && (

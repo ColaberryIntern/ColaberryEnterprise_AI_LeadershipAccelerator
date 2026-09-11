@@ -128,3 +128,31 @@ describe('the counts a surface can render without re-deriving', () => {
     expect(counts.confirmed).toBe((text.match(/^- \*\*/gm) ?? []).length - counts.unconfirmed);
   });
 });
+
+describe('what a story taught the project (Phase 6)', () => {
+  it('renders repo evidence under its own heading, and a raised question under its own', () => {
+    const text = render([
+      item({ dimension: 'actors', value: 'Priya reviews every draft.', provenance: 'client_confirmed' }),
+      item({ dimension: 'integrations', value: 'Reads open tickets from the Zendesk API.', provenance: 'repo_evidence', source_quote: 'src/zendesk/client.ts' }),
+      item({ dimension: 'actors', value: 'STORY-003 found "The dispatcher reviews drafts.", but you confirmed "Priya reviews every draft.". Which is right?', classification: 'QUESTION', provenance: 'repo_evidence', source_quote: 'src/review.ts' }),
+    ]);
+    expect(text).toContain('### Found in your build, not yet confirmed by you');
+    expect(text).toContain('Reads open tickets from the Zendesk API.');
+    expect(text).toContain('### Questions a story raised');
+    expect(text).toContain('Neither value was');
+    expect(text).toContain('Which is right?');
+  });
+
+  it('tells STORY-000 how to repair forward, and not to invent', () => {
+    const text = render([item({})]);
+    expect(text).toContain('Forward repair, not backfill');
+    expect(text).toContain('.colaberry/enrichment/STORY-000.json');
+    expect(text).toContain('Do');
+    expect(text).toMatch(/not invent an answer/);
+  });
+
+  it('says nothing about forward repair when nothing is outstanding', () => {
+    const all = Object.values(ANGLE_TO_DIMENSION).map((d) => item({ dimension: d as UnderstandingItem['dimension'], value: 'x' }));
+    expect(render(all)).not.toContain('Forward repair');
+  });
+});

@@ -259,6 +259,29 @@ export async function handlePushForVerification(input: HandlePushInput): Promise
       newly_verified: summary.rollup.newly_verified,
       xp_awarded: summary.rollup.xp_awarded,
     });
+
+    // CONTINUOUS ENRICHMENT (Unified Project Discovery, Phase 6). After the
+    // stories are verified, read what they said they learned. Same branch,
+    // same push; idempotent per file content, so reading every file on every
+    // push is correct. Failure here is logged inside and never reaches the
+    // delivery's outcome: verification already ran and its credit stands.
+    try {
+      const { ingestStoryEnrichments } = await import('../storyEnrichmentReader');
+      const { storedConnect } = await import('../repoConnect/connectionAccess');
+      await ingestStoryEnrichments(projectId, {
+        owner: input.owner,
+        repo: input.repo,
+        branch: storedConnect(connection).default_branch ?? null,
+      }, { correlationId });
+    } catch (err: unknown) {
+      log('github_push_enrichment_failed', 'failure', {
+        ...base,
+        project_id: projectId,
+        error_class: (err as { name?: string })?.name ?? 'Error',
+        message: (err as { message?: string })?.message,
+      });
+    }
+
     await closeDelivery(input.deliveryId, 'verified');
     return { outcome: 'verified', project_id: projectId };
   } catch (err: unknown) {

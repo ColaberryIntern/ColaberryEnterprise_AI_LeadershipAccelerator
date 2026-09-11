@@ -37,11 +37,13 @@ export interface ComposerSetupProps {
   busy: boolean;
   onChange: (next: SetupValues) => void;
   onSubmit: () => void;
+  /** Assign the chosen campaign its UTM slug (the composer cannot mint links without one). */
+  onAssignSlug?: (campaignId: string) => void;
 }
 
 const CONTENT_TYPES: ContentType[] = ['text', 'image', 'video', 'carousel', 'thread', 'link'];
 
-export default function ComposerSetup({ values, brands, campaigns, locked, busy, onChange, onSubmit }: ComposerSetupProps) {
+export default function ComposerSetup({ values, brands, campaigns, locked, busy, onChange, onSubmit, onAssignSlug }: ComposerSetupProps) {
   const set = <K extends keyof SetupValues>(k: K, v: SetupValues[K]) => onChange({ ...values, [k]: v });
   const visibleCampaigns = campaigns.filter((c) => !values.brand_id || !c.brand_id || c.brand_id === values.brand_id);
   const chosen = campaigns.find((c) => c.id === values.campaign_id);
@@ -63,7 +65,16 @@ export default function ComposerSetup({ values, brands, campaigns, locked, busy,
             <option value="">No campaign (links cannot be tracked)</option>
             {visibleCampaigns.map((c) => <option key={c.id} value={c.id}>{c.name}{c.utm_campaign_slug ? '' : ' - no UTM slug'}</option>)}
           </select>
-          {chosen && !chosen.utm_campaign_slug && <div className="form-text text-warning">This campaign has no UTM slug; tracked links will be refused until it does.</div>}
+          {chosen && !chosen.utm_campaign_slug && (
+            <div className="form-text text-warning d-flex align-items-center gap-2">
+              <span>This campaign has no UTM slug; tracked links will be refused until it does.</span>
+              {onAssignSlug && (
+                <button type="button" className="btn btn-sm btn-outline-warning py-0" disabled={busy} onClick={() => onAssignSlug(chosen.id)} data-testid="assign-slug">
+                  Assign UTM slug
+                </button>
+              )}
+            </div>
+          )}
         </div>
         <div className="col-md-4">
           <label className="form-label small mb-1" htmlFor="composer-type">Content type</label>

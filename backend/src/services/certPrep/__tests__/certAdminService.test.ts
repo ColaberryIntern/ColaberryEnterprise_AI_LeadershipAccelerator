@@ -7,7 +7,7 @@
  * answers must NOT be presented as if it meant something.
  */
 jest.mock('../../../config/database', () => ({ sequelize: { query: jest.fn() } }));
-jest.mock('../../../models/CertQuestion', () => ({ __esModule: true, default: { count: jest.fn() } }));
+jest.mock('../../../models/CertQuestion', () => ({ __esModule: true, default: { count: jest.fn(), findAll: jest.fn() } }));
 jest.mock('../../../models/CertQuestionRevision', () => ({ __esModule: true, default: { findAll: jest.fn() } }));
 jest.mock('../../../models/CertReadinessSnapshot', () => ({ __esModule: true, default: { findAll: jest.fn() } }));
 jest.mock('../../../models/CertEvidenceMapping', () => ({ __esModule: true, default: { findAll: jest.fn() } }));
@@ -24,6 +24,7 @@ import {
 const mQuery = sequelize.query as unknown as jest.Mock;
 const mRevisions = CertQuestionRevision.findAll as unknown as jest.Mock;
 const mCount = CertQuestion.count as unknown as jest.Mock;
+const mRetired = CertQuestion.findAll as unknown as jest.Mock;
 const mMappings = CertEvidenceMapping.findAll as unknown as jest.Mock;
 
 /** One aggregate row as the SQL returns it. */
@@ -38,6 +39,7 @@ beforeEach(() => {
     { question_key: 'A1', revision: 1, difficulty: 'medium', blueprint_version: '1.0-2026-07' },
   ]);
   mCount.mockResolvedValue(20);
+  mRetired.mockResolvedValue([]);
   mMappings.mockResolvedValue([]);
 });
 
@@ -111,6 +113,28 @@ describe('getBankHealth', () => {
     expect(health.approved_by_domain).toEqual({ D1: 1, D3: 1 });
     expect(health.domains_with_no_approved).toEqual(['D2', 'D4', 'D5']);
     expect(health.by_status).toEqual({ approved: 2, draft: 1 });
+  });
+
+  it('carries the whole-bank audit, so the admin sees the same verdict the scripts print', async () => {
+    mRevisions.mockResolvedValue([
+      { question_key: 'a', revision: 1, domain_id: 'D1', review_status: 'approved', stem: 's', options: [], correct_keys: ['A'] },
+      // an older revision of the same key must not be audited twice
+      { question_key: 'a', revision: 2, domain_id: 'D1', review_status: 'approved', stem: 's', options: [], correct_keys: ['B'] },
+    ]);
+    const health = await getBankHealth('1.0-2026-07', ['D1']);
+    expect(health.audit.items).toBe(1);
+    expect(health.audit.checks.length).toBeGreaterThan(5);
+    expect(health.audit.checks.every((c) => typeof c.measured === 'number')).toBe(true);
+  });
+
+  it('leaves retired questions out of the audit — they cannot be served', async () => {
+    mRevisions.mockResolvedValue([
+      { question_key: 'a', revision: 1, domain_id: 'D1', review_status: 'approved', stem: 's', options: [], correct_keys: ['A'] },
+      { question_key: 'gone', revision: 1, domain_id: 'D1', review_status: 'approved', stem: 's', options: [], correct_keys: ['A'] },
+    ]);
+    mRetired.mockResolvedValue([{ question_key: 'gone' }]);
+    const health = await getBankHealth('1.0-2026-07', ['D1']);
+    expect(health.audit.items).toBe(1);
   });
 
   it('boundary: an empty bank reports every domain as unapproved', async () => {

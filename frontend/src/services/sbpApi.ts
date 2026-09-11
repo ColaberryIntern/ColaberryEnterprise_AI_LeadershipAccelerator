@@ -175,12 +175,13 @@ export async function fetchIntakeQuestions(input: {
  * it. Mirrors `ReviewItem` in backend/src/services/sbp/intakeReview.ts.
  *
  *   needsConfirmation  we heard it, nobody has agreed we heard it right
+ *   fromBuild          a story's own work showed it; nobody has agreed yet
  *   inferences         nothing was said; the system worked it out
  *   openQuestions      it was asked and not answered
  *   unknowns           recorded as unknown, deliberately, and that is allowed
  *   confirmed          already corrected or agreed
  */
-export type ReviewGroup = 'confirmed' | 'needsConfirmation' | 'inferences' | 'openQuestions' | 'unknowns';
+export type ReviewGroup = 'confirmed' | 'needsConfirmation' | 'fromBuild' | 'inferences' | 'openQuestions' | 'unknowns';
 
 export interface ReviewItem {
   index: number;
@@ -285,6 +286,33 @@ export async function previewIntake(input: {
     const res = await portalApi.post('/api/portal/sbp/intake/preview', input);
     return { ok: true, preview: res.data as IntakePreview };
   } catch (err) {
+    return { ok: false, error: toError(err) };
+  }
+}
+
+/**
+ * The stored truth, read back after a build exists. Same two halves as the
+ * pre-Confirm preview, plus the revision. Null when the intake never ran, so
+ * a caller can tell "nothing recorded" from "recorded nothing".
+ */
+export interface IntakeReviewRecord {
+  project_id: string;
+  revision: number;
+  items: ReviewItem[];
+  counts: Record<ReviewGroup, number>;
+  contradictions: string[];
+  blocksPlanning: boolean;
+  unanswered: string[];
+}
+
+export async function getIntakeReview(projectId: string): Promise<
+  { ok: true; review: IntakeReviewRecord | null } | { ok: false; error: SbpError }
+> {
+  try {
+    const res = await portalApi.get(`/api/portal/sbp/intake/${encodeURIComponent(projectId)}/review`);
+    return { ok: true, review: res.data as IntakeReviewRecord };
+  } catch (err: any) {
+    if (err?.response?.status === 404) return { ok: true, review: null };
     return { ok: false, error: toError(err) };
   }
 }

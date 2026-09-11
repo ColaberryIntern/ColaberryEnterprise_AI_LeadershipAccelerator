@@ -1,8 +1,16 @@
 import type OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
-import { scoreItem, RubricItem, RubricScore } from './certQuestionRubric';
-import { RubricDimension, SCENARIO_FALSE_NEGATIVES } from '../../data/certBlueprints/ccarRubric';
+import {
+  scoreItem, RubricItem, RubricScore, unachievableDimensions, achievableScore,
+} from './certQuestionRubric';
+
+// Re-exported so existing callers and tests keep working; the definitions moved
+// to the rubric because the ceiling is a property of the rubric, not of the
+// improver - and importing the improver drags in the OpenAI client, which the
+// bank audit and the admin service must not depend on.
+export { unachievableDimensions, achievableScore };
 import { REFERENCE, RUBRIC } from '../../data/certBlueprints/ccarRubric';
+import { hasOptionLabel } from './certOptionLength';
 
 /**
  * certQuestionImprover — rewrite ONE item toward a higher rubric score.
@@ -41,7 +49,7 @@ import { REFERENCE, RUBRIC } from '../../data/certBlueprints/ccarRubric';
  */
 
 export const IMPROVER_MODEL = 'gpt-4o';
-export const IMPROVER_PROMPT_VERSION = 'v2-median-and-measured';
+export const IMPROVER_PROMPT_VERSION = 'v3-attributed-opening';
 
 const TIMEOUT_MS = 30_000;
 const MAX_ATTEMPTS = 2;
@@ -69,7 +77,8 @@ function openai(): OpenAI {
   return client;
 }
 
-function errorClass(err: any): string {
+/** Shared with the option-length lengthener so the two report failures alike. */
+export function errorClass(err: any): string {
   if (err?.name === 'APIConnectionTimeoutError' || /timeout/i.test(String(err?.message))) return 'TimeoutError';
   if (err?.status === 429) return 'RateLimitError';
   if (err?.status === 401 || err?.status === 403) return 'AuthError';
@@ -79,7 +88,7 @@ function errorClass(err: any): string {
 }
 
 /** A 4xx will not fix itself; retrying one only spends money to fail again. */
-const isRetryable = (err: any): boolean => {
+export const isRetryable = (err: any): boolean => {
   const status = err?.status;
   if (typeof status === 'number' && status >= 400 && status < 500 && status !== 429) return false;
   return true;
@@ -139,42 +148,6 @@ export function buildImprovePrompt(item: ImproverItem, score: RubricScore): stri
 }
 
 /**
- * Dimensions this item can NEVER meet, given what a rewrite is allowed to change.
- *
- * WHY THIS EXISTS. The first live sweep spent a model call on `CCARF-A2` and
- * reported it stalled at 5/6. A2 is multi-select by design: `option_count` is
- * defined as four options AND single select, and `checkInvariants` forbids
- * changing how many answers are correct. So the improver is structurally
- * incapable of fixing that dimension, and a sweep aiming at a flat 6/6 would
- * re-spend on it on every run, for ever, and call the result a failure.
- *
- * A target an item cannot reach is not a standard, it is a bug in the check.
- * The ceiling is what this item could achieve if every fixable dimension were
- * fixed, and that is what the sweep aims at.
- */
-export function unachievableDimensions(item: ImproverItem): RubricDimension[] {
-  const out: RubricDimension[] = [];
-  // `option_count` requires exactly one correct answer, and the number of
-  // correct answers is an invariant. See the multi-select note in
-  // `ccarFoundationsItems.ts` for why those three items stay as they are.
-  if (item.correct_keys.length !== 1) out.push('option_count');
-  // These eighteen stems DO open with an observation, in words the detector's
-  // marker list does not enumerate. They were hand-checked one by one and are
-  // recorded in `ccarRubric.ts`. Their only missing dimension is scenario
-  // framing, so the sole way a rewrite could score higher is by inserting a
-  // marker phrase — changing text that is already right to satisfy a proxy. The
-  // detector is the thing that is wrong here, and a sweep must not "fix" a
-  // question to make a known-imperfect measurement happy.
-  if (SCENARIO_FALSE_NEGATIVES.includes(item.question_key)) out.push('scenario_framing');
-  return out;
-}
-
-/** The highest score this item can reach without violating an invariant. */
-export function achievableScore(item: ImproverItem, of: number): number {
-  return of - unachievableDimensions(item).length;
-}
-
-/**
  * The invariant check, run on the candidate before its score is even considered.
  *
  * Deliberately structural rather than semantic. We cannot verify that the model
@@ -196,6 +169,10 @@ export function checkInvariants(before: ImproverItem, after: ImproverItem): stri
   }
   for (const o of after.options) {
     if (!o.text || !o.text.trim()) return `option ${o.key} is empty`;
+    // "D. Allocate more capacity": the model reciting the list. Rendered with
+    // its real label the student sees "D. D. Allocate", which marks the option
+    // as the edited one. See certOptionLength.OPTION_LABEL_PREFIX.
+    if (hasOptionLabel(o.text)) return `option ${o.key} begins with a letter label`;
   }
   if (!after.stem || !after.stem.trim()) return 'stem is empty';
   // The rationale is REQUIRED by `DraftRevisionInput` and by the rubric, which
@@ -281,6 +258,12 @@ export async function generateItem(spec: {
     'changes merged last week without review"), a duration, a log line. "Occasionally',
     'fails" is not an observation, it is a summary of one. Say who saw it.',
     '',
+    'OPEN THE WAY THE PUBLISHED ITEMS OPEN. The first words name the evidence and',
+    'its source: "Monitoring shows ...", "Logs show ...", "Engineers report ...",',
+    '"Reviewers report ...", "The team notices ...", "In production, ...",',
+    '"Metrics show ...". Then the number. A stem that begins "A developer has',
+    'observed that" is weaker than one that begins "Monitoring shows that".',
+    '',
     'THE KEY MUST RESOLVE THE STEM. Read your own stem back and confirm the correct',
     'option addresses the thing that was actually observed. A retry fixes a call',
     'that failed; it does not fix a call that succeeded with a wrong answer. If the',
@@ -294,6 +277,11 @@ export async function generateItem(spec: {
     '',
     '- the rationale explains why the key wins; every wrong option gets its own',
     '  one-line explanation of why it loses, naming what the option would have fixed',
+    '',
+    'OPTION LENGTH MUST NOT SIGNAL THE ANSWER. Write the four options to within a',
+    'few words of each other. Do not give the correct option the most detail; the',
+    'wrong options deserve the same care in wording, because a student reads them',
+    'as seriously as the right one.',
     '',
     'HARD RULES:',
     '- do not invent a product, a version number, a price or a date',

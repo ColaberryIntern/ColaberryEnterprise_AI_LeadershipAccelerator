@@ -57,6 +57,12 @@ export async function createCampaign(params: CreateCampaignParams) {
   const uid = campaign.id.substring(0, 8);
   await campaign.update({ interest_group: `Colaberry_${slug}_${uid}` });
 
+  // The canonical UTM slug, at creation, so the composer never meets a slugless campaign
+  // for anything made from now on. Best effort: without a brand it stays null and the
+  // operator assigns it from the composer (campaignSlugService).
+  const { assignSlugIfPossible } = await import('./marketing/campaignSlugService');
+  await assignSlugIfPossible(campaign.id);
+
   return campaign;
 }
 

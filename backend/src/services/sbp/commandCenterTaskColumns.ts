@@ -84,12 +84,13 @@ export interface CommandCenterTaskColumns {
 export function commandCenterTaskColumns(
   plan: BuildPlan,
   schedule?: Schedule | null,
+  opts: { projectId?: string } = {},
 ): CommandCenterTaskColumns {
   return {
     story_id: COMMAND_CENTER_STORY_ID,
     title: COMMAND_CENTER_TITLE,
     narrative: COMMAND_CENTER_NARRATIVE,
-    build: commandCenterPrompt(plan, schedule ?? null),
+    build: commandCenterPrompt(plan, schedule ?? null, opts),
     acceptance: [...COMMAND_CENTER_ACCEPTANCE],
   };
 }

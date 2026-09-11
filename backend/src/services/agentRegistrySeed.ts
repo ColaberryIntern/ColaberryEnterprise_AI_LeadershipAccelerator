@@ -132,6 +132,17 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'Evaluates behavioral trigger rules and automatically enrolls qualifying leads in behavior-triggered campaigns. Creates CampaignLead records and queues initial outreach actions.',
   },
   {
+    agent_name: 'MandrillOpenClickPoll',
+    agent_type: 'scheduled_processor',
+    module: 'schedulerService',
+    source_file: 'backend/src/services/mandrillEngagementPoll.ts',
+    trigger_type: 'cron',
+    schedule: '5,35 * * * *',
+    category: 'outbound',
+    description:
+      'Mandrill open/click poll, the backstop for webhooks the school system consumes first. Every 30 minutes asks Mandrill for campaign-tagged mail (X-MC-Tags campaign-sequence) over a two-day window at the API cap of 1,000, attributes each open and click to the SENT EMAIL WHOSE SUBJECT MATCHES (never the most recent send - 40% of rows were mis-pinned before 2026-09-11), and records unmatched opens against the lead with no campaign. Dedup on (lead, outcome, subject, day). Registered here on 2026-09-11 so its runs, errors and misses are visible to cron-health alerting; until then it ran untracked.',
+  },
+  {
     agent_name: 'PageEventCleanup',
     agent_type: 'maintenance',
     module: 'schedulerService',
@@ -3046,7 +3057,7 @@ export async function seedAgentRegistry(): Promise<void> {
 
 const AGENT_GROUP_MAP: Record<string, string[]> = {
   campaign_ops: [
-    'CampaignHealthScanner', 'CampaignRepairAgent', 'CampaignQAAgent',
+    'CampaignHealthScanner', 'CampaignRepairAgent', 'CampaignQAAgent', 'MandrillOpenClickPoll',
     'CampaignSelfHealingAgent', 'ContentOptimizationAgent', 'ConversationOptimizationAgent',
   ],
   lead_intelligence: [

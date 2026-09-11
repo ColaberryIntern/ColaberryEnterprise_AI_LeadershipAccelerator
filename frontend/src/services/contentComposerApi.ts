@@ -202,6 +202,11 @@ export async function runAction(id: string, action: ComposerAction, scheduledFor
   return res.data;
 }
 
+export async function assignCampaignSlug(campaignId: string, inputs: { offer?: string | null; audience?: string | null } = {}): Promise<{ campaign_id: string; utm_campaign_slug: string; unchanged: boolean }> {
+  const res = await api.post(`/api/admin/campaigns/${campaignId}/slug`, inputs);
+  return res.data;
+}
+
 export type ApprovalDecision = 'approved' | 'changes_requested' | 'rejected';
 
 export async function decideApproval(id: string, decision: ApprovalDecision, note: string | null): Promise<{ item: ContentItem }> {

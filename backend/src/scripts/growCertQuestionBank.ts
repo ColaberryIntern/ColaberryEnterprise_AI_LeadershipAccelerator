@@ -51,6 +51,10 @@ import {
 import { createDraftRevision } from '../services/certPrep/certQuestionBankService';
 import { triageQuestion } from '../services/certPrep/certQuestionTriage';
 import { CCAR_FOUNDATIONS_BLUEPRINT } from '../data/certBlueprints/ccarFoundations';
+import { assignAnswerPosition } from '../data/certBlueprints/items/itemFactory';
+import { lengthPlan } from '../services/certPrep/certOptionLength';
+import { lengthenDistractor } from '../services/certPrep/certDistractorLengthener';
+import { runLiveAudit } from './lib/certBankAudit';
 import { MOCK_DEMAND } from '../data/certBlueprints/items';
 
 const args = process.argv.slice(2);
@@ -139,12 +143,22 @@ async function main(): Promise<void> {
 
   const byDomain: Record<string, number> = {};
   const byObjective: Record<string, Existing[]> = {};
-  const taken = new Set<string>();
   for (const r of rows) {
     byDomain[r.domain_id] = (byDomain[r.domain_id] ?? 0) + 1;
     (byObjective[r.objective_id] ??= []).push(r);
-    taken.add(r.question_key);
   }
+
+  // Taken keys come from EVERY identity, retired or not. A question key is
+  // permanent: retiring it withdraws the content, it does not free the name.
+  // Chunk 3 of the scaled run built this set from live identities only, so the
+  // keys of six drafts retired that morning read as free, and four good new
+  // questions were written as revision 2 under identities marked withdrawn -
+  // invisible to serving, to the sweep, and to this script's own count.
+  const taken = new Set<string>(
+    (await sequelize.query<{ question_key: string }>(
+      'SELECT question_key FROM cert_questions', { type: QueryTypes.SELECT },
+    )).map((r) => r.question_key),
+  );
 
   log(`bank        : ${rows.length} question(s), supporting ${nonOverlappingMocks(byDomain)} non-overlapping mock(s)`);
   log('');
@@ -169,12 +183,27 @@ async function main(): Promise<void> {
 
   let work: { domain: any; objective: any; scenario: any; difficulty: 'easy' | 'medium' | 'hard' }[] = [];
 
+  // How many questions each scenario holds, kept current as the run writes, so
+  // twenty-five picks in one chunk spread out rather than all landing on the
+  // scenario that was thinnest at the start.
+  const byScenario: Record<string, number> = {};
+  for (const r of rows) byScenario[r.scenario_family ?? ''] = (byScenario[r.scenario_family ?? ''] ?? 0) + 1;
+
   const pickScenario = (domainId: string, override: string | null) => {
     if (override) return BP.scenarios.find((s) => s.scenario_id === override) ?? BP.scenarios[0];
     // Prefer a scenario that names this domain as primary, so the setting fits
-    // the skill rather than being decorative.
+    // the skill rather than being decorative — and among those, the one with the
+    // FEWEST questions. The first chunk of the scaled run wrote 25 D1 items and
+    // every one was S1, because this picked the first fit rather than the
+    // thinnest. The exam draws four scenarios of six at random; a student who
+    // lands the thin one is measured against a shallower pool, and the plan was
+    // making that worse with every question it added.
     const fits = BP.scenarios.filter((s) => s.primary_domains.includes(domainId));
-    return (fits.length > 0 ? fits : BP.scenarios)[0];
+    const pool = fits.length > 0 ? fits : BP.scenarios;
+    const pick = pool.reduce((best, s) =>
+      ((byScenario[s.scenario_id] ?? 0) < (byScenario[best.scenario_id] ?? 0) ? s : best));
+    byScenario[pick.scenario_id] = (byScenario[pick.scenario_id] ?? 0) + 1;
+    return pick;
   };
 
   if (onlyObjective) {
@@ -270,9 +299,27 @@ async function main(): Promise<void> {
       continue;
     }
 
+    // Option length must not point at the key. The first 150 had the key as the
+    // longest option in 112; the prompt now asks for even lengths, and this is
+    // the check that the ask was honoured. Same plan as the backfill script,
+    // so old and new items obey one rule. A refusal is noted, not fatal: one
+    // item with a long key is chance, and the bank audit below counts the rate.
+    let lengthNote = '';
+    const plan = lengthPlan(item);
+    if (plan.target) {
+      const out = await lengthenDistractor(item, plan);
+      if (out.status === 'lengthened') {
+        item = out.item;
+        lengthNote = `  [${plan.target} lengthened ${out.before}->${out.after}]`;
+      } else {
+        lengthNote = `  [key still longest: ${out.status}]`;
+      }
+    }
+
     // Second gate: is the answer defensible? The rubric cannot tell, and the
     // first batch proved the model will satisfy the rubric with a question whose
-    // key does not follow from its own stem.
+    // key does not follow from its own stem. Runs on the FINAL text, after the
+    // length step, so a distractor that grew into an arguable answer is caught.
     const triage = await triageQuestion({
       question_key: key,
       stem: item.stem,
@@ -301,6 +348,23 @@ async function main(): Promise<void> {
       ? `  [triage ${triage.severity}: ${triage.concerns[0]?.detail?.slice(0, 70) ?? ''}]`
       : '';
 
+    // WHERE THE ANSWER SITS IS DECIDED HERE, NOT BY THE MODEL. The first 150
+    // generated items went out with the key at A in 144 of them - a student who
+    // answered A throughout scored 96% on that half. The authored bank never had
+    // this problem because `item()` places the key from a hash of the question
+    // key; generated items bypassed the factory and inherited the model's habit
+    // of writing the right answer first. Same placement, same remap of the
+    // distractor rationales so each explanation stays with its option.
+    const placed = assignAnswerPosition(
+      key,
+      item.options.map((o) => [o.key, o.text] as [string, string]),
+      item.correct_keys,
+    );
+    const placedRationales: Record<string, string> = {};
+    for (const [oldKey, text] of Object.entries(item.distractor_rationales ?? {})) {
+      placedRationales[placed.remap[oldKey] ?? oldKey] = text;
+    }
+
     if (write) {
       await createDraftRevision({
         question_key: key,
@@ -310,18 +374,18 @@ async function main(): Promise<void> {
         objective_id: w.objective.objective_id,
         scenario_family: w.scenario.scenario_id,
         stem: item.stem,
-        options: item.options,
-        correct_keys: item.correct_keys,
-        select_count: item.correct_keys.length,
+        options: placed.options.map(([k, text]) => ({ key: k, text })),
+        correct_keys: placed.correct,
+        select_count: placed.correct.length,
         rationale: item.rationale as string,
-        distractor_rationales: item.distractor_rationales ?? undefined,
+        distractor_rationales: placedRationales,
         difficulty: w.difficulty,
         author: 'colaberry',
       });
     }
     made += 1;
     log(`${key.padEnd(14)} ${score.met}/${score.of}  ${w.objective.objective_id} · ${w.scenario.scenario_id} · ${w.difficulty}`
-      + `  ${write ? 'draft written' : 'would write'}${triageNote}`);
+      + `  ${write ? 'draft written' : 'would write'}${triageNote}${lengthNote}`);
   }
 
   log('');
@@ -329,12 +393,22 @@ async function main(): Promise<void> {
   if (made > 0 && write) {
     log('All new items are DRAFTS. Nothing reaches a student until a named human approves them.');
   }
+
+  // The whole-bank rubric, on the bank this run just changed. Per-item gates
+  // passed every one of the first 150 generated questions and 144 had the key
+  // at A; this is the check that sees that, and it runs here so the finding
+  // arrives with the change.
+  if (write && made > 0) await runLiveAudit('after generation');
 }
 
 /** Let instrumentation finish before the connection goes; see the sweep script. */
 const settleTelemetry = (): Promise<void> => new Promise((r) => { setTimeout(r, 2000); });
 
-main()
+// Only run when invoked directly. The pure helpers above are imported by tests,
+// and a script that fires main() on import tries to reach a database the test
+// does not have, fails, and sets the process exit code - so every test passes
+// and jest still exits 1. Same guard as `require.main === module` in plain Node.
+if (require.main === module) main()
   .then(settleTelemetry)
   .then(() => sequelize.close())
   .catch(async (err) => {

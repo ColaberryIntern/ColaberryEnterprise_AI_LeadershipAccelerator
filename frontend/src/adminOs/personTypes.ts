@@ -246,7 +246,28 @@ export interface CommunicationOutcome {
   subject: string | null;
   /** False when that subject disagrees with the message it was pinned to. */
   attributed: boolean;
+  /** The URLs Mandrill saw clicked, secrets masked. Absent on rows written before 2026-09-11. */
+  clickedUrls?: string[];
 }
+
+/** GET /api/admin/people/message-as-sent — one email exactly as Mandrill sent it. */
+export type MessageAsSent =
+  | {
+      found: true;
+      mandrillId: string;
+      subject: string | null;
+      from: string | null;
+      sentAt: string;
+      html: string | null;
+      text: string | null;
+      opens: number;
+      clicks: number;
+      clickedUrls: string[];
+    }
+  | {
+      found: false;
+      reason: 'not_in_search' | 'content_expired' | 'recipient_mismatch' | 'mandrill_unavailable' | 'not_configured';
+    };
 
 export interface CommunicationMessage {
   id: string;
@@ -262,6 +283,8 @@ export interface CommunicationMessage {
   toAddress: string | null;
   source: string;
   outcomes: CommunicationOutcome[];
+  /** Mandrill's id for the sent message when a poll row recorded it; null for held messages. */
+  mandrillId: string | null;
 }
 
 export interface CommunicationThread {

@@ -84,6 +84,7 @@ import { ensureAgentManagerConversationSchema } from './db/ensureAgentManagerCon
 import { ensureAgentGoalSchema } from './db/ensureAgentGoalSchema';
 import { ensureProjectUnderstandingSchema } from './db/ensureProjectUnderstandingSchema';
 import { ensureProjectDiscoveryCallSchema } from './db/ensureProjectDiscoveryCallSchema';
+import { ensureStoryEnrichmentSchema } from './db/ensureStoryEnrichmentSchema';
 import { ensureAgentOneOnOneSchema } from './db/ensureAgentOneOnOneSchema';
 import { ensureAgentReportSubscriptionSchema } from './db/ensureAgentReportSubscriptionSchema';
 import { ensureAgentReportRunSchema } from './db/ensureAgentReportRunSchema';
@@ -788,6 +789,30 @@ async function ensureCommunityWinsSchema() {
       await sequelize.query(sql);
     } catch (err: any) {
       console.warn('[DB] community wins schema stmt skipped:', err?.message);
+    }
+  }
+}
+
+async function ensureTodayMediaWatchSchema() {
+  // Ambient media watch progress (ambientMediaGateService): podcasts and
+  // testimonials on the Today feed have no timeline_card row, so the card watch
+  // gate cannot track them. One row per (student, media ref) holding the same
+  // WatchState shape the card gate stores in TimelineCardProgress.analytics.
+  // Additive + idempotent, like the blocks above; no manual migration.
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS today_media_watch (
+       enrollment_id UUID NOT NULL,
+       ref TEXT NOT NULL,
+       watch_state JSONB NOT NULL DEFAULT '{}'::jsonb,
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       PRIMARY KEY (enrollment_id, ref)
+     )`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] today media watch schema stmt skipped:', err?.message);
     }
   }
 }
@@ -2619,6 +2644,8 @@ async function start(): Promise<void> {
   await ensureCommunityMemberRoleSchema();
   // Peer Wins — community_posts curriculum tether columns (idempotent, additive).
   await ensureCommunityWinsSchema();
+  // Podcast / testimonial listen-to-earn progress (today_media_watch).
+  await ensureTodayMediaWatchSchema();
   // Comment moderation (Community Organizer role) — status/removed_at/removed_by
   // on community_comments, mirroring the existing post-moderation columns.
   await ensureCommunityCommentModerationSchema();
@@ -2811,6 +2838,9 @@ async function start(): Promise<void> {
   // Unified Project Discovery, Phase 5: a student's request to be called about
   // their project, with the consent scoped to it. Additive, idempotent.
   await ensureProjectDiscoveryCallSchema();
+  // Phase 6: the ledger of what each story's repo taught the truth, keyed
+  // so a replay is a no-op. Additive, idempotent.
+  await ensureStoryEnrichmentSchema();
   // AI Workforce Management, Checkpoint D — a manager's structured 1:1
   // check-in record with their agent. Additive, idempotent, no flag. No
   // seeder writes to it; a manager writes the first row via

@@ -9,7 +9,7 @@ import { computeIdempotencyKey, isBasecampDigestSender } from './textNormalizati
 import { getCaseOrThrow, transitionCase } from './caseRepository';
 import { logCaseEvent } from './caseEventLog';
 import { postCaseProgressNote } from './caseTicketService';
-import { redactSecretLikePatterns } from './promptSafety';
+import { itemInjectionSignals, redactSecretLikePatterns } from './promptSafety';
 import { redactSensitive } from '../../utils/piiRedaction';
 import { ALI_OWNER_PATTERN, recordCommitmentsFromAssessment } from './commitmentLedgerService';
 
@@ -367,6 +367,17 @@ function sanitizeProposal(proposal: ProposedAction): ProposedAction {
   return { ...proposal, preview: sanitizeText(proposal.preview), payload };
 }
 
+// /inbox-zero T10: content that looks like it is trying to instruct the
+// system (redirect a reply, self-approve, exfiltrate a secret) is untrusted
+// data and cannot change any decision — but it CAN make sure a human looks.
+// Any non-excluded item on the case carrying a signal forces individual
+// approval on every action proposed for the case. Advisory detection,
+// mandatory review; never a block, never an automatic action.
+async function caseHasInjectionSignals(caseId: string): Promise<boolean> {
+  const items = await InboxCaseItem.findAll({ where: { case_id: caseId, inclusion_status: { [Op.ne]: 'EXCLUDED' } } });
+  return items.some((i) => itemInjectionSignals(i).length > 0);
+}
+
 export async function createActionIfNew(
   caseRow: InboxCase,
   correlationId: string,
@@ -379,6 +390,7 @@ export async function createActionIfNew(
   if (existing) return null; // re-planning is idempotent — never a duplicate proposal
 
   const proposal = sanitizeProposal(rawProposal);
+  const injectionFlagged = await caseHasInjectionSignals(caseRow.id);
 
   try {
     const created = await InboxCaseAction.create({
@@ -396,7 +408,7 @@ export async function createActionIfNew(
       // the single persistence choke point for planner, quick-resolve and
       // override proposals alike, which is why the gate lives here.
       requires_individual_approval:
-        requiresIndividualApproval(proposal.action_type, proposal.risk_level) || responseNeedsHumanReview(caseRow.assessment),
+        requiresIndividualApproval(proposal.action_type, proposal.risk_level) || responseNeedsHumanReview(caseRow.assessment) || injectionFlagged,
       status: 'PROPOSED',
       depends_on_action_ids: dependsOn,
       idempotency_key,
@@ -411,7 +423,7 @@ export async function createActionIfNew(
       event_type: 'action_proposed',
       actor_type: 'system',
       actor_id: 'case_action_planner',
-      details: { action_type: proposal.action_type, risk_level: proposal.risk_level },
+      details: { action_type: proposal.action_type, risk_level: proposal.risk_level, injection_flagged: injectionFlagged },
       correlation_id: correlationId,
     });
 

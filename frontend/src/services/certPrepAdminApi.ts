@@ -101,6 +101,26 @@ export interface BankHealth {
   domains_with_no_approved: string[];
   /** Advisory quality signal; gates nothing. Absent on an older backend. */
   rubric?: BankRubricSummary;
+  /** Whole-bank properties: position balance, length cue, mocks, spread. */
+  audit?: BankAudit;
+}
+
+export interface BankCheck {
+  id: string;
+  label: string;
+  severity: 'hard' | 'advisory';
+  pass: boolean;
+  measured: number;
+  threshold: number;
+  note: string;
+}
+
+export interface BankAudit {
+  items: number;
+  pass: boolean;
+  hardFailures: number;
+  advisoryFailures: number;
+  checks: BankCheck[];
 }
 
 export interface ItemStatistic {
@@ -190,6 +210,30 @@ export interface QuestionRevision {
   created_at: string;
   /** Computed per request by the server; absent on an older backend. */
   rubric?: RubricScore;
+}
+
+/**
+ * The queue, plus how many rows it is deliberately not showing.
+ *
+ * Superseded revisions are filtered out server-side: a revision with an approved
+ * newer one is history, not a review task. The count comes back so the panel can
+ * SAY it hid them — hiding rows silently leaves a reader unable to tell an empty
+ * queue from a filtered one.
+ */
+export interface ReviewQueue {
+  questions: QuestionRevision[];
+  supersededHidden: number;
+}
+
+export async function fetchReviewQueueWithMeta(
+  status: ReviewStatus,
+  includeSuperseded = false,
+): Promise<ReviewQueue> {
+  const { data } = await api.get<{ questions: QuestionRevision[]; superseded_hidden?: number }>(
+    '/api/admin/cert-prep/questions',
+    { params: { status, ...(includeSuperseded ? { include_superseded: 1 } : {}) } },
+  );
+  return { questions: data.questions ?? [], supersededHidden: data.superseded_hidden ?? 0 };
 }
 
 export async function fetchReviewQueue(status: ReviewStatus): Promise<QuestionRevision[]> {

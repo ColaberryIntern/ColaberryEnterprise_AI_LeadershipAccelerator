@@ -262,14 +262,31 @@ export type PublishMode =
   | { mode: 'handoff'; reasons: string[] };
 
 /**
+ * Providers with a LIVE connector implemented in this codebase - an adapter that actually
+ * calls the network. Empty today: ESC-001 blocks account connection and no provider adapter
+ * exists beyond DryRun and Handoff. A provider the registry marks approved/self-serve but
+ * that is not in this set still resolves to handoff, because "the platform could publish
+ * this directly" is only true when something can carry the request. The first dev deploy
+ * showed LinkedIn (personal profile) as "Direct publish" for exactly this gap: its jobs would
+ * have dead-lettered as no_live_adapter instead of giving the operator a handoff package.
+ * Add a key here in the same commit that adds its adapter to adapterRegistry.
+ */
+export const LIVE_CONNECTORS: ReadonlySet<ProviderKey> = new Set<ProviderKey>([]);
+
+/**
  * May this action run directly against the network, or must it be handed off?
  *
- * Handoff whenever EITHER the capability is missing OR the app is not approved for it. Both
- * reasons are reported when both apply, so the operator sees "not supported" and "not
- * approved" as different problems with different fixes. There is no third answer: nothing
- * here returns "direct, but" - a Publish button either publishes or does not exist.
+ * Handoff whenever the capability is missing, OR the app is not approved for it, OR no live
+ * connector is implemented for the provider. Every applicable reason is reported, so the
+ * operator sees "not supported", "not approved" and "not built yet" as different problems
+ * with different fixes. There is no third answer: nothing here returns "direct, but" - a
+ * Publish button either publishes or does not exist.
  */
-export function decidePublishMode(caps: ProviderCapabilities, action: PublishAction): PublishMode {
+export function decidePublishMode(
+  caps: ProviderCapabilities,
+  action: PublishAction,
+  liveConnectors: ReadonlySet<ProviderKey> = LIVE_CONNECTORS,
+): PublishMode {
   const reasons: string[] = [];
 
   if (!caps.supports[action]) {
@@ -281,6 +298,10 @@ export function decidePublishMode(caps: ProviderCapabilities, action: PublishAct
   const approved = caps.appReview.status === 'approved' || caps.appReview.status === 'self_serve';
   if (!approved) {
     reasons.push(`The app is not approved for ${caps.displayName} (status: ${caps.appReview.status}). ${caps.appReview.note}`);
+  }
+
+  if (!liveConnectors.has(caps.provider)) {
+    reasons.push(`No live connector is implemented for ${caps.displayName} yet; the platform produces a handoff package to post by hand.`);
   }
 
   return reasons.length === 0 ? { mode: 'direct' } : { mode: 'handoff', reasons };
