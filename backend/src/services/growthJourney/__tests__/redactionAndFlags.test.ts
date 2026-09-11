@@ -89,9 +89,9 @@ describe('Phase 2 source', () => {
       expect({ file: rel(f), updates: /\.update\(/.test(src), destroys: /\.destroy\(/.test(src) })
         .toEqual({ file: rel(f), updates: false, destroys: false });
     }
-    // Vacuity guard: once a writer exists this must be ≥ 1. Until then the
-    // control below is what proves the regexes bite.
-    expect(scanned).toBeGreaterThanOrEqual(0);
+    // Vacuity guard: T225 shipped the writers (classificationService.ts and the
+    // input loader both name the model), so the scan must have looked at them.
+    expect(scanned).toBeGreaterThanOrEqual(2);
     const control = "import { GrowthJourneyClassification } from '../../models'; await row.update({ locked: true });";
     expect(APPEND_ONLY.test(control) && /\.update\(/.test(control)).toBe(true);
   });

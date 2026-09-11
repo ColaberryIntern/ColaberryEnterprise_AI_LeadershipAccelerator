@@ -8,6 +8,7 @@ import { respondAsLead } from '../services/testing/campaignSimulator';
 import { checkLeadSendable } from '../services/communicationSafetyService';
 import { detectStopKeyword, processOptOut } from '../services/unsubscribeEnforcementService';
 import { redactForLogs } from '../utils/piiRedaction';
+import { recordReplyClassification } from '../services/growthJourney/replyClassificationHook';
 
 export async function handleGhlSmsReply(req: Request, res: Response): Promise<void> {
   try {
@@ -52,6 +53,9 @@ export async function handleGhlSmsReply(req: Request, res: Response): Promise<vo
     if (detectStopKeyword(message)) {
       console.log(`[GHL Webhook] STOP keyword detected from lead ${lead.id}`);
       await processOptOut(lead.id, 'sms', message, 'stop_keyword');
+      // Growth Journey OS (Phase 2): record the reply's classification — AFTER the
+      // opt-out is processed, fire-and-forget, master-gated, cannot change this response.
+      recordReplyClassification({ leadId: lead.id, body: message, channel: 'sms', campaignId });
       res.status(200).json({ received: true, matched: true, lead_id: lead.id, opted_out: true });
       return;
     }
@@ -93,6 +97,10 @@ export async function handleGhlSmsReply(req: Request, res: Response): Promise<vo
       contactId,
       `📩 SMS Reply Received:\n${message}`
     ).catch(() => {});
+
+    // Growth Journey OS (Phase 2): record the reply's classification. After the STOP
+    // check, alongside the existing bookkeeping — fire-and-forget, master-gated.
+    recordReplyClassification({ leadId: lead.id, body: message, channel: 'sms', campaignId });
 
     // Log inbound SMS to unified communication log
     logCommunication({

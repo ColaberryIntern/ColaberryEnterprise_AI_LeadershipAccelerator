@@ -11,6 +11,7 @@ import { processOptOut } from '../services/unsubscribeEnforcementService';
 import ScheduledEmail from '../models/ScheduledEmail';
 import { handleTicketReplyEmail } from '../services/workforce/ticketReplyService';
 import { resolveExplorerReplyRouting } from '../services/explorerGrowth/explorerInboundRouter';
+import { recordReplyClassification } from '../services/growthJourney/replyClassificationHook';
 import { redactForLogs } from '../utils/piiRedaction';
 
 /** Map Mandrill event types to our outcome types */
@@ -433,6 +434,9 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
       if (isUnsubscribe) {
         console.log(`[MandrillInbound] Auto-unsubscribe detected for lead ${lead.id} (${redactForLogs((lead as any).name)}): "${redactForLogs(bodyLower).substring(0, 80)}"`);
         await processOptOut(lead.id, 'email', `Inbound email opt-out: "${bodyLower.substring(0, 100)}"`, 'inbound_reply');
+        // Growth Journey OS (Phase 2): record the reply's classification — AFTER the
+        // opt-out is processed, fire-and-forget, master-gated, cannot change this response.
+        recordReplyClassification({ leadId: lead.id, body, channel: 'email', campaignId, providerMessageId: msg.headers?.['Message-Id'] ?? null });
         // Do NOT auto-reply to someone who asked to unsubscribe
         console.log(`[MandrillInbound] Skipping auto-reply — lead requested unsubscribe`);
         res.status(200).json({ status: 'unsubscribed' });
@@ -454,6 +458,11 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
       // ADDITIVE: resolveExplorerReplyRouting returns NOT_HANDLED unless the
       // flag is on AND the sender is a known Explorer. Every existing campaign
       // takes exactly the path it took before, which the tests assert directly.
+      // Growth Journey OS (Phase 2): record the reply's classification. Placed after the
+      // opt-out check, before the Explorer router — fire-and-forget, master-gated, and it
+      // cannot change anything below.
+      recordReplyClassification({ leadId: lead.id, body, channel: 'email', campaignId, providerMessageId: msg.headers?.['Message-Id'] ?? null });
+
       let explorerHandled = false;
       try {
         const routing = await resolveExplorerReplyRouting(lead.id, body);
