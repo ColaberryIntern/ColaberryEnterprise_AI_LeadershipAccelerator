@@ -797,6 +797,64 @@ that is not in your draft — approving the current snapshot clears them.
 Blockers naming `case_study_not_approved` and `snapshot_not_approved` are the **intended
 resting state** for an unpublished draft.
 
+### A record linked to a student project carries that project's maturity
+
+Two blockers were added on 2026-09-11 and they fire **only when `case_studies.project_id`
+is set**. A record with no linked project never sees them, which is why the existing
+library was unaffected: on 2026-09-12 all three live records were unlinked, all seven
+publications still passed the gate, and nothing on the public pages changed.
+
+| code | what it means |
+|---|---|
+| `maturity_below_operational_result` | Nothing has been measured in real use, so this is a build record or a demonstration, not a case study. |
+| `project_truth_has_open_questions` | A story found something that disagrees with what the student confirmed, and nobody settled it. The project's truth disagrees with itself. |
+
+**The ladder is computed on every read and is never stored**, so no column edit can
+promote a record:
+
+```
+story_hypothesis          an interview happened; nothing built
+build_record              a story verified from the repo, or a story that reported what it built
+capability_demonstration  a verified story AND something it points at as "watch it work"
+operational_result        NOT REACHABLE from a build. Needs an outcome measured in use.
+impact_case_study         NOT REACHABLE from a build. Needs that, confirmed by the client.
+```
+
+`computeMaturity` cannot return the bottom two rungs of that list. That is deliberate: the
+line between "we finished building it" and "it worked for someone" is drawn in code
+rather than left to an author's judgement, and the publish gate refuses everything below
+`operational_result`.
+
+**So a passing build is not a case study.** If the linked project has no measured outcome,
+do not try to write around the blocker. Either the outcome exists and belongs on the
+record as a verified metric, or the record is a build story and stays unpublished.
+
+### Read the foundation before you author a linked record
+
+```
+GET /api/portal/sbp/intake/:projectId/case-study-foundation
+```
+
+Read-only, participant-scoped, and it answers `publishable: false` on the wire because
+nothing on the student side can publish. It returns four sections that must **stay apart**
+in whatever you write:
+
+| section | what it holds | where it comes from |
+|---|---|---|
+| `hypothesis` | what the student SAID they would build | the project's truth revision |
+| `buildEvidence` | what the stories SHOWED | `repo_evidence` facts, plus a per-story ledger |
+| `demonstrationEvidence` | what a story POINTED AT | a test, a file, a URL |
+| `outcomeEvidence` | what was MEASURED in use | **empty by construction** until an approved measurement definition exists |
+
+It also carries `maturityReason` and `nextRungNeeds` in plain words, which is the fastest
+honest answer to "why can I not publish this yet".
+
+**Blurring those four is how "the tests pass" becomes "the client saved 40%".** A repo can
+prove what was built; it cannot prove what the business wanted, what hurt before, or what
+success meant. The truth contract refuses `repo_evidence` outright on `success_definition`,
+`desired_outcome` and `pain_points` for exactly that reason, so a fact filed under those
+dimensions came from a person, never from a commit.
+
 ---
 
 ## 11. Verify, then report with denominators
@@ -814,6 +872,10 @@ resting state** for an unpublished draft.
   block matters.
 - **Every collected metric has exactly one evidence row**, written by the sync. Two rows
   for one figure can disagree.
+- **If the record is linked to a project**, run the gate and read the two maturity
+  blockers as answers rather than obstacles: below `operational_result` means no outcome
+  has been measured, and an open question means the project's truth contradicts itself.
+  Neither is cleared by editing the case study.
 - Regression: other records unchanged, public index count, `/case-studies` and
   `/demo-day` redirects.
 
