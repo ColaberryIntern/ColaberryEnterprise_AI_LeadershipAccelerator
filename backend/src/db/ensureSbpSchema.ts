@@ -73,6 +73,19 @@ export async function ensureSbpSchema(): Promise<void> {
     // this a catalog-only change in Postgres — no table rewrite, no exclusive
     // lock held while rows are copied — which is what makes it safe to run on
     // every boot against a table a cohort is using right now.
+    // WHICH truth revision the plan was generated from (Unified Project
+    // Discovery, Phase 4). Nullable and permanently so: a plan generated before
+    // this column existed genuinely has no known basis, and backfilling a guess
+    // would invent the provenance the truth contract exists to protect.
+    //
+    // THIS WAS MISSED ON THE FIRST SHIP, AND IT TOOK PRODUCTION BUILDS DOWN.
+    // `savePlanDraft` INSERTs this column, so without it every INSERT throws and
+    // no plan is ever saved: students reached "your plan generated, but we could
+    // not open it up" on every build for 35 minutes on 2026-09-11. The migration
+    // file existed and was never run, because nothing forced it. It is declared
+    // here now, and in REQUIRED_COLUMNS below, so a boot on a database that lacks
+    // it says so out loud instead of failing one INSERT at a time.
+    `ALTER TABLE build_plans ADD COLUMN IF NOT EXISTS truth_revision INTEGER`,
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ`,
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS verified_by TEXT`,
 
@@ -176,6 +189,9 @@ export const REQUIRED_COLUMNS = [
   'build_intake.answers',
   'student_tasks.due_on',
   'student_tasks.due_baseline_on',
+  // Missing ⇒ savePlanDraft's INSERT throws and NO plan is ever saved. See the
+  // ALTER above for what that looked like in production.
+  'build_plans.truth_revision',
   // If these two are missing, every task looks unverified forever and the points
   // gate silently awards nothing — a failure with no error attached to it.
   'student_tasks.verified_at',
