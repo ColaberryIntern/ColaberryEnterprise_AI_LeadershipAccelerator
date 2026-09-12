@@ -7,6 +7,7 @@ import portalApi from '../../utils/portalApi';
 import { getPodcastMuted, setPodcastMuted } from '../../utils/podcastMutePreference';
 import { runtimeApi } from '../../pages/portal/runtime/runtimeApi';
 import { ambientMediaOf } from './ambientMedia';
+import RitualBody from './RitualBody';
 import { useMediaBeats, type WatchBeatPayload } from './useMediaBeats';
 
 // Server-derived watch state for a card (the video watch gate). watched_pct is
@@ -17,6 +18,11 @@ interface WatchState { watched_pct: number; required_pct: number | null; met: bo
  *  REPLY_POINTS in CommunityThreadPanel — what a reply earns, advertised on the
  *  tile so the student knows before opening. The award itself is server-side. */
 const REPLY_POINTS = 2;
+
+/** Above this many characters a community post is clamped on the tile (it still
+ *  renders in full, formatted the same way, in the drawer). Chosen so a guided
+ *  ritual answer is never clamped and a pasted prompt always is. */
+const LONG_POST_CHARS = 900;
 
 // Community byline helpers — a card carrying `author` renders as a post (avatar +
 // name + level badge) instead of the generic curriculum header.
@@ -305,6 +311,11 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   // so every card-scoped affordance on this tile has to route to the post's own
   // endpoints instead — see community_post_id on TimelineFeedCard.
   const isCommunityPost = !!card.community_post_id;
+  // Long enough that rendering it in full would push every other card off the
+  // screen. Measured on the STRING, not on layout: deterministic, testable, and
+  // it cannot change under a re-render. A "Steal This Prompt" post runs ~2,000
+  // characters; a Skill Drop answer runs ~200 and is never clamped.
+  const longPost = isCommunityPost && (card.description || '').length > LONG_POST_CHARS;
 
   // A project task's destination is the project workspace, not the drawer. The
   // routing decision deliberately does NOT live here: this tile is rendered by
@@ -522,7 +533,24 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
           when a compact card has no description to show. */}
       {(!compact || card.description) && (
       <div className="fc-body">
-        {card.description && <p>{card.description}</p>}
+        {/* A community post keeps the shape the student typed — labelled
+            sections, line breaks, bullet lists — because that is what the
+            drawer shows when they click it (Ali, 2026-09-11). One renderer for
+            both, so the two cannot drift; `<p>` collapsed every newline into a
+            wall of prose. A very long post is clamped with a fade and reads in
+            full in the drawer: the feed is a scroll of many cards, not one. */}
+        {card.description && (isCommunityPost
+          ? (
+            <div className={`fc-rbwrap${longPost ? ' clamped' : ''}`}>
+              <RitualBody body={card.description} classes={{ sec: 'fc-rb', label: 'fc-rb-lab', value: 'fc-rb-val' }} />
+              {longPost && (
+                <button type="button" className="fc-rbmore" onClick={() => { setPlayingInline(false); onOpen?.(card); }}>
+                  Read the full post
+                </button>
+              )}
+            </div>
+          )
+          : <p>{card.description}</p>)}
         {/* Locked: a big lock over the tile, dimmed, and an overlay that swallows
             every pointer/keyboard interaction so nothing opens or plays. */}
         {!compact && (
