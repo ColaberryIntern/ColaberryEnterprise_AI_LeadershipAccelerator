@@ -103,6 +103,7 @@
  * import. `caseStudyPublicationService.ts` owns all of those and calls this.
  */
 import { ruleMaturity, type PublishFoundation } from './caseStudyPublishMaturityRule';
+import { ruleHeroMetrics } from './caseStudyPublishHeroRules';
 import {
   Blockers,
   collectMetrics,
@@ -192,6 +193,9 @@ export function evaluateCaseStudyPublishGate(
     // was added to.
     ruleMetricShapes(metrics, b);
     ruleCollectedSha(metrics, content, b);
+    // 16 and 17 - what may stand in the hero. A bare count is refused from the
+    // headline row and stays publishable in the measurement section.
+    ruleHeroMetrics(metrics, b);
   } else if (input.snapshot) {
     b.add('snapshot_not_approved', 'case_study_snapshots.content',
       `snapshot version ${input.snapshot.version} carries no content object`,
