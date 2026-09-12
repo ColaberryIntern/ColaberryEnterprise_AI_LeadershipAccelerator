@@ -142,6 +142,9 @@ describe('three lines, then expand in place', () => {
     const wrap = container.querySelector('.fc-rbwrap') as HTMLElement;
     expect(wrap.className).toContain('clamped');
     // Three LINES, against the body's own line-height — not a pixel guess.
+    // `.fc-rbwrap` is pinned to the body's font metrics in timeline.css so this
+    // em resolves to 3 × 1.55 × 14.5px; before that it inherited the card's
+    // 18px and rendered 3.7 lines on production.
     expect(wrap.style.maxHeight).toBe('4.65em');
     const more = container.querySelector('.fc-rbmore') as HTMLButtonElement;
     expect(more.textContent).toBe('Show more');

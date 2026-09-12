@@ -171,7 +171,10 @@
    one place beside the component that toggles it; the fade and the button are
    styling. `Show more` appears only when the text actually overflows, which is
    measured rather than guessed. */
-.tl-de .fc-rbwrap{margin-bottom:6px}
+/* The wrapper carries the BODY TEXT's own metrics so the inline `Nem` clamp
+   resolves against them. Without this the em resolved against the card's 18px
+   and three lines rendered as 3.7 — measured on production 2026-09-12. */
+.tl-de .fc-rbwrap{margin-bottom:6px;font-size:14.5px;line-height:1.55}
 .tl-de .fc-rbwrap.clamped{position:relative;overflow:hidden}
 .tl-de .fc-rbwrap.clamped::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1.6em;pointer-events:none;background:linear-gradient(to bottom,transparent,var(--surface-page))}
 .tl-de .fc-rbmore{display:inline-block;margin:0 0 12px;border:0;background:none;padding:0;cursor:pointer;font:inherit;font-size:13px;font-weight:750;color:var(--berry,#367895)}
