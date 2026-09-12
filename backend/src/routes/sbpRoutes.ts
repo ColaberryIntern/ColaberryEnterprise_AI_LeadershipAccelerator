@@ -315,6 +315,36 @@ router.post('/api/portal/sbp/builds/:projectId/publish', requireParticipant, asy
   } catch (e) { fail(res, e, next); }
 });
 
+// ── add a story to a published build ────────────────────────────────────────────
+//
+// Add only. Editing or deleting an existing story changes the verification
+// contract and is deliberately not offered here; see addStoryService.
+//
+// 201 with the publish result plus the new ids. 404/409/422 carry an
+// `error_class` naming the rule that refused, so the form can say which line
+// to fix rather than "invalid". Validation failures are 400 via `fail`.
+router.post('/api/portal/sbp/builds/:projectId/stories', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const projectId = z.string().uuid().parse(req.params.projectId);
+    await requireOwnedProject(req, projectId);
+    const { addStorySchema, addStoryToPublishedBuild, AddStoryError } = await import('../services/sbp/addStoryService');
+    const body = addStorySchema.parse(req.body ?? {});
+    try {
+      const result = await addStoryToPublishedBuild(projectId, body, {
+        enrollmentId: eid(req),
+        repo: await repoFor(projectId),
+      });
+      res.status(201).json(result);
+    } catch (e) {
+      if (e instanceof AddStoryError) {
+        return res.status(e.status).json({ error: e.message, error_class: e.error_class, details: e.details });
+      }
+      throw e;
+    }
+  } catch (e) { fail(res, e, next); }
+});
+
 // ── the prompt ──────────────────────────────────────────────────────────────
 router.get('/api/portal/sbp/builds/:projectId/stories/:storyId/prompt', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -516,6 +546,27 @@ router.get('/api/portal/sbp/intake/:projectId/case-study-hypothesis', requirePar
     });
 
     res.json({ project_id: projectId, hypothesis, coverage: hypothesisCoverage(hypothesis) });
+  } catch (e) { fail(res, e, next); }
+});
+
+/*
+ * The case-study foundation: hypothesis, build evidence, demonstration
+ * evidence and outcome evidence, kept apart, with the project's computed
+ * maturity. Read-only, a projection recomputed on every call; nothing here
+ * can publish anything and the response says so (`publishable: false`).
+ * Same scoping as every other build route.
+ */
+router.get('/api/portal/sbp/intake/:projectId/case-study-foundation', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const projectId = z.string().uuid().parse(req.params.projectId);
+    await requireOwnedProject(req, projectId);
+
+    const { loadCaseStudyFoundation } = await import('../services/sbp/caseStudyFoundationLoader');
+    const foundation = await loadCaseStudyFoundation(projectId);
+    if (!foundation) return res.status(404).json({ error: 'No intake for this project' });
+
+    res.json({ project_id: projectId, ...foundation });
   } catch (e) { fail(res, e, next); }
 });
 

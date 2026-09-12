@@ -212,6 +212,31 @@ function log(
  * implementation that could drift from the first and tell an admin a record is
  * ready when the gate would refuse it.
  */
+/**
+ * The linked student project's maturity, for the gate. Null when the record
+ * is not linked to a project, or the project never ran an intake, or the read
+ * fails: in all three the maturity rule is a no-op and the other rules decide.
+ * A read failure is logged, not surfaced, because it must not turn a refusal
+ * the other rules would have given into a 500 the admin cannot act on.
+ */
+async function foundationFor(record: { project_id?: string | null }): Promise<{ maturity: string; openQuestions: number } | null> {
+  const projectId = record.project_id ? String(record.project_id) : null;
+  if (!projectId) return null;
+  try {
+    // Imported here, not at the top: the loader reaches the sbp models, and a
+    // record with no linked project (every record before Phase 7) must not
+    // pay for that at module load. Same discipline as the sbp routes.
+    const { loadCaseStudyFoundationForGate } = await import('../sbp/caseStudyFoundationLoader');
+    return await loadCaseStudyFoundationForGate(projectId);
+  } catch (err: any) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'backend', event: 'case_study_foundation_read_failed', outcome: 'partial',
+      error_class: err?.name || 'Error', context: { project_id: projectId, message: String(err?.message || '').slice(0, 200) },
+    }));
+    return null;
+  }
+}
+
 export async function evaluateCaseStudyPublication(
   input: PublishCaseStudyInput,
 ): Promise<CaseStudyPublishDecision> {
@@ -222,6 +247,7 @@ export async function evaluateCaseStudyPublication(
     surfaceKey: data.surfaceKey,
     caseStudy: toPublishRecord(record),
     snapshot: toPublishSnapshot(snapshot),
+    foundation: await foundationFor(record),
   });
 }
 
@@ -249,6 +275,7 @@ export async function publishCaseStudy(
     surfaceKey: data.surfaceKey,
     caseStudy: toPublishRecord(record),
     snapshot,
+    foundation: await foundationFor(record),
   });
   const base: PublicationLogContext = {
     case_study_id: data.caseStudyId,

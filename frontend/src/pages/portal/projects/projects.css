@@ -615,3 +615,31 @@
 .pj-root .pj-pipe strong{display:block;margin-bottom:4px;color:var(--text-strong)}
 .pj-root .pj-pipe.ok{border-left-color:var(--leaf-action)}
 .pj-root .pj-pipe.warn{border-left-color:var(--cherry)}
+
+/* Case study readiness ladder (Phase 7). Five rungs, one marked; the top two
+   read as what they are: not reachable from a build alone. */
+.pj-root .pj-ladder{list-style:none;margin:0 0 4px;padding:0}
+.pj-root .pj-rung{display:flex;align-items:center;gap:9px;padding:5px 0;font-size:14px;color:var(--text-muted);flex-wrap:wrap}
+.pj-root .pj-rung .pj-rung-dot{width:10px;height:10px;border-radius:50%;border:2px solid var(--border-default);flex:none;background:var(--surface-page)}
+.pj-root .pj-rung.done{color:var(--leaf-text)} .pj-root .pj-rung.done .pj-rung-dot{background:var(--leaf,#5BA63C);border-color:var(--leaf,#5BA63C)}
+.pj-root .pj-rung.here{color:var(--text-strong);font-weight:700} .pj-root .pj-rung.here .pj-rung-dot{border-color:var(--cherry);background:var(--cherry)}
+.pj-root .pj-rung.measured{opacity:.7} .pj-root .pj-rung.measured .pj-rung-dot{border-style:dashed}
+.pj-root .pj-rung-note{font-size:12px;color:var(--text-muted);font-style:italic}
+
+/* ── Add a story (AddStoryPanel) ─────────────────────────────────────────── */
+/* Mirrors the archive dialog's field vocabulary (.pja-input/.pja-err/.pja-foot)
+   so the two forms on this page read as one system. Inline, not modal: adding
+   is additive and reversible in a way archiving is not. */
+.pjs-collapsed{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:18px 0 6px}
+.pjs-why{font-size:13px;color:var(--text-muted);line-height:1.45;flex:1;min-width:220px}
+.pjs-added{font-size:12.5px;font-weight:700;color:var(--leaf-deep, #3C7A26)}
+.pjs-panel{margin:18px 0 6px;padding:18px 20px 20px;background:var(--surface-page);
+  border:1px solid var(--border-default);border-radius:var(--r-16);box-shadow:var(--shadow-md)}
+.pjs-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.pjs-head h3{margin:0;font-size:16px}
+.pjs-field{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+.pjs-field>span:first-child{font-size:12.5px;font-weight:700;color:var(--text-strong)}
+.pjs-field textarea.pja-input{resize:vertical;line-height:1.45}
+.pjs-hint{font-size:12px;color:var(--text-muted);line-height:1.45}
+.pjs-refusal{margin-top:12px}
+.pjs-violations{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.5;color:var(--text-strong)}

@@ -52,6 +52,9 @@ import { createDraftRevision } from '../services/certPrep/certQuestionBankServic
 import { triageQuestion } from '../services/certPrep/certQuestionTriage';
 import { CCAR_FOUNDATIONS_BLUEPRINT } from '../data/certBlueprints/ccarFoundations';
 import { assignAnswerPosition } from '../data/certBlueprints/items/itemFactory';
+import { lengthPlan } from '../services/certPrep/certOptionLength';
+import { lengthenDistractor } from '../services/certPrep/certDistractorLengthener';
+import { runLiveAudit } from './lib/certBankAudit';
 import { MOCK_DEMAND } from '../data/certBlueprints/items';
 
 const args = process.argv.slice(2);
@@ -296,9 +299,27 @@ async function main(): Promise<void> {
       continue;
     }
 
+    // Option length must not point at the key. The first 150 had the key as the
+    // longest option in 112; the prompt now asks for even lengths, and this is
+    // the check that the ask was honoured. Same plan as the backfill script,
+    // so old and new items obey one rule. A refusal is noted, not fatal: one
+    // item with a long key is chance, and the bank audit below counts the rate.
+    let lengthNote = '';
+    const plan = lengthPlan(item);
+    if (plan.target) {
+      const out = await lengthenDistractor(item, plan);
+      if (out.status === 'lengthened') {
+        item = out.item;
+        lengthNote = `  [${plan.target} lengthened ${out.before}->${out.after}]`;
+      } else {
+        lengthNote = `  [key still longest: ${out.status}]`;
+      }
+    }
+
     // Second gate: is the answer defensible? The rubric cannot tell, and the
     // first batch proved the model will satisfy the rubric with a question whose
-    // key does not follow from its own stem.
+    // key does not follow from its own stem. Runs on the FINAL text, after the
+    // length step, so a distractor that grew into an arguable answer is caught.
     const triage = await triageQuestion({
       question_key: key,
       stem: item.stem,
@@ -364,7 +385,7 @@ async function main(): Promise<void> {
     }
     made += 1;
     log(`${key.padEnd(14)} ${score.met}/${score.of}  ${w.objective.objective_id} · ${w.scenario.scenario_id} · ${w.difficulty}`
-      + `  ${write ? 'draft written' : 'would write'}${triageNote}`);
+      + `  ${write ? 'draft written' : 'would write'}${triageNote}${lengthNote}`);
   }
 
   log('');
@@ -372,6 +393,12 @@ async function main(): Promise<void> {
   if (made > 0 && write) {
     log('All new items are DRAFTS. Nothing reaches a student until a named human approves them.');
   }
+
+  // The whole-bank rubric, on the bank this run just changed. Per-item gates
+  // passed every one of the first 150 generated questions and 144 had the key
+  // at A; this is the check that sees that, and it runs here so the finding
+  // arrives with the change.
+  if (write && made > 0) await runLiveAudit('after generation');
 }
 
 /** Let instrumentation finish before the connection goes; see the sweep script. */

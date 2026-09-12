@@ -1,4 +1,5 @@
 import { BrandOfferPolicy } from '../../models/BrandOfferPolicy';
+import Brand from '../../models/Brand';
 import { isOfferFamilySlug, type OfferFamilySlug } from '../../models/OfferFamily';
 
 /**
@@ -195,6 +196,44 @@ export async function allowedOfferFamilies(brandId: string, at?: Date): Promise<
 
   // Subtracted last, so a row pair that contradicts itself resolves to denied.
   return [...allowed].filter((f) => !denied.has(f)).sort();
+}
+
+/**
+ * The brands whose ACTIVE, in-window `allow` row covers `offerFamily`, with any
+ * brand holding a `deny` row for it subtracted — the same three rules as
+ * `allowedOfferFamilies`, inverted. Used to propose a cross-brand referral
+ * target (Phase 2): "who may offer what this brand may not?" Fails closed to
+ * an empty list, and says so.
+ */
+export async function brandsAllowingFamily(
+  offerFamily: string,
+  at?: Date,
+): Promise<Array<{ brand_id: string; brand_slug: string; tenant_id: string }>> {
+  if (!isOfferFamilySlug(offerFamily)) return [];
+  const when = at ?? new Date();
+  let rows: BrandOfferPolicy[];
+  try {
+    rows = await BrandOfferPolicy.findAll({ where: { offer_family: offerFamily } });
+  } catch (err: unknown) {
+    console.error(
+      JSON.stringify({
+        event: 'growth_journey.offer_eligibility.brands_failed',
+        offer_family: offerFamily,
+        error_class: (err as { name?: string })?.name ?? 'Error',
+        message: (err as { message?: string })?.message,
+      }),
+    );
+    return [];
+  }
+  const denied = new Set(rows.filter((r) => r.decision === 'deny').map((r) => r.brand_id));
+  const allowed = rows.filter(
+    (r) => r.decision === 'allow' && r.status === 'active' && withinWindow(r, when) && !denied.has(r.brand_id),
+  );
+  if (allowed.length === 0) return [];
+  const brands = await Brand.findAll({ where: { id: [...new Set(allowed.map((r) => r.brand_id))] } });
+  return brands
+    .map((b) => ({ brand_id: b.id, brand_slug: b.slug, tenant_id: b.tenant_id }))
+    .sort((a, b) => a.brand_slug.localeCompare(b.brand_slug));
 }
 
 export class OfferNotEligibleError extends Error {

@@ -40,6 +40,15 @@ describe('assertInboxZeroCaseColumns', () => {
     expect(r.missing).toEqual(['inbox_cases.snoozed_until', 'inbox_case_actions.verification_attempt_count']);
   });
 
+  it('T16: reports a missing liveness column on inbox_case_items, and the catalog query covers that table', async () => {
+    catalogReturning(ALL_COLUMNS.filter((c) => c.col !== 'inbox_case_items.source_live'));
+    const r = await assertInboxZeroCaseColumns();
+    expect(r.ok).toBe(false);
+    expect(r.missing).toEqual(['inbox_case_items.source_live']);
+    expect(String(query.mock.calls[0][0])).toContain("'inbox_case_items'");
+    expect(INBOX_ZERO_REQUIRED_COLUMNS).toEqual(expect.arrayContaining(['inbox_case_items.source_live', 'inbox_case_items.source_checked_at', 'inbox_case_items.source_gone_reason']));
+  });
+
   it('treats a catalog read failure as a failed post-condition, never a pass', async () => {
     query.mockRejectedValue(new Error('connection refused'));
     const r = await assertInboxZeroCaseColumns();
@@ -58,6 +67,7 @@ describe('ensureInboxCaseSchema', () => {
       expect(sqls.some((s) => s.includes(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${name}`))).toBe(true);
     }
     expect(sqls.some((s) => s.includes('idx_inbox_cases_updated_at'))).toBe(true);
+    expect(sqls.some((s) => s.includes('idx_inbox_case_items_liveness') && s.includes('NULLS FIRST') && s.includes('WHERE disposition IS NULL'))).toBe(true);
     expect(sqls.some((s) => s.includes('idx_inbox_cases_state_snoozed'))).toBe(true);
   });
 

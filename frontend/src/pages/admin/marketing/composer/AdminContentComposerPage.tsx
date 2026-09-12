@@ -97,6 +97,16 @@ export default function AdminContentComposerPage() {
 
   const brand = useMemo(() => brands.find((b) => b.id === setup.brand_id) ?? null, [brands, setup.brand_id]);
 
+  // ── Campaign slug (the tracked-link chain's root) ───────────────────────────────────────
+  const assignSlug = async (campaignId: string) => {
+    setBusy(true);
+    try {
+      const r = await composer.assignCampaignSlug(campaignId);
+      setCampaigns((cs) => cs.map((c) => (c.id === campaignId ? { ...c, utm_campaign_slug: r.utm_campaign_slug } : c)));
+      say('success', `UTM slug assigned: ${r.utm_campaign_slug}`);
+    } catch (err) { fail(err, 'The slug could not be assigned.'); } finally { setBusy(false); }
+  };
+
   // ── Step 1/4: create or update the draft ────────────────────────────────────────────────
   const saveSetup = async () => {
     setBusy(true);
@@ -201,7 +211,7 @@ export default function AdminContentComposerPage() {
       )}
 
       <SectionCard title="1. Setup" subtitle="Brand, campaign, landing page and the canonical message." icon="settings-3-line">
-        <ComposerSetup values={setup} brands={brands} campaigns={campaigns} locked={Boolean(item)} busy={busy} onChange={setSetup} onSubmit={saveSetup} />
+        <ComposerSetup values={setup} brands={brands} campaigns={campaigns} locked={Boolean(item)} busy={busy} onChange={setSetup} onSubmit={saveSetup} onAssignSlug={assignSlug} />
       </SectionCard>
 
       <SectionCard title="2. Channels and variants" subtitle="Pick networks, generate, edit, add tracked links, validate." icon="share-line">

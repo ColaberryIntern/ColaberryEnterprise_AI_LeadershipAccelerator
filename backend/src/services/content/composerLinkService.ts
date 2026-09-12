@@ -61,7 +61,8 @@ function shortUrlFor(code: string): string {
 export async function generateItemLinks(
   itemId: string,
   destinationUrl: string,
-  actorEmail: string | null,
+  /** The admin's id (`req.admin.sub`) - `tracked_links.created_by` is a UUID column, not an email. */
+  createdBy: string | null,
 ): Promise<ItemLink[]> {
   const item = await ContentItem.findByPk(itemId);
   if (!item) throw new WorkflowError('Content item not found', 404, 'NotFound');
@@ -130,7 +131,7 @@ export async function generateItemLinks(
       utm_content: preview.utm!.utm_content ?? null,
       utm_term: preview.utm!.utm_term ?? null,
       status: 'draft',
-      created_by: actorEmail,
+      created_by: createdBy,
       metadata: { content_item_id: itemId, content_variant_id: variant.id, provider },
     } as any);
 
