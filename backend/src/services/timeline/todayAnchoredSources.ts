@@ -16,6 +16,7 @@ import { anchoredWeekAllowed, weekStartedForToday, isWeekGated, groupByType } fr
 import { resolve as resolveType } from './typeRegistry';
 import { blendSurfaces } from './todayAnchoredBlend';
 import { getActiveProjectTree } from '../projects/projectReadService';
+import { storyPointsForProject, pointsByStoryId } from '../sbp/verification/storyPoints';
 import TimelineCard from '../../models/TimelineCard';
 import CommunityPost from '../../models/CommunityPost';
 import CommunityMember from '../../models/CommunityMember';
@@ -114,7 +115,7 @@ export async function rehydrateCardItems(items: TodayFeedItem[]): Promise<void> 
 }
 
 function projectItem(
-  t: { id: string; title: string | null; description: string | null; status: string; release_key: string | null },
+  t: { id: string; title: string | null; description: string | null; status: string; release_key: string | null; points?: number | null },
   projectId: string,
 ): TodayFeedItem {
   return {
@@ -142,8 +143,17 @@ function projectItem(
     week: null,
     estimated_time: null,
     status: t.status === 'complete' ? 'completed' : t.status === 'in_progress' ? 'in_progress' : 'available',
+    // What verifying this story pays (the tree already priced it from
+    // storyPoints). Builder points, because that is the ledger the work lands
+    // in; the tile shows the total either way. Null ⇒ no badge, never a guess.
+    points: projectPoints(t.points),
     interacted: false,
   };
+}
+
+/** A story's price tag as the tile's `points`, or null when there is none. */
+function projectPoints(points: number | null | undefined): TodayFeedItem['points'] {
+  return typeof points === 'number' && points > 0 ? { builder: points } : null;
 }
 
 // A community post's media lives in media_urls (JSONB). Carry it into the Today card
@@ -302,9 +312,13 @@ export async function rehydrateProjectItems(items: TodayFeedItem[]): Promise<voi
     const ids = Array.from(new Set(project.map((i) => i.ref.slice('project:'.length))));
     const tasks = await StudentTask.findAll({
       where: { id: ids },
-      attributes: ['id', 'project_id', 'title', 'description', 'status', 'release_key'],
+      attributes: ['id', 'project_id', 'story_id', 'title', 'description', 'status', 'release_key'],
     });
     const byId = new Map(tasks.map((t) => { const plain = t.get({ plain: true }) as any; return [plain.id as string, plain]; }));
+    // The price tag, at SERVE time: impressions frozen before stories carried
+    // points (and any placed before a plan was published) get theirs here, one
+    // plan read per project, from the module the verifier pays from.
+    const priceByProject = await projectPriceTags(Array.from(new Set(Array.from(byId.values()).map((t) => String(t.project_id)))));
     for (const it of project) {
       const taskId = it.ref.slice('project:'.length);
       const t = byId.get(taskId);
@@ -315,10 +329,25 @@ export async function rehydrateProjectItems(items: TodayFeedItem[]): Promise<voi
       if (t.description !== undefined) it.description = t.description ?? null;
       if (t.release_key !== undefined) it.subtitle = t.release_key ?? null;
       it.status = t.status === 'complete' ? 'completed' : t.status === 'in_progress' ? 'in_progress' : 'available';
+      const price = t.story_id ? priceByProject.get(String(t.project_id))?.get(String(t.story_id)) : undefined;
+      it.points = projectPoints(price);
     }
   } catch (err: any) {
     console.warn('[todayAnchoredSources] project rehydrate failed:', err?.message?.split('\n')[0]);
   }
+}
+
+/** project_id → (story_id → points). One plan read per project; a failed one prices nothing on that project. */
+async function projectPriceTags(projectIds: string[]): Promise<Map<string, Map<string, number>>> {
+  const out = new Map<string, Map<string, number>>();
+  await Promise.all(projectIds.map(async (pid) => {
+    try {
+      out.set(pid, pointsByStoryId(await storyPointsForProject(pid)));
+    } catch (err: any) {
+      console.warn('[todayAnchoredSources] story points failed:', err?.message?.split('\n')[0]);
+    }
+  }));
+  return out;
 }
 
 // ─── Live-session replay ("You missed it") ──────────────────────────────

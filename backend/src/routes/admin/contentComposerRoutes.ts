@@ -125,7 +125,9 @@ router.post('/api/admin/content', requireAdmin, async (req: Request, res: Respon
       canonical_body: parsed.data.canonical_body,
       content_type: parsed.data.content_type,
       status: 'draft',
-      created_by: req.admin?.email ?? null,
+      // `created_by` is a UUID column: the admin id (`sub`), never the email. Writing the
+      // email here 500'd every "Create draft" on production (found 2026-09-11, T032).
+      created_by: req.admin?.sub ?? null,
       metadata: { isPaid: parsed.data.is_paid, hasOffer: parsed.data.has_offer, kinds: parsed.data.kinds },
       // Sequelize's creation-attributes type predates the model's `declare` fields (repo idiom).
     } as any);
@@ -257,7 +259,7 @@ router.post('/api/admin/content/:id/links', requireAdmin, async (req: Request, r
   if (!parsed.success) return bad(res, parsed.error.flatten());
   try {
     if (!(await visibleItem(req, id.data))) return void res.status(404).json(NOT_FOUND);
-    res.json({ links: await generateItemLinks(id.data, parsed.data.destination_url.trim(), req.admin?.email ?? null) });
+    res.json({ links: await generateItemLinks(id.data, parsed.data.destination_url.trim(), req.admin?.sub ?? null) });
   } catch (err) { fail(res, err, 'composer_links_failed'); }
 });
 

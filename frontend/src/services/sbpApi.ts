@@ -317,6 +317,47 @@ export async function getIntakeReview(projectId: string): Promise<
   }
 }
 
+/**
+ * What a case study could be built from, in four sections that stay apart,
+ * with the project's computed rung. Read-only: the shape carries
+ * `publishable: false` and nothing on the student side can change that.
+ */
+export type CaseStudyMaturity =
+  | 'story_hypothesis' | 'build_record' | 'capability_demonstration' | 'operational_result' | 'impact_case_study';
+
+export interface CaseStudyFoundation {
+  project_id: string;
+  maturity: CaseStudyMaturity;
+  ladder: CaseStudyMaturity[];
+  maturityReason: string;
+  nextRungNeeds: string | null;
+  truthRevision: number | null;
+  hypothesisCoverage: { filled: number; total: number };
+  buildEvidence: {
+    facts: Array<{ dimension: string; label: string; value: string; evidence: string }>;
+    stories: Array<{ storyId: string; outcome: string; added: number; questions: number; refused: number }>;
+    verifiedStories: number;
+  };
+  demonstrationEvidence: Array<{ storyId: string; kind: string; ref: string; note: string | null }>;
+  outcomeEvidence: { items: never[]; why: string; heldMeasurementEvents: number };
+  openQuestions: number;
+  publicationPreference: 'undecided';
+  publishable: false;
+  limitations: string[];
+}
+
+export async function getCaseStudyFoundation(projectId: string): Promise<
+  { ok: true; foundation: CaseStudyFoundation | null } | { ok: false; error: SbpError }
+> {
+  try {
+    const res = await portalApi.get(`/api/portal/sbp/intake/${encodeURIComponent(projectId)}/case-study-foundation`);
+    return { ok: true, foundation: res.data as CaseStudyFoundation };
+  } catch (err: any) {
+    if (err?.response?.status === 404) return { ok: true, foundation: null };
+    return { ok: false, error: toError(err) };
+  }
+}
+
 /** Start a build. Resolves as soon as the intake is durable; generation continues. */
 export async function startBuild(answers: StartBuildAnswers): Promise<
   { ok: true; correlationId: string } | { ok: false; error: SbpError }
@@ -355,6 +396,62 @@ export async function publishBuild(projectId: string, expectedSha256?: string): 
     return { ok: true, commitSha: res.data?.commitSha ?? null, filesWritten: res.data?.filesWritten ?? 0, status: res.data?.status };
   } catch (err) {
     return { ok: false, error: toError(err) };
+  }
+}
+
+/** What a student sends to add a story to a published build. */
+export interface AddStoryInput {
+  title: string;
+  narrative: string;
+  /** 3 to 7 lines; exactly one must start with "Trust". */
+  acceptance: string[];
+  /** r1 or later. r0 is the walking skeleton and is closed. */
+  release: string;
+  /** The sha of the plan the student is looking at. The server refuses a stale one. */
+  expected_sha256: string;
+}
+
+export interface AddStoryResult {
+  story_id: string;
+  requirement_id: string;
+  /** The sha of the NEW plan. Send this next time. */
+  plan_sha256: string;
+  planVersion: number;
+  status: BuildStatus;
+  commitSha: string | null;
+}
+
+/**
+ * A refusal, as the server states it. `error_class` is the rule that fired
+ * (NoTrustLine, UnknownRelease, HashMismatch, GateBlocked, ...) so the form can
+ * say which line to fix rather than "invalid". `details` carries the gate
+ * violations when there are any.
+ */
+export interface AddStoryRefusal {
+  status: number;
+  error_class: string | null;
+  message: string;
+  details: unknown;
+}
+
+/** Add one story to a published build. Never throws. */
+export async function addStory(projectId: string, input: AddStoryInput): Promise<
+  { ok: true; result: AddStoryResult } | { ok: false; refusal: AddStoryRefusal }
+> {
+  try {
+    const res = await portalApi.post(`/api/portal/sbp/builds/${encodeURIComponent(projectId)}/stories`, input);
+    return { ok: true, result: res.data as AddStoryResult };
+  } catch (err: any) {
+    const data = err?.response?.data ?? {};
+    return {
+      ok: false,
+      refusal: {
+        status: Number(err?.response?.status ?? 0),
+        error_class: typeof data.error_class === 'string' ? data.error_class : null,
+        message: typeof data.error === 'string' ? data.error : toError(err).message,
+        details: data.details ?? null,
+      },
+    };
   }
 }
 

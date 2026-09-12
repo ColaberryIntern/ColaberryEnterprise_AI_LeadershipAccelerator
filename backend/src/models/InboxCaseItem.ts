@@ -39,6 +39,11 @@ interface InboxCaseItemAttributes {
   ai_recommendation_reason: string | null;
   basecamp_close_recommended: boolean | null;
   basecamp_close_recommended_reason: string | null;
+  // /inbox-zero T16 — is the source message/todo still in Ali's inbox right
+  // now. null = never checked; false only from a definitive provider answer.
+  source_live?: boolean | null;
+  source_checked_at?: Date | null;
+  source_gone_reason?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -63,6 +68,9 @@ class InboxCaseItem extends Model<InboxCaseItemAttributes> implements InboxCaseI
   declare ai_recommendation_reason: string | null;
   declare basecamp_close_recommended: boolean | null;
   declare basecamp_close_recommended_reason: string | null;
+  declare source_live: boolean | null;
+  declare source_checked_at: Date | null;
+  declare source_gone_reason: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -88,6 +96,9 @@ InboxCaseItem.init(
     ai_recommendation_reason: { type: DataTypes.TEXT, allowNull: true },
     basecamp_close_recommended: { type: DataTypes.BOOLEAN, allowNull: true },
     basecamp_close_recommended_reason: { type: DataTypes.TEXT, allowNull: true },
+    source_live: { type: DataTypes.BOOLEAN, allowNull: true },
+    source_checked_at: { type: DataTypes.DATE, allowNull: true },
+    source_gone_reason: { type: DataTypes.TEXT, allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   },

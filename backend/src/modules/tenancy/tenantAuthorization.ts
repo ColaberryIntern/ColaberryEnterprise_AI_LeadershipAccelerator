@@ -28,6 +28,19 @@ export interface PlatformRequestContext {
   isPlatformSuperAdmin: boolean;
   /** Every tenant the identity has an active membership in. Used to scope list queries. */
   authorizedTenantIds: string[];
+  /**
+   * The brands the identity's memberships confine it to, or `null` when it is not
+   * brand-restricted at all — a platform superadmin, or a membership whose `brand_id`
+   * is null (which means "every brand in this tenant", see TenantMembership).
+   *
+   * This is what closes G2. Before it existed, a brand-restricted operator who did not
+   * ASK to be confined to their brand read their whole tenant: `brandId` was only ever
+   * set from a request, and null meant "unscoped". Now the restriction is carried
+   * whether or not the caller named a brand, and `requireBrandAccess` and
+   * `tenantScopeWhere` both consult it. Never an empty array: a restricted membership
+   * always names a brand, and an identity with no memberships is closed by tenant scope.
+   */
+  authorizedBrandIds: string[] | null;
 }
 
 /** A context with no access at all. The safe default for an unauthenticated request. */
@@ -40,6 +53,7 @@ export function emptyContext(): PlatformRequestContext {
     roles: [],
     isPlatformSuperAdmin: false,
     authorizedTenantIds: [],
+    authorizedBrandIds: null,
   };
 }
 
@@ -50,6 +64,13 @@ export function emptyContext(): PlatformRequestContext {
  * or an admin context switcher. It is validated against real memberships here; a caller
  * naming a tenant they have no membership in gets a context with `tenantId: null`, and
  * the guards below then deny. The requested value is never trusted on its own.
+ *
+ * `requestedBrandId` is different: a caller naming a brand their memberships do not
+ * cover gets a THROWN `TenantAccessError` (403), not a null. Null `brandId` means
+ * "not narrowed to one brand", and handing that back for a refused request would let a
+ * brand-scoped operator widen their read to the whole tenant by typing the wrong id.
+ * Nothing passed a brand before the growth-journey routes did, so the throw reaches no
+ * older caller; those routes already map the error to a 403 response.
  */
 export async function buildRequestContext(input: {
   platformIdentityId: string | null;
@@ -93,14 +114,29 @@ export async function buildRequestContext(input: {
     : [];
   const roles = isSuper ? [...new Set([...scopedRoles, ...allRoles])] : scopedRoles;
 
+  // The memberships that decide brand restriction: those in the tenant being operated
+  // in, or — when no single tenant was resolved — all of them. Brand ids are UUIDs and
+  // globally unique, so a union across tenants is still strictly narrower than "any".
+  const relevant = tenantId ? memberships.filter((m) => m.tenant_id === tenantId) : memberships;
+  const authorizedBrandIds = authorizedBrandsOf(relevant, isSuper);
+
   let brandId: string | null = null;
-  if (input.requestedBrandId && tenantId) {
-    // A membership with brand_id null spans every brand in its tenant.
-    const brandScoped = memberships.filter((m) => m.tenant_id === tenantId);
+  if (input.requestedBrandId) {
+    // A request is honoured only inside a resolved tenant (a brand cannot be granted
+    // without one) and only when the memberships there cover it. Anything else is a
+    // refusal, and a refusal is thrown — see the doc comment above for why not null.
     const permitted =
-      isSuper ||
-      brandScoped.some((m) => m.brand_id === null || m.brand_id === input.requestedBrandId);
-    if (permitted) brandId = input.requestedBrandId;
+      Boolean(tenantId) &&
+      (authorizedBrandIds === null || authorizedBrandIds.includes(input.requestedBrandId));
+    if (!permitted) {
+      throw new TenantAccessError('Brand not in scope', 403, 'AuthorizationError');
+    }
+    brandId = input.requestedBrandId;
+  } else if (authorizedBrandIds !== null && authorizedBrandIds.length === 1) {
+    // Auto-confine. A single-brand operator who did not name their brand is narrowed
+    // to it anyway; they have nothing else to choose. Two or more restricted brands
+    // stay un-narrowed here and are still bounded by `authorizedBrandIds` in the guards.
+    brandId = authorizedBrandIds[0];
   }
 
   return {
@@ -111,7 +147,23 @@ export async function buildRequestContext(input: {
     roles,
     isPlatformSuperAdmin: isSuper,
     authorizedTenantIds,
+    authorizedBrandIds,
   };
+}
+
+/**
+ * `null` when any relevant membership spans every brand (brand_id null) or the identity
+ * is a superadmin; otherwise the distinct brands named by the memberships. An identity
+ * with no relevant memberships is not brand-restricted either — it has no tenant to be
+ * restricted within, and tenant scope already closes it.
+ */
+function authorizedBrandsOf(
+  relevant: Array<{ brand_id: string | null }>,
+  isSuper: boolean,
+): string[] | null {
+  if (isSuper || relevant.length === 0) return null;
+  if (relevant.some((m) => m.brand_id === null)) return null;
+  return [...new Set(relevant.map((m) => m.brand_id as string))];
 }
 
 /** Does the context carry this permission in its current tenant scope? */
@@ -153,8 +205,11 @@ export function canAccessTenant(
  */
 export function tenantScopeWhere(ctx: PlatformRequestContext): Record<string, unknown> {
   if (ctx.isPlatformSuperAdmin) return {};
-  if (ctx.tenantId) return { tenant_id: ctx.tenantId };
-  if (ctx.authorizedTenantIds.length > 0) return { tenant_id: ctx.authorizedTenantIds };
+  // A brand-restricted operator's list is narrowed to their brands whether or not they
+  // asked for one (G2). Byte-identical to before for anyone not brand-restricted.
+  const brand = ctx.authorizedBrandIds !== null ? { brand_id: ctx.authorizedBrandIds } : {};
+  if (ctx.tenantId) return { tenant_id: ctx.tenantId, ...brand };
+  if (ctx.authorizedTenantIds.length > 0) return { tenant_id: ctx.authorizedTenantIds, ...brand };
   return { tenant_id: null };
 }
 
@@ -209,6 +264,13 @@ export function requirePlatformSuperAdmin(ctx: PlatformRequestContext): void {
  * Guard for a brand-scoped operation. A brand belonging to another tenant is a 404 for
  * the same reason as `requireTenantAccess`; a brand inside the caller's tenant that
  * their membership does not cover is a 403.
+ *
+ * Two checks, both needed. `brandId` is the one brand the request narrowed to (asked
+ * for, or auto-confined). `authorizedBrandIds` is the set the memberships allow, and it
+ * applies even when nothing was narrowed — a two-brand operator with `brandId` null is
+ * still refused a third brand. A row with NO brand is refused to a brand-restricted
+ * caller for the reason `canAccessTenant` refuses a row with no tenant: unclassified
+ * data is not everyone's.
  */
 export function requireBrandAccess(
   ctx: PlatformRequestContext,
@@ -218,6 +280,12 @@ export function requireBrandAccess(
   requireTenantAccess(ctx, resourceTenantId);
   if (ctx.isPlatformSuperAdmin) return;
   if (ctx.brandId && resourceBrandId && ctx.brandId !== resourceBrandId) {
+    throw new TenantAccessError('Brand not in scope', 403, 'AuthorizationError');
+  }
+  if (
+    ctx.authorizedBrandIds !== null &&
+    (!resourceBrandId || !ctx.authorizedBrandIds.includes(resourceBrandId))
+  ) {
     throw new TenantAccessError('Brand not in scope', 403, 'AuthorizationError');
   }
 }

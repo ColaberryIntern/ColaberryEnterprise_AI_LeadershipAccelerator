@@ -2478,6 +2478,29 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] Inbox case auto-sync: hourly, on the hour');
 
+  // /inbox-zero T16 — inbox liveness (Ali: "If I delete something from my
+  // inbox, then it should not show up on this report"). Every five minutes,
+  // ask the providers about the stalest open case items — bounded to 150 a
+  // pass, never-checked rows first — so anything Ali archived or deleted
+  // leaves the console within minutes. Offset from :00 so it does not start
+  // at the same instant as the hourly auto-sync (which does its own pass);
+  // an overlap is harmless — every write is idempotent and a double
+  // settle is caught and logged, never thrown. Read-only
+  // against the outside world; dispositions only what has already left
+  // the inbox, through the engine's own closure guard.
+  cron.schedule('2-57/5 * * * *', () => {
+    instrumentCronJob('InboxLivenessReconcile', async () => {
+      const { reconcileLiveness } = require('./inboxCase/inboxLivenessService');
+      const r = await reconcileLiveness({ correlationId: `liveness_cron:${Date.now()}` });
+      console.log(
+        `[Scheduler] Inbox liveness: ${r.checked} checked, ${r.live} live, ${r.gone} gone, ${r.unverifiable} unverifiable, ${r.skipped_backoff} skipped (backoff), ${r.cases_closed.length} case(s) closed, ${r.close_blocked.length} blocked`
+      );
+    }).catch((err: any) => {
+      console.error('[Scheduler] Inbox liveness error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Inbox liveness reconcile: every 5 minutes (offset :02)');
+
   // -- Inbox Chief of Staff --
   try {
     const { startInboxScheduler } = require('./inbox/inboxScheduler');

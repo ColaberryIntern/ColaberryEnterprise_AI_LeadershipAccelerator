@@ -4,6 +4,7 @@ import {
   RubricDimension,
   SCENARIO_MARKERS,
   OBSERVED_QUANTITY,
+  SCENARIO_FALSE_NEGATIVES,
 } from '../../data/certBlueprints/ccarRubric';
 
 /**
@@ -226,4 +227,40 @@ export function summariseBank(scores: RubricScore[], items: RubricItem[]): BankS
       ? scores.filter((s) => s.dimensions.find((d) => d.id === 'scenario_framing')?.verdict === 'meets').length / items.length
       : 0,
   };
+}
+
+/**
+ * Dimensions this item can NEVER meet, given what a rewrite is allowed to change.
+ *
+ * WHY THIS EXISTS. The first live sweep spent a model call on `CCARF-A2` and
+ * reported it stalled at 5/6. A2 is multi-select by design: `option_count` is
+ * defined as four options AND single select, and `checkInvariants` forbids
+ * changing how many answers are correct. So the improver is structurally
+ * incapable of fixing that dimension, and a sweep aiming at a flat 6/6 would
+ * re-spend on it on every run, for ever, and call the result a failure.
+ *
+ * A target an item cannot reach is not a standard, it is a bug in the check.
+ * The ceiling is what this item could achieve if every fixable dimension were
+ * fixed, and that is what the sweep aims at.
+ */
+export function unachievableDimensions(item: Pick<RubricItem, 'question_key' | 'correct_keys'>): RubricDimension[] {
+  const out: RubricDimension[] = [];
+  // `option_count` requires exactly one correct answer, and the number of
+  // correct answers is an invariant. See the multi-select note in
+  // `ccarFoundationsItems.ts` for why those three items stay as they are.
+  if (item.correct_keys.length !== 1) out.push('option_count');
+  // These eighteen stems DO open with an observation, in words the detector's
+  // marker list does not enumerate. They were hand-checked one by one and are
+  // recorded in `ccarRubric.ts`. Their only missing dimension is scenario
+  // framing, so the sole way a rewrite could score higher is by inserting a
+  // marker phrase — changing text that is already right to satisfy a proxy. The
+  // detector is the thing that is wrong here, and a sweep must not "fix" a
+  // question to make a known-imperfect measurement happy.
+  if (SCENARIO_FALSE_NEGATIVES.includes(item.question_key)) out.push('scenario_framing');
+  return out;
+}
+
+/** The highest score this item can reach without violating an invariant. */
+export function achievableScore(item: Pick<RubricItem, 'question_key' | 'correct_keys'>, of: number): number {
+  return of - unachievableDimensions(item).length;
 }

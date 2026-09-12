@@ -101,6 +101,26 @@ export interface BankHealth {
   domains_with_no_approved: string[];
   /** Advisory quality signal; gates nothing. Absent on an older backend. */
   rubric?: BankRubricSummary;
+  /** Whole-bank properties: position balance, length cue, mocks, spread. */
+  audit?: BankAudit;
+}
+
+export interface BankCheck {
+  id: string;
+  label: string;
+  severity: 'hard' | 'advisory';
+  pass: boolean;
+  measured: number;
+  threshold: number;
+  note: string;
+}
+
+export interface BankAudit {
+  items: number;
+  pass: boolean;
+  hardFailures: number;
+  advisoryFailures: number;
+  checks: BankCheck[];
 }
 
 export interface ItemStatistic {
