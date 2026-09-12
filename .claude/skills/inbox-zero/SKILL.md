@@ -36,6 +36,14 @@ This skill is that human loop, made fast: one screen, one item at a time, one de
 6. **Money, legal, HR, refunds, contracts, employment, sensitive student matters, new promises,
    new dates, pricing, and any ambiguous recipient or destination** always get a human decision,
    whatever the confidence says.
+7. **Only what is in Ali's inbox right now.** (Ali, 2026-09-11: "This process should only be
+   looking in my current inboxes. If I delete something from my inbox, then it should not show up
+   on this report.") A message Ali archived, deleted or moved is a decision already made. The
+   backend materialises this (`inbox_case_items.source_live`, swept every five minutes and at
+   `start`), hides any case whose evidence has all left the inbox, and `next` asks the provider
+   about its candidate before handing it over. The console never presents an item without that
+   check, and says plainly how many items are still unverified (`overview.liveness`,
+   `focus.liveness`). Unknown is shown as unknown, never as gone and never as confirmed.
 
 ## Commands
 
@@ -60,8 +68,10 @@ next item involving Priya, via `zoom-out person`).
 
 1. **Start.** Bridge `start` with a tab identity (the session ID is fine). `acquired:false` means
    another tab holds the lease: show its owner and offer `resume` only if Ali confirms that tab is
-   dead - never steal a live lease. On success, render the overview (`references/templates.md`),
-   then invoke the `loop` skill with `5m /inbox-zero refresh` and say so in one line.
+   dead - never steal a live lease. On success, bridge `reconcile` once (a bounded sweep of the
+   stalest items against the mailboxes, so the first overview is not stale), then bridge
+   `overview` and render it (`references/templates.md`), then invoke the `loop` skill with
+   `5m /inbox-zero refresh` and say so in one line.
 2. **Overview.** Status, last/next refresh, mailboxes healthy/total, Basecamp state, bottom line,
    the six counts, the recommended item and WHY it is first. One screen. Never a raw mailbox dump.
 3. **Next.** Bridge `next` (optionally with a focus). Render the focus view: who/what, why it
@@ -84,7 +94,8 @@ next item involving Priya, via `zoom-out person`).
    Then `next` again. Repeat until the overview says Actionable Zero or Ali says stop.
 5. **Refresh** (every five minutes, from the loop). Bridge `heartbeat`, then `delta` since the
    stored cursor. If `interrupts` is non-empty (P0/P1 due now), interrupt with one line naming
-   it. Otherwise print exactly one line: `+N new · overview updated · next refresh HH:MM`. Advance
+   it. Otherwise print exactly one line: `+N new · M cleared · overview updated · next refresh HH:MM CT`
+   (drop `M cleared` when zero; cleared = resolved since the cursor, including mail that left your inbox). Advance
    the cursor with `processing_succeeded:true` only after the delta was fully rendered; on any
    error, leave the cursor alone and say the refresh failed. **Never overwrite text Ali is editing.**
 6. **Stop.** Bridge `stop`. Print the closeout: what reached zero, what is waiting, what is
@@ -109,7 +120,10 @@ The overview reports both, and neither while DEGRADED (`references/degraded-and-
 
 Follow `brief-me`'s decision efficiency without its read-only restriction: plain English, lead
 with the answer, every genuine question as lettered choices plus free entry, every PR or Basecamp
-link as a full URL, never a fabricated count or status. Dates are absolute. Drafts are in Ali's
+link as a full URL, never a fabricated count or status. **Every time and date shown to Ali is
+Central time (`America/Chicago`; the abbreviation follows the date, CDT or CST)** — the bridge
+returns ISO-8601 UTC and the conversion happens here, at render time, never in the data. Dates are
+absolute (`Thu 11 Sep 2026, 3:19 PM CDT`, never "yesterday"). Drafts are in Ali's
 voice: answer first, concise, every question in the thread addressed, no promise the engine cannot
 verify, recipients preserved and any add/remove called out.
 

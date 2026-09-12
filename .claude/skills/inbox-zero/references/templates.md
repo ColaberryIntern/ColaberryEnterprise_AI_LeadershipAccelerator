@@ -9,7 +9,10 @@ If a number has not been fetched this turn, say "not fetched" rather than guessi
 # 📥 INBOX ZERO
 
 **Status:** ACTIVE | PAUSED | DEGRADED | BLOCKED | ZERO
-**Last refreshed:** <HH:MM> · **Next refresh:** <HH:MM> (loop armed) | (loop NOT running)
+**Last refreshed:** <HH:MM CDT|CST> · **Next refresh:** <HH:MM CDT|CST> (loop armed) | (loop NOT running)
+
+All times in every template below are Central (`America/Chicago`). Convert from the bridge's UTC
+at render time; never print a bare ISO string or a UTC clock to Ali.
 **Mailboxes:** <healthy>/<configured> · **Basecamp:** healthy | not configured | degraded
 
 ## Bottom line
@@ -23,6 +26,8 @@ If a number has not been fetched this turn, say "not fetched" rather than guessi
 - ⚪ Safe noise/automation: <counts.noise_24h> archived by the inbox manager in the last 24h | not readable
 - 🆕 New since this session began: <counts.new_since_cursor>
 - 💤 Snoozed (hidden): <counts.snoozed>
+
+<if liveness.unchecked_items > 0:> ⏳ <liveness.unchecked_items> item(s) not yet checked against your inbox (last check <liveness.last_checked_at_ct>); <liveness.gone_hidden_cases> case(s) hidden because their mail has left your inbox.
 
 **Recommended next:** <recommended.title> — <recommended.why>
 
@@ -49,6 +54,7 @@ Basecamp probe error) . When ZERO, replace Recommended next with the closeout's 
 **Correct destination:** EMAIL | BASECAMP | BOTH | INTERNAL TASK | NO RESPONSE | not yet decided
 **Who owes the next move:** ALI | TEAM MEMBER (<name>) | SENDER | SYSTEM
 **Why it is first:** <summary.why>
+**In your inbox:** confirmed <focus.liveness.verified_at_ct> (<live> of <n> items) | ⚠ could not confirm for <k> item(s) (<error_class>) — shown anyway, treat as unverified | not checked
 
 ## Synopsis
 <case.summary — the thread and the current ask, short>
@@ -98,7 +104,7 @@ unless the refresh reported it changed.
 
 ## Refresh line
 
-Quiet: `+<count> new · overview updated · next refresh <HH:MM>`
+Quiet: `+<count> new · <closed> cleared · overview updated · next refresh <HH:MM CDT|CST>` (drop `<closed> cleared` when zero)
 Interrupt (P0/P1 due now arrived): `🔴 <title> just arrived (<why>) — say "next" to take it, or keep going.`
 Failed: `Refresh failed (<error>) — cursor held at <cursor_at>; will retry next tick.`
 

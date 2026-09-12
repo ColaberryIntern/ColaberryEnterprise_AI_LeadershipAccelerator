@@ -20,6 +20,26 @@ until it is re-authorised. The console will show DEGRADED for it. Recovery is op
 code: `scripts/inbox-auth-helper.js` on the prod host, run by Ali. Until then, never claim
 Actionable Zero; the overview's bottom line explains why.
 
+## Liveness (only what is in the inbox right now)
+
+`overview.liveness` and `focus.liveness` say how much of what you see has been confirmed against the
+mailboxes. Three states, and the console names each one:
+- **confirmed** — the provider said the message still carries `INBOX` (Gmail) / sits in the Inbox
+  folder (Hotmail) / the to-do is active (Basecamp mirror). Rendered as "In your inbox: confirmed".
+- **unverified** — the provider could not be asked (timeout, 5xx, auth, backoff). The item is SHOWN
+  with the reason; it is never hidden and never marked gone on a guess. (A mailbox whose SYNC is
+  failing already shows DEGRADED through the health probe; a liveness check that fails on its own
+  is reported per item, not as a mailbox outage.)
+- **gone** — the provider gave a definitive answer (archived, trashed, spam, 404, completed). The
+  item is dispositioned NO_ACTION with that reason, its PROPOSED actions are withdrawn, and the case
+  closes through the real closure guard. It never appears again; the event log carries
+  `item_removed_at_source{reason}` for the audit.
+
+Sweeps: the backend runs a bounded pass every five minutes (`InboxLivenessReconcile`, 150 items,
+never-checked first) and after every hourly auto-sync; `start` forces one. A large stalled backlog
+is therefore verified within about half an hour of deploy. Until it is, the overview's
+"not yet checked" count is the honest number.
+
 ## Lease conflicts
 
 `start` returning 409 means another tab holds the operator lease. The response names the owner
