@@ -297,6 +297,18 @@ Weaknesses found by running it, and what was done. Add to this every time.
   letter differ, because `item()` re-letters as it places the key), and
   `applyCertOptionPatches` refuses anything it cannot place exactly once.
   Both scripts share `lib/certLengthPass`, so "balanced" means one thing.
+- *(2026-09-11)* **A concurrent deploy recreated the backend container fifty
+  seconds into the authored planner's first run, and the run left nothing
+  behind.** The planner collected every patch in memory and printed them at
+  the end, to a file inside the container. Another session's
+  `docker compose up -d backend` replaced the container; the process, its
+  memory and its `/tmp` went with it. Fifty-five model calls, zero output.
+  **A long run must leave its work behind as it goes, on the host.** The
+  planner now streams one JSON patch per line the moment it exists, prints
+  `resume with: --skip N` on exit, and its usage says to redirect on the host;
+  the applier reads the stream and collapses exact repeats from a resumed run.
+  Same lesson as the deploy race in memory, from the other side: you cannot
+  stop another session recreating the container, so assume it will.
 - *(2026-09-10)* **Do not write source containing backslashes through a shell
   heredoc.** Building the schema parser that way put a literal CR and a real
   newline where `` and `
