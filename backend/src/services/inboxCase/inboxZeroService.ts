@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Op } from 'sequelize';
 import InboxCase from '../../models/InboxCase';
 import InboxCaseItem from '../../models/InboxCaseItem';
@@ -384,7 +385,7 @@ function fromOf(item: InboxCaseItem): string | null {
 export const NEXT_LIVENESS_CANDIDATES = 5;
 
 /** Pick the single best case to work on, optionally narrowed by a focus mode. */
-export async function getNext(focus: FocusMode | null, now: Date = new Date(), correlationId = 'inbox_zero_next'): Promise<FocusPayload | null> {
+export async function getNext(focus: FocusMode | null, now: Date = new Date(), correlationId?: string): Promise<FocusPayload | null> {
   const visible = await loadVisibleCases();
   const open = visible.cases;
   let pool = open.map((c) => ({ c, s: summarise(c, now) })).filter(({ s }) => s.category !== 'snoozed');
@@ -407,8 +408,9 @@ export async function getNext(focus: FocusMode | null, now: Date = new Date(), c
   // Ask the provider about the candidate RIGHT NOW before handing it to Ali.
   // A candidate whose evidence has all left the inbox is dispositioned (and
   // closes through the real guard) and the next one is tried — bounded.
+  const corr = correlationId ?? randomUUID(); // inbox_case_events.correlation_id is a UUID column
   for (const entry of pool.slice(0, NEXT_LIVENESS_CANDIDATES)) {
-    const check = await verifyCaseLivenessNow(entry.c.id, correlationId, now);
+    const check = await verifyCaseLivenessNow(entry.c.id, corr, now);
     if (check.all_gone) continue;
     return buildFocus(entry.c, now, { verified_at: now.toISOString(), live: check.live, gone: check.gone, unverified: check.unverified, unchecked: check.unchecked });
   }

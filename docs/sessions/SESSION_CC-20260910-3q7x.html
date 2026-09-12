@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Friday, September 11, 2026 at 5:40 PM</div>
-    <div><span class="sid">CC-20260910-3q7x</span><span class="count">12 changes</span></div>
+    <div class="meta">Generated Friday, September 11, 2026 at 7:36 PM</div>
+    <div><span class="sid">CC-20260910-3q7x</span><span class="count">13 changes</span></div>
   </header>
   <main>
     
@@ -233,6 +233,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">`inboxLivenessService.test.ts` 23/23 (each provider answer → exactly one verdict incl. Ali&#39;s real archived label set `Label_119, IMPORTANT`; unverifiable never flips `source_live`; the archived case is dispositioned, its two PROPOSED actions REJECTED with reason `source_gone…`, and it reaches RESOLVED with `item_removed_at_source{reason:&#39;archived&#39;}` in the events; mixed case stays open; stalest-first rotation, limit 150, recent rows skipped, backoff skipped; second pass writes nothing; close blocked by an OPEN question is reported not forced and the case is still hidden; overview/queue hide all-gone and count unchecked; `next` skips an all-gone candidate, returns null when all are gone, and presents an unverifiable one honestly); `caseAutoSyncService.test.ts` +5 (`in:inbox` in the query and on a real run, live-at-discovery stamp, one sweep per run, a throwing sweep never fails the sync or the cursor); `inboxZeroService.test.ts` +2 (closed vs new in the delta; hidden_gone and no interrupt from a gone case); `ensureInboxCaseSchema.inboxZero.test.ts` +1 (missing liveness column fires, catalog query covers `inbox_case_items`, partial index DDL present). All 80 inbox-case/controller/db suites green; tsc at the 2-error baseline; bridge Central-time smoke 10/10 and live (`next_attempt_at_ct: &quot;Fri 11 Sep 2026, 5:02 PM CDT&quot;`). Independent verifier PASS 11/12 (the docked point was the 500-line ceiling, fixed by the split before commit; its three hardening notes — guard the settle call on the `next` path, an honest scheduler comment, a doc wording — all applied; post-fix re-run 80 suites / 1,039 tests green).</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Triggered by the first live session — the first item the console recommended (Gmail `19f4cebb4badda55`, 2026-07-10) had no `INBOX` label; it had been archived, yet sat in AWAITING_APPROVAL for 41 days and scored first. Discovery-07 established that nothing in the system had ever re-checked inbox membership: `inbox_emails` has no label/folder column and no DDL path, the Gmail history sync asks only for `messageAdded`, and the one deleted-at-source pass sees Trash/Spam within 2 days of the *received* date. The two shared test fakes gained `order`/`limit`/`max`/static `update` and SQL NULL semantics for `Op.is` — the reconciler&#39;s rotation depends on them and a fake that ignored them would pass a broken rotation. Basecamp comments/messages, sent mail and attachments are not liveness-checked (stay null, shown as unverified). Fresh-boot gap noted at the same session (in-memory provider health resets on deploy, so a broken mailbox reads healthy for ~1 minute) is still open for Phase 6.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">13</span>
+          <h2>Phase 4b deployed, and the audit-trail defect it exposed (T16 follow-up)</h2>
+          <span class="badge">2026-09-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">PR #2492 merged (`f583ce11`) and deployed to production (`up -d --build backend`, host `7cbca0ce9` → `4377f0421`, image built 00:18:23Z, boot 00:18:46Z). Boot verified: both ensure hooks, `[Scheduler] Inbox liveness reconcile: every 5 minutes (offset :02)`, no post-condition failures; `/health` 200; `POST /api/admin/inbox/zero/liveness/reconcile` 401 unauthenticated; `inboxLivenessService.js` and `inboxZeroVisibility.js` in `dist`; the three `source_*` columns and `idx_inbox_case_items_liveness` present in the live catalog. First sweep (150 items): **85 live, 65 gone (50 archived, 13 missing, 2 trashed), 0 unverifiable, 49 cases closed**, including Ali&#39;s July-10 case `673f111e…` → `RESOLVED`, item `NO_ACTION`/`archived`, both proposed actions `REJECTED`. **Defect found by reading the live audit trail rather than the return value:** `inbox_case_events.correlation_id` is `UUID NOT NULL`, the service passed run labels (`liveness_cron:…`, `inbox_zero_reconcile:ali@…`), and `logCaseEvent` swallows the INSERT failure by design — so 65 items were dispositioned with **zero** `item_removed_at_source` rows. Fixed: `auditCorrelationId()` coerces any non-UUID to a fresh UUID and the label travels in the structured log (`run_label`); the controller, the cron and `getNext` now pass real UUIDs. The event fake in the test suite now enforces the UUID column exactly as Postgres does, and the seeded case carries a real UUID, so this fails in CI next time.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`inboxLivenessService.test.ts` 24/24 including a new regression test that drives the sweep with the exact human-readable label from prod and asserts every audit row still lands under a UUID and `logCaseEvent` never logged a write failure; 84 suites / 1,077 tests green across inbox-case + controllers + db; full CI jest 1,370 suites / 21,344 tests (the one failure is the local-only `@anthropic-ai/sdk` gap); tsc at the 2-error baseline; route-auth lint 114/114. Live evidence quoted above read from the production database through the read-only bridge pattern.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The 65 already-dispositioned items have correct data (`source_live=false`, reason, disposition) but no audit row; a dry-run-by-default backfill script writes them from the item rows themselves, marked `backfilled_at`, and is run only after the fix deploys. Another session pulled and redeployed prod at 00:19:55Z (host now `03ac2f526`) — the sweep had already completed at 00:19:36Z. The `+N new · M cleared` refresh line matters more than expected: this sweep alone would have read as &quot;+49 new&quot; without it.</span></div>
           
         </div>
       </article>

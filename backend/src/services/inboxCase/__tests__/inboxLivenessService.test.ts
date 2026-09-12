@@ -27,9 +27,20 @@ const fakeInboxVip = makeFakeModel();
 jest.mock('../../../models/InboxCase', () => ({ __esModule: true, default: fakeInboxCase }));
 jest.mock('../../../models/InboxCaseItem', () => ({ __esModule: true, default: fakeInboxCaseItem }));
 jest.mock('../../../models/InboxCaseAction', () => ({ __esModule: true, default: fakeInboxCaseAction }));
+// The real column is `correlation_id UUID NOT NULL`; Postgres rejects a
+// label like "liveness_cron:123" and logCaseEvent swallows the failure. The
+// fake enforces the same rule so a missing audit row fails HERE, not in prod
+// (it did, once: 65 dispositions, 0 item_removed_at_source rows).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 jest.mock('../../../models/InboxCaseEvent', () => ({
   __esModule: true,
-  default: { ...fakeInboxCaseEvent, create: (attrs: any) => fakeInboxCaseEvent.create({ created_at: new Date(), ...attrs }) },
+  default: {
+    ...fakeInboxCaseEvent,
+    create: (attrs: any) => {
+      if (!UUID_RE.test(String(attrs.correlation_id))) throw Object.assign(new Error(`invalid input syntax for type uuid: "${attrs.correlation_id}"`), { name: 'SequelizeDatabaseError' });
+      return fakeInboxCaseEvent.create({ created_at: new Date(), ...attrs });
+    },
+  },
 }));
 jest.mock('../../../models/InboxCaseQuestion', () => ({ __esModule: true, default: fakeInboxCaseQuestion }));
 jest.mock('../../../models/OpsBcTodo', () => ({ __esModule: true, default: fakeOpsBcTodo }));
@@ -73,7 +84,7 @@ import { loadVisibleCases } from '../inboxZeroVisibility';
 import { getQueue } from '../inboxZeroQueueService';
 
 const NOW = new Date('2026-09-11T20:30:00.000Z');
-const CORR = 'test-corr';
+const CORR = '3f7d2c1a-5b6e-4d8f-9a0b-1c2d3e4f5a6b';
 
 function g404(): any { const e: any = new Error('Requested entity was not found.'); e.code = 404; return e; }
 
@@ -81,7 +92,9 @@ async function seedCase(over: Partial<any> = {}) {
   return fakeInboxCase.create({
     id: randomUUID(), title: 'Case', mode: 'TOPIC', state: 'AWAITING_APPROVAL', objective: null, summary: null,
     recommendation: null, confidence: 80, reopen_count: 0, assessment: null, priority_band: null, priority_reason: null,
-    sla_due_at: null, snoozed_until: null, snooze_reason: null, waiting_since: null, correlation_id: 'c',
+    // Real column is UUID NOT NULL — the closure path logs under the CASE's own
+    // correlation id, so a placeholder here would fail the same way prod did.
+    sla_due_at: null, snoozed_until: null, snooze_reason: null, waiting_since: null, correlation_id: randomUUID(),
     opened_at: new Date('2026-08-01T00:00:00Z'), created_at: new Date('2026-08-01T00:00:00Z'), updated_at: new Date('2026-08-02T00:00:00Z'),
     closed_at: null, ...over,
   });
@@ -192,6 +205,20 @@ describe('reconcileLiveness — the bounded sweep', () => {
     expect(removed.actor_id).toBe('inbox_liveness');
     const rejected: any = Array.from(fakeInboxCaseEvent.rows.values()).find((e: any) => e.event_type === 'action_rejected');
     expect(rejected.details.reason).toMatch(/^source_gone/);
+  });
+
+  it('a human-readable run label still produces every audit row, under a UUID correlation id (the prod defect of 2026-09-12)', async () => {
+    const c = await seedCase();
+    await seedItem(c.id);
+    gmailGet.mockResolvedValue({ data: { labelIds: ['Label_1'] } });
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const r = await reconcileLiveness({ correlationId: 'liveness_cron:1757600000000', now: NOW });
+    expect(r.gone).toBe(1);
+    const removed: any = Array.from(fakeInboxCaseEvent.rows.values()).find((e: any) => e.event_type === 'item_removed_at_source');
+    expect(removed).toBeTruthy();
+    expect(removed.correlation_id).toMatch(UUID_RE);
+    expect(errorSpy).not.toHaveBeenCalledWith(expect.stringContaining('Failed to write case event'), expect.anything());
+    errorSpy.mockRestore();
   });
 
   it('a live item is stamped live and left open; nothing else changes', async () => {
