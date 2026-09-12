@@ -4,6 +4,7 @@ import {
   CommunityPost, CommunityComment,
 } from '../../services/communityApi';
 import { parseRitualBody } from './ritualPostBody';
+import RitualBody from './RitualBody';
 import { checkReply, MIN_REPLY_WORDS } from './contributionQuality';
 import { emitPointsEarned } from '../../services/pointsFx';
 
@@ -355,12 +356,9 @@ const CommunityThreadPanel: React.FC<Props> = ({ postId, fallbackLabel, preview,
           </div>
         ) : (
           <>
-            {parsed.sections.map((s, i) => (
-              <div className="ct-sec" key={i}>
-                {s.label && <div className="ct-seclab">{s.label}</div>}
-                <div className="ct-secval">{s.value}</div>
-              </div>
-            ))}
+            {/* The SAME renderer the Today tile uses — see RitualBody. The two
+                surfaces showed the same post two different ways until 2026-09-11. */}
+            <RitualBody body={post.body} classes={{ sec: 'ct-sec', label: 'ct-seclab', value: 'ct-secval' }} />
             {!!images.length && (
               <div className="ct-media">
                 {images.map((u) => <img key={u} src={u} alt="" loading="lazy" />)}

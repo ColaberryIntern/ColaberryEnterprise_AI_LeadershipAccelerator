@@ -22,6 +22,7 @@ jest.mock('../sbpOrchestrator', () => ({
 
 import {
   addStorySchema, buildStoryRevision, addStoryToPublishedBuild, AddStoryError, MAX_STORIES_PER_BUILD,
+  resolveOwnerAgent,
 } from '../addStoryService';
 import { gatePlan, blockingViolations } from '../planGate';
 import type { BuildPlan, PlanStory } from '../planContract';
@@ -33,7 +34,7 @@ function story(id: string, release: string, fulfills: string[]): PlanStory {
     id, release, fulfills,
     title: `Story ${id}`,
     narrative: `As a coordinator, I want ${id} to work, so that the roster is trustworthy.`,
-    owner_agent: 'AGENT-001',
+    owner_agent: 'System',
     acceptance: [
       'Given a roster, when it loads, then every row is present',
       'Given a bad row, when it loads, then the row is flagged',
@@ -58,7 +59,9 @@ function publishedPlan(): BuildPlan {
       { key: 'r1', name: 'Flags', goal: 'flag bad rows', demo: 'a bad row is red', week_start: 3, week_end: 4 },
     ],
     stories: [story('STORY-001', 'r0', ['REQ-001']), story('STORY-002', 'r1', ['REQ-002'])],
-    agents: [{ id: 'AGENT-001', name: 'Roster Reader', purpose: 'reads rosters', trigger_type: 'event' } as any],
+    // NO agents[]. 30 of 31 real published plans have none, and the fixture
+    // was wrong to carry one: it is what let the AGENT-nnn assumption survive
+    // 22 green tests and reach production, where it refused every build.
   } as BuildPlan;
 }
 
@@ -111,11 +114,14 @@ describe('buildStoryRevision — the story a student writes passes the same gate
     expect(JSON.stringify(r.plan.stories.slice(0, 2))).toBe(before);
   });
 
-  it('defaults the owner to the first agent, and honours an explicit one', () => {
-    expect(buildStoryRevision(publishedPlan(), input()).story.owner_agent).toBe('AGENT-001');
+  it('takes the owner from the plan\'s own stories, which is all a real plan has', () => {
+    expect(buildStoryRevision(publishedPlan(), input()).story.owner_agent).toBe('System');
+  });
+
+  it('honours an explicit owner the plan already uses', () => {
     const plan = publishedPlan();
-    plan.agents!.push({ id: 'AGENT-002', name: 'Exporter', purpose: 'exports', trigger_type: 'manual' } as any);
-    expect(buildStoryRevision(plan, { ...input(), owner_agent: 'AGENT-002' }).story.owner_agent).toBe('AGENT-002');
+    plan.stories[1].owner_agent = 'User';
+    expect(buildStoryRevision(plan, { ...input(), owner_agent: 'User' }).story.owner_agent).toBe('User');
   });
 
   it('mints the requirement at should, so a new idea is never a must the skeleton has to cover', () => {
@@ -150,14 +156,9 @@ describe('buildStoryRevision — every refusal names its rule', () => {
     expectClass(() => buildStoryRevision(publishedPlan(), i), 'NoTrustLine', 422);
   });
 
-  it('refuses an agent the plan does not have', () => {
-    expectClass(() => buildStoryRevision(publishedPlan(), { ...input(), owner_agent: 'AGENT-099' }), 'UnknownAgent', 422);
-  });
 
-  it('refuses a plan with no agents rather than inventing an owner', () => {
-    const plan = publishedPlan();
-    plan.agents = [];
-    expectClass(() => buildStoryRevision(plan, input()), 'NoAgents', 422);
+  it('refuses an owner the plan never uses, and says which ones it does', () => {
+    expectClass(() => buildStoryRevision(publishedPlan(), { ...input(), owner_agent: 'Nobody' }), 'UnknownAgent', 422);
   });
 
   it('stops at the cap', () => {
@@ -256,5 +257,39 @@ describe('addStoryToPublishedBuild — sequencing', () => {
     const out = await addStoryToPublishedBuild('p1', input(), { enrollmentId: 'e1', repo: null });
     expect(mockPublishBuild.mock.calls[0][1].repo).toBeNull();
     expect(out.status).toBe('awaiting_repo');
+  });
+});
+
+describe('resolveOwnerAgent — against the shape real plans actually have', () => {
+  /**
+   * Measured on production the day this shipped: 30 of 31 published plans had
+   * NO `agents[]`, and their stories carried owners like "User" and "System".
+   * The first version required an AGENT-nnn id from `plan.agents` and refused
+   * every single real build. These tests are that incident.
+   */
+  const planWith = (owners: string[]): any => ({
+    stories: owners.map((o, i) => ({ id: `STORY-00${i + 1}`, owner_agent: o })),
+  });
+
+  it('picks the most common owner, not the first', () => {
+    expect(resolveOwnerAgent(planWith(['User', 'System', 'System']))).toBe('System');
+  });
+
+  it('never refuses when no owner was asked for, even with nothing to copy', () => {
+    expect(resolveOwnerAgent({ stories: [] } as any)).toBe('System');
+    expect(resolveOwnerAgent({} as any)).toBe('System');
+  });
+
+  it('ignores blank owners rather than electing the empty string', () => {
+    expect(resolveOwnerAgent(planWith(['', '  ', 'User']))).toBe('User');
+  });
+
+  it('falls back to agents[] for the rare plan that has one', () => {
+    expect(resolveOwnerAgent({ stories: [], agents: [{ id: 'AGENT-001' }] } as any)).toBe('AGENT-001');
+  });
+
+  it('accepts an explicit owner the plan uses, and rejects one it does not', () => {
+    expect(resolveOwnerAgent(planWith(['User', 'System']), 'User')).toBe('User');
+    expect(resolveOwnerAgent(planWith(['User', 'System']), 'Nobody')).toBeNull();
   });
 });
