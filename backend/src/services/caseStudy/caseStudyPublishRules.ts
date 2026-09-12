@@ -61,7 +61,11 @@ export type CaseStudyPublishBlockerCode =
   // Unified Project Discovery, Phase 7: a record linked to a student project
   // carries that project's computed maturity. See caseStudyPublishMaturityRule.
   | 'maturity_below_operational_result'
-  | 'project_truth_has_open_questions';
+  | 'project_truth_has_open_questions'
+  // The hero row. See caseStudyPublishHeroRules for the card row that made the
+  // library worse and why the skill alone could not stop it.
+  | 'headline_metric_is_a_bare_count'
+  | 'headline_metric_missing_plain_answers';
 
 export const CASE_STUDY_PUBLISH_BLOCKER_CODES = [
   'surface_not_publishable',
@@ -81,6 +85,8 @@ export const CASE_STUDY_PUBLISH_BLOCKER_CODES = [
   'metric_collected_sha_mismatch',
   'maturity_below_operational_result',
   'project_truth_has_open_questions',
+  'headline_metric_is_a_bare_count',
+  'headline_metric_missing_plain_answers',
 ] as const;
 
 /** One reason a publish was refused. `message` names the FIELD and its VALUE. */
