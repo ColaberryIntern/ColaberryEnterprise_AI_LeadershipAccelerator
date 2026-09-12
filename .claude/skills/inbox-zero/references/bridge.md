@@ -28,6 +28,7 @@ show Ali exactly what a command will do before the first real call in a session.
 | `start` | `{tab}` | `POST /api/admin/inbox/zero/session/start` → `{session, overview}`; 409 = another tab holds the lease (`session.incumbent` names it) |
 | `heartbeat` | `{lease_id}` | `POST .../session/heartbeat` → `{heartbeat, expiresAt}`; `heartbeat:false` = lease gone, run `resume` |
 | `stop` | `{lease_id}` | `POST .../session/stop` → `{released}` (idempotent) |
+| `reconcile` | `{limit?, stale_minutes?}` | `POST .../liveness/reconcile` → `{reconcile: {checked, live, gone, unverifiable, skipped_backoff, cases_closed, close_blocked}}` — T16 bounded inbox-liveness sweep; run once at `start` |
 | `cursor` | `{lease_id, to, processing_succeeded}` | `POST .../session/cursor`; 409 `LeaseNotActive` = you are not the active tab |
 | `health` | `{}` | `GET .../health` → providers + basecamp + `degraded` + reasons |
 | `overview` | `{cursor?}` | `GET .../overview` → status, counts, recommended + why, bottom line |
@@ -43,7 +44,12 @@ show Ali exactly what a command will do before the first real call in a session.
 
 ## Result shape
 
-Success: `{"ok":true,"status":200,"cmd":"overview","body":{...}}`.
+Success: `{"ok":true,"status":200,"cmd":"overview","body":{...},"tz":"America/Chicago"}`.
+
+**Central time is in the payload.** Every ISO-8601 timestamp in `body` has a sibling `<key>_ct`
+already rendered in Central (`"expiresAt_ct":"Fri 11 Sep 2026, 3:22 PM CDT"`), computed by Node's
+ICU inside the container. Render the `_ct` value to Ali; never convert by hand and never print the
+raw UTC string. `IZ_TZ` overrides the zone; `IZ_TZ=` (empty) turns the annotation off.
 HTTP failure: `ok:false`, `status` set, `body` carries the API's `{error, message|details}`.
 Transport/setup failure: `{"ok":false,"error":"TimeoutError|TransportError|NoSecret|NoJwtLib|BadArgs|UnknownCommand","message":"..."}`.
 

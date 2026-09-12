@@ -57,7 +57,7 @@ export async function decideApproval(
   const status: ContentApprovalStatus = decision;
   await request.update({
     status,
-    decided_by: actor.adminId ?? actor.email ?? null,
+    decided_by: actor.adminId ?? null, // UUID column; the email goes on the event row below
     decided_at: now,
     decision_note: note,
     revision_at_decision: revision,

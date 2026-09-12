@@ -128,6 +128,23 @@ describe('the length cue', () => {
   });
 });
 
+describe('option labels', () => {
+  it('is a hard failure that names the items and the script', () => {
+    const bank = authored.map((i, idx) => (idx !== 3 ? i : {
+      ...i,
+      options: i.options.map((o, j) => (j === 1 ? { ...o, text: `${o.key}. ${o.text}` } : o)),
+    }));
+    const a = auditBank(bank);
+    const c = a.checks.find((x) => x.id === 'option_labels')!;
+    expect(c.severity).toBe('hard');
+    expect(c.pass).toBe(false);
+    expect(c.measured).toBe(1);
+    expect(c.note).toContain(authored[3].question_key);
+    expect(c.note).toContain('balanceCertOptionLengths');
+    expect(a.pass).toBe(false);
+  });
+});
+
 describe('bestOneLetterMockScore', () => {
   it('weights by mock demand rather than counting items evenly', () => {
     // D1 keyed to A (16 of 60 items), everything else keyed to B (44 of 60).

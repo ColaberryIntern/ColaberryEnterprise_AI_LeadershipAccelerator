@@ -6,6 +6,11 @@ import {
   getParticipationHandler,
   listParticipationsHandler,
 } from '../../controllers/growthJourneyController';
+import {
+  getClassificationWhyHandler,
+  listClassificationsHandler,
+  overrideClassificationHandler,
+} from '../../controllers/growthJourneyClassificationController';
 
 /**
  * Growth Journey admin read routes (T207).
@@ -58,5 +63,12 @@ router.use(BASE, requireGrowthJourneyEnabled);
 
 router.get(`${BASE}/participations`, listParticipationsHandler);
 router.get(`${BASE}/participations/:id`, getParticipationHandler);
+
+// Phase 2 (T229): the classification queue, its Why, and the one write — a
+// human override, audited, append-only, policy-checked. Same guards, same
+// master-flag 404, same status matrix as the participation routes above.
+router.get(`${BASE}/classifications`, listClassificationsHandler);
+router.get(`${BASE}/classifications/:id/why`, getClassificationWhyHandler);
+router.post(`${BASE}/classifications/:id/override`, overrideClassificationHandler);
 
 export default router;

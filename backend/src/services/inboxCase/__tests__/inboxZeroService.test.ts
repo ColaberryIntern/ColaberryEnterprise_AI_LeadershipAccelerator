@@ -21,6 +21,19 @@ jest.mock('../../../models/InboxCaseAction', () => ({ __esModule: true, default:
 jest.mock('../../../models/InboxCommitment', () => ({ __esModule: true, default: fakeInboxCommitment }));
 jest.mock('../../../models/InboxVip', () => ({ __esModule: true, default: fakeInboxVip }));
 jest.mock('../../../models/InboxCaseEvent', () => ({ __esModule: true, default: fakeInboxCaseEvent }));
+// T16: `next` now asks the provider about its candidate through inboxLivenessService,
+// which pulls in the closure/approval path. The gmail clients below are `{}`, so
+// every check is "unverifiable" here — the fixture cases are shown as unverified,
+// never hidden. Liveness itself is pinned in inboxLivenessService.test.ts.
+const fakeOpsBcTodo = makeFakeModel();
+const fakeInboxCaseQuestion = makeFakeModel();
+jest.mock('../../../models/OpsBcTodo', () => ({ __esModule: true, default: fakeOpsBcTodo }));
+jest.mock('../../../models/InboxCaseQuestion', () => ({ __esModule: true, default: fakeInboxCaseQuestion }));
+jest.mock('../caseTicketService', () => ({
+  ensureCaseTicket: jest.fn(async () => {}),
+  syncTicketForCase: jest.fn(async () => {}),
+  postCaseProgressNote: jest.fn(async () => {}),
+}));
 
 const backoff: Record<string, { consecutiveFailures: number; nextAttemptAt: string | null }> = {};
 jest.mock('../../inbox/inboxSyncBackoff', () => ({
@@ -178,6 +191,25 @@ describe('delta since cursor', () => {
     expect(dlt.cases.map((c) => c.title)).toEqual(['Cohort kickoff deck review', 'Refund request from a placed student', 'Newsletter reply thread']);
     expect(dlt.interrupts.map((c) => c.title)).toEqual(['Refund request from a placed student']);
     expect(dlt.next_cursor).toBe('2026-09-11T14:45:00.000Z');
+  });
+  it('T16: a case the sweep closed is counted as `closed`, never as new — but the cursor still moves past it', async () => {
+    const closedNow: any = Array.from(fakeInboxCase.rows.values()).find((c: any) => c.state === 'RESOLVED');
+    await closedNow.update({ updated_at: new Date('2026-09-11T14:50:00.000Z') });
+    const dlt = await getDelta(CURSOR, NOW);
+    expect(dlt.cases.map((c) => c.title)).not.toContain(closedNow.title);
+    expect(dlt.closed).toBe(1);
+    expect(dlt.count).toBe(3);
+    expect(dlt.next_cursor).toBe('2026-09-11T14:50:00.000Z');
+  });
+  it('T16: an open case whose evidence has all left the inbox is hidden from the delta and counted as hidden_gone', async () => {
+    const target: any = Array.from(fakeInboxCase.rows.values()).find((c: any) => c.title === 'Refund request from a placed student');
+    const its = (Array.from(fakeInboxCaseItem.rows.values()) as any[]).filter((i) => i.case_id === target.id);
+    expect(its.length).toBeGreaterThan(0); // a case with no evidence cannot be judged gone — pick one that has some
+    for (const i of its) await i.update({ source_live: false, source_gone_reason: 'archived' });
+    const dlt = await getDelta(CURSOR, NOW);
+    expect(dlt.cases.map((c) => c.title)).toEqual(['Cohort kickoff deck review', 'Newsletter reply thread']);
+    expect(dlt.interrupts).toEqual([]); // the hidden case was the only P0 due-now; a gone case can never interrupt
+    expect(dlt.hidden_gone).toBe(1);
   });
   it('a refresh during an active draft does not touch the draft', async () => {
     const before = JSON.stringify(Array.from(fakeInboxCaseAction.rows.values()).map((r: any) => r.toJSON()));

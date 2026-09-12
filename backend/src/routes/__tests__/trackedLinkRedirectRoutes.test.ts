@@ -16,12 +16,16 @@
  */
 
 const mockFindOne = jest.fn();
+const mockLinkUpdate = jest.fn();
 const mockClickCreate = jest.fn();
 const mockGetLinkableHostnames = jest.fn();
 
 jest.mock('../../models', () => ({
-  TrackedLink: { findOne: (...a: unknown[]) => mockFindOne(...a) },
+  TrackedLink: { findOne: (...a: unknown[]) => mockFindOne(...a), update: (...a: unknown[]) => mockLinkUpdate(...a) },
   LinkClick: { create: (...a: unknown[]) => mockClickCreate(...a) },
+}));
+jest.mock('../../config/database', () => ({
+  sequelize: { literal: (sql: string) => ({ __literal: sql }) },
 }));
 
 jest.mock('../../services/journeyLinkRewriter', () => ({
@@ -60,6 +64,7 @@ describe('GET /r/:shortCode', () => {
 
   beforeEach(() => {
     mockFindOne.mockReset();
+    mockLinkUpdate.mockReset().mockResolvedValue([1]);
     mockClickCreate.mockReset().mockResolvedValue({});
     mockGetLinkableHostnames.mockReset().mockResolvedValue(ALLOWED);
     errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -91,6 +96,32 @@ describe('GET /r/:shortCode', () => {
       expect(row.tenant_id).toBe('tenant-1');
       expect(row.campaign_id).toBe('campaign-1');
       expect(row.is_bot).toBe(false);
+    });
+
+    it('a HUMAN click advances the link counters with a SQL increment, after the click row lands', async () => {
+      // The counters were declared on the model since T001 and written by nothing - found
+      // live in T032 when a real click left click_count at 0. The increment is an
+      // expression so concurrent clicks add instead of racing a read-modify-write.
+      mockFindOne.mockResolvedValue(activeLink());
+      mockClickCreate.mockResolvedValue({});
+      await request(app()).get('/r/ABCD2345').set('User-Agent', CHROME);
+      await new Promise((r) => setTimeout(r, 10)); // fire-and-forget chain
+      expect(mockLinkUpdate).toHaveBeenCalledTimes(1);
+      const [values, opts] = mockLinkUpdate.mock.calls[0];
+      expect(values.click_count).toEqual({ __literal: 'click_count + 1' });
+      expect(values.first_click_at).toEqual({ __literal: 'COALESCE(first_click_at, NOW())' });
+      expect(values.last_click_at).toBeInstanceOf(Date);
+      expect(opts).toEqual({ where: { id: 'link-1' } });
+    });
+
+    it('a failed counter update is logged and the visitor still got their redirect', async () => {
+      mockFindOne.mockResolvedValue(activeLink());
+      mockClickCreate.mockResolvedValue({});
+      mockLinkUpdate.mockRejectedValue(new Error('deadlock'));
+      const res = await request(app()).get('/r/ABCD2345').set('User-Agent', CHROME);
+      expect(res.status).toBe(302);
+      await new Promise((r) => setTimeout(r, 10));
+      expect(mockLinkUpdate).toHaveBeenCalledTimes(1);
     });
 
     it('stores a HASHED ip and never the address itself', async () => {
@@ -145,6 +176,9 @@ describe('GET /r/:shortCode', () => {
       const row = mockClickCreate.mock.calls[0][0];
       expect(row.is_bot).toBe(true);
       expect(row.bot_reason).toBe('social_preview_facebook');
+      // Recorded, never counted: the link's click_count means people.
+      await new Promise((r) => setTimeout(r, 10));
+      expect(mockLinkUpdate).not.toHaveBeenCalled();
     });
 
     it('flags a request with no user agent at all', async () => {

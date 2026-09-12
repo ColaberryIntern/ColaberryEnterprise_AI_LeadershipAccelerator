@@ -34,13 +34,15 @@ import Project from '../../../models/Project';
 import StudentTask from '../../../models/StudentTask';
 import GitHubConnection from '../../../models/GitHubConnection';
 import { getPublishedPlan } from '../planStore';
-import { COMMAND_CENTER_STORY_ID, COMMAND_CENTER_ACCEPTANCE } from '../commandCenterStory';
 import { markTaskVerifiedComplete } from '../../projects/projectWriteService';
 import { recordEvidence } from '../../progression/evidenceEngine';
 import { recomputeForEnrollment } from '../../progression/competencyEngine';
 import { evaluateForEnrollment } from '../../progression/promotionService';
 import { classifyError } from '../../../utils/errorClassifier';
 import { getBudgetPerUnitXp } from '../../progression/pointsConfigService';
+import { planStorySpecs, STORY_XP_KEY } from './storyPoints';
+import { award as awardPoints } from '../../pointsService';
+import { env } from '../../../config/env';
 import { parseProgressFile, ProgressParseErrorClass } from './progressContract';
 import {
   decideBuild,
@@ -76,8 +78,12 @@ import {
  * published plan, so decomposing the same work into more stories pays no more
  * than decomposing it into fewer. The budget is editable in `points_config`;
  * nothing here hardcodes it. See pointsConfigService.getBudgetPerUnitXp.
+ *
+ * Defined in ./storyPoints and re-exported here: the Projects page and the
+ * Today tile price a story from the same module, so the number shown before
+ * the work is the number paid after it.
  */
-export const STORY_XP_KEY = 'project_story_verified';
+export { STORY_XP_KEY } from './storyPoints';
 
 /** Stamped into `student_tasks.verified_by` so a completion names what granted it. */
 export const VERIFIER_SOURCE = 'build_pipeline:repo_verification';
@@ -234,31 +240,13 @@ export async function verifyBuildFromRepo(
   }
 
   /**
-   * The stories to judge — the plan's, PLUS the Command Center.
-   *
-   * STORY-000 is deliberately kept out of `plan.stories` (it is scaffolding the
-   * platform authors, not work the student planned), and this loop used to build
-   * its spec list from `plan.stories` alone. The consequence was silent and
-   * total: STORY-000 got no verdict, no `verification_json`, and no route to
-   * `verified_at` — it was the one story on every build that could never be
-   * verified, and once completion is gated on the latch it became the one story
-   * that could never be finished at all.
-   *
-   * Its criteria come from COMMAND_CENTER_ACCEPTANCE, which is the same constant
-   * materializeTasks writes onto the task row, so the plan and the row cannot
-   * disagree about what this story asks for.
-   *
-   * Deduped defensively: if a plan ever does carry a STORY-000 of its own, the
-   * plan wins and nothing is appended, because the plan is the authority on
-   * every story it actually contains.
+   * The stories to judge — the plan's, PLUS the Command Center (STORY-000,
+   * which the plan deliberately never lists; without it that one story could
+   * never be verified or finished). Built by storyPoints.planStorySpecs — the
+   * ONE definition the Projects page and the Today tile also price from — so
+   * what a student is shown is exactly what is judged and paid.
    */
-  const planSpecs: PlanStorySpec[] = (stored.plan.stories ?? []).map((s) => ({
-    id: s.id,
-    acceptance: Array.isArray(s.acceptance) ? s.acceptance.map(String) : [],
-  }));
-  const specs: PlanStorySpec[] = planSpecs.some((s) => s.id === COMMAND_CENTER_STORY_ID)
-    ? planSpecs
-    : [...planSpecs, { id: COMMAND_CENTER_STORY_ID, acceptance: [...COMMAND_CENTER_ACCEPTANCE] }];
+  const specs: PlanStorySpec[] = planStorySpecs(stored.plan);
 
   let inputs;
   try {
@@ -467,6 +455,37 @@ export async function verifyBuildFromRepo(
     if (awarded.created) {
       newlyVerified.push(verdict.story_id);
       xpAwarded += awarded.builder_xp;
+    }
+
+    // THE HUD LEDGER. Builder XP above lives in `xp_events`; the topbar total
+    // and every "+N pts" badge read `student_points_events`, a different table.
+    // Until 2026-09-11 a verified story moved only the first, which is why
+    // project work showed no points anywhere a student looks (Ali: "points
+    // should be on the Today timeline for the project work"). Same rate, same
+    // moment, idempotent on `(enrollment, event_key)`; keyed on the Today feed
+    // ref `project:<task id>` so the feed can treat it exactly like a collected
+    // blog or podcast. Not gated on `awarded.created`: a story verified before
+    // this existed has its evidence row but no HUD row, and the key dedups.
+    //
+    // Fail-soft, after the evidence is written: the evidence record is the
+    // truth and this is its mirror on a second table. A blip here must not
+    // fail a sync whose verification already landed. Logged with an error
+    // class so a missed mirror is findable, never silent.
+    if (env.portalPointsAwardEnabled && storyAward.per_unit > 0) {
+      try {
+        await awardPoints(enrollmentId, {
+          eventType: STORY_XP_KEY,
+          eventKey: `project:${task.id}`,
+          points: storyAward.per_unit,
+          metadata: { project_id: projectId, story_id: verdict.story_id, commit_sha: verdict.commit_sha },
+        });
+      } catch (err) {
+        log('sbp_verification_points_award_failed', opts.correlationId, 'failure', {
+          projectId, storyId: verdict.story_id, points: storyAward.per_unit,
+          error_class: classifyError(err),
+          note: 'evidence and Builder XP are recorded; the HUD points row is missing for this story',
+        });
+      }
     }
   }
 

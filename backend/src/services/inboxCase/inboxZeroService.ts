@@ -11,6 +11,11 @@ import { isConfigured as isHotmailConfigured } from '../inbox/graphMailService';
 import { getBcToken } from '../ops/basecampToken';
 import { bcGet } from '../ops/basecampClient';
 import { itemInjectionSignals } from './promptSafety';
+import { verifyCaseLivenessNow } from './inboxLivenessService';
+import { allGoneCaseIds, loadVisibleCases, LivenessSummary } from './inboxZeroVisibility';
+
+export type { LivenessSummary, VisibleCases } from './inboxZeroVisibility';
+export { loadVisibleCases } from './inboxZeroVisibility';
 import InboxClassification from '../../models/InboxClassification';
 
 // /inbox-zero operator service (T9a). The read model behind the console:
@@ -22,6 +27,12 @@ import InboxClassification from '../../models/InboxClassification';
 // Gate 2 only: every case this service sees was created by the auto-sync
 // from mail that survived gate 1 (caseAutoSyncService.filterToInScopeEmails),
 // or from Basecamp. Nothing here reaches behind gate 1.
+//
+// Liveness (T16, Ali: "only my current inboxes"): every read below goes
+// through inboxZeroVisibility.loadVisibleCases(), which hides any case whose
+// evidence has ALL been confirmed gone from the inbox. An item never checked
+// is shown and counted as unverified, never silently treated as gone — and
+// `next` asks the provider about its candidate before handing it to Ali.
 
 export const INBOX_ZERO_PROVIDERS = ['gmail_colaberry', 'gmail_personal', 'hotmail'] as const;
 export type InboxZeroProvider = (typeof INBOX_ZERO_PROVIDERS)[number];
@@ -84,6 +95,7 @@ export interface Overview {
   counts: OverviewCounts;
   recommended: CaseSummary | null;
   bottom_line: string;
+  liveness: LivenessSummary;
 }
 
 // States in which Ali has something to decide or send.
@@ -234,10 +246,6 @@ export function summarise(c: InboxCase, now: Date): CaseSummary {
 
 // ─── Overview ────────────────────────────────────────────────────────────────
 
-async function loadOpenCases(): Promise<InboxCase[]> {
-  return InboxCase.findAll({ where: { state: { [Op.ne]: 'RESOLVED' } } as any }); // `as any`: Op-keyed where
-}
-
 // Gate 1's own work, for the "safe noise" row: how much the inbox manager
 // archived in the last day. A READ of a COS table (never a write); if it
 // fails the row shows null rather than a guess.
@@ -256,7 +264,8 @@ async function noiseLast24h(now: Date): Promise<number | null> {
 }
 
 export async function getOverview(cursorAt: string | null, now: Date = new Date()): Promise<Overview> {
-  const [health, open, noise_24h] = await Promise.all([getFullHealth(), loadOpenCases(), noiseLast24h(now)]);
+  const [health, visible, noise_24h] = await Promise.all([getFullHealth(), loadVisibleCases(), noiseLast24h(now)]);
+  const open = visible.cases;
   const summaries = open.map((c) => summarise(c, now));
 
   const counts: OverviewCounts = { due_now: 0, needs_decision: 0, unassessed: 0, waiting: 0, review: 0, snoozed: 0, new_since_cursor: 0, noise_24h };
@@ -272,7 +281,7 @@ export async function getOverview(cursorAt: string | null, now: Date = new Date(
   else if (actionable === 0) status = 'ZERO';
   else status = 'ACTIVE';
 
-  return { status, generated_at: now.toISOString(), health, counts, recommended, bottom_line: bottomLine(status, counts, recommended, health) };
+  return { status, generated_at: now.toISOString(), health, counts, recommended, bottom_line: bottomLine(status, counts, recommended, health, visible.liveness), liveness: visible.liveness };
 }
 
 function pickRecommended(summaries: CaseSummary[]): CaseSummary | null {
@@ -281,9 +290,10 @@ function pickRecommended(summaries: CaseSummary[]): CaseSummary | null {
   return candidates.sort((a, b) => b.score - a.score || a.opened_at.localeCompare(b.opened_at))[0];
 }
 
-function bottomLine(status: InboxZeroStatus, counts: OverviewCounts, rec: CaseSummary | null, health: InboxZeroHealth): string {
+function bottomLine(status: InboxZeroStatus, counts: OverviewCounts, rec: CaseSummary | null, health: InboxZeroHealth, liveness?: LivenessSummary): string {
+  const unverified = liveness && liveness.unchecked_items > 0 ? ` ${liveness.unchecked_items} item(s) have not yet been checked against your inbox.` : '';
   if (status === 'DEGRADED') {
-    return `A source is degraded (${health.degraded_reasons.join('; ')}), so this view may be incomplete. ${counts.due_now + counts.needs_decision + counts.unassessed} item(s) still need you.`;
+    return `A source is degraded (${health.degraded_reasons.join('; ')}), so this view may be incomplete. ${counts.due_now + counts.needs_decision + counts.unassessed} item(s) still need you.${unverified}`;
   }
   if (status === 'ZERO') {
     return counts.waiting > 0
@@ -291,17 +301,24 @@ function bottomLine(status: InboxZeroStatus, counts: OverviewCounts, rec: CaseSu
       : 'Actionable zero. Nothing needs you right now.';
   }
   const parts = [`${counts.due_now} due now`, `${counts.needs_decision} need a decision`, `${counts.unassessed} not yet assessed`, `${counts.waiting} waiting on others`];
-  return `${parts.join(', ')}. First: ${rec ? `"${rec.title}" — ${rec.why}` : 'nothing ranked'}.`;
+  return `${parts.join(', ')}. First: ${rec ? `"${rec.title}" — ${rec.why}` : 'nothing ranked'}.${unverified}`;
 }
 
 // ─── Delta since cursor ──────────────────────────────────────────────────────
 
 export interface Delta {
   since: string;
+  /** Open, visible cases that changed since the cursor — what "+N new" may claim. */
   count: number;
   cases: CaseSummary[];
   /** The only things allowed to interrupt a focused operator. */
   interrupts: CaseSummary[];
+  /** Cases that reached RESOLVED since the cursor (Ali's decisions AND the
+   * liveness sweep clearing mail that left the inbox). Reported separately so
+   * a sweep that closes forty archived cases never reads as "+40 new". */
+  closed: number;
+  /** Still-open cases hidden because their evidence has all left the inbox. */
+  hidden_gone: number;
   next_cursor: string;
 }
 
@@ -314,10 +331,15 @@ export async function getDelta(since: string, now: Date = new Date()): Promise<D
   // Sorted here as well as in the query so the cursor semantics do not depend
   // on the driver honouring `order` (and so a test fake behaves like Postgres).
   const sorted = [...rows].sort((a, b) => new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime() || a.id.localeCompare(b.id));
-  const cases = sorted.map((c) => summarise(c, now));
+  const stillOpen = sorted.filter((c) => c.state !== 'RESOLVED');
+  const closed = sorted.length - stillOpen.length;
+  const goneIds = await allGoneCaseIds(stillOpen.map((c) => c.id));
+  const cases = stillOpen.filter((c) => !goneIds.has(c.id)).map((c) => summarise(c, now));
   const interrupts = cases.filter((s) => s.category === 'due_now' && (s.priority_band === 'P0' || s.priority_band === 'P1'));
+  // The cursor still advances past EVERY row read (closed and hidden included),
+  // otherwise the same closed cases would be re-read on every tick forever.
   const nextCursor = sorted.length ? new Date(sorted[sorted.length - 1].updated_at).toISOString() : since;
-  return { since, count: cases.length, cases, interrupts, next_cursor: nextCursor };
+  return { since, count: cases.length, cases, interrupts, closed, hidden_gone: goneIds.size, next_cursor: nextCursor };
 }
 
 // ─── Next item and its focus payload ─────────────────────────────────────────
@@ -334,6 +356,10 @@ export interface FocusPayload {
   owner: 'ALI' | 'TEAM_MEMBER' | 'SENDER' | 'SYSTEM';
   current_owner: string | null;
   degraded: boolean;
+  /** Just-in-time inbox check on this case's open items (T16). `verified_at`
+   * is when the provider was asked; `unverified` lists items it could not
+   * answer for (the console says so rather than assuming). */
+  liveness: { verified_at: string | null; live: number; gone: Array<{ item_id: string; reason: string }>; unverified: Array<{ item_id: string; error_class: string }>; unchecked: number };
   /** Instruction-shaped content found on the case's items. Non-empty means the
    * console shows the notice, renders the verdict as UNCERTAIN, and every
    * action is already individual-approval (planner gate). Data, not blocking. */
@@ -354,9 +380,13 @@ function fromOf(item: InboxCaseItem): string | null {
   return typeof snap.from_address === 'string' ? snap.from_address.toLowerCase() : null;
 }
 
+/** How many ranked candidates `next` will check against the inbox before giving up. */
+export const NEXT_LIVENESS_CANDIDATES = 5;
+
 /** Pick the single best case to work on, optionally narrowed by a focus mode. */
-export async function getNext(focus: FocusMode | null, now: Date = new Date()): Promise<FocusPayload | null> {
-  const open = await loadOpenCases();
+export async function getNext(focus: FocusMode | null, now: Date = new Date(), correlationId = 'inbox_zero_next'): Promise<FocusPayload | null> {
+  const visible = await loadVisibleCases();
+  const open = visible.cases;
   let pool = open.map((c) => ({ c, s: summarise(c, now) })).filter(({ s }) => s.category !== 'snoozed');
 
   if (focus === 'waiting') {
@@ -369,22 +399,23 @@ export async function getNext(focus: FocusMode | null, now: Date = new Date()): 
     }
     if (focus === 'vip') {
       const vips = await vipAddresses();
-      const keep: typeof pool = [];
-      for (const entry of pool) {
-        const items = await itemsFor(entry.c.id);
-        if (items.some((i) => { const f = fromOf(i); return !!f && vips.has(f); })) keep.push(entry);
-      }
-      pool = keep;
+      pool = pool.filter((entry) => (visible.itemsByCase.get(entry.c.id) ?? []).some((i) => { const f = fromOf(i); return !!f && vips.has(f); }));
     }
     pool.sort((a, b) => b.s.score - a.s.score || a.s.opened_at.localeCompare(b.s.opened_at));
   }
 
-  const top = pool[0];
-  if (!top) return null;
-  return buildFocus(top.c, now);
+  // Ask the provider about the candidate RIGHT NOW before handing it to Ali.
+  // A candidate whose evidence has all left the inbox is dispositioned (and
+  // closes through the real guard) and the next one is tried — bounded.
+  for (const entry of pool.slice(0, NEXT_LIVENESS_CANDIDATES)) {
+    const check = await verifyCaseLivenessNow(entry.c.id, correlationId, now);
+    if (check.all_gone) continue;
+    return buildFocus(entry.c, now, { verified_at: now.toISOString(), live: check.live, gone: check.gone, unverified: check.unverified, unchecked: check.unchecked });
+  }
+  return null;
 }
 
-export async function buildFocus(c: InboxCase, now: Date = new Date()): Promise<FocusPayload> {
+export async function buildFocus(c: InboxCase, now: Date = new Date(), liveness?: FocusPayload['liveness']): Promise<FocusPayload> {
   const [items, actions, commitments] = await Promise.all([
     itemsFor(c.id),
     InboxCaseAction.findAll({ where: { case_id: c.id, status: { [Op.notIn]: ['REJECTED', 'SKIPPED', 'COMPENSATED'] } } as any }), // `as any`: Op-keyed where
@@ -418,6 +449,7 @@ export async function buildFocus(c: InboxCase, now: Date = new Date()): Promise<
     owner,
     current_owner: currentOwner,
     degraded: getHealth().degraded, // mailbox health only; the overview carries the Basecamp probe
+    liveness: liveness ?? { verified_at: null, live: 0, gone: [], unverified: [], unchecked: items.length },
     injection: {
       flagged: injectionSignals.length > 0,
       signals: injectionSignals,

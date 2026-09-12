@@ -57,6 +57,14 @@ export interface ProjectTaskDto {
    */
   verified_at: string | null;
   /**
+   * What verifying this story pays — the build's capstone budget split across
+   * its stories (sbp/verification/storyPoints, the same module the verifier
+   * pays from). Null for anything that is never paid: demo-prep tasks, a
+   * project with no published plan, a budget nobody has set. The Projects page
+   * and the Today tile both read this; neither invents a number.
+   */
+  points: number | null;
+  /**
    * The live verdict from the last repo read: how far this story actually got,
    * what is still outstanding, and the commit behind it. Null until the project
    * has been synced at least once.
@@ -384,7 +392,8 @@ export function toBuildVerificationRollup(
   };
 }
 
-export function toTaskDto(t: Plain): ProjectTaskDto {
+/** `pointsByStory` — story_id → points, from storyPoints.pointsByStoryId; absent = nothing is paid. */
+export function toTaskDto(t: Plain, pointsByStory?: ReadonlyMap<string, number>): ProjectTaskDto {
   return {
     id: String(t.id),
     story_id: t.story_id ?? null,
@@ -406,6 +415,7 @@ export function toTaskDto(t: Plain): ProjectTaskDto {
     due_on: asDateOnly(t.due_on),
     due_baseline_on: asDateOnly(t.due_baseline_on),
     verified_at: asIsoTimestamp(t.verified_at),
+    points: (t.story_id && pointsByStory?.get(String(t.story_id))) || null,
     // The latch columns travel with the blob, always. A caller that passes the
     // blob alone gets the repo's opinion of the student's work instead of ours.
     verification: toTaskVerificationDto(t.verification_json, {
@@ -417,14 +427,14 @@ export function toTaskDto(t: Plain): ProjectTaskDto {
 }
 
 /** Map a list plus its (unordered) tasks; tasks are sorted by position. */
-export function toListDto(l: Plain, tasks: Plain[]): ProjectListDto {
+export function toListDto(l: Plain, tasks: Plain[], pointsByStory?: ReadonlyMap<string, number>): ProjectListDto {
   return {
     id: String(l.id),
     cluster: l.cluster ?? '',
     title: l.title ?? '',
     status: l.status ?? 'not_started',
     position: Number(l.position ?? 0),
-    tasks: tasks.map(toTaskDto).sort(byPosition),
+    tasks: tasks.map((t) => toTaskDto(t, pointsByStory)).sort(byPosition),
   };
 }
 
@@ -456,9 +466,11 @@ export function toProjectTreeDto(
    * stays I/O-free.
    */
   verificationXpEarned = 0,
+  /** story_id → points a verified story pays (storyPoints.pointsByStoryId). Injected for the same reason. */
+  pointsByStory?: ReadonlyMap<string, number>,
 ): ProjectTreeDto {
   const listDtos = lists
-    .map((l) => toListDto(l, Array.isArray(l.tasks) ? l.tasks : []))
+    .map((l) => toListDto(l, Array.isArray(l.tasks) ? l.tasks : [], pointsByStory))
     .sort(byPosition);
   return {
     id: String(p.id),

@@ -116,10 +116,18 @@ describe('publish_now', () => {
 describe('send_for_approval', () => {
   it('moves a draft to review and opens exactly one request pinned to the revision', async () => {
     mockItem.status = 'draft';
-    const r = await sendForApproval('ci-1', { email: 'sohail@colaberry.com' });
+    const r = await sendForApproval('ci-1', { adminId: 'a-sohail', email: 'sohail@colaberry.com' });
     expect(r.approvalRequestId).toBe('ar-1');
-    expect(mockApprovalCreate).toHaveBeenCalledWith(expect.objectContaining({ content_item_id: 'ci-1', status: 'pending', revision_at_request: 2, requested_by: 'sohail@colaberry.com' }));
+    // requested_by is a UUID column: the admin id. This test used to pin the email here,
+    // which is exactly the value the database refused on production.
+    expect(mockApprovalCreate).toHaveBeenCalledWith(expect.objectContaining({ content_item_id: 'ci-1', status: 'pending', revision_at_request: 2, requested_by: 'a-sohail' }));
     expect(mockItem.status).toBe('ready_for_review');
+  });
+
+  it('never writes the email into requested_by when the actor has no id', async () => {
+    mockItem.status = 'draft';
+    await sendForApproval('ci-1', { email: 'sohail@colaberry.com' });
+    expect(mockApprovalCreate.mock.calls[0][0].requested_by).toBeNull();
   });
 
   it('a second click reuses the open request rather than opening another', async () => {

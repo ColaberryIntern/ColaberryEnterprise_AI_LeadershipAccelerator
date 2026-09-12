@@ -51,6 +51,15 @@ describe('invariants — a rewrite must not become a different question', () => 
     expect(checkInvariants(item(), after)).toMatch(/not one of the options/);
   });
 
+  it('refuses an option that begins with its own letter label', () => {
+    // "D. Allocate more capacity" renders as "D. D. Allocate" and marks the
+    // option as the one a model edited. Four of the first 23 lengthened
+    // options came back this way.
+    const labelled = item();
+    labelled.options = [...labelled.options.slice(0, 3), { key: 'D', text: 'D. Latency' }];
+    expect(checkInvariants(item(), labelled)).toMatch(/option D begins with a letter label/);
+  });
+
   it('refuses an empty option or an empty stem', () => {
     expect(checkInvariants(item(), item({ stem: '   ' }))).toMatch(/stem is empty/);
     const blanked = item();

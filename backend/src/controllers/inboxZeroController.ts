@@ -9,6 +9,7 @@ import {
   inboxZeroNextQuerySchema,
   inboxZeroOverviewQuerySchema,
   inboxZeroQueueQuerySchema,
+  inboxZeroReconcileSchema,
   inboxZeroStartSchema,
   caseIdParamSchema,
 } from '../schemas/inboxCaseSchema';
@@ -24,12 +25,14 @@ import { INBOX_ZERO_OPERATOR_RESOURCE_KEY } from '../services/inboxCase/operator
 import { getQueue } from '../services/inboxCase/inboxZeroQueueService';
 import { listStaleWaiting, listWaiting } from '../services/inboxCase/waitingLedgerService';
 import { listOpenCommitments, listOverdueCommitments } from '../services/inboxCase/commitmentLedgerService';
+import { reconcileLiveness } from '../services/inboxCase/inboxLivenessService';
 
 // /inbox-zero operator API (T9a). Thin: validate, call the service, return.
 // Everything here is a READ except the operator session itself (lease +
-// cursor), which is operator state, not case state. No case is mutated by
-// any route in this file; approvals and executions stay on the existing
-// case routes and their gates.
+// cursor), which is operator state, not case state, and the T16 liveness
+// reconcile, which only ever records what the provider says about Ali's
+// own inbox and dispositions evidence he already cleared. Approvals and
+// executions stay on the existing case routes and their gates.
 
 function bad(res: Response, issues: unknown) {
   return res.status(400).json({ error: 'ValidationError', details: issues });
@@ -96,6 +99,17 @@ export async function handleZeroNext(req: Request, res: Response) {
   const focus = await getNext(parsed.data.focus ?? null);
   if (!focus) return res.json({ focus: null, message: 'Nothing actionable in this focus.' });
   res.json({ focus });
+}
+
+export async function handleZeroReconcile(req: Request, res: Response) {
+  const parsed = inboxZeroReconcileSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return bad(res, parsed.error.issues);
+  const result = await reconcileLiveness({
+    limit: parsed.data.limit,
+    staleMinutes: parsed.data.stale_minutes,
+    correlationId: `inbox_zero_reconcile:${actor(req)}:${Date.now()}`,
+  });
+  res.json({ reconcile: result });
 }
 
 export async function handleZeroFocusCase(req: Request, res: Response) {

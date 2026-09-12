@@ -18,6 +18,7 @@ import { computeSourceHash, BasecampReference, parseDigestTodoLines, isBasecampD
 import { persistClusterAsCase, DiscoveredCaseSummary, MAX_CANDIDATES_PER_CASE } from './caseDiscoveryService';
 import { logCaseEvent } from './caseEventLog';
 import { evaluateClosureGuard, closeCase } from './caseClosureService';
+import { reconcileLiveness } from './inboxLivenessService';
 
 // Hourly + manual "Sync Now" ingestion of Ali's real inbox into Cases,
 // per his explicit request: "I would like the Cases to be in sync with my
@@ -58,9 +59,12 @@ async function writeCursor(at: Date): Promise<void> {
   await SystemSetting.upsert({ key: CURSOR_KEY, value: { cursor: at.toISOString() }, updated_by: null } as any);
 }
 
-function gmailWindowQuery(sinceHoursAgo: number): string {
+// `-in:sent` is load-bearing (2026-07-14 mail-loop incident). `in:inbox` is
+// Ali's rule (T16): gate 2 only ever looks at what is in his inbox right now,
+// so mail he archived before the hourly run never becomes a case at all.
+export function gmailWindowQuery(sinceHoursAgo: number): string {
   const hours = Math.max(1, Math.ceil(sinceHoursAgo));
-  return `newer_than:${hours}h -in:sent`;
+  return `newer_than:${hours}h -in:sent in:inbox`;
 }
 
 async function fetchRecentEmailCandidates(cursor: Date): Promise<RawCandidateItem[]> {
@@ -393,9 +397,25 @@ export async function runAutoSync(triggeredBy: 'cron' | 'admin', requestedBy: st
       );
       newCasesCreated++;
       itemsAdded += summary.itemCount;
+      // Every email item this run created came from an inbox-scoped fetch
+      // (Gmail `in:inbox`, Hotmail inbox folder) — it was live at discovery.
+      // Stamp that so the reconciler sweeps never-checked rows first and the
+      // console does not report brand-new mail as "not yet checked".
+      await InboxCaseItem.update(
+        { source_live: true, source_checked_at: runStartedAt },
+        { where: { case_id: summary.caseId, source_type: 'email', source_checked_at: { [Op.is]: null } } as any } // `as any`: Op-keyed where
+      );
     }
 
     await disposeItemsDeletedAtSource(correlationId);
+    // T16: bounded liveness sweep (archive/trash/404/completed) on the
+    // stalest open items. Its own failures are logged inside; never let a
+    // provider hiccup here fail the sync that just created cases.
+    try {
+      await reconcileLiveness({ correlationId });
+    } catch (err: any) {
+      console.error(JSON.stringify({ timestamp: new Date().toISOString(), level: 'error', service: 'caseAutoSyncService', event: 'liveness_reconcile_failed', outcome: 'failure', error_class: err?.error_class || err?.name || 'UnknownError', correlation_id: correlationId, context: { message: String(err?.message ?? err).slice(0, 200) } }));
+    }
     await writeCursor(runStartedAt);
 
     const result: AutoSyncResult = {

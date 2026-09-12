@@ -216,6 +216,7 @@ import LeadSource from './LeadSource';
 import EntryPoint from './EntryPoint';
 import FormDefinition from './FormDefinition';
 import RoutingRule from './RoutingRule';
+import RoutingRuleExecution from './RoutingRuleExecution';
 import RawLeadPayload from './RawLeadPayload';
 import ScholarshipInterview from './ScholarshipInterview';
 
@@ -440,6 +441,8 @@ import JourneyPath from './JourneyPath';
 import OfferFamily from './OfferFamily';
 import BrandOfferPolicy from './BrandOfferPolicy';
 import GrowthJourneyEnrollment from './GrowthJourneyEnrollment';
+import GrowthJourneyClassification from './GrowthJourneyClassification';
+import GrowthJourneyTransition from './GrowthJourneyTransition';
 import SenderProfile from './SenderProfile';
 import PlatformIdentity from './PlatformIdentity';
 import PlatformIdentityLink from './PlatformIdentityLink';
@@ -1455,6 +1458,7 @@ export {
   EntryPoint,
   FormDefinition,
   RoutingRule,
+  RoutingRuleExecution,
   RawLeadPayload,
   ScholarshipInterview,
   AiCompany,
@@ -1604,6 +1608,8 @@ export {
   OfferFamily,
   BrandOfferPolicy,
   GrowthJourneyEnrollment,
+  GrowthJourneyClassification,
+  GrowthJourneyTransition,
   SenderProfile,
   PlatformIdentity,
   PlatformIdentityLink,

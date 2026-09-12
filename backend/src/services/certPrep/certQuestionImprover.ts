@@ -10,6 +10,7 @@ import {
 // bank audit and the admin service must not depend on.
 export { unachievableDimensions, achievableScore };
 import { REFERENCE, RUBRIC } from '../../data/certBlueprints/ccarRubric';
+import { hasOptionLabel } from './certOptionLength';
 
 /**
  * certQuestionImprover — rewrite ONE item toward a higher rubric score.
@@ -168,6 +169,10 @@ export function checkInvariants(before: ImproverItem, after: ImproverItem): stri
   }
   for (const o of after.options) {
     if (!o.text || !o.text.trim()) return `option ${o.key} is empty`;
+    // "D. Allocate more capacity": the model reciting the list. Rendered with
+    // its real label the student sees "D. D. Allocate", which marks the option
+    // as the edited one. See certOptionLength.OPTION_LABEL_PREFIX.
+    if (hasOptionLabel(o.text)) return `option ${o.key} begins with a letter label`;
   }
   if (!after.stem || !after.stem.trim()) return 'stem is empty';
   // The rationale is REQUIRED by `DraftRevisionInput` and by the rubric, which
