@@ -1,4 +1,4 @@
-import { ContentItem, ContentVariant, ContentItemMedia, MediaAsset, ExternalPublication, PlatformDeliveryEvent, PublishingJob } from '../../models';
+import { ContentItem, ContentVariant, ContentItemMedia, MediaAsset, ExternalPublication, PlatformDeliveryEvent, PublishingJob, TrackedLink } from '../../models';
 import type { ContentItemStatus } from '../../models/ContentItem';
 import { isKillSwitchActive } from '../launchSafety';
 import { transition } from '../content/contentWorkflow';
@@ -241,6 +241,20 @@ async function publishOne(job: PublishingJob, adapter: SocialProviderAdapter, de
     httpStatus: receipt.httpStatus, providerCode: receipt.providerCode,
     payload: { external_id: receipt.externalId, mode: receipt.mode, publication_id: publication.id },
   }, now);
+
+  // The short link goes live with the post. The composer mints links as `draft`, and until
+  // this line nothing ever moved them: `/r/:shortCode` serves only `active`, so every link a
+  // post carried answered 410 Gone. Found on 2026-09-11 while exercising the live release.
+  // Activation is the freeze point (`published_at`): from here the UTM set a click joins on
+  // cannot change. A handoff package counts - the operator pastes that text within minutes.
+  // `where: status = 'draft'` keeps a retry or reconciliation from touching the timestamp.
+  if (variant?.tracked_link_id) {
+    await TrackedLink.update(
+      { status: 'active', published_at: now },
+      { where: { id: variant.tracked_link_id, status: 'draft' } },
+    );
+  }
+
   await job.update({ state: 'published' as PublishingJobState, claimed_by: null });
   return 'published';
 }
