@@ -75,7 +75,17 @@ const REASON_TEXT: Record<Extract<MessageAsSent, { found: false }>['reason'], st
  * clicked link highlighted. On demand only: each fetch is two Mandrill calls,
  * and the modal must not spend them on every open.
  */
-export default function AsSentPanel({ personRef, m }: { personRef: string; m: CommunicationMessage }) {
+export default function AsSentPanel({ personRef, m, onLoaded }: {
+  personRef: string;
+  m: CommunicationMessage;
+  /**
+   * Reports what the fetch found, so the rest of the modal can stop
+   * contradicting it. The outcome timeline above says "the poll did not keep
+   * the URL" for rows written before 2026-09-11 -- true of the stored row, and
+   * wrong the moment Mandrill hands the URL back on the same screen.
+   */
+  onLoaded?: (result: MessageAsSent) => void;
+}) {
   const [state, setState] = useState<{ status: 'idle' } | { status: 'loading' } | { status: 'done'; result: MessageAsSent } | { status: 'error' }>({ status: 'idle' });
   const at = m.sentAt ?? m.scheduledFor;
   const neverSent = !m.sentAt || m.status === 'cancelled' || m.status === 'failed';
@@ -88,7 +98,9 @@ export default function AsSentPanel({ personRef, m }: { personRef: string; m: Co
       const res = await api.get('/api/admin/people/message-as-sent', {
         params: { ref: personRef, subject: m.subject, at, ...(m.mandrillId ? { mandrillId: m.mandrillId } : {}) },
       });
-      setState({ status: 'done', result: res.data as MessageAsSent });
+      const result = res.data as MessageAsSent;
+      setState({ status: 'done', result });
+      onLoaded?.(result);
     } catch {
       setState({ status: 'error' });
     }
@@ -147,15 +159,15 @@ export default function AsSentPanel({ personRef, m }: { personRef: string; m: Co
         {' '}· retrieved from Mandrill, not from this platform's records.
       </div>
       {r.clickedUrls.length > 0 ? (
-        <div className="small mb-2">
+        /* The URLs themselves are listed once, by the timeline above. Here it
+           is only the pointer to the highlight, so the modal says each thing
+           in one place. */
+        <p className="small mb-2">
           <span className="badge bg-success-subtle text-success-emphasis me-1">
             <i className="ri-cursor-line me-1" aria-hidden="true" />clicked
           </span>
-          The highlighted {r.clickedUrls.length === 1 ? 'link is the one' : 'links are the ones'} they clicked:
-          <ul className="mb-0 mt-1">
-            {r.clickedUrls.map((u) => <li key={u}><code style={{ fontSize: '.75rem' }}>{u}</code></li>)}
-          </ul>
-        </div>
+          The highlighted {r.clickedUrls.length === 1 ? 'link is the one' : 'links are the ones'} they clicked.
+        </p>
       ) : r.clicks > 0 ? (
         <p className="small text-muted mb-2">Mandrill counts {r.clicks} {r.clicks === 1 ? 'click' : 'clicks'} but did not keep the URL, so nothing is highlighted.</p>
       ) : null}
