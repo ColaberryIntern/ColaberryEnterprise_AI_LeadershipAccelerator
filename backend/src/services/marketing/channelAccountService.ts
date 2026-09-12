@@ -205,7 +205,7 @@ async function writeCredential(
   secret: string,
   expiresAt: Date | null,
 ): Promise<void> {
-  const sealed = seal(secret);
+  const sealed = seal(secret, { accountId: account.id, credentialType: type });
   const existing = await ConnectorCredential.findOne({
     where: { channel_account_id: account.id, credential_type: type },
   });
@@ -276,14 +276,19 @@ export async function getAccessToken(accountId: string, type: CredentialType = '
   }
 
   try {
-    return open({
-      ciphertext: credential.ciphertext,
-      iv: credential.iv,
-      auth_tag: credential.auth_tag,
-      wrapped_data_key: credential.wrapped_data_key,
-      key_id: credential.key_id,
-      encrypted_at: credential.encrypted_at.toISOString(),
-    });
+    return open(
+      {
+        ciphertext: credential.ciphertext,
+        iv: credential.iv,
+        auth_tag: credential.auth_tag,
+        wrapped_data_key: credential.wrapped_data_key,
+        key_id: credential.key_id,
+        encrypted_at: credential.encrypted_at.toISOString(),
+      },
+      // Binds the row to this account and type: a row transplanted from another account fails
+      // authentication instead of opening.
+      { accountId: accountId, credentialType: type },
+    );
   } catch (err) {
     const errorClass = err instanceof CredentialVaultError ? err.errorClass : 'Error';
     await account.update({

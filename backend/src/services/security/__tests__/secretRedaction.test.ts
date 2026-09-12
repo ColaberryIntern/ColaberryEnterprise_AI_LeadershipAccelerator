@@ -16,6 +16,8 @@ import { redactSecrets, redactedJson } from '../secretRedaction';
  */
 const META_TOKEN = ['EAA', 'G7ZC8ZBxyz0123456789', 'abcdefghijklmnopqrstuvwxyz'].join('');
 const GOOGLE_TOKEN = ['ya29', '.', 'a0AfB_byC1234567890abcdefghijklmnopqrstuvwxyz'].join('');
+const LINKEDIN_TOKEN = ['AQV', 'x1y2z3A4B5C6D7E8F9G0', 'hIjKlMnOpQrStUvWxYz'].join('');
+const GITHUB_TOKEN = ['ghp', '_', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ012345'].join('');
 const JWT = [
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9',
   'eyJzdWIiOiIxMjM0NTY3ODkwIn0',
@@ -65,15 +67,27 @@ describe('by value', () => {
     expect(out.detail).toContain('Invalid OAuth access token:');
   });
 
-  it('masks bearer headers, Google tokens and JWTs anywhere in a string', () => {
+  it('masks every provider shape the module claims to cover, anywhere in a string', () => {
+    // One case per entry in SECRET_VALUE_PATTERNS. The T003 verification found the comment
+    // claiming LinkedIn coverage that the pattern list did not have, so the rule now is that
+    // a provider named in that comment has both a pattern and a line here.
     const out = redactSecrets({
       a: `Authorization: Bearer ${META_TOKEN}`,
       b: `refreshed to ${GOOGLE_TOKEN} ok`,
       c: `id_token=${JWT}`,
+      d: `linkedin said ${LINKEDIN_TOKEN}`,
+      e: `github said ${GITHUB_TOKEN}`,
     });
-    expect(JSON.stringify(out)).not.toContain(META_TOKEN);
-    expect(JSON.stringify(out)).not.toContain(GOOGLE_TOKEN);
-    expect(JSON.stringify(out)).not.toContain(JWT);
+    const text = JSON.stringify(out);
+    for (const secret of [META_TOKEN, GOOGLE_TOKEN, JWT, LINKEDIN_TOKEN, GITHUB_TOKEN]) {
+      expect(text).not.toContain(secret);
+    }
+  });
+
+  it('masks a token sitting in a URL query string, which is how they reach access logs', () => {
+    const out: any = redactSecrets({ url: `https://graph.facebook.com/me?access_token=${META_TOKEN}` });
+    expect(out.url).not.toContain(META_TOKEN);
+    expect(out.url).toContain('graph.facebook.com');
   });
 
   it('masks a token nested deep inside arrays and objects', () => {

@@ -18,8 +18,13 @@
  * an email to every student. The ciphertext in the database backup is worthless without it.
  *
  * ROTATION. Mint a second key, move the old one into SOCIAL_CREDENTIAL_PREVIOUS_KEYS as
- * `<oldKeyId>:<oldKeyBase64>`, deploy, run the re-wrap sweep, then drop the old entry. Nothing
- * is read-locked during that window; see credentialVault's `rewrap`.
+ * `<oldKeyId>:<oldKeyBase64>`, deploy, then run the sweep:
+ *
+ *     TS_NODE_TRANSPILE_ONLY=1 npx ts-node src/scripts/rewrapCredentials.ts            (dry run)
+ *     TS_NODE_TRANSPILE_ONLY=1 npx ts-node src/scripts/rewrapCredentials.ts --execute
+ *
+ * and drop the old entry once it reports zero remaining. Nothing is read-locked during that
+ * window, and the sweep never decrypts a credential: it moves the wrapping only.
  */
 
 import { generateMasterKey } from '../services/security/credentialVault';

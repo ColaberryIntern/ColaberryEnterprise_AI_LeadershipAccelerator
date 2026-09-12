@@ -47,15 +47,27 @@ const SAFE_KEYS = new Set([
   'missing_scopes',
 ]);
 
-/** Bearer prefixes and long opaque strings that are almost certainly key material. */
+/**
+ * Bearer prefixes and provider token shapes.
+ *
+ * THIS LIST IS NOT EXHAUSTIVE AND CANNOT BE. Opaque tokens from TikTok, X and others are
+ * indistinguishable from ordinary identifiers by shape alone, and a pattern loose enough to
+ * catch them would mask legitimate ids and make logs useless. The by-KEY pass is the general
+ * defence; these patterns are the second net, for the specific case of a provider echoing its
+ * own token back inside an error body under an innocent field name.
+ *
+ * Every entry below is covered by a case in `secretRedaction.test.ts`. Do not add a provider
+ * to this comment without adding both a pattern and a test, which is exactly the drift the
+ * T003 verification caught: the comment used to claim LinkedIn `AQV` coverage that did not
+ * exist.
+ */
 const SECRET_VALUE_PATTERNS: readonly RegExp[] = [
   /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/i,
-  // Provider token shapes: Meta (EAA...), Google/LinkedIn (ya29., AQV...), GitHub (gh[pousr]_).
-  /\bEAA[A-Za-z0-9]{20,}/,
-  /\bya29\.[A-Za-z0-9._-]{20,}/,
-  /\bgh[pousr]_[A-Za-z0-9]{20,}/,
-  // A JWT in any field.
-  /\beyJ[A-Za-z0-9._-]{20,}/,
+  /\bEAA[A-Za-z0-9]{20,}/,                 // Meta
+  /\bya29\.[A-Za-z0-9._-]{20,}/,           // Google
+  /\bAQV[A-Za-z0-9_-]{20,}/,               // LinkedIn
+  /\bgh[pousr]_[A-Za-z0-9]{20,}/,          // GitHub
+  /\beyJ[A-Za-z0-9._-]{20,}/,              // any JWT
 ];
 
 const MASK = '<redacted>';

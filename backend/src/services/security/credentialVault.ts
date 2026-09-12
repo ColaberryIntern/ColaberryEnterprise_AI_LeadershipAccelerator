@@ -67,6 +67,31 @@ export class CredentialVaultError extends Error {
 }
 
 /**
+ * What a sealed record is bound to. Passed as GCM additional authenticated data, so a record
+ * sealed for one account cannot be transplanted onto another: the auth tag covers this context
+ * as well as the ciphertext.
+ *
+ * WHY THIS EXISTS. Without it, an attacker with database WRITE access could copy a whole sealed
+ * row from a high-privilege account onto a low-privilege one and it would open cleanly, because
+ * every field needed to decrypt travels together. ESC-001's threat model is read access (dumps,
+ * backups, replicas, a stray SELECT), so this sits just outside what was approved - it is here
+ * because binding costs nothing today and would cost a re-seal of every stored credential once
+ * rows exist. Found by the T003 verification's own transplant probe.
+ */
+export interface CredentialContext {
+  /** The account the secret belongs to. */
+  accountId: string;
+  /** Which secret of that account this is. */
+  credentialType: string;
+}
+
+function aadFor(context: CredentialContext): Buffer {
+  // Version-prefixed so a future change to what is bound is distinguishable rather than a
+  // silent authentication failure nobody can explain.
+  return Buffer.from(`v1|${context.accountId}|${context.credentialType}`, 'utf8');
+}
+
+/**
  * A sealed secret, exactly as it is stored. Every field is non-secret on its own: without the
  * master key the wrapped data key is inert.
  */
@@ -203,7 +228,7 @@ function unwrapDataKey(wrapped: string, master: MasterKey): Buffer {
  * a backup; it is NOT safe to return from an API, because it is still the secret under a key
  * the server holds.
  */
-export function seal(plaintext: string): SealedCredential {
+export function seal(plaintext: string, context: CredentialContext): SealedCredential {
   if (typeof plaintext !== 'string' || plaintext === '') {
     throw new CredentialVaultError('Refusing to seal an empty secret.', 'ValidationError');
   }
@@ -211,6 +236,7 @@ export function seal(plaintext: string): SealedCredential {
   const dataKey = randomBytes(KEY_BYTES);
   const iv = randomBytes(IV_BYTES);
   const cipher = createCipheriv(ALGORITHM, dataKey, iv);
+  cipher.setAAD(aadFor(context));
   const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
 
   return {
@@ -230,7 +256,7 @@ export function seal(plaintext: string): SealedCredential {
  * send an empty Bearer token to a provider and read the 401 as "the account is disconnected",
  * which is the wrong diagnosis and the wrong remedy.
  */
-export function open(record: SealedCredential): string {
+export function open(record: SealedCredential, context: CredentialContext): string {
   const master = resolveKeyById(record.key_id);
   const dataKey = unwrapDataKey(record.wrapped_data_key, master);
   const iv = Buffer.from(record.iv, 'base64');
@@ -240,6 +266,7 @@ export function open(record: SealedCredential): string {
   }
   const decipher = createDecipheriv(ALGORITHM, dataKey, iv);
   decipher.setAuthTag(tag);
+  decipher.setAAD(aadFor(context));
   try {
     return Buffer.concat([
       decipher.update(Buffer.from(record.ciphertext, 'base64')),
@@ -247,7 +274,8 @@ export function open(record: SealedCredential): string {
     ]).toString('utf8');
   } catch {
     throw new CredentialVaultError(
-      'The credential failed authentication: it was altered, or sealed with a different key.',
+      'The credential failed authentication: it was altered, sealed with a different key, or '
+      + 'belongs to a different account.',
       'CredentialTampered',
     );
   }
@@ -277,6 +305,11 @@ function constantTimeEquals(a: string, b: string): boolean {
  * caller. This is the whole of master-key rotation: the data key is unwrapped with whichever
  * key sealed it and re-wrapped with the current one. The ciphertext, iv and auth tag are
  * untouched, so nothing about the secret changes and the operation is safe to run in bulk.
+ *
+ * No `CredentialContext` is needed here, and that is not an oversight: the AAD binds the SECRET
+ * layer, which this never opens. Rotation moves the wrapping only, so a sweep can re-wrap every
+ * row in the database without being able to read a single credential. That property is worth
+ * more than the symmetry would have been.
  */
 export function rewrap(record: SealedCredential): SealedCredential {
   const current = requireActiveKey();
