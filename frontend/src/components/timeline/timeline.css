@@ -154,6 +154,24 @@
 .tl-de .fc-head .tc-lvl-badge.lvl-4{background:#ffe4e6;color:#be123c}
 .tl-de .fc-body{padding:0 20px 14px}
 .tl-de .fc-body p{margin:0 0 14px;color:var(--text-body);font-size:14.5px}
+/* ── Community post body (RitualBody) ────────────────────────────────────────
+   Deliberately mirrors `.ct-sec` / `.ct-seclab` / `.ct-secval` in
+   CommunityThreadPanel's own <style>: the tile and the drawer must show the
+   same post the same way (Ali, 2026-09-11). `pre-wrap` is the load-bearing
+   rule — it is what keeps a bullet list a list instead of one run-on line.
+   The two live apart because the drawer renders outside `.tl-de` and ships its
+   own styles; the shared STRUCTURE is RitualBody.tsx. */
+.tl-de .fc-rb{margin-bottom:12px}
+.tl-de .fc-rb:last-of-type{margin-bottom:0}
+.tl-de .fc-rb-lab{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted,#6B6B6B);margin-bottom:4px}
+.tl-de .fc-rb-val{font-size:14.5px;line-height:1.55;color:var(--text-body);white-space:pre-wrap;overflow-wrap:anywhere}
+/* A very long post (a pasted prompt) is clamped so one card cannot own the
+   whole feed; it reads in full, identically formatted, in the drawer. */
+.tl-de .fc-rbwrap{margin-bottom:14px}
+.tl-de .fc-rbwrap.clamped{position:relative;max-height:19em;overflow:hidden}
+.tl-de .fc-rbwrap.clamped::after{content:"";position:absolute;left:0;right:0;bottom:0;height:5.5em;pointer-events:none;background:linear-gradient(to bottom,transparent,var(--surface-page) 82%)}
+.tl-de .fc-rbmore{position:absolute;left:0;bottom:0;z-index:1;border:0;background:none;padding:0;cursor:pointer;font:inherit;font-size:13px;font-weight:750;color:var(--berry,#367895)}
+.tl-de .fc-rbmore:hover{text-decoration:underline}
 /* ── Locked card: big lock over a dimmed tile; every interaction is blocked ── */
 .tl-de .fc-media-wrap{position:relative}
 .tl-de .fcard.locked .fc-media-wrap > .mthumb{filter:grayscale(.5) brightness(.62);pointer-events:none}
