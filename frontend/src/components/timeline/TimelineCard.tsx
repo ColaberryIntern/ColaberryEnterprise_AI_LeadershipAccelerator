@@ -19,10 +19,12 @@ interface WatchState { watched_pct: number; required_pct: number | null; met: bo
  *  tile so the student knows before opening. The award itself is server-side. */
 const REPLY_POINTS = 2;
 
-/** Above this many characters a community post is clamped on the tile (it still
- *  renders in full, formatted the same way, in the drawer). Chosen so a guided
- *  ritual answer is never clamped and a pasted prompt always is. */
-const LONG_POST_CHARS = 900;
+/** A community post shows this many lines on the tile before "Show more".
+ *  Ali, 2026-09-12: "I would rather have 3 lines max with the ability for the
+ *  user to expand the text." Expressed in `em` against the body's own
+ *  line-height in timeline.css, so it stays three LINES if the type scale
+ *  changes. */
+const POST_CLAMP_LINES = 3;
 
 // Community byline helpers — a card carrying `author` renders as a post (avatar +
 // name + level badge) instead of the generic curriculum header.
@@ -315,7 +317,20 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   // screen. Measured on the STRING, not on layout: deterministic, testable, and
   // it cannot change under a re-render. A "Steal This Prompt" post runs ~2,000
   // characters; a Skill Drop answer runs ~200 and is never clamped.
-  const longPost = isCommunityPost && (card.description || '').length > LONG_POST_CHARS;
+  // A community post is clamped to POST_CLAMP_LINES until the student expands
+  // it, in place, on the tile. Whether it NEEDS expanding is a question about
+  // layout, so it is measured (scrollHeight vs clientHeight) rather than
+  // guessed from the character count — a three-word post must not be handed a
+  // "Show more" that reveals nothing.
+  const [postExpanded, setPostExpanded] = useState(false);
+  const [postOverflows, setPostOverflows] = useState(false);
+  const postBodyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = postBodyRef.current;
+    if (!el) { setPostOverflows(false); return; }
+    // Measured while clamped; 2px absorbs sub-pixel line rounding.
+    setPostOverflows(el.scrollHeight > el.clientHeight + 2);
+  }, [card.description, isCommunityPost]);
 
   // A project task's destination is the project workspace, not the drawer. The
   // routing decision deliberately does NOT live here: this tile is rendered by
@@ -541,14 +556,25 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
             full in the drawer: the feed is a scroll of many cards, not one. */}
         {card.description && (isCommunityPost
           ? (
-            <div className={`fc-rbwrap${longPost ? ' clamped' : ''}`}>
-              <RitualBody body={card.description} classes={{ sec: 'fc-rb', label: 'fc-rb-lab', value: 'fc-rb-val' }} />
-              {longPost && (
-                <button type="button" className="fc-rbmore" onClick={() => { setPlayingInline(false); onOpen?.(card); }}>
-                  Read the full post
+            <>
+              <div
+                ref={postBodyRef}
+                className={`fc-rbwrap${postExpanded ? '' : ' clamped'}`}
+                style={postExpanded ? undefined : { maxHeight: `${POST_CLAMP_LINES * 1.55}em` }}
+              >
+                <RitualBody body={card.description} classes={{ sec: 'fc-rb', label: 'fc-rb-lab', value: 'fc-rb-val' }} />
+              </div>
+              {postOverflows && (
+                <button
+                  type="button"
+                  className="fc-rbmore"
+                  aria-expanded={postExpanded}
+                  onClick={() => setPostExpanded((v) => !v)}
+                >
+                  {postExpanded ? 'Show less' : 'Show more'}
                 </button>
               )}
-            </div>
+            </>
           )
           : <p>{card.description}</p>)}
         {/* Locked: a big lock over the tile, dimmed, and an overlay that swallows
