@@ -98,6 +98,7 @@ written. It has now: **178 tasks carry `verified_at`.**
 | `studentProgressMerge.ts` | pure | `mergeProgressFile`, made safe to hand to a student |
 | `storyVerificationRead.ts` | I/O | The one story the workspace page has open |
 | `rejectedClaimsSignal.ts` | I/O | Making `rejected_claims` reach a human, instead of resting in a column |
+| `storyPoints.ts` | I/O | ONE answer to "what is a story worth": the `project_story_verified` budget split across the plan's stories + STORY-000. The verifier judges and pays from it; the project tree and the Today tile show it. Priced in one place so the number a student sees before building is the number paid after verification (2026-09-11) |
 
 #### Command Center, documents, and the rest
 

@@ -51,6 +51,15 @@ jest.mock('../../../progression/competencyEngine', () => ({
 jest.mock('../../../progression/promotionService', () => ({
   evaluateForEnrollment: (...a: any[]) => mockEvaluatePromotion(...a),
 }));
+// The HUD ledger (student_points_events) — the topbar total and every "+N pts"
+// badge. A verified story pays it beside Builder XP as of 2026-09-11.
+const mockAwardPoints = jest.fn();
+jest.mock('../../../pointsService', () => ({
+  award: (...a: any[]) => mockAwardPoints(...a),
+}));
+jest.mock('../../../../config/env', () => ({
+  env: { ...jest.requireActual('../../../../config/env').env, portalPointsAwardEnabled: true },
+}));
 
 import { verifyBuildFromRepo, STORY_XP_KEY, VERIFIER_SOURCE } from '../buildVerificationService';
 import { PROGRESS_SCHEMA_VERSION } from '../progressContract';
@@ -140,6 +149,7 @@ beforeEach(() => {
   mockTaskUpdate.mockResolvedValue([1]);
   mockMarkVerified.mockResolvedValue({ id: 'x', story_id: 'STORY-001', status: 'complete', verified_at: new Date() });
   mockRecordEvidence.mockResolvedValue({ builder_xp: 0, created: true });
+  mockAwardPoints.mockResolvedValue({ awarded: true, points: 400 });
   // The 2-story PLAN against an 800 budget: 400 a story.
   mockGetBudgetPerUnitXp.mockResolvedValue({ per_unit: 400, budget: 800, reason: null });
   mockRecompute.mockResolvedValue([]);
@@ -208,6 +218,59 @@ describe('idempotency — reading the same commit twice awards once', () => {
     const summary = await verifyBuildFromRepo(PROJECT_ID, { fetchImpl: githubFetch() });
     expect(summary.rollup.xp_awarded).toBe(0);
     expect(summary.rollup.newly_verified).toEqual([]);
+  });
+});
+
+/**
+ * The HUD ledger. Builder XP lives in xp_events; the topbar total and every
+ * "+N pts" badge read student_points_events. Until 2026-09-11 a verified story
+ * moved only the first — project work showed no points anywhere a student
+ * looks. Ali: "points should be on the Today timeline for the project work."
+ */
+describe('a verified story pays the HUD ledger at the same rate, once', () => {
+  it('awards the per-story rate under the Today feed ref of the task', async () => {
+    await verifyBuildFromRepo(PROJECT_ID, { fetchImpl: githubFetch() });
+
+    expect(mockAwardPoints).toHaveBeenCalledTimes(1);
+    expect(mockAwardPoints).toHaveBeenCalledWith(ENROLLMENT_ID, expect.objectContaining({
+      eventType: STORY_XP_KEY,
+      eventKey: 'project:task-STORY-001',      // `project:<task id>` — what the feed calls this item
+      points: 400,                              // the SAME figure recordEvidence was handed
+      metadata: expect.objectContaining({ project_id: PROJECT_ID, story_id: 'STORY-001', commit_sha: SHA }),
+    }));
+  });
+
+  it('does not pay again when the story was already verified on a previous run', async () => {
+    const fetchImpl = githubFetch();
+    await verifyBuildFromRepo(PROJECT_ID, { fetchImpl });
+    mockTaskFindOne.mockImplementation(async ({ where }: any) =>
+      taskRow(where.story_id, where.story_id === 'STORY-001' ? new Date('2026-08-10T12:05:00Z') : null));
+
+    await verifyBuildFromRepo(PROJECT_ID, { fetchImpl });
+
+    expect(mockAwardPoints).toHaveBeenCalledTimes(1);
+  });
+
+  it('pays nothing to the HUD when the budget is unset — the same fail-closed rule as Builder XP', async () => {
+    mockGetBudgetPerUnitXp.mockResolvedValue({ per_unit: 0, budget: null, reason: 'no_budget_set' });
+    await verifyBuildFromRepo(PROJECT_ID, { fetchImpl: githubFetch() });
+    expect(mockAwardPoints).not.toHaveBeenCalled();
+  });
+
+  it('is a MIRROR of the evidence, not a gate on it: a failed HUD award does not fail the sync', async () => {
+    mockAwardPoints.mockRejectedValue(new Error('connection terminated'));
+    const summary = await verifyBuildFromRepo(PROJECT_ID, { fetchImpl: githubFetch() });
+    expect(summary.ok).toBe(true);
+    expect(summary.rollup.newly_verified).toEqual(['STORY-001']);   // the verification itself landed
+    expect(mockRecordEvidence).toHaveBeenCalledTimes(1);            // and Builder XP was recorded first
+  });
+
+  it('never pays a story the repo did not verify', async () => {
+    mockGetBudgetPerUnitXp.mockResolvedValue({ per_unit: 400, budget: 800, reason: null });
+    // Only STORY-001 is claimed with a commit in the fixture; STORY-002 and STORY-000 are not.
+    await verifyBuildFromRepo(PROJECT_ID, { fetchImpl: githubFetch() });
+    const keys = mockAwardPoints.mock.calls.map((c) => c[1].eventKey);
+    expect(keys).toEqual(['project:task-STORY-001']);
   });
 });
 

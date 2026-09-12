@@ -125,3 +125,57 @@ describe('ambient testimonial tile', () => {
     expect(text()).toContain('Watched 20%');
   });
 });
+
+/**
+ * Project story tile. Ali, 2026-09-11: "the projects should have points instead
+ * of the open button, just like the Classroom." The points are paid when the
+ * platform verifies the story from the repo — never by a click — so the button
+ * says what building it pays and hands the card up to the container, which
+ * routes to the workspace (the tile is Router-free by design).
+ */
+describe('project task tile', () => {
+  const story = (over: Partial<TimelineFeedCard> = {}) => card({
+    id: 'project:t-1', type: 'project_task', student_label: 'Project Task', render_band: 'task',
+    title: 'STORY-001 · User selects location', project_id: 'p-1', project_task_id: 't-1',
+    points: { builder: 57 }, ...over,
+  });
+
+  it('shows the price tag and a "Build · +N pts" CTA, not "Collect" and not "Start"', async () => {
+    await render(story());
+    expect(text()).toContain('+57 pts');
+    expect(cta()?.textContent).toContain('Build · +57 pts');
+    expect(cta()?.textContent).not.toContain('Collect');
+    expect(cta()?.textContent).not.toMatch(/\bStart\b/);
+    expect(cta()?.className).toContain('cherry');
+    expect(cta()?.title).toContain('verified work pays +57 pts');
+  });
+
+  it('falls back to "Start" with no badge when the story carries no price', async () => {
+    await render(story({ points: {} }));
+    expect(cta()?.textContent).toMatch(/\bStart\b/);
+    expect(text()).not.toContain('pts');
+  });
+
+  it('hands the card up on the CTA and on Comment — a story\'s conversation lives in its workspace', async () => {
+    const opened: string[] = [];
+    await act(async () => { root.render(<TimelineCard card={story()} onOpen={(c) => opened.push(c.id)} />); });
+    await act(async () => { cta()!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    const comment = Array.from(container.querySelectorAll('button.cmt')).find((b) => /Comment/.test(b.textContent || '')) as HTMLButtonElement;
+    await act(async () => { comment.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(opened).toEqual(['project:t-1', 'project:t-1']);
+    expect(container.querySelector('.fc-comments, [data-testid="card-comments"]')).toBeNull();   // no dead card thread opened
+  });
+
+  it('shows "Completed · +N pts" once verified, and never calls the card gate', async () => {
+    await render(story({ status: 'completed', completed_at: '2026-09-11T12:00:00Z' }));
+    expect(text()).toContain('Completed · +57 pts');
+    expect(cta()).toBeUndefined();
+    expect(mVerdict).not.toHaveBeenCalled();
+  });
+
+  it('shows the source\'s meta line (the due state) where a curriculum card shows its difficulty', async () => {
+    await render(story({ meta: 'Due today', difficulty: '' }));
+    expect(text()).toContain('Due today');
+    expect(text()).not.toContain('core');
+  });
+});
