@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Friday, September 11, 2026 at 7:36 PM</div>
-    <div><span class="sid">CC-20260910-3q7x</span><span class="count">13 changes</span></div>
+    <div class="meta">Generated Saturday, September 12, 2026 at 6:38 AM</div>
+    <div><span class="sid">CC-20260910-3q7x</span><span class="count">14 changes</span></div>
   </header>
   <main>
     
@@ -248,6 +248,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">`inboxLivenessService.test.ts` 24/24 including a new regression test that drives the sweep with the exact human-readable label from prod and asserts every audit row still lands under a UUID and `logCaseEvent` never logged a write failure; 84 suites / 1,077 tests green across inbox-case + controllers + db; full CI jest 1,370 suites / 21,344 tests (the one failure is the local-only `@anthropic-ai/sdk` gap); tsc at the 2-error baseline; route-auth lint 114/114. Live evidence quoted above read from the production database through the read-only bridge pattern.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">The 65 already-dispositioned items have correct data (`source_live=false`, reason, disposition) but no audit row; a dry-run-by-default backfill script writes them from the item rows themselves, marked `backfilled_at`, and is run only after the fix deploys. Another session pulled and redeployed prod at 00:19:55Z (host now `03ac2f526`) — the sweep had already completed at 00:19:36Z. The `+N new · M cleared` refresh line matters more than expected: this sweep alone would have read as &quot;+49 new&quot; without it.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">14</span>
+          <h2>Ali&#39;s email style kit as a guard on every /inbox-zero send (T18)</h2>
+          <span class="badge">2026-09-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali sent Basecamp to-do 9982045924 (&quot;Email writing style kit&quot;, 6 files) with the instruction to share it with any project that drafts email on his behalf. /inbox-zero&#39;s Gmail executor was sending a plain-text body with no signature and no check. New `services/email/aliEmailStyle.ts`: a typed port of the kit&#39;s `style-linter.js` (hard: no em/en-dash, branded signature present, no double sign-off, no duplicate full name; soft: fluff opener, vague urgency, marketing exclamation, hedging stack, vague subject) plus `normalizeAliEmailText` (dashes → &quot; - &quot; with single spaces, trailing &quot;Best, Ali&quot; / bare &quot;Ali&quot; removed, plain-text signature appended exactly once, idempotent) and `normalizeAliSubject`. Wired twice: the planner normalises the draft at PROPOSE time and stores `payload.style`; the executor normalises again and refuses to send on any surviving hard fail (`StyleViolationError` → FAILED action Ali can see). Skill: drafting rules cite the kit; the focus template shows the draft as it will actually leave plus &quot;Style notes&quot; for soft rules. Fixed on the way: a `/g` regex used with `.test()` (stateful across calls) and dash replacement that doubled surrounding spaces; widened the kit&#39;s fluff regex by one alternation (&quot;hope you are doing well&quot;).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`aliEmailStyle.test.ts` 15/15 (each non-negotiable flagged and passed; repeat-call regex test; normalisation idempotent, never double-signs, strips a sign-off above an existing signature, empty draft; executor refuses a hard violation and sends nothing; the compliant MIME that leaves the Gmail fake carries `To:`, the normalised subject, no dashes and the signature). 39 suites / 618 tests across inbox-case + email + controller green.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The kit&#39;s `emailSignature.js` (Mandrill kit) is not in this repo; the plain-text block from `reference_email_signature` is the constant here. Only the text transport exists on this path (`text/plain` MIME), so HTML rules (font, callouts) are not applicable yet. Cora and the Mandrill scripts are out of scope for this change.</span></div>
           
         </div>
       </article>

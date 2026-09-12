@@ -127,6 +127,18 @@ absolute (`Thu 11 Sep 2026, 3:19 PM CDT`, never "yesterday"). Drafts are in Ali'
 voice: answer first, concise, every question in the thread addressed, no promise the engine cannot
 verify, recipients preserved and any add/remove called out.
 
+**Every email draft follows Ali's email writing style kit** (source of truth: Basecamp to-do
+https://3.basecamp.com/3945211/buckets/7463955/todos/9982045924). The three non-negotiables are a
+GUARD in the backend, not a reminder here: no em-dashes or en-dashes anywhere, the branded signature
+on every send, no double sign-off (the signature names him, so the body ends on its last real
+sentence, never "Best, Ali"). The planner normalises every draft to that before Ali sees it and the
+executor refuses to send anything that still breaks it (`StyleViolationError`, shown as a FAILED
+action). The rest of the kit is how the draft should read: subject leads with the action and has no
+exclamation mark; salutation is the first name only; the first line is the point, never "hope
+you're doing well"; 3-5 sentence paragraphs; specific dates, never "ASAP". When B (edit first) is
+chosen, restate the draft to that standard; `payload.style.soft` lists what the linter would still
+flag.
+
 ## References
 
 | File | Contents |

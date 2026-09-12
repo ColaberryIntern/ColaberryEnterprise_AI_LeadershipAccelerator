@@ -3,6 +3,7 @@ import InboxCaseAction from '../../models/InboxCaseAction';
 import { getColaberryGmailClient, getPersonalGmailClient } from '../inbox/inboxSyncService';
 import { archiveMessage as archiveHotmailMessage, isConfigured as isHotmailConfigured } from '../inbox/graphMailService';
 import { bcPost, bcPut } from '../ops/basecampClient';
+import { lintAliEmail, normalizeAliEmailText, normalizeAliSubject, STYLE_KIT_URL } from '../email/aliEmailStyle';
 
 // Per-action-type executors for the durable-outbox action executor
 // (caseExecutionService.ts). Each function performs exactly ONE external
@@ -86,10 +87,27 @@ export async function executeEmailSend(action: InboxCaseAction, item: InboxCaseI
   const to = item.source_type === 'sent_email' ? (Array.isArray(snap.to_addresses) ? snap.to_addresses[0] : undefined) : snap.from_address;
   if (!to) throw new ClassifiedExecutionError('ValidationError', 'Reply target has no resolvable recipient on record');
 
+  // Second half of the style guard (STYLE_KIT_URL). The planner already
+  // normalized this draft, but a body can also be edited between proposal and
+  // approval — and this is the last point before it leaves as Ali. Normalize
+  // again (idempotent), then REFUSE the send if a hard violation survives:
+  // an email that breaks the three non-negotiables is incorrect however good
+  // its content is, and a refusal here is a FAILED action Ali can see and
+  // retry, never a silently wrong email in a customer's inbox.
+  const subject = normalizeAliSubject(String(action.payload.subject || `Re: ${item.title}`));
+  const body = normalizeAliEmailText(String(action.payload.body || ''));
+  const style = lintAliEmail({ subject, text: body });
+  if (!style.ok) {
+    throw new ClassifiedExecutionError(
+      'StyleViolationError',
+      `Draft violates Ali's email style kit (${style.hardFails.map((f) => f.rule).join(', ')}). See ${STYLE_KIT_URL}`,
+    );
+  }
+
   const raw = buildRawMimeReply({
     to,
-    subject: String(action.payload.subject || `Re: ${item.title}`),
-    body: String(action.payload.body || ''),
+    subject,
+    body,
     inReplyTo: snap.message_id,
   });
 
@@ -97,7 +115,7 @@ export async function executeEmailSend(action: InboxCaseAction, item: InboxCaseI
     gmail.users.messages.send({ userId: 'me', requestBody: { raw, threadId: snap.thread_id || undefined } })
   );
 
-  return { message_id: res.data.id, thread_id: res.data.threadId, sent_to: to };
+  return { message_id: res.data.id, thread_id: res.data.threadId, sent_to: to, style_soft_fails: style.softFails.map((f) => f.rule) };
 }
 
 const RESOLVED_LABEL = 'Inbox Intel/Resolved';
