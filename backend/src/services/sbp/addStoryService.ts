@@ -62,7 +62,14 @@ export const addStorySchema = z.object({
   /** r1, r2, … — r0 is the walking skeleton and is closed to additions. */
   release: z.string().trim().regex(/^r[1-9]\d*$/, 'release must be r1 or later'),
   /** AGENT-nnn from the plan. Defaults to the plan's first agent. */
-  owner_agent: z.string().trim().regex(/^AGENT-\d+$/).optional(),
+  /**
+   * Who owns the story. FREE TEXT, because that is what real plans carry:
+   * measured across production, 30 of 31 published plans have no `agents[]`
+   * at all and their stories name an owner like "User" or "System". An
+   * AGENT-nnn regex here refused every real build on the day it shipped.
+   * Defaults to whatever the plan's own stories already use.
+   */
+  owner_agent: z.string().trim().min(1).max(60).optional(),
   task_guidance: z.string().trim().min(10).max(600).optional(),
   failure_paths: z.array(z.string().trim().min(4).max(200)).max(5).optional(),
   /** The sha of the published plan the student is looking at. */
@@ -77,7 +84,6 @@ export type AddStoryErrorClass =
   | 'UnknownRelease'
   | 'ReleaseLocked'
   | 'UnknownAgent'
-  | 'NoAgents'
   | 'NoTrustLine'
   | 'PlanPredatesGate'
   | 'GateBlocked';
@@ -112,6 +118,37 @@ function nextId(prefix: 'STORY' | 'REQ', ids: string[]): string {
 }
 
 const TRUST_LINE = /^\s*trust\b/i;
+
+/**
+ * Who should own a new story, taken from what the plan already does.
+ *
+ * `plan.agents` is optional and in production almost always absent: 30 of 31
+ * published plans carry no agents array, and their stories name an owner like
+ * "User" or "System". So the plan's OWN stories are the authority on what an
+ * owner looks like here, and `agents` is the fallback for the rare plan that
+ * has one. Returns null only when the student named an owner the plan never
+ * uses, which is the one case worth refusing.
+ */
+export function resolveOwnerAgent(plan: BuildPlan, explicit?: string): string | null {
+  const owners = (plan.stories ?? [])
+    .map((st) => st.owner_agent)
+    .filter((o): o is string => typeof o === 'string' && o.trim().length > 0);
+  const agentIds = (plan.agents ?? []).map((a) => a.id).filter(Boolean);
+
+  if (explicit) return new Set<string>([...owners, ...agentIds]).has(explicit) ? explicit : null;
+
+  // The most common owner among existing stories, so a new story files with
+  // the majority rather than with whichever story happens to be first.
+  const tally = new Map<string, number>();
+  for (const o of owners) tally.set(o, (tally.get(o) ?? 0) + 1);
+  let best: string | null = null;
+  let bestN = 0;
+  for (const [o, n] of tally) if (n > bestN) { best = o; bestN = n; }
+
+  // 'System' is the last resort for a plan whose stories name no owner at all.
+  // Never a refusal: the student did not choose this and cannot fix it.
+  return best ?? agentIds[0] ?? 'System';
+}
 
 /**
  * Pure. Given the published plan and the student's input, return the revised
@@ -151,17 +188,14 @@ export function buildStoryRevision(plan: BuildPlan, input: AddStoryInput): Story
         : `exactly one acceptance line may start with "Trust"; found ${trustLines}`);
   }
 
-  let ownerAgent = input.owner_agent;
-  if (ownerAgent) {
-    if (!agents.some((a) => a.id === ownerAgent)) {
-      throw new AddStoryError(422, 'UnknownAgent',
-        `agent ${ownerAgent} is not in this plan`, { agents: agents.map((a) => a.id) });
-    }
-  } else {
-    ownerAgent = agents[0]?.id;
-    if (!ownerAgent) {
-      throw new AddStoryError(422, 'NoAgents', 'this plan has no agents to own a story');
-    }
+  const ownerAgent = resolveOwnerAgent(plan, input.owner_agent);
+  if (!ownerAgent) {
+    const known = [...new Set([
+      ...(plan.stories ?? []).map((st) => st.owner_agent).filter(Boolean),
+      ...agents.map((a) => a.id),
+    ])];
+    throw new AddStoryError(422, 'UnknownAgent',
+      `this plan has no owner called ${input.owner_agent}`, { known_owners: known });
   }
 
   const storyId = nextId('STORY', stories.map((s) => s.id));
