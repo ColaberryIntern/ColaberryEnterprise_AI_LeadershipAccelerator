@@ -47,6 +47,15 @@ export interface InterviewProgress {
   resolved: number;
   remaining: number;
   complete: boolean;
+  /**
+   * Answers captured from a phone call and awaiting the applicant's confirmation
+   * (`needs_followup`). They are NOT resolved — the transcript is imperfect and
+   * the person has to see their own words before they count — but they are also
+   * not nothing, and a UI that reported "Question 1 of 21" after a full call would
+   * be lying about what happened. This is what lets the interview say "17 from
+   * your call, confirm each below" instead.
+   */
+  captured_pending: number;
 }
 
 /** Every answer on an application, keyed for lookup. */
@@ -71,13 +80,19 @@ export async function remainingQuestions(applicationId: string): Promise<Intervi
 
 export async function progress(applicationId: string): Promise<InterviewProgress> {
   const all = orderedQuestions();
-  const remaining = await remainingQuestions(applicationId);
+  const answers = await answerMap(applicationId);
+  const remaining = all.filter((q) => {
+    const a = answers.get(q.question_key);
+    return !a || !RESOLVED_STATES.has(a.state);
+  });
+  const capturedPending = all.filter((q) => answers.get(q.question_key)?.state === 'needs_followup').length;
   return {
     version: ACTIVE_QUESTION_SET_VERSION,
     total: all.length,
     resolved: all.length - remaining.length,
     remaining: remaining.length,
     complete: remaining.length === 0,
+    captured_pending: capturedPending,
   };
 }
 
