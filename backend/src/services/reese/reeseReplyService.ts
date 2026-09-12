@@ -1,10 +1,12 @@
+import crypto from 'crypto';
 import OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import RoomMembership from '../../models/RoomMembership';
 import RoomMessage from '../../models/RoomMessage';
-import { getReeseEnrollmentId, getReeseAdminUserId, getReeseAgentId } from './reeseIdentitySeed';
+import { getReeseEnrollmentId, getReeseAdminUserId, getReeseAgentId, REESE_AGENT_NAME } from './reeseIdentitySeed';
 import { buildReeseSystemPrompt } from './reeseSystemPrompt';
 import { ensureReeseTicketForRoom, logReeseExchangeActivity } from './reeseTicketLinkService';
+import { authorizeTicketDispatch } from '../workLedger/agentActionAuthorizationBridge';
 import { logAgentActivity } from '../agentBlueprint/agentActivityLogService';
 import { agentHasTool } from '../agents/tools/agentToolRegistry';
 import { readAttachments, attachmentInstruction } from '../agents/tools/readAttachmentsTool';
@@ -191,6 +193,25 @@ export async function maybeTriggerReeseReply(roomId: string, senderEnrollmentId:
 
     const reply = completion.choices[0]?.message?.content?.trim();
     if (!reply) return;
+
+    // Audit-coverage fix (Ali: "shouldn't Reese not be audited with
+    // everything we're tracking?") — this reply path never called the real
+    // ABAC chokepoint at all, unlike reeseAutonomousOutreachService.ts's
+    // outreach sends, so every DM reply Reese has ever sent carries zero
+    // authorization/audit trail (getAgentAuthorizationSummary()'s count only
+    // ever reflected the outreach path). Same shadow-mode-only chokepoint,
+    // same call shape, evaluated right before the real send — mirrors the
+    // ordering fix already applied to the outreach path (authorize before
+    // the action, not after). Advisory only; never gates the reply. Scoped
+    // to when a real ticket exists, since the check itself is ticket-scoped.
+    if (ticketId) {
+      await authorizeTicketDispatch({
+        eventId: crypto.randomUUID(),
+        ticketId,
+        agentName: REESE_AGENT_NAME,
+        action: 'reese_dm_reply',
+      });
+    }
 
     // Dynamic import breaks the dmService.ts <-> reeseReplyService.ts circular
     // dependency (dmService calls this module; this module posts back through
