@@ -75,12 +75,15 @@ describe('Phase 2 source', () => {
     }
   });
 
-  it('never updates or destroys an append-only row (classifications, transitions)', () => {
-    // §6.4. The two models declare no updated_at; this is the behavioural half:
-    // any Phase 2 source file that imports either model contains no `.update(`
-    // and no `.destroy(` at all. Strict on purpose — a file that needs to
-    // update an enrolment keeps the append-only models out of its imports.
-    const APPEND_ONLY = /GrowthJourney(Classification|Transition)\b/;
+  it('never updates or destroys an append-only row (classifications, transitions, decisions, snapshots)', () => {
+    // §6.4. FOUR models now declare no updated_at — classifications and
+    // transitions (T222) plus decisions and score snapshots (T301) — and this is
+    // the behavioural half: any source file that imports one of them contains no
+    // `.update(` and no `.destroy(` at all. Strict on purpose — a file that needs
+    // to update an enrolment or a PROFILE keeps the append-only models out of its
+    // imports. `GrowthJourneyProfile` is deliberately NOT in this pattern: it is
+    // the one mutable table this run owns, and updating it is the point.
+    const APPEND_ONLY = /GrowthJourney(Classification|Transition|Decision|ScoreSnapshot)\b/;
     let scanned = 0;
     for (const f of files) {
       const src = fs.readFileSync(f, 'utf8');
@@ -91,9 +94,28 @@ describe('Phase 2 source', () => {
     }
     // Vacuity guard: T225 shipped the writers (classificationService.ts and the
     // input loader both name the model), so the scan must have looked at them.
+    //
+    // Stated plainly rather than implied: the Decision and ScoreSnapshot halves of
+    // the pattern match NOTHING yet, because no service names those models until
+    // T307/T311. They are pre-emptive. The Classification/Transition halves are
+    // what keeps this scan non-vacuous today, which is why the count stays >= 2.
     expect(scanned).toBeGreaterThanOrEqual(2);
-    const control = "import { GrowthJourneyClassification } from '../../models'; await row.update({ locked: true });";
-    expect(APPEND_ONLY.test(control) && /\.update\(/.test(control)).toBe(true);
+
+    // One control per half of the pattern, so a half that stops matching is caught
+    // here rather than the day a service first imports the model.
+    for (const control of [
+      "import { GrowthJourneyClassification } from '../../models'; await row.update({ locked: true });",
+      "import { GrowthJourneyTransition } from '../../models'; await row.update({ status: 'applied' });",
+      "import GrowthJourneyDecision from '../../models/GrowthJourneyDecision'; await row.update({ executed: true });",
+      "import GrowthJourneyScoreSnapshot from '../../models/GrowthJourneyScoreSnapshot'; await row.destroy();",
+    ]) {
+      expect(APPEND_ONLY.test(control) && /\.update\(|\.destroy\(/.test(control)).toBe(true);
+    }
+
+    // The mutable one must NOT be caught, or T307's profile writer could not work.
+    expect(
+      APPEND_ONLY.test("import GrowthJourneyProfile from '../../models/GrowthJourneyProfile'; await row.update({ state: 'CUSTOMER' });"),
+    ).toBe(false);
   });
 
   it('carries no literal control byte (heredoc tripwire)', () => {

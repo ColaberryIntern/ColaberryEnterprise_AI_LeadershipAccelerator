@@ -199,8 +199,11 @@ describe('the two tables sit in the statement list where the foreign keys allow'
     expect(idxAlter).toBeGreaterThan(idxTransitions);
   });
 
-  it('the run now owns seven tables, and the bidirectional _unique guard covers all seven', () => {
-    expect(tablesCreated()).toHaveLength(7);
+  it('the run now owns ten tables, and the bidirectional _unique guard covers them all', () => {
+    // Seven when Phase 2 wrote this; Phase 3 (T301) added decisions, profiles and
+    // score_snapshots. The count is asserted, not the names — the names have their
+    // own explicit set-equality assertion in the statements test.
+    expect(tablesCreated()).toHaveLength(10);
     const uniqueNamed = [...SQL.matchAll(/CREATE\s+UNIQUE\s+INDEX\s+IF\s+NOT\s+EXISTS\s+(\w+)/gi)].map((m) => m[1]);
     expect(uniqueNamed).toEqual(expect.arrayContaining([
       'growth_journey_classifications_idempotency_unique',
