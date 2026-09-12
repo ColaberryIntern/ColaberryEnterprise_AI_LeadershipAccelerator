@@ -54,7 +54,13 @@ export const FIXTURE: FixtureCase[] = [
       opened_at: d('2026-09-11T13:00:00Z'), updated_at: d('2026-09-11T13:30:00Z'), created_at: d('2026-09-11T13:00:00Z'),
       assessment: assessed({ response_needed: 'YES', response_needed_confidence: 80, response_needed_reason: 'Kes asked in the to-do', response_channel: 'BASECAMP', response_channel_reason: 'active to-do', current_owner: 'Kes' }),
     },
-    items: [{ source_type: 'basecamp_todo', provider: 'basecamp', title: 'Review deck', occurred_at: d('2026-09-11T12:30:00Z'), source_url: 'https://3.basecamp.com/x', inclusion_status: 'INCLUDED', disposition: null, snapshot: { project_id: 1 }, source_hash: 'h-c1' }],
+    // T20: this one arrived as a Basecamp NOTIFICATION email, so it IS inbox
+    // work — and the to-do it points at travels with it, so the response goes
+    // to Basecamp while the email itself gets archived.
+    items: [
+      { source_type: 'email', provider: 'gmail_colaberry', title: '[Basecamp] Kes commented on "Review deck"', occurred_at: d('2026-09-11T12:31:00Z'), source_url: 'https://mail/c0', inclusion_status: 'INCLUDED', disposition: null, snapshot: { from_address: 'notifications@basecamp.com', thread_id: 'T-C' }, source_hash: 'h-c0' },
+      { source_type: 'basecamp_todo', provider: 'basecamp', title: 'Review deck', occurred_at: d('2026-09-11T12:30:00Z'), source_url: 'https://3.basecamp.com/x', inclusion_status: 'INCLUDED', disposition: null, snapshot: { project_id: 1 }, source_hash: 'h-c1' },
+    ],
   },
   {
     key: 'failed_verify',
@@ -63,6 +69,7 @@ export const FIXTURE: FixtureCase[] = [
       opened_at: d('2026-09-05T09:00:00Z'), updated_at: d('2026-09-11T11:00:00Z'), created_at: d('2026-09-05T09:00:00Z'),
       assessment: assessed({ response_needed: 'NO', response_needed_confidence: 88, response_needed_reason: 'already sent', response_channel: 'NONE', response_channel_reason: 'done' }),
     },
+    items: [{ source_type: 'email', provider: 'gmail_colaberry', title: 'Intro request', occurred_at: d('2026-09-05T08:00:00Z'), source_url: 'https://mail/h-d1', inclusion_status: 'INCLUDED', disposition: null, snapshot: { from_address: 'partner@example.com' }, source_hash: 'h-d1' }],
   },
   {
     key: 'waiting_fresh',
@@ -70,6 +77,7 @@ export const FIXTURE: FixtureCase[] = [
       title: 'Waiting on Priya for the SOW', mode: 'TOPIC', state: 'WAITING', waiting_since: d('2026-09-10T09:00:00Z'), sla_due_at: d('2026-09-15T00:00:00Z'),
       opened_at: d('2026-09-08T09:00:00Z'), updated_at: d('2026-09-10T09:00:00Z'), created_at: d('2026-09-08T09:00:00Z'), assessment: assessed(),
     },
+    items: [{ source_type: 'email', provider: 'gmail_colaberry', title: 'SOW draft', occurred_at: d('2026-09-08T08:00:00Z'), source_url: 'https://mail/h-e1', inclusion_status: 'INCLUDED', disposition: null, snapshot: { from_address: 'priya@example.com' }, source_hash: 'h-e1' }],
   },
   {
     key: 'waiting_stale',
@@ -77,6 +85,7 @@ export const FIXTURE: FixtureCase[] = [
       title: 'Waiting on the bank for the wire', mode: 'TOPIC', state: 'WAITING', waiting_since: d('2026-09-01T09:00:00Z'), sla_due_at: d('2026-09-04T00:00:00Z'),
       opened_at: d('2026-08-30T09:00:00Z'), updated_at: d('2026-09-01T09:00:00Z'), created_at: d('2026-08-30T09:00:00Z'), assessment: assessed(),
     },
+    items: [{ source_type: 'email', provider: 'hotmail', title: 'Wire confirmation', occurred_at: d('2026-08-30T08:00:00Z'), source_url: 'https://mail/h-f1', inclusion_status: 'INCLUDED', disposition: null, snapshot: { from_address: 'bank@example.com' }, source_hash: 'h-f1' }],
   },
   {
     key: 'review_legacy',
@@ -84,6 +93,7 @@ export const FIXTURE: FixtureCase[] = [
       title: 'Newsletter reply thread', mode: 'TOPIC', state: 'ASSESSING', priority_band: null,
       opened_at: d('2026-09-11T14:00:00Z'), updated_at: d('2026-09-11T14:45:00Z'), created_at: d('2026-09-11T14:00:00Z'), assessment: null,
     },
+    items: [{ source_type: 'email', provider: 'gmail_colaberry', title: 'Re: newsletter', occurred_at: d('2026-09-11T13:50:00Z'), source_url: 'https://mail/h-g1', inclusion_status: 'INCLUDED', disposition: null, snapshot: { from_address: 'reader@example.com' }, source_hash: 'h-g1' }],
   },
   {
     key: 'snoozed',
@@ -91,6 +101,7 @@ export const FIXTURE: FixtureCase[] = [
       title: 'Conference sponsorship', mode: 'TOPIC', state: 'READY_TO_PLAN', priority_band: 'P1', snoozed_until: d('2026-09-18T09:00:00Z'), snooze_reason: 'Budget meeting is the 17th',
       opened_at: d('2026-09-07T09:00:00Z'), updated_at: d('2026-09-11T10:00:00Z'), created_at: d('2026-09-07T09:00:00Z'), assessment: assessed(),
     },
+    items: [{ source_type: 'email', provider: 'gmail_colaberry', title: 'Sponsorship packet', occurred_at: d('2026-09-07T08:00:00Z'), source_url: 'https://mail/h-h1', inclusion_status: 'INCLUDED', disposition: null, snapshot: { from_address: 'events@example.com' }, source_hash: 'h-h1' }],
   },
   {
     key: 'resolved',
@@ -98,6 +109,17 @@ export const FIXTURE: FixtureCase[] = [
       title: 'Closed last week', mode: 'TOPIC', state: 'RESOLVED', closed_at: d('2026-09-04T00:00:00Z'),
       opened_at: d('2026-09-01T09:00:00Z'), updated_at: d('2026-09-04T00:00:00Z'), created_at: d('2026-09-01T09:00:00Z'), assessment: assessed(),
     },
+    items: [{ source_type: 'email', provider: 'gmail_colaberry', title: 'Old thread', occurred_at: d('2026-09-01T08:00:00Z'), source_url: 'https://mail/h-i1', inclusion_status: 'INCLUDED', disposition: null, snapshot: { from_address: 'someone@example.com' }, source_hash: 'h-i1' }],
+  },
+  {
+    // T20 control: board work that never came by email. The console must not
+    // show it at all, and must not count it as inbox work.
+    key: 'board_only',
+    row: {
+      title: 'Board to-do that never emailed Ali', mode: 'TOPIC', state: 'READY_TO_PLAN', priority_band: null,
+      opened_at: d('2026-09-10T09:00:00Z'), updated_at: d('2026-09-11T09:00:00Z'), created_at: d('2026-09-10T09:00:00Z'), assessment: assessed(),
+    },
+    items: [{ source_type: 'basecamp_todo', provider: 'basecamp', title: 'Anchor to-do', occurred_at: d('2026-09-10T08:00:00Z'), source_url: 'https://3.basecamp.com/y', inclusion_status: 'INCLUDED', disposition: null, snapshot: { project_id: 2 }, source_hash: 'h-j1' }],
   },
 ];
 

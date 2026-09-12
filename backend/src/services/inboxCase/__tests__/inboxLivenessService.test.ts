@@ -79,7 +79,7 @@ import {
   verifyCaseLivenessNow,
   DEFAULT_RECONCILE_LIMIT,
 } from '../inboxLivenessService';
-import { getNext, getOverview } from '../inboxZeroService';
+import { getDelta, getNext, getOverview } from '../inboxZeroService';
 import { loadVisibleCases } from '../inboxZeroVisibility';
 import { getQueue } from '../inboxZeroQueueService';
 
@@ -344,6 +344,58 @@ describe('settleCaseIfNoLiveItems', () => {
   });
 });
 
+describe('T20 — the console is about the inbox, and only the inbox', () => {
+  // Ali, 2026-09-12: "It should be emails only, but if you get a basecamp
+  // email, it needs to be handled in basecamp. Then what's every handled
+  // should be removed from the inbox, but make no mistake, it is all about
+  // the inbox. That is it!"
+  it('hides a Basecamp-only case and counts it as not-inbox, never as inbox work', async () => {
+    const board = await seedCase({ title: 'board to-do' });
+    await seedItem(board.id, { source_type: 'basecamp_todo', provider: 'basecamp', source_id: 't1' });
+    const mail = await seedCase({ title: 'real mail' });
+    await seedItem(mail.id);
+
+    const visible = await loadVisibleCases();
+
+    expect(visible.cases.map((c) => c.title)).toEqual(['real mail']);
+    expect(visible.liveness.non_email_cases).toBe(1);
+    expect(visible.liveness.gone_hidden_cases).toBe(0); // not "hidden mail" — not mail at all
+  });
+
+  it('KEEPS a Basecamp notification email, with its attached to-dos, because it landed in the inbox', async () => {
+    const c = await seedCase({ title: 'Basecamp: new comment on Logo Creation' });
+    await seedItem(c.id, { source_id: 'bc-notification', snapshot: { from_address: 'notifications@basecamp.com' } });
+    await seedItem(c.id, { source_type: 'basecamp_todo', provider: 'basecamp', source_id: 't9' });
+
+    const visible = await loadVisibleCases();
+
+    expect(visible.cases.map((c2) => c2.title)).toEqual(['Basecamp: new comment on Logo Creation']);
+    expect(visible.liveness.non_email_cases).toBe(0);
+    expect(visible.itemsByCase.get(c.id)).toHaveLength(2); // the to-do travels with the email so the response goes to Basecamp
+  });
+
+  it('a Basecamp-only case never reaches next, the queue, the overview counts, or the delta', async () => {
+    const board = await seedCase({ title: 'board only' });
+    await seedItem(board.id, { source_type: 'basecamp_todo', provider: 'basecamp', source_id: 't2' });
+    gmailGet.mockResolvedValue({ data: { labelIds: ['INBOX'] } });
+
+    expect(await getNext(null, NOW, CORR)).toBeNull();
+    expect((await getQueue('urgency', NOW)).groups.flatMap((g) => g.cases)).toHaveLength(0);
+    const ov = await getOverview(null, NOW);
+    expect(ov.counts.needs_decision + ov.counts.unassessed + ov.counts.due_now + ov.counts.waiting + ov.counts.review).toBe(0);
+    expect(ov.liveness.non_email_cases).toBe(1);
+    const dlt = await getDelta('2026-01-01T00:00:00.000Z', NOW);
+    expect(dlt.cases).toHaveLength(0);
+    expect(dlt.hidden_gone).toBe(1); // counted as not-shown, and never as new
+  });
+
+  it('sent mail alone is not inbox work either', async () => {
+    const c = await seedCase({ title: 'my own outbound' });
+    await seedItem(c.id, { source_type: 'sent_email' });
+    expect((await loadVisibleCases()).cases).toHaveLength(0);
+  });
+});
+
 describe('the console honours liveness', () => {
   it('overview/queue hide an all-gone case, show an unchecked one, and count what is unverified', async () => {
     const goneCase = await seedCase({ title: 'gone' });
@@ -356,7 +408,7 @@ describe('the console honours liveness', () => {
 
     const ov = await getOverview(null, NOW);
     expect(ov.counts.needs_decision).toBe(2);
-    expect(ov.liveness).toEqual({ unchecked_items: 1, gone_hidden_cases: 1, last_checked_at: NOW.toISOString() });
+    expect(ov.liveness).toEqual({ unchecked_items: 1, gone_hidden_cases: 1, non_email_cases: 0, last_checked_at: NOW.toISOString() });
     expect(ov.bottom_line).toMatch(/1 item\(s\) have not yet been checked against your inbox/);
 
     const q = await getQueue('urgency', NOW);
