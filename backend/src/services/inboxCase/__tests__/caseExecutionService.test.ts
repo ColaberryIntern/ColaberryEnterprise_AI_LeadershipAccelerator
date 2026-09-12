@@ -126,6 +126,40 @@ describe('executeApprovedActions — dependency ordering and failure blocking', 
     expect(result.skipped).toBe(1);
   });
 
+  it("T19 (Ali: 'when the email is addressed, move it out the inbox'): an archive whose reply Ali REJECTED still runs — rejected means addressed", async () => {
+    const c = await seedCase();
+    const reply = await seedAction(c.id, { action_type: 'EMAIL_SEND', status: 'REJECTED' });
+    const archive = await seedAction(c.id, { action_type: 'EMAIL_LABEL', depends_on_action_ids: [reply.id] });
+
+    const result = await executeApprovedActions(c.id, 'ali@colaberry.com');
+
+    expect(archive.status).toBe('SUCCEEDED');
+    expect(mockEmailArchiveExecutor).toHaveBeenCalledTimes(1);
+    expect(result.skipped).toBe(0);
+  });
+
+  it('T19: a FAILED or SKIPPED dependency still keeps the mail in the inbox (archive SKIPPED)', async () => {
+    const c = await seedCase();
+    const reply = await seedAction(c.id, { action_type: 'EMAIL_SEND', status: 'SKIPPED' });
+    const archive = await seedAction(c.id, { action_type: 'EMAIL_ARCHIVE', depends_on_action_ids: [reply.id] });
+
+    await executeApprovedActions(c.id, 'ali@colaberry.com');
+
+    expect(archive.status).toBe('SKIPPED');
+    expect(mockEmailArchiveExecutor).not.toHaveBeenCalled();
+  });
+
+  it('T19: the relaxation is for archives only — a non-archive action behind a REJECTED dependency is still SKIPPED', async () => {
+    const c = await seedCase();
+    const comment = await seedAction(c.id, { action_type: 'BASECAMP_COMMENT', status: 'REJECTED' });
+    const waiting = await seedAction(c.id, { action_type: 'MARK_WAITING', depends_on_action_ids: [comment.id] });
+
+    await executeApprovedActions(c.id, 'ali@colaberry.com');
+
+    expect(waiting.status).toBe('SKIPPED');
+    expect(mockMarkWaitingExecutor).not.toHaveBeenCalled();
+  });
+
   it('archive actions execute only after their dependencies succeed', async () => {
     const c = await seedCase();
     const waiting = await seedAction(c.id, { action_type: 'MARK_WAITING' });
