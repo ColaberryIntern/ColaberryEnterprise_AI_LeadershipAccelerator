@@ -288,17 +288,30 @@ const InternshipInterview: React.FC<Props> = ({ onProgressed, onComplete }) => {
         <h2 id="ip-iv">Your interview</h2>
 
         <div className="ip-progress" role="group" aria-label="Interview progress">
+          {/* "In hand" = confirmed answers PLUS the ones captured on the call and
+              waiting to be confirmed. Filling the bar to `answered` alone would show
+              5% right after a call that captured 17 — the bar and the "17 from your
+              call" banner would then tell opposite stories. Confirming a captured
+              answer moves it from captured to confirmed, so "in hand" holds steady
+              until a genuinely new question is answered — which is the honest shape
+              of the work left. */}
           <div className="ip-progress__bar">
             <div
               className="ip-progress__fill"
-              style={{ width: `${total ? Math.round((answered / total) * 100) : 0}%` }}
+              style={{ width: `${total ? Math.round(((answered + capturedPending) / total) * 100) : 0}%` }}
             />
           </div>
           {/* Text, not just a bar — a bar alone tells a screen-reader user nothing. */}
           <p className="ip-muted" aria-live="polite">
             {view.progress.complete
               ? 'All questions answered.'
-              : `Question ${answered + 1} of ${total}`}
+              : capturedPending > 0
+                ? `${answered + capturedPending} of ${total} in hand — confirm ${capturedPending} from your call${
+                    total - answered - capturedPending > 0
+                      ? `, then answer ${total - answered - capturedPending} more`
+                      : ''
+                  }`
+                : `Question ${answered + 1} of ${total}`}
           </p>
         </div>
 
