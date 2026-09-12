@@ -118,7 +118,7 @@ const InternshipInterview: React.FC<Props> = ({ onProgressed, onComplete }) => {
     } else {
       setDraft(emptyDraft());
     }
-  }, [question?.question_key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [question?.question_key]);
 
   const answered = view ? view.progress.resolved : 0;
   const total = view ? view.progress.total : 0;
