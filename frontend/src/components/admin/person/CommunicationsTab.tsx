@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CommunicationMessage, CommunicationOutcome, CommunicationsPanel } from '../../../adminOs/personTypes';
+import { CommunicationMessage, CommunicationOutcome, CommunicationsPanel, MessageAsSent } from '../../../adminOs/personTypes';
 import { EmptyPanel, Stat, fmtDateTime } from './primitives';
 import AsSentPanel, { RenderedBody, highlightClicked } from './MessageAsSent';
 
@@ -117,11 +117,23 @@ function clickedUrlsOf(outcomes: CommunicationOutcome[]): string[] {
  *      that writes these pins every open to the most recent sent email, so a
  *      login-email open lands here -- and a solid dot would claim she opened
  *      THIS email when she did not.
- *   2. "Clicked" says WHICH link only when the poll kept the URL (rows from
- *      2026-09-11 on). Before that the modal says a link was clicked and that
- *      the URL was not recorded, rather than highlighting a guess.
+ *   2. "Clicked" names WHICH link when the URL is known -- from the row (rows
+ *      the poll wrote from 2026-09-11 on) or, for older rows, from the as-sent
+ *      fetch below, whose result is lifted into this component for exactly
+ *      that reason. When it is known from neither, it says so rather than
+ *      highlighting a guess.
  */
-function OutcomeTimeline({ sentAt, outcomes }: { sentAt: string | null; outcomes: CommunicationOutcome[] }) {
+function OutcomeTimeline({ sentAt, outcomes, alsoClicked = [] }: {
+  sentAt: string | null;
+  outcomes: CommunicationOutcome[];
+  /**
+   * Clicked URLs the as-sent fetch found, when the stored row had none. Old
+   * rows predate the poll keeping URLs, but Mandrill still knows them -- and
+   * once it has said so on this screen, this note must not go on claiming the
+   * URL is unknown.
+   */
+  alsoClicked?: string[];
+}) {
   const events = [
     ...(sentAt ? [{ outcome: 'sent', at: sentAt, channel: null, subject: null, attributed: true }] : []),
     ...outcomes,
@@ -134,6 +146,10 @@ function OutcomeTimeline({ sentAt, outcomes }: { sentAt: string | null; outcomes
   const misattributed = outcomes.filter((o) => !o.attributed);
   const clicks = outcomes.filter((o) => o.attributed && o.outcome === 'clicked');
   const tone = (o: string) => OUTCOME_TONE[o] ?? (o === 'sent' ? 'secondary' : 'secondary');
+  // The row's own URLs when it has them; otherwise whatever the fetch learned.
+  const stored = clickedUrlsOf(clicks);
+  const known = stored.length > 0 ? stored : alsoClicked;
+  const fromFetch = stored.length === 0 && alsoClicked.length > 0;
 
   return (
     <>
@@ -163,13 +179,18 @@ function OutcomeTimeline({ sentAt, outcomes }: { sentAt: string | null; outcomes
         ))}
       </div>
 
-      {clicks.length > 0 && (clickedUrlsOf(clicks).length > 0 ? (
+      {clicks.length > 0 && (known.length > 0 ? (
         <div className="small mb-1 mt-2">
           <i className="ri-cursor-line me-1 text-success" aria-hidden="true" />
           Clicked {clicks.length === 1 ? 'once' : `${clicks.length} times`}, on:
           <ul className="mb-0 mt-1">
-            {clickedUrlsOf(clicks).map((u) => <li key={u}><code style={{ fontSize: '.75rem' }}>{u}</code></li>)}
+            {known.map((u) => <li key={u}><code style={{ fontSize: '.75rem' }}>{u}</code></li>)}
           </ul>
+          {fromFetch && (
+            <span className="text-muted">
+              The stored row predates the poll keeping URLs; this came back with the message below.
+            </span>
+          )}
         </div>
       ) : (
         <p className="small text-muted mb-1 mt-2">
@@ -206,6 +227,10 @@ function OutcomeTimeline({ sentAt, outcomes }: { sentAt: string | null; outcomes
 function MessageModal({ m, personRef, onClose }: { m: CommunicationMessage; personRef: string; onClose: () => void }) {
   const inbound = m.direction === 'inbound';
   const clicked = clickedUrlsOf(m.outcomes);
+  // What the as-sent fetch learned, lifted here so the timeline above and the
+  // message below are one account rather than two that disagree.
+  const [fetched, setFetched] = useState<MessageAsSent | null>(null);
+  const fetchedClicks = fetched?.found ? fetched.clickedUrls : [];
   return (
     <div className="modal d-block" tabIndex={-1} role="dialog"
       style={{ background: 'rgba(0,0,0,.4)' }} onClick={onClose}>
@@ -255,7 +280,7 @@ function MessageModal({ m, personRef, onClose }: { m: CommunicationMessage; pers
               <div className="text-muted text-uppercase mb-2" style={{ letterSpacing: '.05em', fontSize: '.68rem' }}>
                 What happened to it
               </div>
-              <OutcomeTimeline sentAt={m.sentAt} outcomes={m.outcomes} />
+              <OutcomeTimeline sentAt={m.sentAt} outcomes={m.outcomes} alsoClicked={fetchedClicks} />
             </div>
 
             <div className="text-muted text-uppercase mb-1" style={{ letterSpacing: '.05em', fontSize: '.68rem' }}>
@@ -277,7 +302,7 @@ function MessageModal({ m, personRef, onClose }: { m: CommunicationMessage; pers
               /* Not held here. A cancelled send has nothing to fetch; a
                  message Mandrill sent can be fetched from Mandrill, as sent,
                  on demand -- the panel says which it is. */
-              <AsSentPanel personRef={personRef} m={m} />
+              <AsSentPanel personRef={personRef} m={m} onLoaded={setFetched} />
             )}
 
             <p className="text-muted small mb-0 mt-3">
