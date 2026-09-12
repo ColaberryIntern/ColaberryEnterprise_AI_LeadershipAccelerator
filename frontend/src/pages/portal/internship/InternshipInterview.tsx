@@ -287,41 +287,41 @@ const InternshipInterview: React.FC<Props> = ({ onProgressed, onComplete }) => {
       <section className="ip-card" aria-labelledby="ip-iv">
         <h2 id="ip-iv">Your interview</h2>
 
+        {/* Two-tone bar, ONE number, and that number only ever goes up.
+            - The light band reaches `answered + captured_pending` — the answers in
+              hand, so a call that captured 17 fills the bar to ~81% at once rather
+              than reading as "nothing done".
+            - The solid band reaches `answered` (confirmed) and GROWS into the light
+              band with every confirmation, so each action visibly advances.
+            - The only number, "N of 21 answered", counts confirmations and fresh
+              answers alike, so it rises on every save — never the earlier
+              down-counting "confirm 14 from your call". */}
         <div className="ip-progress" role="group" aria-label="Interview progress">
-          {/* "In hand" = confirmed answers PLUS the ones captured on the call and
-              waiting to be confirmed. Filling the bar to `answered` alone would show
-              5% right after a call that captured 17 — the bar and the "17 from your
-              call" banner would then tell opposite stories. Confirming a captured
-              answer moves it from captured to confirmed, so "in hand" holds steady
-              until a genuinely new question is answered — which is the honest shape
-              of the work left. */}
           <div className="ip-progress__bar">
             <div
-              className="ip-progress__fill"
+              className="ip-progress__captured"
               style={{ width: `${total ? Math.round(((answered + capturedPending) / total) * 100) : 0}%` }}
+            />
+            <div
+              className="ip-progress__fill"
+              style={{ width: `${total ? Math.round((answered / total) * 100) : 0}%` }}
             />
           </div>
           {/* Text, not just a bar — a bar alone tells a screen-reader user nothing. */}
           <p className="ip-muted" aria-live="polite">
             {view.progress.complete
               ? 'All questions answered.'
-              : capturedPending > 0
-                ? `${answered + capturedPending} of ${total} in hand — confirm ${capturedPending} from your call${
-                    total - answered - capturedPending > 0
-                      ? `, then answer ${total - answered - capturedPending} more`
-                      : ''
-                  }`
-                : `Question ${answered + 1} of ${total}`}
+              : `${answered} of ${total} answered`}
           </p>
         </div>
 
-        {/* After a phone call, the captured answers arrive as needs_followup and are
-            pre-filled below. Say so, or "Question 1 of 21" reads as nothing done. */}
+        {/* After a phone call, the captured answers arrive pre-filled below. Explain
+            that — with no live count, since a number that fell as you confirmed read
+            as going backwards. The count lives only in the bar, which goes up. */}
         {capturedPending > 0 && !view.progress.complete && (
           <div className="ip-captured-banner" role="status">
-            <strong>{capturedPending} {capturedPending === 1 ? 'answer' : 'answers'} from your call</strong> are
-            ready below, pre-filled with what we heard. Confirm each one — edit anything that isn’t right —
-            and answer what the call didn’t cover.
+            Your call pre-filled the answers below. <strong>Confirm each one</strong> — edit anything
+            that isn’t right — and answer the few the call didn’t cover.
           </div>
         )}
 

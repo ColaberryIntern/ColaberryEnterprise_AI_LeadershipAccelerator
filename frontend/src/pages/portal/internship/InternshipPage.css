@@ -225,6 +225,7 @@
 .ip-progress { margin: 0 0 20px; }
 
 .ip-progress__bar {
+  position: relative;
   height: 6px;
   border-radius: 999px;
   background: rgba(124, 58, 237, 0.12);
@@ -232,7 +233,23 @@
   margin-bottom: 8px;
 }
 
+/* The lighter band: answers in hand (confirmed + captured on the call). It sits
+   under the solid confirmed band, so the gap between them is what is still to
+   confirm from the call. */
+.ip-progress__captured {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: rgba(124, 58, 237, 0.32);
+  border-radius: 999px;
+  transition: width 220ms ease;
+}
+
 .ip-progress__fill {
+  position: absolute;
+  left: 0;
+  top: 0;
   height: 100%;
   background: #7c3aed;
   border-radius: 999px;
@@ -242,7 +259,8 @@
 /* The bar is decoration; the count beside it is the real signal. Removing the
    animation for reduced-motion users costs nothing because of that. */
 @media (prefers-reduced-motion: reduce) {
-  .ip-progress__fill { transition: none; }
+  .ip-progress__fill,
+  .ip-progress__captured { transition: none; }
 }
 
 .ip-q__section {
