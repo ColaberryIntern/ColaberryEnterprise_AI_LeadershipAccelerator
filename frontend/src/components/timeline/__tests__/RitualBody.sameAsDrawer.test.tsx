@@ -115,24 +115,67 @@ describe('the tile renders a community post exactly as the drawer does', () => {
   });
 });
 
-describe('length', () => {
-  it('clamps a very long post and offers the drawer, handing the card up on click', async () => {
-    const long = `${POST}\n\n${'word '.repeat(400)}`;
-    const opened: string[] = [];
-    await act(async () => { root.render(<TimelineCard card={card({ description: long })} onOpen={(c) => opened.push(c.id)} />); });
-    const wrap = container.querySelector('.fc-rbwrap')!;
-    expect(wrap.className).toContain('clamped');
-    const more = container.querySelector('.fc-rbmore') as HTMLButtonElement;
-    expect(more.textContent).toBe('Read the full post');
-    await act(async () => { more.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-    expect(opened).toEqual(['community:p1']);
-    // Clamping is presentation only: every section is still in the DOM.
-    expect(tileSections()).toEqual(drawerSections(long));
+/**
+ * Ali, 2026-09-12: "I would rather have 3 lines max with the ability for the
+ * user to expand the text." So the tile opens clamped to three lines and the
+ * student expands it IN PLACE — the drawer is no longer the only way to read a
+ * long post. Whether "Show more" appears at all is a question about layout, so
+ * the component measures it; jsdom reports 0 for both heights, and these tests
+ * drive that measurement explicitly rather than pretending it happened.
+ */
+describe('three lines, then expand in place', () => {
+  /** Make the clamped body report that it overflows (or does not). */
+  const stubOverflow = (overflows: boolean) => {
+    Object.defineProperty(HTMLElement.prototype, 'scrollHeight', { configurable: true, get() { return overflows && (this as HTMLElement).className.includes('clamped') ? 400 : 60; } });
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get() { return 60; } });
+  };
+  afterEach(() => {
+    // @ts-expect-error — restore jsdom's own zero-height getters
+    delete HTMLElement.prototype.scrollHeight;
+    // @ts-expect-error
+    delete HTMLElement.prototype.clientHeight;
   });
 
-  it('does NOT clamp an ordinary ritual answer', async () => {
-    await render(card({ description: '🧩 Skill Drop · Week 2\n\nMy 3 skills: invoice-parser, tone-checker, standup-writer' }));
-    expect(container.querySelector('.fc-rbwrap')!.className).not.toContain('clamped');
+  it('opens clamped to three lines and offers "Show more"', async () => {
+    stubOverflow(true);
+    await render(card());
+    const wrap = container.querySelector('.fc-rbwrap') as HTMLElement;
+    expect(wrap.className).toContain('clamped');
+    // Three LINES, against the body's own line-height — not a pixel guess.
+    expect(wrap.style.maxHeight).toBe('4.65em');
+    const more = container.querySelector('.fc-rbmore') as HTMLButtonElement;
+    expect(more.textContent).toBe('Show more');
+    expect(more.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('expands IN PLACE — no drawer, no navigation — and collapses again', async () => {
+    stubOverflow(true);
+    const opened: string[] = [];
+    await act(async () => { root.render(<TimelineCard card={card()} onOpen={(c) => opened.push(c.id)} />); });
+    const more = () => container.querySelector('.fc-rbmore') as HTMLButtonElement;
+
+    await act(async () => { more().dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    const wrap = container.querySelector('.fc-rbwrap') as HTMLElement;
+    expect(wrap.className).not.toContain('clamped');
+    expect(wrap.style.maxHeight).toBe('');
+    expect(more().textContent).toBe('Show less');
+    expect(more().getAttribute('aria-expanded')).toBe('true');
+    expect(opened).toEqual([]);   // expanding is not opening the post
+
+    await act(async () => { more().dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect((container.querySelector('.fc-rbwrap') as HTMLElement).className).toContain('clamped');
+    expect(more().textContent).toBe('Show more');
+  });
+
+  it('keeps every section in the DOM while clamped — the clamp is presentation only', async () => {
+    stubOverflow(true);
+    await render(card());
+    expect(tileSections()).toEqual(drawerSections(POST));
+  });
+
+  it('offers no "Show more" when the post already fits', async () => {
+    stubOverflow(false);
+    await render(card({ description: '🧩 Skill Drop · Week 2\n\nMy 3 skills: invoice-parser, tone-checker' }));
     expect(container.querySelector('.fc-rbmore')).toBeNull();
   });
 });
