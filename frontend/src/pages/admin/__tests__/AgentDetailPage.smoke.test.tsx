@@ -953,15 +953,58 @@ describe('AgentDetailPage — reactivation flow (deactivated agent)', () => {
     return Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Reactivate')) as HTMLButtonElement | undefined;
   }
 
-  it('renders no autonomy-level select or Reactivate button when the agent is enabled', async () => {
+  // The picker's own control (label reads "Reactivate" on a disabled agent,
+  // "Set level" once the agent is already enabled — same real backend call
+  // either way, see agentDetailV2Header.tsx's own header comment on why).
+  function autonomyButton(): HTMLButtonElement | undefined {
+    return Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Reactivate' || b.textContent === 'Set level' || b.textContent === 'Saving…' || b.textContent === 'Reactivating…') as HTMLButtonElement | undefined;
+  }
+
+  // Ali, live, on Reese's own page: "why is the autonomy not past Observe"
+  // — traced to this picker only ever rendering for a DISABLED agent, even
+  // though the real reactivateAgent() mechanism behind it has no such
+  // restriction. Now always renders; framing/copy/button-label differ by
+  // real state instead of the control disappearing once an agent is active.
+  it('an enabled agent whose level was never deliberately set still shows the picker, framed honestly (not "inactive")', async () => {
+    getAgentDetail.mockResolvedValue(DETAIL); // enabled: true, autonomy_level_set_at: null
+
+    await renderAgentPage();
+
+    expect(reactivateSelect()).toBeDefined();
+    expect(container.textContent).toContain("This agent's autonomy level has never been deliberately set");
+    expect(container.textContent).not.toContain('This agent is inactive.');
+    expect(autonomyButton()!.textContent).toBe('Set level');
+  });
+
+  it('an enabled agent with a real, previously-set autonomy level shows when it was last set, not the "never set" framing', async () => {
+    getAgentDetail.mockResolvedValue({ ...DETAIL, agent: { ...DETAIL.agent, autonomy_level: 'suggest', autonomy_level_set_at: '2026-09-01T00:00:00Z' } });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('Autonomy level last set');
+    expect(container.textContent).not.toContain('never been deliberately set');
+  });
+
+  it('happy path: setting a level on an ALREADY-ENABLED agent calls the real reactivateAgent() and shows the "set", not "reactivated", confirmation', async () => {
+    reactivateAgent.mockResolvedValue({
+      agentId: 'agent-reese', agentName: 'Reese', found: true, reactivated: true, autonomyLevel: 'communicate', error: null,
+    });
     getAgentDetail.mockResolvedValue(DETAIL); // enabled: true
     await renderAgentPage();
 
-    // querySelector() returns null (not undefined) when nothing matches —
-    // the `as ... | undefined` cast above is compile-time only, so this was
-    // asserting the wrong runtime value pre-existing this session's edits.
-    expect(reactivateSelect()).toBeNull();
-    expect(reactivateButton()).toBeUndefined();
+    await act(async () => {
+      const select = reactivateSelect()!;
+      select.value = 'communicate';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await act(async () => {
+      autonomyButton()!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(reactivateAgent).toHaveBeenCalledWith('agent-reese', 'communicate');
+    expect(container.textContent).toContain('Autonomy level set to "communicate".');
+    expect(container.textContent).not.toContain('Reactivated at autonomy level');
   });
 
   it('boundary: a disabled agent shows the autonomy-level select and a Reactivate button disabled until a level is chosen', async () => {

@@ -67,6 +67,17 @@ export default function AgentDetailV2Header({
   const [descExpanded, setDescExpanded] = useState(false);
   const { agent, trust_contract } = detail;
 
+  // Ali, live, on Reese's own "why is the autonomy dot stuck on Observe"
+  // question: the picker that lets a manager deliberately choose
+  // autonomy_level used to only render for a DISABLED agent — the real,
+  // working reactivateAgent() mechanism behind it has no such restriction
+  // (it just sets enabled:true unconditionally alongside the level, a no-op
+  // when already true), so this was a pure UI gap, not a backend limit.
+  // Always show the control now; framing/urgency differs by real state
+  // rather than the control disappearing once an agent is active.
+  const autonomyNeverDeliberatelySet = !agent.autonomy_level_set_at;
+  const autonomyNeedsAttention = !agent.enabled || autonomyNeverDeliberatelySet;
+
   const lastActive = trust_contract.last_run_at || trust_contract.last_activity_at;
   const description = agent.description || '';
   const descIsLong = description.length > 140;
@@ -126,26 +137,34 @@ export default function AgentDetailV2Header({
             {reactivationMessage}
           </p>
         )}
-        {!agent.enabled && (
-          <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--adv2-warn-soft)', borderRadius: 8, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: 500, fontSize: 13 }}>This agent is inactive.</span>
-            <select
-              aria-label="Autonomy level"
-              value={selectedAutonomyLevel}
-              onChange={(e) => onSelectAutonomyLevel(e.target.value as AutonomyLevel | '')}
-              style={{ fontSize: 13, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--adv2-rule-2)' }}
-            >
-              <option value="">Choose an autonomy level…</option>
-              {AUTONOMY_LEVELS.map((level) => (
-                <option key={level} value={level}>{level}</option>
-              ))}
-            </select>
-            <button className="adv2-btn" onClick={onReactivate} disabled={!selectedAutonomyLevel || reactivating}>
-              {reactivating ? 'Reactivating…' : 'Reactivate'}
-            </button>
-            {selectedAutonomyLevel && <span style={{ fontSize: 12.5, color: 'var(--adv2-ink-2)', flexBasis: '100%' }}>{AUTONOMY_LEVEL_DESCRIPTIONS[selectedAutonomyLevel]}</span>}
-          </div>
-        )}
+        <div style={{
+          marginTop: 12, padding: '10px 14px',
+          background: autonomyNeedsAttention ? 'var(--adv2-warn-soft)' : 'var(--adv2-trust-soft)',
+          borderRadius: 8, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
+        }}>
+          <span style={{ fontWeight: 500, fontSize: 13 }}>
+            {!agent.enabled
+              ? 'This agent is inactive.'
+              : autonomyNeverDeliberatelySet
+                ? "This agent's autonomy level has never been deliberately set — it's sitting at an untouched default."
+                : `Autonomy level last set ${timeAgo(agent.autonomy_level_set_at as string)}.`}
+          </span>
+          <select
+            aria-label="Autonomy level"
+            value={selectedAutonomyLevel}
+            onChange={(e) => onSelectAutonomyLevel(e.target.value as AutonomyLevel | '')}
+            style={{ fontSize: 13, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--adv2-rule-2)' }}
+          >
+            <option value="">Choose an autonomy level…</option>
+            {AUTONOMY_LEVELS.map((level) => (
+              <option key={level} value={level}>{level}</option>
+            ))}
+          </select>
+          <button className="adv2-btn" onClick={onReactivate} disabled={!selectedAutonomyLevel || reactivating}>
+            {reactivating ? 'Saving…' : agent.enabled ? 'Set level' : 'Reactivate'}
+          </button>
+          {selectedAutonomyLevel && <span style={{ fontSize: 12.5, color: 'var(--adv2-ink-2)', flexBasis: '100%' }}>{AUTONOMY_LEVEL_DESCRIPTIONS[selectedAutonomyLevel]}</span>}
+        </div>
 
         <div className="adv2-facts">
           <div><span className={`adv2-dot${detail.live_status === 'online' ? '' : ' adv2-neutral'}`} /><b>{STATUS_LABEL[detail.live_status]}</b>, {agent.enabled ? 'enabled' : 'disabled'}</div>
