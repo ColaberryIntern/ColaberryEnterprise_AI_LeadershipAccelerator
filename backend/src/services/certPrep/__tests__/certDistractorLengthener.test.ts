@@ -85,6 +85,33 @@ describe('lengthenDistractor', () => {
     expect(out.after).toBe(words.length);
   });
 
+  it('refuses a fluent rewrite even when it fits the bounds perfectly', async () => {
+    const before = itemWithLongKey();
+    const plan = lengthPlan(before);
+    // Same idea, entirely different words, exactly the right length: this is
+    // what the model returned 36 times out of 45 on the first authored run.
+    const rewrite = 'Extend the permitted duration for that operation so unhurried executions conclude'
+      + ' properly within the allotted window';
+    expect(rewrite.length).toBeGreaterThanOrEqual(plan.minChars);
+    expect(rewrite.length).toBeLessThanOrEqual(plan.maxChars);
+    mCreate.mockResolvedValue(reply(rewrite));
+    const out = await lengthenDistractor(before, plan);
+    expect(out.status).toBe('not_an_extension');
+    if (out.status === 'not_an_extension') expect(out.reason).toMatch(/rewritten rather than extended|opening word/);
+    // tried twice: the model sometimes honours the instruction on a second pass
+    expect(mCreate).toHaveBeenCalledTimes(2);
+  });
+
+  it('tells the model the word to start with and how to end', () => {
+    const before = itemWithLongKey();
+    const plan = lengthPlan(before);
+    const target = before.options.find((o) => o.key === plan.target)!;
+    const p = buildLengthenPrompt(before, plan);
+    expect(p).toContain(`START WITH THE SAME WORD the option starts with now ("${target.text.split(' ')[0]}")`);
+    expect(p).toContain('no full stop, so yours must not add one');
+    expect(p).toMatch(/KEEP THE WORDS THAT ARE THERE/);
+  });
+
   it('tries once more on a reply outside the bounds, then refuses', async () => {
     const before = itemWithLongKey();
     const plan = lengthPlan(before);

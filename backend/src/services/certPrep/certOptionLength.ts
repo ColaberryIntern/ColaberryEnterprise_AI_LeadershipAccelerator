@@ -68,6 +68,78 @@ export function stripOptionLabels<T extends { options: { key: string; text: stri
   return changed.length ? { item: { ...item, options }, changed } : { item, changed };
 }
 
+/**
+ * AN EXTENSION, NOT A REWRITE.
+ *
+ * WHY THIS EXISTS. Asked to make one wrong option longer, the model returns a
+ * fluent sentence of its own rather than the author's sentence with more in
+ * it. Across the first authored run, the median rewrite kept 40% of the
+ * original's content words, 11 of 45 changed the opening word, and 15 of 45
+ * added a full stop their three siblings did not have. Every one passed the
+ * bounds check, the invariants, the rubric and the adversarial triage: they
+ * measure length, structure, shape and correctness, and none of them measures
+ * whether the words are still the author's.
+ *
+ * Three things make an edit an extension, and all three are cheap to check:
+ *
+ *   OPENING WORD. Options answer their stem as a set - "That ...", "After
+ *     ...", "Retry ..." - so the first word is grammar, not style. "That
+ *     redacted values are replaced" became "Ensure redacted values are
+ *     replaced", which no longer completes the question it answers.
+ *   TRAILING PUNCTUATION. Within one item every option ends the same way. An
+ *     option that gains a full stop its siblings lack is a mark on the one
+ *     that was edited - the same defect as the letter label, in punctuation.
+ *   THE AUTHOR'S WORDS. Most of the original's content words must survive.
+ *     This is the one that catches a fluent replacement, which is otherwise
+ *     indistinguishable from a good edit by any other measure.
+ */
+export const CONTENT_RETENTION_MIN = 0.7;
+
+/** Words too common to carry meaning; retention is measured on the rest. */
+const STOPWORDS = new Set(
+  'the a an of to in on for and or so that it its is are be with by as at from this these those than then when which what'.split(' '),
+);
+
+const contentWords = (text: string): Set<string> => new Set(
+  (text.toLowerCase().match(/[a-z]+/g) ?? []).filter((w) => w.length > 3 && !STOPWORDS.has(w)),
+);
+
+const firstWord = (text: string): string => (text.trim().toLowerCase().match(/[a-z0-9_]+/) ?? [''])[0];
+
+const trailing = (text: string): string => {
+  const m = text.trim().match(/[.;:,!?]$/);
+  return m ? m[0] : '';
+};
+
+/** How much of the original's meaning-carrying vocabulary survives, 0 to 1. */
+export function contentRetention(before: string, after: string): number {
+  const o = contentWords(before);
+  if (o.size === 0) return 1;
+  const n = contentWords(after);
+  let hit = 0;
+  for (const w of o) if (n.has(w)) hit += 1;
+  return hit / o.size;
+}
+
+/**
+ * Why `after` is not an extension of `before`, or null when it is. Pure, so
+ * the contract can be tested without a model and read without running one.
+ */
+export function extensionProblem(before: string, after: string): string | null {
+  if (after.trim().length <= before.trim().length) return 'not longer than the original';
+  if (firstWord(after) !== firstWord(before)) {
+    return `opening word changed: "${firstWord(before)}" -> "${firstWord(after)}"`;
+  }
+  if (trailing(after) !== trailing(before)) {
+    return `trailing punctuation changed: "${trailing(before) || 'none'}" -> "${trailing(after) || 'none'}"`;
+  }
+  const keep = contentRetention(before, after);
+  if (keep < CONTENT_RETENTION_MIN) {
+    return `rewritten rather than extended: ${Math.round(keep * 100)}% of the original's words kept, floor ${Math.round(CONTENT_RETENTION_MIN * 100)}%`;
+  }
+  return null;
+}
+
 export function longestOptionKey(item: Pick<RubricItem, 'options'>): string | null {
   let best: { key: string; n: number } | null = null;
   for (const o of item.options ?? []) {

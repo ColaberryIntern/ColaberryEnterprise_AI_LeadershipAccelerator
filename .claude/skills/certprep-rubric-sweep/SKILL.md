@@ -309,6 +309,25 @@ Weaknesses found by running it, and what was done. Add to this every time.
   the applier reads the stream and collapses exact repeats from a resumed run.
   Same lesson as the deploy race in memory, from the other side: you cannot
   stop another session recreating the container, so assume it will.
+- *(2026-09-12)* **Asked to lengthen one wrong option, the model rewrote it.**
+  The authored run produced 45 patches that passed the bounds check, the
+  invariants, the rubric and the adversarial triage - and kept a median of
+  **40% of the author's content words**. 11 of 45 changed the opening word,
+  which is grammar rather than style: the four options answer the stem as a
+  set, so "That redacted values are replaced" became "Ensure redacted values
+  are replaced" and stopped completing the question it answers. 15 of 45
+  added a full stop their three siblings did not have - the letter-label
+  defect again, in punctuation, marking the option an editor touched. Caught
+  by reading the diff, not by any gate. **Every gate measured a property of
+  the result; none measured whether the result was still the author's
+  sentence.** `extensionProblem` now requires the opening word, the trailing
+  punctuation and 70% of the content words to survive, the prompt asks for an
+  extension in those words, and the bank audit gains a hard
+  `option_punctuation` check. The 45 patches were thrown away unapplied.
+  The same measurement over production's 70 balancer edits: median 50%
+  retention, 44 of 70 with a changed opening word - left alone deliberately,
+  because those options were model-written to begin with, every one was
+  re-triaged, and no author's voice was at stake.
 - *(2026-09-10)* **Do not write source containing backslashes through a shell
   heredoc.** Building the schema parser that way put a literal CR and a real
   newline where `` and `
