@@ -33,6 +33,7 @@ marked where that matters. Everything in
 | `buildSchedule.ts` | pure | Release weeks → real calendar dates, capacity, demo release, prep tasks |
 | `commandCenterStory.ts` | pure | STORY-000: its id, title, acceptance, and prompt built from the student's own plan |
 | `materializeTasks.ts` | I/O | Plan → `student_task_lists` + `student_tasks`, one transaction |
+| `addStoryService.ts` | I/O | A student adds one story to a PUBLISHED build. Builds the revision (next `STORY-nnn` plus a `should` requirement it fulfils, so `dangling_requirement` never fires), gates it, saves it as the next draft, and hands it to `publishBuild` — the same path as the first publish, so the repo render and materialisation are inherited. Add only: editing a story's acceptance lines rewrites the verification contract. Nothing is written before the gate passes; a plan that predates a blocking rule is refused as `PlanPredatesGate`, not blamed on the student |
 | `buildStoryPrompt.ts` | pure | The Claude Code prompt stored on each task's `build` column |
 | `renderDocs.ts` | pure | The ~16-19 file document set + the path allowlist |
 | `repoWriter.ts` | I/O | One GitHub commit, content-hash idempotent, allowlist enforced by throwing. Two co-owned files are merged rather than replaced: `CLAUDE.md` via `spliceManagedBlock`, `.colaberry/progress.json` via `mergeProgressFile` (#1463) |
@@ -97,6 +98,7 @@ written. It has now: **178 tasks carry `verified_at`.**
 | `studentProgressMerge.ts` | pure | `mergeProgressFile`, made safe to hand to a student |
 | `storyVerificationRead.ts` | I/O | The one story the workspace page has open |
 | `rejectedClaimsSignal.ts` | I/O | Making `rejected_claims` reach a human, instead of resting in a column |
+| `storyPoints.ts` | I/O | ONE answer to "what is a story worth": the `project_story_verified` budget split across the plan's stories + STORY-000. The verifier judges and pays from it; the project tree and the Today tile show it. Priced in one place so the number a student sees before building is the number paid after verification (2026-09-11) |
 
 #### Command Center, documents, and the rest
 

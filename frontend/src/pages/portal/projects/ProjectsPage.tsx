@@ -5,6 +5,7 @@ import ProjectWizard from './ProjectWizard';
 import { useIsExplorer } from '../useIsExplorer';
 import ProjectPreview from './ProjectPreview';
 import ProjectInterior from './ProjectInterior';
+import AddStoryPanel from './AddStoryPanel';
 import NextSessionStrip from './NextSessionStrip';
 import {
   resolveBackendProjectId, startBuild as startServerBuild, pollBuild,
@@ -573,6 +574,16 @@ const ProjectsPage: React.FC = () => {
               onOpenTask={(taskId) => openTaskById(active.id, taskId)}
               onBack={() => { setView({ kind: 'overview' }); window.scrollTo(0, 0); }}
             />
+            {/* Add only. Reads the plan sha on open and re-hydrates the project
+                tree on success, the same refresh the drift banner uses, so the
+                new task appears without a reload. Hidden for sample builds,
+                which have no backend plan to add to. */}
+            {!active.sample && !demo && (
+              <AddStoryPanel
+                projectId={active.pipelineProjectId || active.id}
+                onAdded={() => { void refreshProjectsFromBackend(); }}
+              />
+            )}
           </div>
         )}
       </PortalShell>

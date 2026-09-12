@@ -12,6 +12,7 @@ import StudentTask from '../../models/StudentTask';
 import EvidenceRecord from '../../models/EvidenceRecord';
 import { getProjectByEnrollment, listProjectsForEnrollment } from '../projectService';
 import { awardedEvidenceRef } from '../sbp/verification/verificationLatch';
+import { storyPointsForProject, pointsByStoryId } from '../sbp/verification/storyPoints';
 import {
   toProjectTreeDto,
   toProjectSummaryDto,
@@ -40,11 +41,28 @@ async function buildTree(projectId: string): Promise<ProjectTreeDto | null> {
     return pl;
   });
   const plainProject = project.get({ plain: true }) as any;
-  const xpEarned = await verifiedStoryXp(
-    String(plainProject.enrollment_id ?? ''),
-    tasks.map((t) => t.get({ plain: true })),
-  );
-  return toProjectTreeDto(plainProject, plainLists, xpEarned);
+  const [xpEarned, pointsByStory] = await Promise.all([
+    verifiedStoryXp(
+      String(plainProject.enrollment_id ?? ''),
+      tasks.map((t) => t.get({ plain: true })),
+    ),
+    storyPointsMap(projectId),
+  ]);
+  return toProjectTreeDto(plainProject, plainLists, xpEarned, pointsByStory);
+}
+
+/**
+ * story_id → points a verified story pays on this build, from the same module
+ * the verifier pays from. Fail-soft: a project tree without its price tags is
+ * still a project tree; an unreadable plan or config must not 500 the page.
+ */
+async function storyPointsMap(projectId: string): Promise<Map<string, number>> {
+  try {
+    return pointsByStoryId(await storyPointsForProject(projectId));
+  } catch (err: any) {
+    console.warn('[projectReadService] story points lookup failed:', err?.message?.split('\n')[0]);
+    return new Map();
+  }
 }
 
 /**

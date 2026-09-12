@@ -399,6 +399,62 @@ export async function publishBuild(projectId: string, expectedSha256?: string): 
   }
 }
 
+/** What a student sends to add a story to a published build. */
+export interface AddStoryInput {
+  title: string;
+  narrative: string;
+  /** 3 to 7 lines; exactly one must start with "Trust". */
+  acceptance: string[];
+  /** r1 or later. r0 is the walking skeleton and is closed. */
+  release: string;
+  /** The sha of the plan the student is looking at. The server refuses a stale one. */
+  expected_sha256: string;
+}
+
+export interface AddStoryResult {
+  story_id: string;
+  requirement_id: string;
+  /** The sha of the NEW plan. Send this next time. */
+  plan_sha256: string;
+  planVersion: number;
+  status: BuildStatus;
+  commitSha: string | null;
+}
+
+/**
+ * A refusal, as the server states it. `error_class` is the rule that fired
+ * (NoTrustLine, UnknownRelease, HashMismatch, GateBlocked, ...) so the form can
+ * say which line to fix rather than "invalid". `details` carries the gate
+ * violations when there are any.
+ */
+export interface AddStoryRefusal {
+  status: number;
+  error_class: string | null;
+  message: string;
+  details: unknown;
+}
+
+/** Add one story to a published build. Never throws. */
+export async function addStory(projectId: string, input: AddStoryInput): Promise<
+  { ok: true; result: AddStoryResult } | { ok: false; refusal: AddStoryRefusal }
+> {
+  try {
+    const res = await portalApi.post(`/api/portal/sbp/builds/${encodeURIComponent(projectId)}/stories`, input);
+    return { ok: true, result: res.data as AddStoryResult };
+  } catch (err: any) {
+    const data = err?.response?.data ?? {};
+    return {
+      ok: false,
+      refusal: {
+        status: Number(err?.response?.status ?? 0),
+        error_class: typeof data.error_class === 'string' ? data.error_class : null,
+        message: typeof data.error === 'string' ? data.error : toError(err).message,
+        details: data.details ?? null,
+      },
+    };
+  }
+}
+
 /** The assembled Claude Code prompt for one story. */
 export async function getStoryPrompt(projectId: string, storyId: string, notes?: string): Promise<
   { ok: true; prompt: string; hasRepo: boolean; pathsVerified: boolean } | { ok: false; error: SbpError }

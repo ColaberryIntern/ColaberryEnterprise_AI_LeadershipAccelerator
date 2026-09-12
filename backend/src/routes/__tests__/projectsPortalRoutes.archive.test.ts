@@ -113,6 +113,14 @@ jest.mock('../../models/GitHubConnection', () => ({
   __esModule: true,
   default: { findOne: async () => null },
 }));
+// The story price tag (2026-09-11) reaches projectReadService through
+// sbp/verification/storyPoints → pointsConfigService → the PointsConfig model,
+// which cannot init against the sequelize stub below. Not under test here.
+jest.mock('../../services/sbp/verification/storyPoints', () => ({
+  __esModule: true,
+  storyPointsForProject: async () => null,
+  pointsByStoryId: () => new Map(),
+}));
 jest.mock('../../models', () => ({
   __esModule: true,
   Enrollment: {

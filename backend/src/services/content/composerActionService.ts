@@ -138,7 +138,8 @@ export async function sendForApproval(itemId: string, actor: Actor): Promise<Act
       tenant_id: item.tenant_id,
       brand_id: item.brand_id,
       status: 'pending',
-      requested_by: actor.adminId ?? actor.email ?? null,
+      // UUID column: the id or nothing. An email fallback would be a 500 at the database.
+      requested_by: actor.adminId ?? null,
       requested_at: new Date(),
       revision_at_request: revision,
     } as any);
