@@ -18,6 +18,7 @@
  *   heartbeat    {lease_id}                 POST session/heartbeat
  *   stop         {lease_id}                 POST session/stop
  *   reconcile    {limit?, stale_minutes?}   POST liveness/reconcile (T16 bounded inbox-liveness sweep)
+ *   dismiss      {case_id}                  POST cases/:id/dismiss (E: disposition items NO_ACTION + close)
  *   cursor       {lease_id,to,processing_succeeded}  POST session/cursor
  *   health       {}                         GET  health
  *   overview     {cursor?}                  GET  overview
@@ -79,6 +80,10 @@ function route(cmd, a) {
     case 'snooze': return { method: 'PATCH', path: `${CASES}/${id}/operator`, body: pick(a, ['snoozed_until', 'snooze_reason', 'priority_band', 'priority_reason']) };
     case 'approve': return { method: 'POST', path: `${CASES}/${id}/actions/${aid}/approve`, body: {} };
     case 'reject': return { method: 'POST', path: `${CASES}/${id}/actions/${aid}/reject`, body: pick(a, ['reason']) };
+    // E (no response) needs this: reject records WHY, dismiss dispositions the
+    // items and closes through the real guard. Without it a case whose only
+    // action was rejected sits open with an undispositioned item forever.
+    case 'dismiss': return { method: 'POST', path: `${CASES}/${id}/dismiss`, body: {} };
     case 'execute': return { method: 'POST', path: `${CASES}/${id}/execute`, body: {} };
     case 'verify': return { method: 'POST', path: `${CASES}/${id}/verify`, body: {} };
     case 'plan': return { method: 'POST', path: `${CASES}/${id}/plan`, body: {} };

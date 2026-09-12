@@ -38,7 +38,17 @@ This skill is that human loop, made fast: one screen, one item at a time, one de
 6. **Money, legal, HR, refunds, contracts, employment, sensitive student matters, new promises,
    new dates, pricing, and any ambiguous recipient or destination** always get a human decision,
    whatever the confidence says.
-7. **Only what is in Ali's inbox right now.** (Ali, 2026-09-11: "This process should only be
+7. **Emails only.** (Ali, 2026-09-12: "It should be emails only, but if you get a basecamp email,
+   it needs to be handled in basecamp. Then what's every handled should be removed from the inbox,
+   but make no mistake, it is all about the inbox. That is it!") A case reaches this console only
+   if it has an email item that arrived in a mailbox. A Basecamp to-do that never emailed Ali is
+   board work, not inbox work, and never appears here — the engine still tracks it and the admin
+   page still shows it. A Basecamp **notification email** does appear, because it landed in the
+   inbox: the to-do it points at travels with it, so the response goes to Basecamp (destination
+   BASECAMP, on the verified recording id) and the email itself is archived.
+   `overview.liveness.non_email_cases` reports how many open cases were set aside, so the number is
+   never a mystery.
+8. **Only what is in Ali's inbox right now.** (Ali, 2026-09-11: "This process should only be
    looking in my current inboxes. If I delete something from my inbox, then it should not show up
    on this report.") A message Ali archived, deleted or moved is a decision already made. The
    backend materialises this (`inbox_case_items.source_live`, swept every five minutes and at
