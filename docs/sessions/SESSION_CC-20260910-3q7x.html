@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Saturday, September 12, 2026 at 6:38 AM</div>
-    <div><span class="sid">CC-20260910-3q7x</span><span class="count">14 changes</span></div>
+    <div class="meta">Generated Saturday, September 12, 2026 at 6:52 AM</div>
+    <div><span class="sid">CC-20260910-3q7x</span><span class="count">15 changes</span></div>
   </header>
   <main>
     
@@ -247,7 +247,7 @@
           <div class="row"><span class="k">What changed</span><span class="v">PR #2492 merged (`f583ce11`) and deployed to production (`up -d --build backend`, host `7cbca0ce9` → `4377f0421`, image built 00:18:23Z, boot 00:18:46Z). Boot verified: both ensure hooks, `[Scheduler] Inbox liveness reconcile: every 5 minutes (offset :02)`, no post-condition failures; `/health` 200; `POST /api/admin/inbox/zero/liveness/reconcile` 401 unauthenticated; `inboxLivenessService.js` and `inboxZeroVisibility.js` in `dist`; the three `source_*` columns and `idx_inbox_case_items_liveness` present in the live catalog. First sweep (150 items): **85 live, 65 gone (50 archived, 13 missing, 2 trashed), 0 unverifiable, 49 cases closed**, including Ali&#39;s July-10 case `673f111e…` → `RESOLVED`, item `NO_ACTION`/`archived`, both proposed actions `REJECTED`. **Defect found by reading the live audit trail rather than the return value:** `inbox_case_events.correlation_id` is `UUID NOT NULL`, the service passed run labels (`liveness_cron:…`, `inbox_zero_reconcile:ali@…`), and `logCaseEvent` swallows the INSERT failure by design — so 65 items were dispositioned with **zero** `item_removed_at_source` rows. Fixed: `auditCorrelationId()` coerces any non-UUID to a fresh UUID and the label travels in the structured log (`run_label`); the controller, the cron and `getNext` now pass real UUIDs. The event fake in the test suite now enforces the UUID column exactly as Postgres does, and the seeded case carries a real UUID, so this fails in CI next time.</span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">`inboxLivenessService.test.ts` 24/24 including a new regression test that drives the sweep with the exact human-readable label from prod and asserts every audit row still lands under a UUID and `logCaseEvent` never logged a write failure; 84 suites / 1,077 tests green across inbox-case + controllers + db; full CI jest 1,370 suites / 21,344 tests (the one failure is the local-only `@anthropic-ai/sdk` gap); tsc at the 2-error baseline; route-auth lint 114/114. Live evidence quoted above read from the production database through the read-only bridge pattern.</span></div>
           
-        <div class="row"><span class="k">Notes</span><span class="v">The 65 already-dispositioned items have correct data (`source_live=false`, reason, disposition) but no audit row; a dry-run-by-default backfill script writes them from the item rows themselves, marked `backfilled_at`, and is run only after the fix deploys. Another session pulled and redeployed prod at 00:19:55Z (host now `03ac2f526`) — the sweep had already completed at 00:19:36Z. The `+N new · M cleared` refresh line matters more than expected: this sweep alone would have read as &quot;+49 new&quot; without it.</span></div>
+        <div class="row"><span class="k">Notes</span><span class="v">PR #2496 (the fix) was approved, merged (`a12be29d`) and deployed 2026-09-12 11:19Z (`8a4fe3841` → `071746979`, backend only). By then the sweeps had grown the gap to 561 dispositioned items with no audit row; the dry-run-by-default backfill wrote all 561 from the item rows themselves (marked `backfilled_at`), and a second dry-run reported 0. Forward proof: the first post-fix sweep that found a gone item wrote its `item_removed_at_source` row live. Backlog fully verified: 0 unchecked open items (from 811), 404 open cases (from ~890). Another session pulled and redeployed prod at 00:19:55Z (host now `03ac2f526`) — the sweep had already completed at 00:19:36Z. The `+N new · M cleared` refresh line matters more than expected: this sweep alone would have read as &quot;+49 new&quot; without it.</span></div>
           
         </div>
       </article>
@@ -263,6 +263,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">`aliEmailStyle.test.ts` 15/15 (each non-negotiable flagged and passed; repeat-call regex test; normalisation idempotent, never double-signs, strips a sign-off above an existing signature, empty draft; executor refuses a hard violation and sends nothing; the compliant MIME that leaves the Gmail fake carries `To:`, the normalised subject, no dashes and the signature). 39 suites / 618 tests across inbox-case + email + controller green.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">The kit&#39;s `emailSignature.js` (Mandrill kit) is not in this repo; the plain-text block from `reference_email_signature` is the constant here. Only the text transport exists on this path (`text/plain` MIME), so HTML rules (font, callouts) are not applicable yet. Cora and the Mandrill scripts are out of scope for this change.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">15</span>
+          <h2>An addressed email leaves the inbox (T19)</h2>
+          <span class="badge">2026-09-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali: &quot;When the email is addressed, can we move it out the inbox.&quot; The planner already proposes an archive (`EMAIL_LABEL` Gmail → `Inbox Intel/Resolved`; `EMAIL_ARCHIVE` Hotmail) for every email item and orders it after every other action — but `caseExecutionService` treated a REJECTED dependency as blocking, so decision E (&quot;no response&quot;) would have SKIPPED the archive and left the mail in the inbox. Now, for archive actions only, a REJECTED dependency counts as settled (Ali decided; the item is addressed) while FAILED/SKIPPED still block (something went wrong; keep it visible); every other action type keeps the strict rule. Skill: A, C and E approve the archive as part of the decision; D never files; PROTECTED items stay their own question; the approval policy records it as Ali&#39;s standing instruction and hard rule 1 says what a letter now means.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`caseExecutionService.test.ts` 19/19 with three new cases (archive behind a REJECTED reply runs; behind a SKIPPED reply stays SKIPPED; a non-archive action behind a REJECTED dependency is still SKIPPED). Full CI jest (pre-T19 tree) 1,370 suites green; tsc baseline; route-auth 114/114.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The archive is still an approved, executed, re-fetch-verified action with its own audit row — Ali&#39;s letter is the approval, so no audit is lost. Decision record: scope-rule.md Rule 5.</span></div>
           
         </div>
       </article>

@@ -1,6 +1,6 @@
 import InboxCaseAction from '../../models/InboxCaseAction';
 import InboxCaseItem from '../../models/InboxCaseItem';
-import { ActionStatus } from '../../types/inboxCase';
+import { ActionStatus, ActionType } from '../../types/inboxCase';
 import { ACTION_EXECUTORS, ClassifiedExecutionError } from './caseActionExecutors';
 import { logCaseEvent } from './caseEventLog';
 import { getCaseOrThrow, transitionCase } from './caseRepository';
@@ -120,6 +120,24 @@ function topologicalOrder(actions: InboxCaseAction[]): InboxCaseAction[] {
 const BLOCKING_STATUSES: ActionStatus[] = ['FAILED', 'SKIPPED', 'REJECTED'];
 const SATISFYING_STATUSES: ActionStatus[] = ['SUCCEEDED', 'VERIFIED'];
 
+// Ali, 2026-09-12: "When the email is addressed, can we move it out the
+// inbox." An archive action depends on every other action in its plan
+// (archive-last). For the ARCHIVE alone, a dependency Ali REJECTED is a
+// decision made — the item is addressed ("no response needed") — so it
+// settles the dependency rather than blocking it. FAILED and SKIPPED still
+// block: something went wrong, and the mail stays visible until it is put
+// right. Every other action type keeps the strict rule (a Basecamp close
+// that depends on a rejected comment must not run on its own).
+const ARCHIVE_ACTION_TYPES: ActionType[] = ['EMAIL_LABEL', 'EMAIL_ARCHIVE'];
+const ARCHIVE_BLOCKING_STATUSES: ActionStatus[] = ['FAILED', 'SKIPPED'];
+const ARCHIVE_SATISFYING_STATUSES: ActionStatus[] = ['SUCCEEDED', 'VERIFIED', 'REJECTED'];
+
+function dependencyRulesFor(action: InboxCaseAction): { blocking: ActionStatus[]; satisfying: ActionStatus[] } {
+  return ARCHIVE_ACTION_TYPES.includes(action.action_type)
+    ? { blocking: ARCHIVE_BLOCKING_STATUSES, satisfying: ARCHIVE_SATISFYING_STATUSES }
+    : { blocking: BLOCKING_STATUSES, satisfying: SATISFYING_STATUSES };
+}
+
 export async function executeApprovedActions(caseId: string, requestedBy: string): Promise<ExecuteResult> {
   const caseRow = await getCaseOrThrow(caseId);
   if (caseRow.state === 'AWAITING_APPROVAL' || caseRow.state === 'FAILED') {
@@ -168,7 +186,8 @@ export async function executeApprovedActions(caseId: string, requestedBy: string
   let skipped = 0;
 
   for (const action of ordered) {
-    const blockedBy = action.depends_on_action_ids.find((depId) => BLOCKING_STATUSES.includes(statusById.get(depId) as ActionStatus));
+    const rules = dependencyRulesFor(action);
+    const blockedBy = action.depends_on_action_ids.find((depId) => rules.blocking.includes(statusById.get(depId) as ActionStatus));
     if (blockedBy) {
       await action.update({ status: 'SKIPPED', updated_at: new Date() });
       statusById.set(action.id, 'SKIPPED');
@@ -185,7 +204,7 @@ export async function executeApprovedActions(caseId: string, requestedBy: string
       continue;
     }
 
-    const notYetSatisfied = action.depends_on_action_ids.some((depId) => !SATISFYING_STATUSES.includes(statusById.get(depId) as ActionStatus));
+    const notYetSatisfied = action.depends_on_action_ids.some((depId) => !rules.satisfying.includes(statusById.get(depId) as ActionStatus));
     if (notYetSatisfied) {
       // A dependency exists in this action set but hasn't resolved yet
       // (shouldn't happen given topological order, but defended against —
