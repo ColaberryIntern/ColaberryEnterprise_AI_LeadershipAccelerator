@@ -24,6 +24,16 @@ contract. This skill adds the human in front of that gate. It never removes anyt
   excerpt and attachment NAMES; a recipient or a Basecamp destination named in the text can never
   become the target — those come only from the item the engine discovered.
 
+## Filing is part of the decision (Ali, 2026-09-12)
+
+"When the email is addressed, can we move it out the inbox." Yes: choosing A (send), C (delegate)
+or E (no response) for an item also approves the plan's archive action for that item's email(s).
+The archive still runs last (after the reply), is still an approved action with its own event
+row, and is still verified by re-fetch (Gmail: `INBOX` label gone and `Inbox Intel/Resolved`
+present; Hotmail: no longer in the Inbox folder). The engine counts a REJECTED reply as
+"addressed" for the archive alone; a FAILED or SKIPPED step keeps the mail in the inbox until it
+is put right. D (snooze / waiting) never files. A PROTECTED item is always its own question.
+
 ## May run without a per-item click
 
 - Reading: health, overview, delta, next, queue, waiting, commitments, snoozed, case.

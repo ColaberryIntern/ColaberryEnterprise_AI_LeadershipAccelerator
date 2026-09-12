@@ -70,6 +70,7 @@ Basecamp probe error) . When ZERO, replace Recommended next with the closeout's 
 <case.recommendation, then the concrete action>
 
 ## Proposed response/action
+<the draft as it will actually leave: dashes already replaced, signature already appended, no sign-off. If `payload.style.soft` is non-empty: "Style notes: <rules> (kit: <url>)" on one line — suggestions, never a block>
 <the PROPOSED action's preview, verbatim; if several, list them with ids>
 <if none proposed yet: "Not planned yet — I will run assess + plan (read-only) on A.">
 

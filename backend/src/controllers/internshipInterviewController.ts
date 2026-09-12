@@ -97,7 +97,7 @@ export async function handleGetInterview(req: Request, res: Response): Promise<v
       await ctx.application.reload();
     } catch { /* the poll still returns the live view below */ }
 
-    const [remaining, p, scheduled, live] = await Promise.all([
+    const [remaining, p, scheduled, live, answers] = await Promise.all([
       remainingQuestions(ctx.application.id),
       progress(ctx.application.id),
       InternshipInterviewSession.findOne({
@@ -117,6 +117,7 @@ export async function handleGetInterview(req: Request, res: Response): Promise<v
         },
         order: [['created_at', 'DESC']],
       }),
+      answerMap(ctx.application.id),
     ]);
 
     res.json({
@@ -131,16 +132,31 @@ export async function handleGetInterview(req: Request, res: Response): Promise<v
         : null,
       // The client renders one at a time, but gets the list so it can show a
       // section heading and a truthful "3 of 21" without a round trip per answer.
-      questions: remaining.map((q) => ({
-        question_key: q.question_key,
-        section: q.section,
-        section_title: SECTION_TITLES[q.section],
-        prompt: q.prompt_form,
-        answer_type: q.answer_type,
-        options: q.options ?? null,
-        required: q.required,
-        is_confirmation: !!q.is_confirmation,
-      })),
+      questions: remaining.map((q) => {
+        // A phone call leaves its answers as `needs_followup`: captured, not yet
+        // confirmed. Hand the captured value back so the client can pre-fill it and
+        // ask the applicant to confirm rather than answer from scratch — otherwise
+        // a full call's 17 answers are invisible and re-asked blank.
+        const a = answers.get(q.question_key);
+        const captured = a && a.state === 'needs_followup'
+          ? {
+            answer_text: a.answer_text ?? null,
+            answer_value: (a.answer_value as boolean | string | null) ?? null,
+            answered_via: a.answered_via ?? null,
+          }
+          : null;
+        return {
+          question_key: q.question_key,
+          section: q.section,
+          section_title: SECTION_TITLES[q.section],
+          prompt: q.prompt_form,
+          answer_type: q.answer_type,
+          options: q.options ?? null,
+          required: q.required,
+          is_confirmation: !!q.is_confirmation,
+          captured,
+        };
+      }),
     });
   } catch (err) {
     respondToError(res, err, 'internship_get_interview_failed');

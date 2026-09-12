@@ -665,3 +665,25 @@
 @media (prefers-reduced-motion: reduce) {
   .ip-callpulse span { animation: none; opacity: 0.9; }
 }
+
+/* After a phone call: the "N answers from your call" banner, and the per-question
+   "from your call" cue on each pre-filled question. */
+.ip-captured-banner {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(46, 125, 91, 0.08);
+  border: 1px solid rgba(46, 125, 91, 0.24);
+  color: var(--strong, #14532d);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.ip-captured-banner strong { color: var(--good, #2e7d5b); }
+
+.ip-q__fromcall {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--good, #2e7d5b);
+}

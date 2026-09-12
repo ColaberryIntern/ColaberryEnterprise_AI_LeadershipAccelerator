@@ -73,6 +73,12 @@ export interface InterviewQuestionView {
   options: string[] | null;
   required: boolean;
   is_confirmation: boolean;
+  /**
+   * What a phone call captured for this question, awaiting confirmation. Present
+   * only for `needs_followup` answers — the client pre-fills it and asks the
+   * applicant to confirm or edit rather than answer from scratch.
+   */
+  captured: { answer_text: string | null; answer_value: boolean | string | null; answered_via: string | null } | null;
 }
 
 export interface InterviewProgressView {
@@ -81,6 +87,8 @@ export interface InterviewProgressView {
   resolved: number;
   remaining: number;
   complete: boolean;
+  /** Answers captured from a call and awaiting confirmation (not yet resolved). */
+  captured_pending: number;
 }
 
 export interface InterviewView {

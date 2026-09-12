@@ -40,8 +40,9 @@ export async function passItem(input: ImproverItem): Promise<PassOutcome> {
   if (out.status !== 'lengthened') {
     const why = out.status === 'failed' ? `${out.error_class}: ${out.message}`
       : out.status === 'out_of_bounds' ? `got ${out.got}, wanted ${out.min}-${out.max}`
-        : out.status === 'invariant_violated' ? out.reason
-          : `rubric ${out.before} -> ${out.after}`;
+        : out.status === 'not_an_extension' ? out.reason
+          : out.status === 'invariant_violated' ? out.reason
+            : `rubric ${out.before} -> ${out.after}`;
     return { status: 'refused', plan, why: `${out.status}: ${why}` };
   }
 

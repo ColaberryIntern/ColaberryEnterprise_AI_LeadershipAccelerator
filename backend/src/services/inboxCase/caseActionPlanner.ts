@@ -10,6 +10,7 @@ import { getCaseOrThrow, transitionCase } from './caseRepository';
 import { logCaseEvent } from './caseEventLog';
 import { postCaseProgressNote } from './caseTicketService';
 import { itemInjectionSignals, redactSecretLikePatterns } from './promptSafety';
+import { lintAliEmail, normalizeAliEmailText, normalizeAliSubject, STYLE_KIT_URL } from '../email/aliEmailStyle';
 import { redactSensitive } from '../../utils/piiRedaction';
 import { ALI_OWNER_PATTERN, recordCommitmentsFromAssessment } from './commitmentLedgerService';
 
@@ -76,7 +77,16 @@ function buildReplyAction(
   const body = [assessment.teaching_brief_recommended_decision, assessment.recommendation_rationale, answeredQaText]
     .filter(Boolean)
     .join('\n\n');
-  const draftBody = body || (assessment.recommended_next_actions || []).join('\n') || answeredQaText;
+  const rawBody = body || (assessment.recommended_next_actions || []).join('\n') || answeredQaText;
+
+  // Ali's email style kit (STYLE_KIT_URL) is a GUARD, not a reminder: the
+  // model writes the prose, this makes it compliant before Ali ever sees it —
+  // dashes replaced, no double sign-off, branded signature appended exactly
+  // once. The remaining lint travels with the action so the console can show
+  // what it fixed and what is only a suggestion.
+  const subject = normalizeAliSubject(`Re: ${replyTargetItem.title}`);
+  const draftBody = normalizeAliEmailText(rawBody);
+  const style = lintAliEmail({ subject, text: draftBody });
 
   return {
     action_type: 'EMAIL_SEND',
@@ -84,7 +94,12 @@ function buildReplyAction(
     target_source: replyTargetItem.provider,
     target_id: replyTargetItem.source_id,
     preview: `Reply to "${replyTargetItem.title}":\n\n${draftBody}`,
-    payload: { subject: `Re: ${replyTargetItem.title}`, body: draftBody, reply_to_item_id: replyTargetItem.id },
+    payload: {
+      subject,
+      body: draftBody,
+      reply_to_item_id: replyTargetItem.id,
+      style: { ok: style.ok, hard: style.hardFails.map((f) => f.rule), soft: style.softFails.map((f) => f.rule), kit: STYLE_KIT_URL },
+    },
     risk_level: 'MEDIUM',
     idempotencyParts: [caseRow.id, 'EMAIL_SEND', replyTargetItem.id],
   };

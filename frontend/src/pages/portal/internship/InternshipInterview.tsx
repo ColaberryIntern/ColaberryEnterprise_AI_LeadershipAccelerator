@@ -72,6 +72,7 @@ const InternshipInterview: React.FC<Props> = ({ onProgressed, onComplete }) => {
   const [callPhase, setCallPhase] = useState<CallPhase>('idle');
   const [captured, setCaptured] = useState(0);
   const resolvedAtStart = useRef(0);
+  const capturedAtStart = useRef(0);
   const pollTimer = useRef<number | null>(null);
   const polling = useRef(false);
 
@@ -107,8 +108,21 @@ const InternshipInterview: React.FC<Props> = ({ onProgressed, onComplete }) => {
     [view, index],
   );
 
+  // Pre-fill the draft with what the call captured for this question, so the
+  // applicant confirms or edits it rather than re-typing. Keyed on the question so
+  // it re-seeds each time the shown question changes.
+  useEffect(() => {
+    const cap = question?.captured;
+    if (cap && (cap.answer_text != null || cap.answer_value != null)) {
+      setDraft({ text: cap.answer_text ?? '', value: cap.answer_value ?? null });
+    } else {
+      setDraft(emptyDraft());
+    }
+  }, [question?.question_key]);
+
   const answered = view ? view.progress.resolved : 0;
   const total = view ? view.progress.total : 0;
+  const capturedPending = view ? view.progress.captured_pending : 0;
 
   /** Is the current draft a submittable answer for this question type? */
   const draftIsValid = useMemo(() => {
@@ -168,7 +182,13 @@ const InternshipInterview: React.FC<Props> = ({ onProgressed, onComplete }) => {
       window.setTimeout(() => onComplete?.(), 1600);
       return;
     }
-    const got = Math.max(0, v.progress.resolved - resolvedAtStart.current);
+    // A phone call's answers land as `needs_followup` (captured, not yet
+    // confirmed), so `resolved` barely moves — the real signal that the call did
+    // something is the jump in captured_pending. Count both.
+    const got = Math.max(
+      0,
+      (v.progress.resolved - resolvedAtStart.current) + (v.progress.captured_pending - capturedAtStart.current),
+    );
     if (got > 0) {
       setCaptured(got);
       setIndex(0);
@@ -205,6 +225,7 @@ const InternshipInterview: React.FC<Props> = ({ onProgressed, onComplete }) => {
       }
       const v = await fetchInterview();
       resolvedAtStart.current = v.progress.resolved;
+      capturedAtStart.current = v.progress.captured_pending;
       if (!v.live_call) {
         // Placed but already terminal (a fast no-answer/fail). Settle immediately.
         settleEndedCall(v);
@@ -267,19 +288,42 @@ const InternshipInterview: React.FC<Props> = ({ onProgressed, onComplete }) => {
         <h2 id="ip-iv">Your interview</h2>
 
         <div className="ip-progress" role="group" aria-label="Interview progress">
+          {/* "In hand" = confirmed answers PLUS the ones captured on the call and
+              waiting to be confirmed. Filling the bar to `answered` alone would show
+              5% right after a call that captured 17 — the bar and the "17 from your
+              call" banner would then tell opposite stories. Confirming a captured
+              answer moves it from captured to confirmed, so "in hand" holds steady
+              until a genuinely new question is answered — which is the honest shape
+              of the work left. */}
           <div className="ip-progress__bar">
             <div
               className="ip-progress__fill"
-              style={{ width: `${total ? Math.round((answered / total) * 100) : 0}%` }}
+              style={{ width: `${total ? Math.round(((answered + capturedPending) / total) * 100) : 0}%` }}
             />
           </div>
           {/* Text, not just a bar — a bar alone tells a screen-reader user nothing. */}
           <p className="ip-muted" aria-live="polite">
             {view.progress.complete
               ? 'All questions answered.'
-              : `Question ${answered + 1} of ${total}`}
+              : capturedPending > 0
+                ? `${answered + capturedPending} of ${total} in hand — confirm ${capturedPending} from your call${
+                    total - answered - capturedPending > 0
+                      ? `, then answer ${total - answered - capturedPending} more`
+                      : ''
+                  }`
+                : `Question ${answered + 1} of ${total}`}
           </p>
         </div>
+
+        {/* After a phone call, the captured answers arrive as needs_followup and are
+            pre-filled below. Say so, or "Question 1 of 21" reads as nothing done. */}
+        {capturedPending > 0 && !view.progress.complete && (
+          <div className="ip-captured-banner" role="status">
+            <strong>{capturedPending} {capturedPending === 1 ? 'answer' : 'answers'} from your call</strong> are
+            ready below, pre-filled with what we heard. Confirm each one — edit anything that isn’t right —
+            and answer what the call didn’t cover.
+          </div>
+        )}
 
         {error && <div className="ip-alert" role="alert">{error}</div>}
 
@@ -287,6 +331,11 @@ const InternshipInterview: React.FC<Props> = ({ onProgressed, onComplete }) => {
           <div className="ip-q">
             <p className="ip-q__section">{question.section_title}</p>
             <label className="ip-q__prompt" htmlFor="ip-answer">{question.prompt}</label>
+            {question.captured && (
+              <p className="ip-q__fromcall">
+                From your call — confirm or edit, then save.
+              </p>
+            )}
 
             {question.answer_type === 'yes_no' && (
               <div className="ip-q__yesno" role="group" aria-label={question.prompt}>
@@ -338,7 +387,7 @@ const InternshipInterview: React.FC<Props> = ({ onProgressed, onComplete }) => {
                 onClick={() => submitAnswer(false)}
                 disabled={busy || !draftIsValid}
               >
-                {busy ? 'Saving…' : 'Save and continue'}
+                {busy ? 'Saving…' : question.captured ? 'Confirm and continue' : 'Save and continue'}
               </button>
               {/* Skipping is allowed and honest: a skipped question comes back
                   round rather than being silently treated as answered. */}
@@ -438,10 +487,10 @@ const InternshipInterview: React.FC<Props> = ({ onProgressed, onComplete }) => {
                 <h3>Call ended</h3>
                 <p>
                   We captured {captured} {captured === 1 ? 'answer' : 'answers'} from your call.
-                  A few questions are still open — you can finish them right here.
+                  Confirm each one below — they’re pre-filled with what we heard — and answer anything we missed.
                 </p>
                 <button type="button" className="te-btn berry" onClick={() => setCallPhase('idle')}>
-                  Continue
+                  Review my answers
                 </button>
               </>
             )}
