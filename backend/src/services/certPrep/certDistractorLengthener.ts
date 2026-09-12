@@ -2,7 +2,7 @@ import type OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { scoreItem } from './certQuestionRubric';
 import { checkInvariants, errorClass, isRetryable, ImproverItem } from './certQuestionImprover';
-import { LengthPlan, OPTION_LABEL_PREFIX } from './certOptionLength';
+import { LengthPlan, OPTION_LABEL_PREFIX, extensionProblem } from './certOptionLength';
 
 /**
  * certDistractorLengthener — rewrite ONE wrong option so it is longer than the
@@ -12,13 +12,19 @@ import { LengthPlan, OPTION_LABEL_PREFIX } from './certOptionLength';
  * an item's key is the longest option and which distractor should overtake it;
  * this one asks the model for the words and then refuses them unless they fit.
  *
+ * IT EXTENDS, IT DOES NOT REWRITE. Asked for a longer option the model returns
+ * a fluent sentence of its own. `extensionProblem` refuses that: the opening
+ * word, the trailing punctuation and most of the author's words must survive.
+ * See its comment for the run that proved why.
+ *
  * WHAT IS CHECKED, in order, before a candidate is returned:
  *   1. Only the target option changed. The stem, the key, the other distractors
  *      and every rationale are copied from the original, never from the model.
  *   2. The new text lands inside the plan's character bounds. Too short and the
  *      tell survives; too long and the distractor becomes the new tell.
- *   3. `checkInvariants` still holds — nothing emptied, nothing re-keyed.
- *   4. The rubric score did not drop. The rubric measures option length, and a
+ *   3. It is an EXTENSION of the original, not a replacement for it.
+ *   4. `checkInvariants` still holds — nothing emptied, nothing re-keyed.
+ *   5. The rubric score did not drop. The rubric measures option length, and a
  *      distractor that overshoots the published range would cost a dimension.
  *
  * WHAT IS NOT CHECKED HERE. Whether the longer distractor is now arguably
@@ -33,13 +39,14 @@ import { LengthPlan, OPTION_LABEL_PREFIX } from './certOptionLength';
  */
 
 export const LENGTHENER_MODEL = 'gpt-4o';
-export const LENGTHENER_PROMPT_VERSION = 'v1-same-wrongness';
+export const LENGTHENER_PROMPT_VERSION = 'v2-extend-do-not-rewrite';
 const TIMEOUT_MS = 20_000;
 const MAX_ATTEMPTS = 2;
 
 export type LengthenOutcome =
   | { status: 'lengthened'; item: ImproverItem; before: number; after: number }
   | { status: 'out_of_bounds'; got: number; min: number; max: number }
+  | { status: 'not_an_extension'; reason: string }
   | { status: 'invariant_violated'; reason: string }
   | { status: 'score_dropped'; before: number; after: number }
   | { status: 'failed'; error_class: string; message: string };
@@ -58,6 +65,9 @@ function openai(): OpenAI {
 /** Exported for tests, which need to swap the client between cases. */
 export function __resetLengthenerClient(): void { client = null; }
 
+const firstWordOf = (text: string): string => (text.trim().match(/[A-Za-z0-9_]+/) ?? [''])[0];
+const trailingOf = (text: string): string => (text.trim().match(/[.;:,!?]$/) ?? [''])[0];
+
 export function buildLengthenPrompt(item: ImproverItem, plan: LengthPlan): string {
   const target = item.options.find((o) => o.key === plan.target)!;
   const key = item.options.find((o) => o.key === item.correct_keys[0])!;
@@ -74,16 +84,29 @@ export function buildLengthenPrompt(item: ImproverItem, plan: LengthPlan): strin
     `OPTION TO REWRITE: ${target.key}`,
     `WHY ${target.key} IS WRONG (from the author): ${why}`,
     '',
-    `Rewrite option ${target.key} so that it is between ${plan.minChars} and ${plan.maxChars}`,
-    'characters long (it must end up LONGER than the correct option, which is',
-    `${key.text.trim().length} characters). Add specificity — what is done, to what, and`,
-    'what it is expected to change — in the same voice as the other options.',
+    `EXTEND option ${target.key}. Keep the sentence that is there and ADD to it,`,
+    'so that the result reads as the original with more detail in it. This is an',
+    'edit, not a rewrite: if someone compared the two they should see the first',
+    'sentence inside the second.',
     '',
-    'HARD RULES:',
-    `- it must stay wrong for exactly the reason given above; do not make it a`,
+    `Length: between ${plan.minChars} and ${plan.maxChars} characters (it must end up`,
+    `LONGER than the correct option, which is ${key.text.trim().length} characters).`,
+    'What to add: what is done, to what, and what it is expected to change.',
+    '',
+    'HARD RULES — a candidate breaking any of these is thrown away unread:',
+    `- START WITH THE SAME WORD the option starts with now ("${firstWordOf(target.text)}"),`,
+    '  because the four options answer the question as a set and the opening word',
+    '  is grammar, not style',
+    `- END THE SAME WAY: ${trailingOf(target.text)
+      ? `the option ends with "${trailingOf(target.text)}", so yours must too`
+      : 'the option ends with no full stop, so yours must not add one'}`,
+    '- KEEP THE WORDS THAT ARE THERE. Do not find better phrasing for what the',
+    '  option already says. Every noun and verb in it should still be in yours.',
+    '- it must stay wrong for exactly the reason given above; do not make it a',
     '  better answer, a partial version of the correct answer, or a hedge',
-    '- keep its approach and meaning; you are adding detail, not changing the idea',
-    '- do not mention the correct option, the stem, or that it is wrong',
+    '- do not signal that it is wrong: no "artificially", no "regardless of",',
+    '  no wording that tells the reader not to pick it',
+    '- do not mention the correct option or the stem',
     `- return the option TEXT only: do not begin it with "${target.key}." or any letter`,
     '- do not invent a product, a version number, a price or a date',
     '',
@@ -102,6 +125,7 @@ export async function lengthenDistractor(item: ImproverItem, plan: LengthPlan): 
 
   let lastErr: any = null;
   let lastBounds: { got: number } | null = null;
+  let lastNotExtension: string | null = null;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     try {
       const res = await openai().chat.completions.create({
@@ -124,6 +148,14 @@ export async function lengthenDistractor(item: ImproverItem, plan: LengthPlan): 
         continue; // a miss on length is worth one more try
       }
 
+      // An extension, not a replacement. Retried once, because the model does
+      // sometimes honour the instruction on a second pass.
+      const notExtension = extensionProblem(item.options.find((o) => o.key === plan.target)!.text, text);
+      if (notExtension) {
+        lastNotExtension = notExtension;
+        continue;
+      }
+
       const candidate: ImproverItem = {
         ...item,
         options: item.options.map((o) => (o.key === plan.target ? { key: o.key, text } : { ...o })),
@@ -141,6 +173,7 @@ export async function lengthenDistractor(item: ImproverItem, plan: LengthPlan): 
       if (!isRetryable(err) || attempt === MAX_ATTEMPTS) break;
     }
   }
+  if (lastNotExtension && !lastErr) return { status: 'not_an_extension', reason: lastNotExtension };
   if (lastBounds && !lastErr) {
     return { status: 'out_of_bounds', got: lastBounds.got, min: plan.minChars, max: plan.maxChars };
   }

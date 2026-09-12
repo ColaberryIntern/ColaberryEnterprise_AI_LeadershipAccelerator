@@ -1,6 +1,7 @@
 import {
   lengthPlan, longestOptionKey, hasOptionLabel, stripOptionLabels,
-  KEEP_EVERY, MIN_MARGIN_CHARS, MAX_MARGIN_CHARS,
+  extensionProblem, contentRetention,
+  KEEP_EVERY, MIN_MARGIN_CHARS, MAX_MARGIN_CHARS, CONTENT_RETENTION_MIN,
 } from '../certOptionLength';
 import { assignAnswerPosition } from '../../../data/certBlueprints/items/itemFactory';
 
@@ -39,6 +40,55 @@ describe('option labels — "D. Allocate more capacity" as option D', () => {
     expect(dirty.options[1].text).toBe('B. lower the threshold'); // input untouched
     const clean = item('k', ['a', 'b', 'c', 'd']);
     expect(stripOptionLabels(clean).item).toBe(clean);
+  });
+});
+
+describe('an extension, not a rewrite', () => {
+  // Every case below is a real pair from the first authored run, which passed
+  // the bounds check, the invariants, the rubric and the triage.
+  const original = 'Retry the failed step with exponential backoff';
+
+  it('accepts the original with more detail added to it', () => {
+    expect(extensionProblem(original, `${original} and a capped number of attempts`)).toBeNull();
+  });
+
+  it('refuses a fluent replacement that says the same thing in new words', () => {
+    // Keeps the opening word, so the retention rule is what has to catch it.
+    const rewrite = 'Retry the unsuccessful operation again, using progressively longer waits between tries';
+    expect(extensionProblem(original, rewrite)).toMatch(/rewritten rather than extended/);
+  });
+
+  it('refuses a changed opening word, because the options answer the stem as a set', () => {
+    // "That redacted values are replaced ..." -> "Ensure redacted values are replaced ..."
+    const before = 'That redacted values are replaced with a consistent placeholder';
+    const after = 'Ensure redacted values are replaced with a consistent placeholder across every field';
+    expect(extensionProblem(before, after)).toMatch(/opening word changed: "that" -> "ensure"/);
+  });
+
+  it('refuses a full stop the three sibling options do not have', () => {
+    expect(extensionProblem(original, `${original} and a capped number of attempts.`))
+      .toMatch(/trailing punctuation changed: "none" -> "\."/);
+  });
+
+  it('refuses dropping a full stop the siblings do have', () => {
+    expect(extensionProblem(`${original}.`, `${original} and a capped number of attempts`))
+      .toMatch(/trailing punctuation changed: "\." -> "none"/);
+  });
+
+  it('refuses anything not actually longer', () => {
+    expect(extensionProblem(original, 'Retry the step')).toMatch(/not longer/);
+  });
+
+  it('measures retention on meaning-carrying words, ignoring the scaffolding', () => {
+    // Same content words, different connectives: retention is total.
+    expect(contentRetention('Retry the failed step with backoff', 'Retry a failed step using backoff')).toBe(1);
+    expect(contentRetention('alpha bravo charlie', 'alpha bravo charlie delta')).toBe(1);
+    expect(contentRetention('alpha bravo charlie delta', 'alpha bravo')).toBe(0.5);
+  });
+
+  it('has a floor strict enough to have caught the run that motivated it', () => {
+    // The first authored run's median retention was 0.40.
+    expect(CONTENT_RETENTION_MIN).toBeGreaterThan(0.4);
   });
 });
 
