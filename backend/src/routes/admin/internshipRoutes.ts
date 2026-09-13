@@ -56,7 +56,9 @@ const decideSchema = z.object({
     'approve', 'approve_with_conditions', 'reject',
     'waitlist', 'request_information', 'schedule_human_follow_up',
   ]),
-  reason_code: z.enum(REASON_CODES as [string, ...string[]]),
+  // Optional: a reason is required only for reject / waitlist / request_information
+  // (enforced in decide()). Approving needs none.
+  reason_code: z.enum(REASON_CODES as [string, ...string[]]).nullish(),
   student_message: z.string().max(4000).nullish(),
   reviewer_notes: z.string().max(4000).nullish(),
   conditions: z.string().max(2000).nullish(),
@@ -125,7 +127,7 @@ router.post('/api/admin/internship/applications/:id/decide', requireSection('int
     const result = await decide({
       application,
       decision: parsed.data.decision,
-      reasonCode: parsed.data.reason_code,
+      reasonCode: parsed.data.reason_code ?? '',
       studentMessage: parsed.data.student_message,
       reviewerNotes: parsed.data.reviewer_notes,
       conditions: parsed.data.conditions,

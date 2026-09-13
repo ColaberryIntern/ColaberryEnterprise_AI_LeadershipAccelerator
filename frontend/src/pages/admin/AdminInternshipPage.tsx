@@ -139,7 +139,10 @@ const AdminInternshipPage: React.FC = () => {
 
   const chosenReason = reasonOptions.find((r) => r.code === reasonCode) ?? null;
   const needsMessage = reasonCode === 'other_see_message';
-  const canSubmit = !!reasonCode && (!needsMessage || studentMessage.trim().length > 0);
+  // A reason is required only for the scoped (negative) decisions. Approving needs
+  // none — the offer letter and message are the substance.
+  const reasonRequired = NEEDS_SCOPED_REASON[decision] !== null;
+  const canSubmit = (!reasonRequired || !!reasonCode) && (!needsMessage || studentMessage.trim().length > 0);
 
   const submit = useCallback(async () => {
     if (!selected || !canSubmit) return;
@@ -500,7 +503,7 @@ const AdminInternshipPage: React.FC = () => {
 
             <div className="mb-3">
               <label className="form-label" htmlFor="ai-reason" style={{ fontSize: 13, fontWeight: 600 }}>
-                Reason (required)
+                Reason {reasonRequired ? '(required)' : '(optional)'}
               </label>
               <select
                 id="ai-reason"
@@ -577,7 +580,7 @@ const AdminInternshipPage: React.FC = () => {
             </button>
             {!canSubmit && (
               <span className="text-muted ms-2" style={{ fontSize: 12 }}>
-                {!reasonCode ? 'Pick a reason first.' : 'This reason needs a message.'}
+                {reasonRequired && !reasonCode ? 'Pick a reason first.' : 'This reason needs a message.'}
               </span>
             )}
           </SectionCard>
