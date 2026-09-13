@@ -3,6 +3,7 @@ import * as path from 'path';
 import { arbitrate, SORT_KEYS } from '../../../explorerGrowth/governor/arbiter';
 import { decideForSubject } from '../decideForSubject';
 import { OfferNotEligibleError } from '../../offerEligibility';
+import { SCAN_DIRS, phase2SourceFiles } from '../../__tests__/phase2Sources';
 import { TIER_SETTING_CANDIDATES, tierFor } from './fixtures/tierSetter';
 import type { DecideDeps, JourneyCandidate, JourneyStrategy, JourneySubjectContext } from '../types';
 
@@ -44,19 +45,21 @@ const RANKING_UTILITIES = [
   'fast-sort',
 ];
 
-function sources(dir: string, out: string[] = []): string[] {
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    const p = path.join(dir, e.name);
-    if (e.isDirectory()) {
-      sources(p, out);
-    } else if (e.name.endsWith('.ts')) {
-      out.push(p);
-    }
-  }
-  return out;
+/**
+ * The files to scan: `phase2SourceFiles()`, the SAME list the no-send scanner
+ * walks - `services/growthJourney` AND `services/routing`.
+ *
+ * Attempt 2's verifier defeated the directory-scoped version by putting the
+ * comparison in `services/routing/` and calling it from a one-line wrapper in
+ * this tree: zero literal occurrences here, a full second arbiter next door.
+ * Sharing one file list means a guard cannot be bypassed by choosing a folder,
+ * and the test below fails if the two lists ever diverge.
+ */
+function scannedFiles(): string[] {
+  return phase2SourceFiles();
 }
 
-const rel = (f: string) => path.relative(GJ_DIR, f).replace(/\\/g, '/');
+const rel = (f: string) => path.relative(path.join(GJ_DIR, '..'), f).replace(/\\/g, '/');
 
 const stripComments = (src: string) =>
   src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
@@ -86,10 +89,23 @@ export function rankingFieldReads(source: string): string[] {
 }
 
 describe('the structural guard: nothing under growthJourney READS a ranking field', () => {
-  const files = sources(GJ_DIR).filter((f) => !f.includes('__tests__'));
+  const files = scannedFiles();
 
   it('scans a non-trivial number of files, so a passing scan means something', () => {
-    expect(files.length).toBeGreaterThanOrEqual(10);
+    expect(files.length).toBeGreaterThanOrEqual(15);
+  });
+
+  it('walks the SAME tree as the no-send scanner, so neither can be bypassed by choosing a folder', () => {
+    // The bypass attempt 2's verifier found: a second arbiter in
+    // `services/routing/` called from a one-line wrapper in `growthJourney/`.
+    // Both guards now share one file list; if a third directory is ever added
+    // to this run, it is added once and both guards see it.
+    const dirs = SCAN_DIRS.map((d) => d.replace(/\\/g, '/'));
+    expect(dirs.some((d) => d.endsWith('services/growthJourney'))).toBe(true);
+    expect(dirs.some((d) => d.endsWith('services/routing'))).toBe(true);
+    expect(dirs).toHaveLength(2);
+    // And the routing tree really is in the list this guard walks.
+    expect(files.some((f) => f.replace(/\\/g, '/').includes('/services/routing/'))).toBe(true);
   });
 
   it('no production file reads priority_tier or intra_tier_score', () => {
