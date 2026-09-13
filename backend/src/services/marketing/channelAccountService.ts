@@ -384,6 +384,34 @@ export async function revokeAccount(accountId: string, revokedBy: string | null)
   return toView(account, []);
 }
 
+/**
+ * The author a post is attributed to, as the provider's own URN.
+ *
+ * This is the ONLY difference between posting as a person and posting as a company page, which
+ * is why it lives here (next to the account that knows which it is) rather than inside the
+ * adapter. `provider_account_id` holds the OIDC `sub` for a member and the organization id for
+ * a page; the URN shape is the provider's, not ours.
+ */
+export async function getAuthorUrn(accountId: string): Promise<string> {
+  const account = await ChannelAccount.findByPk(accountId);
+  if (!account) throw new WorkflowError('Channel account not found', 404, 'NotFound');
+
+  switch (account.provider) {
+    case 'linkedin_member':
+      return `urn:li:person:${account.provider_account_id}`;
+    case 'linkedin_organization':
+      return `urn:li:organization:${account.provider_account_id}`;
+    default:
+      // Not a silent empty string: an adapter given a blank author posts as nobody, and
+      // LinkedIn's 422 would be diagnosed as a copy problem rather than a wiring one.
+      throw new WorkflowError(
+        `No author URN format is known for provider ${account.provider}.`,
+        409,
+        'UnknownAuthorFormat',
+      );
+  }
+}
+
 /** Rows still sealed under a retired master key. Drives the rotation sweep's reporting. */
 export async function credentialsNeedingRewrap(tenantId?: string): Promise<number> {
   const active = activeKeyId();
