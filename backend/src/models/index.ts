@@ -419,6 +419,8 @@ import LinkClick from './LinkClick';
 
 // --- Marketing Operations: Content OS ---
 import ContentItem from './ContentItem';
+import ChannelAccount from './ChannelAccount';
+import ConnectorCredential from './ConnectorCredential';
 import ContentVariant from './ContentVariant';
 import MediaAsset from './MediaAsset';
 import ContentItemMedia from './ContentItemMedia';
@@ -1588,6 +1590,8 @@ export {
   LinkClick,
   // Marketing Operations: Content OS
   ContentItem,
+  ChannelAccount,
+  ConnectorCredential,
   ContentVariant,
   MediaAsset,
   ContentItemMedia,
@@ -1925,6 +1929,9 @@ LinkClick.belongsTo(TrackedLink, { foreignKey: 'tracked_link_id', as: 'trackedLi
 // Every edge below is backed by a real FK in ensureContentOsSchema.ts, so every one gets an
 // association. The rule is applied per EDGE: constrain and associate the immediate parent,
 // leave cross-domain references bare and unassociated.
+ChannelAccount.hasMany(ConnectorCredential, { foreignKey: 'channel_account_id', as: 'credentials' });
+ConnectorCredential.belongsTo(ChannelAccount, { foreignKey: 'channel_account_id', as: 'account' });
+
 ContentItem.hasMany(ContentVariant, { foreignKey: 'content_item_id', as: 'variants' });
 ContentVariant.belongsTo(ContentItem, { foreignKey: 'content_item_id', as: 'contentItem' });
 
