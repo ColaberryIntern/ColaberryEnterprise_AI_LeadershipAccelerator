@@ -131,6 +131,36 @@ export async function decideInternshipApplication(id: string, body: {
   return data;
 }
 
+// ── AI assessment ─────────────────────────────────────────────────────────────
+
+export type RequirementStatus = 'met' | 'not_met' | 'unclear';
+
+export interface RequirementCheck {
+  key: string;
+  label: string;
+  status: RequirementStatus;
+  evidence: string | null;
+}
+
+export type AssessmentRecommendation =
+  | 'approve' | 'approve_with_conditions' | 'concerns' | 'follow_up' | 'not_ready';
+
+export interface ApplicantAssessment {
+  summary: string;
+  recommendation: AssessmentRecommendation;
+  rationale: string;
+  conditions: string[];
+  follow_up_questions: string[];
+  requirements: RequirementCheck[];
+  generated_at: string;
+  model_generated: boolean;
+}
+
+export async function assessInternshipApplication(id: string): Promise<ApplicantAssessment> {
+  const { data } = await api.post<ApplicantAssessment>(`/api/admin/internship/applications/${id}/assess`);
+  return data;
+}
+
 // ── Documents ───────────────────────────────────────────────────────────────
 
 export interface AdminDocumentRow {
