@@ -128,6 +128,10 @@
    grey glyph. It is no longer rendered at all, and the height it was using goes
    to the post: a ritual pill, the student's own sentence, then who said it. */
 .cr-quotetile .cr-in{padding:14px 15px 13px}
+/* The whole tile opens the post's thread, so it has to look like it does. */
+.cr-tile.cr-clickable{cursor:pointer;transition:border-color .16s ease,box-shadow .16s ease}
+.cr-tile.cr-clickable:hover{border-color:var(--cr,#367895)}
+.cr-tile.cr-clickable:focus-visible{outline:2px solid var(--cr,#367895);outline-offset:2px}
 .cr-eyebrow{
   align-self:flex-start;font-size:.66rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
   color:var(--cr,#367895);background:var(--cr-soft,rgba(54,120,149,.10));
