@@ -397,6 +397,36 @@ export function projectProgress(p: StudentProject): { done: number; total: numbe
 export function reqVerified(p: StudentProject): { v: number; total: number } {
   return { v: p.reqs.filter((r) => r.state === 'verified').length, total: p.reqs.length };
 }
+
+/**
+ * What this build is worth, and what it has actually paid.
+ *
+ * `earned` counts only stories the SERVER verified (`verifiedAt`), never
+ * `state: 'done'`. A student marking a task done does not pay them — the
+ * platform pays when the repo verifies, which is the whole reason the tile
+ * says "Build · +N pts" and not "Collect". Counting `done` here would put a
+ * number on the card that the points ledger cannot back.
+ *
+ * `available` is the sum of every priced story. Unpriced tasks (PREP steps,
+ * and every task on a build with no published plan or no budget) contribute
+ * nothing and are not counted in either figure, so a build the platform cannot
+ * price shows no chip at all rather than "0 pts", which would read as "worth
+ * nothing" instead of "not priced yet".
+ */
+export function projectPoints(p: StudentProject): { earned: number; available: number; priced: number } {
+  let earned = 0;
+  let available = 0;
+  let priced = 0;
+  for (const l of p.lists) {
+    for (const t of l.tasks) {
+      if (typeof t.points !== 'number' || t.points <= 0) continue;
+      priced += 1;
+      available += t.points;
+      if (t.verifiedAt) earned += t.points;
+    }
+  }
+  return { earned, available, priced };
+}
 const DUE_RANK: Record<TaskDue, number> = { overdue: 0, today: 1, up: 2, done: 9 };
 
 // ── dependency blocking (see-but-not-open) ────────────────────────────────────

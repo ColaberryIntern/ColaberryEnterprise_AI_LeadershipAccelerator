@@ -16,7 +16,7 @@ import { PipelineBanner, CallBanner, type PipelineState, type HandoffCounts } fr
 import ProjectsNextStepHero from './ProjectsNextStepHero';
 import FeedCard, { FeedItem } from '../feed/FeedCard';
 import {
-  useProjectsList, createProjectFromAnswers, claimBackendProject, projectProgress, reqVerified, nextTask,
+  useProjectsList, createProjectFromAnswers, claimBackendProject, projectProgress, projectPoints, reqVerified, nextTask,
   removeProjectLocally,
   StudentProject, ProjectTask, ProjectList, NewBuildAnswers,
 } from './projectsStore';
@@ -141,6 +141,7 @@ export function BuildCard({ p, onOpen, onRemove, repoSync }: {
   repoSync?: string;
 }) {
   const prog = projectProgress(p);
+  const pts = projectPoints(p);
   const rv = reqVerified(p);
   const creating = p.status === 'creating';
   const stageLabel = creating ? 'Creating…' : (prog.pct === 100 ? 'Complete' : p.stage.split(' · ')[0]);
@@ -161,6 +162,19 @@ export function BuildCard({ p, onOpen, onRemove, repoSync }: {
             </span>
             <span className={`pj-st ${progState}`}>{prog.done}/{prog.total} tasks</span>
             {rv.total > 0 && <span className={`pj-due ${rv.v === rv.total ? 'done' : 'up'}`}>{rv.v}/{rv.total} verified</span>}
+            {/* What the build pays. The list card carried task and verified
+                counts but no points, so the one screen a student lands on was
+                the only project surface that never said what the work is worth
+                (Ali, 2026-09-13: "You are not showing the points in the project
+                section"). Absent — not "0 pts" — when nothing here is priced. */}
+            {pts.priced > 0 && (
+              <span
+                className={`pj-due ${pts.earned >= pts.available ? 'done' : 'up'}`}
+                title={`Verified work on this build pays ${pts.available} pts in total. ${pts.earned} earned so far — the platform pays each story when your repo verifies it.`}
+              >
+                {pts.earned}/{pts.available} pts
+              </span>
+            )}
             <OriginChip p={p} />
             <RepoSyncChip state={repoSync} />
           </div>
@@ -201,6 +215,11 @@ const ProjectsPage: React.FC = () => {
   // seeded training example alongside them, so anything that counts, totals, or
   // says "you have N" must read this list and not `projects`.
   const ownBuilds = useMemo(() => projects.filter((p) => !p.sample), [projects]);
+  /** Points across the student's own builds, for the dashboard stat. */
+  const buildPoints = useMemo(() => ownBuilds.reduce(
+    (a, p) => { const q = projectPoints(p); return { earned: a.earned + q.earned, available: a.available + q.available }; },
+    { earned: 0, available: 0 },
+  ), [ownBuilds]);
   // Backend-source flip: pull the student's persisted build (completions from
   // other devices, or a build this browser has never seen) then mirror back up.
   // Once per page session, flag-gated + best-effort (see projectSync).
@@ -735,6 +754,16 @@ const ProjectsPage: React.FC = () => {
               fixture being counted as a build the student owns.
             */}
             <div className="te-stat"><span className="lab">Active builds</span><span className="num">{ownBuilds.length}</span></div>
+            {/* The same figure the cards carry, totalled across the student's
+                OWN builds — `ownBuilds`, so the seeded training example never
+                inflates what they think their work is worth. Hidden entirely
+                when nothing is priced yet. */}
+            {buildPoints.available > 0 && (
+              <div className="te-stat" title="Across your builds. The platform pays each story when your repo verifies it.">
+                <span className="lab">Build points</span>
+                <span className="num">{buildPoints.earned}/{buildPoints.available}</span>
+              </div>
+            )}
             {projects.map((p) => {
               const prog = projectProgress(p);
               return (
