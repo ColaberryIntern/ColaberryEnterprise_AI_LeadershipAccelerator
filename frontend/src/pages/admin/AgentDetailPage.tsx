@@ -229,12 +229,22 @@ export default function AgentDetailPage() {
 
   const handleReactivate = useCallback(async () => {
     if (!id || !selectedAutonomyLevel) return;
+    // Ali, live: the picker used to only appear for a disabled agent, so
+    // every real call here was a genuine reactivation. It's now also
+    // reachable for an already-enabled agent to deliberately set/change its
+    // level — same backend call (reactivateAgent() is a no-op on `enabled`
+    // when already true), but "Reactivated" would misdescribe that case.
+    const wasAlreadyEnabled = detail?.agent.enabled ?? false;
     setReactivating(true);
     setReactivationMessage(null);
     try {
       const result = await reactivateAgent(id, selectedAutonomyLevel);
       setReactivationMessage(
-        result.error ? `Failed to reactivate: ${result.error}` : `Reactivated at autonomy level "${result.autonomyLevel}".`,
+        result.error
+          ? `Failed to reactivate: ${result.error}`
+          : wasAlreadyEnabled
+            ? `Autonomy level set to "${result.autonomyLevel}".`
+            : `Reactivated at autonomy level "${result.autonomyLevel}".`,
       );
       setSelectedAutonomyLevel('');
       await fetchDetail();
@@ -243,7 +253,7 @@ export default function AgentDetailPage() {
     } finally {
       setReactivating(false);
     }
-  }, [id, selectedAutonomyLevel, fetchDetail]);
+  }, [id, selectedAutonomyLevel, detail, fetchDetail]);
 
   if (loading) {
     return (
