@@ -167,7 +167,11 @@ export function StoryDetailArticle({
               reader had to scroll past a picture of the product to reach a film
               of it. The poster falls back to the cover image, so a record with a
               walkthrough looks exactly as it did until somebody presses play. */}
-          <StoryHeroFigure video={record.walkthroughVideo} cover={cover} />
+          <StoryHeroFigure
+            video={record.walkthroughVideo}
+            cover={cover}
+            figuresBelow={metrics.length > 0 || (record.measurement?.metrics?.length ?? 0) > 0}
+          />
         </div>
       </section>
 
