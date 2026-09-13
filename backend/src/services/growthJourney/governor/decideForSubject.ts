@@ -144,6 +144,28 @@ export async function decideForSubject(
     return { status: 'decided', decision: refusal('no_winner', strategy, { candidates: generated, suppressed }) };
   }
 
+  // The boundary AGAIN, on the winner. Defence in depth: the winner comes from
+  // the filtered set, so nothing denied can win today - but the exclusion that
+  // matters most in this system (no business training under AI Flotation) is
+  // specified as two checks, and a decision naming an offer a brand may not
+  // make is the one output this phase must never produce.
+  const winnerFamily = offerFamilyOf(winner, ctx);
+  if (winnerFamily) {
+    try {
+      await deps.assertOfferAllowed({ brandId: ctx.brand_id, offerFamily: winnerFamily });
+    } catch (err: unknown) {
+      if (!(err instanceof OfferNotEligibleError)) throw err;
+      return {
+        status: 'decided',
+        decision: refusal(`winner_not_eligible:${err.decision.reason}`, strategy, {
+          candidates: generated,
+          suppressed: [...suppressed, suppression(winner, `offer_not_eligible:${err.decision.reason}`)],
+          requires_human_review: true,
+        }),
+      };
+    }
+  }
+
   const base: JourneyDecision = {
     selected_action: winner.action_type,
     selected_path: offerFamilyOf(winner, ctx),

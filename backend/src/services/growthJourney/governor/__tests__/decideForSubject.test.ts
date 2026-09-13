@@ -245,7 +245,11 @@ describe('the brand boundary', () => {
     expect(d.suppressed).toEqual(
       expect.arrayContaining([expect.objectContaining({ reason: 'offer_not_eligible:explicit_deny' })]),
     );
-    expect(assertOfferAllowed).toHaveBeenCalledTimes(2);
+    // Two candidates, then the winner again: the boundary is checked per
+    // candidate before ranking AND on the winner afterwards. The second pass is
+    // defence in depth, and this count is what pins it.
+    expect(assertOfferAllowed).toHaveBeenCalledTimes(3);
+    expect(assertOfferAllowed).toHaveBeenLastCalledWith({ brandId: 'b-ent', offerFamily: 'workflow_automation' });
   });
 
   it('every candidate denied → a refusal that asks for a human, not a silent nothing', async () => {

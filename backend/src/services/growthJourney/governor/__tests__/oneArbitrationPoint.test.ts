@@ -2,20 +2,47 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { arbitrate, SORT_KEYS } from '../../../explorerGrowth/governor/arbiter';
 import { decideForSubject } from '../decideForSubject';
+import { OfferNotEligibleError } from '../../offerEligibility';
 import { TIER_SETTING_CANDIDATES, tierFor } from './fixtures/tierSetter';
-import type { JourneyCandidate, JourneyStrategy, JourneySubjectContext } from '../types';
+import type { DecideDeps, JourneyCandidate, JourneyStrategy, JourneySubjectContext } from '../types';
 
 /**
- * §7.3 allows ONE arbitration point across every journey programme. This is the
- * test that keeps it one (T303).
+ * Section 7.3 allows ONE arbitration point across every journey programme. This
+ * is the test that keeps it one (T303).
  *
- * Two halves, because either alone can be fooled: a SOURCE scan proving no file
- * under `services/growthJourney/` ranks candidates itself, and a DIFFERENTIAL
- * proving the pipeline's answer is the arbiter's own answer rather than a
- * coincidentally similar one.
+ * WHY THIS GUARD IS STRUCTURAL AND NOT A LIST OF PATTERNS
+ *
+ * Attempt 1 scanned for comparator SHAPES - a sort with a ranking field in its
+ * comparator, a subtraction of two tiers, a localeCompare. The verifier broke it
+ * in the way that matters: it wrote four realistic second arbiters the scan did
+ * not see, including the most natural refactor of all, reading the field into a
+ * local variable first, plus a lodash orderBy with a string field name, a lodash
+ * sortBy with an accessor, and bracket-notation access. A guard that knows only
+ * the shapes somebody already tried is a guard against repetition.
+ *
+ * So the rule is now about the DATA rather than the syntax:
+ *
+ *   under services/growthJourney, a ranking field may be WRITTEN as an object
+ *   key and must never be READ.
+ *
+ * A second arbiter has to read a tier to compare it - by any syntax, through any
+ * helper, into any local. A generator only ever writes one. That makes the guard
+ * indifferent to how a comparison is spelled, and it costs nothing today: no
+ * non-test file under this tree reads either field.
  */
 
 const GJ_DIR = path.join(__dirname, '..', '..');
+const RANKING_FIELDS = ['priority_tier', 'intra_tier_score'] as const;
+
+/** A second arbiter can arrive as an import as easily as a loop. */
+const RANKING_UTILITIES = [
+  'lodash',
+  'lodash-es',
+  'ramda',
+  'sort-by',
+  'array-sort',
+  'fast-sort',
+];
 
 function sources(dir: string, out: string[] = []): string[] {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -31,75 +58,104 @@ function sources(dir: string, out: string[] = []): string[] {
 
 const rel = (f: string) => path.relative(GJ_DIR, f).replace(/\\/g, '/');
 
-/**
- * A comparator over tiers, not the identifier.
- *
- * Looking for `priority_tier` itself would flag every honest generator, since a
- * generator must set a tier. These patterns look for the act of RANKING: a sort
- * with a comparator body, a subtraction of two tiers, or a `localeCompare` over
- * action types. `fixtures/tierSetter.ts` is the negative control below.
- */
-const COMPARATORS: Array<{ name: string; rx: RegExp }> = [
-  // NOT a bare `.sort((` — that flagged two honest sorts on the first run:
-  // `offerEligibility` orders offer families by catalog position, and
-  // `classificationService` orders JSON keys for its stable input hash. Neither
-  // ranks a candidate. So the pattern is a sort whose COMPARATOR BODY reaches
-  // for a ranking field, which is what arbitration would have to do.
-  { name: 'sort ranking by tier or score', rx: /\.sort\(\s*\([^)]*\)\s*=>[\s\S]{0,200}?(priority_tier|intra_tier_score)/ },
-  { name: 'subtraction of two tiers', rx: /priority_tier\s*[-<>]=?\s*\w+\.priority_tier/ },
-  { name: 'tier compared to a tier', rx: /\.priority_tier\s*[<>]/ },
-  { name: 'localeCompare over action types', rx: /action_type\.localeCompare/ },
-  { name: 'intra-tier score compared', rx: /intra_tier_score\s*[-<>]=?\s*\w+\.intra_tier_score/ },
-];
+const stripComments = (src: string) =>
+  src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 
-describe('the source scan: nothing under growthJourney ranks candidates itself', () => {
+/**
+ * Every READ of a ranking field, by any syntax.
+ *
+ * A write is `priority_tier:` - an object-literal key, which is what a generator
+ * does. Anything else naming the field is a read: a property access, a bracket
+ * lookup, a bare string handed to a helper, a destructure.
+ */
+export function rankingFieldReads(source: string): string[] {
+  const code = stripComments(source);
+  const reads: string[] = [];
+  for (const field of RANKING_FIELDS) {
+    const rx = new RegExp(`(.{0,12})\\b${field}\\b(.{0,6})`, 'g');
+    for (const m of code.matchAll(rx)) {
+      const before = m[1] ?? '';
+      const after = m[2] ?? '';
+      const quotedKey = /['"]\s*$/.test(before) && /^['"]\s*:/.test(after);
+      const plainKey = !/['"[.]\s*$/.test(before) && /^\s*:/.test(after);
+      if (quotedKey || plainKey) continue;
+      reads.push(`${field}${after.trim().slice(0, 2)}`);
+    }
+  }
+  return reads;
+}
+
+describe('the structural guard: nothing under growthJourney READS a ranking field', () => {
   const files = sources(GJ_DIR).filter((f) => !f.includes('__tests__'));
 
   it('scans a non-trivial number of files, so a passing scan means something', () => {
     expect(files.length).toBeGreaterThanOrEqual(10);
   });
 
-  it('no production file contains a comparator over tiers or scores', () => {
+  it('no production file reads priority_tier or intra_tier_score', () => {
     const offenders: string[] = [];
     for (const f of files) {
-      const src = fs.readFileSync(f, 'utf8');
-      for (const { name, rx } of COMPARATORS) {
-        if (rx.test(src)) offenders.push(`${rel(f)} -> ${name}`);
+      const reads = rankingFieldReads(fs.readFileSync(f, 'utf8'));
+      if (reads.length > 0) offenders.push(`${rel(f)} -> reads ${reads.join(', ')}`);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('no production file imports a ranking utility', () => {
+    const offenders: string[] = [];
+    for (const f of files) {
+      const code = stripComments(fs.readFileSync(f, 'utf8'));
+      for (const spec of [...code.matchAll(/from\s+['"]([^'"]+)['"]/g)].map((m) => m[1])) {
+        if (RANKING_UTILITIES.some((u) => spec === u || spec.startsWith(`${u}/`))) {
+          offenders.push(`${rel(f)} -> ${spec}`);
+        }
       }
     }
     expect(offenders).toEqual([]);
   });
 
-  it('the negative control is NOT flagged: setting a tier is not ranking', () => {
-    // If this ever fails, the scan above has become too broad and would start
-    // flagging honest generators — which is how a guard like this dies.
-    const control = fs.readFileSync(path.join(__dirname, 'fixtures', 'tierSetter.ts'), 'utf8');
-    expect(control).toContain('priority_tier');
-    for (const { rx } of COMPARATORS) expect(rx.test(control)).toBe(false);
-    expect(TIER_SETTING_CANDIDATES).toHaveLength(3);
-    expect(tierFor(90)).toBe(3);
+  it('catches every second-arbiter idiom, including the four that defeated the shape scan', () => {
+    // These are the verifier's own snippets from attempt 1. Four of them passed
+    // the old scan while implementing exactly what this task forbids.
+    const secondArbiters: Array<[string, string]> = [
+      ['lodash orderBy with a string field name', "return orderBy(candidates, ['priority_tier'], ['asc'])[0];"],
+      ['lodash sortBy with an accessor', 'return sortBy(candidates, (c) => c.priority_tier)[0];'],
+      [
+        'reduce with local variable extraction',
+        'const bt = best.priority_tier; const ct = c.priority_tier; return ct < bt ? c : best;',
+      ],
+      [
+        'for loop with local variable extraction',
+        'let wt = winner.priority_tier; for (const c of cs) { const t = c.priority_tier; if (t < wt) wt = t; }',
+      ],
+      ['reduce with a direct dot compare', 'return c.priority_tier < best.priority_tier ? c : best;'],
+      ['bracket-notation reduce', "return c['priority_tier'] < best['priority_tier'] ? c : best;"],
+      ['ternary over the tie-break score', 'return a.intra_tier_score > b.intra_tier_score ? a : b;'],
+      ['destructured read', 'const { priority_tier } = candidate; if (priority_tier < best) return candidate;'],
+    ];
+
+    const slipped = secondArbiters.filter(([, code]) => rankingFieldReads(code).length === 0).map(([n]) => n);
+    expect(slipped).toEqual([]);
   });
 
-  it('a comparator ADDED to a growth-journey file would be caught (the scan bites)', () => {
-    const planted = `
-      const ordered = [...candidates].sort((a, b) => a.priority_tier - b.priority_tier);
-    `;
-    const caught = COMPARATORS.filter(({ rx }) => rx.test(planted)).map((c) => c.name);
-    expect(caught).toContain('sort ranking by tier or score');
-    expect(caught).toContain('subtraction of two tiers');
+  it('leaves honest code alone: writing a tier is not ranking one', () => {
+    // The negative control the plan audit required. A generator must set a tier;
+    // if this fails, the guard has become useless in the other direction.
+    const control = fs.readFileSync(path.join(__dirname, 'fixtures', 'tierSetter.ts'), 'utf8');
+    expect(control).toContain('priority_tier');
+    expect(rankingFieldReads(control)).toEqual([]);
+    expect(TIER_SETTING_CANDIDATES).toHaveLength(3);
+    expect(tierFor(90)).toBe(3);
 
-    // A subtler shape: no sort at all, just a direct comparison of two tiers.
-    const subtle = 'if (a.priority_tier < b.priority_tier) return a;';
-    expect(COMPARATORS.some(({ rx }) => rx.test(subtle))).toBe(true);
-
-    // And the honest shapes the scan must NOT flag: a sort with no ranking
-    // field in its comparator, which is what the two real files in this tree do.
     for (const honest of [
-      "[...allowed].filter((f) => !denied.has(f)).sort()",
-      ".sort((a, b) => a.brand_slug.localeCompare(b.brand_slug))",
-      "Object.entries(v).sort(([a], [b]) => a.localeCompare(b))",
+      'const c = { action_type: "SEND_EMAIL", priority_tier: 7, intra_tier_score: 40 };',
+      'candidates.push({ priority_tier: tierFor(score), intra_tier_score: score });',
+      "const c = { 'priority_tier': 3 };",
+      // The two real sorts in this tree, neither of which ranks a candidate.
+      '[...allowed].filter((f) => !denied.has(f)).sort()',
+      'Object.entries(v).sort(([a], [b]) => a.localeCompare(b))',
     ]) {
-      expect(COMPARATORS.some(({ rx }) => rx.test(honest))).toBe(false);
+      expect(rankingFieldReads(honest)).toEqual([]);
     }
   });
 
@@ -109,7 +165,6 @@ describe('the source scan: nothing under growthJourney ranks candidates itself',
     expect(src).toMatch(/hardStopReason/);
     expect(src).toMatch(/evaluateContact/);
     expect(src).toMatch(/evaluateFreshness/);
-    // The four sort keys stay the arbiter's business, not this module's.
     expect(SORT_KEYS.length).toBeGreaterThanOrEqual(4);
   });
 });
@@ -187,15 +242,16 @@ const FLAGS_ON = {
   journeyExecution: false,
 } as const;
 
-const deps = {
+const deps = (over: Partial<DecideDeps> = {}): DecideDeps => ({
   assertOfferAllowed: async () => undefined,
   contactPolicyFor: () => ({
     channelEligible: true,
-    consent: { verdict: 'allow' as const, reason: 'ok', hasRecord: true },
+    consent: { verdict: 'allow', reason: 'ok', hasRecord: true },
     recentContactCount: 0,
     hoursSinceLastContact: null,
   }),
-};
+  ...over,
+});
 
 describe('the differential: the pipeline returns the arbiter\'s own answer', () => {
   const set = [
@@ -206,7 +262,7 @@ describe('the differential: the pipeline returns the arbiter\'s own answer', () 
 
   it('picks the same winner and the same suppression reasons as arbitrate() directly', async () => {
     const direct = arbitrate(set);
-    const out = await decideForSubject(ctx(), strategy(set), deps, FLAGS_ON);
+    const out = await decideForSubject(ctx(), strategy(set), deps(), FLAGS_ON);
     if (out.status !== 'decided') throw new Error('expected a decision');
 
     expect(out.decision.selected_action).toBe(direct.winner?.action_type);
@@ -219,17 +275,51 @@ describe('the differential: the pipeline returns the arbiter\'s own answer', () 
   });
 
   it('order of the input does not change the answer, because the arbiter is a total order', async () => {
-    const a = await decideForSubject(ctx(), strategy(set), deps, FLAGS_ON);
-    const b = await decideForSubject(ctx(), strategy([...set].reverse()), deps, FLAGS_ON);
+    const a = await decideForSubject(ctx(), strategy(set), deps(), FLAGS_ON);
+    const b = await decideForSubject(ctx(), strategy([...set].reverse()), deps(), FLAGS_ON);
     if (a.status !== 'decided' || b.status !== 'decided') throw new Error('expected decisions');
     expect(a.decision.selected_action).toBe(b.decision.selected_action);
   });
 
   it('uses the arbiter\'s suppression vocabulary, not one of its own', async () => {
-    const out = await decideForSubject(ctx(), strategy(set), deps, FLAGS_ON);
+    const out = await decideForSubject(ctx(), strategy(set), deps(), FLAGS_ON);
     if (out.status !== 'decided') throw new Error('expected a decision');
     for (const s of out.decision.suppressed) {
       expect(s.reason).toMatch(/^(outranked within tier|lower priority than tier)/);
     }
+  });
+
+  it('re-checks the WINNER against the brand boundary, not only the field of candidates', async () => {
+    // This task's own prose promised "every candidate before arbitration and
+    // again on the winner". The verifier found the second half missing. It is
+    // defence in depth - the winner is drawn from the filtered set, so nothing
+    // denied can win today - but T308's hard training exclusion is specified as
+    // two checks, and a decision naming an offer the brand may not make is the
+    // one output this phase must never produce.
+    let call = 0;
+    const assertOfferAllowed = jest.fn(async () => {
+      call += 1;
+      if (call <= set.length) return undefined;
+      throw new OfferNotEligibleError({
+        allowed: false,
+        reason: 'explicit_deny',
+        brand_id: 'b-ent',
+        offer_family: 'business_training',
+        policy_id: 'pol-deny',
+        approved_content_ready: false,
+      });
+    });
+
+    const withFamily = set.map((c) => ({
+      ...c,
+      required_assets: [{ asset_type: 'lesson_recommendation', offer_family: 'business_training' } as never],
+    }));
+    const out = await decideForSubject(ctx(), strategy(withFamily), deps({ assertOfferAllowed }), FLAGS_ON);
+    if (out.status !== 'decided') throw new Error('expected a decision');
+
+    expect(assertOfferAllowed).toHaveBeenCalledTimes(withFamily.length + 1);
+    expect(out.decision.selected_action).toBe('WAIT');
+    expect(out.decision.reason).toBe('winner_not_eligible:explicit_deny');
+    expect(out.decision.requires_human_review).toBe(true);
   });
 });
