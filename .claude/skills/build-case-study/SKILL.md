@@ -881,6 +881,68 @@ dimensions came from a person, never from a commit.
 
 ---
 
+## Hardening — what is prevented, and what is only remembered
+
+Audited 2026-09-13 against the source, not from memory. **19 blocker codes** run on
+every publish, and every path to a live page goes through them: `publishCaseStudy` is
+called from exactly two places, `caseStudyAdminRoutes` and `caseStudyAdminReview`, and
+nothing writes `case_study_publications` directly. The gate runs on a repeat publish of
+an already-live record too, so consent withdrawn between two clicks is caught.
+
+### Prevented in code
+
+| Failure | The guard |
+|---|---|
+| A record goes live on a surface it was never meant for | `surface_not_publishable`, checked before anything else |
+| A draft or an unapproved snapshot reaches a reader | `case_study_not_approved`, `snapshot_not_approved` — the intended resting state of a draft |
+| An organisation or a builder is named without consent | `organization_consent`, `builder_consent`, checked against the record row AND the snapshot, which must agree |
+| A private repository is exposed | `private_repo_exposed` on the structured path, and again on identifiers typed into prose |
+| A figure claims "verified" on the strength of a self-report | `self_attested_verification` |
+| A "verified" figure has no evidence behind it | `proof_metadata_missing`, which also demands a baseline, sample or methodology |
+| A metric nobody has verified is on the page | `metric_pending`, applied only to figures a human promoted with `publishable` |
+| A model's words are published as a quotation | `ai_generated_quote` |
+| An outcome or ROI claim appears in prose with no metric behind it | `unverified_claim` |
+| A shaped figure disagrees with itself | `metric_shape_payload_mismatch`, `metric_ratio_missing_denominator`, `metric_members_count_mismatch` |
+| A figure is computed at a commit the record is not pinned to | `metric_collected_sha_mismatch` |
+| A build record is published as a case study | `maturity_below_operational_result` — only on a record linked to a student project |
+| A record is published while the project's truth contradicts itself | `project_truth_has_open_questions` |
+| An inventory count stands in the headline | `headline_metric_is_a_bare_count` |
+| A headline figure never says what it does not tell you | `headline_metric_missing_plain_answers` |
+| A new blocker ships with nothing that triggers it | The coverage sweep in `caseStudyPublicationService.test.ts` asserts every declared code is emitted by some fixture, and fails CI otherwise |
+| A blocker an admin cannot act on | Every blocker must carry a field, a remedy, and a message that is not the code restated. Also a test |
+| A high readiness score authorising a publish | Readiness is advisory and reported beside the decision, never consulted by it. There is a test named for it |
+
+### Prevented only by someone remembering — the useful half
+
+> §5a lived here for months. "At least one metric must COMPARE, not just COUNT" was
+> true, written down, and enforced by nothing, so the readiness score went up while the
+> card row stayed wrong. It moved into the table above on 2026-09-13, after all fourteen
+> published figures on the three live records turned out to be inventory. That is what
+> this list is for: everything below can drift the same way.
+
+1. **Whether the record is worth publishing at all.** The gate can prove a figure
+   contradicts itself. It cannot tell you the story is dull, the narrative is padded, or
+   that the record answers a question nobody asked. On 2026-09-13 a set of figures
+   measuring the platform's own task-auditing passed every rule here and was still
+   wrong, because nothing in code asks "would a reader care".
+2. **The cover image, and every other image.** §8 says start them on day one. The gate
+   contains zero references to images; a record with none publishes cleanly.
+3. **The walkthrough video.** §8c says every record gets one. Nothing enforces it, and
+   nothing checks that what the narration counts still exists on the page — the caption
+   promised "the verified metrics recorded below" on three records that had none until
+   the string was made conditional on 2026-09-13.
+4. **Looking at the rendered page.** §8b exists because six layout failures shipped past
+   green tests. No rule can replace opening it.
+5. **Diagrams with no angle brackets** (§7), **whole-section authoring** (§3), and
+   **working the entire candidate list** (§5). All three are prose.
+6. **That a record with no figures says why.** Removing a bad card is enforced; writing
+   the sentence that explains the silence is not.
+
+**When you add a rule here, decide which half it belongs in before you write it.** A rule
+in the second half is a rule with a half-life.
+
+---
+
 ## 11. Verify, then report with denominators
 
 - Override survival: re-sync and confirm each section held. Should report `unchanged`.
