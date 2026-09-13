@@ -358,6 +358,49 @@ export function composeBody(ritual: RitualConfig, values: RitualValues): string 
   return parts.join('\n\n');
 }
 
+/**
+ * PURE — the inverse of `composeBody`'s first line.
+ *
+ * Deliberately next to the function that WRITES that line: the two are one
+ * format, and a parser living anywhere else would be a second opinion about a
+ * string this file owns. Returns null for a free-text post, which is most of
+ * the Community feed, so callers must handle "no ritual" as the normal case.
+ *
+ * `rest` is the body with the heading removed — what the student actually
+ * typed. A surface showing both the ritual name and the body should render
+ * this, or the name appears twice (the duplication Ali flagged on the drawer
+ * header in #2426 and on the Today tile in #2502).
+ */
+export interface ParsedRitualHeading {
+  /** "👋 Roll Call · Week 7" — the line as composed. */
+  heading: string;
+  icon: string;
+  name: string;
+  week: number;
+  /** The body minus the heading, trimmed. Empty string when there is nothing else. */
+  rest: string;
+}
+
+// The week number is required, which is what stops a free-text post that merely
+// contains a middle dot from matching. Mirrors HEADING_RE in the frontend's
+// ritualPostBody.ts — same shape, same source of truth (composeBody above).
+const HEADING_RE = /^(\S+)\s+(.+?)\s+·\s+Week\s+(\d+)$/;
+
+export function parseRitualHeading(body: string | null | undefined): ParsedRitualHeading | null {
+  const text = (body || '').trim();
+  if (!text) return null;
+  const [first, ...others] = text.split(/\n{2,}/);
+  const m = HEADING_RE.exec((first || '').trim());
+  if (!m) return null;
+  return {
+    heading: first.trim(),
+    icon: m[1],
+    name: m[2],
+    week: Number(m[3]),
+    rest: others.join('\n\n').trim(),
+  };
+}
+
 export function linkField(ritual: RitualConfig): RitualField | undefined {
   return ritual.fields.find((f) => f.kind === 'link');
 }
