@@ -35,7 +35,13 @@ const DUE_LABEL: Record<string, string> = { overdue: 'Overdue', today: 'Due toda
 // A BLOCKED task (release gate) becomes a LOCKED card: visible, not clickable,
 // with "Complete STORY-XXX to unlock" in the card's own lock note — the same
 // treatment a week-gated curriculum card gets.
-function taskToFeedCard(project: StudentProject, task: ProjectTask, listName: string): TimelineFeedCard {
+// Exported because the projects LANDING page shows the same stories in "Up next
+// across your builds" and was building its own, thinner card from a different
+// component — no points, no release chip, and a blocked story rendered as an
+// ordinary openable row (Ali, 2026-09-13: "The details on the title screen
+// should match what we see in the details like the story's being locked").
+// One mapper, so the two screens cannot describe the same story differently.
+export function taskToFeedCard(project: StudentProject, task: ProjectTask, listName: string): TimelineFeedCard {
   const done = task.state === 'done';
   const { blocked, waitingOn } = isTaskBlocked(project, task);
   return {

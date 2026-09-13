@@ -4,7 +4,7 @@ import PortalShell from '../today/PortalShell';
 import ProjectWizard from './ProjectWizard';
 import { useIsExplorer } from '../useIsExplorer';
 import ProjectPreview from './ProjectPreview';
-import ProjectInterior from './ProjectInterior';
+import ProjectInterior, { taskToFeedCard } from './ProjectInterior';
 import AddStoryPanel from './AddStoryPanel';
 import NextSessionStrip from './NextSessionStrip';
 import {
@@ -14,9 +14,9 @@ import {
 import { describeCallOutcome, type CallNotice } from './describeCallOutcome';
 import { PipelineBanner, CallBanner, type PipelineState, type HandoffCounts } from './ProjectBanners';
 import ProjectsNextStepHero from './ProjectsNextStepHero';
-import FeedCard, { FeedItem } from '../feed/FeedCard';
+import TimelineCard, { type TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import {
-  useProjectsList, createProjectFromAnswers, claimBackendProject, projectProgress, projectPoints, reqVerified, nextTask,
+  useProjectsList, createProjectFromAnswers, claimBackendProject, projectProgress, projectPoints, reqVerified, nextTask, isTaskBlocked,
   removeProjectLocally,
   StudentProject, ProjectTask, ProjectList, NewBuildAnswers,
 } from './projectsStore';
@@ -48,9 +48,6 @@ type View =
   | { kind: 'preview'; id: string }
   | { kind: 'interior'; id: string; taskId?: string | null };
 
-const PROJ_ICON = (
-  <svg viewBox="0 0 24 24" fill="none"><path d="M3 7l9-4 9 4-9 4-9-4z" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /><path d="M3 12l9 4 9-4M3 17l9 4 9-4" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg>
-);
 const DUE_RANK: Record<string, number> = { overdue: 0, today: 1, up: 2, done: 9 };
 
 /**
@@ -538,19 +535,36 @@ const ProjectsPage: React.FC = () => {
   const copyPrompt = () => { if (navigator.clipboard && primaryNext?.task.prompt) navigator.clipboard.writeText(primaryNext.task.prompt); };
   const startBuild = () => setView({ kind: 'wizard' });
 
-  // landing timeline: the next open tasks across all builds
-  const feed: FeedItem[] = [];
+  // Landing timeline: the next open stories across all builds, rendered as the
+  // SAME card the build interior renders — through the interior's own mapper.
+  //
+  // It used to build a thinner `FeedItem` of its own: title, list name, one
+  // line of description, "Open build". So the first screen a student sees
+  // described a story differently from the screen behind it — no points, no
+  // release chip, and a story LOCKED behind its release gate shown as an
+  // ordinary openable row. Two mappings of one thing is how they drifted.
+  //
+  // Unblocked work leads. A locked story still appears, locked, with the gate
+  // named — that is the detail Ali asked to match — but it never displaces
+  // something the student can actually start.
+  const feedCards: { card: TimelineFeedCard; projectId: string; task: ProjectTask }[] = [];
   projects.forEach((p) => {
     const opens: { t: ProjectTask; l: ProjectList }[] = [];
     p.lists.forEach((l) => l.tasks.forEach((t) => { if (t.state === 'todo') opens.push({ t, l }); }));
-    opens.sort((a, b) => DUE_RANK[a.t.due] - DUE_RANK[b.t.due]);
-    opens.slice(0, 4).forEach(({ t, l }) => feed.push({
-      id: `t-${t.id}`, source: 'projects', sourceLabel: p.name, color: p.accent, icon: PROJ_ICON,
-      title: t.title, meta: l.name, desc: t.what,
-      cta: { label: 'Open build', onClick: () => openTaskWorkspace(p.id, t), variant: 'berry' },
+    opens.sort((a, b) => {
+      const ab = isTaskBlocked(p, a.t).blocked ? 1 : 0;
+      const bb = isTaskBlocked(p, b.t).blocked ? 1 : 0;
+      return ab !== bb ? ab - bb : DUE_RANK[a.t.due] - DUE_RANK[b.t.due];
+    });
+    opens.slice(0, 4).forEach(({ t, l }) => feedCards.push({
+      // The list label carries the BUILD name too: inside a project the project
+      // is obvious, here it is not, and the old row said which build it was.
+      card: taskToFeedCard(p, t, `${p.name} · ${l.name}`),
+      projectId: p.id,
+      task: t,
     }));
   });
-  const feedTop = feed.slice(0, 6);
+  const feedTop = feedCards.slice(0, 6);
 
   // ── interior + wizard + preview take over the whole page ──
   if (view.kind === 'interior' && active) {
@@ -735,7 +749,18 @@ const ProjectsPage: React.FC = () => {
           {feedTop.length > 0 && (
             <div className="te-feed" style={{ marginTop: 24 }}>
               <div className="te-feed-head"><span className="h"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Up next across your builds</span></div>
-              {feedTop.map((it) => <FeedCard key={it.id} item={it} />)}
+              {/* `.tl-de` because every rule for these cards is scoped under it —
+                  the same wrapper the interior and the hero use. */}
+              <div className="tl-de">
+                {feedTop.map(({ card, projectId, task }) => (
+                  <TimelineCard
+                    key={card.id}
+                    card={card}
+                    onOpen={() => openTaskWorkspace(projectId, task)}
+                    onWorkspace={() => openTaskWorkspace(projectId, task)}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </div>
