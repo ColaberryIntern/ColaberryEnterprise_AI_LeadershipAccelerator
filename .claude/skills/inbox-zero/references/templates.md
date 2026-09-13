@@ -28,6 +28,7 @@ at render time; never print a bare ISO string or a UTC clock to Ali.
 - 💤 Snoozed (hidden): <counts.snoozed>
 
 <if liveness.unchecked_items > 0:> ⏳ <liveness.unchecked_items> item(s) not yet checked against your inbox (last check <liveness.last_checked_at_ct>); <liveness.gone_hidden_cases> case(s) hidden because their mail has left your inbox.
+<if liveness.non_email_cases > 0:> 📋 <liveness.non_email_cases> open case(s) are Basecamp board work, not inbox mail — not shown here.
 
 **Recommended next:** <recommended.title> — <recommended.why>
 

@@ -73,8 +73,11 @@ export async function getQueue(view: QueueView, now: Date = new Date()): Promise
         add(s.category, { due_now: 'Due now', needs_decision: 'Needs a decision', unassessed: 'Not yet assessed', waiting: 'Waiting on someone else', review: 'In flight with the system', snoozed: 'Snoozed' }[s.category], s);
         break;
       case 'mailbox': {
-        const providers = Array.from(new Set(items.map((i) => i.provider)));
-        if (providers.length === 0) add('none', 'No linked source', s);
+        // T20: a mailbox is a mailbox. Group by the providers of the EMAIL
+        // items only — "basecamp" is not somewhere mail arrives, and a case
+        // with no email item is not visible here at all.
+        const providers = Array.from(new Set(items.filter((i) => i.source_type === 'email').map((i) => i.provider)));
+        if (providers.length === 0) add('none', 'No linked mailbox', s);
         for (const p of providers) add(p, p, s);
         break;
       }
