@@ -6,7 +6,8 @@ import BucketSections from '../../components/timeline/BucketSections';
 import { classroomSectionsEnabled } from './classroomBucketsFlag';
 import { classroomRailsEnabled } from './classroomRailsFlag';
 import ClassroomRails from '../../components/timeline/ClassroomRails';
-import { fetchClassroomRails, interleaveRails, ClassroomRailsResult } from './classroomRailsApi';
+import { fetchClassroomRails, interleaveRails, ClassroomRailsResult, type Rail, type RailTile } from './classroomRailsApi';
+import { railTileToPostCard } from './classroomRailCard';
 import { fetchClassroomProjection, ClassroomProjection } from './classroomProjectionApi';
 import { TimelineFeedCard } from '../../components/timeline/TimelineCard';
 import CardDetailDrawer from '../../components/timeline/CardDetailDrawer';
@@ -230,6 +231,28 @@ const ClassroomPage: React.FC = () => {
   // Opening a card now shows its detail drawer (preview + in-app video player);
   // completion is an explicit action inside the drawer, not a side effect of opening.
   const openCard = useCallback((card: TimelineFeedCard) => { setSelectedCard(card); }, []);
+
+  /**
+   * A rail tile the CLASSROOM handles itself rather than navigating away.
+   *
+   * Today has always opened a community post in the card drawer — the pop-up
+   * with the thread and the reply composer. The Classroom's rail only ever
+   * linked out to `/portal/community`, so the same post offered a conversation
+   * on one page and a page change on the other (Ali, 2026-09-13: "where did the
+   * pop up go where I can actually comment… we want to add that same capability
+   * when clicked on here").
+   *
+   * The drawer already knows what to do with any card carrying
+   * `community_post_id` — it renders CommunityThreadPanel — so this synthesises
+   * the minimum card that says "this is a post", exactly as the Today feed's
+   * adapter does. Nothing else is invented: the panel fetches the post itself.
+   *
+   * Tiles from other rails are left alone; their anchors navigate as before.
+   */
+  const openRailTile = useCallback((tile: RailTile, rail: Rail) => {
+    if (rail.surface !== 'community') return;   // every other rail navigates
+    setSelectedCard(railTileToPostCard(tile));
+  }, []);
   const completeCard = useCallback(async (card: TimelineFeedCard) => {
     // No swallow: a gate rejection (422 watch / 423 lock) must propagate so the
     // caller can surface "watch it first" instead of the tile falsely flipping to
@@ -384,7 +407,7 @@ const ClassroomPage: React.FC = () => {
                     <>
                       {interleaveRails(visibleCards, rails.rails).map((entry, i) => (
                         'rail' in entry
-                          ? <ClassroomRails key={`rail-${entry.rail.surface}`} rail={entry.rail} />
+                          ? <ClassroomRails key={`rail-${entry.rail.surface}`} rail={entry.rail} onOpen={openRailTile} />
                           : <TimelineFeed
                               key={`card-${(entry.card as TimelineFeedCard).id ?? i}`}
                               cards={[entry.card as TimelineFeedCard]}
