@@ -46,7 +46,28 @@ export interface ContentAssetQuery {
   state?: ExplorerPrimaryState;
 }
 
-export interface Candidate {
+/**
+ * The ONLY four fields arbitration reads (T302).
+ *
+ * Extracted so one arbitration point can serve every journey programme without
+ * a second arbiter, a second tier order or a second suppression vocabulary.
+ * `Candidate` narrows each field, so Explorer's own types are unchanged and its
+ * tests stay byte-identical; a Growth Journey candidate satisfies the same four
+ * without being forced into learner-shaped `scores`, `overlays` or `readout`.
+ *
+ * Widening the arbiter's types is the one declared exception to "the Explorer
+ * Governor is not modified", made deliberately and in the open rather than
+ * smuggled into another task. It changes no statement: the comparator already
+ * ignored its context argument, so nothing about how a winner is chosen moves.
+ */
+export interface ArbitrableCandidate {
+  action_type: string;
+  campaign_key: string | null;
+  priority_tier: number;
+  intra_tier_score: number;
+}
+
+export interface Candidate extends ArbitrableCandidate {
   action_type: ExplorerActionType;
   campaign_key: string | null;
   priority_tier: PriorityTier;
@@ -82,22 +103,47 @@ export interface GovernorContext {
     in_app?: { eligible: boolean; reason?: string };
   };
   /** Hard-stop inputs (§9.1 tier 0). */
-  hardStop: {
-    converted: boolean;
-    unsubscribed: boolean;
-    dnc: boolean;
-    consentRevoked: boolean;
-    killSwitch: boolean;
-    campaignInactive: boolean;
-  };
+  hardStop: HardStopFlags;
   asOf: Date;
+}
+
+/**
+ * The six tier-0 stops (T302). Previously an inline literal on
+ * `GovernorContext`; extracted verbatim so a non-learner strategy can compute
+ * them and reach the same `hardStopReason`. Structurally identical, so
+ * `GovernorContext` still satisfies every existing caller.
+ *
+ * Three of the six have no query behind them in Explorer's own wiring
+ * (`consentRevoked`, `killSwitch`, `campaignInactive` are hard-coded false),
+ * which is recorded in the Phase 3 discovery and is why each Growth Journey
+ * strategy computes its own.
+ */
+export interface HardStopFlags {
+  converted: boolean;
+  unsubscribed: boolean;
+  dnc: boolean;
+  consentRevoked: boolean;
+  killSwitch: boolean;
+  campaignInactive: boolean;
+}
+
+/** Anything carrying the six stops. `hardStopReason` needs no more than this. */
+export interface HardStopBearer {
+  hardStop?: HardStopFlags;
 }
 
 export type Generator = (ctx: GovernorContext) => Candidate | null;
 
-/** A candidate that was dropped, and why — the "why NOT" record. */
-export interface SuppressedCandidate {
-  action_type: ExplorerActionType;
+/**
+ * A candidate that was dropped, and why — the "why NOT" record.
+ *
+ * Parameterised in T302 by INDEXED ACCESS (`C['action_type']`) rather than by a
+ * cast inside `suppress`, which would have been a statement change. The default
+ * `C = Candidate` keeps every existing use — `SuppressedCandidate[]` on the
+ * decision row included — compiling exactly as before.
+ */
+export interface SuppressedCandidate<C extends ArbitrableCandidate = Candidate> {
+  action_type: C['action_type'];
   campaign_key: string | null;
   reason: string;
 }

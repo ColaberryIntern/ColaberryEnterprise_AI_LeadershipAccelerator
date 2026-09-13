@@ -1,4 +1,4 @@
-import type { GovernorContext } from '../types';
+import type { HardStopBearer } from '../types';
 
 /**
  * §9.1 tier 0 — the hard stop. EPIC 4 T001.
@@ -32,7 +32,7 @@ export type HardStopReason =
  * one of them stops the decision. `converted` is checked first because it is
  * the most informative for a human reading the decision row.
  */
-export function hardStopReason(ctx: GovernorContext): HardStopReason | null {
+export function hardStopReason(ctx: HardStopBearer): HardStopReason | null {
   const h = ctx?.hardStop;
   // A missing hardStop block is treated as a stop, not as "nothing to stop".
   // Absent evidence is not evidence of eligibility — the same rule the
@@ -49,6 +49,6 @@ export function hardStopReason(ctx: GovernorContext): HardStopReason | null {
 }
 
 /** True when the Governor may proceed to generate candidates at all. */
-export function mayProceed(ctx: GovernorContext): boolean {
+export function mayProceed(ctx: HardStopBearer): boolean {
   return hardStopReason(ctx) === null;
 }
