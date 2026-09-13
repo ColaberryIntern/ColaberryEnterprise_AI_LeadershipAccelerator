@@ -233,6 +233,30 @@ up as outcomes.
 **`baseline: "n/a"` is the tell.** When you write it you have just built a scale metric.
 That is fine once; if it is true of every card, the set is wrong.
 
+**THIS IS NOW A GATE RULE, NOT ADVICE.** It was advice for months and the library drifted
+anyway: on 2026-09-12 all fourteen published figures across the three live records were
+scale metrics, and three of them were deficiencies standing in the slot a reader reads as
+the result — 0.7% test coverage, 16% test files, and a commit cadence under four a week.
+The hero row was cleared on all three, and two blockers now stop it recurring:
+
+| code | fires when |
+|---|---|
+| `headline_metric_is_a_bare_count` | a headline figure has no `ratio`/`share`/`series` shape, no two-ended `span`, and no stated `measurement.baseline` |
+| `headline_metric_missing_plain_answers` | a headline figure is comparative but does not carry all three of §5b |
+
+A scale metric is still perfectly publishable **in the measurement section**, which is
+where "we built eight agents" is an honest thing to say. The rule only governs the hero.
+
+**An empty hero row is allowed and is often the right answer.** The public strip renders
+without it, falling back to the facts and indicators, and a record that opens with no
+figure reads better than one that opens with an inventory. If the work has no comparison
+to show, show none and say why in the measurement narrative.
+
+The second rule is the one that catches a bad figure the first cannot. A machine cannot
+tell pride from embarrassment, so it does not try; it asks the author to write "what this
+does not tell you" beside the number. Writing that line about one file in a hundred and
+forty-two is usually enough to stop the card.
+
 ### 5b. Plain language: the three answers every figure owes a reader
 
 A shaped metric renders three short blocks under its picture, and they are written by a

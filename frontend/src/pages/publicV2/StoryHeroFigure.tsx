@@ -38,9 +38,23 @@ import type { PublicCaseStudyDetail } from '../../services/caseStudyPublicTypes'
 export function StoryHeroFigure({
   video,
   cover,
+  figuresBelow = false,
 }: {
   video: PublicCaseStudyDetail['walkthroughVideo'];
   cover: { src: string; alt: string } | null;
+  /**
+   * Does the record actually publish figures further down?
+   *
+   * The synthetic-narration caption used to promise "the verified metrics
+   * recorded below" unconditionally. On 2026-09-13 every figure was removed
+   * from all three live records, because each counted the software's own
+   * construction rather than anything that happened to a person, and the
+   * sentence became a lie on every one of them: the narration states figures
+   * and there was nothing below to check them against. The disclosure a
+   * synthetic voice needs is the FIRST half of that sentence; the second half
+   * is only true when it is true.
+   */
+  figuresBelow?: boolean;
 }): React.ReactElement | null {
   /**
    * AN OPERATOR'S OWN VIDEO PLAYS THROUGH AN IFRAME, not this `<video>`.
@@ -118,8 +132,10 @@ export function StoryHeroFigure({
             those. */}
         {video.narrationSource === 'synthetic' ? (
           <figcaption className="cbv2-story__walkthrough-note">
-            {video.title}. Narrated by a synthetic voice; the figures it states are the
-            verified metrics recorded below.
+            {video.title}. Narrated by a synthetic voice
+            {figuresBelow
+              ? '; the figures it states are the verified metrics recorded below.'
+              : '. This record publishes no figures, so anything the narration counts is described in the sections below rather than verified as a metric.'}
           </figcaption>
         ) : (
           <figcaption className="cbv2-story__walkthrough-note">{video.title}</figcaption>

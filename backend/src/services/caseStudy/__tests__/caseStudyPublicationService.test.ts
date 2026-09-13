@@ -283,6 +283,13 @@ const PROOF_POINT: CaseStudyMetricEntry = {
     methodology: 'median run duration, read from the workflow run log',
     limitations: ['one environment only; no financial figure was measured'],
   },
+  // The three answers a headline owes a reader. Required in the hero since
+  // 2026-09-12; the reference record has to model what it asks of everyone.
+  plain: {
+    counts: 'how long one nightly reconciliation run takes, end to end',
+    from: 'the duration the job writes into its own workflow run log',
+    cannotShow: 'whether anyone got their evening back, or what the time was worth',
+  },
 };
 
 function publishableContent(): CaseStudySnapshotContent {
@@ -1090,6 +1097,18 @@ describe('the refusal is actionable and complete', () => {
           };
         }),
       },
+      // headline_metric_is_a_bare_count — the shape of every figure that was
+      // live on 2026-09-12: a count of our own work, compared to nothing.
+      {
+        content: bend((c) => {
+          const m = (c.heroMetrics as any)[0];
+          delete m.measurement.baseline;
+          delete m.shape;
+        }),
+      },
+      // headline_metric_missing_plain_answers — comparative, but silent about
+      // what it does not tell you.
+      { content: bend((c) => { delete (c.heroMetrics as any)[0].plain; }) },
       // maturity_below_operational_result — a linked student project that has
       // built and demonstrated, and measured nothing in use.
       { foundation: { maturity: 'capability_demonstration', openQuestions: 0 } },
