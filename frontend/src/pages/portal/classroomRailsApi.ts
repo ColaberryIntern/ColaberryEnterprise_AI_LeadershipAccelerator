@@ -26,6 +26,10 @@ export interface RailTile {
   image_url: string | null;
   glyph: string | null;
   stamp: string | null;
+  /** Small pill above the words — community uses it for the ritual a post answers. */
+  eyebrow?: string | null;
+  /** Whose words these are. Community only; rendered as initials + name + level. */
+  person?: { name: string; level: number | null; avatar_url: string | null } | null;
   action: RailAction | null;
   featured?: boolean;
 }

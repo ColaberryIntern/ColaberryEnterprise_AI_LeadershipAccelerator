@@ -66,6 +66,20 @@ export interface RailTile {
   glyph: string | null;
   /** Corner stamp over the picture: the fact that decides relevance. */
   stamp: string | null;
+  /**
+   * A short line ABOVE the title, rendered as a pill. Community uses it for the
+   * ritual a post answers ("👋 Roll Call · Week 7"), which is the fact that tells
+   * a student whether they have something to say. Optional: a rail that has no
+   * such fact omits it rather than inventing one.
+   */
+  eyebrow?: string | null;
+  /**
+   * The person behind the tile, when a tile is somebody's words rather than a
+   * thing. Community renders it as an initials avatar + name + level; nothing
+   * else sets it. `avatar_url` is honoured when a member ever has one — today
+   * none of the 268 do, which is why this rail stopped rendering a picture.
+   */
+  person?: { name: string; level: number | null; avatar_url: string | null } | null;
   action: RailAction | null;
   /** Renders double width. At most one per rail, and only when one item leads. */
   featured?: boolean;
