@@ -12,8 +12,16 @@ import { phase2SourceFiles } from './phase2Sources';
  *   2. Flags are read ONLY through the flags module. No `process.env.GROWTH_JOURNEY`
  *      anywhere under the scanned dirs.
  *
- * Plus the fourth-opt-out-detector guard: the word `unsubscribe` appears in
- * Phase 2 source only in a test or on an import line.
+ * Plus the fourth-opt-out-detector guard, in two halves:
+ *
+ *   3. The word `unsubscribe` appears in Phase 2 source only in a test or on an
+ *      import line.
+ *   4. Which leaves one hole, because an import line is exactly where a module
+ *      names the model to read the rows - and it may rename it there. Alias the
+ *      model, derive a verdict from `rows.length > 0`, and rule 3 sees nothing.
+ *      So any file whose import line names that model owes two things: it calls
+ *      `isSuppressedForChannel`, and it does not re-implement the cutoff that
+ *      function owns. T304's contact-evidence resolver is the first reader.
  */
 
 const ROOT = path.join(__dirname, '..', '..', '..');
@@ -32,6 +40,43 @@ function logStatements(src: string): string[] {
 // classify.test.ts covers the path a person's text actually takes.
 const SENSITIVE_KEY = /\b(email|to|body|email_normalized|phone)\s*:/;
 
+/**
+ * Does this file read the suppression-event rows, and if so does it delegate?
+ *
+ * The model is matched on the IMPORT line, so an alias cannot hide the read: the
+ * specifier `UnsubscribeEvent` has to appear there whatever local name follows.
+ * `isLegacyGlobalEvent` and `isGlobalChannel` are the detector's own internals -
+ * a reader calling those is assembling a second verdict out of the first one's
+ * parts, which is the thing being forbidden, not a legitimate reuse.
+ */
+const SUPPRESSION_MODEL_IMPORT = /^\s*import\b.*\bUnsubscribeEvent\b/;
+const CUTOFF_REIMPLEMENTATION = /2026-09-09|isLegacyGlobalEvent\s*\(|isGlobalChannel\s*\(/;
+
+/** Comments only, removed. `[^:]` keeps a `https://` out of the line-comment case. */
+function stripComments(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+}
+
+export function suppressionDelegationOffenders(src: string): string[] {
+  const lines = src.split('\n');
+  if (!lines.some((l) => SUPPRESSION_MODEL_IMPORT.test(l))) return [];
+
+  const offenders: string[] = [];
+  if (!src.includes('isSuppressedForChannel(')) {
+    offenders.push('reads suppression rows without calling isSuppressedForChannel');
+  }
+  // The cutoff half reads CODE only. A reader explaining in prose which case the
+  // detector owns is doing the opposite of re-implementing it, and the first
+  // version of this rule failed exactly that comment.
+  const own = stripComments(src)
+    .split('\n')
+    .filter((l) => CUTOFF_REIMPLEMENTATION.test(l) && !/^\s*import\b/.test(l));
+  if (own.length > 0) {
+    offenders.push(`re-implements the cutoff the detector owns on ${own.length} line(s)`);
+  }
+  return offenders;
+}
+
 describe('the scanner itself', () => {
   it('flags a control statement that logs an email without redaction', () => {
     const control = "logger.info({ event: 'x', email: lead.email });";
@@ -44,6 +89,59 @@ describe('the scanner itself', () => {
   it('passes a control statement that redacts', () => {
     const ok = "logger.info({ event: 'x', email: redactForLogs(lead.email) });";
     expect(logStatements(ok)[0].includes('redactForLogs(')).toBe(true);
+  });
+
+  it('flags a fourth opt-out detector hidden behind an import alias', () => {
+    // The bypass the word-scan alone cannot see: not one line below carries the
+    // banned word outside the import, and the verdict is still home-made.
+    const control = [
+      "import { UnsubscribeEvent as Rows } from '../../models';",
+      'export const blocked = async (leadId: number): Promise<boolean> =>',
+      '  (await Rows.findAll({ where: { lead_id: leadId } })).length > 0;',
+    ].join('\n');
+    expect(suppressionDelegationOffenders(control)).toEqual([
+      'reads suppression rows without calling isSuppressedForChannel',
+    ]);
+  });
+
+  it('flags a reader that rebuilds the cutoff out of the detector parts', () => {
+    const control = [
+      "import { UnsubscribeEvent } from '../../models';",
+      "import { isLegacyGlobalEvent, isSuppressedForChannel } from '../channelSuppression';",
+      'export const blocked = (rows: { channel: null; created_at: Date }[]) =>',
+      "  rows.some((r) => isLegacyGlobalEvent(r)) || isSuppressedForChannel(rows, 'email').suppressed;",
+    ].join('\n');
+    const offenders = suppressionDelegationOffenders(control);
+    expect(offenders).toHaveLength(1);
+    expect(offenders[0]).toContain('re-implements the cutoff');
+  });
+
+  it('passes a reader that hands the rows and the verdict to the one detector', () => {
+    const control = [
+      "import { UnsubscribeEvent as SuppressionEventRow } from '../../models';",
+      "import { isSuppressedForChannel } from '../channelSuppression';",
+      'export const blocked = async (leadId: number) => {',
+      '  const rows = await SuppressionEventRow.findAll({ where: { lead_id: leadId } });',
+      "  return isSuppressedForChannel(rows.map((r: any) => ({ channel: r.channel, created_at: r.created_at })), 'sms');",
+      '};',
+    ].join('\n');
+    expect(suppressionDelegationOffenders(control)).toEqual([]);
+  });
+
+  it('lets a reader NAME the cutoff case in prose while delegating it', () => {
+    // The both-directions half of the control above: same date, in a comment.
+    const control = [
+      "import { UnsubscribeEvent as SuppressionEventRow } from '../../models';",
+      "import { isSuppressedForChannel } from '../channelSuppression';",
+      '// Delegates the legacy pre-2026-09-09 global case to isGlobalChannel() upstream.',
+      '/* Also mentions isLegacyGlobalEvent(2026-09-09) in a block comment. */',
+      'export const blocked = (rows: never[]) => isSuppressedForChannel(rows, \'voice\');',
+    ].join('\n');
+    expect(suppressionDelegationOffenders(control)).toEqual([]);
+  });
+
+  it('says nothing about a file that never reads those rows', () => {
+    expect(suppressionDelegationOffenders('export const x = 1;\n')).toEqual([]);
   });
 });
 
@@ -63,6 +161,20 @@ describe('Phase 2 source', () => {
       const src = fs.readFileSync(f, 'utf8');
       expect({ file: rel(f), direct: /process\.env\.GROWTH_JOURNEY/.test(src) }).toEqual({ file: rel(f), direct: false });
     }
+  });
+
+  it('every file that reads suppression rows hands the verdict to the one detector', () => {
+    for (const f of files) {
+      const offenders = suppressionDelegationOffenders(fs.readFileSync(f, 'utf8'));
+      expect({ file: rel(f), offenders }).toEqual({ file: rel(f), offenders: [] });
+    }
+  });
+
+  it('at least one scanned file really does read those rows, so the rule is not vacuous', () => {
+    const readers = files
+      .filter((f) => fs.readFileSync(f, 'utf8').split('\n').some((l) => SUPPRESSION_MODEL_IMPORT.test(l)))
+      .map(rel);
+    expect(readers).toContain('services/growthJourney/governor/contactEvidence.ts');
   });
 
   it('defines no fourth opt-out detector: "unsubscribe" appears only on import lines outside tests', () => {
