@@ -408,6 +408,23 @@ describe('a failed audit write is LOST, not deferred', () => {
     expect(src).toContain('LOST');
     expect(src).toMatch(/Phase 4/);
   });
+
+  it('and the SESSION LOG does not still claim the recovery either', () => {
+    // The verifier's deduction: the false sentence was corrected here and in the
+    // evidence file, and retracted three bullets later in the log - but the
+    // sentence itself was left standing, and this guard only read the source. A
+    // reader of the tracked artefact meets the first claim they reach.
+    const log = fs.readFileSync(
+      // FIVE levels: __tests__ -> growthJourney -> services -> src -> backend -> repo root.
+      // Four landed in backend/docs, which does not exist, and the test failed on
+      // its own path rather than on the claim.
+      path.join(__dirname, '..', '..', '..', '..', '..', 'docs', 'sessions', 'CC-20260812-k4m9.md'),
+      'utf8',
+    );
+    expect(log).not.toContain('the next run records the change;');
+    // Non-vacuity: the file really was read and really is the right one.
+    expect(log).toContain('T307: the Colaberry Business lifecycle');
+  });
 });
 
 describe('the projection is the only mutable write this run owns', () => {
