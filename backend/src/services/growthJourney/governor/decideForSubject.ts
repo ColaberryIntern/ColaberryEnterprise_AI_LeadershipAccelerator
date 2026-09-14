@@ -119,10 +119,14 @@ export async function decideForSubject(
     return { status: 'decided', decision: refusal(`hard_stop:${stop}`, strategy) };
   }
 
-  // 3. Generate.
+  // 3. Generate. A strategy that produced nothing may say why (T309): the
+  //    class stays `no_candidate` and the reason is appended, so a subject with
+  //    no learner profile reads `no_candidate:no_learner_profile` while every
+  //    strategy without the hook reads exactly what it did before.
   const generated = strategy.generate(ctx);
   if (generated.length === 0) {
-    return { status: 'decided', decision: refusal('no_candidate', strategy) };
+    const why = strategy.emptyReason?.(ctx) ?? null;
+    return { status: 'decided', decision: refusal(why ? `no_candidate:${why}` : 'no_candidate', strategy) };
   }
 
   // 4. The brand boundary, on EVERY candidate, before anything is ranked.

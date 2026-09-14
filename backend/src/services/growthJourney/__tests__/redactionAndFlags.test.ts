@@ -387,14 +387,44 @@ describe('Phase 2 source', () => {
     expect(readers).toContain('services/growthJourney/governor/contactEvidence.ts');
   });
 
-  it('defines no fourth opt-out detector: "unsubscribe" appears only on import lines outside tests', () => {
+  /**
+   * The ONE non-import shape the word may take in production: populating
+   * Explorer's own `HardStopFlags.unsubscribed` field, as an object-literal
+   * key. T309 first needed it - the contact evidence has to become a tier-0
+   * flag somewhere, and that somewhere is `contactEvidence.ts`, once, for every
+   * strategy. An event name, a model, a `.findAll`, a status literal, a property
+   * read - none of those match this, and the control below proves it.
+   */
+  const HARD_STOP_KEY = /^\s*unsubscribed:/;
+  const fourthDetectorOffenders = (src: string) =>
+    src
+      .split('\n')
+      .map((l, i) => ({ l, i: i + 1 }))
+      .filter(({ l }) => /unsubscribe/i.test(l) && !/^\s*import\b/.test(l) && !HARD_STOP_KEY.test(l));
+
+  it('defines no fourth opt-out detector: "unsubscribe" appears only on import lines or as the tier-0 key', () => {
     for (const f of files) {
-      const lines = fs.readFileSync(f, 'utf8').split('\n');
-      const offenders = lines
-        .map((l, i) => ({ l, i: i + 1 }))
-        .filter(({ l }) => /unsubscribe/i.test(l) && !/^\s*import\b/.test(l));
-      expect({ file: rel(f), offenders }).toEqual({ file: rel(f), offenders: [] });
+      expect({ file: rel(f), offenders: fourthDetectorOffenders(fs.readFileSync(f, 'utf8')) }).toEqual({
+        file: rel(f),
+        offenders: [],
+      });
     }
+  });
+
+  it('and that allowance is exactly one shape - a detector still trips it', () => {
+    const trips = [
+      "if (lead.status === 'unsubscribed') return false;",
+      "const rows = await UnsubscribeEvent.findAll({ where: { lead_id } });",
+      "reason: 'unsubscribe_event_email',",
+      "if (ctx.hardStop.unsubscribed) stop();",
+      "const unsubscribed = events.length > 0;",
+    ];
+    for (const l of trips) expect({ l, trips: fourthDetectorOffenders(l).length }).toEqual({ l, trips: 1 });
+    expect(fourthDetectorOffenders("    unsubscribed: email.evaluator === 'suppression',")).toEqual([]);
+    expect(fourthDetectorOffenders("import { UnsubscribeEvent as SuppressionEventRow } from '../../../models';")).toEqual([]);
+    // Non-vacuity: the production file that carries the allowed shape really does.
+    const ce = fs.readFileSync(path.join(__dirname, '..', 'governor', 'contactEvidence.ts'), 'utf8');
+    expect(ce.split('\n').filter((l) => HARD_STOP_KEY.test(l))).toHaveLength(1);
   });
 
   it('never updates or destroys an append-only row (classifications, transitions, decisions, snapshots)', () => {

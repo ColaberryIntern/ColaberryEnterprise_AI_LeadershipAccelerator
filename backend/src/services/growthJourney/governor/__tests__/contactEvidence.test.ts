@@ -29,7 +29,8 @@ jest.mock('../../../consentService', () => ({
   evaluateConsent: (...a: unknown[]) => m.evaluateConsent(...a),
 }));
 
-import { resolveContactEvidence } from '../contactEvidence';
+import { resolveContactEvidence, tierZeroStopsFromContact } from '../contactEvidence';
+import type { ChannelEvidence, ContactEvidence } from '../types';
 import { SUPPRESSED_LEAD_STATUSES } from '../../../explorerGrowth/explorerContactabilityService';
 
 /**
@@ -332,5 +333,70 @@ describe('the two answers this codebase cannot give', () => {
     expect(e.human_conversation).toBe('unknown');
     expect(e.sales_capacity).toBe('unknown');
     expect(e.human_conversation_reason).toMatch(/failed closed/);
+  });
+});
+
+describe('tierZeroStopsFromContact - the suppression half of the six stops, from this evidence (T309)', () => {
+  const ch = (eligible: boolean, reason: string, evaluator: string): ChannelEvidence => ({
+    eligible,
+    reason,
+    evaluator,
+    last_contact_at: null,
+    hours_since_last_contact: null,
+  });
+  const open = ch(true, 'express_consent', 'consent');
+  const evidence = (over: Partial<ContactEvidence['channels']> = {}): ContactEvidence => ({
+    channels: {
+      email: open,
+      sms: ch(false, 'no_express_consent', 'consent'),
+      voice: ch(false, 'no_express_consent', 'consent'),
+      in_app: ch(true, 'in_app_needs_no_consent', 'none'),
+      none: ch(true, 'no channel needed', 'none'),
+      ...over,
+    },
+    recent_contact_count: 0,
+    hours_since_last_contact: null,
+    human_conversation: 'unknown',
+    human_conversation_reason: 'x',
+    sales_capacity: 'unknown',
+    sales_capacity_reason: 'x',
+    failed_closed: false,
+  });
+  const NONE = { unsubscribed: false, dnc: false, consentRevoked: false };
+
+  it('nothing stops a reachable person', () => {
+    expect(tierZeroStopsFromContact(evidence())).toEqual(NONE);
+  });
+
+  it.each([
+    ['a suppression event on email', { email: ch(false, 'unsubscribe_event_email', 'suppression') }, { ...NONE, unsubscribed: true }],
+    ['a legacy global event', { email: ch(false, 'unsubscribe_event_exists_legacy_global', 'suppression') }, { ...NONE, unsubscribed: true }],
+    ['a complaint', { email: ch(false, 'lead_complained', 'lead_status') }, { ...NONE, unsubscribed: true }],
+    ['do-not-disturb on the lead', { email: ch(false, 'lead_dnd', 'lead_status'), sms: ch(false, 'lead_dnd', 'lead_status') }, { ...NONE, dnc: true }],
+    ['consent revoked on voice', { voice: ch(false, 'revoked', 'consent') }, { ...NONE, consentRevoked: true }],
+    ['consent revoked on sms', { sms: ch(false, 'revoked', 'consent') }, { ...NONE, consentRevoked: true }],
+  ])('%s is a stop', (_l, over, expected) => {
+    expect(tierZeroStopsFromContact(evidence(over))).toEqual(expected);
+  });
+
+  it.each([
+    ['a bounce closes email and is NOT a stop', { email: ch(false, 'lead_bounced', 'lead_status') }],
+    ['missing consent closes a channel and is NOT a stop', { email: ch(false, 'no_express_consent', 'consent') }],
+    ['a brand preference block is NOT a stop', { email: ch(false, 'brand_preference:marketing', 'brand_preference') }],
+    ['a queued send is NOT a stop', { email: ch(false, 'send_already_queued', 'in_flight') }],
+    ['the word revoked from a NON-consent evaluator is NOT a stop', { voice: ch(false, 'revoked', 'brand_preference') }],
+    ['a closed-because-lookup-failed channel is NOT a stop here', { email: ch(false, 'suppression_lookup_failed', 'failed_closed') }],
+  ])('%s', (_l, over) => {
+    // Tier 0 is suppression, not availability: Explorer's rule, and the one
+    // that once blocked all 153 learners when it was got wrong.
+    expect(tierZeroStopsFromContact(evidence(over))).toEqual(NONE);
+  });
+
+  it('reads the evaluator names the REAL resolver writes, so the two cannot drift', async () => {
+    // Drive the resolver into a suppression verdict and hand its own output in.
+    arrange({ unsubFindAll: [{ channel: 'email', created_at: AFTER_CUTOFF }] });
+    const e = await resolveContactEvidence(args());
+    expect(e.channels.email.evaluator).toBe('suppression');
+    expect(tierZeroStopsFromContact(e).unsubscribed).toBe(true);
   });
 });

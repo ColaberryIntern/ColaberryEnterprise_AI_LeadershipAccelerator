@@ -6,6 +6,7 @@ import type { ConsentChannel } from '../../../models/ConsentRecord';
 import { isSuppressedForChannel, type SuppressionEvent } from '../../channelSuppression';
 import { classifyError } from '../../../utils/errorClassifier';
 import { redactForLogs } from '../../../utils/piiRedaction';
+import type { HardStopFlags } from '../../explorerGrowth/governor/types';
 import type { ChannelEvidence, ContactEvidence, JourneyChannel } from './types';
 
 /**
@@ -257,4 +258,35 @@ export async function resolveContactEvidence(args: ResolveContactEvidenceArgs): 
     });
     return failClosed('lookup_failed');
   }
+}
+
+/* ── the three tier-0 stops this evidence can answer ─────────────────────── */
+
+/**
+ * The suppression half of Explorer's six tier-0 stops, from this evidence.
+ *
+ * Programme-neutral on purpose: a person who opted out is stopped whatever the
+ * journey, so every strategy calls this rather than carrying its own copy of
+ * the mapping (T309 first needed it; T310's two business strategies are next).
+ * It reads the STRUCTURED verdict — which evaluator answered, and what it said
+ * — not a regex over free text, because this module produced structure so
+ * nothing downstream would need to parse.
+ *
+ * Tier 0 is suppression, not channel availability (Explorer's own rule, learned
+ * the hard way in `runGovernor`): a bounce or a missing consent closes a
+ * channel and is not a stop. Only a suppression event, a complaint, a
+ * do-not-disturb status or a revoked consent stops the whole decision.
+ *
+ * `converted`, `killSwitch` and `campaignInactive` are not this evidence's to
+ * answer; the strategy and the context builder own those.
+ */
+export function tierZeroStopsFromContact(
+  contact: ContactEvidence,
+): Omit<HardStopFlags, 'converted' | 'killSwitch' | 'campaignInactive'> {
+  const { email, sms, voice } = contact.channels;
+  return {
+    unsubscribed: email.evaluator === 'suppression' || email.reason === 'lead_complained',
+    dnc: [email, sms].some((c) => c.reason === 'lead_dnd'),
+    consentRevoked: [email, sms, voice].some((c) => c.evaluator === 'consent' && c.reason === 'revoked'),
+  };
 }

@@ -1,5 +1,11 @@
 import type { FreshnessInput } from '../../explorerGrowth/governor/freshness';
 import type { Candidate, ContactPolicyInput, HardStopFlags } from '../../explorerGrowth/governor/types';
+import type {
+  ExplorerAffinity,
+  ExplorerOverlay,
+  ExplorerPrimaryState,
+  ExplorerSignalReadout,
+} from '../../../types/explorerGrowth';
 import type { EligibilityDecision } from '../offerEligibility';
 
 /**
@@ -132,6 +138,32 @@ export interface ContactEvidence {
 
 /* ── The subject context ──────────────────────────────────────────────────── */
 
+/**
+ * What Explorer knows about a LEARNER subject, in Explorer's own shapes (T309).
+ *
+ * Every field here is an existing Explorer type, so the learner strategy can
+ * build a `GovernorContext` and hand it to Explorer's own generators without a
+ * translation layer that could drift. `scores` are Explorer's E/I/F, produced by
+ * Explorer's scorer over Explorer's readout — a journey never invents a learner
+ * score, and T306's vector reports `available: false` for a learner programme
+ * for exactly that reason.
+ *
+ * ABSENT (`undefined` or `null`) for a subject with no `explorer_journey_profiles`
+ * row. That table's key is an `enrollments.id`, so a CPN scholarship lead, a
+ * community signup or any subject who never enrolled has nothing here — and the
+ * strategy's answer for them is a refusal that says so, never a profile made up
+ * to have something to score.
+ */
+export interface LearnerFacts {
+  enrollment_id: string;
+  primary_state: ExplorerPrimaryState;
+  overlays: ExplorerOverlay[];
+  scores: { e: number; i: number; f: number };
+  affinities: ExplorerAffinity[];
+  readout: ExplorerSignalReadout;
+  state_entered_at: Date | null;
+}
+
 /** What the classifier decided, as the decision needs to cite it. */
 export interface JourneyClassificationRef {
   classification_id: string | null;
@@ -170,6 +202,12 @@ export interface JourneySubjectContext {
    */
   freshness: FreshnessInput;
   asOf: Date;
+  /**
+   * T309. Present for a learner subject Explorer has a profile for; absent or
+   * null otherwise. Optional so that every context T303 and T308 already build
+   * stays valid, and because for three of the four programmes it is meaningless.
+   */
+  learner?: LearnerFacts | null;
 }
 
 /* ── The strategy ─────────────────────────────────────────────────────────── */
@@ -187,6 +225,13 @@ export interface JourneyStrategy {
   /** The six tier-0 stops, computed by the strategy because Explorer hard-codes three of them to false. */
   hardStops(ctx: JourneySubjectContext): HardStopFlags;
   generate(ctx: JourneySubjectContext): JourneyCandidate[];
+  /**
+   * T309. When `generate` returns nothing, WHY — so the refusal can say
+   * `no_candidate:no_learner_profile` rather than a bare `no_candidate`. The
+   * pipeline keeps the class and appends the reason, so a strategy without this
+   * hook produces exactly the refusal it always did. Return null to say nothing.
+   */
+  emptyReason?(ctx: JourneySubjectContext): string | null;
 }
 
 /* ── The decision ─────────────────────────────────────────────────────────── */
