@@ -18,19 +18,29 @@ import { CASE_STUDY_MATURITIES, type CaseStudyMaturity } from '../sbp/caseStudyH
  *                                       disagrees with itself
  *
  * Both are no-ops when the input carries no foundation, which is every Case
- * Study not linked to a student project and every one linked to a project
- * whose intake never ran. An additive rule must not refuse the library it was
- * added to.
+ * Study about no student project and every one whose project's intake never
+ * ran. An additive rule must not refuse the library it was added to.
+ *
+ * `via` says how the project was found. `linked` is `case_studies.project_id`.
+ * `repository` is a record with no `project_id` whose cited repository belongs
+ * to a student project (`caseStudyProjectResolution.ts`): before 2026-09-14
+ * that record skipped this rule entirely, which made `from-repositories` a
+ * way to publish a build record as a case study. The message names the route
+ * so an admin reading the refusal is not told about a link they never made.
  */
 
 export interface PublishFoundation {
   readonly maturity: CaseStudyMaturity;
   readonly openQuestions: number;
+  readonly via?: 'linked' | 'repository';
 }
 
 export const PUBLISHABLE_FROM: CaseStudyMaturity = 'operational_result';
 
 const rung = (m: CaseStudyMaturity): number => CASE_STUDY_MATURITIES.indexOf(m);
+
+const subject = (f: PublishFoundation): string =>
+  f.via === 'repository' ? 'the student project this record\'s repository belongs to' : 'the linked project';
 
 export function ruleMaturity(foundation: PublishFoundation | null | undefined, b: Blockers): void {
   if (!foundation) return;
@@ -39,7 +49,7 @@ export function ruleMaturity(foundation: PublishFoundation | null | undefined, b
     b.add(
       'maturity_below_operational_result',
       'project.maturity',
-      `the linked project is at "${foundation.maturity}", below "${PUBLISHABLE_FROM}": nothing has been measured in real use, so this is a build record or a demonstration, not a case study`,
+      `${subject(foundation)} is at "${foundation.maturity}", below "${PUBLISHABLE_FROM}": nothing has been measured in real use, so this is a build record or a demonstration, not a case study`,
       'record an outcome through an approved measurement definition, confirmed by the client; a passing build or a demo cannot stand in for one',
     );
   }

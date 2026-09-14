@@ -212,26 +212,56 @@ function log(
  * implementation that could drift from the first and tell an admin a record is
  * ready when the gate would refuse it.
  */
+type GateFoundation = { maturity: string; openQuestions: number; via: 'linked' | 'repository' };
+
 /**
- * The linked student project's maturity, for the gate. Null when the record
- * is not linked to a project, or the project never ran an intake, or the read
- * fails: in all three the maturity rule is a no-op and the other rules decide.
- * A read failure is logged, not surfaced, because it must not turn a refusal
- * the other rules would have given into a 500 the admin cannot act on.
+ * The student project's maturity, for the gate. Null when the record is about
+ * no student project, or the project never ran an intake, or the read fails:
+ * in all three the maturity rule is a no-op and the other rules decide. A read
+ * failure is logged, not surfaced, because it must not turn a refusal the
+ * other rules would have given into a 500 the admin cannot act on.
+ *
+ * TWO WAYS TO BE ABOUT A PROJECT. `project_id` on the record is the first.
+ * The second is a record with no `project_id` whose cited repository belongs
+ * to a student project; until 2026-09-14 that record skipped the maturity
+ * rule entirely, so `from-repositories` was a way to publish a build record
+ * as a case study. When several projects resolve, the gate judges the least
+ * mature and the most unsettled, because the rule exists to fail closed.
  */
-async function foundationFor(record: { project_id?: string | null }): Promise<{ maturity: string; openQuestions: number } | null> {
-  const projectId = record.project_id ? String(record.project_id) : null;
-  if (!projectId) return null;
+async function foundationFor(record: { id: string; project_id?: string | null }): Promise<GateFoundation | null> {
+  const linked = record.project_id ? String(record.project_id) : null;
   try {
     // Imported here, not at the top: the loader reaches the sbp models, and a
-    // record with no linked project (every record before Phase 7) must not
+    // record about no student project (every record before Phase 7) must not
     // pay for that at module load. Same discipline as the sbp routes.
     const { loadCaseStudyFoundationForGate } = await import('../sbp/caseStudyFoundationLoader');
-    return await loadCaseStudyFoundationForGate(projectId);
+    if (linked) {
+      const f = await loadCaseStudyFoundationForGate(linked);
+      return f ? { ...f, via: 'linked' } : null;
+    }
+
+    const { resolveProjectsThroughRepositories } = await import('./caseStudyProjectResolution');
+    const projectIds = await resolveProjectsThroughRepositories(record.id);
+    if (projectIds.length === 0) return null;
+
+    const { CASE_STUDY_MATURITIES } = await import('../sbp/caseStudyHypothesis');
+    const rung = (m: string): number => CASE_STUDY_MATURITIES.indexOf(m as never);
+    const found: Array<{ maturity: string; openQuestions: number }> = [];
+    for (const projectId of projectIds) {
+      const f = await loadCaseStudyFoundationForGate(projectId);
+      if (f) found.push(f);
+    }
+    if (found.length === 0) return null;
+    // Least mature rung, and the largest count of unsettled questions across
+    // every resolved project: the rule fails closed, so the record is judged
+    // by the worst of what it is about.
+    const lowest = found.reduce((a, b) => (rung(b.maturity) < rung(a.maturity) ? b : a));
+    const mostOpen = found.reduce((n, f) => Math.max(n, f.openQuestions), 0);
+    return { maturity: lowest.maturity, openQuestions: mostOpen, via: 'repository' };
   } catch (err: any) {
     console.warn(JSON.stringify({
       level: 'warn', service: 'backend', event: 'case_study_foundation_read_failed', outcome: 'partial',
-      error_class: err?.name || 'Error', context: { project_id: projectId, message: String(err?.message || '').slice(0, 200) },
+      error_class: err?.name || 'Error', context: { case_study_id: record.id, project_id: linked, message: String(err?.message || '').slice(0, 200) },
     }));
     return null;
   }

@@ -224,6 +224,13 @@ const mockFoundationForGate = jest.fn();
 jest.mock('../../sbp/caseStudyFoundationLoader', () => ({
   loadCaseStudyFoundationForGate: (...a: any[]) => mockFoundationForGate(...a),
 }));
+// A record with no project_id may still be ABOUT a student project, through a
+// cited repository. Mocked to "none" here, which is every record about our
+// own work; the tests that resolve something set it explicitly.
+const mockResolveProjects = jest.fn(async () => [] as string[]);
+jest.mock('../caseStudyProjectResolution', () => ({
+  resolveProjectsThroughRepositories: (...a: any[]) => mockResolveProjects(...a),
+}));
 
 import EvidenceRecord from '../../../models/EvidenceRecord';
 import PortfolioArtifact from '../../../models/PortfolioArtifact';
@@ -433,6 +440,7 @@ beforeEach(() => {
   snapshots.reset();
   publications.reset();
   jest.clearAllMocks();
+  mockResolveProjects.mockImplementation(async () => []);
   logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 });
 
@@ -1563,6 +1571,56 @@ describe('a linked student project carries its maturity into the gate', () => {
     const d2 = await evaluateCaseStudyPublication({ caseStudyId: unlinked.caseStudyId, surfaceKey: 'enterprise', actor: 'ali@colaberry.com' });
     expect(mockFoundationForGate).not.toHaveBeenCalled();
     expect(d2.allowed).toBe(true);
+  });
+
+  it('names the route the project came by, so an admin is not told about a link they never made', () => {
+    const linked = evaluate({ foundation: { maturity: 'build_record', openQuestions: 0 } });
+    expect(messages(linked)).toMatch(/^the linked project is at "build_record"/m);
+    const viaRepo = evaluate({ foundation: { maturity: 'build_record', openQuestions: 0, via: 'repository' } });
+    expect(messages(viaRepo)).toMatch(/the student project this record's repository belongs to is at "build_record"/);
+  });
+
+  it('a record with no project_id is judged by the project its cited repository belongs to', async () => {
+    // The bypass this closes: on 2026-09-14 a live record cited a student's
+    // connected repository and, having no project_id, skipped this rule.
+    mockResolveProjects.mockResolvedValue(['cce94c20-a398-45b3-a6fb-b3fc87b6b1ef']);
+    mockFoundationForGate.mockResolvedValue({ maturity: 'capability_demonstration', openQuestions: 0 });
+    const unlinked = seedPublishable();
+    const d = await evaluateCaseStudyPublication({ caseStudyId: unlinked.caseStudyId, surfaceKey: 'enterprise', actor: 'ali@colaberry.com' });
+    expect(mockResolveProjects).toHaveBeenCalledWith(unlinked.caseStudyId);
+    expect(mockFoundationForGate).toHaveBeenCalledWith('cce94c20-a398-45b3-a6fb-b3fc87b6b1ef');
+    expect(codes(d)).toContain('maturity_below_operational_result');
+    expect(messages(d)).toMatch(/this record's repository belongs to/);
+  });
+
+  it('several resolved projects: the least mature and the most unsettled decide, because the rule fails closed', async () => {
+    mockResolveProjects.mockResolvedValue(['aaaaaaaa-0000-4000-8000-000000000001', 'bbbbbbbb-0000-4000-8000-000000000002']);
+    mockFoundationForGate.mockImplementation(async (id: string) => (
+      id.startsWith('aaaa')
+        ? { maturity: 'operational_result', openQuestions: 2 }
+        : { maturity: 'build_record', openQuestions: 0 }
+    ));
+    const unlinked = seedPublishable();
+    const d = await evaluateCaseStudyPublication({ caseStudyId: unlinked.caseStudyId, surfaceKey: 'enterprise', actor: 'ali@colaberry.com' });
+    expect(codes(d)).toEqual(expect.arrayContaining(['maturity_below_operational_result', 'project_truth_has_open_questions']));
+    expect(messages(d)).toMatch(/"build_record"/);
+    expect(messages(d)).toMatch(/2 questions stories raised are unsettled/);
+  });
+
+  it('a repository that belongs to no student project resolves to nothing, and the library is untouched', async () => {
+    mockResolveProjects.mockResolvedValue([]);
+    const unlinked = seedPublishable();
+    const d = await evaluateCaseStudyPublication({ caseStudyId: unlinked.caseStudyId, surfaceKey: 'enterprise', actor: 'ali@colaberry.com' });
+    expect(mockFoundationForGate).not.toHaveBeenCalled();
+    expect(d.allowed).toBe(true);
+  });
+
+  it('a resolution failure is logged and the other rules decide, the same as a foundation read failure', async () => {
+    mockResolveProjects.mockRejectedValue(new Error('database away'));
+    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const unlinked = seedPublishable();
+    const d = await evaluateCaseStudyPublication({ caseStudyId: unlinked.caseStudyId, surfaceKey: 'enterprise', actor: 'ali@colaberry.com' });
+    expect(d.allowed).toBe(true);
   });
 
   it('a foundation read failure does not become a 500; the other rules decide', async () => {
