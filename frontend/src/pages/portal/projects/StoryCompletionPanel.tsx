@@ -43,7 +43,33 @@ export interface StoryCompletionPanelProps {
  * Matched on the id rather than a release flag because the id is what the
  * generator hardcodes and what the panel already receives.
  */
-export function isSelfDirectedStory(storyKey: string): boolean {
+/**
+ * A story the platform can NEVER verify, so the student has to be allowed to
+ * close it themselves.
+ *
+ * TWO WAYS A STORY LANDS HERE.
+ *   - `PREP-n`: rehearsals, recordings and the Demo Day slot, generated with
+ *     `acceptance: []`.
+ *   - ANY task carrying no acceptance criteria. Tasks created outside the plan
+ *     pipeline (ids like `p1789142215938-t2`) have none at all.
+ *
+ * The id test alone was too narrow: it described one SOURCE of the problem
+ * rather than the problem. The verifier matches acceptance criteria against the
+ * repo, so with no criteria there is nothing to match, `verified_at` can never
+ * be stamped, and the completion button stays dead forever however much the
+ * student pushes. Measured on production the day this changed: 64 such tasks
+ * across 7 active learners, on top of the 186 PREP tasks the id test already
+ * covered. One of them wrote in to ask why her story would not close.
+ *
+ * `loaded` is load-bearing. Before the first read `acceptance` is legitimately
+ * empty, and treating that as unverifiable would unlock the button early, on
+ * every story, for the moment before the verdict arrives.
+ */
+export function isSelfDirectedStory(
+  storyKey: string,
+  verif?: { loaded: boolean; acceptance: string[] },
+): boolean {
+  if (verif && verif.loaded && (verif.acceptance ?? []).length === 0) return true;
   return /^PREP-\d+$/i.test((storyKey || '').trim());
 }
 
@@ -53,7 +79,7 @@ const StoryCompletionPanel: React.FC<StoryCompletionPanelProps> = ({
   const verified = Boolean(verif.verifiedAt);
   /* Self-directed only while unverified: if one of these ever does get a
      verdict, the normal verified path still wins. */
-  const selfDirected = !verified && isSelfDirectedStory(storyKey);
+  const selfDirected = !verified && isSelfDirectedStory(storyKey, verif);
 
   return (
     <>
