@@ -1,10 +1,11 @@
+import { ExplorerContentAsset } from '../../models';
 import {
   resolveContentAssets,
   type AudienceTier,
   type ContentBrandScope,
 } from '../explorerGrowth/content/resolveContentAssets';
 import type { ContentAssetQuery } from '../explorerGrowth/governor/types';
-import { assertContentAllowed } from './contentEligibility';
+import { assertContentAllowed, type ContentAssetFacts } from './contentEligibility';
 import type { JourneyCandidate, JourneySubjectContext } from './governor/types';
 
 /**
@@ -36,6 +37,18 @@ import type { JourneyCandidate, JourneySubjectContext } from './governor/types';
  *    passed only for a subject with an enrollment, which is exactly what
  *    Explorer's own call site resolves per learner.
  *
+ * ─── IT ASKS THE GATE TWICE, AND THE SECOND TIME IS THE IMPORTANT ONE ───────
+ *
+ * Before the lookup it asks the POLICY question: may this brand cite content for
+ * this offer at all. After the lookup it asks the PER-ASSET question for every
+ * row the registry returned, having fetched their declaration columns.
+ *
+ * The second call is not belt-and-braces. `RESOLVE_SQL` enforces `brand_id`,
+ * `offer_family` and `eligible_programs`; it does NOT enforce `approval_status`
+ * or `eligible_paths`, and it cannot consult `growth_journey_content_rules` at
+ * all. Without this call an unreviewed asset would be cited, and the declaration
+ * table would have a reader nothing reached.
+ *
  * ─── IT REFUSES BY NAME AND NEVER SUBSTITUTES ───────────────────────────────
  *
  * Every exit is assets or a named gap, the discipline `resolveContentAssets`
@@ -66,9 +79,28 @@ function familyFor(query: ContentAssetQuery, ctx: JourneySubjectContext): string
   return query.offer_family ?? ctx.classification?.primary_path ?? null;
 }
 
+/** The eight declaration columns, for the assets the registry returned. */
+export type AssetFactsLoader = (ids: string[]) => Promise<Map<string, ContentAssetFacts>>;
+
+const loadAssetFacts: AssetFactsLoader = async (ids) => {
+  const rows = (await ExplorerContentAsset.findAll({
+    where: { id: ids },
+    attributes: [
+      'id',
+      'brand_id',
+      'offer_family',
+      'approval_status',
+      'eligible_programs',
+      'eligible_paths',
+    ],
+  })) as unknown as ContentAssetFacts[];
+  return new Map(rows.map((row) => [String(row.id), row]));
+};
+
 export interface JourneyContentDeps {
   assertAllowed?: typeof assertContentAllowed;
   resolveAssets?: typeof resolveContentAssets;
+  loadFacts?: AssetFactsLoader;
 }
 
 /**
@@ -85,6 +117,7 @@ export async function resolveJourneyContent(
 ): Promise<{ assets: Record<string, unknown>[]; gaps: string[] }> {
   const assertAllowed = deps.assertAllowed ?? assertContentAllowed;
   const resolveAssets = deps.resolveAssets ?? resolveContentAssets;
+  const loadFacts = deps.loadFacts ?? loadAssetFacts;
 
   const assets: Record<string, unknown>[] = [];
   const gaps: string[] = [];
@@ -123,8 +156,45 @@ export async function resolveJourneyContent(
       tier,
       scope,
     );
-    if (resolved.resolved) assets.push(...(resolved.assets as unknown as Record<string, unknown>[]));
-    else gaps.push(resolved.reason);
+    if (!resolved.resolved) {
+      gaps.push(resolved.reason);
+      continue;
+    }
+
+    const selected = resolved.assets as unknown as Record<string, unknown>[];
+    const ids = selected.map((a) => String(a.id)).filter(Boolean);
+    let facts: Map<string, ContentAssetFacts>;
+    try {
+      facts = ids.length > 0 ? await loadFacts(ids) : new Map();
+    } catch {
+      // Fail closed: an unreadable declaration column is not an approval.
+      gaps.push('asset_facts_lookup_failed');
+      continue;
+    }
+
+    for (const asset of selected) {
+      const id = String(asset.id);
+      const row = facts.get(id);
+      if (!row) {
+        // The row came from this same table a moment ago. If it cannot be read
+        // back, something is wrong and the safe answer is not to cite it.
+        gaps.push('asset_facts_missing');
+        continue;
+      }
+      const perAsset = await assertAllowed({
+        brandId: ctx.brand_id,
+        tenantId: ctx.tenant_id,
+        offerFamily: family,
+        asset: row,
+        allowUnscoped: scope.allow_unscoped,
+        programSlug: ctx.program_slug,
+        state: ctx.state,
+        tier,
+        at: ctx.asOf,
+      });
+      if (perAsset.allowed) assets.push(asset);
+      else gaps.push(perAsset.reason);
+    }
   }
 
   return { assets, gaps };

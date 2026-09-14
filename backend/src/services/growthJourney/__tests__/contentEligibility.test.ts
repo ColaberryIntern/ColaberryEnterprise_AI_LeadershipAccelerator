@@ -148,11 +148,15 @@ describe('the policy question, asked without an asset', () => {
     expect(v.reason).not.toContain('asset_');
   });
 
-  it('keys the declaration lookup on brand and tenant only', async () => {
+  it('issues NO declaration query at all', async () => {
+    // It used to fetch the brand's rules and then discard them, which is how its
+    // comment came to claim a collection-level check that could not happen. A
+    // question that names no asset cannot consult an asset-level rule, and a
+    // collection-level rule has no reader in this phase.
     const { asset, ...rest } = input();
     void asset;
     await assertContentAllowed(rest);
-    expect(m.ruleFindAll.mock.calls[0][0].where).toEqual({ brand_id: 'b-train', tenant_id: 't-col' });
+    expect(m.ruleFindAll).not.toHaveBeenCalled();
   });
 });
 
@@ -218,6 +222,64 @@ describe('with no declaration, the asset own columns decide', () => {
   });
 });
 
+describe('the columns the SQL does NOT enforce are enforced here', () => {
+  // The division of labour this task overstated once and now states precisely:
+  // RESOLVE_SQL filters brand_id, offer_family and eligible_programs on the rows
+  // it returns; approval_status and eligible_paths are enforced only here, which
+  // is why the adapter asks this question again after selection.
+  it('refuses an asset whose eligible_paths exclude the offer family', async () => {
+    const v = await assertContentAllowed(
+      input({
+        asset: { id: 'a', brand_id: null, approval_status: 'approved', eligible_paths: ['learner_free_training'] },
+      }),
+    );
+    expect(v.reason).toBe('asset_other_path');
+  });
+
+  it('allows one whose eligible_paths name it', async () => {
+    const v = await assertContentAllowed(
+      input({
+        asset: { id: 'a', brand_id: null, approval_status: 'approved', eligible_paths: ['learner_paid_training'] },
+      }),
+    );
+    expect(v.allowed).toBe(true);
+  });
+
+  it('treats an empty eligible_paths as "says nothing"', async () => {
+    const v = await assertContentAllowed(
+      input({ asset: { id: 'a', brand_id: null, approval_status: 'approved', eligible_paths: [] } }),
+    );
+    expect(v.allowed).toBe(true);
+  });
+});
+
+describe('access_tier finally has a reader', () => {
+  it('restricted content is refused to a free-preview subject', async () => {
+    m.ruleFindAll.mockResolvedValue([rule({ access_tier: 'restricted' })]);
+    const v = await assertContentAllowed(input({ tier: 'free_preview' }));
+    expect(v).toEqual({ allowed: false, reason: 'content_rule_restricted', rule_id: 'rule-1' });
+  });
+
+  it('and allowed to a full-access one', async () => {
+    m.ruleFindAll.mockResolvedValue([rule({ access_tier: 'restricted' })]);
+    const v = await assertContentAllowed(input({ tier: 'full_access' }));
+    expect(v.allowed).toBe(true);
+  });
+
+  it('NULL stays permissive: not declared is not restricted', async () => {
+    // The rule as a whole still had to be approved to reach this check.
+    m.ruleFindAll.mockResolvedValue([rule({ access_tier: null })]);
+    const v = await assertContentAllowed(input({ tier: 'free_preview' }));
+    expect(v.allowed).toBe(true);
+  });
+
+  it('an unknown tier is treated as NOT full access', async () => {
+    m.ruleFindAll.mockResolvedValue([rule({ access_tier: 'restricted' })]);
+    const v = await assertContentAllowed(input({ tier: undefined }));
+    expect(v.reason).toBe('content_rule_restricted');
+  });
+});
+
 describe('when a declaration exists, the declaration decides', () => {
   it('an approved rule supersedes the asset own unreviewed columns', async () => {
     // The declaration IS the review. Without this, a fully declared asset would
@@ -271,6 +333,14 @@ describe('when a declaration exists, the declaration decides', () => {
     expect(options.order).toEqual([['version', 'DESC']]);
   });
 
+  it('a collection-level row has NO reader, and that is deliberate', async () => {
+    // Nothing in Phase 3 resolves an asset's collection membership, so a rule
+    // written against a collection could only be consulted by guessing. The
+    // lookup keys on asset_id, so such a row is simply never returned.
+    await assertContentAllowed(input());
+    expect(m.ruleFindAll.mock.calls[0][0].where).toHaveProperty('asset_id', 'asset-1');
+  });
+
   it('scopes the lookup to this brand, tenant AND asset', async () => {
     // The query-shape control: without the brand in the WHERE, another brand's
     // declaration could approve this brand's content.
@@ -310,11 +380,22 @@ describe('it fails closed, and says nothing a log should not carry', () => {
 });
 
 describe('Explorer does not go through this gate', () => {
-  it('no file under explorerGrowth imports it', () => {
+  it('no file under explorerGrowth imports it, by module name OR by symbol', () => {
     // If Explorer's resolver consulted this gate, every one of its learners would
     // lose their content immediately, because `approved_content_ready` is false
     // for every policy row in production. This is the structural half of the
     // header's claim.
+    //
+    // BOTH the module name and the exported symbols are matched. T305's verifier
+    // walked through the filename-only version with a one-line renaming
+    // re-export shim outside this tree - the same laundering shape T304's
+    // verifier found - and a consumer that renames the import still has to call
+    // the function by one of these names. What this cannot see, stated rather
+    // than implied: a shim that also renames the FUNCTION (`export { x as y }`)
+    // and is itself outside `explorerGrowth/`. The binding proof there is
+    // narrower and stronger - `resolveContentAssets` has exactly two live call
+    // sites and neither touches this gate.
+    const NAMES = [/contentEligibility/, /assertContentAllowed/, /ContentVerdict/];
     const root = path.join(__dirname, '..', '..', 'explorerGrowth');
     const offenders: string[] = [];
     const walk = (dir: string) => {
@@ -323,7 +404,8 @@ describe('Explorer does not go through this gate', () => {
         if (entry.isDirectory()) {
           walk(p);
         } else if (entry.name.endsWith('.ts')) {
-          if (/contentEligibility/.test(fs.readFileSync(p, 'utf8'))) offenders.push(entry.name);
+          const src = fs.readFileSync(p, 'utf8');
+          if (NAMES.some((rx) => rx.test(src))) offenders.push(entry.name);
         }
       }
     };

@@ -339,6 +339,18 @@ describe('growth_journey_content_rules (T305)', () => {
     );
   });
 
+  it('actually maintains updated_at, which a mutable table must', () => {
+    // It said MUTABLE on both sides and set `timestamps: false`, so the column
+    // would never have advanced on an edit. T301's mutable sibling
+    // `GrowthJourneyProfile` maps both timestamp columns; this now matches it.
+    const options = (GrowthJourneyContentRule as unknown as {
+      options: { timestamps?: boolean; createdAt?: string; updatedAt?: string };
+    }).options;
+    expect(options.timestamps).toBe(true);
+    expect(options.updatedAt).toBe('updated_at');
+    expect(options.createdAt).toBe('created_at');
+  });
+
   it('is MUTABLE on purpose, unlike the other three, and says so on both sides', () => {
     // A declaration is edited as content is reviewed. `version` plus the unique
     // index below is how a superseded declaration stays readable, rather than

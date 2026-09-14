@@ -116,7 +116,7 @@ GrowthJourneyContentRule.init(
     access_tier: {
       type: DataTypes.STRING(16),
       allowNull: true,
-      comment: "free | restricted. Null = not declared, which the reader treats as restricted.",
+      comment: "free | restricted. 'restricted' refuses a free-preview subject; NULL = not declared.",
     },
     sender_profile_id: { type: DataTypes.UUID, allowNull: true },
     version: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
@@ -130,7 +130,14 @@ GrowthJourneyContentRule.init(
   {
     sequelize,
     tableName: 'growth_journey_content_rules',
-    timestamps: false,
+    // MUTABLE, so Sequelize must actually maintain `updated_at` - the same
+    // configuration `GrowthJourneyProfile` uses, and the reason it is spelled out
+    // rather than left at the file's original `timestamps: false`: this table
+    // declares itself editable and `phase3.test.ts` asserts that on both sides,
+    // while a `false` here meant the column would never have advanced on an edit.
+    timestamps: true,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
   },
 );
 

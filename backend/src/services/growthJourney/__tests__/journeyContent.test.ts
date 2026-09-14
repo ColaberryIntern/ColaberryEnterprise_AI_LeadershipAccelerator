@@ -99,11 +99,25 @@ const candidate = (over: Partial<JourneyCandidate> = {}): JourneyCandidate => ({
 const allow = jest.fn();
 const refuse = jest.fn();
 const assets = jest.fn();
+const facts = jest.fn();
+
+/** The declaration columns of a resolved asset, as the loader returns them. */
+const factsFor = (id: string, over: Record<string, unknown> = {}) =>
+  new Map([[id, { id, brand_id: null, offer_family: null, approval_status: 'approved', ...over }]]);
 
 beforeEach(() => {
   allow.mockReset().mockResolvedValue({ allowed: true, reason: 'policy_allows', rule_id: null });
   refuse.mockReset().mockResolvedValue({ allowed: false, reason: 'content_not_approved', rule_id: null });
   assets.mockReset().mockResolvedValue({ resolved: true, assets: [{ id: 'asset-1', title: 'A lesson' }] });
+  facts.mockReset().mockResolvedValue(factsFor('asset-1'));
+});
+
+/** The three injected seams, defaulted so each test overrides only what it is about. */
+const wiring = (over: Record<string, unknown> = {}) => ({
+  assertAllowed: allow as never,
+  resolveAssets: assets as never,
+  loadFacts: facts as never,
+  ...over,
 });
 
 describe('the scope this adapter hands the registry', () => {
@@ -131,11 +145,7 @@ describe('the scope this adapter hands the registry', () => {
 
 describe('the composition', () => {
   it('gates BEFORE it looks anything up, and passes the scope to both', async () => {
-    const out = await resolveJourneyContent(candidate(), ctx(), {
-      assertAllowed: allow as never,
-      resolveAssets: assets as never,
-    });
-    expect(allow).toHaveBeenCalledTimes(1);
+    const out = await resolveJourneyContent(candidate(), ctx(), wiring());
     expect(assets).toHaveBeenCalledTimes(1);
     expect(allow.mock.calls[0][0]).toMatchObject({
       brandId: 'b-ent',
@@ -145,34 +155,63 @@ describe('the composition', () => {
       programSlug: 'business-growth',
       state: 'PROBLEM_IDENTIFIED',
     });
+    // The FIRST call is the policy question: no asset, because nothing is
+    // selected yet.
+    expect(allow.mock.calls[0][0].asset).toBeUndefined();
     expect(assets.mock.calls[0][3]).toEqual({ brand_id: 'b-ent', allow_unscoped: false });
     expect(out).toEqual({ assets: [{ id: 'asset-1', title: 'A lesson' }], gaps: [] });
   });
 
-  it('a refusal is a NAMED GAP and the registry is never consulted', async () => {
-    const out = await resolveJourneyContent(candidate(), ctx(), {
-      assertAllowed: refuse as never,
-      resolveAssets: assets as never,
+  it('asks the gate AGAIN per resolved asset, with that asset own columns', async () => {
+    // The reason this second call exists: RESOLVE_SQL enforces brand, offer
+    // family and eligible_programs, and never approval_status or eligible_paths.
+    await resolveJourneyContent(candidate(), ctx(), wiring());
+    expect(allow).toHaveBeenCalledTimes(2);
+    expect(facts).toHaveBeenCalledWith(['asset-1']);
+    expect(allow.mock.calls[1][0]).toMatchObject({
+      offerFamily: 'workflow_automation',
+      tier: 'free_preview',
+      asset: { id: 'asset-1', approval_status: 'approved' },
     });
+  });
+
+  it('drops an asset the per-asset gate refuses, and names the reason as a gap', async () => {
+    allow
+      .mockResolvedValueOnce({ allowed: true, reason: 'policy_allows', rule_id: null })
+      .mockResolvedValueOnce({ allowed: false, reason: 'asset_not_approved:none', rule_id: null });
+    const out = await resolveJourneyContent(candidate(), ctx(), wiring());
+    expect(out).toEqual({ assets: [], gaps: ['asset_not_approved:none'] });
+  });
+
+  it('fails closed when the declaration columns cannot be read back', async () => {
+    facts.mockRejectedValue(new Error('connection reset'));
+    const out = await resolveJourneyContent(candidate(), ctx(), wiring());
+    expect(out).toEqual({ assets: [], gaps: ['asset_facts_lookup_failed'] });
+  });
+
+  it('fails closed when a resolved asset has no row to read back', async () => {
+    // It came from this table a moment ago. If it cannot be read, the safe
+    // answer is not to cite it.
+    facts.mockResolvedValue(new Map());
+    const out = await resolveJourneyContent(candidate(), ctx(), wiring());
+    expect(out).toEqual({ assets: [], gaps: ['asset_facts_missing'] });
+  });
+
+  it('a refusal is a NAMED GAP and the registry is never consulted', async () => {
+    const out = await resolveJourneyContent(candidate(), ctx(), wiring({ assertAllowed: refuse as never }));
     expect(out).toEqual({ assets: [], gaps: ['content_not_approved'] });
     expect(assets).not.toHaveBeenCalled();
+    expect(facts).not.toHaveBeenCalled();
   });
 
   it('a registry refusal is also a named gap, never a substituted asset', async () => {
     assets.mockResolvedValue({ resolved: false, reason: 'no_asset_for_purpose:weekly_digest' });
-    const out = await resolveJourneyContent(candidate(), ctx(), {
-      assertAllowed: allow as never,
-      resolveAssets: assets as never,
-    });
+    const out = await resolveJourneyContent(candidate(), ctx(), wiring());
     expect(out).toEqual({ assets: [], gaps: ['no_asset_for_purpose:weekly_digest'] });
   });
 
   it('reports a gap for a query with no offer family behind it', async () => {
-    const out = await resolveJourneyContent(
-      candidate(),
-      ctx({ classification: null }),
-      { assertAllowed: allow as never, resolveAssets: assets as never },
-    );
+    const out = await resolveJourneyContent(candidate(), ctx({ classification: null }), wiring());
     expect(out.gaps).toEqual(['content_no_offer_family:weekly_digest']);
     expect(allow).not.toHaveBeenCalled();
   });
@@ -181,12 +220,13 @@ describe('the composition', () => {
     assets
       .mockResolvedValueOnce({ resolved: true, assets: [{ id: 'a1' }] })
       .mockResolvedValueOnce({ resolved: false, reason: 'no_asset_for_purpose:lesson_recommendation' });
+    facts.mockResolvedValue(factsFor('a1'));
     const out = await resolveJourneyContent(
       candidate({
         required_assets: [{ asset_type: 'weekly_digest' }, { asset_type: 'lesson_recommendation' }],
       }),
       ctx(),
-      { assertAllowed: allow as never, resolveAssets: assets as never },
+      wiring(),
     );
     expect(out.assets).toEqual([{ id: 'a1' }]);
     expect(out.gaps).toEqual(['no_asset_for_purpose:lesson_recommendation']);
@@ -196,7 +236,7 @@ describe('the composition', () => {
     await resolveJourneyContent(
       candidate({ required_assets: [{ asset_type: 'weekly_digest', offer_family: 'business_training' } as never] }),
       ctx(),
-      { assertAllowed: allow as never, resolveAssets: assets as never },
+      wiring(),
     );
     expect(allow.mock.calls[0][0].offerFamily).toBe('business_training');
   });
@@ -228,7 +268,7 @@ describe('the acceptance criterion: a refused gate becomes a WAIT that names it'
     const out = await decideForSubject(
       ctx(),
       strategy([candidate()]),
-      deps((c, x) => resolveJourneyContent(c, x, { assertAllowed: refuse as never, resolveAssets: assets as never })),
+      deps((c, x) => resolveJourneyContent(c, x, wiring({ assertAllowed: refuse as never }))),
       flags(),
     );
     expect(out.status).toBe('decided');
@@ -242,7 +282,7 @@ describe('the acceptance criterion: a refused gate becomes a WAIT that names it'
     const out = await decideForSubject(
       ctx(),
       strategy([candidate()]),
-      deps((c, x) => resolveJourneyContent(c, x, { assertAllowed: allow as never, resolveAssets: assets as never })),
+      deps((c, x) => resolveJourneyContent(c, x, wiring())),
       flags(),
     );
     const d = (out as { decision: { selected_action: string; selected_content: unknown } }).decision;

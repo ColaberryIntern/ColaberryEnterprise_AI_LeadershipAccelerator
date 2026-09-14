@@ -296,6 +296,21 @@ describe('NOTHING STAMPS A BRAND (T305)', () => {
     }
   });
 
+  it('NO write statement anywhere in this file touches a brand column', () => {
+    // The hole T305's verifier found: the two slices above start at
+    // `const PROJECTION_SQL`, so a stamping UPDATE declared ABOVE it escaped both
+    // and 1,437 tests stayed green. This reads the whole file instead, and the
+    // slices stay as the precise per-statement checks.
+    const writes = [...SRC.matchAll(/(INSERT\s+INTO|UPDATE)\s+explorer_content_assets[\s\S]{0,600}/gi)]
+      .map((mm) => mm[0]);
+    expect(writes.length).toBeGreaterThanOrEqual(2); // the upsert and the retire UPDATE
+    for (const statement of writes) {
+      for (const column of BRAND_DIMENSION) {
+        expect({ column, inWrite: statement.includes(column) }).toEqual({ column, inWrite: false });
+      }
+    }
+  });
+
   it('the scan is not vacuous: it finds the columns this module DOES write', () => {
     // Without this, a mis-sliced source string would make every assertion above
     // pass by reading an empty string.

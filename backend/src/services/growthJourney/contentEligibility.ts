@@ -34,12 +34,19 @@ import { resolveOfferEligibility } from './offerEligibility';
  * ─── IT ANSWERS TWO QUESTIONS, AND THEY ARE NOT THE SAME ────────────────────
  *
  * Called WITHOUT an asset it answers "may this brand cite content for this offer
- * at all": the brand boundary, `approved_content_ready`, and any collection-level
- * declaration. Called WITH one it also checks that asset's own columns and its
- * own declaration. The pre-selection caller asks the first, because there is no
- * point selecting an asset a brand may not cite - and an early version of this
- * file conflated the two, passing an empty object and refusing everything on the
- * strength of columns that were never populated.
+ * at all": the brand boundary and `approved_content_ready`. It consults NO
+ * declaration, and issues no query to do so - an earlier version fetched the
+ * brand's rules and then discarded them, which is both a wasted round trip and
+ * the reason its comment claimed a collection-level check that could not happen.
+ * Called WITH an asset it also checks that asset's own columns and the
+ * declaration keyed to it. The pre-selection caller asks the first, because there
+ * is no point selecting an asset a brand may not cite; `journeyContent` then asks
+ * the second for every asset the registry returned.
+ *
+ * COLLECTION-LEVEL ROWS (`collection_key`, no `asset_id`) HAVE NO READER YET, and
+ * that is stated rather than implied: nothing in Phase 3 resolves an asset's
+ * collection membership, so a rule written against a collection could only be
+ * consulted by guessing. It is a declared Phase 4 surface.
  *
  * ─── WHEN A RULE EXISTS, THE RULE DECIDES ───────────────────────────────────
  *
@@ -75,10 +82,13 @@ export interface ContentAllowedInput {
    * OMITTED for the pre-selection question - "may this brand cite content for
    * this offer at all" - which is what the content adapter asks before it looks
    * anything up. Supplied for the per-asset question, which additionally checks
-   * the asset's own columns and its own declaration.
+   * the asset's own columns and the declaration keyed to it.
    *
-   * Those columns are enforced in SQL too, by the resolver's brand predicate, so
-   * omitting the asset here loses no protection: it asks a narrower question.
+   * The division of labour, stated precisely because the first version of this
+   * comment overstated it: `RESOLVE_SQL` enforces `brand_id`, `offer_family` and
+   * `eligible_programs` on the rows it returns. It does NOT enforce
+   * `approval_status` or `eligible_paths` - those are enforced HERE, per asset,
+   * which is why `journeyContent` asks this question again after selection.
    */
   asset?: ContentAssetFacts;
   /**
@@ -89,6 +99,12 @@ export interface ContentAllowedInput {
   allowUnscoped: boolean;
   programSlug?: string | null;
   state?: string | null;
+  /**
+   * The audience tier this subject is entitled to. Used only to enforce a
+   * declaration's `access_tier`: `restricted` content is refused to a
+   * free-preview subject, the same asymmetry the tier itself exists for.
+   */
+  tier?: 'free_preview' | 'full_access';
   at?: Date;
 }
 
@@ -144,6 +160,14 @@ function assetVerdict(input: ContentAllowedInput & { asset: ContentAssetFacts })
   if (program === false) {
     return { allowed: false, reason: 'asset_other_program', rule_id: null };
   }
+  // `eligible_paths` is checked against the offer family, because a journey path
+  // and an offer family share their vocabulary today - T202 derived each
+  // programme's paths FROM the family allow sets. If they ever diverge, this
+  // needs the path passed separately rather than inferred, and comparing the two
+  // directly is exactly the disjoint-vocabulary bug this repo has shipped before.
+  if (listed(asset.eligible_paths, offerFamily) === false) {
+    return { allowed: false, reason: 'asset_other_path', rule_id: null };
+  }
   if (asset.approval_status !== ALLOWED_ASSET_STATUS) {
     // NULL on every Explorer-era row, and named as such rather than as a
     // generic refusal: nobody reviewed it, which is different from rejecting it.
@@ -177,14 +201,21 @@ export async function assertContentAllowed(input: ContentAllowedInput): Promise<
     return { allowed: false, reason: 'content_not_approved', rule_id: null };
   }
 
-  // 3. The declaration, when there is one.
+  // 3. The policy question ends here. No declaration is consulted, and none is
+  //    fetched: an asset-level rule cannot apply to a question that names no
+  //    asset, and a collection-level rule has no reader in this phase.
+  if (!input.asset?.id) {
+    return { allowed: true, reason: 'policy_allows', rule_id: null };
+  }
+
+  // 4. The declaration keyed to this asset.
   let rules: unknown[];
   try {
     rules = await GrowthJourneyContentRule.findAll({
       where: {
         brand_id: input.brandId,
         tenant_id: input.tenantId,
-        ...(input.asset?.id ? { asset_id: input.asset.id } : {}),
+        asset_id: input.asset.id,
       },
       order: [['version', 'DESC']],
       limit: 10,
@@ -194,29 +225,23 @@ export async function assertContentAllowed(input: ContentAllowedInput): Promise<
     log('growth_journey.content_rule_lookup_failed', {
       error_class: classifyError(err),
       brand_id: input.brandId,
-      asset_id: input.asset?.id ?? null,
+      asset_id: input.asset.id,
     });
     return { allowed: false, reason: 'content_rule_lookup_failed', rule_id: null };
   }
 
-  const rule = (input.asset?.id ? rules[0] : undefined) as
+  const rule = rules[0] as
     | {
         id: string;
         approval_status?: string;
         offer_family?: string | null;
         eligible_programs?: unknown;
         lifecycle_states?: unknown;
+        access_tier?: string | null;
         effective_from?: unknown;
         expires_at?: unknown;
       }
     | undefined;
-
-  // 4. No asset named: the caller asked the policy question, and every policy
-  //    check has passed. A collection-level declaration that denies would have
-  //    been found above; there is nothing else this question can consult.
-  if (!input.asset) {
-    return { allowed: true, reason: 'policy_allows', rule_id: null };
-  }
 
   // 5. No declaration falls back to the asset's own columns — never to a denial.
   //    The table ships empty, and a denial here would refuse every asset in the
@@ -241,6 +266,13 @@ export async function assertContentAllowed(input: ContentAllowedInput): Promise<
   }
   if (listed(rule.lifecycle_states, input.state ?? null) === false) {
     return { allowed: false, reason: 'content_rule_state', rule_id: rule.id };
+  }
+  // `access_tier` had no reader at all when it shipped. It has one here: content
+  // a human marked restricted is not cited to someone on the free-preview tier.
+  // NULL stays permissive, because "not declared" is not "restricted" - the rule
+  // as a whole still had to be approved to get this far.
+  if (rule.access_tier === 'restricted' && input.tier !== 'full_access') {
+    return { allowed: false, reason: 'content_rule_restricted', rule_id: rule.id };
   }
 
   // An approved declaration SUPERSEDES the asset's own unreviewed columns: the
