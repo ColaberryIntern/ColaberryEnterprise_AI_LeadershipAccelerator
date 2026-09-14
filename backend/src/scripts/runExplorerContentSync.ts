@@ -98,6 +98,9 @@ export async function buildGapReport(asOf: Date): Promise<PurposeReport[]> {
         { asset_type: purpose, affinity_tags: [], state: row.primary_state },
         asOf,
         'free_preview',
+        // T305: the coverage report is Explorer's own, so it counts unscoped
+        // rows - the same scope the Governor resolves with.
+        { brand_id: null, allow_unscoped: true },
       );
       byState.push({
         state: row.primary_state,

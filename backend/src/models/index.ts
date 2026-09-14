@@ -443,6 +443,7 @@ import BrandOfferPolicy from './BrandOfferPolicy';
 import GrowthJourneyEnrollment from './GrowthJourneyEnrollment';
 import GrowthJourneyClassification from './GrowthJourneyClassification';
 import GrowthJourneyTransition from './GrowthJourneyTransition';
+import GrowthJourneyContentRule from './GrowthJourneyContentRule';
 import GrowthJourneyDecision from './GrowthJourneyDecision';
 import GrowthJourneyProfile from './GrowthJourneyProfile';
 import GrowthJourneyScoreSnapshot from './GrowthJourneyScoreSnapshot';
@@ -1613,6 +1614,7 @@ export {
   GrowthJourneyEnrollment,
   GrowthJourneyClassification,
   GrowthJourneyTransition,
+  GrowthJourneyContentRule,
   GrowthJourneyDecision,
   GrowthJourneyProfile,
   GrowthJourneyScoreSnapshot,

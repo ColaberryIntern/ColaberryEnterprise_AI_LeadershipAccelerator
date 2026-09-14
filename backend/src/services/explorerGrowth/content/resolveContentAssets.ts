@@ -49,6 +49,25 @@ export interface ResolvedAsset {
  */
 export type AudienceTier = 'free_preview' | 'full_access';
 
+/**
+ * Which brand is asking, and whether undeclared content counts as theirs.
+ *
+ * REQUIRED, no default, for the same reason `AudienceTier` is: either default is
+ * a silent bug. `{brand_id: null, allow_unscoped: true}` as a default would
+ * narrow a brand-scoped caller to unscoped rows only; a brand as a default would
+ * leak one brand's content into another's journey, which is the failure this
+ * whole dimension exists to prevent.
+ *
+ * `allow_unscoped` is TRUE only for Explorer's own callers and for Colaberry
+ * Training, which is Explorer's brand: the existing rows were written before
+ * brands existed, and they are Training's content. Every other brand passes
+ * FALSE and sees only what has been declared to it.
+ */
+export interface ContentBrandScope {
+  brand_id: string | null;
+  allow_unscoped: boolean;
+}
+
 export type ResolvedAssets =
   | { resolved: true; assets: ResolvedAsset[] }
   | { resolved: false; reason: string };
@@ -79,6 +98,11 @@ const RESOLVE_SQL = `
      AND 'email' = ANY(allowed_channels)
      AND :tier = ANY(audience_tags)
      AND (:stage_tags IS NULL OR journey_stage_tags && CAST(:stage_tags AS text[]))
+     AND ((brand_id IS NULL AND :allow_unscoped)
+          OR (:brand_id IS NOT NULL AND brand_id = CAST(:brand_id AS uuid)))
+     AND (:offer_family IS NULL OR offer_family IS NULL OR offer_family = :offer_family)
+     AND (:program_slug IS NULL OR eligible_programs IS NULL
+          OR jsonb_exists(eligible_programs, :program_slug))
    ORDER BY CASE WHEN CAST(:affinity_tags AS text[]) = '{}'::text[] THEN 0
                  WHEN affinity_tags && CAST(:affinity_tags AS text[]) THEN 0
                  ELSE 1 END,
@@ -113,6 +137,7 @@ export async function resolveContentAssets(
   query: ContentAssetQuery,
   asOf: Date,
   tier: AudienceTier,
+  scope: ContentBrandScope,
 ): Promise<ResolvedAssets> {
   const spec = PURPOSE_SPECS[query.asset_type];
 
@@ -142,6 +167,17 @@ export async function resolveContentAssets(
       // the point of selection rather than in a wrapper, because a wrapper can
       // be bypassed by the next caller and this cannot.
       tier,
+      // THE BRAND PREDICATE. The explicit `:brand_id IS NOT NULL` guard in the
+      // SQL is not decoration: written the obvious way, a NULL brand makes
+      // `brand_id = :brand_id` never true, so the whole clause silently means
+      // "unscoped rows only" - indistinguishable from "everything" while nothing
+      // is stamped, and a regression the day something is.
+      brand_id: scope.brand_id,
+      allow_unscoped: scope.allow_unscoped,
+      // Both default to NO FILTER when the caller does not know, never to
+      // "match nothing" - see the field comments on ContentAssetQuery.
+      offer_family: query.offer_family ?? null,
+      program_slug: query.program_slug ?? null,
       max_rows: supported.limit,
     },
   });
@@ -171,12 +207,13 @@ export async function resolveAllForCandidate(
   queries: ContentAssetQuery[],
   asOf: Date,
   tier: AudienceTier,
+  scope: ContentBrandScope,
 ): Promise<{ assets: ResolvedAsset[]; gaps: string[] }> {
   const assets: ResolvedAsset[] = [];
   const gaps: string[] = [];
 
   for (const q of queries) {
-    const result = await resolveContentAssets(q, asOf, tier);
+    const result = await resolveContentAssets(q, asOf, tier, scope);
     if (result.resolved) assets.push(...result.assets);
     else gaps.push(result.reason);
   }

@@ -44,6 +44,24 @@ export interface ContentAssetQuery {
    * this interface's `asset_type` just stopped being.
    */
   state?: ExplorerPrimaryState;
+  /**
+   * T305. The offer family this asset would speak for, when the caller knows it.
+   *
+   * A DECLARED asset (its own `offer_family` set) serves only that family; an
+   * UNDECLARED one (NULL, which is every Explorer-era row) serves any. Omitting
+   * this field filters nothing - the same "no preference, not match nothing"
+   * rule `affinity_tags` follows above, and for the same reason: read the other
+   * way it would manufacture a content gap for every learner in the system.
+   */
+  offer_family?: string;
+  /**
+   * T305. The journey programme asking, when the caller knows it.
+   *
+   * Matched against the asset's `eligible_programs`, again with NULL on the
+   * asset meaning "not declared, so any programme". This is what lets one
+   * registry serve four programmes without a per-programme copy of it.
+   */
+  program_slug?: string;
 }
 
 /**

@@ -21,9 +21,21 @@ async function runAndCapture(): Promise<string[]> {
   return queryMock.mock.calls.map((c) => String(c[0]));
 }
 
-/** Pull the column names out of a `CREATE TABLE x ( ... )` statement. */
+/**
+ * Pull the column names out of a `CREATE TABLE x ( ... )` statement.
+ *
+ * `--` comments are stripped FIRST. Without that, a documented column comes back
+ * as a column named `--` and the real column on the next line is swallowed with
+ * it, because the split is on commas: the comment and the column share a chunk.
+ * T305 hit exactly that, and the anti-drift test below failed for a reason that
+ * had nothing to do with drift.
+ */
 function columnsOf(createStmt: string): string[] {
-  const body = createStmt.slice(createStmt.indexOf('(') + 1, createStmt.lastIndexOf(')'));
+  const withoutComments = createStmt.replace(/--[^\n]*/g, '');
+  const body = withoutComments.slice(
+    withoutComments.indexOf('(') + 1,
+    withoutComments.lastIndexOf(')'),
+  );
   const cols: string[] = [];
   let depth = 0;
   let current = '';
@@ -122,6 +134,76 @@ describe('ensureExplorerGrowthSchema — idempotency and safety', () => {
       (s) => /CREATE UNIQUE INDEX/i.test(s) && /explorer_content_assets/i.test(s),
     );
     expect(idx).toMatch(/WHERE source_id IS NOT NULL/i);
+  });
+});
+
+describe('the column parser this file leans on', () => {
+  it('does not mistake a SQL comment for a column, nor swallow the one after it', () => {
+    // The control for the fix above. Both failures happen together, which is why
+    // the original symptom looked like drift rather than like a parser bug.
+    const stmt = [
+      'CREATE TABLE IF NOT EXISTS t (',
+      '  id UUID PRIMARY KEY,',
+      '  -- a note about the next column',
+      '  named_after_a_comment TEXT,',
+      '  plain TEXT',
+      ')',
+    ].join('\n');
+    expect(columnsOf(stmt)).toEqual(['id', 'named_after_a_comment', 'plain']);
+  });
+});
+
+describe('the T305 brand dimension reaches BOTH a new and an existing database', () => {
+  // The trap this test exists for: `CREATE TABLE IF NOT EXISTS` is a no-op
+  // against production, which already has this table, so a column added only to
+  // the CREATE body would be invisible in prod while every test passed. And a
+  // column added only as an ALTER would be missing from the anti-drift check
+  // below, which reads the CREATE body. Both halves, asserted per column.
+  const BRAND_DIMENSION = [
+    'tenant_id',
+    'brand_id',
+    'offer_family',
+    'eligible_programs',
+    'eligible_paths',
+    'approval_status',
+    'approved_by',
+    'approved_at',
+  ];
+
+  it.each(BRAND_DIMENSION)('%s is in the CREATE body and in an ADD COLUMN IF NOT EXISTS', async (column) => {
+    const stmts = await runAndCapture();
+    const create = stmts.find((s) =>
+      /CREATE TABLE IF NOT EXISTS explorer_content_assets\b/i.test(s),
+    );
+    expect(columnsOf(create as string)).toContain(column);
+
+    const alter = stmts.find((s) =>
+      new RegExp(
+        `ALTER TABLE explorer_content_assets\\s+ADD COLUMN IF NOT EXISTS ${column}\\b`,
+        'i',
+      ).test(s),
+    );
+    expect(alter).toBeDefined();
+  });
+
+  it('every new column is NULLABLE with no default, so NULL means one thing', async () => {
+    // A DEFAULT here would invent a declaration for the 646 live rows no human
+    // has reviewed. NULL = not declared, uniformly, on all eight.
+    const stmts = await runAndCapture();
+    for (const column of BRAND_DIMENSION) {
+      const alter = stmts.find((s) => new RegExp(`ADD COLUMN IF NOT EXISTS ${column}\\b`, 'i').test(s)) as string;
+      expect(alter).not.toMatch(/NOT NULL/i);
+      expect(alter).not.toMatch(/DEFAULT/i);
+    }
+  });
+
+  it('the ALTERs come before the index that needs one of those columns', async () => {
+    const stmts = await runAndCapture();
+    const lastAlter = Math.max(
+      ...stmts.map((s, i) => (/ADD COLUMN IF NOT EXISTS/i.test(s) ? i : -1)),
+    );
+    const brandIndex = stmts.findIndex((s) => /idx_explorer_assets_brand\b/.test(s));
+    expect(brandIndex).toBeGreaterThan(lastAlter);
   });
 });
 

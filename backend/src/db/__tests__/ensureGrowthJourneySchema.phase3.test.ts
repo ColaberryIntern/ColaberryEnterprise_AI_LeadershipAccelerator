@@ -1,12 +1,16 @@
 import { GROWTH_JOURNEY_STATEMENTS } from '../ensureGrowthJourneySchema';
+import GrowthJourneyContentRule from '../../models/GrowthJourneyContentRule';
 import GrowthJourneyDecision from '../../models/GrowthJourneyDecision';
 import GrowthJourneyProfile from '../../models/GrowthJourneyProfile';
 import GrowthJourneyScoreSnapshot from '../../models/GrowthJourneyScoreSnapshot';
 import { SQL, columnsDeclaredIn, statementCreating, tablesCreated } from './helpers/growthJourneyDdl';
 
 /**
- * T301 — the three Phase 3 tables: model ↔ DDL parity, keys, append-only shape,
- * and the one deliberate exception to append-only.
+ * The Phase 3 tables: model ↔ DDL parity, keys, append-only shape, and the two
+ * deliberate exceptions to append-only.
+ *
+ * T301 brought decisions, profiles and score_snapshots; T305 brought
+ * content_rules, the section 10 declaration.
  *
  * Same discipline as the Phase 1 and Phase 2 files: the expected column lists
  * are WRITTEN OUT LITERALLY, never derived from `Model.getAttributes()`, and
@@ -87,6 +91,37 @@ const EXPECTED_SNAPSHOT_COLUMNS = [
   'scores',
   'score_gaps',
   'created_at',
+];
+
+const EXPECTED_CONTENT_RULE_COLUMNS = [
+  'id',
+  'tenant_id',
+  'brand_id',
+  'asset_id',
+  'collection_key',
+  'eligible_programs',
+  'eligible_paths',
+  'audience_personas',
+  'lifecycle_states',
+  'overlays',
+  'offer_family',
+  'channels',
+  'content_purpose',
+  'approved_claims',
+  'source_evidence',
+  'approved_urls',
+  'approved_ctas',
+  'effective_from',
+  'expires_at',
+  'access_tier',
+  'sender_profile_id',
+  'version',
+  'owner',
+  'approval_status',
+  'approved_by',
+  'approved_at',
+  'created_at',
+  'updated_at',
 ];
 
 /** The attribute names a model maps, including its timestamp columns. */
@@ -234,10 +269,11 @@ describe('growth_journey_score_snapshots', () => {
 });
 
 describe('the three tables sit where the foreign keys and the boot order allow', () => {
-  it('the run now owns ten tables', () => {
-    expect(tablesCreated()).toHaveLength(10);
+  it('the run now owns eleven tables', () => {
+    expect(tablesCreated()).toHaveLength(11);
     expect(tablesCreated()).toEqual(
       expect.arrayContaining([
+        'growth_journey_content_rules',
         'growth_journey_decisions',
         'growth_journey_profiles',
         'growth_journey_score_snapshots',
@@ -287,5 +323,81 @@ describe('the three tables sit where the foreign keys and the boot order allow',
       expect(s).toMatch(/IF NOT EXISTS/i);
       expect(s).not.toMatch(/\bDROP\b|\bTRUNCATE\b|DELETE FROM|ALTER COLUMN|\bRENAME\b/i);
     }
+  });
+});
+
+describe('growth_journey_content_rules (T305)', () => {
+  it('SQL declares exactly the expected columns', () => {
+    expect(sorted(columnsDeclaredIn('growth_journey_content_rules'))).toEqual(
+      sorted(EXPECTED_CONTENT_RULE_COLUMNS),
+    );
+  });
+
+  it('GrowthJourneyContentRule maps exactly the same set', () => {
+    expect(sorted(modelColumns(GrowthJourneyContentRule))).toEqual(
+      sorted(EXPECTED_CONTENT_RULE_COLUMNS),
+    );
+  });
+
+  it('is MUTABLE on purpose, unlike the other three, and says so on both sides', () => {
+    // A declaration is edited as content is reviewed. `version` plus the unique
+    // index below is how a superseded declaration stays readable, rather than
+    // append-only rows plus a "latest" query.
+    expect(modelColumns(GrowthJourneyContentRule)).toContain('updated_at');
+    expect(columnsDeclaredIn('growth_journey_content_rules')).toContain('updated_at');
+    expect(columnsDeclaredIn('growth_journey_content_rules')).toContain('version');
+  });
+
+  it('answers every section 10 declaration question, by column', () => {
+    // The failure this catches is a table with most of the fields, missing the
+    // ones nobody needs until a claim needs its evidence.
+    const cols = columnsDeclaredIn('growth_journey_content_rules');
+    const SECTION_10 = {
+      'tenant and brand': ['tenant_id', 'brand_id'],
+      'which asset or collection': ['asset_id', 'collection_key'],
+      'eligible programmes and paths': ['eligible_programs', 'eligible_paths'],
+      'audience and persona': ['audience_personas'],
+      'lifecycle states and overlays': ['lifecycle_states', 'overlays'],
+      'offer family': ['offer_family'],
+      'channel and purpose': ['channels', 'content_purpose'],
+      'approved claims and their evidence': ['approved_claims', 'source_evidence'],
+      'approved URLs and CTAs': ['approved_urls', 'approved_ctas'],
+      'effective and expiry dates': ['effective_from', 'expires_at'],
+      'free versus restricted access': ['access_tier'],
+      'sender profile': ['sender_profile_id'],
+      'version, owner and approval state': ['version', 'owner', 'approval_status'],
+    };
+    const missing = Object.entries(SECTION_10)
+      .flatMap(([question, columns]) => columns.filter((c) => !cols.includes(c)).map((c) => `${question}: ${c}`));
+    expect(missing).toEqual([]);
+  });
+
+  it('is keyed so one asset has ONE live declaration per brand, and the key is really UNIQUE', () => {
+    const idx = SQL.match(
+      /CREATE\s+(UNIQUE\s+)?INDEX IF NOT EXISTS growth_journey_content_rules_asset_unique[^`]*/i,
+    );
+    expect(idx).not.toBeNull();
+    // The keyword, not just the name: a non-unique index called `_unique` is the
+    // lie the parity suite's bidirectional guard exists for.
+    expect(idx?.[1]).toBeDefined();
+    expect(idx?.[0]).toMatch(/\(brand_id, asset_id, version\)/);
+    expect(idx?.[0]).toMatch(/WHERE asset_id IS NOT NULL/i);
+  });
+
+  it('carries the foreign keys the asset table deliberately does not', () => {
+    // `explorer_content_assets` got its brand columns WITHOUT foreign keys - it
+    // is an index over other tables and its DDL runs before the multi-tenant
+    // modules are guaranteed to have. This table is this run's own, orders
+    // itself, and therefore has no excuse.
+    const create = statementCreating('growth_journey_content_rules') as string;
+    expect(create).toMatch(/tenant_id UUID NOT NULL REFERENCES tenants\(id\)/i);
+    expect(create).toMatch(/brand_id UUID NOT NULL REFERENCES brands\(id\)/i);
+  });
+
+  it('ships EMPTY: this module inserts nothing into it', () => {
+    // Declaring the existing assets is a human review job (Phase 4). A seeded
+    // row here would be a fabricated approval record, and `contentEligibility`
+    // is written so that an empty table changes nobody's content.
+    expect(SQL).not.toMatch(/INSERT\s+INTO\s+growth_journey_content_rules/i);
   });
 });

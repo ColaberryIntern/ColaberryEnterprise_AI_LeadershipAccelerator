@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 const queryMock = jest.fn();
 jest.mock('../../../../config/database', () => ({
   sequelize: { query: (...a: unknown[]) => queryMock(...a) },
@@ -251,5 +253,55 @@ describe('bucket decides priority, because nothing else can', () => {
     const welcome = priorityForBucket('pre_class');
     const evaluation = priorityForBucket('learn');
     expect(welcome).toBeGreaterThan(evaluation);
+  });
+});
+
+describe('NOTHING STAMPS A BRAND (T305)', () => {
+  // The regression that made stamping a hard stop for this phase: this module's
+  // upsert is `ON CONFLICT (source_system, source_id) DO UPDATE` and it runs on a
+  // live nightly cron. Writing `brand_id` here would have converted every live
+  // row the night after deploy, and Explorer's Governor - which resolves with
+  // `{brand_id: null, allow_unscoped: true}`, i.e. unscoped rows ONLY - would
+  // have found zero content for all 220 Training profiles.
+  //
+  // Asserted as a property of the write list rather than as a file hash: a hash
+  // fails on every future edit including the legitimate ones, while this stays
+  // true through refactors and false the moment someone stamps.
+  const SRC = fs.readFileSync(path.join(__dirname, '..', 'syncTimelineCards.ts'), 'utf8');
+  const BRAND_DIMENSION = [
+    'brand_id',
+    'tenant_id',
+    'offer_family',
+    'eligible_programs',
+    'eligible_paths',
+    'approval_status',
+    'approved_by',
+    'approved_at',
+  ];
+
+  it('the projection selects no brand-dimension column', () => {
+    const projection = SRC.slice(SRC.indexOf('const PROJECTION_SQL'), SRC.indexOf('const UPSERT_SQL'));
+    expect(projection.length).toBeGreaterThan(200);
+    for (const column of BRAND_DIMENSION) {
+      expect({ column, present: projection.includes(column) }).toEqual({ column, present: false });
+    }
+  });
+
+  it('the upsert writes no brand-dimension column, on insert OR on conflict', () => {
+    const upsert = SRC.slice(SRC.indexOf('const UPSERT_SQL'));
+    expect(upsert).toMatch(/ON CONFLICT/i);
+    expect(upsert).toMatch(/DO UPDATE/i);
+    for (const column of BRAND_DIMENSION) {
+      expect({ column, present: upsert.includes(column) }).toEqual({ column, present: false });
+    }
+  });
+
+  it('the scan is not vacuous: it finds the columns this module DOES write', () => {
+    // Without this, a mis-sliced source string would make every assertion above
+    // pass by reading an empty string.
+    const upsert = SRC.slice(SRC.indexOf('const UPSERT_SQL'));
+    for (const column of ['asset_type', 'source_system', 'source_id', 'title', 'audience_tags']) {
+      expect(upsert).toContain(column);
+    }
   });
 });

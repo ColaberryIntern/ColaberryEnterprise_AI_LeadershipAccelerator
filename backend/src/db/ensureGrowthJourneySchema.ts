@@ -416,6 +416,61 @@ export const GROWTH_JOURNEY_STATEMENTS: readonly string[] = [
   // programme took its brand — and every lead, domain and policy hanging off it
   // — with it.
   //
+  // --- T305: the section 10 content declaration.
+  //
+  // One row per asset (or per named collection) per brand, carrying everything a
+  // grounded message needs to be defensible: which programmes, paths, lifecycle
+  // states, overlays and personas it may serve, which claims are approved and
+  // what evidence backs them, which URLs and CTAs may be cited, when it is
+  // effective, whether it is free or restricted, who sends it, who owns it, and
+  // what its approval state is.
+  //
+  // It is the WRITER that `brand_offer_policies.approved_landing_pages` and
+  // `content_collections` never had - both of those are JSONB lists defaulting to
+  // `[]` that nothing in the repo writes, which is why `approved_content_ready`
+  // has been false for every row in production since it was added.
+  //
+  // NO ROWS SHIP IN THIS PHASE. Declaring the existing assets is a human review
+  // job (Phase 4), and inventing rows here would be a fabricated approval record.
+  // An empty table is why `contentEligibility` treats "no rule" as "fall back to
+  // the asset's own columns" rather than as a denial: a denial would take every
+  // Explorer learner's content away the moment this shipped.
+  `CREATE TABLE IF NOT EXISTS growth_journey_content_rules (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     tenant_id UUID NOT NULL REFERENCES tenants(id),
+     brand_id UUID NOT NULL REFERENCES brands(id),
+     asset_id UUID,
+     collection_key VARCHAR(64),
+     eligible_programs JSONB NOT NULL DEFAULT '[]'::jsonb,
+     eligible_paths JSONB NOT NULL DEFAULT '[]'::jsonb,
+     audience_personas JSONB NOT NULL DEFAULT '[]'::jsonb,
+     lifecycle_states JSONB NOT NULL DEFAULT '[]'::jsonb,
+     overlays JSONB NOT NULL DEFAULT '[]'::jsonb,
+     offer_family VARCHAR(48),
+     channels JSONB NOT NULL DEFAULT '[]'::jsonb,
+     content_purpose VARCHAR(32),
+     approved_claims JSONB NOT NULL DEFAULT '[]'::jsonb,
+     source_evidence JSONB NOT NULL DEFAULT '[]'::jsonb,
+     approved_urls JSONB NOT NULL DEFAULT '[]'::jsonb,
+     approved_ctas JSONB NOT NULL DEFAULT '[]'::jsonb,
+     effective_from TIMESTAMPTZ,
+     expires_at TIMESTAMPTZ,
+     access_tier VARCHAR(16),
+     sender_profile_id UUID,
+     version INTEGER NOT NULL DEFAULT 1,
+     owner VARCHAR(128),
+     approval_status VARCHAR(16) NOT NULL DEFAULT 'draft',
+     approved_by VARCHAR(128),
+     approved_at TIMESTAMPTZ,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     CHECK (asset_id IS NOT NULL OR collection_key IS NOT NULL)
+   )`,
+  // One live declaration per asset per brand per version. A second row for the
+  // same asset would make "which rule applies" a question with two answers.
+  `CREATE UNIQUE INDEX IF NOT EXISTS growth_journey_content_rules_asset_unique ON growth_journey_content_rules (brand_id, asset_id, version) WHERE asset_id IS NOT NULL`,
+  `CREATE INDEX IF NOT EXISTS idx_gj_content_rules_brand_status ON growth_journey_content_rules (brand_id, approval_status)`,
+
   // Placed last so `journey_programs` exists before the foreign key names it.
   `ALTER TABLE brands
      ADD COLUMN IF NOT EXISTS default_journey_program_id UUID

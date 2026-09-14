@@ -139,6 +139,7 @@ describe('the schema is additive, and provably so', () => {
     const RUN_OWNED = [
       'brand_offer_policies',
       'growth_journey_classifications',
+      'growth_journey_content_rules',
       'growth_journey_decisions',
       'growth_journey_enrollments',
       'growth_journey_profiles',
@@ -231,6 +232,7 @@ describe('the schema is additive, and provably so', () => {
     expect(tables.sort()).toEqual([
       'brand_offer_policies',
       'growth_journey_classifications',
+      'growth_journey_content_rules',
       'growth_journey_decisions',
       'growth_journey_enrollments',
       'growth_journey_profiles',
