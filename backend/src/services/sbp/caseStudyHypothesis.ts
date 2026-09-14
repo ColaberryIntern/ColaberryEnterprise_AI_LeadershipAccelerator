@@ -119,6 +119,17 @@ export interface HypothesisInput {
   readonly plan?: Pick<BuildPlan, 'descriptor' | 'requirements'> | null;
 }
 
+/**
+ * The sentence that is true of the hypothesis SECTION on every record, and true
+ * of the whole RECORD only while nothing has been built. Named so the foundation
+ * can drop it from the record-level limitations once a story is verified: on
+ * 2026-09-14 the first project to reach capability_demonstration still opened
+ * its limitations with "Nothing here has been built", one line above the rung
+ * that said one story was.
+ */
+export const HYPOTHESIS_ONLY_LIMITATION =
+  'This is a hypothesis. Nothing here has been built, run, measured or used.';
+
 export function buildCaseStudyHypothesis(input: HypothesisInput): CaseStudyHypothesis {
   const items = input.items;
   const unknownAngles = remainingAngles(items);
@@ -130,9 +141,7 @@ export function buildCaseStudyHypothesis(input: HypothesisInput): CaseStudyHypot
   // student hoped for. Absent a plan, there is no planned capability yet.
   const plannedCapability = input.plan?.descriptor?.trim() || null;
 
-  const limitations: string[] = [
-    'This is a hypothesis. Nothing here has been built, run, measured or used.',
-  ];
+  const limitations: string[] = [HYPOTHESIS_ONLY_LIMITATION];
   if (!successDefinition) {
     limitations.push('No definition of success was given, so no outcome can be claimed later without one.');
   }
