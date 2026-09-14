@@ -1,8 +1,8 @@
 jest.mock('../../services/certPrep/certDistractorLengthener', () => ({ lengthenDistractor: jest.fn() }));
-jest.mock('../../services/certPrep/certQuestionTriage', () => ({ triageQuestion: jest.fn() }));
+jest.mock('../../services/certPrep/certQuestionTriage', () => ({ reviewQuestion: jest.fn() }));
 
 import { lengthenDistractor } from '../../services/certPrep/certDistractorLengthener';
-import { triageQuestion } from '../../services/certPrep/certQuestionTriage';
+import { reviewQuestion } from '../../services/certPrep/certQuestionTriage';
 import { lengthPlan } from '../../services/certPrep/certOptionLength';
 import { ImproverItem } from '../../services/certPrep/certQuestionImprover';
 import { passItem } from '../lib/certLengthPass';
@@ -13,7 +13,7 @@ import { passItem } from '../lib/certLengthPass';
  * lengthened-and-triaged, refused, discarded.
  */
 const mLengthen = lengthenDistractor as unknown as jest.Mock;
-const mTriage = triageQuestion as unknown as jest.Mock;
+const mTriage = reviewQuestion as unknown as jest.Mock;
 
 const base = (over: Partial<ImproverItem> = {}): ImproverItem => ({
   question_key: 'CCARF-D1-40',

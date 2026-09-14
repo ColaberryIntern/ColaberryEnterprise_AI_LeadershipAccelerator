@@ -32,7 +32,7 @@ import { sequelize } from '../config/database';
 import CertQuestionTriage from '../models/CertQuestionTriage';
 import { LATEST_REVISION_SQL, ReviewRow } from './sendCertQuestionReview';
 import { sendTriageReportEmail, TriageReportItem } from '../services/certPrep/certReviewEmail';
-import { triageQuestion } from '../services/certPrep/certQuestionTriage';
+import { reviewQuestion } from '../services/certPrep/certQuestionTriage';
 import {
   needsHuman,
   TriageResult,
@@ -123,7 +123,7 @@ async function main(): Promise<void> {
   const results: { row: ReviewRow; result: TriageResult }[] = [];
 
   for (const row of queue) {
-    const result = await triageQuestion({
+    const result = await reviewQuestion({
       question_key: row.question_key,
       stem: row.stem,
       options: row.options,
@@ -166,6 +166,15 @@ async function main(): Promise<void> {
   console.log(`scored    : ${results.length}`);
   console.log(`no objection raised : ${clean}   <- NOT the same as checked by a person`);
   console.log(`need a human        : ${flagged}`);
+  // The reading list is the HIGH rows: a blind read chose a different answer,
+  // or the reviewer's argument won outright. LOW is an argument on the record
+  // that a reader without the key was not moved by.
+  const bySeverity: Record<string, number> = {};
+  for (const { result: r } of results) {
+    if (r.verdict === 'needs_human') bySeverity[r.severity ?? 'unset'] = (bySeverity[r.severity ?? 'unset'] ?? 0) + 1;
+  }
+  const disputed = results.filter(({ result: r }) => r.concerns.some((c) => c.kind === 'answer_disputed')).length;
+  console.log(`  by severity       : ${JSON.stringify(bySeverity)}  (${disputed} where a blind read chose a different answer)`);
   console.log('');
   if (write) {
     console.log(`run id    : ${runId}`);
