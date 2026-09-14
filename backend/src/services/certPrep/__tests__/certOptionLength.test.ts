@@ -1,6 +1,6 @@
 import {
   lengthPlan, longestOptionKey, hasOptionLabel, stripOptionLabels,
-  extensionProblem, contentRetention,
+  extensionProblem, contentRetention, selfDefeatingPhrase,
   KEEP_EVERY, MIN_MARGIN_CHARS, MAX_MARGIN_CHARS, CONTENT_RETENTION_MIN,
 } from '../certOptionLength';
 import { assignAnswerPosition } from '../../../data/certBlueprints/items/itemFactory';
@@ -84,6 +84,32 @@ describe('an extension, not a rewrite', () => {
     expect(contentRetention('Retry the failed step with backoff', 'Retry a failed step using backoff')).toBe(1);
     expect(contentRetention('alpha bravo charlie', 'alpha bravo charlie delta')).toBe(1);
     expect(contentRetention('alpha bravo charlie delta', 'alpha bravo')).toBe(0.5);
+  });
+
+  it('refuses an addition that tells the reader not to pick the option', () => {
+    // All three are real additions from the second authored run, which the
+    // prompt forbade and nothing measured.
+    const a = 'When the agent already knows the exact shell syntax';
+    expect(extensionProblem(a, `${a} and it is quicker, even if it risks errors`))
+      .toMatch(/added "even if", which tells the reader not to pick/);
+    const b = 'A fixed number of refinement rounds agreed in advance';
+    expect(extensionProblem(b, `${b}, after which the result is accepted regardless of its quality`))
+      .toMatch(/added "regardless of"/);
+    const c = 'Adjust the classification parameters to raise confidence';
+    expect(extensionProblem(c, `${c} scores artificially across the board`))
+      .toMatch(/added "artificially"/);
+  });
+
+  it('allows an addition that merely describes a bad outcome', () => {
+    // Half the bank's distractors diagnose a failure. "Causing delays" is the
+    // option's content; "even if it causes delays" is a hint.
+    const a = 'Latency in one tool that only appears under load';
+    expect(extensionProblem(a, `${a} and disappears when quiet, causing delays in delivery`)).toBeNull();
+  });
+
+  it('does not punish a concession the author wrote themselves', () => {
+    const a = 'Accept the result even if it is incomplete';
+    expect(selfDefeatingPhrase(a, `${a}, recording what was missing at the time`)).toBeNull();
   });
 
   it('has a floor strict enough to have caught the run that motivated it', () => {

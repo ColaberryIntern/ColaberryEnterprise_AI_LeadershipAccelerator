@@ -2,7 +2,7 @@ import type OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { scoreItem } from './certQuestionRubric';
 import { checkInvariants, errorClass, isRetryable, ImproverItem } from './certQuestionImprover';
-import { LengthPlan, OPTION_LABEL_PREFIX, extensionProblem } from './certOptionLength';
+import { LengthPlan, OPTION_LABEL_PREFIX, extensionProblem, SELF_DEFEATING } from './certOptionLength';
 
 /**
  * certDistractorLengthener — rewrite ONE wrong option so it is longer than the
@@ -39,7 +39,7 @@ import { LengthPlan, OPTION_LABEL_PREFIX, extensionProblem } from './certOptionL
  */
 
 export const LENGTHENER_MODEL = 'gpt-4o';
-export const LENGTHENER_PROMPT_VERSION = 'v2-extend-do-not-rewrite';
+export const LENGTHENER_PROMPT_VERSION = 'v3-extend-without-disparaging';
 const TIMEOUT_MS = 20_000;
 const MAX_ATTEMPTS = 2;
 
@@ -104,8 +104,9 @@ export function buildLengthenPrompt(item: ImproverItem, plan: LengthPlan): strin
     '  option already says. Every noun and verb in it should still be in yours.',
     '- it must stay wrong for exactly the reason given above; do not make it a',
     '  better answer, a partial version of the correct answer, or a hedge',
-    '- do not signal that it is wrong: no "artificially", no "regardless of",',
-    '  no wording that tells the reader not to pick it',
+    '- do not signal that it is wrong. What you add must be neutral about',
+    '  whether the approach works: describe what it does, never concede that it',
+    `  falls short. These are rejected outright: ${SELF_DEFEATING.map((p) => `"${p}"`).join(', ')}.`,
     '- do not mention the correct option or the stem',
     `- return the option TEXT only: do not begin it with "${target.key}." or any letter`,
     '- do not invent a product, a version number, a price or a date',

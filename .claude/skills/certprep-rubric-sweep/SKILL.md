@@ -328,6 +328,19 @@ Weaknesses found by running it, and what was done. Add to this every time.
   retention, 44 of 70 with a changed opening word - left alone deliberately,
   because those options were model-written to begin with, every one was
   re-triaged, and no author's voice was at stake.
+- *(2026-09-14)* **The extension contract worked, and the re-run still had to
+  be read.** Under it the 47 authored patches kept 100% of the author's words,
+  the opening word and the punctuation - measured, not assumed. Reading them
+  anyway found three additions that disparaged their own option: "even if it
+  risks errors", "even if the plans add little value", "regardless of its
+  current state or quality". The prompt already forbade exactly that wording.
+  **A rule the prompt states and nothing measures is a preference, not a
+  rule** - the third time this session that a stated instruction was ignored
+  and no gate noticed. `selfDefeatingPhrase` now rejects concessive
+  constructions the original did not already use. Deliberately concessive
+  constructions only, never negative words: half the bank's distractors
+  diagnose a failure, so "causing delays" is the option's content and "even if
+  it causes delays" is a hint to skip it.
 - *(2026-09-10)* **Do not write source containing backslashes through a shell
   heredoc.** Building the schema parser that way put a literal CR and a real
   newline where `` and `
