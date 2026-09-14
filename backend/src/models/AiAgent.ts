@@ -261,6 +261,11 @@ interface AiAgentAttributes {
   // default sitting on every agent that has never been through that flow" —
   // see agentAuthorizationService.ts's resolveLevel() for why this matters.
   autonomy_level_set_at?: Date | null;
+  // Fleet-wide autonomy-level auto-classification, Phase 2 (2026-09-14) —
+  // 'auto' (agentCapabilityClassifier.ts set this from real granted tools)
+  // vs 'manual' (a human set it via reactivateAgent()) vs null (neither has
+  // ever touched this agent). See ensureAiAgentAutonomySourceSchema.ts.
+  autonomy_level_source?: 'auto' | 'manual' | null;
   // AI Workforce Reset, Phase D.1 "Inventory" (2026-08-24) — one of the 18 real
   // `departments` table slugs, or null when not yet classified / genuinely
   // cross-cutting (never forced). `scope` is JSONB, reserved for a future
@@ -305,6 +310,7 @@ class AiAgent extends Model<AiAgentAttributes> implements AiAgentAttributes {
   declare reports_to_id: string | null;
   declare autonomy_level: 'observe' | 'suggest' | 'act_audited' | 'communicate' | null;
   declare autonomy_level_set_at: Date | null;
+  declare autonomy_level_source: 'auto' | 'manual' | null;
   declare department: string | null;
   declare scope: Record<string, any>;
 }
@@ -463,6 +469,10 @@ AiAgent.init(
     },
     autonomy_level_set_at: {
       type: DataTypes.DATE,
+      allowNull: true,
+    },
+    autonomy_level_source: {
+      type: DataTypes.STRING(10),
       allowNull: true,
     },
     department: {

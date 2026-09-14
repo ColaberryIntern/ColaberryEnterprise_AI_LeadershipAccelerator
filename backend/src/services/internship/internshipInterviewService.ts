@@ -30,8 +30,20 @@ import { emitInternshipEvent } from './internshipAnalytics';
  * follow-up flagged by the AI is re-asked rather than quietly accepted.
  */
 
-/** Answer states that count as done. Everything else gets asked again. */
-const RESOLVED_STATES = new Set(['answered', 'confirmed']);
+/**
+ * Answer states that count as done. Everything else gets asked again.
+ *
+ * `needs_followup` — a phone call's captured answers — COUNTS as done here, on
+ * purpose. The call is meant to answer the questions; whatever it captured should
+ * not be re-asked in the interview walk, and a second call or the form should only
+ * chase the genuine gaps (remainingQuestions keys off this set, so both do). The
+ * applicant still SEES and confirms every captured answer — but at the summary, in
+ * one review pass, not one question at a time: `canSubmit` there requires
+ * needs_confirmation to be empty, so nothing reaches a reviewer unconfirmed.
+ * (Ali, 2026-09-13: "the interview should answer all questions; if it doesn't, they
+ * should be completable with another phone call or filling out the form.")
+ */
+const RESOLVED_STATES = new Set(['answered', 'confirmed', 'needs_followup']);
 
 export interface AnswerInput {
   question_key: string;
@@ -85,7 +97,15 @@ export async function progress(applicationId: string): Promise<InterviewProgress
     const a = answers.get(q.question_key);
     return !a || !RESOLVED_STATES.has(a.state);
   });
-  const capturedPending = all.filter((q) => answers.get(q.question_key)?.state === 'needs_followup').length;
+  // Captured answers still awaiting confirmation AND not yet counted as done.
+  // Now that needs_followup counts as resolved (the walk shows only the gaps and
+  // review happens at the summary), this is 0 — the interview no longer surfaces a
+  // separate "confirm N from your call" count. Kept as a derived value so it stays
+  // correct if that policy ever changes.
+  const capturedPending = all.filter((q) => {
+    const a = answers.get(q.question_key);
+    return a?.state === 'needs_followup' && !RESOLVED_STATES.has(a.state);
+  }).length;
   return {
     version: ACTIVE_QUESTION_SET_VERSION,
     total: all.length,

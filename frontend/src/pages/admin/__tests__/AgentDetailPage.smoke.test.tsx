@@ -126,6 +126,7 @@ const DETAIL: AgentDetail = {
     department: null, module: null, source_file: null,
     max_runs_per_hour: 60, max_writes_per_execution: 100, max_proposals_per_run: 50,
     autonomy_level_set_at: null,
+    autonomy_level_source: null,
   },
   identity: null,
   live_status: 'online',
@@ -983,6 +984,34 @@ describe('AgentDetailPage — reactivation flow (deactivated agent)', () => {
 
     expect(container.textContent).toContain('Autonomy level last set');
     expect(container.textContent).not.toContain('never been deliberately set');
+  });
+
+  // Fleet-wide autonomy-level auto-classification, Phase 2 (2026-09-14) —
+  // the system classified this, no human reviewed it; the UI must say so
+  // rather than looking identical to a real human decision.
+  it('an enabled agent auto-classified by the capability classifier shows an honest "no human has reviewed this" notice, not the manual-set framing', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      agent: { ...DETAIL.agent, autonomy_level: 'act_audited', autonomy_level_set_at: '2026-09-14T00:00:00Z', autonomy_level_source: 'auto' },
+    });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('Auto-classified');
+    expect(container.textContent).toContain('no human has reviewed this');
+    expect(container.textContent).not.toContain('Autonomy level last set');
+  });
+
+  it('an enabled agent with a real, previously-set autonomy level and NO recorded source (predates the source column) still shows the honest manual-set framing, never defaulted to auto', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      agent: { ...DETAIL.agent, autonomy_level: 'suggest', autonomy_level_set_at: '2026-09-01T00:00:00Z', autonomy_level_source: null },
+    });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('Autonomy level last set');
+    expect(container.textContent).not.toContain('Auto-classified');
   });
 
   it('happy path: setting a level on an ALREADY-ENABLED agent calls the real reactivateAgent() and shows the "set", not "reactivated", confirmation', async () => {

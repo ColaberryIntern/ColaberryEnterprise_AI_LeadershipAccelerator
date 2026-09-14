@@ -4,6 +4,7 @@ import { requireSection } from '../../middlewares/authMiddleware';
 import InternshipApplication from '../../models/InternshipApplication';
 import { applicationDetail, queue, queueCounts, type QueueBucket } from '../../services/internship/internshipReviewQueue';
 import { decide } from '../../services/internship/internshipDecisionService';
+import { assessApplicant } from '../../services/internship/internshipApplicantAssessment';
 import { InvalidInternshipTransitionError } from '../../services/internship/internshipStateMachine';
 import { REASON_CODES } from '../../services/internship/internshipReasonCodes';
 import fs from 'fs';
@@ -56,7 +57,9 @@ const decideSchema = z.object({
     'approve', 'approve_with_conditions', 'reject',
     'waitlist', 'request_information', 'schedule_human_follow_up',
   ]),
-  reason_code: z.enum(REASON_CODES as [string, ...string[]]),
+  // Optional: a reason is required only for reject / waitlist / request_information
+  // (enforced in decide()). Approving needs none.
+  reason_code: z.enum(REASON_CODES as [string, ...string[]]).nullish(),
   student_message: z.string().max(4000).nullish(),
   reviewer_notes: z.string().max(4000).nullish(),
   conditions: z.string().max(2000).nullish(),
@@ -103,6 +106,30 @@ router.get('/api/admin/internship/applications/:id', requireSection('internship'
   }
 });
 
+/**
+ * POST /api/admin/internship/applications/:id/assess
+ * Generate the AI assessment on demand (a reviewer clicks Generate), so the LLM
+ * cost is paid when a human is actually reviewing, not on every queue load.
+ */
+router.post('/api/admin/internship/applications/:id/assess', requireSection('internship'), async (req: Request, res: Response) => {
+  try {
+    const assessment = await assessApplicant(String(req.params.id));
+    res.json(assessment);
+  } catch (err: any) {
+    if (err?.message === 'application_not_found') {
+      res.status(404).json({ error: 'Application not found.' });
+      return;
+    }
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_assess_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not generate the assessment.' });
+  }
+});
+
 /** POST /api/admin/internship/applications/:id/decide */
 router.post('/api/admin/internship/applications/:id/decide', requireSection('internship'), async (req: Request, res: Response) => {
   const parsed = decideSchema.safeParse(req.body ?? {});
@@ -125,7 +152,7 @@ router.post('/api/admin/internship/applications/:id/decide', requireSection('int
     const result = await decide({
       application,
       decision: parsed.data.decision,
-      reasonCode: parsed.data.reason_code,
+      reasonCode: parsed.data.reason_code ?? '',
       studentMessage: parsed.data.student_message,
       reviewerNotes: parsed.data.reviewer_notes,
       conditions: parsed.data.conditions,

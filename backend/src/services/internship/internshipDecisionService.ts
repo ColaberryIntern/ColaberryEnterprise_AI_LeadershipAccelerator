@@ -97,27 +97,38 @@ export async function decide(params: DecideParams): Promise<DecideResult> {
   const nowMs = params.nowMs ?? Date.now();
   const { application } = params;
 
-  if (!isReasonCode(params.reasonCode)) {
-    return { ok: false, error: 'Pick a reason.', field: 'reason_code' };
-  }
-  const code: InternshipReasonCode = params.reasonCode;
-
   const scope = reasonScopeFor(params.decision);
-  if (scope && !reasonAppliesTo(code, scope)) {
-    return {
-      ok: false,
-      error: `That reason cannot be used for this decision.`,
-      field: 'reason_code',
-    };
-  }
 
-  // The rule that stops "Other" becoming the default rejection.
-  if (requiresCustomMessage(code) && !(params.studentMessage || '').trim()) {
-    return {
-      ok: false,
-      error: 'This reason needs a message for the applicant — they will receive exactly what you write.',
-      field: 'student_message',
-    };
+  // A reason is required only where it protects the APPLICANT: a rejection,
+  // waitlist, or information request has to carry a student-safe, applicable code
+  // (that is what the closed list of reasons exists for). Approving needs no
+  // reason to approve — the offer letter and the message ARE the substance — so a
+  // positive decision records the decision itself as its code and asks for nothing.
+  let code: string;
+  if (scope) {
+    if (!isReasonCode(params.reasonCode)) {
+      return { ok: false, error: 'Pick a reason.', field: 'reason_code' };
+    }
+    if (!reasonAppliesTo(params.reasonCode, scope)) {
+      return {
+        ok: false,
+        error: `That reason cannot be used for this decision.`,
+        field: 'reason_code',
+      };
+    }
+    // The rule that stops "Other" becoming the default rejection.
+    if (requiresCustomMessage(params.reasonCode) && !(params.studentMessage || '').trim()) {
+      return {
+        ok: false,
+        error: 'This reason needs a message for the applicant — they will receive exactly what you write.',
+        field: 'student_message',
+      };
+    }
+    code = params.reasonCode;
+  } else {
+    // Positive / neutral decision: honour a real reason if one was chosen, else
+    // record the decision as the code. Never demand one.
+    code = isReasonCode(params.reasonCode) ? params.reasonCode : params.decision;
   }
 
   const targetState = REVIEWER_DECISIONS[params.decision];
@@ -166,7 +177,8 @@ export async function decide(params: DecideParams): Promise<DecideResult> {
     student_message: (params.studentMessage || '').trim() || null,
     reviewer_notes: (params.reviewerNotes || '').trim() || null,
     conditions: (params.conditions || '').trim() || null,
-    reapply_after: params.decision === 'reject' ? reapplyDate(code, nowMs) : null,
+    // Only ever reached for reject, where `code` is a validated reason code.
+    reapply_after: params.decision === 'reject' ? reapplyDate(code as InternshipReasonCode, nowMs) : null,
     decided_by: params.decidedBy,
     decided_at: new Date(nowMs),
     ai_recommendation: aiRecommendation,
@@ -215,7 +227,10 @@ export async function decide(params: DecideParams): Promise<DecideResult> {
           to,
           firstName,
           applicationId: application.id,
-          reasonCode: code,
+          // For a positive decision `code` is the decision name, which the approved
+          // template does not read (it uses the message and conditions); for a
+          // negative one it is a real reason code. Safe either way.
+          reasonCode: code as InternshipReasonCode,
           studentMessage: params.studentMessage,
           conditions: params.conditions,
           correlationId: application.correlation_id ?? undefined,

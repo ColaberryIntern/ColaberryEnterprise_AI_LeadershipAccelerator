@@ -105,6 +105,80 @@ describe('a community tile', () => {
   });
 });
 
+/**
+ * Ali, 2026-09-13: "where did the pop up go where I can actually comment… we
+ * want to add that same capability when clicked on here." Today opened a
+ * community post in the card drawer; the Classroom rail only ever linked out
+ * to /portal/community. The tile now hands the post to the page, which opens
+ * the same pop-up — so the click must NOT also navigate.
+ */
+describe('a community tile opens the post in place', () => {
+  const clickOn = async (sel: string) => {
+    const el = container.querySelector(sel) as HTMLElement;
+    const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
+    await act(async () => { el.dispatchEvent(ev); });
+    return ev;
+  };
+
+  it('hands the tile up and cancels the navigation when the button is clicked', async () => {
+    const seen: string[] = [];
+    await act(async () => { root.render(<ClassroomRails rail={rail()} onOpen={(t) => seen.push(t.id)} />); });
+    const ev = await clickOn('.cr-act');
+    expect(seen).toEqual(['p1']);
+    expect(ev.defaultPrevented).toBe(true);   // the href must not also fire
+  });
+
+  it('opens from anywhere on the tile, not only the button', async () => {
+    const seen: string[] = [];
+    await act(async () => { root.render(<ClassroomRails rail={rail()} onOpen={(t) => seen.push(t.id)} />); });
+    await clickOn('.cr-quote');
+    expect(seen).toEqual(['p1']);
+    expect(container.querySelector('.cr-tile')!.getAttribute('role')).toBe('button');
+  });
+
+  it('opens on Enter and Space, for a student who is not using a mouse', async () => {
+    const seen: string[] = [];
+    await act(async () => { root.render(<ClassroomRails rail={rail()} onOpen={(t) => seen.push(t.id)} />); });
+    const tile = container.querySelector('.cr-tile') as HTMLElement;
+    expect(tile.getAttribute('tabindex')).toBe('0');
+    for (const key of ['Enter', ' ']) {
+      await act(async () => { tile.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })); });
+    }
+    expect(seen).toEqual(['p1', 'p1']);
+  });
+
+  it('still navigates normally when the page passes no handler', async () => {
+    await render(rail());
+    const ev = await clickOn('.cr-act');
+    expect(ev.defaultPrevented).toBe(false);
+    expect(container.querySelector('.cr-tile')!.className).not.toContain('cr-clickable');
+    expect(container.querySelector('.cr-tile')!.getAttribute('role')).toBeNull();
+  });
+
+  it('leaves other rails navigating even when a handler is passed', async () => {
+    const seen: string[] = [];
+    await act(async () => {
+      root.render(<ClassroomRails
+        rail={{
+          surface: 'project', label: 'Your project', count_label: null, href: '/portal/projects',
+          tiles: [{
+            id: 't1', title: 'STORY-001', detail: 'Release 0', meta: null,
+            image_url: '/thumbnails/x.jpg', glyph: '💻', stamp: 'NEXT TASK',
+            action: { label: 'Build · +50 pts', href: '/portal/projects/workspace/p1/STORY-001', kind: 'primary' },
+          }],
+        }}
+        onOpen={(t) => seen.push(t.id)}
+      />);
+    });
+    const ev = await clickOn('.cr-act');
+    // The handler still hears about it, but the anchor is allowed to navigate:
+    // the workstation is a different page, not a pop-up.
+    expect(seen).toEqual(['t1']);
+    expect(ev.defaultPrevented).toBe(false);
+    expect((container.querySelector('.cr-act') as HTMLAnchorElement).textContent).toBe('Build · +50 pts');
+  });
+});
+
 describe('every other rail is untouched', () => {
   it('an events tile still renders its picture, glyph fallback and stamp', async () => {
     await render({

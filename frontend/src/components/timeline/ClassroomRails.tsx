@@ -26,8 +26,14 @@ import './classroomRails.css';
 
 interface Props {
   rail: Rail;
-  /** Rendered instead of an image when a tile has none. */
-  onOpen?: (tile: RailTile, rail: Rail) => void;
+  /**
+   * The page's chance to handle a tile ITSELF instead of letting the action's
+   * href navigate. The Classroom uses it to open a community post's thread in
+   * the card drawer — the pop-up where a student can actually reply — and the
+   * community tile calls `preventDefault()` before this runs. A page that does
+   * not pass a handler keeps the plain navigation.
+   */
+  onOpen?: (tile: RailTile, rail: Rail, e: React.MouseEvent | React.KeyboardEvent) => void;
 }
 
 const SCROLL_TILES = 2;
@@ -79,8 +85,26 @@ const Person: React.FC<{ person: NonNullable<RailTile['person']> }> = ({ person 
  */
 const Tile: React.FC<{ tile: RailTile; rail: Rail; onOpen?: Props['onOpen'] }> = ({ tile, rail, onOpen }) => {
   const quote = rail.surface === 'community';
+  // A community tile opens the post's thread RIGHT HERE when the page gives us
+  // a handler — the same pop-up Today opens, where the student can actually
+  // read the replies and write one (Ali, 2026-09-13: "where did the pop up go
+  // where I can actually comment… we want to add that same capability when
+  // clicked on here"). The whole tile is the target, not just the button.
+  // Without a handler nothing changes: the anchor still navigates to the post.
+  // `stopPropagation` as well as `preventDefault`: the Reply anchor sits INSIDE
+  // the clickable article, so without it one click on the button would open the
+  // post twice.
+  const openInPlace = quote && !!onOpen
+    ? (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); onOpen(tile, rail, e); }
+    : undefined;
   return (
-    <article className={`cr-tile${tile.featured ? ' cr-featured' : ''}${quote ? ' cr-quotetile' : ''}`}>
+    <article
+      className={`cr-tile${tile.featured ? ' cr-featured' : ''}${quote ? ' cr-quotetile' : ''}${openInPlace ? ' cr-clickable' : ''}`}
+      onClick={openInPlace}
+      role={openInPlace ? 'button' : undefined}
+      tabIndex={openInPlace ? 0 : undefined}
+      onKeyDown={openInPlace ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen!(tile, rail, e); } } : undefined}
+    >
       {!quote && (
         <div className={`cr-pic${isPortrait(rail.surface) && tile.image_url ? ' cr-avatar' : ''}`}
              aria-hidden={tile.image_url ? undefined : true}>
@@ -104,7 +128,7 @@ const Tile: React.FC<{ tile: RailTile; rail: Rail; onOpen?: Props['onOpen'] }> =
           <a
             className={`cr-act${tile.action.kind === 'quiet' ? ' cr-quiet' : ''}`}
             href={tile.action.href}
-            onClick={() => onOpen?.(tile, rail)}
+            onClick={openInPlace ?? ((e) => onOpen?.(tile, rail, e))}
           >
             {tile.action.label}
           </a>

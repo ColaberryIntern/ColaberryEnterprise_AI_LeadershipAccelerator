@@ -69,7 +69,15 @@ export async function resolveProjectRail(ctx: RailContext): Promise<Rail | null>
         glyph: first ? '\u{1F4BB}' : '\u{1F4DD}',
         stamp: first ? 'NEXT TASK' : 'TASK',
         action: {
-          label: 'Open workstation',
+          // What the story PAYS, not the tool it opens. Ali, 2026-09-13: "For
+          // projects, instead of Open Workstation, show the points instead and
+          // allow the user to click." Same wording as the Today tile and the
+          // Projects page, and the same number — all three read it from the
+          // task's `points`, which the tree prices through storyPoints.
+          // Falls back to the old label when the story is unpriced (no
+          // published plan, or a PREP task): a button that says "+0 pts" would
+          // be worse than one that says what it does.
+          label: task.points && task.points > 0 ? `Build · +${task.points} pts` : 'Open workstation',
           href: workstationHref(tree.id, (task as any).story_id || task.id),
           kind: 'primary',
         },

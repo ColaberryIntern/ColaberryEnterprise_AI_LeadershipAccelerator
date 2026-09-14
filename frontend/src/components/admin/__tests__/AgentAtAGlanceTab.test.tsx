@@ -50,6 +50,7 @@ const DETAIL: AgentDetail = {
     department: null, module: null, source_file: null,
     max_runs_per_hour: 60, max_writes_per_execution: 100, max_proposals_per_run: 50,
     autonomy_level_set_at: null,
+    autonomy_level_source: null,
   },
   identity: null,
   live_status: 'unknown',

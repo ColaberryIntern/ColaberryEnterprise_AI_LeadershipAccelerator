@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader, SectionCard, StatusBadge } from '../../components/admin/shell';
 import {
   ApplicationDetail, QueueBucket, QueueResponse, ReviewerDecision,
+  ApplicantAssessment, AssessmentRecommendation, RequirementStatus,
+  assessInternshipApplication,
   decideInternshipApplication, fetchInternshipApplication, fetchInternshipQueue,
 } from '../../services/adminInternshipApi';
 import { InternshipKpi, fetchInternshipKpis } from '../../services/adminInternshipApi';
@@ -73,6 +75,10 @@ const AdminInternshipPage: React.FC = () => {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
+  const [assessment, setAssessment] = useState<ApplicantAssessment | null>(null);
+  const [assessing, setAssessing] = useState(false);
+  const [assessError, setAssessError] = useState<string | null>(null);
+
   const [decision, setDecision] = useState<ReviewerDecision>('approve');
   const [reasonCode, setReasonCode] = useState('');
   const [studentMessage, setStudentMessage] = useState('');
@@ -119,6 +125,10 @@ const AdminInternshipPage: React.FC = () => {
       setStudentMessage('');
       setReviewerNotes('');
       setConditions('');
+      // The assessment is per-applicant and generated on demand, so drop the last
+      // one whenever a different application is opened.
+      setAssessment(null);
+      setAssessError(null);
     } catch {
       setDetail(null);
       setDetailError('Could not load this application.');
@@ -128,6 +138,19 @@ const AdminInternshipPage: React.FC = () => {
   }, []);
 
   useEffect(() => { if (selected) void loadDetail(selected); }, [selected, loadDetail]);
+
+  const runAssessment = useCallback(async () => {
+    if (!selected) return;
+    setAssessing(true);
+    setAssessError(null);
+    try {
+      setAssessment(await assessInternshipApplication(selected));
+    } catch {
+      setAssessError('Could not generate the assessment. Try again.');
+    } finally {
+      setAssessing(false);
+    }
+  }, [selected]);
 
   /** Reasons legal for the currently chosen decision. */
   const reasonOptions = useMemo(() => {
@@ -139,7 +162,10 @@ const AdminInternshipPage: React.FC = () => {
 
   const chosenReason = reasonOptions.find((r) => r.code === reasonCode) ?? null;
   const needsMessage = reasonCode === 'other_see_message';
-  const canSubmit = !!reasonCode && (!needsMessage || studentMessage.trim().length > 0);
+  // A reason is required only for the scoped (negative) decisions. Approving needs
+  // none — the offer letter and message are the substance.
+  const reasonRequired = NEEDS_SCOPED_REASON[decision] !== null;
+  const canSubmit = (!reasonRequired || !!reasonCode) && (!needsMessage || studentMessage.trim().length > 0);
 
   const submit = useCallback(async () => {
     if (!selected || !canSubmit) return;
@@ -361,6 +387,91 @@ const AdminInternshipPage: React.FC = () => {
             )}
           </SectionCard>
 
+          {/* AI ASSESSMENT — a summary and a recommendation the reviewer reads, never
+              a decision. Requirement green/red is deterministic; the summary and
+              posture are the model's, generated on demand. */}
+          <SectionCard
+            title="AI assessment"
+            icon="robot-2-line"
+            subtitle="A recommendation, not a decision. You decide below."
+          >
+            {assessError && <div className="alert alert-danger py-2" role="alert">{assessError}</div>}
+
+            {!assessment && (
+              <div className="d-flex align-items-center gap-3">
+                <button type="button" className="btn btn-sm btn-dark" onClick={runAssessment} disabled={assessing}>
+                  {assessing ? 'Reading the application…' : 'Generate AI assessment'}
+                </button>
+                <span className="text-muted" style={{ fontSize: 13 }}>
+                  Summarises the applicant, checks each requirement, and suggests a posture.
+                </span>
+              </div>
+            )}
+
+            {assessment && (
+              <div className="d-flex flex-column gap-3">
+                <div className="d-flex align-items-center gap-2 flex-wrap">
+                  <RecommendationBadge value={assessment.recommendation} />
+                  {!assessment.model_generated && (
+                    <span className="badge bg-secondary" title="The language model was unavailable; showing the requirement check only.">
+                      requirement check only
+                    </span>
+                  )}
+                  <button type="button" className="btn btn-sm btn-outline-secondary ms-auto" onClick={runAssessment} disabled={assessing}>
+                    {assessing ? 'Refreshing…' : 'Refresh'}
+                  </button>
+                </div>
+
+                <p className="mb-0" style={{ fontSize: 14, lineHeight: 1.55 }}>{assessment.summary}</p>
+
+                {assessment.rationale && (
+                  <p className="text-muted mb-0" style={{ fontSize: 13.5, lineHeight: 1.55 }}>
+                    <strong>Why:</strong> {assessment.rationale}
+                  </p>
+                )}
+
+                <div>
+                  <div className="text-uppercase text-muted mb-2" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.05em' }}>
+                    Requirements
+                  </div>
+                  <div className="d-flex flex-column gap-1">
+                    {assessment.requirements.map((r) => (
+                      <div key={r.key} className="d-flex align-items-start gap-2" style={{ fontSize: 13.5 }}>
+                        <RequirementDot status={r.status} />
+                        <span>
+                          {r.label}
+                          {r.evidence && <span className="text-muted"> — {r.evidence}</span>}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {assessment.conditions.length > 0 && (
+                  <div>
+                    <div className="text-uppercase text-muted mb-1" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.05em' }}>
+                      Suggested conditions
+                    </div>
+                    <ul className="mb-0" style={{ fontSize: 13.5 }}>
+                      {assessment.conditions.map((c, i) => <li key={i}>{c}</li>)}
+                    </ul>
+                  </div>
+                )}
+
+                {assessment.follow_up_questions.length > 0 && (
+                  <div>
+                    <div className="text-uppercase text-muted mb-1" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.05em' }}>
+                      Questions to get answered
+                    </div>
+                    <ul className="mb-0" style={{ fontSize: 13.5 }}>
+                      {assessment.follow_up_questions.map((q, i) => <li key={i}>{q}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </SectionCard>
+
           {/* THE APPLICANT'S OWN WORDS, FIRST. */}
           <SectionCard title="Their answers" icon="chat-quote-line" subtitle="In their own words, exactly as given">
             {detail.summary.length === 0
@@ -500,7 +611,7 @@ const AdminInternshipPage: React.FC = () => {
 
             <div className="mb-3">
               <label className="form-label" htmlFor="ai-reason" style={{ fontSize: 13, fontWeight: 600 }}>
-                Reason (required)
+                Reason {reasonRequired ? '(required)' : '(optional)'}
               </label>
               <select
                 id="ai-reason"
@@ -577,7 +688,7 @@ const AdminInternshipPage: React.FC = () => {
             </button>
             {!canSubmit && (
               <span className="text-muted ms-2" style={{ fontSize: 12 }}>
-                {!reasonCode ? 'Pick a reason first.' : 'This reason needs a message.'}
+                {reasonRequired && !reasonCode ? 'Pick a reason first.' : 'This reason needs a message.'}
               </span>
             )}
           </SectionCard>
@@ -618,6 +729,42 @@ const AdminInternshipPage: React.FC = () => {
 
       <InternshipConversionPanel onChanged={() => { void loadQueue(bucket); }} />
     </div>
+  );
+};
+
+/** The AI's suggested posture, as a coloured badge. Advice, not a decision. */
+const RecommendationBadge: React.FC<{ value: AssessmentRecommendation }> = ({ value }) => {
+  const map: Record<AssessmentRecommendation, { label: string; bg: string }> = {
+    approve: { label: 'Suggests: Approve', bg: '#2e7d5b' },
+    approve_with_conditions: { label: 'Suggests: Approve with conditions', bg: '#1f7a8c' },
+    concerns: { label: 'Suggests: Concerns', bg: '#b23a3a' },
+    follow_up: { label: 'Suggests: Follow up', bg: '#a8690f' },
+    not_ready: { label: 'Suggests: Not ready', bg: '#6b7280' },
+  };
+  const m = map[value];
+  return (
+    <span
+      className="badge"
+      style={{ background: m.bg, color: '#fff', fontSize: 12, fontWeight: 600, padding: '6px 10px' }}
+    >
+      {m.label}
+    </span>
+  );
+};
+
+/** Green / red / amber for a requirement's status. */
+const RequirementDot: React.FC<{ status: RequirementStatus }> = ({ status }) => {
+  const color = status === 'met' ? '#2e7d5b' : status === 'not_met' ? '#b23a3a' : '#a8690f';
+  const label = status === 'met' ? 'Met' : status === 'not_met' ? 'Not met' : 'Unclear';
+  return (
+    <span
+      aria-label={label}
+      title={label}
+      style={{
+        flex: 'none', width: 11, height: 11, borderRadius: '50%', background: color,
+        marginTop: 4, display: 'inline-block',
+      }}
+    />
   );
 };
 
