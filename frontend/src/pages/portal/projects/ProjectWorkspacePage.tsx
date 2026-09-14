@@ -14,6 +14,8 @@ import { refreshProjectsFromBackend } from './projectSync';
 import { useStoryVerification } from './useStoryVerification';
 import AcceptanceChecklist from './AcceptanceChecklist';
 import StoryCompletionPanel, { isSelfDirectedStory } from './StoryCompletionPanel';
+import DemoEvidencePanel, { isPrepStory } from './DemoEvidencePanel';
+import { useIsExplorer } from '../useIsExplorer';
 import {
   useAgentAttachments, AttachButton, AttachmentTray, DropOverlay, SentAttachments,
   type SentAttachment,
@@ -243,6 +245,8 @@ const ProjectWorkspacePage: React.FC = () => {
     }));
   }, []);
 
+  // Hook: above the early return below, as every hook must be.
+  const demo = useIsExplorer();   // Explorer = demo mode: nothing is handed in for real
   if (!project || !task) {
     return (
       <div className="rt" data-theme={theme}>
@@ -285,6 +289,9 @@ const ProjectWorkspacePage: React.FC = () => {
   // Display only — see the header pill. The GATE lives in StoryCompletionPanel
   // and reads `verified_at` alone.
   const done = Boolean(verif.verifiedAt) || locallyDone;
+  // Which workspace this is: a story is built and verified from the repo; a
+  // demo-prep task is evidenced. Decides the whole centre column below.
+  const isPrep = isPrepStory(task.storyId);
   // "How to build it" is step 1 when there is no acceptance list to be step 1 —
   // a lone step numbered 2 reads like something failed to load.
   const buildStepNo = acceptance.length ? 2 : 1;
@@ -362,6 +369,17 @@ const ProjectWorkspacePage: React.FC = () => {
             <p>{task.what || task.title}</p>
             {task.req && <span className="rt-req">Fulfils {task.req}</span>}
           </section>
+
+          {/* A DEMO-PREP TASK IS HANDED IN, NOT BUILT. There is no repo to
+              verify, no acceptance to tick and no Claude Code prompt to copy,
+              so those sections would be theatre. The evidence panel is the
+              whole workspace: what to hand in, the box to hand it in, what it
+              pays. Demo Day says staff mark it. (Ali, 2026-09-14: "Demos
+              should provide points as well.") */}
+          {isPrep && (
+            <DemoEvidencePanel task={task} projectId={projectId} taskId={task.storyId || task.id} points={task.points} demo={demo} />
+          )}
+          {!isPrep && (<>
 
           {/* WHAT DONE MEANS — checkable, because acceptance criteria are a
               pre-flight the student walks, not a paragraph they re-read. The
@@ -549,6 +567,7 @@ const ProjectWorkspacePage: React.FC = () => {
               onSkip={() => { skipTask(project.id, task.id); setTick((n) => n + 1); goBack(); }}
             />
           )}
+          </>)}
         </main>
 
         {/* RIGHT — the mentor, same coach the classroom uses */}

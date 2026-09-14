@@ -12,7 +12,7 @@ import StudentTask from '../../models/StudentTask';
 import EvidenceRecord from '../../models/EvidenceRecord';
 import { getProjectByEnrollment, listProjectsForEnrollment } from '../projectService';
 import { awardedEvidenceRef } from '../sbp/verification/verificationLatch';
-import { storyPointsForProject, pointsByStoryId } from '../sbp/verification/storyPoints';
+import { taskPointsForProject } from '../sbp/verification/storyPoints';
 import {
   toProjectTreeDto,
   toProjectSummaryDto,
@@ -58,7 +58,7 @@ async function buildTree(projectId: string): Promise<ProjectTreeDto | null> {
  */
 async function storyPointsMap(projectId: string): Promise<Map<string, number>> {
   try {
-    return pointsByStoryId(await storyPointsForProject(projectId));
+    return taskPointsForProject(projectId);
   } catch (err: any) {
     console.warn('[projectReadService] story points lookup failed:', err?.message?.split('\n')[0]);
     return new Map();

@@ -10,6 +10,7 @@ import ProjectsNextStepHero from './ProjectsNextStepHero';
 import CaseStudyReadinessCard from './CaseStudyReadinessCard';
 import TimelineCard, { type TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import TimelineFeed from '../../../components/timeline/TimelineFeed';
+import { isPrepStory, DEMO_DAY_STORY_ID } from './DemoEvidencePanel';
 // Every rule for the Classroom card is scoped `.tl-de …` in timeline.css, and
 // /portal/projects is its own route chunk: import it here so a cold load of
 // the Projects tab styles the cards (ProjectsNextStepHero does the same).
@@ -69,6 +70,9 @@ export function taskToFeedCard(project: StudentProject, task: ProjectTask, listN
     meta: done ? null : DUE_LABEL[task.due],
     project_id: project.id,
     project_task_id: task.id,
+    // A demo-prep task is handed in, not built; Demo Day is marked by staff.
+    // The button must not say "Build" over a recording or a rehearsal.
+    cta_verb: task.storyId === DEMO_DAY_STORY_ID ? 'Demo Day' : isPrepStory(task.storyId) ? 'Submit' : null,
   };
 }
 
