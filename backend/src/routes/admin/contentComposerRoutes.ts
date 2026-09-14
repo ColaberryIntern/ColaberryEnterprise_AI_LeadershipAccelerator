@@ -105,6 +105,47 @@ function actorOf(req: Request) {
   return { adminId: req.admin?.sub ?? null, email: req.admin?.email ?? null };
 }
 
+/**
+ * Draft the canonical message from a topic. A convenience at the START of the composer, not a
+ * shortcut past anything: the draft lands in the same editable box, and goes through the same
+ * validation, approval and publishing path as anything typed by hand.
+ */
+const DraftSchema = z.object({
+  topic: z.string().trim().min(3).max(500),
+  brand_id: UUID,
+  campaign_id: UUID.nullable().optional(),
+  content_type: z.string().trim().max(32).optional(),
+  is_paid: z.boolean().optional(),
+  has_offer: z.boolean().optional(),
+  destination_url: z.string().trim().url().max(2048).nullable().optional(),
+}).strict();
+
+router.post('/api/admin/content/draft-message', requireAdmin, async (req: Request, res: Response) => {
+  const parsed = DraftSchema.safeParse(req.body);
+  if (!parsed.success) return bad(res, parsed.error.flatten());
+  try {
+    const scope = await adminTenantScope(req.admin);
+    if (scope.mode === 'denied') return void res.status(404).json(NOT_FOUND);
+    const { Brand } = await import('../../models');
+    const brand = await Brand.findByPk(parsed.data.brand_id);
+    if (!brand || !scopeAllows(scope, brand.tenant_id)) {
+      return void res.status(404).json({ error: 'Brand not found', error_class: 'NotFound' });
+    }
+
+    const { draftCanonicalMessage } = await import('../../services/content/composerDraftService');
+    const draft = await draftCanonicalMessage({
+      topic: parsed.data.topic,
+      brandId: parsed.data.brand_id,
+      campaignId: parsed.data.campaign_id ?? null,
+      contentType: parsed.data.content_type,
+      isPaid: parsed.data.is_paid,
+      hasOffer: parsed.data.has_offer,
+      destinationUrl: parsed.data.destination_url ?? null,
+    });
+    res.json(draft);
+  } catch (err) { fail(res, err, 'composer_draft_failed'); }
+});
+
 router.post('/api/admin/content', requireAdmin, async (req: Request, res: Response) => {
   const parsed = CreateDraftSchema.safeParse(req.body);
   if (!parsed.success) return bad(res, parsed.error.flatten());

@@ -91,7 +91,12 @@ router.patch('/api/admin/campaigns/:id', requireAdmin, handleUpdateCampaign);
 // Assign (or confirm) the campaign's canonical UTM slug. The composer needs one before it
 // can mint tracked links; until this endpoint existed nothing in the app wrote the column.
 const SlugParams = z.object({ id: z.string().uuid() });
-const SlugBody = z.object({ offer: z.string().trim().max(80).nullable().optional(), audience: z.string().trim().max(80).nullable().optional() }).strict();
+const SlugBody = z.object({
+  offer: z.string().trim().max(80).nullable().optional(),
+  audience: z.string().trim().max(80).nullable().optional(),
+  // The brand the operator picked in the composer, used ONLY when the campaign has none.
+  brand_id: z.string().uuid().nullable().optional(),
+}).strict();
 router.post('/api/admin/campaigns/:id/slug', requireAdmin, async (req: Request, res: Response) => {
   const params = SlugParams.safeParse(req.params);
   if (!params.success) return void res.status(400).json({ error: 'Campaign id must be a UUID', error_class: 'ValidationError' });
@@ -101,8 +106,18 @@ router.post('/api/admin/campaigns/:id/slug', requireAdmin, async (req: Request, 
     const { assignCampaignSlug } = await import('../../services/marketing/campaignSlugService');
     const { WorkflowError } = await import('../../services/content/contentWorkflowService');
     try {
-      const result = await assignCampaignSlug(params.data.id, body.data);
-      res.json({ campaign_id: result.campaign.id, utm_campaign_slug: result.slug, unchanged: result.unchanged });
+      const result = await assignCampaignSlug(params.data.id, {
+        offer: body.data.offer,
+        audience: body.data.audience,
+        brandId: body.data.brand_id ?? null,
+      });
+      res.json({
+        campaign_id: result.campaign.id,
+        utm_campaign_slug: result.slug,
+        unchanged: result.unchanged,
+        // So the composer can refresh a campaign that just gained a brand.
+        brand_id: result.campaign.brand_id,
+      });
     } catch (err) {
       if (err instanceof WorkflowError) return void res.status(err.status).json({ error: err.message, error_class: err.errorClass });
       throw err;

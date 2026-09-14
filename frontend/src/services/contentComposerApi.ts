@@ -202,8 +202,33 @@ export async function runAction(id: string, action: ComposerAction, scheduledFor
   return res.data;
 }
 
-export async function assignCampaignSlug(campaignId: string, inputs: { offer?: string | null; audience?: string | null } = {}): Promise<{ campaign_id: string; utm_campaign_slug: string; unchanged: boolean }> {
+export async function assignCampaignSlug(
+  campaignId: string,
+  inputs: { offer?: string | null; audience?: string | null; brand_id?: string | null } = {},
+): Promise<{ campaign_id: string; utm_campaign_slug: string; unchanged: boolean; brand_id: string | null }> {
   const res = await api.post(`/api/admin/campaigns/${campaignId}/slug`, inputs);
+  return res.data;
+}
+
+export interface DraftedMessage {
+  message: string;
+  /** Bracketed holes the operator must fill before publishing. */
+  placeholders: string[];
+  /** Specifics the model produced that the brief did not support. Shown, never auto-removed. */
+  unverifiedClaims: string[];
+  model: string;
+}
+
+export async function draftCanonicalMessage(input: {
+  topic: string;
+  brand_id: string;
+  campaign_id?: string | null;
+  content_type?: string;
+  is_paid?: boolean;
+  has_offer?: boolean;
+  destination_url?: string | null;
+}): Promise<DraftedMessage> {
+  const res = await api.post('/api/admin/content/draft-message', input);
   return res.data;
 }
 

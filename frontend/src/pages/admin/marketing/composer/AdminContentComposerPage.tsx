@@ -97,12 +97,43 @@ export default function AdminContentComposerPage() {
 
   const brand = useMemo(() => brands.find((b) => b.id === setup.brand_id) ?? null, [brands, setup.brand_id]);
 
+  // ── First draft from a topic ────────────────────────────────────────────────────────────
+  const [draftNotes, setDraftNotes] = useState<{ placeholders: string[]; unverifiedClaims: string[] } | null>(null);
+
+  const draftMessage = async (topic: string) => {
+    setBusy(true);
+    try {
+      const d = await composer.draftCanonicalMessage({
+        topic,
+        brand_id: setup.brand_id,
+        campaign_id: setup.campaign_id || null,
+        content_type: setup.content_type,
+        is_paid: setup.is_paid,
+        has_offer: setup.has_offer,
+        destination_url: setup.destination_url || null,
+      });
+      setSetup((v) => ({ ...v, canonical_body: d.message }));
+      setDraftNotes({ placeholders: d.placeholders, unverifiedClaims: d.unverifiedClaims });
+      say(
+        d.unverifiedClaims.length > 0 ? 'info' : 'success',
+        d.unverifiedClaims.length > 0
+          ? 'Draft written. Check the flagged specifics before you publish.'
+          : 'Draft written. Edit it freely, it is only a starting point.',
+      );
+    } catch (err) { fail(err, 'The draft could not be written.'); } finally { setBusy(false); }
+  };
+
   // ── Campaign slug (the tracked-link chain's root) ───────────────────────────────────────
   const assignSlug = async (campaignId: string) => {
     setBusy(true);
     try {
-      const r = await composer.assignCampaignSlug(campaignId);
-      setCampaigns((cs) => cs.map((c) => (c.id === campaignId ? { ...c, utm_campaign_slug: r.utm_campaign_slug } : c)));
+      // Send the brand the operator already chose. A campaign with no brand of its own would
+      // otherwise dead-end here: the old error told them to set one on a screen that has no
+      // field for it.
+      const r = await composer.assignCampaignSlug(campaignId, { brand_id: setup.brand_id || null });
+      setCampaigns((cs) => cs.map((c) => (
+        c.id === campaignId ? { ...c, utm_campaign_slug: r.utm_campaign_slug, brand_id: r.brand_id } : c
+      )));
       say('success', `UTM slug assigned: ${r.utm_campaign_slug}`);
     } catch (err) { fail(err, 'The slug could not be assigned.'); } finally { setBusy(false); }
   };
@@ -211,7 +242,7 @@ export default function AdminContentComposerPage() {
       )}
 
       <SectionCard title="1. Setup" subtitle="Brand, campaign, landing page and the canonical message." icon="settings-3-line">
-        <ComposerSetup values={setup} brands={brands} campaigns={campaigns} locked={Boolean(item)} busy={busy} onChange={setSetup} onSubmit={saveSetup} onAssignSlug={assignSlug} />
+        <ComposerSetup values={setup} brands={brands} campaigns={campaigns} locked={Boolean(item)} busy={busy} onChange={setSetup} onSubmit={saveSetup} onAssignSlug={assignSlug} onDraftMessage={draftMessage} draftNotes={draftNotes} />
       </SectionCard>
 
       <SectionCard title="2. Channels and variants" subtitle="Pick networks, generate, edit, add tracked links, validate." icon="share-line">
