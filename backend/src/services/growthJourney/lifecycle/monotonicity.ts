@@ -33,6 +33,14 @@
  *
  * T307's verifier found this behaviour correct and unpinned. It is pinned now,
  * once, for every machine that uses this.
+ *
+ * `foreignPrevious` means exactly what the field says and nothing wider: the
+ * previous state is in NO group this machine knows. A state the machine owns is
+ * never reported foreign, whatever the candidate. T308's verifier found the first
+ * draft breaking that on the commonest transition of all - a knowledge rung to a
+ * commercial state - which wrote a false sentence about a programme boundary into
+ * the audit trail on 27% of inputs while leaving the projected state correct. The
+ * projection being right is why 48 unchanged tests did not see it.
  */
 
 export interface MonotonicityRule<S extends string> {
@@ -85,6 +93,17 @@ export function applyLadderMonotonicity<S extends string>(
         ? { state: candidate, held: false, foreignPrevious: false }
         : { state: rule.floor, held: true, foreignPrevious: false };
     }
+    return { state: candidate, held: false, foreignPrevious: false };
+  }
+
+  if (prevRung !== -1) {
+    // Previous is on THIS machine's ladder and the candidate is not: the ordinary
+    // move off the knowledge ladder into a commercial state, or into a state on
+    // neither list. Nothing unrecognised has happened, so nothing may be reported
+    // as unrecognised - this branch used to fall through below and label a rung
+    // this machine owns as another programme's vocabulary. `state` was right
+    // either way; the fact recorded next to it was not, and that fact reaches the
+    // audit trail.
     return { state: candidate, held: false, foreignPrevious: false };
   }
 

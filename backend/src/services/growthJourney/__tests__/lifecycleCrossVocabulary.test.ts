@@ -88,6 +88,58 @@ describe('a previous state from the OTHER programme is never held', () => {
   });
 });
 
+/**
+ * An input that drives each machine OFF its knowledge ladder and into a commercial
+ * state: one scheduled appointment. That is the cell the suite below originally
+ * never reached, because every case it drove produced an on-ladder candidate.
+ */
+const commercialBusiness = (previous: string) => ({
+  ...businessInput(previous),
+  appointments: { scheduled: 1, completed: 0, no_show: 0, cancelled: 0 },
+});
+const commercialFlotation = (previous: string) => ({
+  ...flotationInput(previous),
+  appointments: { scheduled: 1, completed: 0, no_show: 0, cancelled: 0 },
+});
+
+describe('a state the machine OWNS is never reported foreign, whatever the candidate', () => {
+  // Stated over every own state rather than over the ladder rungs, for two
+  // reasons: the ladders are not exported and a copy of one here is how the next
+  // drift starts, and the strong form covers the rungs, the commercial states and
+  // the terminal in a single property.
+  //
+  // The narrow version of this - "a rung is not foreign" - is what the suite was
+  // missing. Every earlier case produced an ON-LADDER candidate, so the cell where
+  // previous is on the ladder and the candidate has left it was never driven, and
+  // both machines were writing a false sentence into the audit trail on it.
+
+  it('drives a genuinely COMMERCIAL candidate, or the property below is vacuous', () => {
+    expect(classifyBusinessState(commercialBusiness('NEW_BUSINESS_LEAD')).state).toBe('DISCOVERY_READY');
+    expect(classifyFlotationState(commercialFlotation('NEW_PROJECT_LEAD')).state).toBe('DISCOVERY_READY');
+  });
+
+  it.each([...BUSINESS_STATES])('the business machine does not call its own %s foreign', (own) => {
+    const r = classifyBusinessState(commercialBusiness(own));
+    expect(r.evidence.join(' ')).not.toContain('not one of this programme');
+  });
+
+  it.each([...FLOTATION_STATES])('the Flotation machine does not call its own %s foreign', (own) => {
+    const r = classifyFlotationState(commercialFlotation(own));
+    expect(r.evidence.join(' ')).not.toContain('not one of this programme');
+  });
+
+  it('and a state from the OTHER programme still is foreign under the same input', () => {
+    // The other direction: the assertions above must not be passing because the
+    // foreign message stopped being emitted at all.
+    expect(classifyBusinessState(commercialBusiness('PROBLEM_CLARIFIED')).evidence.join(' ')).toContain(
+      'not one of this programme',
+    );
+    expect(classifyFlotationState(commercialFlotation('EXPLORING_SOLUTIONS')).evidence.join(' ')).toContain(
+      'not one of this programme',
+    );
+  });
+});
+
 describe('a SHARED state name is still honoured by both machines', () => {
   it('DISCOVERY_READY is a real commercial state in each, not a foreign one', () => {
     // The trap the foreign-state rule could create: treating a name both specs
@@ -147,6 +199,21 @@ describe('the shared rule reports WHICH case it took', () => {
     expect(applyLadderMonotonicity('Z', 'A', rule)).toEqual({ state: 'Z', held: false, foreignPrevious: false });
     // Terminal to terminal is not a "hold": nothing was refused.
     expect(applyLadderMonotonicity('Z', 'Z', rule)).toEqual({ state: 'Z', held: false, foreignPrevious: false });
+  });
+
+  it('a previous state ON the ladder is not foreign when the candidate LEAVES the ladder', () => {
+    // The defect this closes: prevRung !== -1 with candRung === -1 fell through to
+    // the unrecognised-value branch, so an ordinary move from a knowledge rung to a
+    // commercial state was reported as a previous state from another programme.
+    // `state` was right throughout; the FACT reported alongside it was not.
+    expect(applyLadderMonotonicity('X', 'A', rule)).toEqual({ state: 'X', held: false, foreignPrevious: false });
+    expect(applyLadderMonotonicity('Y', 'C', rule)).toEqual({ state: 'Y', held: false, foreignPrevious: false });
+    // A candidate on neither list, with previous on the ladder, is the same case.
+    expect(applyLadderMonotonicity('Q' as 'A', 'B', rule)).toEqual({
+      state: 'Q',
+      held: false,
+      foreignPrevious: false,
+    });
   });
 
   it('a commercial previous state with an off-ladder candidate takes the candidate', () => {

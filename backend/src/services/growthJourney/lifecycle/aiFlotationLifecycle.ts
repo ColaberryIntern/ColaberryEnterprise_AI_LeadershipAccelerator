@@ -1,4 +1,8 @@
-import { OFFER_FAMILIES, type OfferFamilySlug } from '../../../models/OfferFamily';
+import {
+  AI_FLOTATION_DENIED_FAMILIES,
+  OFFER_FAMILIES,
+  type OfferFamilySlug,
+} from '../../../models/OfferFamily';
 import {
   applyLadderMonotonicity,
   settleEnteredAt,
@@ -105,7 +109,18 @@ export const DEFERRED_STATES: ReadonlyArray<{ state: FlotationState; reason: str
 
 /* ── the hard exclusion, as a partition of the whole catalogue ──────────────── */
 
-/** §5.4's four service paths, plus the paid discovery its purpose names. */
+/**
+ * §5.4's four service paths, plus the paid discovery its purpose names.
+ *
+ * ENUMERATED, and deliberately not derived as `catalogue - denied`. Subtraction
+ * would make every family added to the catalogue tomorrow allowed for AI
+ * Flotation the moment it is added, silently — the one default this brand must
+ * not have. Enumerated, a new family is in neither list, and
+ * `offerCatalogueIsPartitioned()` fails the build until somebody decides which
+ * side it belongs on. The cost of that choice is a list that could drift from
+ * what the seed actually seeds, and `flotationExclusion.test.ts` closes that by
+ * pinning this set against `allowedFamiliesFor('ai-flotation', 'ai-flotation')`.
+ */
 export const FLOTATION_ALLOWED_FAMILIES: readonly OfferFamilySlug[] = Object.freeze([
   'ai_consulting',
   'workflow_automation',
@@ -115,23 +130,23 @@ export const FLOTATION_ALLOWED_FAMILIES: readonly OfferFamilySlug[] = Object.fre
 ]);
 
 /**
- * Everything else, and every entry is a deliberate decision.
+ * Everything else — THE CANONICAL LIST, not a copy of it.
  *
- * `learner_community_subscription` is here even though §5.4's sentence names
- * only "learner training, certification or internship". A community
- * subscription is a learner offer, this brand does not sell learner offers, and
- * reading the list as exhaustive would let the one learner family the sentence
- * happens not to enumerate through the boundary. Recorded as a judgement rather
- * than presented as the spec's own words.
+ * `AI_FLOTATION_DENIED_FAMILIES` in `models/OfferFamily.ts` is the same set for
+ * the same reason (§4:287, "explicitly deny business training and learner
+ * programs"), it is what the seed writes as AI Flotation's deny row, and its own
+ * doc comment says why a second copy is wrong: a family dropped from one list
+ * would be dropped from the assertion too, and the test would pass over the gap.
+ * The first draft of this file typed the six out again, which is precisely that
+ * mistake at the one boundary where getting it wrong means selling training from
+ * a consultancy.
+ *
+ * It also already records the `learner_community_subscription` judgement — a
+ * community subscription is a learner offer even though §5.4's sentence names
+ * only "learner training, certification or internship" — so this file does not
+ * need to make that call a second time, and must not appear to.
  */
-export const FLOTATION_EXCLUDED_FAMILIES: readonly OfferFamilySlug[] = Object.freeze([
-  'business_training',
-  'learner_free_training',
-  'learner_paid_training',
-  'learner_community_subscription',
-  'learner_certification',
-  'learner_internship',
-]);
+export const FLOTATION_EXCLUDED_FAMILIES: readonly OfferFamilySlug[] = AI_FLOTATION_DENIED_FAMILIES;
 
 /**
  * The generation-side half of the exclusion.

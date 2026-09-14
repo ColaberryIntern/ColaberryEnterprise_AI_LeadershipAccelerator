@@ -10,7 +10,14 @@ jest.mock('../../../models/BrandOfferPolicy', () => ({
 
 import { assertOfferAllowed } from '../offerEligibility';
 import { decideForSubject } from '../governor/decideForSubject';
-import { isFamilyAllowedForFlotation, flotationExclusionReason } from '../lifecycle/aiFlotationLifecycle';
+import {
+  isFamilyAllowedForFlotation,
+  flotationExclusionReason,
+  FLOTATION_ALLOWED_FAMILIES,
+  FLOTATION_EXCLUDED_FAMILIES,
+} from '../lifecycle/aiFlotationLifecycle';
+import { AI_FLOTATION_DENIED_FAMILIES } from '../../../models/OfferFamily';
+import { allowedFamiliesFor, BRAND_OFFER_POLICIES } from '../../../seeds/growthJourney/offerPolicyDefinitions';
 import type { GrowthJourneyFlags } from '../../../config/growthJourneyFlags';
 import type {
   DecideDeps,
@@ -237,6 +244,32 @@ describe('enforcement TWO: an injected candidate is suppressed and never selecte
     expect(d.selected_action).toBe('SEND_EMAIL');
     expect(d.suppressed).toHaveLength(1);
     expect(d.suppressed[0].reason).toBe('offer_not_eligible:explicit_deny');
+  });
+});
+
+describe('the two enforcement points cannot DRIFT from what the seed actually seeds', () => {
+  // The verifier's convention finding: two literal lists for one boundary is how
+  // a grant added to the seed's allow set later gets silently withheld here, or
+  // how an exclusion gets dropped from one side only. The excluded half is now
+  // the canonical constant rather than a copy; the allowed half stays enumerated
+  // on purpose (see the comment on it) and is pinned here instead.
+
+  it('the excluded half IS the canonical constant, not a copy that agrees today', () => {
+    expect(FLOTATION_EXCLUDED_FAMILIES).toBe(AI_FLOTATION_DENIED_FAMILIES);
+  });
+
+  it("the allowed half equals what the seed grants AI Flotation, after its own denials", () => {
+    const seeded = allowedFamiliesFor('ai-flotation', 'ai-flotation');
+    expect([...FLOTATION_ALLOWED_FAMILIES].sort()).toEqual([...seeded].sort());
+    expect(seeded.length).toBeGreaterThan(0); // non-vacuity: the seed really has a row
+  });
+
+  it('and the deny row the seed writes is the same set this file excludes', () => {
+    const denyRow = BRAND_OFFER_POLICIES.find(
+      (p) => p.brand_slug === 'ai-flotation' && p.decision === 'deny',
+    );
+    expect(denyRow).toBeDefined();
+    expect([...(denyRow?.offer_families ?? [])].sort()).toEqual([...FLOTATION_EXCLUDED_FAMILIES].sort());
   });
 });
 
