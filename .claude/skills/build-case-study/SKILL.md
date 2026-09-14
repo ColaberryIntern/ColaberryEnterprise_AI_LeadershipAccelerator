@@ -557,6 +557,70 @@ alone does not put it on the page — **and set `identity.heroImageUrl` to the c
 
 ---
 
+### 8a. What the builder already made beats anything you can produce
+
+The rule above is about pictures. It generalises, and it is the more important half:
+**search the repository for what the builder actually produced before you create,
+generate, or commission anything.** A case study about someone's work that illustrates
+itself with our own output is a case study about us.
+
+**Look in `artifacts/` first.** It is one of only four paths the platform lets a build
+write to (`CLAUDE.md`, `docs/`, `.colaberry/`, `artifacts/` — see `PATH_ALLOWLIST` in
+`renderDocs.ts`), and it is the one reserved for what the build produced rather than what
+the platform wrote. It is also the folder this skill never mentioned until 2026-09-14,
+which is why builders' own output was being walked past.
+
+```bash
+ls -R <repo>/artifacts 2>/dev/null | head -40
+find <repo> -maxdepth 3 \( -name "*.pdf" -o -name "*.pptx" -o -name "*.csv" -o -name "*.ipynb" \) \
+  -not -path "*/node_modules/*" | head -20
+find <repo> -maxdepth 2 -iname "*report*" -o -maxdepth 2 -iname "*eval*" -o -maxdepth 2 -iname "*demo*" | head -20
+```
+
+Anything found maps to a real `artifact_type`, and the set is wider than screenshots:
+`screenshot, architecture, photo, demo, deck, roadmap, report, evaluation, code,
+document, other`. A learner's evaluation notebook is an `evaluation`. Their slide deck is
+a `deck`. Their exported results are a `report`. Each is stronger on the record than
+anything generated, because the builder made it while doing the work.
+
+Set `source_type: 'repo'` and `source_commit_sha` on anything taken this way, so the
+record states which commit it came from and a reader can go and look.
+
+### Does it make sense? Three questions, all of which must pass
+
+Finding an artifact is not a reason to publish it. Ask, in this order:
+
+1. **Does it show the work, or does it show the tooling?** A screenshot of the running
+   system, an evaluation of its outputs, a deck presenting it: these show the work. A
+   `package.json`, a CI badge, a folder listing: these show that software exists.
+2. **Would it mean anything to someone who did not build it?** An architecture diagram
+   usually survives this. A raw log file usually does not. The test is the same one the
+   metrics learned on 2026-09-13: a thing that only the builder can read is inventory,
+   whatever format it is in.
+3. **Is it honest at the moment it is shown?** An empty state, a half-seeded dashboard, a
+   demo pointing at a dead endpoint — all real, all in the repo, all misleading on a
+   record. Nine CoreOps tabs were captured and four were honest empty states; the useful
+   one had six times the text of the tab captured first.
+
+A found artifact that fails any of the three is left where it is. **Nothing is better than
+something that does not make sense** — the same standing rule the hero row learned.
+
+### Two things that will bite
+
+**Promotion has no caller yet.** `caseStudyArtifactPromotion` exists because the artifact
+surface could not populate through the application at all — the pilot record's three
+approved artifacts were promoted by direct SQL — but as of 2026-09-14 nothing outside its
+own tests calls it. Expect to approve rows by hand, and check `status: 'approved'` and
+`visibility: 'public'` afterwards, because `projectArtifacts` silently drops anything that
+is not approved.
+
+**A private repo is a publish blocker, not a warning.** An artifact whose `public_url`
+points into a private repository trips `private_repo_exposed` at the gate. Check the
+repository's visibility before promoting anything that links into it, rather than at
+publish time when the refusal costs a round trip.
+
+---
+
 ## 8b. Open the page and look at it
 
 A record can pass every gate in this file and still be wrong on screen. Ali's ruling
