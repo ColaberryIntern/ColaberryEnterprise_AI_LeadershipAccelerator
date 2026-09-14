@@ -351,7 +351,17 @@ async function ingestZoomRecordingsForSession(
       (m) => streamZoomFile(m as ZoomRecordingMatch),
       title,
       { session_id: session.id },
-      { zoom_uuid: inst.uuid, source: 'class_session', part: idx + 1, parts: instances.length },
+      {
+        zoom_uuid: inst.uuid,
+        source: 'class_session',
+        part: idx + 1,
+        parts: instances.length,
+        // Which Zoom composition this is. Lets "does this recording contain
+        // the screen share?" be answered from the row instead of by pulling
+        // the file down and looking at frames, which is what it took on
+        // 2026-09-14.
+        recording_type: inst.match.recordingType ?? null,
+      },
     );
     if (result.resourceId) {
       ingestedAny = true;
@@ -433,7 +443,7 @@ export async function ingestRecordingForRoom(
     (m) => streamZoomFile(m as ZoomRecordingMatch),
     `${room.name} — recording`,
     { room_id: room.id },
-    { zoom_uuid: instanceUuid, source: 'always_open_room' },
+    { zoom_uuid: instanceUuid, source: 'always_open_room', recording_type: match.recordingType ?? null },
   );
 }
 

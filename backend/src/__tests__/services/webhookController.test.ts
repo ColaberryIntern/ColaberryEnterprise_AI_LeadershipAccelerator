@@ -39,6 +39,10 @@ jest.mock('../../services/subscriptionService', () => ({
 jest.mock('../../services/zoomService', () => ({
   verifyZoomWebhookSignature: jest.fn(),
   computeZoomWebhookEncryptedToken: jest.fn(),
+  // Real implementation, not a stub: the controller's file choice is exactly
+  // what these tests exercise, and pickBestMp4 is pure. Its own unit tests
+  // live in services/__tests__/zoomService.test.ts.
+  pickBestMp4: jest.requireActual('../../services/zoomService').pickBestMp4,
 }));
 
 jest.mock('../../models/LiveSession', () => ({ findOne: jest.fn() }));
@@ -604,7 +608,42 @@ describe('handleZoomWebhook', () => {
       name: 'Week 1 Build Day.mp4',
       mimeType: 'video/mp4',
       sizeBytes: 900,
+      recordingType: null, // fixture carries no recording_type, so size decides and nothing is recorded
     });
+  });
+
+  it('prefers the shared-screen composition over a larger webcam-only file, and records which one it chose', async () => {
+    (verifyZoomWebhookSignature as jest.Mock).mockReturnValue(true);
+    const session = { id: 'session-1', title: 'Week 7 · Build Day', zoom_meeting_id: '123' };
+    (LiveSession.findOne as jest.Mock).mockResolvedValue(session);
+    (ingestRecordingForSession as jest.Mock).mockResolvedValue({ status: 'ingested', resourceId: 'r1' });
+
+    // The failure a student reported on 2026-09-14: only the webcam track was
+    // kept. Here the webcam file is deliberately the LARGER one, so a
+    // size-only rule would repeat that mistake.
+    const event = {
+      event: 'recording.completed',
+      download_token: 'short-lived-token',
+      payload: {
+        object: {
+          id: 123,
+          topic: 'Week 7 Build Day',
+          recording_files: [
+            { file_type: 'MP4', file_size: 99_000_000, recording_type: 'active_speaker', download_url: 'https://zoom.us/rec/webcam' },
+            { file_type: 'MP4', file_size: 14_000_000, recording_type: 'shared_screen_with_speaker_view', download_url: 'https://zoom.us/rec/screen' },
+          ],
+        },
+      },
+    };
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': '1' });
+    const res = mockResponse();
+
+    await handleZoomWebhook(req as Request, res as Response);
+
+    expect(ingestRecordingForSession).toHaveBeenCalledWith(session, expect.objectContaining({
+      downloadUrl: 'https://zoom.us/rec/screen',
+      recordingType: 'shared_screen_with_speaker_view',
+    }));
   });
 
   it('verifies the signature against the raw buffer bytes, not a re-serialized object (mirrors the PaySimple fix above)', async () => {

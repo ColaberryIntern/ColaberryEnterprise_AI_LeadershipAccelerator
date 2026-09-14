@@ -59,3 +59,27 @@ describe('ComposerSetup slug assignment', () => {
     expect(btn.disabled).toBe(true);
   });
 });
+
+describe('ComposerSetup content type', () => {
+  it('warns at the moment a media type is chosen that nothing can be attached yet', () => {
+    // The trap Ali hit: "image" selected, no way to attach one, blocked two steps later at
+    // validation with a message about media items. Say it here instead.
+    render({ values: { ...VALUES, content_type: 'image' } });
+    const warning = container.querySelector('[data-testid="media-type-warning"]')!;
+    expect(warning).not.toBeNull();
+    expect(warning.textContent).toMatch(/does not create one/);
+    expect(warning.textContent).toMatch(/Use text for now/);
+  });
+
+  it('says nothing for a text post, which works end to end today', () => {
+    render({ values: { ...VALUES, content_type: 'text' } });
+    expect(container.querySelector('[data-testid="media-type-warning"]')).toBeNull();
+  });
+
+  it('labels the media options as unavailable in the dropdown itself', () => {
+    render();
+    const options = Array.from(container.querySelectorAll('#composer-type option')).map((o) => o.textContent);
+    expect(options).toContain('image (needs an upload, not available yet)');
+    expect(options).toContain('text');
+  });
+});

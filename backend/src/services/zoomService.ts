@@ -219,9 +219,16 @@ export interface ZoomRecordingMatch {
   name: string;
   mimeType: string;
   sizeBytes: number | null;
+  /**
+   * Zoom's composition for the chosen file (`shared_screen_with_speaker_view`,
+   * `active_speaker`, ...). Persisted into RoomResource.metadata so that
+   * "the recording has no screen share in it" can be answered from the
+   * database instead of by downloading the file.
+   */
+  recordingType?: string | null;
 }
 
-interface ZoomRecordingFile {
+export interface ZoomRecordingFile {
   file_type: string;
   file_size: number;
   download_url: string;
@@ -230,6 +237,54 @@ interface ZoomRecordingFile {
   // recording happened and could not tell a pre-class test from the class.
   recording_start?: string;
   recording_end?: string;
+  /**
+   * Which composition this file is. When the account records "active speaker,
+   * gallery view and shared screen separately", one meeting yields several
+   * MP4s and only the `shared_screen*` ones contain the presenter's screen.
+   * Undeclared until 2026-09-14, so selection could not prefer them.
+   */
+  recording_type?: string;
+}
+
+/**
+ * Rank a recording composition for a class or room recording. Higher is better.
+ *
+ * A class is the screen. The presenter's face is nice to have alongside it;
+ * the presenter's face INSTEAD of it is the failure a student reported on
+ * 2026-09-14: a full 2.5-hour Week 7 recording, 640x360, webcam only, no
+ * slide or terminal visible anywhere in it.
+ */
+function compositionRank(recordingType: string | undefined): number {
+  const t = String(recordingType || '');
+  if (t === 'shared_screen_with_speaker_view' || t === 'shared_screen_with_gallery_view') return 3;
+  if (t.startsWith('shared_screen')) return 2;
+  return 0;
+}
+
+/**
+ * Choose the MP4 that should become "the recording" when Zoom returns more
+ * than one for a single meeting instance.
+ *
+ * Order of preference:
+ *   1. A composition that contains the shared screen (see compositionRank).
+ *   2. Within the same rank, the largest file. Pause/resume can split one
+ *      composition into several parts, and the largest is the real one.
+ *
+ * Exported so the webhook controller and the polling backfill select the same
+ * file; before this they carried two copies of a size-only reduce.
+ */
+export function pickBestMp4<T extends Pick<ZoomRecordingFile, 'file_type' | 'file_size' | 'recording_type'>>(
+  files: readonly T[] | null | undefined,
+): T | null {
+  if (!files?.length) return null;
+  const mp4s = files.filter((f) => f.file_type === 'MP4');
+  if (!mp4s.length) return null;
+  return mp4s.reduce((a, b) => {
+    const ra = compositionRank(a.recording_type);
+    const rb = compositionRank(b.recording_type);
+    if (rb !== ra) return rb > ra ? b : a;
+    return (b.file_size ?? 0) > (a.file_size ?? 0) ? b : a;
+  });
 }
 interface ZoomRecordingMeeting {
   id: number;
@@ -297,17 +352,14 @@ function addDays(dateStr: string, days: number): string {
 // go through this, since matching only ever needs a meeting ID + a date to
 // pick the right day-window, never the whole LiveSession/RoomBooking shape.
 function toRecordingMatch(meeting: ZoomRecordingMeeting, fallbackName?: string): ZoomRecordingMatch | null {
-  if (!meeting.recording_files?.length) return null;
-  const mp4s = meeting.recording_files.filter((f) => f.file_type === 'MP4');
-  if (!mp4s.length) return null;
-  // Pause/resume can produce more than one MP4 for the same meeting — the
-  // largest file is the real one, not necessarily whichever comes first.
-  const best = mp4s.reduce((a, b) => (b.file_size > a.file_size ? b : a));
+  const best = pickBestMp4(meeting.recording_files);
+  if (!best) return null;
   return {
     downloadUrl: best.download_url,
     name: `${meeting.topic || fallbackName || 'recording'}.mp4`,
     mimeType: 'video/mp4',
     sizeBytes: best.file_size ?? null,
+    recordingType: best.recording_type ?? null,
   };
 }
 
