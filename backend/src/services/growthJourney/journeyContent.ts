@@ -1,4 +1,6 @@
 import { ExplorerContentAsset } from '../../models';
+import { classifyError } from '../../utils/errorClassifier';
+import { redactForLogs } from '../../utils/piiRedaction';
 import {
   resolveContentAssets,
   type AudienceTier,
@@ -79,7 +81,12 @@ function familyFor(query: ContentAssetQuery, ctx: JourneySubjectContext): string
   return query.offer_family ?? ctx.classification?.primary_path ?? null;
 }
 
-/** The eight declaration columns, for the assets the registry returned. */
+/**
+ * The declaration columns of the assets the registry returned - the six
+ * `ContentAssetFacts` reads, not all eight on the table: `tenant_id` is already
+ * pinned by the caller and `approved_by`/`approved_at` have no reader in this
+ * phase, so selecting them would be selecting fields nothing consults.
+ */
 export type AssetFactsLoader = (ids: string[]) => Promise<Map<string, ContentAssetFacts>>;
 
 const loadAssetFacts: AssetFactsLoader = async (ids) => {
@@ -166,8 +173,25 @@ export async function resolveJourneyContent(
     let facts: Map<string, ContentAssetFacts>;
     try {
       facts = ids.length > 0 ? await loadFacts(ids) : new Map();
-    } catch {
-      // Fail closed: an unreadable declaration column is not an approval.
+    } catch (err: unknown) {
+      // Fail closed: an unreadable declaration column is not an approval. The
+      // gap travels either way, but the error CLASS is recorded - the sibling
+      // failure path in `contentEligibility` does, and two failure paths in one
+      // feature disagreeing about whether a failure is worth logging is how a
+      // recurring outage stays invisible. Ids and slugs only, redacted anyway.
+      console.warn(
+        redactForLogs(
+          JSON.stringify({
+            service: 'growth-journey',
+            level: 'warn',
+            outcome: 'failure',
+            event: 'growth_journey.asset_facts_lookup_failed',
+            error_class: classifyError(err),
+            brand_id: ctx.brand_id,
+            asset_count: ids.length,
+          }),
+        ),
+      );
       gaps.push('asset_facts_lookup_failed');
       continue;
     }

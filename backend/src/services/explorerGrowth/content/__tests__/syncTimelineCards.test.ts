@@ -296,6 +296,35 @@ describe('NOTHING STAMPS A BRAND (T305)', () => {
     }
   });
 
+  it('NO FILE in this directory writes a brand column to that table', () => {
+    // T305's verifier moved the stamping write into a sibling file that the sync
+    // imports (`content/brandStamp.ts`) and 1,439 tests stayed green. One file is
+    // the wrong unit: the cron imports this whole directory's worth of helpers.
+    //
+    // What this still cannot see, named rather than implied: a table name
+    // assembled from a variable or from string fragments at runtime
+    // (`UPDATE ${TBL} SET brand_id`). No literal scan closes that, and the
+    // binding proofs for it are `syncTimelineCards.ts`'s md5 identity and T315's
+    // live `brand_id IS NOT NULL = 0` after a post-deploy sync.
+    const dir = path.join(__dirname, '..');
+    const files = fs
+      .readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith('.ts'))
+      .map((e) => path.join(dir, e.name));
+    expect(files.length).toBeGreaterThanOrEqual(4);
+
+    const offenders: string[] = [];
+    for (const file of files) {
+      const src = fs.readFileSync(file, 'utf8');
+      for (const write of src.matchAll(/(INSERT\s+INTO|UPDATE)\s+explorer_content_assets[\s\S]{0,600}/gi)) {
+        for (const column of BRAND_DIMENSION) {
+          if (write[0].includes(column)) offenders.push(`${path.basename(file)}:${column}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it('NO write statement anywhere in this file touches a brand column', () => {
     // The hole T305's verifier found: the two slices above start at
     // `const PROJECTION_SQL`, so a stamping UPDATE declared ABOVE it escaped both

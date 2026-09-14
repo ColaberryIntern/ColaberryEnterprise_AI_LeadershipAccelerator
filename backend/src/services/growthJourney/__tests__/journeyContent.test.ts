@@ -189,6 +189,20 @@ describe('the composition', () => {
     expect(out).toEqual({ assets: [], gaps: ['asset_facts_lookup_failed'] });
   });
 
+  it('records the error CLASS on that failure, with ids only', async () => {
+    // The gap travelling is not enough: a failure nobody can classify is a
+    // recurring outage nobody can see. The sibling path in contentEligibility
+    // logs the same way, and a learner address must not reach the line.
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    facts.mockRejectedValue(new Error('learner@example.com could not be read'));
+    await resolveJourneyContent(candidate(), ctx(), wiring());
+    const line = String(warn.mock.calls[0]?.[0] ?? '');
+    expect(line).toContain('growth_journey.asset_facts_lookup_failed');
+    expect(line).toContain('error_class');
+    expect(line).not.toContain('learner@example.com');
+    warn.mockRestore();
+  });
+
   it('fails closed when a resolved asset has no row to read back', async () => {
     // It came from this table a moment ago. If it cannot be read, the safe
     // answer is not to cite it.
