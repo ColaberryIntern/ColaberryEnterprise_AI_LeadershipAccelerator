@@ -78,6 +78,7 @@ import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureAiAgentReportsToSchema } from './db/ensureAiAgentReportsToSchema';
 import { ensureAiAgentHierarchySchema } from './db/ensureAiAgentHierarchySchema';
 import { ensureAiAgentAutonomyLevelSchema } from './db/ensureAiAgentAutonomyLevelSchema';
+import { ensureAiAgentAutonomySourceSchema } from './db/ensureAiAgentAutonomySourceSchema';
 import { ensureAgentPersonaVersionHistorySchema } from './db/ensureAgentPersonaVersionHistorySchema';
 import { ensureAgentRoleCharterSchema } from './db/ensureAgentRoleCharterSchema';
 import { ensureManagerDirectiveSchema } from './db/ensureManagerDirectiveSchema';
@@ -2778,6 +2779,10 @@ async function start(): Promise<void> {
   // AI Workforce Reset, Phase C — autonomy_level (docs/ai-governance/abac-design.md's
   // 4-level ladder), required at agent reactivation time. Additive, idempotent, no flag.
   await ensureAiAgentAutonomyLevelSchema();
+  // Fleet-wide autonomy-level auto-classification, Phase 2 — autonomy_level_source
+  // ('auto'|'manual'|null), distinguishing a classifier-set level from a real human
+  // decision. Additive, idempotent, no flag.
+  await ensureAiAgentAutonomySourceSchema();
   // Trust Contract Phase 1 — real history behind AiAgent.persona_version,
   // written by seedAgentRegistry() (below) whenever a registry entry's
   // version genuinely changes. Additive, idempotent, no flag. Must run

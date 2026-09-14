@@ -77,6 +77,14 @@ export default function AgentDetailV2Header({
   // rather than the control disappearing once an agent is active.
   const autonomyNeverDeliberatelySet = !agent.autonomy_level_set_at;
   const autonomyNeedsAttention = !agent.enabled || autonomyNeverDeliberatelySet;
+  // Fleet-wide autonomy-level auto-classification, Phase 2 (2026-09-14) —
+  // a third honest state alongside "never set"/"set by a human": the
+  // system classified this from the agent's real granted tools
+  // (agentCapabilityClassifier.ts), nobody made the call. A null source on
+  // an agent that DOES have a set_at predates this column (every prior
+  // real reactivation was a genuine human decision) — treated as manual,
+  // not defaulted to auto, since that's the honest historical read.
+  const autonomyWasAutoClassified = !autonomyNeverDeliberatelySet && agent.autonomy_level_source === 'auto';
 
   const lastActive = trust_contract.last_run_at || trust_contract.last_activity_at;
   const description = agent.description || '';
@@ -147,7 +155,9 @@ export default function AgentDetailV2Header({
               ? 'This agent is inactive.'
               : autonomyNeverDeliberatelySet
                 ? "This agent's autonomy level has never been deliberately set — it's sitting at an untouched default."
-                : `Autonomy level last set ${timeAgo(agent.autonomy_level_set_at as string)}.`}
+                : autonomyWasAutoClassified
+                  ? `Auto-classified ${timeAgo(agent.autonomy_level_set_at as string)} based on this agent's real granted tools — no human has reviewed this.`
+                  : `Autonomy level last set ${timeAgo(agent.autonomy_level_set_at as string)}.`}
           </span>
           <select
             aria-label="Autonomy level"
