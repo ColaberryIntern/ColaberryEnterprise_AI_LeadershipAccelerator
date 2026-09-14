@@ -265,11 +265,11 @@ router.post('/api/portal/workspace/repo/provision', requireParticipant, async (r
 // `.colaberry/progress.json`, so re-deriving what is done costs one extra read
 // and no new button for the student to learn.
 //
-// A webhook is the better trigger and is deliberately NOT built. See
-// docs/BUILD_VERIFICATION_CONTRACT.md — the pieces it needs (a public endpoint,
-// signature verification, the bot-commit filter that stops our own writes
-// re-triggering a sync) are a workstream of their own, and half of it would be
-// worse than none.
+// The push webhook (`githubPushVerification.ts`) is the better trigger and has
+// been live since August 2026; this route is the fallback for a repo whose
+// hook was never registered. The two must do the same work after a pull:
+// verification, enrichment ingest, document refresh. When one gains a step,
+// the other gets it too, or the student without a hook silently gets less.
 router.post('/api/portal/workspace/repo/sync', requireParticipant, async (req, res) => {
   try {
     const projectId = projectIdSchema.parse(req.body?.project_id);
@@ -316,6 +316,18 @@ router.post('/api/portal/workspace/repo/sync', requireParticipant, async (req, r
         error_class: 'VerificationUnavailable',
         reason: 'Your repo synced, but the platform could not re-check your stories just now. Try Sync again shortly.',
       };
+    }
+
+    // CONTINUOUS ENRICHMENT (Unified Project Discovery, Phase 6), the same
+    // read the push webhook makes after verification. This route ran
+    // verification without it until 2026-09-14, so a student syncing by hand
+    // instead of by webhook had every enrichment file ignored while their
+    // stories verified. Idempotent per file content; never fails the sync.
+    try {
+      const { ingestStoryEnrichmentsForProject } = await import('../services/sbp/storyEnrichmentReader');
+      await ingestStoryEnrichmentsForProject(projectId, { correlationId });
+    } catch (enrichErr: any) {
+      logError('workspace_enrichment_failed', req, enrichErr);
     }
 
     // Mirror what we just concluded back into the repo, so the student's

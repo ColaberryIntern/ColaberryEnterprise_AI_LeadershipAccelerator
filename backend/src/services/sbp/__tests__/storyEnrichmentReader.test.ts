@@ -7,8 +7,15 @@ const mockApply = jest.fn();
 jest.mock('../storyEnrichmentService', () => ({
   applyStoryEnrichment: (...a: any[]) => mockApply(...a),
 }));
+const mockFindConnection = jest.fn();
+jest.mock('../../../models/GitHubConnection', () => ({
+  __esModule: true,
+  default: { findOne: (...a: any[]) => mockFindConnection(...a) },
+}));
 
-import { ingestStoryEnrichments, storyIdFromFileName, MAX_ENRICHMENT_FILES } from '../storyEnrichmentReader';
+import {
+  ingestStoryEnrichments, ingestStoryEnrichmentsForProject, storyIdFromFileName, MAX_ENRICHMENT_FILES,
+} from '../storyEnrichmentReader';
 
 const PROJECT = 'cce94c20-a398-45b3-a6fb-b3fc87b6b1ef';
 const TARGET = { owner: 'student', repo: 'workspace', branch: 'main' };
@@ -138,5 +145,42 @@ describe('ingestStoryEnrichments', () => {
     }
     const s = await ingestStoryEnrichments(PROJECT, TARGET, { fetchImpl: fakeGithub(files).fetchImpl });
     expect(s.files_seen).toBe(MAX_ENRICHMENT_FILES);
+  });
+});
+
+describe('ingestStoryEnrichmentsForProject: the manual-sync entry point', () => {
+  // The push webhook holds the connection and calls ingestStoryEnrichments
+  // itself. Manual sync has only a project id, and until 2026-09-14 it did not
+  // call the reader at all. These pin the resolution, not the read: the read
+  // is the function above and is tested above.
+
+  it('resolves the repository the way verification does, including the stored branch', async () => {
+    mockFindConnection.mockResolvedValue({
+      repo_owner: 'student', repo_name: 'workspace',
+      status_json: { connect: { default_branch: 'develop' } },
+    });
+    const gh = fakeGithub({ 'STORY-001.json': JSON.stringify(goodEvent('STORY-001')) });
+    const s = await ingestStoryEnrichmentsForProject(PROJECT, { fetchImpl: gh.fetchImpl });
+    expect(mockFindConnection).toHaveBeenCalledWith({ where: { project_id: PROJECT } });
+    expect(s.files_seen).toBe(1);
+    expect(s.applied.map((a) => a.outcome)).toEqual(['merged']);
+    // Every GitHub read names the branch the connection recorded, so the
+    // enrichment file is read from where verification read the stories.
+    expect(gh.calls.every((u) => u.includes('ref=develop'))).toBe(true);
+  });
+
+  it('a project with no repository is a classified summary, never a throw', async () => {
+    mockFindConnection.mockResolvedValue(null);
+    const gh = fakeGithub({ 'STORY-001.json': JSON.stringify(goodEvent('STORY-001')) });
+    const s = await ingestStoryEnrichmentsForProject(PROJECT, { fetchImpl: gh.fetchImpl });
+    expect(s).toEqual({ files_seen: 0, applied: [], skipped: [], error_class: 'NoRepository' });
+    expect(gh.calls).toEqual([]);
+    expect(mockApply).not.toHaveBeenCalled();
+  });
+
+  it('a connection missing owner or name is the same classified summary', async () => {
+    mockFindConnection.mockResolvedValue({ repo_owner: 'student', repo_name: null, status_json: {} });
+    const s = await ingestStoryEnrichmentsForProject(PROJECT, { fetchImpl: fakeGithub({}).fetchImpl });
+    expect(s.error_class).toBe('NoRepository');
   });
 });
