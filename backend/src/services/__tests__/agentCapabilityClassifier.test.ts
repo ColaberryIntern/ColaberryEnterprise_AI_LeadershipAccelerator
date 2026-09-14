@@ -45,6 +45,20 @@ describe('classifyAgentAutonomyLevel — real agent examples', () => {
     expect(result.matchedTool).toBe('create_strategic_initiative');
   });
 
+  // Real production dry-run finding (2026-09-14, 166 real agents checked):
+  // 'post_' used to be a communicate-tier keyword and wrongly promoted this
+  // agent to the highest trust level — InboxCaseEngine's real tools are all
+  // internal ticket-management actions ("post a progress note ON a
+  // ticket"), never external communication. Caught by the "verify before
+  // trusting" review step the classifier's own summarise() output is
+  // designed to prompt, before any --apply ever ran. Regression-pinned here.
+  it('InboxCaseEngine: internal ticket-comment tooling (post_case_progress_notes) stays act_audited, never promoted to communicate', () => {
+    const result = classifyAgentAutonomyLevel(['create_case_tickets', 'sync_case_ticket_status', 'post_case_progress_notes']);
+
+    expect(result.level).toBe('act_audited');
+    expect(result.matchedTool).toBe('create_case_tickets');
+  });
+
   it('boundary: a genuinely ambiguous real tool name (auto_execute_safe_actions) resolves on its verb, not the word "safe"', () => {
     // Isolated from its real sibling tools (detect_problems, create_intelligence_decisions,
     // create_tickets) deliberately: those are ALSO act_audited-tier, and the

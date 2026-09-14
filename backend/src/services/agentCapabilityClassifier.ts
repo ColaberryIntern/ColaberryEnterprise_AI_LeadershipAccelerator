@@ -43,7 +43,17 @@ interface KeywordTier {
 const KEYWORD_TIERS: KeywordTier[] = [
   {
     level: 'communicate',
-    keywords: ['send_', 'respond_to_dm', '_sms', '_email', '_call', '_dm', 'post_'],
+    // 'post_' was here originally (speculatively, for a future genuinely-
+    // external social-posting agent — see the OpenClaw agents' real
+    // descriptions) but REMOVED after the first real production dry-run
+    // (2026-09-14): among 166 real agents, it matched exactly one real
+    // tool — InboxCaseEngine's `post_case_progress_notes`, an INTERNAL
+    // ticket-comment action, not external communication — and zero genuine
+    // true positives (the real OpenClaw social-posting agents don't declare
+    // their social actions in tools_granted at all). Grounded in real data,
+    // not speculation: a keyword this codebase's own tools_granted strings
+    // never actually needed stays out until a real example justifies it.
+    keywords: ['send_', 'respond_to_dm', '_sms', '_email', '_call', '_dm'],
   },
   {
     level: 'act_audited',
