@@ -92,6 +92,48 @@ describe('the registry declares §5.3 and §5.4 by name', () => {
     }
   });
 
+  it('is DEEP frozen: an entry cannot be edited in place', () => {
+    // `Object.freeze` on the array alone left every entry writable, and the
+    // verifier set `SCORE_DIMENSIONS[0].source` at runtime. A registry whose
+    // entries can be edited is a registry that can disagree with the test above.
+    const first = SCORE_DIMENSIONS[0] as { source: string; programs: string[] };
+    expect(() => {
+      first.source = 'lead_firmographics';
+    }).toThrow(TypeError);
+    expect(() => first.programs.push('learner')).toThrow(TypeError);
+    expect(SCORE_DIMENSIONS[0].source).toBe('none');
+  });
+
+  it('a source that EXISTS but is not wired is declared, not hidden', () => {
+    // The verifier's finding: `relationship_engagement` was declared sourceless
+    // while `interaction_outcomes.outcome` and `appointments.status` already
+    // power an engagement score in `opportunityScoringService`. A reason that
+    // omits an existing source is a false reason, so those entries now carry a
+    // `deferred_source` naming it — and the pinned count stays until the plan
+    // says otherwise.
+    const deferred = SCORE_DIMENSIONS.filter((d) => d.deferred_source);
+    expect(deferred.map((d) => d.key).sort()).toEqual(['friction_risk', 'relationship_engagement']);
+    for (const d of deferred) {
+      expect(d.source).toBe('none');
+      expect((d.deferred_source ?? '').length).toBeGreaterThan(60);
+      expect(d.deferred_source).toContain('interaction_outcomes');
+    }
+  });
+
+  it('the AI-derived source is named as AI-derived, not as declared', () => {
+    // `leads.maturity_score` is written as `recommendation.confidence * 100` by
+    // the advisory sync. Calling it `declared_maturity` hid that; AI may rank,
+    // but it may not be invisible.
+    const feasibility = SCORE_DIMENSIONS.find((d) => d.key === 'technical_feasibility');
+    expect(feasibility?.source).toBe('advisory_ai_maturity');
+    const v = scoreSubject(signals({ lead: { maturity_score: 6, selected_systems: 'crm' } }), 'consulting');
+    const factor = v.dimensions
+      .find((d) => d.key === 'technical_feasibility')
+      ?.factors.find((f) => f.factor === 'maturity_score');
+    expect(factor?.label).toContain('Advisory AI maturity');
+    expect(factor?.detail).toContain('recommendation.confidence');
+  });
+
   it('the three shared names are ONE entry each, not two', () => {
     // §5.3 and §5.4 use the same words for these three. Duplicating them would
     // let the two copies drift; using one entry for adjacent-but-differently-named
@@ -117,11 +159,23 @@ describe('a sourceless dimension is null and named, never zero', () => {
     }
   });
 
-  it('never produces a number for one, for either programme', () => {
+  it('never produces a number for one, for either programme, WITH labels present', () => {
+    // The labels matter: the verifier's mutation scored `friction_risk` from
+    // `opportunity_score`, and it only fired when labels were supplied — which
+    // no test combined with a check on sourceless values. It does now.
     for (const program of ['business', 'consulting'] as const) {
-      const v = scoreSubject(signals({ lead: fullLead, observed: { page_events: 9, behavioral_signals: 3 } }), program);
+      const v = scoreSubject(
+        signals({
+          lead: fullLead,
+          observed: { page_events: 9, behavioral_signals: 3 },
+          labels: { lead_temperature: 'hot', opportunity_score: 12, recommended_offer: 'ai_consulting' },
+        }),
+        program,
+      );
       for (const d of v.dimensions) {
-        if (d.source === 'none') expect(d.value).toBeNull();
+        if (d.source === 'none') {
+          expect({ key: d.key, value: d.value }).toEqual({ key: d.key, value: null });
+        }
       }
     }
   });
@@ -167,28 +221,152 @@ describe('a measured zero and an unmeasured null are different answers', () => {
     expect(v.gaps).toContain('intent:no_value_for_subject');
   });
 
-  it('an unanswered declared timeline is null, not "not urgent"', () => {
+  it('a FALSE timeline is null, because the column default is false', () => {
+    // The defect attempt 1 shipped: `leads.evaluating_90_days` is
+    // `allowNull: false, defaultValue: false`, so `false` is what the column
+    // holds for every lead nobody asked. Reading it as "not evaluating" turned a
+    // column default into a declared measurement, on the one dimension both
+    // programmes depend on.
+    const v = scoreSubject(
+      signals({ lead: { ...fullLead, evaluating_90_days: false }, observed: { page_events: 1, behavioral_signals: 0 } }),
+      'business',
+    );
+    expect(v.dimensions.find((d) => d.key === 'urgency')?.value).toBeNull();
+    expect(v.gaps).toContain('urgency:default_not_distinguishable_from_unasked');
+    expect(v.summary).toBeNull();
+  });
+
+  it('a null timeline is the same answer, by the same reason', () => {
     const v = scoreSubject(
       signals({ lead: { ...fullLead, evaluating_90_days: null }, observed: { page_events: 1, behavioral_signals: 0 } }),
       'business',
     );
     expect(v.dimensions.find((d) => d.key === 'urgency')?.value).toBeNull();
-    expect(v.gaps).toContain('urgency:no_value_for_subject');
+    expect(v.gaps).toContain('urgency:default_not_distinguishable_from_unasked');
   });
 
-  it('an answered "no" IS a measurement, and scores low rather than null', () => {
+  it('a negative answer counts ONLY when the caller confirms it was asked', () => {
+    // The seam for a source that records the asking. Nothing in the repo does
+    // today, so a caller that cannot answer leaves it undefined — and then the
+    // dimension stays null rather than inventing a negative.
     const v = scoreSubject(
-      signals({ lead: { ...fullLead, evaluating_90_days: false }, observed: { page_events: 1, behavioral_signals: 0 } }),
+      signals({
+        lead: { ...fullLead, evaluating_90_days: false },
+        observed: { page_events: 1, behavioral_signals: 0 },
+        asked: { evaluating_90_days: true },
+      }),
       'business',
     );
     const urgency = v.dimensions.find((d) => d.key === 'urgency');
     expect(urgency?.value).toBe(10);
-    expect(urgency?.factors[0].label).toBe('Not evaluating within 90 days');
+    expect(urgency?.factors[0].label).toBe('Asked, and not evaluating within 90 days');
+  });
+
+  it('a positive timeline is a real answer and scores the cap', () => {
+    const v = scoreSubject(
+      signals({ lead: { ...fullLead, evaluating_90_days: true }, observed: { page_events: 1, behavioral_signals: 0 } }),
+      'business',
+    );
+    expect(v.dimensions.find((d) => d.key === 'urgency')?.value).toBe(100);
+  });
+
+  it('a string that is not an answer does not become one', () => {
+    // `'yes'` is not in the truthy set, and attempt 1 scored it as "not
+    // evaluating" — a third way to render a non-answer as a measurement.
+    const v = scoreSubject(
+      signals({ lead: { ...fullLead, evaluating_90_days: 'yes' }, observed: null }),
+      'business',
+    );
+    expect(v.dimensions.find((d) => d.key === 'urgency')?.value).toBeNull();
   });
 
   it('a lead row that is absent entirely leaves fit null', () => {
     const v = scoreSubject(signals({ lead: null, observed: { page_events: 2, behavioral_signals: 1 } }), 'business');
     expect(v.dimensions.find((d) => d.key === 'fit')?.value).toBeNull();
+  });
+
+  it('(a) a TEXT value in a numeric column does not become a measured zero', () => {
+    // `annual_revenue` is a VARCHAR. Attempt 1 stripped the non-digits, got `''`,
+    // and `Number('')` is 0 — so "confidential" scored 10 points for "Annual
+    // revenue recorded".
+    const v = scoreSubject(signals({ lead: { annual_revenue: 'confidential' } }), 'business');
+    expect(v.dimensions.find((d) => d.key === 'fit')?.value).toBeNull();
+    expect(v.available).toBe(false);
+  });
+
+  it('(a2) an unparseable employee count is absent, not zero employees', () => {
+    const v = scoreSubject(signals({ lead: { employee_count: 'unknown' } }), 'business');
+    expect(v.dimensions.find((d) => d.key === 'fit')?.value).toBeNull();
+  });
+
+  it('(b) an EMPTY array is not a recorded list', () => {
+    // `[]` is truthy, so attempt 1 awarded it the same 10 points as a populated
+    // list and labelled it "0 technologies named". The advisory mapper really
+    // does store `[]` when the advisor sends nothing.
+    const v = scoreSubject(
+      signals({ lead: { technology_stack: [], departments_impacted: [], selected_systems: [] } }),
+      'business',
+    );
+    const fit = v.dimensions.find((d) => d.key === 'fit');
+    expect(fit?.value).toBeNull();
+    expect(fit?.factors).toEqual([]);
+  });
+
+  it('(c) an ALL-EMPTY lead has no summary, for EITHER programme', () => {
+    // Attempt 1: summary 26 for business and 3 for consulting, from a subject
+    // with nothing measured at all. This is the case the whole task exists for.
+    // `employee_count: ''`, not `0`: every numeric column here is nullable with
+    // NO default, so a real 0 is something somebody wrote — case (c2) asserts
+    // that — and putting one in this fixture would have made "nothing was
+    // measured" quietly untrue.
+    const empty = {
+      industry: '',
+      annual_revenue: '',
+      employee_count: '',
+      company_size: '',
+      technology_stack: [],
+      evaluating_90_days: false,
+      maturity_score: '',
+      estimated_roi: '',
+      departments_impacted: [],
+      selected_systems: [],
+    };
+    for (const program of ['business', 'consulting'] as const) {
+      const v = scoreSubject(signals({ lead: empty }), program);
+      expect({
+        program,
+        summary: v.summary,
+        available: v.available,
+        anyValue: v.dimensions.some((d) => d.value !== null),
+      }).toEqual({ program, summary: null, available: false, anyValue: false });
+    }
+  });
+
+  it('(c2) a zero employee_count IS a measurement when it is a real zero', () => {
+    // The other direction: 0 as a NUMBER is an answer, and must not be swept up
+    // by the fix for the empty string.
+    const v = scoreSubject(signals({ lead: { employee_count: 0, industry: 'Consulting' } }), 'business');
+    const fit = v.dimensions.find((d) => d.key === 'fit');
+    expect(fit?.value).not.toBeNull();
+    expect(fit?.factors.find((f) => f.factor === 'employee_count')?.label).toBe('0 employees');
+  });
+
+  it('(d) an unmeasured maturity score leaves consulting feasibility null', () => {
+    // The hole the verifier's own mutation walked through: a zero default with no
+    // `?? 0` in sight would have produced a full non-null consulting summary
+    // from a column nobody wrote.
+    const v = scoreSubject(
+      signals({ lead: { selected_systems: 'crm', evaluating_90_days: true } }),
+      'consulting',
+    );
+    expect(v.dimensions.find((d) => d.key === 'technical_feasibility')?.value).toBeNull();
+    expect(v.gaps).toContain('technical_feasibility:no_value_for_subject');
+    expect(v.summary).toBeNull();
+  });
+
+  it('(d2) a maturity score of 0 IS a measurement', () => {
+    const v = scoreSubject(signals({ lead: { maturity_score: 0, selected_systems: 'crm' } }), 'consulting');
+    expect(v.dimensions.find((d) => d.key === 'technical_feasibility')?.value).toBe(0);
   });
 
   it('a lead row with none of the fit fields recorded is null, not 0', () => {

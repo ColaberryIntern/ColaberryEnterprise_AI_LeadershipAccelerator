@@ -51,6 +51,16 @@ export interface SubjectSignals {
   /** Counted inbound signals. `null` when the caller did not read them at all. */
   observed: { page_events: number; behavioral_signals: number } | null;
   /**
+   * Which questions were actually PUT to this subject.
+   *
+   * `leads.evaluating_90_days` is `NOT NULL DEFAULT false`, so the column cannot
+   * distinguish "answered no" from "never asked" — and reading the default as an
+   * answer is the defect attempt 1 shipped. Nothing in the repo records the
+   * asking today, so a caller that does not know leaves this undefined and the
+   * dimension stays null. This is the seam for a source that can answer it.
+   */
+  asked?: { evaluating_90_days?: boolean };
+  /**
    * Recorded, NEVER scored. Four writers with disjoint vocabularies
    * (`lead_temperature`), an in-place overwrite with no history
    * (`opportunity_scores`), and a competing offer vocabulary
@@ -65,24 +75,52 @@ export interface SubjectSignals {
   computed_at: Date | null;
 }
 
-type Scored = { value: number | null; factors: ScoreFactor[] };
+type Scored = {
+  value: number | null;
+  factors: ScoreFactor[];
+  /** Why the value is null, when "the caller read nothing" is not the reason. */
+  nullReason?: string;
+};
 
 const clamp = (n: number, cap: number): number => Math.max(0, Math.min(cap, Math.round(n)));
 
-/** A number from a column that may arrive as a string, or not at all. */
+/**
+ * A number from a column that may arrive as a string, or not at all.
+ *
+ * THE TRAP THIS GUARDS, which shipped in attempt 1: stripping non-digits from
+ * `'confidential'` leaves `''`, and `Number('')` is **0**. So a text value in a
+ * `VARCHAR` revenue column became a measured zero and scored points for "Annual
+ * revenue recorded". A digit-stripped string that holds no digits is not a
+ * number, and this now says so.
+ */
 function numeric(raw: unknown): number | null {
-  if (raw === null || raw === undefined || raw === '') return null;
-  const n = typeof raw === 'number' ? raw : Number(String(raw).replace(/[^0-9.\-]/g, ''));
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
+  const text = String(raw).trim();
+  if (text === '') return null;
+  const digits = text.replace(/[^0-9.\-]/g, '');
+  if (digits === '' || digits === '-' || digits === '.') return null;
+  const n = Number(digits);
   return Number.isFinite(n) ? n : null;
 }
 
-/** A list from a column that may arrive as a string, an array, or not at all. */
+/**
+ * A list from a column that may arrive as a string, an array, or not at all.
+ *
+ * AN EMPTY ARRAY IS NOT A LIST. `[]` is truthy, so attempt 1 awarded an empty
+ * JSONB array the same points as a populated one and labelled it "0
+ * technologies named" — and the advisory mapper really does store `[]` when the
+ * advisor sends nothing. Empty in, `null` out: nothing to score, and the
+ * dimension says so through its gap instead of through a fabricated factor.
+ */
 function list(raw: unknown): string[] | null {
-  if (Array.isArray(raw)) return raw.map((x) => String(x)).filter(Boolean);
-  if (typeof raw === 'string' && raw.trim() !== '') {
-    return raw.split(',').map((x) => x.trim()).filter(Boolean);
-  }
-  return null;
+  const items = Array.isArray(raw)
+    ? raw.map((x) => String(x).trim())
+    : typeof raw === 'string'
+      ? raw.split(',').map((x) => x.trim())
+      : [];
+  const kept = items.filter((x) => x !== '');
+  return kept.length > 0 ? kept : null;
 }
 
 /* ── the three sourced business dimensions ─────────────────────────────────── */
@@ -168,20 +206,60 @@ function scoreIntent(signals: SubjectSignals, spec: ScoreDimensionSpec): Scored 
   return { value: clamp(factors.reduce((sum, f) => sum + f.points, 0), spec.cap), factors };
 }
 
-/** A declared timeline. Null when the field was never answered. */
+/**
+ * A declared timeline — and only a POSITIVE answer is one.
+ *
+ * `leads.evaluating_90_days` is `allowNull: false, defaultValue: false`, so
+ * `false` is what the column holds for every lead nobody asked. Attempt 1 read
+ * it as an answer and labelled it "Not evaluating within 90 days": a column
+ * default rendered as a declared measurement, on the one dimension both
+ * programmes depend on.
+ *
+ * So `true` scores, and `false` is `null` with its own gap — unless the caller
+ * can say the question was actually put, which `asked.evaluating_90_days`
+ * exists for. Nothing in the repo records that today; the parameter is the seam
+ * for whatever does, and a caller that cannot answer it must not pretend.
+ *
+ * The consequence is worth stating: almost every subject now has no urgency and
+ * therefore no summary. That is the true state of the data, and a summary built
+ * on a column default would have been a number about nobody.
+ */
 function scoreUrgency(signals: SubjectSignals, spec: ScoreDimensionSpec): Scored {
   const raw = signals.lead?.evaluating_90_days;
-  if (raw === null || raw === undefined || raw === '') return { value: null, factors: [] };
-  const evaluating = raw === true || String(raw).toLowerCase() === 'true' || String(raw) === '1';
-  const factors: ScoreFactor[] = [
-    {
-      factor: 'evaluating_90_days',
-      label: evaluating ? 'Evaluating within 90 days' : 'Not evaluating within 90 days',
-      points: evaluating ? spec.cap : 10,
-      detail: 'the only declared-timeline field on a lead',
-    },
-  ];
-  return { value: clamp(factors[0].points, spec.cap), factors };
+  const positive = raw === true || String(raw).toLowerCase() === 'true' || String(raw) === '1';
+  if (positive) {
+    return {
+      value: spec.cap,
+      factors: [
+        {
+          factor: 'evaluating_90_days',
+          label: 'Evaluating within 90 days',
+          points: spec.cap,
+          detail: 'the only declared-timeline field on a lead, and the only value of it that is an answer',
+        },
+      ],
+    };
+  }
+
+  if (signals.asked?.evaluating_90_days === true) {
+    return {
+      value: 10,
+      factors: [
+        {
+          factor: 'evaluating_90_days',
+          label: 'Asked, and not evaluating within 90 days',
+          points: 10,
+          detail: 'the caller confirmed the question was put, so the negative IS an answer',
+        },
+      ],
+    };
+  }
+
+  return {
+    value: null,
+    factors: [],
+    nullReason: 'default_not_distinguishable_from_unasked',
+  };
 }
 
 /* ── the three sourced consulting dimensions ───────────────────────────────── */
@@ -209,16 +287,25 @@ function scoreSolutionFit(signals: SubjectSignals, spec: ScoreDimensionSpec): Sc
   return { value: clamp(factors.reduce((sum, f) => sum + f.points, 0), spec.cap), factors };
 }
 
-/** Declared AI maturity. Null when nobody scored it. */
+/**
+ * AI-derived maturity. Null when nothing wrote it.
+ *
+ * `leads.maturity_score` is written by the advisory sync as
+ * `Math.round(recommendation.confidence * 100)`, so this is a model's
+ * confidence, not the lead's own answer. It is used as a RANKING input, which
+ * AI is allowed to be, and the factor says where it came from so a reviewer is
+ * never misled into reading it as a declaration.
+ */
 function scoreTechnicalFeasibility(signals: SubjectSignals, spec: ScoreDimensionSpec): Scored {
   const maturity = numeric(signals.lead?.maturity_score);
   if (maturity === null) return { value: null, factors: [] };
   const factors: ScoreFactor[] = [
     {
       factor: 'maturity_score',
-      label: `Declared AI maturity ${maturity}`,
+      label: `Advisory AI maturity ${maturity}`,
       points: clamp(maturity <= 10 ? maturity * 10 : maturity, spec.cap),
-      detail: 'the lead’s own maturity answer, read as feasibility rather than as intent',
+      detail:
+        'written by the advisory sync as recommendation.confidence * 100 - a model’s confidence, not the lead’s own answer',
     },
   ];
   const stack = list(signals.lead?.technology_stack);
@@ -307,7 +394,7 @@ export function scoreSubject(signals: SubjectSignals, program: JourneyProgramKin
       source: spec.source,
       factors: scored.factors,
     });
-    if (scored.value === null) gaps.push(`${spec.key}:no_value_for_subject`);
+    if (scored.value === null) gaps.push(`${spec.key}:${scored.nullReason ?? 'no_value_for_subject'}`);
   }
 
   const labels = labelFactors(signals);

@@ -47,7 +47,18 @@ export type SignalSource =
   | 'lead_firmographics'
   | 'declared_timeline'
   | 'declared_systems'
-  | 'declared_maturity'
+  /**
+   * NOT a declared answer. `leads.maturity_score` is written by the advisory
+   * sync as `Math.round(recommendation.confidence * 100)`
+   * (`advisoryLeadMapperService.ts`, `advisorySyncController.ts`), so this
+   * dimension is AI-DERIVED and named that way rather than as "declared".
+   *
+   * It stays a source: AI may rank and recommend, and this touches no cohort
+   * date, price, seat, consent state or brand boundary — the things AI may never
+   * be authoritative for. What it may not be is invisible, which is what calling
+   * it `declared_maturity` made it.
+   */
+  | 'advisory_ai_maturity'
   | 'observed_visitor_signals'
   | 'none';
 
@@ -66,6 +77,19 @@ export interface ScoreDimensionSpec {
    * it actually measures is what stops that.
    */
   reason?: string;
+  /**
+   * A source that EXISTS and is deliberately not wired here.
+   *
+   * Explorer's `DEFERRED_RULES` precedent. T306's verifier found
+   * `relationship_engagement` declared sourceless while
+   * `interaction_outcomes.outcome` and `appointments.status` already power a
+   * per-lead engagement score in `opportunityScoringService` — a hidden
+   * capability, and a false reason. This field records the conflict in the
+   * registry instead of in a comment: the plan's acceptance pins the sourceless
+   * count at 7 of 10 and 6 of 9, so wiring these is a declared follow-up rather
+   * than something to smuggle in against a stated criterion.
+   */
+  deferred_source?: string;
 }
 
 /**
@@ -78,7 +102,7 @@ export interface ScoreDimensionSpec {
  * separate entries under the spec's own names. Merging them would be inventing a
  * vocabulary neither section uses.
  */
-export const SCORE_DIMENSIONS: readonly ScoreDimensionSpec[] = Object.freeze([
+const ENTRIES: ScoreDimensionSpec[] = [
   /* ── shared by both programmes ─────────────────────────────────────────── */
   {
     key: 'problem_clarity',
@@ -153,7 +177,9 @@ export const SCORE_DIMENSIONS: readonly ScoreDimensionSpec[] = Object.freeze([
     weight: 0,
     cap: 100,
     reason:
-      'every candidate measures OUR outbound — `communication_logs`, `activities`, and `leads.pipeline_stage`, which advances on a send — so it records what we did, not where the relationship stands',
+      'the outbound-side candidates (`communication_logs`, `activities`, `leads.pipeline_stage`, which advances on a send) record what WE did rather than where the relationship stands — but a counterparty-side source does exist, so this entry is deferred rather than absent',
+    deferred_source:
+      '`interaction_outcomes.outcome` (`replied`, `booked_meeting`, `answered`, `declined`, keyed on `lead_id`, written live by the Mandrill, GHL and Synthflow webhooks) and `appointments.status`; `opportunityScoringService` already computes an engagement score from exactly those. Wiring it changes the sourceless count this task pins at 7 of 10, so it is T310 with the count amended deliberately.',
   },
   {
     key: 'delivery_feasibility',
@@ -173,7 +199,9 @@ export const SCORE_DIMENSIONS: readonly ScoreDimensionSpec[] = Object.freeze([
     weight: 0,
     cap: 100,
     reason:
-      'the nearest candidate is a bounce count on `interaction_outcomes`, which is a channel problem rather than a deal risk — and a second opt-out list is forbidden in this tree',
+      'no deal-risk model exists: nothing records a stalled decision, a competing vendor or a lost deal, and `leads.pipeline_stage` cannot express "lost" at all (`advancePipelineStage` refuses it)',
+    deferred_source:
+      '`interaction_outcomes.outcome` also carries `declined` and `no_response`, which ARE deal risk and need none of the opt-out status literals T304 bans. Deferred for the same pinned-count reason as relationship engagement, not because the data is missing.',
   },
 
   /* ── §5.4, the consulting journey ──────────────────────────────────────── */
@@ -189,7 +217,7 @@ export const SCORE_DIMENSIONS: readonly ScoreDimensionSpec[] = Object.freeze([
     key: 'technical_feasibility',
     label: 'Technical feasibility',
     programs: ['consulting'],
-    source: 'declared_maturity',
+    source: 'advisory_ai_maturity',
     weight: 0.3,
     cap: 100,
   },
@@ -231,7 +259,19 @@ export const SCORE_DIMENSIONS: readonly ScoreDimensionSpec[] = Object.freeze([
     reason:
       '`technology_stack` and `selected_systems` name systems but carry no integration or security attributes, and nothing else in the repo models either',
   },
-]);
+];
+
+/**
+ * Deep-frozen, not shallow.
+ *
+ * `Object.freeze` on the array alone left every entry writable — T306's
+ * verifier set `SCORE_DIMENSIONS[0].source` at runtime and nothing objected. A
+ * registry whose entries can be edited in place is a registry that can disagree
+ * with the test that pins it.
+ */
+export const SCORE_DIMENSIONS: readonly ScoreDimensionSpec[] = Object.freeze(
+  ENTRIES.map((entry) => Object.freeze({ ...entry, programs: Object.freeze([...entry.programs]) as JourneyProgramKind[] })),
+);
 
 /** The dimensions one programme declares, in registry order. */
 export function dimensionsFor(program: JourneyProgramKind): ScoreDimensionSpec[] {
