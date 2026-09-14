@@ -47,12 +47,27 @@ export interface TriageConcern {
   detail: string;
 }
 
+/**
+ * What a reader who has NOT seen the key chose. Independent evidence, unlike
+ * an argument constructed after seeing the answer.
+ */
+export interface BlindRead {
+  answer: string;
+  confidence: 'sure' | 'close' | 'guess';
+  runner_up: string | null;
+  why: string;
+  /** Whether `answer` is one of the marked correct keys. */
+  agrees: boolean;
+}
+
 export interface TriageResult {
   verdict: TriageVerdict;
   severity: TriageSeverity | null;
   concerns: TriageConcern[];
   /** Set when the verdict is `error`, so a failure is countable by class. */
   errorClass?: string | null;
+  /** The blind read, when the review ran one; null when that call failed. */
+  blind?: BlindRead | null;
 }
 
 /**
@@ -71,8 +86,28 @@ export interface TriageResult {
  * of the triage table's unique key, a v2 run is a new opinion rather than a
  * duplicate suppressed against v1's rows — which is the reason that column is in
  * the key at all.
+ *
+ * v3-blind-then-argue. On 2026-09-14, v2 over a bank that passed every shape
+ * check flagged 53 of 100 items, every one medium, every one
+ * `defensible_distractor`, every one phrased "could be seen as" or "a valid
+ * alternative" — the hedged form the prompt says LOSES. A reviewer asked to
+ * judge its own argument is not independent of it. So the review now starts
+ * with a different kind of evidence: the reviewer ANSWERS THE QUESTION without
+ * seeing the key. A reader who picks a different option is a finding on its
+ * own (high, `answer_disputed`). Only when the blind read agrees does the
+ * argue-against step run, and an argument the blind read did not share is
+ * recorded at LOW - on the record, not on the reading list. The reading list
+ * is what a person would actually get wrong.
  */
-export const TRIAGE_PROMPT_VERSION = 'v2-argument-wins';
+export const TRIAGE_PROMPT_VERSION = 'v3-blind-then-argue';
+
+/**
+ * The blind read wants the strongest reader available, because it stands in
+ * for a competent candidate; a weak reader would dispute hard items it simply
+ * could not answer. The argue-against step keeps the cheaper model - its job
+ * is to construct an objection, which does not need the stronger one.
+ */
+export const BLIND_MODEL = 'gpt-4o';
 
 /** The reviewer. A different model family from the author, which is the point. */
 export const TRIAGE_MODEL = 'gpt-4o-mini';

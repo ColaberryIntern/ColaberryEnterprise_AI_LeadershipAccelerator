@@ -7,6 +7,8 @@ import {
   TriageVerdict,
   TRIAGE_MODEL,
   TRIAGE_PROMPT_VERSION,
+  BlindRead,
+  BLIND_MODEL,
 } from './triageTypes';
 
 /**
@@ -275,4 +277,132 @@ export async function triageQuestion(q: TriageInput): Promise<TriageResult> {
     message: lastError?.message,
   });
   return { verdict: 'error', severity: null, concerns: [], errorClass };
+}
+
+// ── the blind read ───────────────────────────────────────────────────────────
+//
+// Independent evidence. The argue-against step sees the key and reasons from
+// it; this step sees only what a candidate sees. Disagreement here is the one
+// signal that does not depend on the reviewer judging its own argument.
+
+const BLIND_SYSTEM = [
+  'You are a candidate sitting a professional certification exam.',
+  'Read the question and choose the single best option. Commit to one.',
+  '',
+  'Respond with JSON only:',
+  '{"answer":"A"|"B"|"C"|"D",',
+  ' "confidence":"sure"|"close"|"guess",',
+  ' "runner_up":"B"|null,',
+  ' "why":"one sentence"}',
+  '',
+  '"close" means one other option was nearly as good; name it as runner_up.',
+].join('\n');
+
+function blindPrompt(q: TriageInput): string {
+  return [
+    `Domain ${q.domain_id}, objective ${q.objective_id}.`,
+    '',
+    `QUESTION: ${q.stem}`,
+    '',
+    ...q.options.map((o) => `${o.key}. ${o.text}`),
+    '',
+    'Choose the single best option and answer as JSON.',
+  ].join('\n');
+}
+
+/** Exported for tests. Null when the reply does not name one of the options. */
+export function parseBlindResponse(raw: string | null | undefined, q: TriageInput): BlindRead | null {
+  if (!raw) return null;
+  let parsed: any;
+  try { parsed = JSON.parse(raw); } catch { return null; }
+  const keys = new Set(q.options.map((o) => o.key));
+  const answer = String(parsed?.answer ?? '').trim().toUpperCase();
+  if (!keys.has(answer)) return null;
+  const confidence = ['sure', 'close', 'guess'].includes(parsed?.confidence) ? parsed.confidence : 'guess';
+  const runner = String(parsed?.runner_up ?? '').trim().toUpperCase();
+  return {
+    answer,
+    confidence,
+    runner_up: keys.has(runner) && runner !== answer ? runner : null,
+    why: String(parsed?.why ?? '').slice(0, 300),
+    agrees: q.correct_keys.includes(answer),
+  };
+}
+
+/**
+ * Answer the question without the key. Returns null on any failure - the
+ * caller falls back to the argue-against step alone, and says so.
+ */
+export async function blindAnswer(q: TriageInput): Promise<BlindRead | null> {
+  if (q.correct_keys.length !== 1) return null; // "the" answer has no single value
+  let lastError: any = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const res = await reviewer().chat.completions.create({
+        model: BLIND_MODEL,
+        temperature: 0,
+        max_tokens: 200,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: BLIND_SYSTEM },
+          { role: 'user', content: blindPrompt(q) },
+        ],
+      });
+      return parseBlindResponse(res?.choices?.[0]?.message?.content ?? null, q);
+    } catch (err: any) {
+      lastError = err;
+      if (isClientError(err)) break;
+      if (attempt < MAX_ATTEMPTS) await new Promise((r) => setTimeout(r, 800 * attempt));
+    }
+  }
+  console.error('[certTriage] blind read failed', {
+    question_key: q.question_key, error_class: classify(lastError), message: lastError?.message,
+  });
+  return null;
+}
+
+/**
+ * The full review: blind read, then the argue-against step, then one verdict.
+ *
+ *   blind disagrees            -> needs_human / HIGH, answer_disputed
+ *   blind agrees, argue high   -> HIGH, the reviewer's concern
+ *   blind agrees, argue flags  -> LOW: on the record, off the reading list
+ *   blind agrees, argue clean  -> no_concerns
+ *   blind unavailable          -> the argue-against verdict alone, marked so
+ *
+ * `triageQuestion` is left as the pure argue-against step so its contract, and
+ * everything that tested it, stays true.
+ */
+export async function reviewQuestion(q: TriageInput): Promise<TriageResult> {
+  const blind = await blindAnswer(q);
+
+  if (blind && !blind.agrees) {
+    return {
+      verdict: 'needs_human',
+      severity: 'high',
+      blind,
+      concerns: [{
+        kind: 'answer_disputed',
+        option: blind.answer,
+        detail: `A reader without the key chose ${blind.answer} (${blind.confidence}${blind.runner_up ? `, runner-up ${blind.runner_up}` : ''}): ${blind.why} The key is ${q.correct_keys.join('/')}.`,
+      }],
+    };
+  }
+
+  const argued = await triageQuestion(q);
+  if (argued.verdict !== 'needs_human') return { ...argued, blind };
+  if (argued.severity === 'high') return { ...argued, blind };
+
+  // The reviewer built an argument the blind read did not share. Kept, because
+  // a person may still want to see it; low, because a reader who did not know
+  // the answer was not moved by it.
+  const note = blind
+    ? `Blind read agreed with the key (${blind.confidence}). `
+    : 'Blind read unavailable. ';
+  return {
+    ...argued,
+    severity: blind ? 'low' : argued.severity,
+    blind,
+    concerns: argued.concerns.map((c, i) => (i === 0 ? { ...c, detail: `${note}${c.detail}` } : c)),
+  };
 }

@@ -49,7 +49,7 @@ import {
   generateItem, improveItem, achievableScore, ImproverItem,
 } from '../services/certPrep/certQuestionImprover';
 import { createDraftRevision } from '../services/certPrep/certQuestionBankService';
-import { triageQuestion } from '../services/certPrep/certQuestionTriage';
+import { reviewQuestion } from '../services/certPrep/certQuestionTriage';
 import { CCAR_FOUNDATIONS_BLUEPRINT } from '../data/certBlueprints/ccarFoundations';
 import { assignAnswerPosition } from '../data/certBlueprints/items/itemFactory';
 import { lengthPlan } from '../services/certPrep/certOptionLength';
@@ -320,7 +320,7 @@ async function main(): Promise<void> {
     // first batch proved the model will satisfy the rubric with a question whose
     // key does not follow from its own stem. Runs on the FINAL text, after the
     // length step, so a distractor that grew into an arguable answer is caught.
-    const triage = await triageQuestion({
+    const triage = await reviewQuestion({
       question_key: key,
       stem: item.stem,
       options: item.options,
