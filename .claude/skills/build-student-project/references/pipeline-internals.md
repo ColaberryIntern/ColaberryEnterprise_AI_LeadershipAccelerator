@@ -31,6 +31,7 @@ marked where that matters. Everything in
 | `planHash.ts` | pure | `hashPlan` — the sha the reviewer is shown |
 | `planStore.ts` | I/O | `build_intake` + `build_plans`. Raw SQL; those tables have no Sequelize model |
 | `buildSchedule.ts` | pure | Release weeks → real calendar dates, capacity, demo release, prep tasks |
+| `prepTaskPoints.ts` | pure | What a Demo Prep task (`PREP-n`) pays and how to tell one apart. `priceForStory()` is the ONE read every price tag goes through — a plan story's budget share, a prep task's flat rate, null otherwise — so the Projects page, the Today tile and the Classroom rail cannot disagree. No imports on purpose: the tree mapper is pure and route tests stub the database (2026-09-14) |
 | `commandCenterStory.ts` | pure | STORY-000: its id, title, acceptance, and prompt built from the student's own plan |
 | `materializeTasks.ts` | I/O | Plan → `student_task_lists` + `student_tasks`, one transaction |
 | `addStoryService.ts` | I/O | A student adds one story to a PUBLISHED build. Builds the revision (next `STORY-nnn` plus a `should` requirement it fulfils, so `dangling_requirement` never fires), gates it, saves it as the next draft, and hands it to `publishBuild` — the same path as the first publish, so the repo render and materialisation are inherited. Add only: editing a story's acceptance lines rewrites the verification contract. Nothing is written before the gate passes; a plan that predates a blocking rule is refused as `PlanPredatesGate`, not blamed on the student |
