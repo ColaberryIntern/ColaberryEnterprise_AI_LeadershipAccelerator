@@ -179,6 +179,11 @@ export interface AgentDetail {
     max_writes_per_execution: number | null;
     max_proposals_per_run: number | null;
     autonomy_level_set_at: string | null;
+    /** Fleet-wide autonomy-level auto-classification, Phase 2 — 'auto'
+     * (agentCapabilityClassifier.ts set this from real granted tools) vs
+     * 'manual' (a human set it via the reactivation flow) vs null (neither
+     * has ever touched this agent). */
+    autonomy_level_source: 'auto' | 'manual' | null;
   };
   identity: AgentDetailIdentity | null;
   live_status: 'online' | 'away' | 'offline' | 'unknown';

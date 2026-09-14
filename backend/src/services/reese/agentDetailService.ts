@@ -74,6 +74,7 @@ export interface AgentDetailResult {
     max_writes_per_execution: number | null;
     max_proposals_per_run: number | null;
     autonomy_level_set_at: Date | null;
+    autonomy_level_source: 'auto' | 'manual' | null;
   };
   identity: {
     admin_user_id: string;
@@ -425,6 +426,7 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
       max_writes_per_execution: agent.max_writes_per_execution ?? null,
       max_proposals_per_run: agent.max_proposals_per_run ?? null,
       autonomy_level_set_at: agent.autonomy_level_set_at ?? null,
+      autonomy_level_source: agent.autonomy_level_source ?? null,
     },
     identity: adminUser
       ? {

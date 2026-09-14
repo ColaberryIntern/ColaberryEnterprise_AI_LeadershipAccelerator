@@ -126,6 +126,20 @@ describe('getAgentDetail', () => {
     expect(result!.agent.autonomy_level_set_at).toEqual(setAt);
   });
 
+  // Fleet-wide autonomy-level auto-classification, Phase 2 (2026-09-14) —
+  // real autonomy_level_source values pass through verbatim, and an agent
+  // nobody has ever classified reads as an honest null, never a fabricated
+  // 'manual'.
+  it('agent.autonomy_level_source passes through the real value, or null when never classified', async () => {
+    mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, autonomy_level_source: 'auto' });
+    const result = await getAgentDetail('agent-1');
+    expect(result!.agent.autonomy_level_source).toBe('auto');
+
+    mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, autonomy_level_source: undefined });
+    const result2 = await getAgentDetail('agent-1');
+    expect(result2!.agent.autonomy_level_source).toBeNull();
+  });
+
   // Trust & Control slice 2 (2026-09-03) — an unclassified agent (the
   // common case for most of the fleet, per AiAgent.ts's own comment) must
   // read as an honest null, never a fabricated department.
