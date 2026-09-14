@@ -78,6 +78,33 @@ describe('through decideForSubject', () => {
     expect(out.decision.candidates).toEqual([]);
   });
 
+  it('an opted-out learner in conversation is a HARD STOP, not a human-review case - the verifier\'s Probe B', async () => {
+    // Before the retry this recorded `every_candidate_needs_an_unknown_input`
+    // with `requires_human_review: true` where Explorer records
+    // `hard stop: unsubscribed`: the row mis-stated why, and once Phase 4
+    // sources the human inputs a CREATE_HUMAN_TASK would have won for a person
+    // who opted out. Every channel closed by lead status, as T304 stamps it.
+    const closed = (reason: string) => channel(false, reason, 'lead_status');
+    const out = await decideForSubject(
+      ctx({
+        learner: facts({ overlays: ['IN_CONVERSATION'] }),
+        contact: contact({
+          email: closed('lead_unsubscribed'),
+          sms: closed('lead_unsubscribed'),
+          voice: closed('lead_unsubscribed'),
+          in_app: closed('lead_unsubscribed'),
+        }),
+      }),
+      learnerStrategy,
+      deps(),
+      flags(),
+    );
+    if (out.status !== 'decided') throw new Error('disabled');
+    expect(out.decision.reason).toBe('hard_stop:unsubscribed');
+    expect(out.decision.requires_human_review).toBe(false);
+    expect(out.decision.candidates).toEqual([]);
+  });
+
   it('a converted learner is a hard stop before any generator runs', async () => {
     const out = await decideForSubject(ctx({ learner: facts({ primary_state: 'CONVERTED' }) }), learnerStrategy, deps(), flags());
     if (out.status !== 'decided') throw new Error('disabled');

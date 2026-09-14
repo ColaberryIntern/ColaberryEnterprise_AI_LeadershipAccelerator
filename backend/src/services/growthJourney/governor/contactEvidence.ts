@@ -274,19 +274,38 @@ export async function resolveContactEvidence(args: ResolveContactEvidenceArgs): 
  *
  * Tier 0 is suppression, not channel availability (Explorer's own rule, learned
  * the hard way in `runGovernor`): a bounce or a missing consent closes a
- * channel and is not a stop. Only a suppression event, a complaint, a
- * do-not-disturb status or a revoked consent stops the whole decision.
+ * channel and is not a stop. What stops the whole decision: a suppression
+ * event; a lead STATUS that means the person opted out - which is every status
+ * on Explorer's canonical suppressed list except the two below, stated as an
+ * exclusion so that a status added to that list later stops rather than
+ * silently not stopping; a do-not-disturb status; or a revoked consent.
+ *
+ * The first version of this matched the event evaluator and the complaint and
+ * MISSED the opt-out LEAD STATUS itself - the one the enforcement service sets
+ * on every email opt-out, the primary opt-out in the system, and the one this
+ * module checks first and stamps on every channel. T309's verifier drove the
+ * real resolver with that status and watched the mapping say "nothing stops".
+ * The lesson is recorded on the test that now drives every canonical status
+ * through the real resolver into this function.
  *
  * `converted`, `killSwitch` and `campaignInactive` are not this evidence's to
  * answer; the strategy and the context builder own those.
  */
+
+/** The two lead-status closures that are NOT an opt-out, in the reason form this module stamps. */
+const LEAD_STATUS_DNC = 'lead_dnd';
+const LEAD_STATUS_BOUNCE = 'lead_bounced';
+
 export function tierZeroStopsFromContact(
   contact: ContactEvidence,
 ): Omit<HardStopFlags, 'converted' | 'killSwitch' | 'campaignInactive'> {
   const { email, sms, voice } = contact.channels;
+  const closedByStatus = (c: ChannelEvidence) => c.evaluator === 'lead_status';
+  const optedOutByStatus = (c: ChannelEvidence) =>
+    closedByStatus(c) && c.reason !== LEAD_STATUS_DNC && c.reason !== LEAD_STATUS_BOUNCE;
   return {
-    unsubscribed: email.evaluator === 'suppression' || email.reason === 'lead_complained',
-    dnc: [email, sms].some((c) => c.reason === 'lead_dnd'),
+    unsubscribed: email.evaluator === 'suppression' || optedOutByStatus(email),
+    dnc: [email, sms].some((c) => c.reason === LEAD_STATUS_DNC),
     consentRevoked: [email, sms, voice].some((c) => c.evaluator === 'consent' && c.reason === 'revoked'),
   };
 }

@@ -392,6 +392,41 @@ describe('tierZeroStopsFromContact - the suppression half of the six stops, from
     expect(tierZeroStopsFromContact(evidence(over))).toEqual(NONE);
   });
 
+  it.each([
+    ['unsubscribed', { unsubscribed: true, dnc: false, consentRevoked: false }],
+    ['complained', { unsubscribed: true, dnc: false, consentRevoked: false }],
+    ['dnd', { unsubscribed: false, dnc: true, consentRevoked: false }],
+    ['bounced', { unsubscribed: false, dnc: false, consentRevoked: false }],
+  ])('Lead.status %s, through the REAL resolver, maps to %o', async (status, expected) => {
+    // The one this function first MISSED is the first row: the enforcement
+    // service sets that status on every email opt-out, and this module checks
+    // the status before anything else and stamps it on every channel - so a
+    // suppression row alongside it is never even consulted. The verifier drove
+    // exactly this and watched the mapping say nothing stops.
+    arrange({ leadFindByPk: { id: 501, status }, unsubFindAll: [{ channel: 'email', created_at: AFTER_CUTOFF }] });
+    const e = await resolveContactEvidence(args());
+    expect(e.channels.email.evaluator).toBe('lead_status');
+    expect(e.channels.email.reason).toBe(`lead_${status}`);
+    expect(tierZeroStopsFromContact(e)).toEqual(expected);
+  });
+
+  it('the canonical list is exactly the four statuses driven above - a fifth is a failing test here', () => {
+    expect([...SUPPRESSED_LEAD_STATUSES].sort()).toEqual(['bounced', 'complained', 'dnd', 'unsubscribed']);
+  });
+
+  it('a status added to the canonical list later fails SAFE: it stops', () => {
+    // Stated as an exclusion in the mapping precisely so this is the default.
+    const e = evidence({ email: ch(false, 'lead_some_future_status', 'lead_status') });
+    expect(tierZeroStopsFromContact(e).unsubscribed).toBe(true);
+  });
+
+  it('and a lead status that is NOT on the list closes nothing and stops nothing', async () => {
+    arrange({ leadFindByPk: { id: 501, status: 'new' } });
+    const e = await resolveContactEvidence(args());
+    expect(e.channels.email.evaluator).not.toBe('lead_status');
+    expect(tierZeroStopsFromContact(e)).toEqual(NONE);
+  });
+
   it('reads the evaluator names the REAL resolver writes, so the two cannot drift', async () => {
     // Drive the resolver into a suppression verdict and hand its own output in.
     arrange({ unsubFindAll: [{ channel: 'email', created_at: AFTER_CUTOFF }] });

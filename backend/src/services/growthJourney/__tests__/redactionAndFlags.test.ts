@@ -395,7 +395,10 @@ describe('Phase 2 source', () => {
    * strategy. An event name, a model, a `.findAll`, a status literal, a property
    * read - none of those match this, and the control below proves it.
    */
-  const HARD_STOP_KEY = /^\s*unsubscribed:/;
+  // The key may OPEN the line only if the word appears nowhere else on it. The
+  // first version was a bare prefix, and T309's verifier put Explorer's own
+  // `/unsubscrib|complain/i` detector after the colon and walked it through.
+  const HARD_STOP_KEY = /^\s*unsubscribed:(?!.*unsubscrib)/i;
   const fourthDetectorOffenders = (src: string) =>
     src
       .split('\n')
@@ -418,9 +421,14 @@ describe('Phase 2 source', () => {
       "reason: 'unsubscribe_event_email',",
       "if (ctx.hardStop.unsubscribed) stop();",
       "const unsubscribed = events.length > 0;",
+      // V4: a detector hiding behind the allowed key. The allowance is the KEY,
+      // not the line.
+      "    unsubscribed: /unsubscrib|complain/i.test(contactability.email?.reason ?? ''),",
+      "    unsubscribed: ctx.hardStop.unsubscribed || reason.includes('unsubscribe'),",
     ];
     for (const l of trips) expect({ l, trips: fourthDetectorOffenders(l).length }).toEqual({ l, trips: 1 });
     expect(fourthDetectorOffenders("    unsubscribed: email.evaluator === 'suppression',")).toEqual([]);
+    expect(fourthDetectorOffenders("    unsubscribed: email.evaluator === 'suppression' || optedOutByStatus(email),")).toEqual([]);
     expect(fourthDetectorOffenders("import { UnsubscribeEvent as SuppressionEventRow } from '../../../models';")).toEqual([]);
     // Non-vacuity: the production file that carries the allowed shape really does.
     const ce = fs.readFileSync(path.join(__dirname, '..', 'governor', 'contactEvidence.ts'), 'utf8');
