@@ -8,7 +8,7 @@ import { recordWebhookOutcome } from '../services/paysimpleWebhookHealth';
 import LiveSession from '../models/LiveSession';
 import RoomBooking from '../models/RoomBooking';
 import CommunityRoom from '../models/CommunityRoom';
-import { verifyZoomWebhookSignature, computeZoomWebhookEncryptedToken } from '../services/zoomService';
+import { verifyZoomWebhookSignature, computeZoomWebhookEncryptedToken, pickBestMp4 } from '../services/zoomService';
 import {
   ingestRecordingForSession,
   ingestRecordingForBooking,
@@ -271,14 +271,14 @@ export async function handleZoomWebhook(req: Request, res: Response): Promise<vo
     }
 
     const files: any[] = event.payload?.object?.recording_files || [];
-    const mp4s = files.filter((f: any) => f.file_type === 'MP4');
-    if (!mp4s.length) {
+    // Same selector as the polling backfill in zoomService, so a webhook-driven
+    // ingest and a cron-driven one can never pick different files for the
+    // same meeting.
+    const best = pickBestMp4(files);
+    if (!best) {
       res.status(200).json({ received: true, matched: true, note: 'no MP4 file in payload' });
       return;
     }
-    // Pause/resume can produce more than one MP4 for the same meeting — the
-    // largest file is the real one, not necessarily whichever comes first.
-    const best = mp4s.reduce((a: any, b: any) => (b.file_size > a.file_size ? b : a));
 
     const fallbackTitle = session ? session.title : booking ? booking.title : (room as CommunityRoom).name;
     const preResolvedMatch = {
@@ -287,6 +287,7 @@ export async function handleZoomWebhook(req: Request, res: Response): Promise<vo
       name: `${event.payload?.object?.topic || fallbackTitle}.mp4`,
       mimeType: 'video/mp4',
       sizeBytes: best.file_size ?? null,
+      recordingType: best.recording_type ?? null,
     };
 
     // Ack fast — a multi-hundred-MB download shouldn't block Zoom's webhook
