@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { scoreSubject } from '../scoring/scoreVector';
 import {
   BUSINESS_OVERLAYS,
   BUSINESS_STATES,
@@ -146,16 +147,68 @@ describe('evidence from now: one case per entry', () => {
 });
 
 describe('knowledge never steps down; a deal may; a customer is terminal', () => {
+  /**
+   * Every downward pair on the ladder, each driven by evidence that really
+   * produces the lower state.
+   *
+   * Attempt 1 drove all three rows with NO evidence, so the candidate was always
+   * rung 0 — and a mutation allowing every downward step except a fall to the
+   * bottom rung survived all 573 tests. The `it.each` labels named these very
+   * pairs while the callback ignored the second element, so the label claimed a
+   * property the test did not check. Each row now carries the input that
+   * produces its candidate, and asserts that it does.
+   */
+  const CANDIDATE_INPUTS: Record<string, Partial<ClassifyBusinessInput>> = {
+    NEW_BUSINESS_LEAD: {},
+    PROBLEM_IDENTIFIED: { lead: { idea_input: 'our onboarding takes three weeks' } },
+    EXPLORING_SOLUTIONS: { lead: { selected_systems: 'crm,warehouse' } },
+  };
+
   it.each([
     ['PROBLEM_IDENTIFIED', 'NEW_BUSINESS_LEAD'],
+    ['EXPLORING_SOLUTIONS', 'NEW_BUSINESS_LEAD'],
     ['EXPLORING_SOLUTIONS', 'PROBLEM_IDENTIFIED'],
+    ['QUALIFIED_OPPORTUNITY', 'NEW_BUSINESS_LEAD'],
+    ['QUALIFIED_OPPORTUNITY', 'PROBLEM_IDENTIFIED'],
     ['QUALIFIED_OPPORTUNITY', 'EXPLORING_SOLUTIONS'],
-  ])('holds at %s rather than falling to %s', (previous) => {
-    // Knowing they have a problem does not stop being true because they went
-    // quiet. They gain a STALLED overlay instead.
-    const r = classifyBusinessState(input({ previous: { state: previous, state_entered_at: AS_OF } }));
+  ])('holds at %s when the evidence now reads as %s', (previous, candidateState) => {
+    const over = CANDIDATE_INPUTS[candidateState];
+
+    // First: the input really does produce the lower state on its own. Without
+    // this the row below could be passing for the wrong reason.
+    expect(classifyBusinessState(input(over)).state).toBe(candidateState);
+
+    // Then: with that previous state, the ladder refuses to step down.
+    const r = classifyBusinessState(
+      input({ ...over, previous: { state: previous, state_entered_at: AS_OF } }),
+    );
     expect(r.state).toBe(previous);
     expect(r.evidence[r.evidence.length - 1]).toContain('knowledge does not step down');
+  });
+
+  it('a real-world demotion: the replies age out but the systems remain', () => {
+    // The concrete failure the weak test would have missed. A subject reached
+    // QUALIFIED on inbound outcomes; those rows are archived, `selected_systems`
+    // is still there, and the evidence now reads EXPLORING_SOLUTIONS.
+    const r = classifyBusinessState(
+      input({
+        previous: { state: 'QUALIFIED_OPPORTUNITY', state_entered_at: AS_OF },
+        lead: { selected_systems: 'crm' },
+        inbound: { replied: 0, booked_meeting: 0, answered: 0, declined: 0 },
+      }),
+    );
+    expect(r.state).toBe('QUALIFIED_OPPORTUNITY');
+  });
+
+  it('and an UPWARD step on the ladder is always allowed', () => {
+    // The other direction: monotonicity must not become "never changes".
+    const r = classifyBusinessState(
+      input({
+        previous: { state: 'PROBLEM_IDENTIFIED', state_entered_at: AS_OF },
+        lead: { selected_systems: 'crm' },
+      }),
+    );
+    expect(r.state).toBe('EXPLORING_SOLUTIONS');
   });
 
   it('a discovery-ready deal that cools falls back — but not below QUALIFIED', () => {
@@ -209,14 +262,45 @@ describe('knowledge never steps down; a deal may; a customer is terminal', () =>
 describe('state_entered_at moves only on a real change', () => {
   const entered = new Date('2026-09-01T00:00:00Z');
 
-  it('is left alone when the state does not change', () => {
-    // Every duration rule reads this. Resetting it on a nightly re-run would
-    // make nobody ever look stalled.
-    const r = classifyBusinessState(
-      input({ previous: { state: 'PROBLEM_IDENTIFIED', state_entered_at: entered }, lead: { idea_input: 'x' } }),
+  /**
+   * Preserved in every case where the state does not change — not just the one.
+   *
+   * Attempt 1 tested a single 13-day-old non-customer, so resetting the clock
+   * for a CUSTOMER, or for anyone already past the 21-day line, survived all 573
+   * tests. That is the exact hazard this file's own comment names: a stalled
+   * subject whose clock resets nightly flips STALLED on and off forever.
+   */
+  it.each([
+    ['a recent subject', 'PROBLEM_IDENTIFIED', new Date('2026-09-01T00:00:00Z'), { lead: { idea_input: 'x' } }],
+    ['one past the stall line', 'PROBLEM_IDENTIFIED', new Date('2026-07-01T00:00:00Z'), { lead: { idea_input: 'x' } }],
+    ['a CUSTOMER', 'CUSTOMER', new Date('2026-05-01T00:00:00Z'), { isCustomer: true }],
+    ['a commercial state', 'DISCOVERY_READY', new Date('2026-08-20T00:00:00Z'), { appointments: { scheduled: 1, completed: 0, no_show: 0, cancelled: 0 } }],
+  ] as [string, string, Date, Partial<ClassifyBusinessInput>][])(
+    'is left alone for %s whose state does not change',
+    (_label, previous, enteredAt, over) => {
+      const r = classifyBusinessState(input({ ...over, previous: { state: previous, state_entered_at: enteredAt } }));
+      expect(r.state).toBe(previous);
+      expect(r.state_entered_at).toEqual(enteredAt);
+    },
+  );
+
+  it('and a STALLED subject keeps its clock, so the overlay does not flicker', () => {
+    // Two runs a day apart over the same unchanged state: the overlay must stay
+    // on, which it only can if the clock did not move.
+    const old = new Date('2026-08-01T00:00:00Z');
+    const monday = classifyBusinessState(
+      input({ previous: { state: 'QUALIFIED_OPPORTUNITY', state_entered_at: old }, lead: { selected_systems: 'crm' } }),
     );
-    expect(r.state).toBe('PROBLEM_IDENTIFIED');
-    expect(r.state_entered_at).toEqual(entered);
+    const tuesday = classifyBusinessState(
+      input({
+        previous: { state: monday.state, state_entered_at: monday.state_entered_at },
+        lead: { selected_systems: 'crm' },
+        asOf: new Date('2026-09-15T12:00:00Z'),
+      }),
+    );
+    expect(monday.overlays).toContain('STALLED');
+    expect(tuesday.overlays).toContain('STALLED');
+    expect(tuesday.state_entered_at).toEqual(old);
   });
 
   it('moves to asOf when the state does change', () => {
@@ -282,6 +366,13 @@ describe('overlays are derived fresh, never accumulated', () => {
     const old = new Date('2026-08-01T00:00:00Z');
     const r = classifyBusinessState(input({ previous: { state: 'CUSTOMER', state_entered_at: old } }));
     expect(r.overlays).not.toContain('STALLED');
+  });
+
+  it('NO_RESPONSE does not apply to a CUSTOMER who paid without replying', () => {
+    // Someone who bought without ever sending a reply is not unresponsive.
+    const r = classifyBusinessState(input({ isCustomer: true }));
+    expect(r.state).toBe('CUSTOMER');
+    expect(r.overlays).not.toContain('NO_RESPONSE');
   });
 
   it('NO_RESPONSE applies past the first state only', () => {
@@ -361,5 +452,24 @@ describe('pipeline_stage is read and never written', () => {
     for (const forbidden of ['sequelize', 'findAll', 'findOne', 'Date.now', 'new Date()', 'console.', 'process.env']) {
       expect({ forbidden, present: CODE.includes(forbidden) }).toEqual({ forbidden, present: false });
     }
+  });
+});
+
+describe('a signal-less subject: the acceptance clause, both halves', () => {
+  it('lands in NEW_BUSINESS_LEAD with a null summary and its gaps named', () => {
+    // Attempt 1 tested the state half and passed a hand-built vector for the
+    // score half. This composes the REAL T306 scorer, which is the only way the
+    // clause is actually covered.
+    const state = classifyBusinessState(input());
+    const scores = scoreSubject({ lead: null, observed: null, computed_at: AS_OF }, 'business');
+
+    expect(state.state).toBe('NEW_BUSINESS_LEAD');
+    expect(scores.summary).toBeNull();
+    expect(scores.available).toBe(false);
+    // Seven sourceless dimensions plus the three that had no value for this
+    // subject: every one named, none defaulted.
+    expect(scores.gaps.filter((g) => g.endsWith(':no_source'))).toHaveLength(7);
+    expect(scores.gaps).toContain('urgency:default_not_distinguishable_from_unasked');
+    expect(scores.dimensions.every((d) => d.value === null)).toBe(true);
   });
 });

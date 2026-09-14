@@ -26,6 +26,24 @@ import type { ScoreVector } from './governor/types';
  * idempotency scheme. Replay-safe by construction: the key is hashed from what
  * changed and who asked, so the same change recorded twice is one row.
  *
+ * ─── A FAILED AUDIT WRITE IS A LOST AUDIT ROW, NOT A DEFERRED ONE ───────────
+ *
+ * The projection is written first, so a failed transition write leaves the live
+ * state correct — which is the right trade, because losing the audit row is bad
+ * and losing the current state is worse.
+ *
+ * But it is a LOSS, and an earlier version of this comment claimed "the next run
+ * records the change". It cannot: `stateChanged` is derived from the projection,
+ * which already holds the new state, so the next run computes no change and
+ * never retries. That hop is gone from the transitions table permanently. A test
+ * pins exactly that, because a comment claiming a recovery nobody implemented is
+ * worse than no comment.
+ *
+ * Repairing it needs a pass that compares projections against their transition
+ * history and backfills the gaps — Phase 4, and out of scope here. What this
+ * file does instead is log the loss with both states, so the gap is at least
+ * findable.
+ *
  * ─── NO STATE CHANGE, NO TRANSITION, NO NEW TIMESTAMP ───────────────────────
  *
  * A nightly re-run that reaches the same state writes no transition and leaves
@@ -49,6 +67,14 @@ export interface UpsertProfileArgs {
   evidence: string[];
   /** `classifier` | `cron:<name>` | `human:<admin id>` */
   source: string;
+  /**
+   * The instant this run reasoned about — the SAME one the lifecycle used.
+   *
+   * Not a clock of this service's own: it stamps `updated_at` and it buckets the
+   * transition's idempotency key by day, and a second clock would make the two
+   * disagree on a run that straddles midnight.
+   */
+  asOf: Date;
 }
 
 export interface UpsertProfileResult {
@@ -102,7 +128,7 @@ export async function upsertProfile(args: UpsertProfileArgs): Promise<UpsertProf
     scores_computed_at: args.scores?.computed_at ?? null,
     signals_summary: { evidence: args.evidence },
     source: args.source,
-    updated_at: new Date(),
+    updated_at: args.asOf,
   };
 
   let profileId: string;
@@ -132,6 +158,16 @@ export async function upsertProfile(args: UpsertProfileArgs): Promise<UpsertProf
       reason: args.evidence[0] ?? 'state recomputed',
       evidence: args.evidence,
       requestedBy: args.source,
+      // WHAT we moved from, and WHEN. Both are needed and neither is enough
+      // alone: these states regress and re-advance by design, so a re-advance
+      // has the same `from` AND the same `to` as the first advance and would
+      // hash to it. The day bucket is Explorer's own idiom — its decisions are
+      // unique per `(enrollment_id, decision_date)`.
+      //
+      // The remaining limitation, stated rather than hidden: a subject that
+      // regresses and re-advances within ONE day still collapses to a single
+      // row. Same trade Explorer's daily key makes, and the narrow case.
+      keyParts: [`from:${previousState ?? 'none'}`, `day:${args.asOf.toISOString().slice(0, 10)}`],
     });
     return {
       profileId,
@@ -141,9 +177,9 @@ export async function upsertProfile(args: UpsertProfileArgs): Promise<UpsertProf
       transitionReplayed: replayed,
     };
   } catch (err: unknown) {
-    // The projection is already correct, so this is recorded and re-attempted on
-    // the next run rather than rolled back: losing the audit row is bad, losing
-    // the current state is worse.
+    // The projection is already correct and this row is LOST — not deferred. The
+    // next run derives `stateChanged` from the projection, finds no change, and
+    // never retries. Logged with both states so the gap can be found later.
     log('growth_journey.state_transition_write_failed', {
       error_class: classifyError(err),
       brand_id: args.brandId,

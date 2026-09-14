@@ -128,7 +128,15 @@ export const DEFERRED_OVERLAYS: ReadonlyArray<{ overlay: string; reason: string 
   }),
 ]);
 
-/** Days in a discovery state with no inbound before it reads as stalled. */
+/**
+ * Days in one state with no inbound before it reads as stalled.
+ *
+ * A CHOICE, not a measurement: nothing in this repo records the real
+ * distribution of B2B cycle times. The nearest precedent is Explorer's
+ * `DORMANT_DAYS = 14` for a learner going quiet, and this is deliberately longer
+ * because a buying committee is slower than a learner. Stated so the next person
+ * knows it is tunable rather than derived.
+ */
 const STALLED_AFTER_DAYS = 21;
 
 export interface ClassifyBusinessInput {
@@ -287,7 +295,8 @@ function deriveOverlays(input: ClassifyBusinessInput, state: BusinessState): Bus
     out.push('STALLED');
   }
 
-  if (twoSided === 0 && state !== 'NEW_BUSINESS_LEAD') out.push('NO_RESPONSE');
+  // Not a customer: someone who paid without ever replying is not unresponsive.
+  if (twoSided === 0 && state !== 'NEW_BUSINESS_LEAD' && state !== 'CUSTOMER') out.push('NO_RESPONSE');
   if (appointments.no_show > 0) out.push('MEETING_NO_SHOW');
   if (inbound.declined > 0) out.push('DECLINED');
   if ((classification?.secondary_paths ?? []).length > 0) out.push('MULTI_PATH');

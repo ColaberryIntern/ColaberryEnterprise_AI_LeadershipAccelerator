@@ -21,6 +21,7 @@ jest.mock('../../../models', () => ({
 }));
 
 import { upsertProfile, type UpsertProfileArgs } from '../profileService';
+import { computeIdempotencyKey } from '../../inboxCase/textNormalization';
 
 /**
  * T307 — the profile projection and the transition it owes.
@@ -43,6 +44,7 @@ const args = (over: Partial<UpsertProfileArgs> = {}): UpsertProfileArgs => ({
   enrollmentId: null,
   state: 'PROBLEM_IDENTIFIED',
   stateEnteredAt: AT,
+  asOf: AT,
   overlays: ['NO_RESPONSE'],
   scores: null,
   evidence: ['a problem was stated in idea_input'],
@@ -187,6 +189,98 @@ describe('the same change twice is one row', () => {
     expect(String(a)).toHaveLength(64);
   });
 
+  it('A RE-ENTRY gets its own row, not a replay of the first visit', async () => {
+    // These states regress and re-advance by design. Without the from-state in
+    // the key, QUALIFIED -> DISCOVERY_READY -> QUALIFIED -> DISCOVERY_READY
+    // hashes the fourth hop to the second, the unique violation fires, and a
+    // genuine business event is filed as a replay that never happened.
+    // Over four days, because a deal that cools and re-advances does not do it
+    // inside one afternoon. The from-state alone is NOT enough here — hops 2 and
+    // 4 share both their from and their to — which is why the key also buckets
+    // by day.
+    const hops = [
+      ['EXPLORING_SOLUTIONS', 'QUALIFIED_OPPORTUNITY', '2026-09-14'],
+      ['QUALIFIED_OPPORTUNITY', 'DISCOVERY_READY', '2026-09-15'],
+      ['DISCOVERY_READY', 'QUALIFIED_OPPORTUNITY', '2026-09-22'],
+      ['QUALIFIED_OPPORTUNITY', 'DISCOVERY_READY', '2026-09-29'],
+    ];
+    for (const [previous, next, day] of hops) {
+      m.profileFindOne.mockResolvedValueOnce({ id: 'p', state: previous, update: async () => undefined });
+      await upsertProfile(args({ state: next, asOf: new Date(`${day}T12:00:00Z`) }));
+    }
+    const keys = m.transitionCreate.mock.calls.map((c) => c[0].idempotency_key);
+    expect(keys).toHaveLength(4);
+    // The second arrival at DISCOVERY_READY is a different event from the first.
+    expect(keys[1]).not.toBe(keys[3]);
+    expect(new Set(keys).size).toBe(4);
+  });
+
+  it('the same change on the same day IS still one row', async () => {
+    // The daily bucket must not turn every re-run into a new row. Twice in one
+    // day, same hop: one key.
+    for (const _ of [1, 2]) {
+      m.profileFindOne.mockResolvedValueOnce({
+        id: 'p',
+        state: 'NEW_BUSINESS_LEAD',
+        update: async () => undefined,
+      });
+      await upsertProfile(args({ state: 'PROBLEM_IDENTIFIED', asOf: new Date('2026-09-14T23:00:00Z') }));
+    }
+    const [a, b] = m.transitionCreate.mock.calls.map((c) => c[0].idempotency_key);
+    expect(a).toBe(b);
+  });
+
+  it('a regress-and-re-advance inside ONE day collapses — the stated limitation', async () => {
+    // Declared rather than hidden: the same trade Explorer's
+    // `(enrollment_id, decision_date)` key makes. A test so the limitation is
+    // deliberate and visible instead of a surprise in six months.
+    const sameDay = new Date('2026-09-14T09:00:00Z');
+    for (const [previous, next] of [
+      ['QUALIFIED_OPPORTUNITY', 'DISCOVERY_READY'],
+      ['DISCOVERY_READY', 'QUALIFIED_OPPORTUNITY'],
+      ['QUALIFIED_OPPORTUNITY', 'DISCOVERY_READY'],
+    ]) {
+      m.profileFindOne.mockResolvedValueOnce({ id: 'p', state: previous, update: async () => undefined });
+      await upsertProfile(args({ state: next, asOf: sameDay }));
+    }
+    const keys = m.transitionCreate.mock.calls.map((c) => c[0].idempotency_key);
+    expect(keys[0]).toBe(keys[2]);
+  });
+
+  it('keeps Phase 2 keys byte-identical for callers that pass no keyParts', async () => {
+    // `keyParts` is optional on purpose: re-keying the transition types Phase 2
+    // already writes would orphan every row in the table. This compares the key
+    // against the hash of exactly Phase 2's five inputs.
+    m.profileFindOne.mockResolvedValue(null);
+    await upsertProfile(args({ state: 'PROBLEM_IDENTIFIED' }));
+    const row = m.transitionCreate.mock.calls[0][0];
+    const phase2Only = computeIdempotencyKey([
+      'lead:501',
+      'b-ent',
+      'state_changed',
+      JSON.stringify({ state: 'PROBLEM_IDENTIFIED', overlays: ['NO_RESPONSE'] }),
+      'cron:growth-journey-nightly',
+    ]);
+    // And the full key is exactly Phase 2's five inputs plus this caller's two,
+    // so nothing else crept into the hash.
+    expect(row.idempotency_key).toBe(
+      computeIdempotencyKey([
+        'lead:501',
+        'b-ent',
+        'state_changed',
+        JSON.stringify({ state: 'PROBLEM_IDENTIFIED', overlays: ['NO_RESPONSE'] }),
+        'cron:growth-journey-nightly',
+        'from:none',
+        'day:2026-09-14',
+      ]),
+    );
+    // This caller DOES pass keyParts, so its own key differs from the Phase 2
+    // shape — which is the point — while the shape itself is unchanged for
+    // everyone who does not.
+    expect(row.idempotency_key).not.toBe(phase2Only);
+    expect(String(row.idempotency_key)).toHaveLength(64);
+  });
+
   it('and DIFFERENT for a different destination', async () => {
     m.profileFindOne.mockResolvedValue({
       id: 'p',
@@ -277,6 +371,42 @@ describe('a failed transition write does not lose the projection', () => {
     await upsertProfile(args());
     expect(String(warn.mock.calls[0]?.[0] ?? '')).not.toContain('buyer@example.com');
     warn.mockRestore();
+  });
+});
+
+describe('a failed audit write is LOST, not deferred', () => {
+  it('the next run does NOT retry, because the projection already moved', async () => {
+    // An earlier comment claimed "the next run records the change". It cannot:
+    // `stateChanged` is derived from the projection, which already holds the new
+    // state, so the next run computes no change and never calls the writer. This
+    // pins the loss so the comment and the behaviour agree.
+    m.profileFindOne.mockResolvedValueOnce({
+      id: 'p',
+      state: 'NEW_BUSINESS_LEAD',
+      update: async () => undefined,
+    });
+    m.transitionCreate.mockRejectedValueOnce(new Error('connection reset'));
+    const first = await upsertProfile(args({ state: 'PROBLEM_IDENTIFIED' }));
+    expect(first.stateChanged).toBe(true);
+    expect(first.transitionId).toBeNull();
+
+    // The second run sees the projection already at the new state.
+    m.transitionCreate.mockClear();
+    m.profileFindOne.mockResolvedValueOnce({
+      id: 'p',
+      state: 'PROBLEM_IDENTIFIED',
+      update: async () => undefined,
+    });
+    const second = await upsertProfile(args({ state: 'PROBLEM_IDENTIFIED' }));
+    expect(second.stateChanged).toBe(false);
+    expect(m.transitionCreate).not.toHaveBeenCalled();
+  });
+
+  it('and says so in its own header rather than claiming a recovery', () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'profileService.ts'), 'utf8');
+    expect(src).not.toContain('re-attempted on');
+    expect(src).toContain('LOST');
+    expect(src).toMatch(/Phase 4/);
   });
 });
 
