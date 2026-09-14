@@ -306,8 +306,13 @@ describe('the contact policy', () => {
   });
 
   it('an action needing no channel is not blocked by channel eligibility', async () => {
+    // Known human inputs, deliberately: this case is about the CONTACT POLICY
+    // step, and `CREATE_HUMAN_TASK` is also the action step 4b suppresses while
+    // either input is unknown. Leaving them unknown would test that rule twice
+    // and this one not at all.
+    const known = ctx({ contact: { ...ctx().contact, human_conversation: 'no', sales_capacity: 'available' } });
     const d = await decided(
-      ctx(),
+      known,
       strategy([candidate({ action_type: 'CREATE_HUMAN_TASK', channel: 'none', campaign_key: null })]),
       deps({
         contactPolicyFor: () => ({
@@ -383,5 +388,92 @@ describe('what a decision always carries', () => {
       flags(),
     );
     expect(d.requires_human_review).toBe(true);
+  });
+});
+
+describe('an unknown input never unlocks a human action', () => {
+  // sec 7.3's two unanswerable inputs, and sec 8's two human layers in the existing
+  // vocabulary. The plan's acceptance names both reason strings, so they are
+  // asserted literally rather than by shape: renaming one is a silent contract
+  // change for whatever reads the decision later.
+  // The channel is 'none', not null: the union has a member for exactly this
+  // case, and null does not type-check. Jest never said so - ts-jest runs with
+  // isolatedModules, so the scoped tsc is the only thing that types a test file.
+  const humanTask = candidate({ action_type: 'CREATE_HUMAN_TASK', campaign_key: null, priority_tier: 4, channel: 'none' });
+  const aliOutreach = candidate({ action_type: 'SEND_ALI_OUTREACH', campaign_key: null, priority_tier: 3, channel: 'email' });
+
+  const withContact = (over: Partial<JourneySubjectContext['contact']>): JourneySubjectContext =>
+    ctx({ contact: { ...ctx().contact, ...over } });
+
+  it('suppresses CREATE_HUMAN_TASK naming human_conversation_unknown', async () => {
+    const d = await decided(
+      withContact({ sales_capacity: 'available' }),
+      strategy([humanTask, candidate()]),
+      deps(),
+      flags(),
+    );
+    expect(d.suppressed).toEqual(
+      expect.arrayContaining([
+        { action_type: 'CREATE_HUMAN_TASK', campaign_key: null, reason: 'human_conversation_unknown' },
+      ]),
+    );
+    // The legitimate candidate still wins — the subject is not parked because one
+    // proposal needed something we cannot know.
+    expect(d.selected_action).toBe('SEND_EMAIL');
+  });
+
+  it('suppresses SEND_ALI_OUTREACH naming sales_capacity_unknown', async () => {
+    const d = await decided(
+      withContact({ human_conversation: 'no' }),
+      strategy([aliOutreach, candidate()]),
+      deps(),
+      flags(),
+    );
+    expect(d.suppressed).toEqual(
+      expect.arrayContaining([
+        { action_type: 'SEND_ALI_OUTREACH', campaign_key: null, reason: 'sales_capacity_unknown' },
+      ]),
+    );
+  });
+
+  it('names BOTH when both are unknown, which is every subject today', async () => {
+    const d = await decided(ctx(), strategy([humanTask, candidate()]), deps(), flags());
+    expect(d.suppressed.map((s) => s.reason)).toContain('human_conversation_unknown,sales_capacity_unknown');
+  });
+
+  it('leaves a human action alone once BOTH inputs are known — the other direction', async () => {
+    // Without this, the rule could be narrowed to "suppress every human action"
+    // and still look green.
+    const d = await decided(
+      withContact({ human_conversation: 'no', sales_capacity: 'available' }),
+      strategy([humanTask]),
+      deps(),
+      flags(),
+    );
+    expect(d.suppressed).toEqual([]);
+    expect(d.selected_action).toBe('CREATE_HUMAN_TASK');
+  });
+
+  it('says nothing about a non-human action while both are unknown', async () => {
+    const d = await decided(ctx(), strategy([candidate()]), deps(), flags());
+    expect(d.suppressed).toEqual([]);
+    expect(d.selected_action).toBe('SEND_EMAIL');
+  });
+
+  it('refuses by name when every candidate needed an unknown input', async () => {
+    const d = await decided(ctx(), strategy([humanTask, aliOutreach]), deps(), flags());
+    expect(d.selected_action).toBe('WAIT');
+    expect(d.reason).toBe('every_candidate_needs_an_unknown_input');
+    expect(d.requires_human_review).toBe(true);
+    expect(d.suppressed).toHaveLength(2);
+  });
+
+  it('checks the inputs BEFORE arbitration, so a blocked human action cannot win a tier', async () => {
+    // `humanTask` is tier 4 and outranks the tier-7 email. Were the check run after
+    // arbitration, the answer would be a chosen-then-blocked WAIT for a subject who
+    // had a perfectly good email waiting.
+    const d = await decided(ctx(), strategy([humanTask, candidate()]), deps(), flags());
+    expect(d.selected_action).toBe('SEND_EMAIL');
+    expect(d.reason).not.toContain('chosen_then_blocked');
   });
 });

@@ -56,8 +56,12 @@ import type { ChannelEvidence, ContactEvidence, JourneyChannel } from './types';
  * than a person, and no ticket is written with `entity_type='lead'`. And there
  * is no sales-capacity table at all; the only capacity algorithm in the repo is
  * delivery-side. Both are therefore `'unknown'` with a reason naming the
- * absence, and `'unknown'` never unlocks anything: a strategy may not emit a
- * Layer 3 or Layer 4 candidate while either is unknown.
+ * absence. `'unknown'` unlocks nothing, and that is ENFORCED rather than
+ * asserted here: `decideForSubject` suppresses every human-in-the-loop
+ * candidate - `CREATE_HUMAN_TASK` and `SEND_ALI_OUTREACH`, sec 8's Layer 3 and
+ * Layer 4 actions in the existing vocabulary - while either input is unknown,
+ * naming `human_conversation_unknown` / `sales_capacity_unknown` as the
+ * reason, and its suite pins both directions.
  */
 
 const CONTACT_WINDOW_DAYS = 7;

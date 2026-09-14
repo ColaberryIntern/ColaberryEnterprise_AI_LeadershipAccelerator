@@ -276,9 +276,22 @@ describe('the differential: the pipeline returns the arbiter\'s own answer', () 
     candidate({ action_type: 'CREATE_HUMAN_TASK', priority_tier: 3, intra_tier_score: 10, channel: 'none', campaign_key: null }),
   ];
 
+  /**
+   * Known human inputs for the differential, and the reason matters.
+   *
+   * Step 4b suppresses `CREATE_HUMAN_TASK` and `SEND_ALI_OUTREACH` while
+   * `human_conversation` or `sales_capacity` is unknown - which is every subject
+   * today - and `set` contains the first at tier 3, where it wins. A differential
+   * over two different input sets would prove nothing about the RANKING, which is
+   * what these two cases exist to pin. The filtered case gets its own differential
+   * below rather than being folded in here.
+   */
+  const knownInputs = () =>
+    ctx({ contact: { ...ctx().contact, human_conversation: 'no', sales_capacity: 'available' } });
+
   it('picks the same winner and the same suppression reasons as arbitrate() directly', async () => {
     const direct = arbitrate(set);
-    const out = await decideForSubject(ctx(), strategy(set), deps(), FLAGS_ON);
+    const out = await decideForSubject(knownInputs(), strategy(set), deps(), FLAGS_ON);
     if (out.status !== 'decided') throw new Error('expected a decision');
 
     expect(out.decision.selected_action).toBe(direct.winner?.action_type);
@@ -298,11 +311,35 @@ describe('the differential: the pipeline returns the arbiter\'s own answer', () 
   });
 
   it('uses the arbiter\'s suppression vocabulary, not one of its own', async () => {
-    const out = await decideForSubject(ctx(), strategy(set), deps(), FLAGS_ON);
+    const out = await decideForSubject(knownInputs(), strategy(set), deps(), FLAGS_ON);
     if (out.status !== 'decided') throw new Error('expected a decision');
     for (const s of out.decision.suppressed) {
       expect(s.reason).toMatch(/^(outranked within tier|lower priority than tier)/);
     }
+  });
+
+  it('with an unknown input, the answer is still the arbiter\'s — over the filtered set', async () => {
+    // The differential that the unknown-input rule earns: the filter removes a
+    // candidate from the FIELD and changes nothing about the order. Same list
+    // minus the human action, straight through `arbitrate`, must equal what the
+    // pipeline answers for a subject whose inputs are unknown. Were the filter to
+    // re-rank, or to run after arbitration and substitute a runner-up, this fails.
+    const human = new Set(['CREATE_HUMAN_TASK', 'SEND_ALI_OUTREACH']);
+    const direct = arbitrate(set.filter((c) => !human.has(c.action_type)));
+    const out = await decideForSubject(ctx(), strategy(set), deps(), FLAGS_ON);
+    if (out.status !== 'decided') throw new Error('expected a decision');
+
+    expect(out.decision.selected_action).toBe(direct.winner?.action_type);
+    const arbiterReasons = out.decision.suppressed
+      .map((s) => s.reason)
+      .filter((r) => !r.endsWith('_unknown') && !r.includes('_unknown,'));
+    expect(arbiterReasons.sort()).toEqual(direct.suppressed.map((s) => s.reason).sort());
+    // Every candidate is still accounted for: one winner, the rest suppressed —
+    // one of them by the unknown-input rule, the others by the arbiter.
+    expect(out.decision.suppressed).toHaveLength(set.length - 1);
+    expect(out.decision.suppressed.map((s) => s.reason)).toContain(
+      'human_conversation_unknown,sales_capacity_unknown',
+    );
   });
 
   it('re-checks the WINNER against the brand boundary, not only the field of candidates', async () => {

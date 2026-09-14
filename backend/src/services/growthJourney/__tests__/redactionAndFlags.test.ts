@@ -17,11 +17,13 @@ import { phase2SourceFiles } from './phase2Sources';
  *   3. The word `unsubscribe` appears in Phase 2 source only in a test or on an
  *      import line.
  *   4. Which leaves one hole, because an import line is exactly where a module
- *      names the model to read the rows - and it may rename it there. Alias the
- *      model, derive a verdict from `rows.length > 0`, and rule 3 sees nothing.
- *      So any file whose import line names that model owes two things: it calls
- *      `isSuppressedForChannel`, and it does not re-implement the cutoff that
- *      function owns. T304's contact-evidence resolver is the first reader.
+ *      names the model to read the rows - and it may rename it there, or take
+ *      the name from a shim that renamed it first. So any file that reads those
+ *      rows - directly, under an alias, or through a re-export chain - owes two
+ *      things: it calls `isSuppressedForChannel`, and it does not re-implement
+ *      the cutoff that function owns. T304's resolver is the first reader.
+ *   5. And no scanned file spells an opt-out status literal itself, because a
+ *      second list can be built on a surface rules 3 and 4 cannot follow.
  */
 
 const ROOT = path.join(__dirname, '..', '..', '..');
@@ -43,25 +45,136 @@ const SENSITIVE_KEY = /\b(email|to|body|email_normalized|phone)\s*:/;
 /**
  * Does this file read the suppression-event rows, and if so does it delegate?
  *
- * The model is matched on the IMPORT line, so an alias cannot hide the read: the
- * specifier `UnsubscribeEvent` has to appear there whatever local name follows.
+ * WHAT IT SEES. The model named on an import line, under any local alias; and a
+ * binding taken from a relative module that RESOLVES to the model through that
+ * module's own re-exports or imports, up to three hops. The second half exists
+ * because T304's verifier defeated the first: a one-line renaming re-export shim
+ * placed outside the scanned tree left the reader's import line naming neither
+ * the model nor the banned word, and a whole fourth detector lived behind it. So
+ * the question asked here is where a name comes FROM, not what it is called.
  * `isLegacyGlobalEvent` and `isGlobalChannel` are the detector's own internals -
  * a reader calling those is assembling a second verdict out of the first one's
- * parts, which is the thing being forbidden, not a legitimate reuse.
+ * parts, which is the thing forbidden, not a legitimate reuse.
+ *
+ * WHAT IT PROVABLY CANNOT SEE, stated rather than implied, because a guard whose
+ * limits are undocumented gets trusted past them:
+ *
+ *   * A detector built on a DIFFERENT surface - `campaign_leads.status = 'dnd'`
+ *     is what the opt-out writer also sets, and reading it touches no suppression
+ *     row at all. Not closed; NARROWED by the status-literal rule below, which
+ *     costs nothing (zero occurrences in non-test source today) and stops the
+ *     second list forming where this scan could never look.
+ *   * A raw query whose table name is assembled from fragments at runtime
+ *     (`['unsub', 'scribe_events'].join('')`). No static scan closes that one.
+ *
+ * For the file that actually ships, the property is held independently by
+ * BEHAVIOUR as well as by this scan: replacing the delegation with a row count
+ * fails `contactEvidence.test.ts` too. A guard is the cheap half of the proof.
  */
+const SUPPRESSION_MODEL = 'UnsubscribeEvent';
 const SUPPRESSION_MODEL_IMPORT = /^\s*import\b.*\bUnsubscribeEvent\b/;
 const CUTOFF_REIMPLEMENTATION = /2026-09-09|isLegacyGlobalEvent\s*\(|isGlobalChannel\s*\(/;
+/** Statuses the canonical list owns. A literal here is a second list forming. */
+const OPT_OUT_STATUS_LITERAL = /['"](dnd|complained|bounced)['"]/;
 
 /** Comments only, removed. `[^:]` keeps a `https://` out of the line-comment case. */
 function stripComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 }
 
-export function suppressionDelegationOffenders(src: string): string[] {
-  const lines = src.split('\n');
-  if (!lines.some((l) => SUPPRESSION_MODEL_IMPORT.test(l))) return [];
+/** A module's source, however the caller chooses to find it. */
+type ReadSource = (fromFile: string, spec: string) => { file: string; src: string } | null;
 
+const fsRead: ReadSource = (fromFile, spec) => {
+  const base = path.resolve(path.dirname(fromFile), spec);
+  for (const candidate of [`${base}.ts`, path.join(base, 'index.ts')]) {
+    if (fs.existsSync(candidate)) return { file: candidate, src: fs.readFileSync(candidate, 'utf8') };
+  }
+  return null;
+};
+
+/** `import`/`export` name lists carrying a RELATIVE specifier, as (exported, local) pairs. */
+function namedSpecifierLines(src: string): { spec: string; entries: { exported: string; local: string }[] }[] {
+  const out: { spec: string; entries: { exported: string; local: string }[] }[] = [];
+  const rx = /^[ \t]*(?:import|export)\s+(?:type\s+)?\{([^}]*)\}\s*from\s*['"](\.[^'"]+)['"]/gm;
+  for (const m of stripComments(src).matchAll(rx)) {
+    const entries = (m[1] ?? '')
+      .split(',')
+      .map((e) => {
+        const parts = e.trim().replace(/^type\s+/, '').split(/\s+as\s+/).map((p) => p.trim());
+        return { exported: parts[0] ?? '', local: parts[1] ?? parts[0] ?? '' };
+      })
+      .filter((e) => e.exported.length > 0);
+    out.push({ spec: m[2], entries });
+  }
+  return out;
+}
+
+/** `export { A as B }` with no `from` — the two-statement shape of the same shim. */
+function localReexports(src: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const m of stripComments(src).matchAll(/export\s*\{([^}]*)\}\s*;/g)) {
+    for (const entry of (m[1] ?? '').split(',')) {
+      const parts = entry.trim().replace(/^type\s+/, '').split(/\s+as\s+/).map((p) => p.trim());
+      if (!parts[0]) continue;
+      out.set(parts[1] ?? parts[0], parts[0]);
+    }
+  }
+  return out;
+}
+
+/** Does `exported`, taken from `mod`, come from the suppression model? */
+function bindingResolvesToModel(
+  mod: { file: string; src: string },
+  exported: string,
+  read: ReadSource,
+  depth: number,
+): boolean {
+  if (exported === SUPPRESSION_MODEL) return true;
+  if (depth <= 0) return false;
+
+  for (const { spec, entries } of namedSpecifierLines(mod.src)) {
+    for (const e of entries) {
+      if (e.local !== exported) continue;
+      if (e.exported === SUPPRESSION_MODEL) return true;
+      const next = read(mod.file, spec);
+      if (next && bindingResolvesToModel(next, e.exported, read, depth - 1)) return true;
+    }
+  }
+  return localReexports(mod.src).get(exported) === SUPPRESSION_MODEL;
+}
+
+function readsSuppressionRows(src: string, file: string, read: ReadSource): boolean {
+  if (src.split('\n').some((l) => SUPPRESSION_MODEL_IMPORT.test(l))) return true;
+  for (const { spec, entries } of namedSpecifierLines(src)) {
+    const next = read(file, spec);
+    if (!next) continue;
+    for (const e of entries) {
+      if (bindingResolvesToModel(next, e.exported, read, 3)) return true;
+    }
+  }
+  return false;
+}
+
+export function suppressionDelegationOffenders(
+  src: string,
+  opts: { file?: string; read?: ReadSource } = {},
+): string[] {
+  const file = opts.file ?? path.join(ROOT, 'services', 'growthJourney', '__control__.ts');
+  const read = opts.read ?? fsRead;
   const offenders: string[] = [];
+
+  // Applies to EVERY scanned file, reader or not: a second opt-out list can be
+  // built on a surface this scan cannot follow, and it needs these words.
+  const literals = stripComments(src)
+    .split('\n')
+    .filter((l) => OPT_OUT_STATUS_LITERAL.test(l) && !/^\s*import\b/.test(l));
+  if (literals.length > 0) {
+    offenders.push(`spells an opt-out status itself on ${literals.length} line(s)`);
+  }
+
+  if (!readsSuppressionRows(src, file, read)) return offenders;
+
   if (!src.includes('isSuppressedForChannel(')) {
     offenders.push('reads suppression rows without calling isSuppressedForChannel');
   }
@@ -140,6 +253,72 @@ describe('the scanner itself', () => {
     expect(suppressionDelegationOffenders(control)).toEqual([]);
   });
 
+  it('flags a detector hidden behind a renaming re-export shim outside the tree', () => {
+    // T304's verifier's P1, reproduced exactly. The reader's import line names
+    // neither the model nor the banned word; the shim it imports from is a single
+    // line in a directory this scan does not walk.
+    const shim = "export { UnsubscribeEvent as SuppressionRows } from '../models';";
+    const reader = [
+      "import { SuppressionRows } from '../_bridge';",
+      'export const blocked = async (leadId: number): Promise<boolean> =>',
+      '  (await SuppressionRows.findAll({ where: { lead_id: leadId } })).length > 0;',
+    ].join('\n');
+    const read: ReadSource = (_from, spec) =>
+      spec.endsWith('_bridge') ? { file: '/repo/src/services/_bridge.ts', src: shim } : null;
+    expect(suppressionDelegationOffenders(reader, { file: '/repo/src/services/growthJourney/x.ts', read })).toEqual([
+      'reads suppression rows without calling isSuppressedForChannel',
+    ]);
+  });
+
+  it('follows a two-hop shim chain, and the second shape of a shim', () => {
+    // A chain, and a shim written as import-then-export rather than one line.
+    const outer = "export { Rows as PublicRows } from './inner';";
+    const inner = [
+      "import { UnsubscribeEvent } from '../models';",
+      'export { UnsubscribeEvent as Rows };',
+    ].join('\n');
+    const reader = [
+      "import { PublicRows } from '../_outer';",
+      'export const blocked = async (leadId: number): Promise<boolean> =>',
+      '  (await PublicRows.findAll({ where: { lead_id: leadId } })).length > 0;',
+    ].join('\n');
+    const read: ReadSource = (_from, spec) =>
+      spec.endsWith('_outer')
+        ? { file: '/repo/src/services/_outer.ts', src: outer }
+        : spec.endsWith('inner')
+          ? { file: '/repo/src/services/inner.ts', src: inner }
+          : null;
+    expect(suppressionDelegationOffenders(reader, { file: '/repo/src/services/growthJourney/x.ts', read })).toEqual([
+      'reads suppression rows without calling isSuppressedForChannel',
+    ]);
+  });
+
+  it('does NOT flag an honest binding that merely comes from a relative module', () => {
+    // The other direction for the resolver: `contactEvidence.ts` imports the
+    // canonical status list from a relative module, and that must stay silent.
+    const reader = [
+      "import { SUPPRESSED_LEAD_STATUSES } from '../../explorerGrowth/explorerContactabilityService';",
+      'export const blocked = (status: string) => SUPPRESSED_LEAD_STATUSES.includes(status);',
+    ].join('\n');
+    const read: ReadSource = () => ({
+      file: '/repo/src/services/explorerGrowth/explorerContactabilityService.ts',
+      src: "export const SUPPRESSED_LEAD_STATUSES = ['a', 'b'];",
+    });
+    expect(suppressionDelegationOffenders(reader, { file: '/repo/src/services/growthJourney/x.ts', read })).toEqual([]);
+  });
+
+  it('flags a second opt-out list built on a different surface entirely', () => {
+    // T304's verifier's P2: `campaign_leads.status = 'dnd'` is what the opt-out
+    // writer also sets, so this detector touches no suppression row at all and
+    // neither rule 3 nor rule 4 can see it.
+    const control = [
+      "import { CampaignLead } from '../../models';",
+      'export const blocked = async (leadId: number): Promise<boolean> =>',
+      "  (await CampaignLead.count({ where: { lead_id: leadId, status: 'dnd' } })) > 0;",
+    ].join('\n');
+    expect(suppressionDelegationOffenders(control)).toEqual(['spells an opt-out status itself on 1 line(s)']);
+  });
+
   it('says nothing about a file that never reads those rows', () => {
     expect(suppressionDelegationOffenders('export const x = 1;\n')).toEqual([]);
   });
@@ -165,7 +344,22 @@ describe('Phase 2 source', () => {
 
   it('every file that reads suppression rows hands the verdict to the one detector', () => {
     for (const f of files) {
-      const offenders = suppressionDelegationOffenders(fs.readFileSync(f, 'utf8'));
+      const offenders = suppressionDelegationOffenders(fs.readFileSync(f, 'utf8'), { file: f });
+      expect({ file: rel(f), offenders }).toEqual({ file: rel(f), offenders: [] });
+    }
+  });
+
+  it('spells no opt-out status literal anywhere in the scanned tree', () => {
+    // Covered by the per-file assertion above too; asserted separately so a
+    // failure names THIS rule rather than arriving as a surprise inside the
+    // delegation one.
+    for (const f of files) {
+      const src = stripComments(fs.readFileSync(f, 'utf8'));
+      const offenders = src
+        .split('\n')
+        .map((l, i) => ({ line: i + 1, l }))
+        .filter(({ l }) => OPT_OUT_STATUS_LITERAL.test(l) && !/^\s*import\b/.test(l))
+        .map(({ line }) => line);
       expect({ file: rel(f), offenders }).toEqual({ file: rel(f), offenders: [] });
     }
   });

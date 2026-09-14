@@ -35,7 +35,8 @@ import type {
  *
  * ─── ORDER, AND WHY ─────────────────────────────────────────────────────────
  *
- * freshness -> hard stop -> generate -> brand boundary -> arbitrate -> contact
+ * freshness -> hard stop -> generate -> brand boundary -> unknown-input check ->
+ * arbitrate -> contact
  * policy -> content -> answer. Explorer's own order, kept deliberately: a stale
  * profile must not be scored against, and a hard stop must not be reasoned
  * around. A refusal at any step is a recorded answer with a named reason, never
@@ -43,6 +44,22 @@ import type {
  */
 
 const WAIT = 'WAIT';
+
+/**
+ * sec 8's Layer 3 and Layer 4 - the two actions that commit a PERSON - in the
+ * existing vocabulary. No `layer` field is invented for this: `ExplorerActionType`
+ * already names both, and a parallel numbering would be a second taxonomy to
+ * keep in step with the first.
+ */
+const HUMAN_IN_THE_LOOP: ReadonlySet<string> = new Set(['CREATE_HUMAN_TASK', 'SEND_ALI_OUTREACH']);
+
+/** Which of the two inputs a human action needs are unknown right now. */
+function unknownHumanInputs(ctx: JourneySubjectContext): string[] {
+  const out: string[] = [];
+  if (ctx.contact.human_conversation === 'unknown') out.push('human_conversation_unknown');
+  if (ctx.contact.sales_capacity === 'unknown') out.push('sales_capacity_unknown');
+  return out;
+}
 
 function refusal(
   reason: string,
@@ -137,8 +154,37 @@ export async function decideForSubject(
     };
   }
 
+  // 4b. An UNKNOWN IS NOT PERMISSION, and this is where that is enforced.
+  //     `human_conversation` and `sales_capacity` are `'unknown'` for every
+  //     subject in this codebase - nothing ties an inbox thread or a ticket to a
+  //     lead, and there is no capacity table at all (T304) - so a candidate that
+  //     would put a person in the loop is suppressed BY NAME rather than emitted
+  //     and hoped about. Before arbitration, deliberately: a blocked human action
+  //     must not win a tier and hide a legitimate lower-tier action behind itself.
+  //
+  //     NOT handled here, and named rather than implied: `human_conversation:
+  //     'yes'` should also stop a duplicate outreach. That is a judgement about
+  //     WHICH action to propose and it belongs to the generators (T310). This step
+  //     enforces only that an unknown never unlocks a human action.
+  const withKnownInputs: JourneyCandidate[] = [];
+  for (const c of allowed) {
+    const unknowns = HUMAN_IN_THE_LOOP.has(c.action_type) ? unknownHumanInputs(ctx) : [];
+    if (unknowns.length > 0) suppressed.push(suppression(c, unknowns.join(',')));
+    else withKnownInputs.push(c);
+  }
+  if (withKnownInputs.length === 0) {
+    return {
+      status: 'decided',
+      decision: refusal('every_candidate_needs_an_unknown_input', strategy, {
+        candidates: generated,
+        suppressed,
+        requires_human_review: true,
+      }),
+    };
+  }
+
   // 5. THE one arbitration point.
-  const { winner, suppressed: outranked } = arbitrate(allowed);
+  const { winner, suppressed: outranked } = arbitrate(withKnownInputs);
   for (const s of outranked) suppressed.push({ action_type: s.action_type, campaign_key: s.campaign_key, reason: s.reason });
   if (!winner) {
     return { status: 'decided', decision: refusal('no_winner', strategy, { candidates: generated, suppressed }) };
