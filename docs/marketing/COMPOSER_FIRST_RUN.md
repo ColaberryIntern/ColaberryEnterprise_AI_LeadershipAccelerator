@@ -26,7 +26,7 @@ Go to **`https://enterprise.colaberry.ai/admin/marketing/composer`** and sign in
 
 Choose the brand, then a campaign from the dropdown.
 
-**Pick a campaign that already has a brand attached.** 36 of the 44 campaigns do. If you pick one of the other 8, step 3 will tell you to give it a brand first — that is the system being careful, not broken.
+Any campaign works. If the one you pick has no brand of its own (8 of the 44 don't), step 3 attaches the brand you chose here. You don't need to go anywhere else.
 
 If this is a first run and you would rather not touch a real campaign, make a new one called something like `Composer first run - Sept` and use that.
 
@@ -38,7 +38,7 @@ Press **Assign UTM slug** next to that yellow warning.
 
 *You should see:* the warning is replaced by a slug that looks like `colaberry-enterprise-awareness-<campaign name>-all-2026q3`. That is the name every click, every report and every link for this campaign will be filed under from now on.
 
-*If instead you see* "Give the campaign a brand first" — you picked one of the 8 without a brand. Go back to step 2.
+*If instead you see* "This campaign has no brand, and none was supplied" — the brand dropdown in step 2 is empty. Choose one and press the button again.
 
 ### 4. Write the post
 
@@ -46,7 +46,7 @@ Fill in:
 
 - **Title** — internal only, nobody outside sees it.
 - **Landing page** — where the link should send people. It has to be on one of our domains: `enterprise.colaberry.ai`, `colaberry.ai`, `training.colaberry.com` or `myfreeaiclass.com`. A link to somewhere else is refused on purpose, so a typo cannot send our audience to a stranger's site.
-- **Canonical message** — the post itself, written once. The next step adapts it per network.
+- **Canonical message** — the post itself, written once. You don't have to write it from nothing: type a topic in the small box above it (for example `free AI class for working analysts`) and press **Write a first draft**. A draft appears in the box for you to edit. Anything the draft couldn't know for sure appears as `[a placeholder]`; fill those in, and check any line under the box that says a detail needs verifying. The next step adapts the message per network.
 
 Press **Create draft**.
 
