@@ -66,6 +66,13 @@ const SENSITIVE_KEY = /\b(email|to|body|email_normalized|phone)\s*:/;
  *     second list forming where this scan could never look.
  *   * A raw query whose table name is assembled from fragments at runtime
  *     (`['unsub', 'scribe_events'].join('')`). No static scan closes that one.
+ *   * Three laundering shapes the resolver misses, each demonstrated by a plant
+ *     rather than guessed at: a rename chain DEEPER than three hops; a shim that
+ *     re-exports the model as a DEFAULT (`export default UnsubscribeEvent`, or
+ *     `export { default as Rows } from './models/UnsubscribeEvent'`); and a shim
+ *     that renames through a local const first (`const Rows = UnsubscribeEvent;
+ *     export { Rows };`). The walk reads `{ ... }` specifier lists only. Named
+ *     here because a guard trusted past its limits is worse than a known gap.
  *
  * For the file that actually ships, the property is held independently by
  * BEHAVIOUR as well as by this scan: replacing the delegation with a row count
@@ -74,7 +81,16 @@ const SENSITIVE_KEY = /\b(email|to|body|email_normalized|phone)\s*:/;
 const SUPPRESSION_MODEL = 'UnsubscribeEvent';
 const SUPPRESSION_MODEL_IMPORT = /^\s*import\b.*\bUnsubscribeEvent\b/;
 const CUTOFF_REIMPLEMENTATION = /2026-09-09|isLegacyGlobalEvent\s*\(|isGlobalChannel\s*\(/;
-/** Statuses the canonical list owns. A literal here is a second list forming. */
+/**
+ * Statuses the canonical list owns. A literal here is a second list forming.
+ *
+ * Zero occurrences in scanned non-test source when this landed, so the rule cost
+ * nothing - but there are 26 honest ones elsewhere in the repo (bounce analytics,
+ * interaction outcomes), and sec 5.3's delivery-feasibility and friction-risk
+ * dimensions are exactly where a bounce count belongs. WHEN THAT LANDS, the
+ * narrowing is an ALLOW-LIST entry naming the honest source - never deletion of
+ * the rule, which is how a guard dies quietly under deadline pressure.
+ */
 const OPT_OUT_STATUS_LITERAL = /['"](dnd|complained|bounced)['"]/;
 
 /** Comments only, removed. `[^:]` keeps a `https://` out of the line-comment case. */
