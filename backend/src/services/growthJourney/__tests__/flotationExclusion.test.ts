@@ -264,7 +264,12 @@ describe('the two enforcement points cannot DRIFT from what the seed actually se
     expect(seeded.length).toBeGreaterThan(0); // non-vacuity: the seed really has a row
   });
 
-  it('and the deny row the seed writes is the same set this file excludes', () => {
+  it('and the seed still reaches for that same constant rather than a list of its own', () => {
+    // NEAR-TAUTOLOGICAL by construction, and labelled as such rather than left to
+    // look stronger than it is: both sides are now the same object, so this cannot
+    // catch a change to the constant itself - twelve other tests do that. What it
+    // does catch is the seed being edited to use a DIFFERENT list, which is the
+    // drift that would put the two enforcement points out of step.
     const denyRow = BRAND_OFFER_POLICIES.find(
       (p) => p.brand_slug === 'ai-flotation' && p.decision === 'deny',
     );

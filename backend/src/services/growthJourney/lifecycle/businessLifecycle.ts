@@ -261,7 +261,14 @@ function evidenceState(input: ClassifyBusinessInput): { state: BusinessState; ev
  * Extracted in T308 rather than copied into the second lifecycle: T307's own
  * argument was that a second discipline means two places to get it wrong, and a
  * third state vocabulary is when that has to be true in code rather than in a
- * comment. T307's whole suite is the proof the extraction changed nothing.
+ * comment.
+ *
+ * T307's 48 tests pass unchanged, which is evidence about the cases they drive
+ * and NOT proof that the extraction changed nothing - a claim this file's first
+ * version made and the differential in T308's evidence disproved. `state`,
+ * `overlays` and `state_entered_at` are identical to the pre-extraction function
+ * on all 54,432 inputs swept; `evidence` deliberately gained a line naming a
+ * foreign previous state, which the old code never emitted.
  */
 const BUSINESS_MONOTONICITY: MonotonicityRule<BusinessState> = {
   ladder: DISCOVERY_LADDER,

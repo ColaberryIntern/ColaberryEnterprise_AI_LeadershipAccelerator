@@ -35,12 +35,19 @@
  * once, for every machine that uses this.
  *
  * `foreignPrevious` means exactly what the field says and nothing wider: the
- * previous state is in NO group this machine knows. A state the machine owns is
- * never reported foreign, whatever the candidate. T308's verifier found the first
- * draft breaking that on the commonest transition of all - a knowledge rung to a
- * commercial state - which wrote a false sentence about a programme boundary into
- * the audit trail on 27% of inputs while leaving the projected state correct. The
- * projection being right is why 48 unchanged tests did not see it.
+ * previous state is in NO group this machine knows. It is a fact about the
+ * previous state alone, so it is computed once rather than per branch, and it
+ * holds in both directions - a state the machine owns is never reported foreign
+ * whatever the candidate, and a state it does not own is always reported so.
+ *
+ * Both halves were learned the hard way, by two independent reviews of the same
+ * function. The first draft reported a knowledge rung as foreign whenever the
+ * candidate left the ladder - the commonest transition there is - writing a false
+ * sentence about a programme boundary into the audit trail. The fix for that
+ * still left the terminal-candidate return hard-coding `false`, so a subject
+ * promoted straight to the terminal lost the fact entirely. Both times the
+ * projected state was correct, which is exactly why a passing suite did not see
+ * it: `state` is what tests assert on, and `evidence` is what a human reads.
  */
 
 export interface MonotonicityRule<S extends string> {
@@ -69,20 +76,31 @@ export function applyLadderMonotonicity<S extends string>(
 ): MonotonicityResult<S> {
   if (!previous) return { state: candidate, held: false, foreignPrevious: false };
 
-  if (previous === rule.terminal) {
-    return { state: rule.terminal, held: candidate !== rule.terminal, foreignPrevious: false };
-  }
-  if (candidate === rule.terminal) {
-    return { state: rule.terminal, held: false, foreignPrevious: false };
-  }
-
   const prevRung = rule.ladder.indexOf(previous as S);
   const candRung = rule.ladder.indexOf(candidate);
 
+  // `foreignPrevious` is a fact about PREVIOUS ALONE, so it is settled here, once,
+  // before any branch looks at the candidate. Deciding it per branch is what let
+  // two branches disagree with the rest: the first draft reported a rung this
+  // machine owns as foreign whenever the candidate left the ladder, and the fix
+  // for that still left the terminal-candidate return hard-coding `false`, so a
+  // subject promoted straight to the terminal carried no trace that its previous
+  // value came from another programme. Computed once, the branch structure below
+  // decides only `state` and `held`, and neither mistake can be expressed.
+  const foreignPrevious =
+    prevRung === -1 && previous !== rule.terminal && !rule.commercial.includes(previous as S);
+
+  if (previous === rule.terminal) {
+    return { state: rule.terminal, held: candidate !== rule.terminal, foreignPrevious };
+  }
+  if (candidate === rule.terminal) {
+    return { state: rule.terminal, held: false, foreignPrevious };
+  }
+
   if (prevRung !== -1 && candRung !== -1) {
     return candRung >= prevRung
-      ? { state: candidate, held: false, foreignPrevious: false }
-      : { state: previous as S, held: true, foreignPrevious: false };
+      ? { state: candidate, held: false, foreignPrevious }
+      : { state: previous as S, held: true, foreignPrevious };
   }
 
   if (rule.commercial.includes(previous as S)) {
@@ -90,27 +108,18 @@ export function applyLadderMonotonicity<S extends string>(
     if (candRung !== -1) {
       const floorRung = rule.ladder.indexOf(rule.floor);
       return candRung >= floorRung
-        ? { state: candidate, held: false, foreignPrevious: false }
-        : { state: rule.floor, held: true, foreignPrevious: false };
+        ? { state: candidate, held: false, foreignPrevious }
+        : { state: rule.floor, held: true, foreignPrevious };
     }
-    return { state: candidate, held: false, foreignPrevious: false };
+    return { state: candidate, held: false, foreignPrevious };
   }
 
-  if (prevRung !== -1) {
-    // Previous is on THIS machine's ladder and the candidate is not: the ordinary
-    // move off the knowledge ladder into a commercial state, or into a state on
-    // neither list. Nothing unrecognised has happened, so nothing may be reported
-    // as unrecognised - this branch used to fall through below and label a rung
-    // this machine owns as another programme's vocabulary. `state` was right
-    // either way; the fact recorded next to it was not, and that fact reaches the
-    // audit trail.
-    return { state: candidate, held: false, foreignPrevious: false };
-  }
-
-  // Previous belongs to no group here: another programme's vocabulary, a legacy
-  // value, or a hand edit. Trust the evidence rather than freeze the subject in
-  // a state this machine cannot reason about.
-  return { state: candidate, held: false, foreignPrevious: true };
+  // What is left is a previous state on this machine's ladder with a candidate
+  // that has left it - the ordinary move into a commercial state - or a value
+  // this machine does not recognise at all. Either way the answer is the current
+  // evidence rather than freezing the subject in a state it cannot reason about,
+  // and `foreignPrevious` already says which of the two happened.
+  return { state: candidate, held: false, foreignPrevious };
 }
 
 /**

@@ -178,6 +178,41 @@ describe("a state the machine cannot write can still ARRIVE — T307's L2", () =
   });
 });
 
+describe('a foreign previous state survives promotion to the terminal', () => {
+  // At the machine level, because this is the cell where the evidence string is
+  // the only thing that records it: `state` is correct either way.
+
+  it('the business machine still names the foreign previous state on a CUSTOMER', () => {
+    const r = classifyBusinessState({ ...businessInput('PROJECT_STARTED'), isCustomer: true });
+    expect(r.state).toBe('CUSTOMER');
+    expect(r.evidence.join(' ')).toContain('not one of this programme');
+  });
+
+  it('the Flotation machine still names it on a PROJECT_STARTED', () => {
+    const r = classifyFlotationState({
+      ...flotationInput('EXPLORING_SOLUTIONS'),
+      hasDeliveryEngagement: true,
+    });
+    expect(r.state).toBe('PROJECT_STARTED');
+    expect(r.evidence.join(' ')).toContain('not one of this programme');
+  });
+
+  it('and does NOT name one when the previous state was its own', () => {
+    // The other direction at the same cell, so the two assertions above cannot
+    // be passing because the message is emitted unconditionally.
+    const business = classifyBusinessState({ ...businessInput('QUALIFIED_OPPORTUNITY'), isCustomer: true });
+    expect(business.state).toBe('CUSTOMER');
+    expect(business.evidence.join(' ')).not.toContain('not one of this programme');
+
+    const flotation = classifyFlotationState({
+      ...flotationInput('BUILD_QUALIFIED'),
+      hasDeliveryEngagement: true,
+    });
+    expect(flotation.state).toBe('PROJECT_STARTED');
+    expect(flotation.evidence.join(' ')).not.toContain('not one of this programme');
+  });
+});
+
 describe('the shared rule reports WHICH case it took', () => {
   const rule = {
     ladder: ['A', 'B', 'C'] as const,
@@ -192,6 +227,28 @@ describe('the shared rule reports WHICH case it took', () => {
     // earned knowledge" from "we did not recognise that value".
     expect(applyLadderMonotonicity('A', 'B', rule)).toEqual({ state: 'B', held: true, foreignPrevious: false });
     expect(applyLadderMonotonicity('A', 'WHATEVER', rule)).toEqual({ state: 'A', held: false, foreignPrevious: true });
+  });
+
+  it('arriving at the TERMINAL does not erase which case the previous state was', () => {
+    // The cell the per-branch version dropped: promotion straight to the terminal
+    // returned early with `foreignPrevious: false` hard-coded, so a row carrying
+    // another programme's state lost the fact entirely - the state was right and
+    // the audit trail said nothing. `foreignPrevious` is a fact about PREVIOUS,
+    // so the candidate being terminal cannot change it.
+    expect(applyLadderMonotonicity('Z', 'WHATEVER', rule)).toEqual({
+      state: 'Z',
+      held: false,
+      foreignPrevious: true,
+    });
+    // Both directions, at the same cell.
+    expect(applyLadderMonotonicity('Z', 'A', rule)).toEqual({ state: 'Z', held: false, foreignPrevious: false });
+    expect(applyLadderMonotonicity('Z', 'X', rule)).toEqual({ state: 'Z', held: false, foreignPrevious: false });
+  });
+
+  it('and a terminal PREVIOUS reports the same fact about itself', () => {
+    // The terminal is one of the machine's own, so it is never foreign - and it
+    // still holds against a weaker candidate.
+    expect(applyLadderMonotonicity('A', 'Z', rule)).toEqual({ state: 'Z', held: true, foreignPrevious: false });
   });
 
   it('a terminal previous state holds, and arriving at terminal never does', () => {
