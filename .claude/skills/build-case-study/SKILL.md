@@ -607,12 +607,14 @@ something that does not make sense** — the same standing rule the hero row lea
 
 ### Two things that will bite
 
-**Promotion has no caller yet.** `caseStudyArtifactPromotion` exists because the artifact
-surface could not populate through the application at all — the pilot record's three
-approved artifacts were promoted by direct SQL — but as of 2026-09-14 nothing outside its
-own tests calls it. Expect to approve rows by hand, and check `status: 'approved'` and
-`visibility: 'public'` afterwards, because `projectArtifacts` silently drops anything that
-is not approved.
+**Promotion is a button, and a candidate is invisible until you press it.** Approve an
+artifact on the Studio's **Visuals** tab ("Approve + publish"), which calls
+`PATCH /api/admin/case-studies/:id/artifacts/:artifactId` and sets `status: 'approved'`,
+`visibility: 'public'` in one idempotent write. Nothing else moves an artifact off
+`candidate`, and `projectArtifacts` silently drops anything that is not approved, so a
+record can carry sixty candidates and render none. (This section said on 2026-09-14 that
+the promotion path had no caller. It did; the file's header describes the gap it was
+written to close, not the present. Read headers here as dates, not status.)
 
 **A private repo is a publish blocker, not a warning.** An artifact whose `public_url`
 points into a private repository trips `private_repo_exposed` at the gate. Check the
