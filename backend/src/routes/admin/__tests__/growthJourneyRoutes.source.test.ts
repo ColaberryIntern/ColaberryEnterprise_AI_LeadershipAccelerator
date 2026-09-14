@@ -20,12 +20,23 @@ describe('the route module reads the MASTER flag only', () => {
     expect(code).toMatch(/growthJourney\.growthJourneyEnabled/);
     // The sub-flag names are DERIVED here, never written: the dark-launch guard
     // scans every .ts file's raw text - this one included - and the first draft
-    // of this assertion spelled the three names out inside a regex literal and
+    // of this assertion spelled the names out inside a regex literal and
     // tripped it. Building the pattern from the module's own keys leaves no
     // dotted name in this file for the guard to find.
     const subFlags = Object.keys(GROWTH_JOURNEY_ENV_KEYS).filter((k) => k !== 'growthJourneyEnabled');
-    expect(subFlags).toHaveLength(3);
-    for (const flag of subFlags) expect(code).not.toMatch(new RegExp(`\\.${flag}\\b`));
+    // This assertion used to pin the sub-flag COUNT, and that pin went stale the
+    // moment T303 added a fourth flag: the canonical count lives in
+    // `config/__tests__/growthJourneyFlags.test.ts`, that one was updated, and
+    // this second copy was not. It stayed red and unseen because the per-task
+    // surface runs were scoped and never included this file. One count pin, in
+    // one place. Non-vacuity here is the two properties that actually make the
+    // loop below mean something: there are names to scan for, and the pattern
+    // really does match a dotted read when one is present.
+    expect(subFlags.length).toBeGreaterThan(0);
+    for (const flag of subFlags) {
+      expect(new RegExp(`\\.${flag}\\b`).test(`if (flags.${flag}) {}`)).toBe(true);
+      expect(code).not.toMatch(new RegExp(`\\.${flag}\\b`));
+    }
   });
 });
 

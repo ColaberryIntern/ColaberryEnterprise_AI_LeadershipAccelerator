@@ -211,7 +211,7 @@ describe('dark-launch guard — no direct Growth Journey sub-flag reads outside 
     expect(offenders).toEqual([]);
   });
 
-  it('the guard would catch a read of each of the three names', () => {
+  it('the guard would catch a read of each sub-flag name', () => {
     // Non-vacuity for the regex itself, against synthetic text.
     for (const prop of SUB_FLAGS) {
       expect(new RegExp(`\\.${prop}\\b`).test(`if (flags.${prop}) {}`)).toBe(true);

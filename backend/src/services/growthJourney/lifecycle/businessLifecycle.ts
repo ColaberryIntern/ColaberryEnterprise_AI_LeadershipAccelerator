@@ -1,3 +1,9 @@
+import {
+  applyLadderMonotonicity,
+  settleEnteredAt,
+  type MonotonicityRule,
+} from './monotonicity';
+
 /**
  * The Colaberry Business lifecycle (§5.3; Phase 3 T307).
  *
@@ -250,31 +256,19 @@ function evidenceState(input: ClassifyBusinessInput): { state: BusinessState; ev
 }
 
 /**
- * Knowledge never steps down; a deal may; a customer is terminal.
+ * The monotonicity rule this machine hands to the shared implementation.
+ *
+ * Extracted in T308 rather than copied into the second lifecycle: T307's own
+ * argument was that a second discipline means two places to get it wrong, and a
+ * third state vocabulary is when that has to be true in code rather than in a
+ * comment. T307's whole suite is the proof the extraction changed nothing.
  */
-function applyMonotonicity(candidate: BusinessState, previous: string | null | undefined): BusinessState {
-  if (!previous) return candidate;
-  if (previous === 'CUSTOMER') return 'CUSTOMER';
-  if (candidate === 'CUSTOMER') return 'CUSTOMER';
-
-  const prevRung = DISCOVERY_LADDER.indexOf(previous as BusinessState);
-  const candRung = DISCOVERY_LADDER.indexOf(candidate);
-
-  // Both on the discovery ladder: never step down.
-  if (prevRung !== -1 && candRung !== -1) {
-    return candRung >= prevRung ? candidate : previous as BusinessState;
-  }
-
-  // Previously commercial, now reading as a discovery state: allowed, because a
-  // deal cooling is real — but never below the knowledge already earned, which
-  // is why a regressing subject lands on the QUALIFIED rung rather than on NEW.
-  if (COMMERCIAL_STATES.includes(previous as BusinessState) && candRung !== -1) {
-    const floor = DISCOVERY_LADDER.indexOf('QUALIFIED_OPPORTUNITY');
-    return candRung >= floor ? candidate : 'QUALIFIED_OPPORTUNITY';
-  }
-
-  return candidate;
-}
+const BUSINESS_MONOTONICITY: MonotonicityRule<BusinessState> = {
+  ladder: DISCOVERY_LADDER,
+  commercial: COMMERCIAL_STATES,
+  terminal: 'CUSTOMER',
+  floor: 'QUALIFIED_OPPORTUNITY',
+};
 
 /** Fresh every run. Each entry names the source that produced it. */
 function deriveOverlays(input: ClassifyBusinessInput, state: BusinessState): BusinessOverlay[] {
@@ -307,18 +301,21 @@ function deriveOverlays(input: ClassifyBusinessInput, state: BusinessState): Bus
 
 export function classifyBusinessState(input: ClassifyBusinessInput): ClassifyBusinessResult {
   const { state: candidate, evidence } = evidenceState(input);
-  const state = applyMonotonicity(candidate, input.previous.state);
+  const { state, held, foreignPrevious } = applyLadderMonotonicity(
+    candidate,
+    input.previous.state,
+    BUSINESS_MONOTONICITY,
+  );
 
-  const held = state !== candidate;
   const evidenceOut = held
     ? [...evidence, `held at ${state}: ${state === 'CUSTOMER' ? 'customer is terminal' : 'knowledge does not step down'}`]
-    : evidence;
+    : foreignPrevious
+      ? [...evidence, `previous state ${input.previous.state} is not one of this programme's own: trusting current evidence`]
+      : evidence;
 
-  // `state_entered_at` moves ONLY on a real change. A re-run that reaches the
-  // same state must not reset the clock, because every duration rule above and
-  // every "how long have they been stuck" question downstream reads it.
-  const unchanged = input.previous.state === state && input.previous.state_entered_at !== null;
-  const state_entered_at = unchanged ? (input.previous.state_entered_at as Date) : input.asOf;
+  // Moves ONLY on a real change — the shared rule, for the same reason both
+  // machines need it: every duration rule reads this clock.
+  const state_entered_at = settleEnteredAt(state, input.previous, input.asOf);
 
   return {
     state,
