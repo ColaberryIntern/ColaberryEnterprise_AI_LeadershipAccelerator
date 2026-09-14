@@ -31,6 +31,16 @@ import { deriveLegacyScope } from './deriveLegacyScope';
 import portalApi from '../../../utils/portalApi';
 import './projects.css';
 import '../today/TodayShell.css';
+// "Up next across your builds" renders .te-feed / .te-feed-head, defined ONLY
+// in feed.css. This page used to get that file transitively through FeedCard;
+// #2525 replaced FeedCard with TimelineCard and dropped the import, and a cold
+// load of /portal/projects then had none of those rules — the heading's list
+// icon fell back to the UA default and rendered as three 462px black pills
+// (Ali, 2026-09-14: "why are these black lines here"). The Today page hit the
+// identical failure on 2026-08-24 (see TodayShell.tsx). A page that renders a
+// class owns the import for it. feed.css is scoped to .te-feed*, so this
+// cannot leak.
+import '../feed/feed.css';
 
 // Projects tab, in the Today-page shape: a hero "your next step" (your build's
 // next action, or "create a project" if you have none), the next live session,
