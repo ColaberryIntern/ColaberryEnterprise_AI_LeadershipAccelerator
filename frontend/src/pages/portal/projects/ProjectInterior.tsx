@@ -8,6 +8,7 @@ import { CorySpark } from '../../../components/portal/CoryMark';
 import { useIsExplorer } from '../useIsExplorer';
 import ProjectsNextStepHero from './ProjectsNextStepHero';
 import CaseStudyReadinessCard from './CaseStudyReadinessCard';
+import { isSelfDirectedStory } from './StoryCompletionPanel';
 import TimelineCard, { type TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import TimelineFeed from '../../../components/timeline/TimelineFeed';
 // Every rule for the Classroom card is scoped `.tl-de …` in timeline.css, and
@@ -46,7 +47,10 @@ export function taskToFeedCard(project: StudentProject, task: ProjectTask, listN
   const { blocked, waitingOn } = isTaskBlocked(project, task);
   return {
     id: task.id,
-    type: 'project_task',
+    // A Demo Prep rehearsal is the student's own work, not a build story: the
+    // card says "Start · +N pts" and its points land when they confirm it in
+    // the workspace (Ali, 2026-09-14: "Demo should have points as well").
+    type: isSelfDirectedStory(task.storyId || '') ? 'project_prep' : 'project_task',
     student_label: listName,
     render_band: 'task',
     title: task.title,

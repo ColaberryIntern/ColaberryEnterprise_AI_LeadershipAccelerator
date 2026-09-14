@@ -1,6 +1,7 @@
 import React from 'react';
 import CondensedHeaderCard, { CondensedTone } from '../today/CondensedHeaderCard';
 import { StudentProject, ProjectTask, ProjectList } from './projectsStore';
+import { isSelfDirectedStory } from './StoryCompletionPanel';
 // The full-variant card below reuses the Classroom's `.tl-nextweek` markup, and
 // every rule for it is scoped `.tl-de <selector>` inside timeline.css. Wrapping
 // the markup in `.tl-de` is necessary but NOT sufficient: `/portal/projects` is
@@ -96,6 +97,7 @@ const ProjectsNextStepHero: React.FC<Props> = ({ primary, primaryNext, demo, var
     const done = inRelease.filter((t) => t.state === 'done').length;
     const pct = inRelease.length ? Math.round((done / inRelease.length) * 100) : 0;
     const pts = primaryNext.task.points ?? 0;
+    const prep = isSelfDirectedStory(primaryNext.task.storyId || '');
 
     // Wrapped in `.tl-de`. Every rule for this card is scoped under it in
     // timeline.css (`.tl-de .tl-nextweek{...}`), so on a page that does not carry
@@ -125,10 +127,11 @@ const ProjectsNextStepHero: React.FC<Props> = ({ primary, primaryNext, demo, var
             <h2>{primaryNext.task.title}</h2>
             {primaryNext.task.what && <p>{primaryNext.task.what}</p>}
             <div className="pjw-actions" style={{ marginTop: 0 }}>
-              {/* Says what building it pays, like the card below it — the points
-                  land when the platform verifies the story, not on this click. */}
-              <button type="button" className="tl-btn primary" onClick={onOpenBuild} title={pts > 0 ? `Verified work pays +${pts} pts` : undefined}>
-                {pts > 0 ? `Build · +${pts} pts` : 'Open'}
+              {/* Says what it pays, like the card below it. A build story pays
+                  when the platform verifies it from the repo; a Demo Prep
+                  rehearsal ("Start") pays when the student marks it done. */}
+              <button type="button" className="tl-btn primary" onClick={onOpenBuild} title={pts > 0 ? (prep ? `Mark it done in the workspace to earn +${pts} pts` : `Verified work pays +${pts} pts`) : undefined}>
+                {pts > 0 ? `${prep ? 'Start' : 'Build'} · +${pts} pts` : 'Open'}
               </button>
               {primaryNext.task.prompt && (
                 <button type="button" className="te-btn ghost" onClick={onCopyPrompt} disabled={demo} title={demo ? 'Demo — enroll to build for real' : undefined}>Copy prompt</button>

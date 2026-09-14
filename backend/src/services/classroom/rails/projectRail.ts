@@ -2,6 +2,7 @@ import { getActiveProjectTree } from '../../projects/projectReadService';
 import { Rail, RailContext, RailTile, omitIfEmpty } from './types';
 import { isTaskOpen } from '../taskStatus';
 import { ART } from './railArt';
+import { isPrepStory } from '../../sbp/prepTaskPoints';
 
 /**
  * The student's own project, and the tasks still open on it.
@@ -74,10 +75,14 @@ export async function resolveProjectRail(ctx: RailContext): Promise<Rail | null>
           // allow the user to click." Same wording as the Today tile and the
           // Projects page, and the same number — all three read it from the
           // task's `points`, which the tree prices through storyPoints.
-          // Falls back to the old label when the story is unpriced (no
-          // published plan, or a PREP task): a button that says "+0 pts" would
-          // be worse than one that says what it does.
-          label: task.points && task.points > 0 ? `Build · +${task.points} pts` : 'Open workstation',
+          // Falls back to the old label when the task is unpriced (a build
+          // with no published plan): a button that says "+0 pts" would be
+          // worse than one that says what it does.
+          // "Start" for a Demo Prep rehearsal — it is the student's own work,
+          // not a build (Ali, 2026-09-14: "Demo should have points as well").
+          label: task.points && task.points > 0
+            ? `${isPrepStory((task as any).story_id) ? 'Start' : 'Build'} · +${task.points} pts`
+            : 'Open workstation',
           href: workstationHref(tree.id, (task as any).story_id || task.id),
           kind: 'primary',
         },

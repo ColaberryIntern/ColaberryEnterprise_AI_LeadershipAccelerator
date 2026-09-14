@@ -162,6 +162,43 @@ export async function pushTaskStatusByStory(storyKey: string, state: TaskState):
   }
 }
 
+/** What the server answers when a student confirms a Demo Prep task. */
+export interface SelfCompleteResult {
+  id: string;
+  story_id: string;
+  status: 'complete';
+  /** What this confirmation actually paid — 0 on a replay. */
+  points_awarded: number;
+  /** True when the server had already recorded this task as done. */
+  already: boolean;
+}
+
+/**
+ * Confirm a Demo Prep task on the server, and learn what it paid.
+ *
+ * Ali, 2026-09-14: "Demo should have points in the Project section as well."
+ * A prep task's completion used to live only in this browser's localStorage;
+ * the server never heard of it, so nothing could pay it. This is the call that
+ * changes that. It is the ONE completion a client may send — the server
+ * refuses any story that is not `PREP-n` with a 409 — and it is idempotent, so
+ * a retry after a dropped response can never pay twice.
+ *
+ * Returns null when the Projects API is off (404), so the caller can fall back
+ * to the local-only completion this replaced. Any other failure is reported
+ * and thrown: a rehearsal the server could not record must stay open on
+ * screen, or the student loses the points with no way to try again.
+ */
+export async function completeSelfDirectedTask(taskId: string): Promise<SelfCompleteResult | null> {
+  try {
+    const res = await portalApi.post(`/api/portal/projects/tasks/${encodeURIComponent(taskId)}/self-complete`, {});
+    return res.data as SelfCompleteResult;
+  } catch (err) {
+    if (isApiDisabled(err)) return null;
+    reportFailure('task-status', err);
+    throw err;
+  }
+}
+
 /**
  * Tell the server which build the student is now looking at.
  *

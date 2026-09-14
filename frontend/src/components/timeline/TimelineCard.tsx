@@ -259,6 +259,11 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   // pays and takes them to the workspace (Ali, 2026-09-11: "points instead of
   // the open button, just like the Classroom").
   const isProjectTask = !!card.project_task_id;
+  // A Demo Prep rehearsal is the student's own work, not a build: "Start", and
+  // the points land when they confirm it in the workspace, not when a repo
+  // verifies it (Ali, 2026-09-14: "Demo should have points as well").
+  const isPrepTask = isProjectTask && card.type === 'project_prep';
+  const projectVerb = isPrepTask ? 'Start' : 'Build';
   // Media/external cards keep their authored title casing; curriculum content
   // titles are Title-Cased for display.
   const externalTitle = v.kind === 'video' || isSkillsJar || ['testimonial', 'blog', 'podcast', 'announcement'].includes(card.type);
@@ -658,7 +663,9 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
                 className={`fc-cta ${pts > 0 || v.kind === 'lab' || isCommunityPost ? 'cherry' : 'berry'}`}
                 onClick={() => { setPlayingInline(false); onOpen?.(card); }}
                 title={isProjectTask
-                  ? (pts > 0 ? `Build this story in your workspace — verified work pays +${pts} pts` : 'Open this task in your project workspace')
+                  ? (pts > 0
+                    ? (isPrepTask ? `Do this in your workspace and mark it done — it pays +${pts} pts` : `Build this story in your workspace — verified work pays +${pts} pts`)
+                    : 'Open this task in your project workspace')
                   : isCommunityPost ? `Reply to earn +${REPLY_POINTS} pts`
                     : pts > 0 ? `Open to collect +${pts} pts` : undefined}
               >
@@ -666,7 +673,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
                   // Not "Collect": nothing here is collected by clicking. The
                   // platform pays the story when the repo verifies it, and the
                   // button says what that is worth on the way in.
-                  ? <><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {pts > 0 ? <>Build · +{pts} pts</> : 'Start'}</>
+                  ? <><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {pts > 0 ? <>{projectVerb} · +{pts} pts</> : 'Start'}</>
                   : pts > 0
                   ? <><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Collect +{pts} pts</>
                   : isCommunityPost

@@ -134,12 +134,24 @@ describe('rehydrateProjectItems — the story price tag', () => {
     expect(mockStoryPoints).toHaveBeenCalledWith(PROJ);
   });
 
-  it('prices NOTHING that is not a plan story — a demo-prep task carries no badge', async () => {
+  it('prices a demo-prep task at its flat rate and retypes it — even on a plan that does not list it', async () => {
+    // Ali, 2026-09-14: "Demo should have points in the Project section as well."
     const item = mkStale();
     stub([{ id: TASK, project_id: PROJ, story_id: 'PREP-1', title: 'Rehearse the demo', description: null, status: 'not_started', release_key: 'prep' }]);
     priced();
     await rehydrateProjectItems([item]);
+    expect(item.points).toEqual({ builder: 20 });
+    expect(item.type).toBe('project_prep');
+    expect(item.student_label).toBe('Demo Prep');
+  });
+
+  it('prices nothing for a story the plan does not know', async () => {
+    const item = mkStale();
+    stub([{ id: TASK, project_id: PROJ, story_id: 'STORY-099', title: 'Orphan', description: null, status: 'not_started', release_key: 'r9' }]);
+    priced();
+    await rehydrateProjectItems([item]);
     expect(item.points).toBeNull();
+    expect(item.type).toBe('project_task');
   });
 
   it('prices nothing when the project has no published plan, and nothing when the budget is unset', async () => {

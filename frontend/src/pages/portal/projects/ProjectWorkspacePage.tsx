@@ -10,7 +10,8 @@ import {
   WorkspaceRepoView, ConnectStateView, getWorkspaceRepo,
 } from '../../../services/workspaceRepoApi';
 import WorkspaceRepoPanel from './WorkspaceRepoPanel';
-import { refreshProjectsFromBackend } from './projectSync';
+import { refreshProjectsFromBackend, completeSelfDirectedTask } from './projectSync';
+import { emitPointsEarned } from '../../../services/pointsFx';
 import { useStoryVerification } from './useStoryVerification';
 import AcceptanceChecklist from './AcceptanceChecklist';
 import StoryCompletionPanel, { isSelfDirectedStory } from './StoryCompletionPanel';
@@ -57,6 +58,9 @@ const ProjectWorkspacePage: React.FC = () => {
   const location = useLocation();
   const backTo = ((location.state as { from?: string } | null)?.from) || '/portal/projects';
   const goBack = useCallback(() => navigate(backTo), [navigate, backTo]);
+  // Set only when the server could not record a Demo Prep confirmation; the
+  // task stays open so the student can try again for the points.
+  const [selfCompleteError, setSelfCompleteError] = useState('');
 
   // Same theme handling as the runtime: this page renders its own chrome rather
   // than PortalShell, so it has to carry the portal's light/dark setting itself.
@@ -528,17 +532,39 @@ const ProjectWorkspacePage: React.FC = () => {
             </p>
           </section>
 
+          {selfCompleteError && (
+            <div className="rt-waiting" role="alert" style={{ marginTop: 16 }}>
+              <div className="rt-waiting-h">Not saved yet</div>
+              <p className="rt-waiting-p">{selfCompleteError}</p>
+            </div>
+          )}
           {!blocked.blocked && (
             <StoryCompletionPanel
               verif={verif}
               storyKey={storyKey}
               locallyDone={locallyDone}
-              onMarkDone={() => {
+              onMarkDone={async () => {
                 // Two different completions behind one button. A verified story
-                // is the platform's call being mirrored locally; a Demo Prep
-                // task is the student's own, because nothing ever verifies it.
-                // Neither pushes a status: `complete` is not client-settable.
+                // is the platform's call being mirrored locally. A Demo Prep task
+                // is the student's own, because nothing in a repo can verify it —
+                // so the server records the student's confirmation itself and
+                // pays it (Ali, 2026-09-14: "Demo should have points in the
+                // Project section as well"). Build stories still never push
+                // `complete`; the server refuses them with a 409.
                 if (isSelfDirectedStory(storyKey)) {
+                  setSelfCompleteError('');
+                  try {
+                    const r = await completeSelfDirectedTask(task.id);
+                    // null = Projects API off: the local-only completion this
+                    // replaced still works, it just cannot pay.
+                    if (r && r.points_awarded > 0) emitPointsEarned(r.points_awarded);
+                  } catch {
+                    // Keep the task OPEN. Marking it done locally now would hide
+                    // the button, and with it the only way to try again for the
+                    // points the server did not record.
+                    setSelfCompleteError('Couldn’t save this on the server — your points weren’t recorded. Try again in a moment.');
+                    return;
+                  }
                   markSelfDirectedDone(project.id, task.id);
                 } else {
                   mirrorVerifiedCompletion(project.id, task.id);

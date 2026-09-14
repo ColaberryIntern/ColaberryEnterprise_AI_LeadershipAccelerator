@@ -17,7 +17,7 @@ import {
   getOwnedProjectTree,
   listEnrollmentProjectsSummary,
 } from '../services/projects/projectReadService';
-import { setTaskStatus, setTaskStatusByStory, importProject, type ImportProjectInput } from '../services/projects/projectWriteService';
+import { setTaskStatus, setTaskStatusByStory, completeSelfDirectedTask, importProject, type ImportProjectInput } from '../services/projects/projectWriteService';
 import { attachmentsSchema } from '../services/agents/tools/attachmentSchema';
 import { z } from 'zod';
 
@@ -176,6 +176,23 @@ router.patch('/api/portal/projects/tasks/by-story/:storyId', requireParticipant,
     if (!gate(res)) return;
     const { status } = statusSchema.parse(req.body || {});
     const r = await setTaskStatusByStory(eid(req), String(req.params.storyId), status);
+    if (!r) return res.status(404).json({ error: 'Task not found' });
+    res.json(r);
+  } catch (e) { fail(res, e, next); }
+});
+
+/**
+ * The student confirms their own Demo Prep task, and is paid for it. The one
+ * route that reaches `complete` — for PREP-n only; a build story gets the same
+ * 409 the status routes give. Idempotent: a replay answers `already: true` and
+ * `points_awarded: 0`. See projectWriteService.completeSelfDirectedTask.
+ */
+const taskIdSchema = z.string().uuid();
+router.post('/api/portal/projects/tasks/:taskId/self-complete', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const taskId = taskIdSchema.parse(req.params.taskId);
+    const r = await completeSelfDirectedTask(eid(req), taskId);
     if (!r) return res.status(404).json({ error: 'Task not found' });
     res.json(r);
   } catch (e) { fail(res, e, next); }

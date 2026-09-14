@@ -17,6 +17,7 @@ import { resolve as resolveType } from './typeRegistry';
 import { blendSurfaces } from './todayAnchoredBlend';
 import { getActiveProjectTree } from '../projects/projectReadService';
 import { storyPointsForProject, pointsByStoryId } from '../sbp/verification/storyPoints';
+import { priceForStory, isPrepStory } from '../sbp/prepTaskPoints';
 import TimelineCard from '../../models/TimelineCard';
 import CommunityPost from '../../models/CommunityPost';
 import CommunityMember from '../../models/CommunityMember';
@@ -29,6 +30,9 @@ import { env } from '../../config/env';
 import type { TodayFeedItem } from './todayFeedComposer';
 import { getTypeExposureMap } from './feedTypeExposureService';
 import { getRoutingMap } from './feedControlService';
+
+/** For a project with no published plan: nothing is priced, but a Demo Prep task still is. */
+const NO_PRICES: ReadonlyMap<string, number> = new Map();
 
 const CANDIDATE_CAP = 20;
 
@@ -115,15 +119,19 @@ export async function rehydrateCardItems(items: TodayFeedItem[]): Promise<void> 
 }
 
 function projectItem(
-  t: { id: string; title: string | null; description: string | null; status: string; release_key: string | null; points?: number | null },
+  t: { id: string; title: string | null; description: string | null; status: string; release_key: string | null; points?: number | null; story_id?: string | null },
   projectId: string,
 ): TodayFeedItem {
+  const prep = isPrepStory(t.story_id);
   return {
     position: 0,
     kind: 'anchored',
     ref: `project:${t.id}`,
     surface: 'project',
-    type: 'project_task',
+    // A Demo Prep task is the student's own rehearsal, not a build story: the
+    // tile says "Start", not "Build", and names it as such. Same render band.
+    type: prep ? 'project_prep' : 'project_task',
+    student_label: prep ? 'Demo Prep' : undefined,
     render_band: resolveType('project_task')?.render_band ?? 'task',
     card_id: null,
     // A project task is not a curriculum card either — same defect class as the
@@ -329,8 +337,9 @@ export async function rehydrateProjectItems(items: TodayFeedItem[]): Promise<voi
       if (t.description !== undefined) it.description = t.description ?? null;
       if (t.release_key !== undefined) it.subtitle = t.release_key ?? null;
       it.status = t.status === 'complete' ? 'completed' : t.status === 'in_progress' ? 'in_progress' : 'available';
-      const price = t.story_id ? priceByProject.get(String(t.project_id))?.get(String(t.story_id)) : undefined;
-      it.points = projectPoints(price);
+      it.points = projectPoints(priceForStory(t.story_id, priceByProject.get(String(t.project_id)) ?? NO_PRICES));
+      // Rows frozen before Demo Prep had a type of its own get it here too.
+      if (isPrepStory(t.story_id)) { it.type = 'project_prep'; it.student_label = 'Demo Prep'; }
     }
   } catch (err: any) {
     console.warn('[todayAnchoredSources] project rehydrate failed:', err?.message?.split('\n')[0]);

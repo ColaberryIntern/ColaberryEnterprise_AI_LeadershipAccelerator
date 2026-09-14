@@ -39,7 +39,9 @@ describe('toTaskDto', () => {
   it('prices a task from the injected story map, and only a task in it', () => {
     const price = new Map([['STORY-001', 57], ['STORY-000', 57]]);
     expect(toTaskDto({ id: 't1', story_id: 'STORY-001', title: 'x' }, price).points).toBe(57);
-    expect(toTaskDto({ id: 't2', story_id: 'PREP-1', title: 'rehearse' }, price).points).toBeNull();   // demo prep: never paid
+    // Demo prep is priced at its own flat rate, from the map or not (Ali, 2026-09-14).
+    expect(toTaskDto({ id: 't2', story_id: 'PREP-1', title: 'rehearse' }, price).points).toBe(20);
+    expect(toTaskDto({ id: 't5', story_id: 'PREP-6', title: 'demo day' }).points).toBe(20);
     expect(toTaskDto({ id: 't3', story_id: null, title: 'legacy' }, price).points).toBeNull();
     expect(toTaskDto({ id: 't4', story_id: 'STORY-001', title: 'x' }).points).toBeNull();               // no map = nothing is paid
   });
@@ -48,7 +50,7 @@ describe('toTaskDto', () => {
     const tree = toProjectTreeDto({ id: 'p1' }, [
       { id: 'l1', position: 0, tasks: [{ id: 't1', story_id: 'STORY-001', title: 'x', position: 0 }, { id: 't2', story_id: 'PREP-1', title: 'y', position: 1 }] },
     ], 0, new Map([['STORY-001', 57]]));
-    expect(tree.lists[0].tasks.map((t) => t.points)).toEqual([57, null]);
+    expect(tree.lists[0].tasks.map((t) => t.points)).toEqual([57, 20]);
   });
 });
 

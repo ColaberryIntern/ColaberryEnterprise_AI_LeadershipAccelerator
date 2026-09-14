@@ -18,6 +18,10 @@ import {
   VerificationLatch, VerificationRecord,
 } from '../sbp/verification/verificationLatch';
 import { isProtectedProject } from './protectedProjects';
+import { priceForStory } from '../sbp/prepTaskPoints';
+
+/** Shared empty map for callers that price nothing; a Demo Prep task is still priced. */
+const NO_PRICES: ReadonlyMap<string, number> = new Map();
 
 export type { VerificationLatch };
 
@@ -415,7 +419,7 @@ export function toTaskDto(t: Plain, pointsByStory?: ReadonlyMap<string, number>)
     due_on: asDateOnly(t.due_on),
     due_baseline_on: asDateOnly(t.due_baseline_on),
     verified_at: asIsoTimestamp(t.verified_at),
-    points: (t.story_id && pointsByStory?.get(String(t.story_id))) || null,
+    points: priceForStory(t.story_id, pointsByStory ?? NO_PRICES),
     // The latch columns travel with the blob, always. A caller that passes the
     // blob alone gets the repo's opinion of the student's work instead of ours.
     verification: toTaskVerificationDto(t.verification_json, {

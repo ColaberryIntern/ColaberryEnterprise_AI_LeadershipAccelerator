@@ -65,14 +65,25 @@ describe('Open workstation opens the workstation', () => {
   it('keeps the old label for an unpriced story rather than advertising "+0 pts"', async () => {
     mTree.mockResolvedValue({
       id: 'p1', name: 'P',
-      lists: [{ title: 'prep', tasks: [
-        { id: 't1', story_id: 'PREP-1', title: 'Rehearse', status: 'not_started', points: null },
-        { id: 't2', story_id: 'PREP-2', title: 'Again', status: 'not_started', points: 0 },
-        { id: 't3', story_id: 'PREP-3', title: 'Older server', status: 'not_started' },
+      lists: [{ title: 'R9', tasks: [
+        { id: 't1', story_id: 'STORY-091', title: 'No plan yet', status: 'not_started', points: null },
+        { id: 't2', story_id: 'STORY-092', title: 'Zero', status: 'not_started', points: 0 },
+        { id: 't3', story_id: 'STORY-093', title: 'Older server', status: 'not_started' },
       ] }],
     });
     const rail = await resolveProjectRail(ctx);
     for (const tile of rail!.tiles) expect(tile.action?.label).toBe('Open workstation');
+  });
+
+  it('says "Start" for a Demo Prep rehearsal — the student\'s own work, not a build', async () => {
+    // Ali, 2026-09-14: "Demo should have points in the Project section as well."
+    mTree.mockResolvedValue({
+      id: 'p1', name: 'P',
+      lists: [{ title: 'prep', tasks: [{ id: 't1', story_id: 'PREP-1', title: 'Rehearse', status: 'not_started', points: 20 }] }],
+    });
+    const rail = await resolveProjectRail(ctx);
+    expect(rail?.tiles[0].action?.label).toBe('Start · +20 pts');
+    expect(rail?.tiles[0].action?.href).toBe('/portal/projects/workspace/p1/PREP-1');
   });
 
   it('gives every project tile a picture', async () => {

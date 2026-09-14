@@ -5,10 +5,16 @@
  * All access is scoped to the requesting enrollment. Pure helpers in
  * ./projectWriteDto; read-tree reused from ./projectReadService.
  *
- * ONE RULE ABOVE ALL OTHERS IN THIS FILE: a client may never write `complete`.
- * Ownership is not verification, and points ride on completion. Client paths go
- * through `assertClientMaySet`; the platform's path is
- * `markTaskVerifiedComplete`, which no route may call.
+ * ONE RULE ABOVE ALL OTHERS IN THIS FILE: a client may never write `complete`
+ * on a BUILD STORY. Ownership is not verification, and points ride on
+ * completion. Client paths go through `assertClientMaySet`; the platform's path
+ * is `markTaskVerifiedComplete`, which no route calls directly.
+ *
+ * The one named exception, since 2026-09-14: `completeSelfDirectedTask`, which
+ * a route DOES call, for Demo Prep tasks only (`PREP-n`). Those are rehearsals
+ * nothing in a repo can confirm, so the student is the only possible verifier;
+ * the function refuses any other story id with the same 409 the client paths
+ * use. See its own comment for the full reasoning.
  */
 import { Transaction } from 'sequelize';
 import { sequelize } from '../../config/database';
@@ -19,6 +25,8 @@ import { createProjectForEnrollment, getProjectByEnrollment } from '../projectSe
 import { getOwnedProjectTree } from './projectReadService';
 import { importTaskToAttributes, isTaskStatus, type ImportTaskInput } from './projectWriteDto';
 import type { ProjectTreeDto } from './projectTreeDto';
+import { isPrepStory, PREP_TASK_POINTS } from '../sbp/prepTaskPoints';
+import { env } from '../../config/env';
 
 export interface ImportListInput { cluster: string; title?: string; position?: number; tasks: ImportTaskInput[]; }
 export interface ImportProjectInput { project_id?: string; name?: string; lists: ImportListInput[]; }
@@ -240,6 +248,79 @@ export async function markTaskVerifiedComplete(
     replayed: Boolean(task.verified_at),
   }, 'info', 'success');
   return { id: String(task.id), story_id: storyId, status: 'complete', verified_at: verifiedAt };
+}
+
+/** Stamped into `verified_by`: the student themselves, on a task only they can judge. */
+export const SELF_DIRECTED_SOURCE = 'student:self_directed';
+/** The HUD ledger event for a Demo Prep task, keyed on the Today feed ref. */
+export const PREP_DONE_EVENT = 'project_prep_done';
+
+/**
+ * A student completes their OWN Demo Prep task, and is paid for it.
+ *
+ * THE ONE EXCEPTION TO "complete IS NOT CLIENT-SETTABLE", AND WHY IT IS SAFE.
+ * PREP-1..PREP-6 are rehearsals, recordings and the Demo Day slot. They are
+ * generated with `acceptance: []` and never enter the published plan, so the
+ * repo verifier has no spec for them and `verified_at` could never be stamped
+ * by anything — 150 of 150 prep tasks across the cohort sat unverifiable. The
+ * workspace already lets the student confirm them ("You confirm this one
+ * yourself"); until now that confirmation lived only in their browser's
+ * localStorage, the server never heard of it, and so nothing could pay it.
+ * Ali, 2026-09-14: "Demo should have points in the Project section as well."
+ *
+ * The guard is the story id: a plan story is refused here with 409 exactly as
+ * `setTaskStatus` refuses `complete`, so this route can never become a second
+ * way to finish a build story. Ownership is by the task's project, not the
+ * active-project pointer — a student may confirm a rehearsal on any build they
+ * own — and a task that is not theirs is "not found", never "forbidden", so the
+ * route does not confirm that an id exists.
+ *
+ * Idempotent twice over: `markTaskVerifiedComplete` is first-write-wins on the
+ * timestamp, and `award` is findOrCreate on `(enrollment, event_key)` — the
+ * SAME `project:<task id>` key the verifier pays stories under, so the Today
+ * feed treats both alike. A replay returns `already: true` and pays 0.
+ */
+export async function completeSelfDirectedTask(
+  enrollmentId: string,
+  taskId: string,
+): Promise<{ id: string; story_id: string; status: 'complete'; points_awarded: number; already: boolean } | null> {
+  const task = await StudentTask.findByPk(taskId);
+  if (!task) return null;
+  const project = await Project.findByPk(String(task.project_id));
+  if (!project || String((project as any).enrollment_id) !== String(enrollmentId)) return null;
+
+  const storyId = String(task.story_id ?? '');
+  if (!isPrepStory(storyId)) {
+    const e: any = new Error('Only a Demo Prep task can be confirmed by the student. Build stories are verified from your repo.');
+    e.status = 409;
+    e.error_class = 'ForbiddenStateTransition';
+    throw e;
+  }
+
+  const already = Boolean(task.verified_at);
+  await markTaskVerifiedComplete(String(task.project_id), storyId, {
+    source: SELF_DIRECTED_SOURCE,
+    ref: null,
+    correlation_id: null,
+  });
+
+  let pointsAwarded = 0;
+  if (env.portalPointsAwardEnabled) {
+    // Loaded here, not at the top: pointsService pulls the StudentPointsEvent
+    // model, and every suite that stubs the database to test THIS file's
+    // control flow would fail on module load with "reading 'define'" — the
+    // exact trap #2478 hit. The routes file uses the same pattern for the
+    // same reason.
+    const { award } = await import('../pointsService');
+    const r = await award(enrollmentId, {
+      eventType: PREP_DONE_EVENT,
+      eventKey: `project:${task.id}`,
+      points: PREP_TASK_POINTS,
+      metadata: { project_id: String(task.project_id), story_id: storyId, source: SELF_DIRECTED_SOURCE },
+    });
+    pointsAwarded = r.awarded ? r.points : 0;
+  }
+  return { id: String(task.id), story_id: storyId, status: 'complete', points_awarded: pointsAwarded, already };
 }
 
 /**

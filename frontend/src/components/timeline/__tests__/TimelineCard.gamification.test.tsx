@@ -179,3 +179,37 @@ describe('project task tile', () => {
     expect(text()).not.toContain('core');
   });
 });
+
+/**
+ * Demo Prep tile. Ali, 2026-09-14: "Demo should have points in the Project
+ * section as well." A rehearsal is the student's own work, not a build: the
+ * verb is "Start", and the hover text says the points land when they mark it
+ * done in the workspace, not when a repo verifies it.
+ */
+describe('demo prep tile', () => {
+  const prep = (over: Partial<TimelineFeedCard> = {}) => card({
+    id: 'project:t-9', type: 'project_prep', student_label: 'Demo Prep', render_band: 'task',
+    title: 'Record a first run-through and watch it back', project_id: 'p-1', project_task_id: 't-9',
+    points: { builder: 20 }, ...over,
+  });
+
+  it('says "Start · +N pts", never "Build"', async () => {
+    await render(prep());
+    expect(cta()?.textContent).toContain('Start · +20 pts');
+    expect(cta()?.textContent).not.toContain('Build');
+    expect(text()).toContain('+20 pts');
+    expect(cta()?.title).toContain('mark it done');
+  });
+
+  it('still hands the card up to the container, which routes to the workspace', async () => {
+    const opened: string[] = [];
+    await act(async () => { root.render(<TimelineCard card={prep()} onOpen={(c) => opened.push(c.id)} />); });
+    await act(async () => { cta()!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(opened).toEqual(['project:t-9']);
+  });
+
+  it('a build story is untouched — still "Build"', async () => {
+    await render(prep({ type: 'project_task', student_label: 'Project Task', points: { builder: 50 } }));
+    expect(cta()?.textContent).toContain('Build · +50 pts');
+  });
+});
