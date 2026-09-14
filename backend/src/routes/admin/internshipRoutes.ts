@@ -4,6 +4,7 @@ import { requireSection } from '../../middlewares/authMiddleware';
 import InternshipApplication from '../../models/InternshipApplication';
 import { applicationDetail, queue, queueCounts, type QueueBucket } from '../../services/internship/internshipReviewQueue';
 import { decide } from '../../services/internship/internshipDecisionService';
+import { assessApplicant } from '../../services/internship/internshipApplicantAssessment';
 import { InvalidInternshipTransitionError } from '../../services/internship/internshipStateMachine';
 import { REASON_CODES } from '../../services/internship/internshipReasonCodes';
 import fs from 'fs';
@@ -102,6 +103,30 @@ router.get('/api/admin/internship/applications/:id', requireSection('internship'
       context: { message: err?.message },
     }));
     res.status(500).json({ error: 'Could not load the application.' });
+  }
+});
+
+/**
+ * POST /api/admin/internship/applications/:id/assess
+ * Generate the AI assessment on demand (a reviewer clicks Generate), so the LLM
+ * cost is paid when a human is actually reviewing, not on every queue load.
+ */
+router.post('/api/admin/internship/applications/:id/assess', requireSection('internship'), async (req: Request, res: Response) => {
+  try {
+    const assessment = await assessApplicant(String(req.params.id));
+    res.json(assessment);
+  } catch (err: any) {
+    if (err?.message === 'application_not_found') {
+      res.status(404).json({ error: 'Application not found.' });
+      return;
+    }
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_assess_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not generate the assessment.' });
   }
 });
 
