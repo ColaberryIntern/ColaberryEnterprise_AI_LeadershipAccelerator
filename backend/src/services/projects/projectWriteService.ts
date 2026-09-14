@@ -180,6 +180,13 @@ export interface VerificationEvidence {
   ref?: string | null;
   /** Correlation id of the verification run, so a completion traces back to it. */
   correlation_id?: string | null;
+  /**
+   * The evidence itself, when it is small enough to keep on the row — a demo
+   * submission's kind and value, a reviewer's note. Written to
+   * student_tasks.verification_json on the FIRST verification only, under the
+   * same first-write-wins rule as the timestamp and ref.
+   */
+  detail?: Record<string, unknown> | null;
 }
 
 /**
@@ -226,9 +233,15 @@ export async function markTaskVerifiedComplete(
   // under a sha nothing was ever awarded under. Before this line the sha lived
   // only in the log below, which no query can join to.
   const verifiedRef = task.verified_at ? task.verified_ref : (evidence.ref ?? null);
+  const verificationJson = task.verified_at ? task.verification_json : (evidence.detail ?? null);
 
   await StudentTask.update(
-    { status: 'complete', verified_at: verifiedAt, verified_by: verifiedBy, verified_ref: verifiedRef },
+    {
+      status: 'complete', verified_at: verifiedAt, verified_by: verifiedBy, verified_ref: verifiedRef,
+      // Only when there is something to write: a pipeline verification carries
+      // no detail and must not blank a row a reviewer annotated.
+      ...(verificationJson !== undefined ? { verification_json: verificationJson } : {}),
+    },
     { where: { id: task.id } },
   );
   // student_tasks.verified_at is what points will actually gate on; this line is

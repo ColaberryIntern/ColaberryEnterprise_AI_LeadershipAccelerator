@@ -22,13 +22,20 @@ jest.mock('../../../models/StudentTask', () => ({
 jest.mock('../../../models/CommunityPost', () => ({ __esModule: true, default: { findAll: jest.fn() } }));
 jest.mock('../../../models/CommunityMember', () => ({ __esModule: true, default: {} }));
 
-// The story price tag comes from the module the verifier pays from. Mocked so
-// these tests own the rate; `pointsByStoryId` is the real pure mapper.
+// The price tag comes from the module the verifier pays from. Mocked so these
+// tests own the rate. The rehydrate reads `taskPointsForProject` — stories from
+// the budget plus prep tasks at flat rates — so the mock composes the two the
+// way the real one does: `pointsByStoryId` is the real pure mapper, and prep
+// prices are absent here because these tests are about the story tag.
 const mockStoryPoints = jest.fn();
-jest.mock('../../sbp/verification/storyPoints', () => ({
-  storyPointsForProject: (...args: any[]) => mockStoryPoints(...args),
-  pointsByStoryId: jest.requireActual('../../sbp/verification/storyPoints').pointsByStoryId,
-}));
+jest.mock('../../sbp/verification/storyPoints', () => {
+  const actual = jest.requireActual('../../sbp/verification/storyPoints');
+  return {
+    storyPointsForProject: (...args: any[]) => mockStoryPoints(...args),
+    pointsByStoryId: actual.pointsByStoryId,
+    taskPointsForProject: async (pid: string) => actual.pointsByStoryId(await mockStoryPoints(pid)),
+  };
+});
 
 import { rehydrateProjectItems } from '../todayAnchoredSources';
 

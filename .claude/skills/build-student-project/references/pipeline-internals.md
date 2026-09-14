@@ -98,7 +98,8 @@ written. It has now: **178 tasks carry `verified_at`.**
 | `studentProgressMerge.ts` | pure | `mergeProgressFile`, made safe to hand to a student |
 | `storyVerificationRead.ts` | I/O | The one story the workspace page has open |
 | `rejectedClaimsSignal.ts` | I/O | Making `rejected_claims` reach a human, instead of resting in a column |
-| `storyPoints.ts` | I/O | ONE answer to "what is a story worth": the `project_story_verified` budget split across the plan's stories + STORY-000. The verifier judges and pays from it; the project tree and the Today tile show it. Priced in one place so the number a student sees before building is the number paid after verification (2026-09-11) |
+| `storyPoints.ts` | I/O | ONE answer to "what is a story worth": the `project_story_verified` budget split across the plan's stories + STORY-000. The verifier judges and pays from it; the project tree and the Today tile show it. Priced in one place so the number a student sees before building is the number paid after verification (2026-09-11). `taskPointsForProject()` merges these with the prep prices below into the one map every surface reads |
+| `prepPoints.ts` | I/O | What a demo-prep task (`PREP-1…6`) pays: flat rates from `points_config` `demo` (PREP-1…5) and `presentation` (PREP-6), not from the story budget — there are always six prep tasks, so a flat rate is the honest one. A missing or zero row leaves its tasks unpriced (no badge, never "0 pts"). The completion path for these lives outside this directory in `services/projects/demoEvidenceService.ts` — student-submitted evidence for PREP-1…5, staff mark for Demo Day (2026-09-14) |
 
 #### Command Center, documents, and the rest
 

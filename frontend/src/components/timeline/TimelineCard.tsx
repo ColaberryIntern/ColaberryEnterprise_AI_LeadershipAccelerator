@@ -87,6 +87,11 @@ export interface TimelineFeedCard {
   // ("Due today", "Overdue"). The Projects page sets it; curriculum cards leave
   // it unset and keep showing their difficulty.
   meta?: string | null;
+  // The verb on a project task's CTA. Default "Build" — a story is built and
+  // verified from the repo. A demo-prep task is handed in ("Submit"), and Demo
+  // Day is marked by staff ("Demo Day"), so the button must not promise a
+  // build where there is nothing to build. Set by the projects mapper.
+  cta_verb?: string | null;
 }
 
 export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone' | 'setuplab' | 'timemachine';
@@ -658,7 +663,9 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
                 className={`fc-cta ${pts > 0 || v.kind === 'lab' || isCommunityPost ? 'cherry' : 'berry'}`}
                 onClick={() => { setPlayingInline(false); onOpen?.(card); }}
                 title={isProjectTask
-                  ? (pts > 0 ? `Build this story in your workspace — verified work pays +${pts} pts` : 'Open this task in your project workspace')
+                  ? (pts > 0
+                    ? (card.cta_verb ? `Open this task — verified work pays +${pts} pts` : `Build this story in your workspace — verified work pays +${pts} pts`)
+                    : 'Open this task in your project workspace')
                   : isCommunityPost ? `Reply to earn +${REPLY_POINTS} pts`
                     : pts > 0 ? `Open to collect +${pts} pts` : undefined}
               >
@@ -666,7 +673,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
                   // Not "Collect": nothing here is collected by clicking. The
                   // platform pays the story when the repo verifies it, and the
                   // button says what that is worth on the way in.
-                  ? <><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {pts > 0 ? <>Build · +{pts} pts</> : 'Start'}</>
+                  ? <><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {pts > 0 ? <>{card.cta_verb || 'Build'} · +{pts} pts</> : 'Start'}</>
                   : pts > 0
                   ? <><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Collect +{pts} pts</>
                   : isCommunityPost

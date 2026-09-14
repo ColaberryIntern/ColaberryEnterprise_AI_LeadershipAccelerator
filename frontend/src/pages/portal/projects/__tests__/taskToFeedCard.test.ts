@@ -58,6 +58,17 @@ describe('taskToFeedCard', () => {
     expect(taskToFeedCard(projectWith([zero]), zero, 'Release 0').points).toEqual({});
   });
 
+  it('says "Submit" on a demo-prep task and "Demo Day" on the presentation, never "Build"', () => {
+    // Ali, 2026-09-14: demos provide points too. A recording is handed in,
+    // not built; Demo Day is marked by staff. The verb must match the path.
+    const prep = task({ id: 'p2', storyId: 'PREP-2', points: 40 });
+    expect(taskToFeedCard(projectWith([prep]), prep, 'Demo prep')).toMatchObject({ cta_verb: 'Submit', points: { builder: 40 } });
+    const day = task({ id: 'p6', storyId: 'PREP-6', points: 60 });
+    expect(taskToFeedCard(projectWith([day]), day, 'Demo prep')).toMatchObject({ cta_verb: 'Demo Day', points: { builder: 60 } });
+    const story = task({ id: 's1', storyId: 'STORY-001', points: 50 });
+    expect(taskToFeedCard(projectWith([story]), story, 'Release 0').cta_verb).toBeNull();
+  });
+
   it('reports a finished story as completed, dated by the SERVER verification', () => {
     const t = task({ state: 'done', points: 50, verifiedAt: '2026-09-01T00:00:00Z' });
     const card = taskToFeedCard(projectWith([t]), t, 'Release 0');

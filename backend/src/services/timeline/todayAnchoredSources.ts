@@ -16,7 +16,7 @@ import { anchoredWeekAllowed, weekStartedForToday, isWeekGated, groupByType } fr
 import { resolve as resolveType } from './typeRegistry';
 import { blendSurfaces } from './todayAnchoredBlend';
 import { getActiveProjectTree } from '../projects/projectReadService';
-import { storyPointsForProject, pointsByStoryId } from '../sbp/verification/storyPoints';
+import { taskPointsForProject } from '../sbp/verification/storyPoints';
 import TimelineCard from '../../models/TimelineCard';
 import CommunityPost from '../../models/CommunityPost';
 import CommunityMember from '../../models/CommunityMember';
@@ -342,7 +342,7 @@ async function projectPriceTags(projectIds: string[]): Promise<Map<string, Map<s
   const out = new Map<string, Map<string, number>>();
   await Promise.all(projectIds.map(async (pid) => {
     try {
-      out.set(pid, pointsByStoryId(await storyPointsForProject(pid)));
+      out.set(pid, await taskPointsForProject(pid));
     } catch (err: any) {
       console.warn('[todayAnchoredSources] story points failed:', err?.message?.split('\n')[0]);
     }
