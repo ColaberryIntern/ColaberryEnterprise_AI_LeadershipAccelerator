@@ -403,7 +403,10 @@ describe('Phase 2 source', () => {
     src
       .split('\n')
       .map((l, i) => ({ l, i: i + 1 }))
-      .filter(({ l }) => /unsubscribe/i.test(l) && !/^\s*import\b/.test(l) && !HARD_STOP_KEY.test(l));
+      // The scan word is the STEM, so it matches its own lookahead: the first
+      // version scanned for the whole word, and Explorer's `/unsubscrib|complain/`
+      // regex on a line of its own was invisible to it (attempt-2 review, G1).
+      .filter(({ l }) => /unsubscrib/i.test(l) && !/^\s*import\b/.test(l) && !HARD_STOP_KEY.test(l));
 
   it('defines no fourth opt-out detector: "unsubscribe" appears only on import lines or as the tier-0 key', () => {
     for (const f of files) {
@@ -414,7 +417,7 @@ describe('Phase 2 source', () => {
     }
   });
 
-  it('and that allowance is exactly one shape - a detector still trips it', () => {
+  it('and that allowance is the KEY alone - a detector on the same line still trips it', () => {
     const trips = [
       "if (lead.status === 'unsubscribed') return false;",
       "const rows = await UnsubscribeEvent.findAll({ where: { lead_id } });",
@@ -425,6 +428,8 @@ describe('Phase 2 source', () => {
       // not the line.
       "    unsubscribed: /unsubscrib|complain/i.test(contactability.email?.reason ?? ''),",
       "    unsubscribed: ctx.hardStop.unsubscribed || reason.includes('unsubscribe'),",
+      // G1: the regex on a line of its own, no key in front of it.
+      "    const optedOut = /unsubscrib|complain/i.test(reason);",
     ];
     for (const l of trips) expect({ l, trips: fourthDetectorOffenders(l).length }).toEqual({ l, trips: 1 });
     expect(fourthDetectorOffenders("    unsubscribed: email.evaluator === 'suppression',")).toEqual([]);
