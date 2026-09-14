@@ -159,6 +159,8 @@ const ENTRIES: ScoreDimensionSpec[] = [
     cap: 100,
     reason:
       'the only authority signal in the repo is a title regex inside `leadScoringEngine`, which scores an Apollo person before import and never a journey subject; `departments_impacted` is a self-declared list with no role data',
+    deferred_source:
+      '`leads.title` IS populated, and `leadScoringEngine`\u2019s C-suite/VP/Director regex is a deterministic function of exactly that string, so this is "exists, deliberately not wired" on the same footing as relationship engagement rather than a true absence. Deferred for the same pinned-count reason, and declared here because naming two of the three and staying silent on the third would be misleading.',
   },
   {
     key: 'solution_alignment',

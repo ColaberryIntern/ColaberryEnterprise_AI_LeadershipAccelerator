@@ -119,7 +119,13 @@ function list(raw: unknown): string[] | null {
     : typeof raw === 'string'
       ? raw.split(',').map((x) => x.trim())
       : [];
-  const kept = items.filter((x) => x !== '');
+  // `'null'`/`'undefined'` come from stringifying a hole, and a value opening
+  // with `[` or `{` is JSON that reached here as raw text — the verifier's probe
+  // scored `technology_stack: '[]'` as "1 technologies named" and flipped `fit`
+  // from null to 10, which is a fabricated measurement and this file's subject.
+  const kept = items.filter(
+    (x) => x !== '' && x !== 'null' && x !== 'undefined' && !x.startsWith('[') && !x.startsWith('{'),
+  );
   return kept.length > 0 ? kept : null;
 }
 
@@ -241,7 +247,11 @@ function scoreUrgency(signals: SubjectSignals, spec: ScoreDimensionSpec): Scored
     };
   }
 
-  if (signals.asked?.evaluating_90_days === true) {
+  // The negative needs BOTH the confirmation and the row it was read from: a
+  // caller that never loaded the lead cannot know the answer was negative, and
+  // the verifier found that hole by passing `asked` with `lead: null`.
+  const fieldPresent = signals.lead !== null && signals.lead.evaluating_90_days !== undefined;
+  if (signals.asked?.evaluating_90_days === true && fieldPresent) {
     return {
       value: 10,
       factors: [
