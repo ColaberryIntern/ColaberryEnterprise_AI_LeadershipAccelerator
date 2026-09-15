@@ -23,6 +23,7 @@ const clock = () => new Date('2026-09-13T12:00:00.000Z');
 const deps: LiveAdapterDeps = {
   getToken: jest.fn(async () => 'token-not-used-in-these-assertions'),
   getAuthorUrn: jest.fn(async () => 'urn:li:person:abc123'),
+  readMedia: jest.fn(async () => Buffer.alloc(0)),
 };
 
 describe('today: nothing is enabled, and that is the truthful state', () => {
@@ -80,12 +81,13 @@ describe('when LIVE_CONNECTORS gains a provider', () => {
       provider: 'linkedin_member',
       getToken: deps.getToken,
       getAuthorUrn: deps.getAuthorUrn,
+      readMedia: deps.readMedia,
       http: async () => ({ status: 201, headers: { 'x-restli-id': 'urn:li:share:1' }, body: {} }),
       clock,
     });
     const receipt = await adapter.publish({
       jobId: 'j', provider: 'linkedin_member', contentItemId: 'ci', variantId: 'cv',
-      accountId: 'acc-1', text: 'hello', mediaRefs: [], linkUrl: null, disclosureText: null,
+      accountId: 'acc-1', text: 'hello', mediaRefs: [], media: [], linkUrl: null, disclosureText: null,
       scheduledFor: '2026-09-13T12:00:00.000Z', contentRevision: 1,
     }, 'idem-1');
 
