@@ -7,6 +7,7 @@ import { isUniqueViolation } from '../../utils/uniqueViolation';
 import { computeIdempotencyKey } from '../inboxCase/textNormalization';
 import { stableJson } from './classificationService';
 import { loadDecisionContext, type LoadedDecisionContext } from './decision/loadDecisionContext';
+import { evaluateFreshness } from '../explorerGrowth/governor/freshness';
 import { decideForSubject } from './governor/decideForSubject';
 import type { DecideDeps, JourneyCandidate, JourneyDecision, JourneySubjectContext } from './governor/types';
 import { resolveJourneyContent } from './journeyContent';
@@ -53,9 +54,18 @@ import type { SubjectAnchor, UnresolvedReason } from './subjectResolver';
  *
  * State, overlays, the classification, the scores' values and gaps, each
  * channel's eligibility and reason, the contact count, the two unknowns, the
- * stops, and the learner facts. NOT `hours_since_last_contact`, which changes
- * every minute and would make every run a "changed input". A new contact IS a
- * change (the count moves); the clock alone is not.
+ * stops, the learner facts — AND the pipeline's own step-1 verdict: the
+ * freshness result (fresh, or its named reason) and which lookups were
+ * unavailable. NOT `hours_since_last_contact`, which changes every minute and
+ * would make every run a "changed input". A new contact IS a change (the count
+ * moves); the clock alone is not.
+ *
+ * The verdict and the unavailable list were missing from the first draft, and
+ * T311's verifier showed what that does: a subject refused `freshness:stale`
+ * on night one, rescored upstream with unchanged facts, gets the SAME key on
+ * night two — the unique index refuses the insert and the writer hands back
+ * the stale refusal as a replay. A refusal whose reason has since cleared is a
+ * different decision, and it gets its own row.
  */
 
 export type DecisionTrigger = 'nightly' | 'reply' | 'form' | 'manual' | 'replay' | 'dry_run';
@@ -112,12 +122,22 @@ export function productionDeps(): DecideDeps {
   };
 }
 
-/** The discrete facts a decision rests on. Same facts, same hash, same row. */
-export function decisionInputHash(ctx: JourneySubjectContext): string {
+/**
+ * The discrete facts a decision rests on. Same facts, same hash, same row.
+ *
+ * `unavailable` is the loader's list of lookups that failed: a decision made
+ * without the lead row is a different decision from one made with it, and must
+ * not shadow it once the row can be read again.
+ */
+export function decisionInputHash(ctx: JourneySubjectContext, unavailable: readonly string[] = []): string {
   const channels = Object.fromEntries(
     Object.entries(ctx.contact.channels).map(([k, v]) => [k, { eligible: v.eligible, reason: v.reason }]),
   );
+  // Five discrete values and no clock: the verdict, not the timestamps.
+  const freshness = evaluateFreshness(ctx.freshness, ctx.asOf);
   return stableJson({
+    freshness: freshness.fresh ? 'fresh' : freshness.reason,
+    unavailable: [...unavailable].sort(),
     state: ctx.state,
     overlays: [...ctx.overlays].sort(),
     classification: ctx.classification,
@@ -193,7 +213,7 @@ export function decisionRow(
       ctx.subject_ref,
       ctx.brand_id,
       trigger,
-      decisionInputHash(ctx),
+      decisionInputHash(ctx, loaded.unavailable),
       decision.ruleset_version,
       decision.model_version ?? MODEL_VERSION ?? 'none',
     ]),
@@ -218,8 +238,11 @@ function notEmittedOf(loaded: LoadedDecisionContext): unknown[] {
   if (typeof s.generateWithReport !== 'function') return [];
   try {
     return s.generateWithReport(loaded.ctx).not_emitted;
-  } catch {
-    // The decision itself did not depend on this; an absent report is recorded as absent.
+  } catch (err: unknown) {
+    // The decision itself did not depend on this; an absent report is recorded
+    // as absent - and logged, because a swallowed failure is the one thing a
+    // reviewer of the row cannot see.
+    log('growth_journey.decision.not_emitted_report_failed', { subject_ref: loaded.ctx.subject_ref, brand_id: loaded.ctx.brand_id, error_class: classifyError(err) });
     return [];
   }
 }

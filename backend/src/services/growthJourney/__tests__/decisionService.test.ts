@@ -167,6 +167,51 @@ describe('one row per subject per brand per trigger per input state', () => {
     expect(decisionInputHash(bizCtx({ overlays: ['STALLED', 'NO_RESPONSE'] }))).toBe(decisionInputHash(bizCtx({ overlays: ['NO_RESPONSE', 'STALLED'] })));
   });
 
+  it('a refusal whose reason has CLEARED is a second row, not a replay of the refusal', async () => {
+    // The verifier's finding: with the verdict outside the hash, a subject
+    // refused `freshness:stale` on night one got the same key on night two
+    // after being rescored upstream with unchanged facts - and the writer
+    // handed back the stale refusal as a replay, forever.
+    const stale = loaded({ ctx: bizCtx({ freshness: { created_at: new Date('2026-08-01T00:00:00Z'), scores_computed_at: new Date('2026-09-01T00:00:00Z') } }) });
+    arrange(stale);
+    const night1 = await record();
+    if (night1.status !== 'recorded') throw new Error(night1.status);
+    expect(night1.decision.reason).toBe('refused: freshness:stale');
+
+    // Night two: rescored upstream, every other fact identical.
+    const fresh = loaded({ ctx: bizCtx({ freshness: { created_at: new Date('2026-08-01T00:00:00Z'), scores_computed_at: new Date('2026-09-14T06:00:00Z') } }) });
+    m.loadDecisionContext.mockResolvedValue(fresh);
+    const night2 = await record();
+    if (night2.status !== 'recorded') throw new Error(night2.status);
+    expect(night2.replayed).toBe(false);
+    expect(night2.decision.reason).not.toBe('refused: freshness:stale');
+    expect(night2.row.idempotency_key).not.toBe(night1.row.idempotency_key);
+    // And the same fresh facts again ARE a replay.
+    expect(decisionInputHash(fresh.ctx, fresh.unavailable)).toBe(decisionInputHash(fresh.ctx, fresh.unavailable));
+  });
+
+  it('a decision made with a lookup UNAVAILABLE is a different decision from one made with it', async () => {
+    const degraded = loaded({ unavailable: ['lead'] });
+    const healthy = loaded();
+    expect(decisionInputHash(degraded.ctx, degraded.unavailable)).not.toBe(decisionInputHash(healthy.ctx, healthy.unavailable));
+    // Order of the unavailable list is not a fact.
+    expect(decisionInputHash(healthy.ctx, ['lead', 'classification'])).toBe(decisionInputHash(healthy.ctx, ['classification', 'lead']));
+    arrange(degraded);
+    const first = await record();
+    m.loadDecisionContext.mockResolvedValue(healthy);
+    const second = await record();
+    if (first.status !== 'recorded' || second.status !== 'recorded') throw new Error('not recorded');
+    expect(second.row.idempotency_key).not.toBe(first.row.idempotency_key);
+    expect(second.replayed).toBe(false);
+  });
+
+  it('the state ALONE moves the hash - the verifier\'s V3, which the earlier cases never isolated', () => {
+    const a = bizCtx();
+    const stateOnly = bizCtx({ state: 'PROBLEM_IDENTIFIED' });
+    expect(stateOnly.overlays).toEqual(a.overlays);
+    expect(decisionInputHash(stateOnly)).not.toBe(decisionInputHash(a));
+  });
+
   it('the key is the plan\'s six parts: trigger and ruleset move it, and nothing else outside the inputs does', async () => {
     arrange();
     const a = await record({ trigger: 'nightly' });
