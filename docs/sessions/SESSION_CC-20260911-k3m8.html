@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Tuesday, September 15, 2026 at 9:57 AM</div>
-    <div><span class="sid">CC-20260911-k3m8</span><span class="count">17 changes</span></div>
+    <div class="meta">Generated Tuesday, September 15, 2026 at 3:10 PM</div>
+    <div><span class="sid">CC-20260911-k3m8</span><span class="count">18 changes</span></div>
   </header>
   <main>
     
@@ -312,6 +312,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">Runner output on production: `already: 300 triaged at this revision by this model and prompt`, `report: sent to ali@colaberry.com` with the subject above.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">**Where the bank stands at close:** 300 items approved, 5 non-overlapping mocks, 13 of 13 whole-bank checks passing live (positions 25% each way, correct-is-longest 27% against 66% at the start of the week, no letter labels, no mixed punctuation, 300/300 at their rubric ceiling), drift clean, every item carrying a v3 triage verdict, and a 26-item reading list in Ali&#39;s inbox. **Left open, deliberately:** the sweep&#39;s approve step re-stamps already-approved rows (harmless); the drift checker counts the two withdrawn identities as `EXTRA: 2`; 149 superseded drafts sit hidden in the table; the generated half&#39;s 70 balancer edits were rewrites rather than extensions (model text, re-triaged, no author&#39;s voice at stake). Item statistics need ~20 exposures per item before real difficulty can be read - 22 sittings so far. This session&#39;s `PROGRESS.md` entries predate the discovery that this tree treats the file as sealed; this file is the record.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">18</span>
+          <h2>**Skill brought up to date with the whole workstream; closed out**</h2>
+          <span class="badge">2026-09-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`.claude/skills/certprep-rubric-sweep/SKILL.md` now describes the bank, not just the sweep: a toolset table mapping all ten scripts to their jobs and shared conventions; the two things the item rubric cannot see (bank-level properties, key correctness) and what covers each; &quot;After a run&quot; gains the audit, &quot;read the output, not the summary&quot;, and where this tree keeps its session log; a 26th hardening entry for the blind-read triage. A project memory records the bank&#39;s state at close, the toolset, what was left open and the three model-text lessons.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`grep` on the skill for every script name and for &quot;blind&quot; - all present; 26 dated hardening entries; docs-only change, no code.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Nothing left running. #2563 (close-out log) merged by Ali. Session CC-20260911-k3m8: 18 entries in this file, one per change, audit clean.</span></div>
           
         </div>
       </article>
