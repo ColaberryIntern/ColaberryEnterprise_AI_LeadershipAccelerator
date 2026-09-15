@@ -464,18 +464,44 @@ export async function writeDocsToRepo(
   // sitting at "3 of 4" would silently reset to "not started", which reads as
   // the platform losing their work. Merge instead: our side replaced, their side
   // carried across by story id and criterion text.
+  //
+  // Three states of the repo's copy, three different answers:
+  //   absent     — first publish, or the student deleted it: write the render.
+  //   present    — merge; if the merge REFUSES (their file is one we cannot
+  //                parse) the file is DROPPED from this commit, not replaced.
+  //   unreadable — GitHub would not show it to us: also dropped.
+  // Dropping mirrors the plan.json path below. The alternative, writing the
+  // clean template over a file we could not read, is exactly what reset seven
+  // of one student's verified stories to false, twice, in September 2026.
+  let dropProgress = false;
   for (let i = 0; i < changed.length; i++) {
     if (changed[i].path !== PROGRESS_FILE_PATH) continue;
-    const existing = await readRepoFile(target, PROGRESS_FILE_PATH, token, fetchImpl, opts.correlationId);
     const parsed = parseProgressFile(changed[i].content);
     // Our own render failing to parse is a defect in renderDocs, not a student
     // problem — leave the rendered bytes alone rather than merging blind.
     if (!parsed.ok) continue;
-    changed[i] = {
-      ...changed[i],
-      content: serialiseProgressFile(mergeProgressFile(parsed.file, existing)),
-    };
+    const repoCopy = await readRepoFileState(target, PROGRESS_FILE_PATH, token, fetchImpl, opts.correlationId);
+    if (repoCopy.state === 'absent') continue;
+    if (repoCopy.state === 'unreadable') {
+      log('sbp_repo_progress_write_skipped', opts.correlationId, 'partial', {
+        owner, repo, path: PROGRESS_FILE_PATH, reason: 'RepoFileUnreadable', issues: [],
+      });
+      dropProgress = true;
+      continue;
+    }
+    const merged = mergeProgressFile(parsed.file, repoCopy.content);
+    if (!merged.ok) {
+      // Logged at `partial`: the publish goes ahead for every other file, and
+      // "why did my progress.json stop updating" is answered by this line.
+      log('sbp_repo_progress_write_skipped', opts.correlationId, 'partial', {
+        owner, repo, path: PROGRESS_FILE_PATH, reason: merged.error_class, issues: (merged.issues ?? []).slice(0, 5),
+      });
+      dropProgress = true;
+      continue;
+    }
+    changed[i] = { ...changed[i], content: serialiseProgressFile(merged.file) };
   }
+  if (dropProgress) changed = changed.filter((f) => f.path !== PROGRESS_FILE_PATH);
 
   // `.colaberry/plan.json` is ours to regenerate ONLY while the copy in the repo
   // is still the one we wrote. Students hand-edit it — extra stories, a fixed

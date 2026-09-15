@@ -35,6 +35,17 @@ import {
   parseProgressFile,
   serialiseProgressFile,
 } from '../verification/progressContract';
+
+/**
+ * `mergeProgressFile` now REFUSES (returns `{ ok: false }`) when the existing
+ * file cannot be read, instead of handing back the clean render. Every file in
+ * this suite is readable, so unwrap once here and keep the assertions as they were.
+ */
+function mergedFile(rendered: Parameters<typeof mergeProgressFile>[0], existing: Parameters<typeof mergeProgressFile>[1]) {
+  const r = mergeProgressFile(rendered, existing);
+  if (!r.ok) throw new Error(`merge refused: ${r.error_class}: ${r.reason}`);
+  return r.file;
+}
 import raw from './fixtures/pilot-dryrun-plan.json';
 
 const pilot = raw as unknown as BuildPlan;
@@ -243,7 +254,7 @@ describe('adding STORY-000 must not disturb work a student has already done', ()
   };
 
   it('keeps every flag the student set on other stories', () => {
-    const merged = mergeProgressFile(progressOf(), studentFile());
+    const merged = mergedFile(progressOf(), studentFile());
 
     for (const id of ['STORY-001', 'STORY-002']) {
       const s = merged.stories.find((x) => x.id === id)!;
@@ -262,7 +273,7 @@ describe('adding STORY-000 must not disturb work a student has already done', ()
   });
 
   it('adds STORY-000 to that same file, unpassed, without touching the rest', () => {
-    const merged = mergeProgressFile(progressOf(), studentFile());
+    const merged = mergedFile(progressOf(), studentFile());
     const entries = story000In(merged);
     expect(entries).toHaveLength(1);
     expect(entries[0].criteria.every((c) => c.passed === false)).toBe(true);
@@ -272,7 +283,7 @@ describe('adding STORY-000 must not disturb work a student has already done', ()
   it('does NOT reset a student who has already finished STORY-000', () => {
     // The republish case that would be worst: a student finishes the Command
     // Center, then an instructor republishes the plan and the ticks vanish.
-    const withStory000 = mergeProgressFile(progressOf(), studentFile());
+    const withStory000 = mergedFile(progressOf(), studentFile());
     const finished = serialiseProgressFile({
       ...withStory000,
       stories: withStory000.stories.map((s) =>
@@ -282,7 +293,7 @@ describe('adding STORY-000 must not disturb work a student has already done', ()
       ),
     });
 
-    const republished = mergeProgressFile(progressOf(), finished);
+    const republished = mergedFile(progressOf(), finished);
     const [entry] = story000In(republished);
     expect(entry.criteria).toHaveLength(COMMAND_CENTER_ACCEPTANCE.length);
     expect(entry.criteria.every((c) => c.passed === true)).toBe(true);
@@ -290,14 +301,14 @@ describe('adding STORY-000 must not disturb work a student has already done', ()
   });
 
   it('re-merging twice is stable — no duplicate entry, byte-identical bytes', () => {
-    const once = serialiseProgressFile(mergeProgressFile(progressOf(), studentFile()));
-    const twice = serialiseProgressFile(mergeProgressFile(progressOf(), once));
+    const once = serialiseProgressFile(mergedFile(progressOf(), studentFile()));
+    const twice = serialiseProgressFile(mergedFile(progressOf(), once));
     expect(twice).toBe(once);
     expect(story000In(JSON.parse(twice))).toHaveLength(1);
   });
 
   it('the merged file still parses against the schema the reader enforces', () => {
-    const merged = serialiseProgressFile(mergeProgressFile(progressOf(), studentFile()));
+    const merged = serialiseProgressFile(mergedFile(progressOf(), studentFile()));
     const parsed = parseProgressFile(merged);
     expect(parsed.ok).toBe(true);
   });

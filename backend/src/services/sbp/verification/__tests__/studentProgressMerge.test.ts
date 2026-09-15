@@ -25,6 +25,17 @@ import {
   serialiseProgressFile,
   SUPERSEDED_CRITERIA,
 } from '../progressContract';
+
+/**
+ * `mergeProgressFile` now REFUSES (returns `{ ok: false }`) when the existing
+ * file cannot be read, instead of handing back the clean render. Every file in
+ * this suite is readable, so unwrap once here and keep the assertions as they were.
+ */
+function mergedFile(rendered: Parameters<typeof mergeProgressFile>[0], existing: Parameters<typeof mergeProgressFile>[1]) {
+  const r = mergeProgressFile(rendered, existing);
+  if (!r.ok) throw new Error(`merge refused: ${r.error_class}: ${r.reason}`);
+  return r.file;
+}
 import {
   PLATFORM_TOP_LEVEL_KEYS,
   PLATFORM_STORY_KEYS,
@@ -105,7 +116,7 @@ describe('a student\'s own keys survive the merge', () => {
    * module can go.
    */
   it('is exactly what the platform\'s own mergeProgressFile does NOT do', () => {
-    const naive = mergeProgressFile(rendered(), hellensFile());
+    const naive = mergedFile(rendered(), hellensFile());
     for (const key of HELLENS_NINE) {
       expect(Object.keys(naive)).not.toContain(key);
     }

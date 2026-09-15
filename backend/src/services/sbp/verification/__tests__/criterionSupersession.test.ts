@@ -53,6 +53,17 @@ import {
   renderProgressFile,
   serialiseProgressFile,
 } from '../progressContract';
+
+/**
+ * `mergeProgressFile` now REFUSES (returns `{ ok: false }`) when the existing
+ * file cannot be read, instead of handing back the clean render. Every file in
+ * this suite is readable, so unwrap once here and keep the assertions as they were.
+ */
+function mergedFile(rendered: Parameters<typeof mergeProgressFile>[0], existing: Parameters<typeof mergeProgressFile>[1]) {
+  const r = mergeProgressFile(rendered, existing);
+  if (!r.ok) throw new Error(`merge refused: ${r.error_class}: ${r.reason}`);
+  return r.file;
+}
 import { decideStory, PlanStorySpec, CommitFact } from '../verifyDecision';
 import { COMMAND_CENTER_ACCEPTANCE, COMMAND_CENTER_STORY_ID } from '../../commandCenterStory';
 
@@ -282,7 +293,7 @@ describe('a progress.json already committed by a student still verifies', () => 
 
 describe('a republish does not wipe a tick written against the old wording', () => {
   /** What `repoWriter` does on every publish: render fresh, merge the repo's copy over it. */
-  const republish = (existing: ProgressFile): ProgressFile => mergeProgressFile(
+  const republish = (existing: ProgressFile): ProgressFile => mergedFile(
     renderProgressFile(
       [{ id: COMMAND_CENTER_STORY_ID, release: null, acceptance: [...COMMAND_CENTER_ACCEPTANCE] }],
       'Architect Workspace',

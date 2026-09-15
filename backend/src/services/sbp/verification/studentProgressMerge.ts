@@ -158,7 +158,13 @@ export function mergeStudentProgressFile(
   // live in there and are the reason a student who ticked the OLD STORY-000
   // wording keeps their 5 of 5. Reimplementing any of it here would be a second
   // answer to a question that already has one.
-  const merged = mergeProgressFile(rendered, existingRaw);
+  // A refusal here means the student's copy is unreadable. This is the DOWNLOAD
+  // path: they asked the portal for a fresh file, so the fresh render is the
+  // right answer and `existing: 'unreadable'` below tells them why nothing of
+  // theirs was carried across. The repo writer makes the opposite call (it
+  // skips the file) because there nobody asked for a replacement.
+  const mergeOutcome = mergeProgressFile(rendered, existingRaw);
+  const merged = mergeOutcome.ok ? mergeOutcome.file : rendered;
 
   const prior = rawObject(existingRaw);
   const hadFile = existingRaw !== null && existingRaw !== undefined && existingRaw.trim() !== '';
