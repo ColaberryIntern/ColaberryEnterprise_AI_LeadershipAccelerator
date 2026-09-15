@@ -92,10 +92,10 @@ The cause was **not** pace:
 | live builds | 4 | 4 | 4 | 4 | **2** |
 
 **Rules that follow:**
-- **At most TWO live builds** in a 30-minute micro-build window. Convert the
-  rest to `code.kind: 'review'` teaching prompts — full prompt on screen, taught
-  line by line, with the reasoning written *into the prompt as comments*, and
-  the room runs them before the next class.
+- **At most TWO live builds** in a 30-minute micro-build window. The rest
+  stay prompts (see §6 — never `kind: 'review'`) but light ones: a survey,
+  an audit of a file they already have, a command *composed but not run*.
+  The reasoning is written *into the prompt as comments*.
 - **Never cut questions.** They cost 1–2 minutes each and they hold the room.
   Cut prose and live builds instead.
 - **Move the best moment early.** The `challenge` (95–110) and `trivia`
@@ -120,12 +120,23 @@ four plausible options, a `reveal` that reasons, and a `presenterTip` that says
 how to *run* it ("expect the room to split hard", "send mentors to the last two
 options immediately").
 
-### 6. Teach in the prompts, even where nothing is built
+### 6. Teach in the prompts, even where nothing is built — and never `kind: 'review'`
 
 > "Allow teaching in the prompts even if we aren't building something with that step."
 
-A `kind: 'review'` prompt renders as "📖 REVIEW TOGETHER — do not paste" and
-drops the rescue row. Put the *why* inside the prompt as comments:
+> "All the prompts should be prompts in the code section. I don't like these review together scripts. They should all be prompts where we can at least learn something." (2026-09-14, as Session 16 started)
+
+**`kind: 'review'` is retired.** A read-along block teaches nothing the room
+can act on. Every code block is `kind: 'paste'`, `pasteWhere: 'Claude Code'`,
+with `expectedResult`, `stopCondition` and `rescue`. Where the authored slide
+was a file to read, the prompt makes Claude Code *build or inspect the same
+thing in the student's own repo* and explain it back. This includes hand-pasted
+config — the Week 8 YAML workflows hardcoded `npm ci` / `npm test` and would
+have failed every non-Node project in the room; as prompts, Claude Code writes
+them against the project's real commands. Even the "break it on purpose"
+anti-pattern is a prompt: reproduce it *safely* (throwaway branch, guard
+removed then restored, no push), never with `--dangerously-skip-permissions`.
+Put the *why* inside the prompt as comments:
 
 ```
 1. Declare the logging capability when the server is constructed.
@@ -158,7 +169,27 @@ build-map, guided-build, reset, failure, demos, broadcast, cta`.
 the week's `buildMap`/`checkpoints` in `classSessionPlan.ts`. Week 4's Build Day
 was rebuilt around five prompts while five checkpoint slides still advertised
 "8 prompts". Either keep the checkpoint count, or set
-`checkpointsEnabled: false`.
+`checkpointsEnabled: false`. **The rail's numbering wins over the eyebrows**:
+Week 8's rail read CP0 ready · CP1 commands + hook · CP2 headless · CP3 CI while
+the authored eyebrows counted CP1…CP4 — the overridable side (eyebrows, the
+roadmap slide's list) is the side you change (`session17-week8-thursday.js`).
+
+**The Architecture Story slide has no body.** Its read screen is SAY lines
+alone, so its slideNote must carry a node-by-node spoken walk of the diagram
+or the phone says "keep talking from the diagram" (Ali, 2026-09-14:
+"Architecture story's should have commentary explaining it"). Every week's
+`architecture:architecture-0` needs this; `session16-generated-notes.js` is the
+reference. Check any generated slide with `body === ''` the same way.
+
+**Arrival notes one slide behind the projector = broadcast ordering, not
+content.** Fixed in #2561 (deck stamps `deck_id`+`seq`, server refuses a late
+write, deck heartbeats every 5 s). If it recurs, read `session_broadcast` while
+the deck sits on a known slide — a Present tab opened before that deploy is
+unstamped and still last-write-wins.
+
+**The container's `/app/*.js` copies are wiped by every recreate.** A morning
+deploy erased `audit.js`; re-`docker cp` before running anything. The data in
+`kit_config_json` survives.
 
 **`detectDayKind` matches the literal phrase `architecture day`.** For a
 combined class, "Week 7 · Architecture **+ Build** Day" resolves to `build`
@@ -246,6 +277,9 @@ Restores the authored deck exactly.
 | Architecture Day rebuild | `backend/src/scripts/session-decks/session12-week6-monday.js` |
 | Commentary for generated slides | `backend/src/scripts/session-decks/session12-slide-notes.js` |
 | Composed combined class | `backend/src/scripts/session-decks/session15-week7-combined.js` |
+| Script + prompt + eyebrow overlay (compose, don't transcribe) | `backend/src/scripts/session-decks/session17-week8-thursday.js` (Build Day), `session16-week8-monday.js` (Architecture Day) |
+| Generated-slide notes incl. the Architecture Story walk-through | `backend/src/scripts/session-decks/session16-generated-notes.js`, `session17-generated-notes.js` |
+| Broadcast ordering (deck→phone) | `classKit/kitDeckScript.ts` (`broadcastCurrent`), `sessionLiveStateService.ts` (`broadcastConflictClause`) |
 | Contract enforcement | `classKit/kitHtml.ts` (`splitScript`), `classKit/kitConfig.ts` (`slideNotes`) |
 | Two-screen renderer | `services/sessionKitDocService.ts` (`paint`, the category CSS) |
 | Phone derivation | `services/sessionLiveStateService.ts` (`getPresenterNotes`) |
@@ -254,7 +288,9 @@ Restores the authored deck exactly.
 
 - [ ] `auditClassDecks.js` reports **0 failures** for the session
 - [ ] Verified by reading `getKitConfig` back from the database, not from a diff
-- [ ] Every code block is a Claude Code prompt
+- [ ] Every code block is a Claude Code prompt — `kind: 'paste'`, no `review`, no pasted config files
+- [ ] The Architecture Story (and any generated slide with no body) has SAY lines
+- [ ] Build Day eyebrows use the rail's checkpoint numbers
 - [ ] Every slide has commentary written for *that* slide
 - [ ] Arrival and read screens share no text
 - [ ] Checkpoint count still matches the buildmap (Build Day)
