@@ -93,6 +93,24 @@ export function hasRunEvidence(paths: string[], prefix: string): boolean {
   });
 }
 
+/**
+ * Does anything in the tree match a recognised-but-not-taught pattern?
+ *
+ * Case-insensitive, because students write `ADR-001.md`, `adr/`, `Adr/` and
+ * `docs/ADR-015-...md` and every one of them is an ADR. An entry ending in "/"
+ * is a directory (anything at or under it); anything else is a filename prefix
+ * (`docs/ADR-` matches `docs/ADR-015-pgvector.md` but not `docs/adrift.md`,
+ * because the hyphen is part of the prefix).
+ */
+export function pathAccepted(paths: string[], pattern: string): boolean {
+  const t = norm(pattern).toLowerCase();
+  if (t.endsWith('/')) {
+    const dir = t.replace(/\/+$/, '');
+    return paths.some((raw) => { const p = norm(raw).toLowerCase(); return p === dir || p.startsWith(dir + '/'); });
+  }
+  return paths.some((raw) => norm(raw).toLowerCase().startsWith(t));
+}
+
 /** Does anything in the tree sit at, or under, this path? */
 export function pathPresent(paths: string[], target: string): boolean {
   const t = norm(target).replace(/\/+$/, '');
@@ -120,7 +138,8 @@ export function observeCapabilities(enrollmentId: string, tree: TreeEntry[]): In
   for (const def of CAPABILITIES) {
     if (def.shape === 'composite') continue;
 
-    const present = def.evidence.some((e) => pathPresent(paths, e));
+    const present = def.evidence.some((e) => pathPresent(paths, e))
+      || (def.alsoAccepts ?? []).some((e) => pathAccepted(paths, e));
 
     let count = present ? 1 : 0;
     if (def.shape === 'collection') {

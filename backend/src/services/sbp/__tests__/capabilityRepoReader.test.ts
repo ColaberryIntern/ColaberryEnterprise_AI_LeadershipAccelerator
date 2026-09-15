@@ -7,7 +7,9 @@
  * worse than no count.
  */
 import { capstoneProgress, isComplete, mergeInventory } from '../capabilityInventory';
-import { countImmediateChildren, observeCapabilities, pathPresent } from '../capabilityRepoReader';
+import { countImmediateChildren, observeCapabilities, pathAccepted, pathPresent } from '../capabilityRepoReader';
+import { CAPABILITIES } from '../capabilityInventory';
+import { expectedEvidenceFor } from '../buildLabContract';
 
 const t = (...paths: string[]) => paths.map((path) => ({ path, type: path.endsWith('/') ? 'tree' : 'blob' }));
 const entry = (inv: { entries: any[] }, id: string) => inv.entries.find((e) => e.id === id);
@@ -146,5 +148,58 @@ describe('together with the inventory merge', () => {
       'mcp-server/src/server.py', 'artifacts/week-05/inspector.mp4',
     )));
     expect(capstoneProgress(inv)).toEqual({ complete: 3, total: 10 });
+  });
+});
+
+describe('pathAccepted - recognised but not taught', () => {
+  /**
+   * A learner filed eleven ADRs across adr/ and docs/ADR-*.md and asked why his
+   * portfolio showed none of it. Architecture Package only looked in
+   * architecture/. These pin the widening, and pin that it did not leak into
+   * the lab contract.
+   */
+  it('matches a directory pattern case-insensitively, at or under', () => {
+    expect(pathAccepted(['adr/ADR-001-fresh-lookup.md'], 'adr/')).toBe(true);
+    expect(pathAccepted(['ADR/decision.md'], 'adr/')).toBe(true);
+    expect(pathAccepted(['docs/adr/ADR-002.md'], 'docs/adr/')).toBe(true);
+  });
+
+  it('matches a filename prefix, hyphen included, so adrift is not an ADR', () => {
+    expect(pathAccepted(['docs/ADR-015-triage-semantic-cache-pgvector.md'], 'docs/ADR-')).toBe(true);
+    expect(pathAccepted(['docs/adr-016-lowercase.md'], 'docs/ADR-')).toBe(true);
+    expect(pathAccepted(['docs/adrift.md'], 'docs/ADR-')).toBe(false);
+    expect(pathAccepted(['docs/README.md'], 'docs/ADR-')).toBe(false);
+  });
+
+  it('does not treat a neighbouring directory as the pattern', () => {
+    expect(pathAccepted(['adr-archive/old.md'], 'adr/')).toBe(false);
+  });
+});
+
+describe('Architecture Package sees an ADR wherever a student keeps it', () => {
+  const arch = (paths: string[]) => entry(observeCapabilities('enr-1', t(...paths)), 'ARCHITECTURE');
+
+  it('still counts the taught folder', () => {
+    expect(arch(['architecture/system-context.md']).present).toBe(true);
+  });
+
+  it('counts docs/ADR-nnn-*.md, which is where the reporting learner kept his', () => {
+    expect(arch(['docs/ADR-015-triage-semantic-cache-pgvector.md', 'src/index.ts']).present).toBe(true);
+  });
+
+  it('counts an adr/ folder', () => {
+    expect(arch(['adr/ADR-001-fresh-lookup-stores-as-source-of-truth.md']).present).toBe(true);
+  });
+
+  it('is not satisfied by a docs folder with no ADR in it', () => {
+    expect(arch(['docs/README.md', 'docs/setup.md']).present).toBe(false);
+  });
+
+  it('did NOT widen the lab contract: week 11 is still asked to teach architecture/ only', () => {
+    // `evidence` is what the lab must teach; `alsoAccepts` is what we recognise.
+    // If this ever includes adr/, the Week 11 lab audit will start failing for a
+    // path the lab never told anyone to create.
+    expect(expectedEvidenceFor(11)).toEqual(['architecture/']);
+    expect(CAPABILITIES.find((c) => c.id === 'ARCHITECTURE')?.alsoAccepts).toContain('docs/ADR-');
   });
 });
