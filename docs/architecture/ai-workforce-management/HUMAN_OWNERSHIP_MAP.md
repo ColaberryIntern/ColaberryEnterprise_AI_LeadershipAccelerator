@@ -13,7 +13,7 @@ The mission supplied eight names and left two owners to be resolved. `reports_to
 | 3 | Product Experience & UI/UX | Aleem | `aleem@colaberry.com` `d2efd70b…` | Mohammed Abdul Aleem | Marketing | **none** | resolved; no login |
 | 4 | Curriculum, Learning & Certification | Swait | no row matches "Swait"; `swati@colaberry.com` `5db87b51…` | Swati Raman | Operations | **none** | **ASK once: is Swait = Swati Raman?** |
 | 5 | Admissions & Applicant Experience | Taiwo | `taiwooludimimu@gmail.com` `1fbb5316…` | Taiwo Oludimimu | Operations | **none** | resolved; already `reports_to` target for 4 agents; no login |
-| 6 | Sales, Enrollment & Subscriptions | Roselyn | **no row in `org_members`, `admin_users`, or `enrollments`** | — | — | none | **ASK once: absent from every identity table** |
+| 6 | Sales, Enrollment & Subscriptions | Roselyn | `roselen@colaberry.com` `b4dddf0b-6750-4398-83cf-b70b64ed6b48` (spelling supplied by Ali 2026-09-15; the Phase 0 search used "roselyn") | (enrollment `e2a725a3…`) | — | **none** | resolved; no login |
 | 7 | Internship & Career Readiness | Dhee | **no `org_members` row** | — | — | yes, `dhee@colaberry.com` `admin` | **ASK once: needs an `org_members` row before `reports_to` can point at Dhee** |
 | 8 | Website Portfolio & Conversion | Tejesh | `saitejesh@colaberry.com` `5ebf1a6f…` | Sai Tejesh Kowtharapu | Marketing | yes, `admin` (plus `saitejesh+sales@` `sales`) | resolved |
 | 9 | Platform Automation & Reliability | Kes | `kesetebirhan@gmail.com` `3df017df…` | Kesetebirhan Delele | Operations | **none** | resolved; already `reports_to` target for `workforce_intelligence_engine`; no login |
@@ -45,7 +45,15 @@ Reese's accountable human today is **Kes**, one hop removed, through an agent th
 
 Four resolved owners, Aleem, Swati, Taiwo and Kes, have **no `admin_users` login**, so they cannot open their employee's Agent Detail or Talk tab today. `MANAGER_AUTHORIZATION_MAP.md` (2026-08-27) proposed resolving the manager by `OrgMember.email = AuthPayload.email`; that requires an admin login per accountable human. Each employee's Phase 1 must state how its manager will reach it (an `admin_users` row with a scoped `mgmt_role`, or an alternative surface), and Phase 5 must verify the manager actually did.
 
-## Open questions for Ali (asked once, here)
+## Answers (Ali, 2026-09-15)
+
+1. **Swait = Swati Raman** (`swati@colaberry.com`). Confirmed.
+2. **Roselyn = `roselen@colaberry.com`**, org_members `b4dddf0b…`. Resolved.
+3. **Dhee:** one additive `org_members` row approved, to be created when the Internship employee's Phase 1 begins.
+4. **Reese reports to Ali for now**, to be reassigned to Kes later. Implemented in the Reese hardening run (code in `reeseIdentitySeed.ts` plus the production row), not by a bare DB edit, so the seed and the row agree.
+5. **Executive owner:** still open; not needed until that employee's Phase 1.
+
+## Open questions for Ali (asked once, here; answered above)
 
 1. **Swait:** confirm Swati Raman (`swati@colaberry.com`) is the Curriculum owner, or name the right person.
 2. **Roselyn:** no record exists. Provide the email, or name a different Sales owner.

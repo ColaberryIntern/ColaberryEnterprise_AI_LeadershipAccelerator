@@ -1,6 +1,6 @@
 # AI Employee Roster (Program Phase 0)
 
-**Session:** CC-20260915-a1x7 · **Date:** 2026-09-15 · **Status:** proposed for Ali's approval; nothing here exists in production yet except Reese.
+**Session:** CC-20260915-a1x7 · **Date:** 2026-09-15 · **Status:** approved by Ali 2026-09-15 (Q1 = A: Curriculum first; Reese hardening alongside, #2477 first). Nothing here exists in production yet except Reese.
 
 Companion documents: `HUMAN_OWNERSHIP_MAP.md` (who is accountable, resolved to exact rows), `LEGACY_AGENT_CLASSIFICATION.csv` (every one of the 246 fleet rows classified), `FLEET_RECONCILIATION_2026-09-15.md` (how the counts were derived), `REESE_STANDARD_AUDIT.md` (the reference employee against Standard 2.0), `PLATFORM_STATE_2026-09-15.md` (what the next employee gets for free), `MIGRATION_MATRIX.md` (how legacy items move).
 
@@ -26,13 +26,13 @@ Names are domains, not employee names. Employee names, voices and personalities 
 
 | # | Employee domain | Accountable human (exact record) | Owner status | Legacy items | Notes for the roster decision |
 |---|---|---|---|---|---|
-| 1 | Learner Success (Reese) | Kes Delele, via disabled `workforce_intelligence_engine` | **decide** | 11 (7 behaviours, 3 retire, Reese) | Exists. Fails Standard 2.0 on 8 open gaps (`REESE_STANDARD_AUDIT.md`); those are fixed before any pattern is copied |
+| 1 | Learner Success (Reese) | **Ali Muwwakkil** (decided 2026-09-15; Kes later), today still via disabled `workforce_intelligence_engine` until the hardening run lands | decided | 11 (7 behaviours, 3 retire, Reese) | Exists. Fails Standard 2.0 on 8 open gaps (`REESE_STANDARD_AUDIT.md`); those are fixed before any pattern is copied |
 | 2 | Marketing Intelligence & Brand | Sohail Syed (`sohail@colaberry.com`) | resolved; has admin login | 40 (35 behaviours incl. the 6 Skool rows, 2 tools, 3 retire) | Largest live behaviour set after Executive; Skool cluster runs from production-only rows |
 | 3 | Product Experience & UI/UX | Mohammed Abdul Aleem (`aleem@colaberry.com`) | resolved; **no admin login** | **0** | Greenfield: no legacy behaviour exists for this domain; the one `UX_Optimization_Agent` row has no source file (retire) |
-| 4 | Curriculum, Learning & Certification | Swati Raman (`swati@colaberry.com`) if "Swait" = Swati | **ask** (name); no admin login | 8 (3 crons: `LearningInnovationArchitect`, `WorkforceCurriculumDirector`, `WorkforceCertificationDirector`; 3 work-graph tools: `CurriculumArchitectAgent`, `ArtifactGenerationAgent`, `CurriculumQAAgent`; 2 retire) | **Recommended first employee** (below) |
+| 4 | Curriculum, Learning & Certification | Swati Raman (`swati@colaberry.com`) | confirmed; no admin login | 8 (3 crons: `LearningInnovationArchitect`, `WorkforceCurriculumDirector`, `WorkforceCertificationDirector`; 3 work-graph tools: `CurriculumArchitectAgent`, `ArtifactGenerationAgent`, `CurriculumQAAgent`; 2 retire) | **Recommended first employee** (below) |
 | 5 | Admissions & Applicant Experience | Taiwo Oludimimu (`taiwooludimimu@gmail.com`) | resolved; already manages 4 agents; no admin login | 28 (15 behaviours, 13 retire) | Highest external-side-effect risk after Sales: email, SMS, Synthflow call wrappers among the retire candidates |
-| 6 | Sales, Enrollment & Subscriptions | Roselyn | **absent from every identity table** | 16 (15 behaviours, 1 retire) | Cannot start without an owner record |
-| 7 | Internship & Career Readiness | Dhee (`dhee@colaberry.com`, admin) | **needs an `org_members` row** | 1 (`WorkforceCareerDirector`) | Near-greenfield |
+| 6 | Sales, Enrollment & Subscriptions | Roselyn (`roselen@colaberry.com`) | resolved; no admin login | 16 (15 behaviours, 1 retire) | Cannot start without an owner record |
+| 7 | Internship & Career Readiness | Dhee (`dhee@colaberry.com`, admin) | `org_members` row approved for creation at that employee's Phase 1 | 1 (`WorkforceCareerDirector`) | Near-greenfield |
 | 8 | Website Portfolio & Conversion | Sai Tejesh Kowtharapu (`saitejesh@colaberry.com`) | resolved; has admin login | 8, **all retire candidates** (Website orchestrator wrappers, zero callers) | Effectively greenfield: the existing website agents were never wired |
 | 9 | Platform Automation & Reliability | Kes Delele (`kesetebirhan@gmail.com`) | resolved; no admin login | 38 (28 behaviours, 1 tool, 6 retire, 3 unresolved) | Also the natural owner of the 33 untracked scheduler crons |
 | 10 | Executive Intelligence & Governance | *unresolved; Ali is the only `manager` in `org_members`* | **decide** | **75** (51 behaviours, 3 tools, 18 retire, 2 duplicates, 1 unresolved) | The largest bucket by far: reporting, dept-strategy architects, CoryBrain family, strategic cycles |
