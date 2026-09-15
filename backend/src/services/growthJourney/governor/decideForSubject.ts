@@ -65,6 +65,7 @@ function refusal(
   reason: string,
   strategy: JourneyStrategy,
   extra: Partial<JourneyDecision> = {},
+  ctx?: JourneySubjectContext,
 ): JourneyDecision {
   return {
     selected_action: WAIT,
@@ -73,7 +74,10 @@ function refusal(
     selected_content: null,
     candidates: [],
     suppressed: [],
-    deferred_actions: [],
+    // A refusal still records what the strategy would have escalated (T310):
+    // "we did nothing, and here is the human step this subject was waiting on"
+    // is the row a reviewer needs.
+    deferred_actions: ctx ? deferralsOf(strategy, ctx) : [],
     eligibility: null,
     content_gaps: [],
     reason,
@@ -87,6 +91,11 @@ function refusal(
 
 function suppression(c: JourneyCandidate, reason: string): JourneySuppression {
   return { action_type: c.action_type, campaign_key: c.campaign_key, reason };
+}
+
+/** What the strategy would escalate to, named and never applied (T310). */
+function deferralsOf(strategy: JourneyStrategy, ctx: JourneySubjectContext) {
+  return strategy.defer?.(ctx) ?? [];
 }
 
 /** The family a candidate would act on, for the brand-boundary check. */
@@ -108,7 +117,7 @@ export async function decideForSubject(
   //    honest state for a subject with no score source at all.
   const fresh = evaluateFreshness(ctx.freshness, ctx.asOf);
   if (!fresh.fresh) {
-    return { status: 'decided', decision: refusal(`refused: freshness:${fresh.reason}`, strategy) };
+    return { status: 'decided', decision: refusal(`refused: freshness:${fresh.reason}`, strategy, {}, ctx) };
   }
 
   // 2. Hard stops. The strategy computes them, because Explorer's own wiring
@@ -116,7 +125,7 @@ export async function decideForSubject(
   //    inherit that.
   const stop = hardStopReason({ hardStop: strategy.hardStops(ctx) });
   if (stop) {
-    return { status: 'decided', decision: refusal(`hard_stop:${stop}`, strategy) };
+    return { status: 'decided', decision: refusal(`hard_stop:${stop}`, strategy, {}, ctx) };
   }
 
   // 3. Generate. A strategy that produced nothing may say why (T309): the
@@ -126,7 +135,7 @@ export async function decideForSubject(
   const generated = strategy.generate(ctx);
   if (generated.length === 0) {
     const why = strategy.emptyReason?.(ctx) ?? null;
-    return { status: 'decided', decision: refusal(why ? `no_candidate:${why}` : 'no_candidate', strategy) };
+    return { status: 'decided', decision: refusal(why ? `no_candidate:${why}` : 'no_candidate', strategy, {}, ctx) };
   }
 
   // 4. The brand boundary, on EVERY candidate, before anything is ranked.
@@ -150,11 +159,12 @@ export async function decideForSubject(
   if (allowed.length === 0) {
     return {
       status: 'decided',
-      decision: refusal('every_candidate_ineligible', strategy, {
-        candidates: generated,
-        suppressed,
-        requires_human_review: true,
-      }),
+      decision: refusal(
+        'every_candidate_ineligible',
+        strategy,
+        { candidates: generated, suppressed, requires_human_review: true },
+        ctx,
+      ),
     };
   }
 
@@ -179,11 +189,12 @@ export async function decideForSubject(
   if (withKnownInputs.length === 0) {
     return {
       status: 'decided',
-      decision: refusal('every_candidate_needs_an_unknown_input', strategy, {
-        candidates: generated,
-        suppressed,
-        requires_human_review: true,
-      }),
+      decision: refusal(
+        'every_candidate_needs_an_unknown_input',
+        strategy,
+        { candidates: generated, suppressed, requires_human_review: true },
+        ctx,
+      ),
     };
   }
 
@@ -191,7 +202,7 @@ export async function decideForSubject(
   const { winner, suppressed: outranked } = arbitrate(withKnownInputs);
   for (const s of outranked) suppressed.push({ action_type: s.action_type, campaign_key: s.campaign_key, reason: s.reason });
   if (!winner) {
-    return { status: 'decided', decision: refusal('no_winner', strategy, { candidates: generated, suppressed }) };
+    return { status: 'decided', decision: refusal('no_winner', strategy, { candidates: generated, suppressed }, ctx) };
   }
 
   // The boundary AGAIN, on the winner. Defence in depth: the winner comes from
@@ -207,11 +218,16 @@ export async function decideForSubject(
       if (!(err instanceof OfferNotEligibleError)) throw err;
       return {
         status: 'decided',
-        decision: refusal(`winner_not_eligible:${err.decision.reason}`, strategy, {
-          candidates: generated,
-          suppressed: [...suppressed, suppression(winner, `offer_not_eligible:${err.decision.reason}`)],
-          requires_human_review: true,
-        }),
+        decision: refusal(
+          `winner_not_eligible:${err.decision.reason}`,
+          strategy,
+          {
+            candidates: generated,
+            suppressed: [...suppressed, suppression(winner, `offer_not_eligible:${err.decision.reason}`)],
+            requires_human_review: true,
+          },
+          ctx,
+        ),
       };
     }
   }
@@ -223,7 +239,7 @@ export async function decideForSubject(
     selected_content: null,
     candidates: generated,
     suppressed,
-    deferred_actions: [],
+    deferred_actions: deferralsOf(strategy, ctx),
     eligibility: null,
     content_gaps: [],
     reason: winner.rationale.join('; '),

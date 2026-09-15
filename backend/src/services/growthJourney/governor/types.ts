@@ -1,7 +1,13 @@
 import type { FreshnessInput } from '../../explorerGrowth/governor/freshness';
-import type { Candidate, ContactPolicyInput, HardStopFlags } from '../../explorerGrowth/governor/types';
+import type {
+  Candidate,
+  ContactPolicyInput,
+  ContentAssetQuery,
+  HardStopFlags,
+} from '../../explorerGrowth/governor/types';
 import type {
   ExplorerAffinity,
+  ExplorerAssetPurpose,
   ExplorerOverlay,
   ExplorerPrimaryState,
   ExplorerSignalReadout,
@@ -48,7 +54,33 @@ import type { EligibilityDecision } from '../offerEligibility';
  * itself does not need it, because it reuses `Candidate`.
  */
 
-export type JourneyCandidate = Candidate;
+/**
+ * The §8 Layer-1 content purposes a B2B programme can ask for (T310).
+ *
+ * NOT members of Explorer's `EXPLORER_ASSET_PURPOSES`: Explorer's own tests pin
+ * that list at eight and its `PURPOSE_SPECS` is exhaustive over it, so adding a
+ * B2B purpose there would be an edit to Explorer's suite. They live here, and
+ * the content gate (`governor/contentGate.ts`) answers them BEFORE a query can
+ * reach Explorer's resolver — which would not know what to do with one.
+ */
+export const JOURNEY_CONTENT_PURPOSES = ['capability_education', 'case_study', 'clarification_question'] as const;
+export type JourneyContentPurpose = (typeof JOURNEY_CONTENT_PURPOSES)[number];
+
+/** Explorer's asset query, whose purpose may also be a journey purpose. */
+export type JourneyContentQuery = Omit<ContentAssetQuery, 'asset_type'> & {
+  asset_type: ExplorerAssetPurpose | JourneyContentPurpose;
+};
+
+/**
+ * A journey candidate IS Explorer's `Candidate` except that its asset queries
+ * may name a journey purpose. Every Explorer `Candidate` is assignable to this
+ * — Explorer's purposes are a subset of the union — so T309's learner strategy
+ * hands Explorer's own candidates through unchanged, and the four fields the
+ * arbiter reads are untouched.
+ */
+export type JourneyCandidate = Omit<Candidate, 'required_assets'> & {
+  required_assets: JourneyContentQuery[];
+};
 export type { HardStopFlags };
 
 export type JourneyProgramKind = 'learner' | 'business' | 'consulting';
@@ -232,6 +264,14 @@ export interface JourneyStrategy {
    * hook produces exactly the refusal it always did. Return null to say nothing.
    */
   emptyReason?(ctx: JourneySubjectContext): string | null;
+  /**
+   * T310. The Layer 2-4 shapes this strategy WOULD propose if it were allowed
+   * to — a handoff, a scheduling offer — recorded on the decision as
+   * `deferred_actions` and never applied. §8 says a programme may escalate
+   * only when human involvement is the best next action; this is how a
+   * shadow decision says "it would have been", without doing it.
+   */
+  defer?(ctx: JourneySubjectContext): JourneyDeferral[];
 }
 
 /* ── The decision ─────────────────────────────────────────────────────────── */

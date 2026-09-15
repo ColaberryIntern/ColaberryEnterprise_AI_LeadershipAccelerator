@@ -9,6 +9,7 @@ import {
 import type { ContentAssetQuery } from '../explorerGrowth/governor/types';
 import { assertContentAllowed, type ContentAssetFacts } from './contentEligibility';
 import type { JourneyCandidate, JourneySubjectContext } from './governor/types';
+import { gateJourneyPurpose, isJourneyPurpose } from './governor/contentGate';
 
 /**
  * The adapter that makes `DecideDeps.resolveContent` real (§10; Phase 3 T305).
@@ -77,7 +78,7 @@ export function tierFor(ctx: JourneySubjectContext): AudienceTier {
 }
 
 /** The offer family a query speaks for, falling back to the subject's path. */
-function familyFor(query: ContentAssetQuery, ctx: JourneySubjectContext): string | null {
+function familyFor(query: Pick<ContentAssetQuery, 'offer_family'>, ctx: JourneySubjectContext): string | null {
   return query.offer_family ?? ctx.classification?.primary_path ?? null;
 }
 
@@ -157,8 +158,27 @@ export async function resolveJourneyContent(
       continue;
     }
 
+    // T310. A JOURNEY purpose - capability education, a case study, a
+    // clarification question - is answered here and never handed on: Explorer's
+    // resolver indexes an exhaustive record of its own eight purposes and would
+    // throw on a ninth. The policy check above still ran first, so a brand that
+    // may not cite the family is refused for that reason rather than for a
+    // content shortage. Today every journey purpose is a declared gap.
+    const purpose = query.asset_type;
+    if (isJourneyPurpose(purpose)) {
+      const verdict = gateJourneyPurpose(purpose);
+      if (!verdict.supported) {
+        gaps.push(verdict.gap);
+        continue;
+      }
+      // A supported journey purpose has no resolver yet: the day one is
+      // declared supported, this is the seam that must select from its kinds.
+      gaps.push(`content_purpose_has_no_resolver:${purpose}`);
+      continue;
+    }
+
     const resolved = await resolveAssets(
-      { ...query, program_slug: query.program_slug ?? ctx.program_slug ?? undefined },
+      { ...query, asset_type: purpose, program_slug: query.program_slug ?? ctx.program_slug ?? undefined },
       ctx.asOf,
       tier,
       scope,
