@@ -5,6 +5,7 @@ import { seedReeseIdentity } from './reese/reeseIdentitySeed';
 import { seedTicketCreatorIdentities } from './agentBlueprint/ticketCreatorIdentitySeed';
 import { REESE_PERSONA_BLOCK } from './reese/reeseSystemPrompt';
 import { recordPersonaVersionChangeIfNeeded } from './agentPersonaVersionHistoryService';
+import { classifyNewAgentAutonomyLevel, maybeReclassifyAutonomyLevel } from './agentAutonomyReclassificationService';
 
 interface AgentSeedEntry {
   agent_name: string;
@@ -2991,6 +2992,11 @@ export async function seedAgentRegistry(): Promise<void> {
       // the pre-update value. No-ops (the common case) when the registry
       // entry's version matches what's already stored.
       await recordPersonaVersionChangeIfNeeded(agent.id, agent.persona_version, entry);
+      // Fleet-wide autonomy-level auto-classification, Phase 4 — same
+      // capture-before-update posture, for the same reason: diffing against
+      // the pre-update tools_granted, not a value this same call already
+      // overwrote.
+      const previousToolsGranted = agent.tools_granted ?? null;
       // Update registry fields on existing agents (preserves status, config, run stats)
       await agent.update({
         agent_type: entry.agent_type,
@@ -3009,12 +3015,17 @@ export async function seedAgentRegistry(): Promise<void> {
         ...(entry.tools_granted !== undefined ? { tools_granted: entry.tools_granted } : {}),
         ...(entry.persona_version !== undefined ? { persona_version: entry.persona_version } : {}),
       });
+      await maybeReclassifyAutonomyLevel(agent, previousToolsGranted, entry.tools_granted);
     } else {
       console.log(`[AI Ops] Registered agent: ${entry.agent_name}`);
       // Trust Contract Phase 1 — the first version this table has ever seen
       // for a brand-new agent. previousVersion is null (nothing to diff
       // against, not stored via findOrCreate's own comparison).
       await recordPersonaVersionChangeIfNeeded(agent.id, null, entry);
+      // Fleet-wide autonomy-level auto-classification, Phase 4 — a brand-new
+      // agent is classified immediately, never left at the old ambiguous
+      // "untouched default, null source" limbo.
+      await classifyNewAgentAutonomyLevel(agent, entry.tools_granted);
     }
 
     // Safety: Force-disable agents that bypass safety pipelines
