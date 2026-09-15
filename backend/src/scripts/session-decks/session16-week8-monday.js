@@ -96,7 +96,7 @@ const SCRIPTS = {
     'ROOM: A REAL repo on your screen with .claude/commands, .claude/settings.json, .claude/hooks and .github/workflows in it — yours, not the slide.',
     'MOOD: Matter-of-fact. This is a tour of a folder, not a concept.',
     'OPEN: "None of tonight lives in a settings screen on somebody’s laptop."',
-    'DO: This block is READ TOGETHER. Put a finger on settings.json (committed) and settings.local.json (ignored). That split is the whole team-versus-personal design.',
+    'DO: Run the prompt — it surveys THEIR repo and reports EXISTS/MISSING. Then put a finger on settings.json (committed) versus settings.local.json (ignored). That split is the whole team-versus-personal design.',
     'NOTE: The line that makes it click — your automation is code, so it is reviewed like code, versioned like code, inherited like code. Nobody has to be told about your /ship. They just have it.',
   ),
   'A custom command is how a repeatable prompt becomes a verb': L(
@@ -113,7 +113,7 @@ const SCRIPTS = {
     'ROOM: Diagram full screen — JSON in, exit code out. Trace it once with your finger before you speak.',
     'MOOD: Demystifying. Slow the pace right down; you are removing fear, not adding information.',
     'OPEN: "The harness hands your script an envelope and asks a yes-or-no question. Your exit code is the answer."',
-    'DO: Read the commit-guard block together — read stdin, decide, exit. Name the three events that matter: PreToolUse can veto, PostToolUse reacts, Stop decides whether the session may end.',
+    'DO: Run the prompt — it writes commit-guard.sh and simulates a blocked and an allowed call. Point at the two exit codes when they appear. Name the three events that matter: PreToolUse can veto, PostToolUse reacts, Stop decides whether the session may end.',
     'NOTE: Once a room owns this, hooks stop being scary and become the tool people over-use. That is the next slide’s problem — set it up with one sentence.',
   ),
   'Which of your rules deserve to be code': L(
@@ -127,10 +127,10 @@ const SCRIPTS = {
   ),
   'Headless mode: the same agent': L(
     'SITUATION: Surface 3 of 4. The first time tonight something runs with nobody in the chair.',
-    'ROOM: A terminal ready with a scoped -p run you have already tested, and a way to pretty-print the JSON that comes back.',
+    'ROOM: Prompt block on screen. Your own session open so you can show the composed command if theirs drifts.',
     'MOOD: Concrete. Run first, explain second.',
     'OPEN: "Nobody touched the keyboard, and it handed back a receipt."',
-    'DO: Run it live. Pretty-print the JSON. Point at is_error and total_cost_usd — that receipt is the difference between automation and hoping.',
+    'DO: Run the prompt — it COMPOSES the command and explains the five flags without executing it. Point at --allowedTools and --max-turns. The real run, and the JSON receipt, is micro-build 3 after the break.',
     'NOTE: Mention the SDK in ONE line — same engine as a library, query() from TypeScript or Python — and promise they wire it Thursday. Do not detour into SDK syntax.',
   ),
   'Permission mode is the single most consequential line': L(
@@ -138,7 +138,7 @@ const SCRIPTS = {
     'ROOM: Diagram up — the four modes. Have the settings.json deny list ready to read aloud.',
     'MOOD: Serious but not scary. There is a right answer and the reasoning matters more than the answer.',
     'OPEN: "Your routine runs at 3 AM on your capstone repo. Which mode?"',
-    'DO: Take votes on all four before you reveal. The answer is acceptEdits plus a deny on push.',
+    'DO: Take votes on all four before you reveal. The answer is acceptEdits plus a deny on push. Then run the prompt — it writes that deny list into THEIR settings.json.',
     'DO: Read the deny list out loud, slowly. This routine can build and commit; it cannot ship, cannot destroy history, cannot read a secret.',
     'NOTE: Land the reasoning, not the answer — what is the worst thing that happens if it goes wrong? An uncommitted mess you read over coffee. Least privilege turned a catastrophe into a Tuesday.',
   ),
@@ -223,6 +223,74 @@ const SCRIPTS = {
   ),
 };
 
+/* Every code block is a Claude Code PROMPT. Ali, 2026-09-14, as class started:
+ * "All the prompts should be prompts in the code section. I don't like these
+ * review together scripts. They should all be prompts where we can at least
+ * learn something." The seven `kind: 'review'` blocks Week 8 authored (the
+ * repo map, ship.md, commit-guard.sh, the rule-two-ways, the headless anatomy,
+ * the permissions block, the finished command file) become prompts that make
+ * Claude Code build or inspect the same thing IN THE STUDENT'S OWN REPO and
+ * explain it back. The teaching is inside the prompt. Keyed by the same title
+ * fragments as SCRIPTS; slides not listed keep their authored code block. */
+const CODE = {
+  'All four surfaces live in your repository': {
+    kind: 'paste', pasteWhere: 'Claude Code',
+    label: 'Claude Code prompt — map the automation layer of THIS repo',
+    code: 'Show me the automation layer of this repository. Do not create or change anything — this is a survey.\n\nCheck each of these paths and report EXISTS or MISSING, with one line on what it would do if it existed:\n  .claude/settings.json          # hooks + permissions — COMMITTED, the team contract\n  .claude/settings.local.json    # my personal overrides — git-ignored\n  .claude/commands/              # one Markdown file per slash command; filename becomes the verb\n  .claude/hooks/                 # the guardrail scripts the harness runs\n  .github/workflows/             # the reviewer and the required check that run in CI\n\nThen answer three things plainly:\n1. Which of these would a teammate get automatically by cloning this repo, and which would they NOT get? (Check .gitignore to answer, do not guess.)\n2. Why is settings.json committed while settings.local.json is ignored? One sentence.\n3. Is there anything in this repo today that automates my workflow — or does every single thing still wait for me to type?\n\nRun the checks yourself. Do not print commands for me to copy.',
+    expectedResult: 'A five-row EXISTS/MISSING table for your own repo, the committed-versus-ignored split explained, and an honest answer to question 3 — which for most of the room tonight is "nothing runs without you".',
+    stopCondition: 'You can say which one file is the team contract and which one is personal, and why.',
+    rescue: 'If it starts creating files, stop it — this is a survey. Re-paste and say "report only".',
+  },
+  'A custom command is how a repeatable prompt becomes a verb': {
+    kind: 'paste', pasteWhere: 'Claude Code', ccMode: 'Plan Mode',
+    label: 'Claude Code prompt — write /ship for this project, and scope it',
+    code: 'Create a custom slash command at .claude/commands/ship.md for this project — the ceremony after every change, written down once.\n\nFrontmatter:\n  description: Test, format, and draft a PR for the current change\n  argument-hint: [pr-title]\n  allowed-tools: ONLY the tools the steps below literally need. Look at package.json (or the equivalent) and use this project\'s REAL test and format commands, not npm placeholders.\n\nBody, as numbered steps:\n  1. Run the test command. If anything fails, STOP and report the failures. Do not continue.\n     # WHY: verification is step one, and step one is allowed to say no.\n  2. On green, run the formatter and stage the changes.\n  3. Read the staged diff and draft a PR description titled $ARGUMENTS, with a Summary, a Test Evidence line quoting the passing output, and a Risk note.\n     # WHY: $ARGUMENTS is whatever I type after /ship — the title travels into the body.\n\nBefore you write the file: list every tool you will put in allowed-tools and justify each one. git push and git commit must NOT be in the list — this command prepares a change and must be structurally unable to ship one. Say that out loud.\n\nThen create it, and tell me how to confirm /ship now exists in my session without restarting.',
+    expectedResult: 'A ~nine-line ship.md using your project\'s real commands, a justification for every tool, and /ship appearing in the slash menu the moment the file exists — no restart.',
+    stopCondition: 'You typed / in your session and saw /ship in the menu, and you can say what this command CANNOT do.',
+    rescue: 'If allowed-tools came back wide open, that is the normal first draft — tell it to remove every tool the three steps do not literally require. If /ship does not appear, check the file is at the repository root under .claude/commands/, not somewhere else.',
+  },
+  'A hook is a contract with the harness': {
+    kind: 'paste', pasteWhere: 'Claude Code',
+    label: 'Claude Code prompt — write commit-guard.sh and prove the protocol',
+    code: 'Create .claude/hooks/commit-guard.sh in this project and make it executable. Do NOT wire it into settings.json yet — that is the next step.\n\nThe protocol is three moving parts, and the script should be nothing more than them:\n  1. Read the JSON payload the harness pipes on stdin.\n     # WHY: the harness hands your script an envelope describing what is about to happen.\n  2. Pull out .tool_input.command and decide. If the command matches `git push --force` or `rm -rf /`, print one line to stderr saying why it is blocked and exit 2.\n     # WHY: exit 2 from a PreToolUse hook vetoes the tool call, and stderr becomes the reason Claude sees.\n  3. Otherwise exit 0.\n     # WHY: exit 0 means proceed. The exit code is the entire API.\n\nIf jq is not installed on this machine, use a dependency-free way to read the field (node, python, or plain shell) and tell me which you chose and why.\n\nThen prove it without wiring it: feed the script a fake payload containing a forbidden command and one containing a safe command, show me both exit codes and the stderr line, and explain what each exit code would have meant to the harness.\n\nRun everything yourself. Do not print commands for me to copy.',
+    expectedResult: 'A short script, executable, and two simulated runs: exit 2 with a reason for the forbidden command, exit 0 for the safe one.',
+    stopCondition: 'You can say the three moving parts out loud — read stdin, decide, exit — and what exit 2 does.',
+    rescue: 'If the script is longer than about fifteen lines it is doing too much. Tell it to strip everything that is not read-decide-exit.',
+  },
+  'Which of your rules deserve to be code': {
+    kind: 'paste', pasteWhere: 'Claude Code',
+    label: 'Claude Code prompt — wire the guard, then sort MY rules into words and code',
+    code: 'Two jobs. First wire the hook, then sort my rules.\n\nJOB 1 — wire it. Add a PreToolUse hook to .claude/settings.json (create the file if needed; never touch settings.local.json) with matcher "Bash" that runs $CLAUDE_PROJECT_DIR/.claude/hooks/commit-guard.sh.\n  # WHY: $CLAUDE_PROJECT_DIR makes the path portable for everyone who clones the repo.\n  # WHY: it runs before EVERY Bash call, interactive and headless alike — the model has no vote.\nTell me plainly: do I need to review this in /hooks or restart the session before it takes effect? Check how hooks are loaded and give me a straight answer.\n\nJOB 2 — read my CLAUDE.md (if there is none, say so and use three typical rules instead). Put every rule in one of two columns:\n  CODE  — a script could check it without understanding intent (tests green, no secret in the diff, no push to main, files formatted)\n  WORDS — it needs a reader who understands intent (naming, tone, "explain the trade-off")\nFor each rule in CODE, name the hook event that would enforce it. For each rule in WORDS, say in one line why no script could grade it.\n\nThen the honest part: is there a rule in CODE that I have been leaving as words and hoping? Name it. That is the one I convert on Thursday.',
+    expectedResult: 'A hooks block in settings.json pointing at your guard script, a straight answer on when it takes effect, and your own CLAUDE.md sorted into two columns — with the rule you have been hoping about named.',
+    stopCondition: 'You can point at one of your own rules and say which column it belongs in and why.',
+    rescue: 'If it puts "always add a test for new behaviour" in CODE, push back — coverage is checkable, usefulness is not. That argument is the lesson. If the hook does not fire later, open /hooks, review the change, or restart the session.',
+  },
+  'Headless mode: the same agent': {
+    kind: 'paste', pasteWhere: 'Claude Code',
+    label: 'Claude Code prompt — compose (do not run) one scoped headless command',
+    code: 'Compose — but do NOT run — the exact `claude -p` command for one small unattended task on this project. We run one for real after the break; right now I want to see the leash before anything is let off it.\n\nThe task: add a one-line doc comment to every exported function in ONE small source file of this project. Pick the file and tell me why you picked it.\n\nThe command must use all five of these, and you explain each one in one line — what it protects me from:\n  -p                    # WHY: no conversation. It runs to completion and exits.\n  --permission-mode acceptEdits   # WHY: nobody is here to approve anything, so say so up front.\n  --allowedTools "Read" "Edit"    # WHY: THE leash. Read and Edit only — it cannot run commands.\n  --output-format json            # WHY: a program has to read the result, not a person.\n  --max-turns 10                  # WHY: the stop. Without it "keep trying" has no upper bound.\n\nThen answer two questions: which single flag, if I deleted it, would let this run execute shell commands? And which one, if deleted, would let it loop forever?\n\nPrint the finished command. Do not execute it.',
+    expectedResult: 'One complete five-flag command aimed at a real file in your repo, each flag explained as a protection, and the two "if you deleted this" answers — allowedTools and max-turns.',
+    stopCondition: 'You can say what each of the five flags is protecting you from.',
+    rescue: 'If it runs the command anyway, stop it and re-paste with "compose only" at the top. Watching the CLI get assembled is the lesson here; running it is micro-build 3.',
+  },
+  'Permission mode is the single most consequential line': {
+    kind: 'paste', pasteWhere: 'Claude Code',
+    label: 'Claude Code prompt — write the least-privilege permissions for an unattended run',
+    code: 'Add a permissions block to .claude/settings.json in this project for an unattended 3 AM run. Keep any hooks block already in the file. Never touch settings.local.json.\n\nallow:\n  Read, Edit\n  this project\'s real test command and real format command (check package.json or the equivalent; tell me what you found)\n  the git add and git commit commands\n  # WHY: it can build and it can commit. That is the whole job.\ndeny:\n  the commands git push, git reset --hard, and rm -rf\n  Read of .env and of any secrets folder\n  # WHY: it cannot ship, cannot destroy history, and cannot read a secret. Deny beats allow in every mode.\n\nUse the Bash(command:*) and Read(path) pattern syntax and show me the finished JSON.\n\nThen read the deny list back to me and, for each entry, one line: what goes wrong at 3 AM without it.\n\nLast question, answer yes or no first: with this file in place, can an unattended run on this repo push code to GitHub? Then explain which line makes that true.',
+    expectedResult: 'A permissions block using your project\'s real commands, five "what goes wrong at 3 AM" lines, and a plain "no" — push is denied, so the worst case is an uncommitted mess you read over coffee.',
+    stopCondition: 'You can read your own deny list out loud and say why each line is there.',
+    rescue: 'If it adds bypassPermissions or drops the deny on git push, that is exactly the 2 AM story from the next segment. Tell it no and ask it to explain the worst case without that line.',
+  },
+  'Nine lines, and only one of them is a security decision': {
+    kind: 'paste', pasteWhere: 'Claude Code',
+    label: 'Claude Code prompt — audit the command file you just wrote',
+    code: 'Open the custom command file you just created in .claude/commands/ and audit it with me. Do not change the body.\n\n1. Print the file.\n2. Name the ONLY line in it that constrains anything.\n   # WHY: the body is just a prompt — plain English, nothing to learn. allowed-tools is the single enforcement line.\n3. Tell me exactly what this command could do if I deleted allowed-tools: list the tools it would inherit from this session right now.\n   # WHY: a command with no allowed-tools inherits the session\'s permissions, which grow over time — and on Thursday that means inheriting the unattended routine\'s permissions.\n4. If allowed-tools contains Edit or Write and my numbered steps never need to change a file, remove them and show me the diff. If the steps genuinely need them, say so and leave them.\n5. Finish with one sentence: what can this command physically NOT do now?',
+    expectedResult: 'Your own file printed, allowed-tools named as the one enforcement line, the inherited-tools list that shows why omitting it is dangerous, and a tighter list if it was wider than the steps need.',
+    stopCondition: 'You can say out loud what your command cannot do, and why deleting one line would change that.',
+    rescue: 'If it says "the body is also a constraint", correct it — the body is a request; only allowed-tools is a guarantee. That is Monday’s thesis inside a file they just wrote.',
+  },
+};
+
 const TAGS = /^(SAY|DO|NOTE|SITUATION|ROOM|MOOD|OPEN):/;
 const ARRIVAL = ['SITUATION', 'ROOM', 'MOOD', 'OPEN'];
 
@@ -251,14 +319,22 @@ function compose(teach) {
       throw new Error(`slide "${s.title}" matched ${hits.length} script fragments (${hits.join(' | ')})`);
     }
     used.add(hits[0]);
-    return { ...s, script: SCRIPTS[hits[0]] };
+    const code = CODE[hits[0]] ? { ...s.code, ...CODE[hits[0]] } : s.code;
+    return { ...s, script: SCRIPTS[hits[0]], ...(code ? { code } : {}) };
   });
   const unused = Object.keys(SCRIPTS).filter((k) => !used.has(k));
   if (unused.length) throw new Error('scripts with no slide: ' + unused.join(' | '));
+  const unusedCode = Object.keys(CODE).filter((k) => !used.has(k));
+  if (unusedCode.length) throw new Error('code overrides with no slide: ' + unusedCode.join(' | '));
+  const review = out.filter((x) => x.code && x.code.kind !== 'paste');
+  if (review.length) throw new Error('non-prompt code blocks remain: ' + review.map((x) => x.title).join(' | '));
+  const SHELL_LINE = new RegExp('(^|\\n)\\s*(npm |npx |cd |sudo |node |curl |git )');
+  const terminal = out.filter((x) => x.code && (/TERMINAL/i.test(x.code.pasteWhere || '') || SHELL_LINE.test(x.code.code || '')));
+  if (terminal.length) throw new Error('terminal-shaped code blocks: ' + terminal.map((x) => x.title).join(' | '));
   return out;
 }
 
-module.exports = { SID, SCRIPTS, compose, lintScripts };
+module.exports = { SID, SCRIPTS, CODE, compose, lintScripts };
 
 /* Executed directly inside the container: compose, save, read back, report. */
 if (require.main === module) {
@@ -305,9 +381,11 @@ if (require.main === module) {
       const sp = splitScript(s.script, s.body);
       return sp.setup && sp.say && sp.setup.includes(sp.say);
     });
+    const nonPrompt = saved.filter((s) => s.code && s.code.kind !== 'paste');
     console.error(`SAVED teach=${saved.length} untagged=${untagged.length} screensShareText=${shared.length} `
+      + `codeBlocks=${saved.filter((s) => s.code).length} nonPrompt=${nonPrompt.length} `
       + `slideNotes=${Object.keys(after.slideNotes || {}).length}`);
-    if (saved.length !== base.length || untagged.length || shared.length) {
+    if (saved.length !== base.length || untagged.length || shared.length || nonPrompt.length) {
       console.error('VERIFY FAIL');
       process.exit(1);
     }
