@@ -4,8 +4,9 @@ import { PageHeader, SectionCard } from '../../../../components/admin/shell';
 import { listBrands, type Brand } from '../../../../services/adminBrandApi';
 import api from '../../../../utils/api';
 import * as composer from '../../../../services/contentComposerApi';
-import type { ComposerAction, ConfirmationSummary, ContentItem, ContentVariant, ExternalPublication, ItemLink, ProviderKey, ProviderSummary, PublishingJob, VariantProblem } from '../../../../services/contentComposerApi';
+import type { ComposerAction, ConfirmationSummary, ContentItem, ContentVariant, ExternalPublication, ItemLink, ItemMedia, ProviderKey, ProviderSummary, PublishingJob, VariantProblem } from '../../../../services/contentComposerApi';
 import ComposerSetup, { type CampaignOption, type SetupValues } from './ComposerSetup';
+import ComposerMedia from './ComposerMedia';
 import ComposerVariants from './ComposerVariants';
 import ComposerPreview from './ComposerPreview';
 import ComposerConfirmation from './ComposerConfirmation';
@@ -39,6 +40,7 @@ export default function AdminContentComposerPage() {
   const [item, setItem] = useState<ContentItem | null>(null);
   const [variants, setVariants] = useState<ContentVariant[]>([]);
   const [links, setLinks] = useState<ItemLink[]>([]);
+  const [media, setMedia] = useState<ItemMedia[]>([]);
   const [selected, setSelected] = useState<ProviderKey[]>([]);
   const [problems, setProblems] = useState<Record<string, VariantProblem[]>>({});
   const [confirmation, setConfirmation] = useState<ConfirmationSummary | null>(null);
@@ -82,10 +84,11 @@ export default function AdminContentComposerPage() {
     const problemMap: Record<string, VariantProblem[]> = {};
     for (const v of vs) problemMap[v.provider] = Array.isArray(v.validation_errors) ? v.validation_errors : [];
     setProblems(problemMap);
-    const [conf, js, pubs] = await Promise.all([composer.getConfirmation(id), composer.listJobs(id), composer.listPublications(id)]);
+    const [conf, js, pubs, med] = await Promise.all([composer.getConfirmation(id), composer.listJobs(id), composer.listPublications(id), composer.listItemMedia(id)]);
     setConfirmation(conf);
     setJobs(js);
     setPublications(pubs);
+    setMedia(med);
     setLinks(conf.links.map((l) => ({ provider: l.provider, trackedLinkId: '', shortUrl: l.shortUrl, finalUrl: l.finalUrl, utm: l.utm, reused: true })));
   }, []);
 
@@ -180,6 +183,20 @@ export default function AdminContentComposerPage() {
     await reload(id);
   }, 'The variant could not be reverted.')();
 
+  // Media. Reload after each change because the attachment count feeds validation (an
+  // `image` post with nothing attached is a blocker) and the confirmation's asset list.
+  const attachMedia = (file: File, altText: string) => withItem(async (id) => {
+    const next = await composer.attachMedia(id, file, altText);
+    setMedia(next);
+    await reload(id);
+    say('success', `Attached. ${next.length} media item${next.length === 1 ? '' : 's'} on this post.`);
+  }, 'The file could not be attached.')();
+
+  const detachMedia = (mediaAssetId: string) => withItem(async (id) => {
+    setMedia(await composer.detachMedia(id, mediaAssetId));
+    await reload(id);
+  }, 'The file could not be removed.')();
+
   const makeLinks = withItem(async (id) => {
     const ls = await composer.generateLinks(id, setup.destination_url);
     setLinks(ls);
@@ -256,6 +273,7 @@ export default function AdminContentComposerPage() {
             </label>
           ))}
         </div>
+        <ComposerMedia media={media} busy={busy} enabled={Boolean(item)} onAttach={attachMedia} onDetach={detachMedia} />
         <div className="d-flex flex-wrap gap-2 mb-3">
           <button type="button" className="btn btn-sm btn-primary" disabled={!item || busy || selected.length === 0} onClick={generate}>Generate variants</button>
           <button type="button" className="btn btn-sm btn-outline-primary" disabled={!item || busy || variants.length === 0 || !setup.destination_url} onClick={makeLinks}>Generate tracked links</button>
