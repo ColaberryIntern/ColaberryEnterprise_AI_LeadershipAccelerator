@@ -22,6 +22,17 @@ import {
   PROGRESS_FILE_PATH, PROGRESS_SCHEMA_VERSION,
   mergeProgressFile, parseProgressFile, renderProgressFile, serialiseProgressFile,
 } from '../verification/progressContract';
+
+/**
+ * `mergeProgressFile` now REFUSES (returns `{ ok: false }`) when the existing
+ * file cannot be read, instead of handing back the clean render. Every file in
+ * this suite is readable, so unwrap once here and keep the assertions as they were.
+ */
+function mergedFile(rendered: Parameters<typeof mergeProgressFile>[0], existing: Parameters<typeof mergeProgressFile>[1]) {
+  const r = mergeProgressFile(rendered, existing);
+  if (!r.ok) throw new Error(`merge refused: ${r.error_class}: ${r.reason}`);
+  return r.file;
+}
 import {
   PROFILE_FILE_PATH, parseProfileFile, renderProfileSeed, serialiseProfileFile,
 } from '../profileContract';
@@ -259,7 +270,7 @@ describe("a student's completion data survives a republish", () => {
     // THE regression this guards. The version check used to be an equality, so
     // bumping the schema made every existing student file unparseable, merge
     // fell back to the fresh render, and every tick was silently wiped.
-    const merged = mergeProgressFile(renderProgressFile(seedStories, 'Sponsor Dashboard'), studentV1);
+    const merged = mergedFile(renderProgressFile(seedStories, 'Sponsor Dashboard'), studentV1);
     const story = merged.stories.find((s) => s.id === 'STORY-001')!;
     expect(story.criteria[0].passed).toBe(true);
     expect(story.criteria[0].evidence).toBe('roster.test.ts');
@@ -270,7 +281,7 @@ describe("a student's completion data survives a republish", () => {
   });
 
   it('upgrades the merged result to the current version', () => {
-    const merged = mergeProgressFile(renderProgressFile(seedStories, 'x'), studentV1);
+    const merged = mergedFile(renderProgressFile(seedStories, 'x'), studentV1);
     expect(merged.schema_version).toBe(PROGRESS_SCHEMA_VERSION);
   });
 
@@ -280,7 +291,7 @@ describe("a student's completion data survives a republish", () => {
     // `"state": "verified"` into the file and have it survive.
     const forged = JSON.parse(studentV1);
     forged.stories[0].verification = { state: 'verified', criteria_passed: 2, criteria_total: 2, points_awarded: 9999 };
-    const merged = mergeProgressFile(
+    const merged = mergedFile(
       renderProgressFile(seedStories, 'x', {
         progress: [{ story_id: 'STORY-001', state: 'in_progress', criteria_passed: 1, criteria_total: 2 }],
       }),
@@ -292,7 +303,7 @@ describe("a student's completion data survives a republish", () => {
   });
 
   it('drops a tick whose criterion the plan reworded', () => {
-    const reworded = mergeProgressFile(
+    const reworded = mergedFile(
       renderProgressFile(
         [{ id: 'STORY-001', release: 'r0', acceptance: ['Given a roster, when saved, then it persists to Postgres.'] }],
         'x',

@@ -79,8 +79,11 @@ export const PROGRESS_FILE_PATH = '.colaberry/progress.json';
 const criterionSchema = z.object({
   text: z.string().min(1, 'criterion text may not be empty'),
   passed: z.boolean(),
-  /** Optional free-text from the agent: how it knows this passes. */
-  evidence: z.string().max(2000).optional(),
+  /**
+   * Optional free-text from the agent: how it knows this passes. Not capped
+   * per field: see the note on `notes` below.
+   */
+  evidence: z.string().optional(),
 });
 
 /**
@@ -123,7 +126,19 @@ const storyProgressSchema = z.object({
   criteria: z.array(criterionSchema).max(200).default([]),
   files_touched: z.array(z.string().min(1)).max(500).default([]),
   tests_added: z.array(z.string().min(1)).max(500).default([]),
-  notes: z.string().max(4000).nullish(),
+  /**
+   * The agent's own build notes. NOT capped per field, and that is deliberate.
+   *
+   * This used to be `.max(4000)`, and a student who wrote 4,001 characters of
+   * notes on one story had his WHOLE file rejected: every claim on every story
+   * became unreadable, verification stalled, and `mergeProgressFile` (which
+   * then saw an unreadable file) replaced his file with the clean template and
+   * reset seven verified stories to false. Found live 2026-09-15: two stories
+   * over the cap, ten stories lost. Nothing on the platform reads this field;
+   * it only rides along back into the student's own file. A cap on it protects
+   * nothing. The bound that does protect us is on the file: `PROGRESS_FILE_MAX_BYTES`.
+   */
+  notes: z.string().nullish(),
   /** ISO-8601, written by the agent. Advisory only — never trusted as proof. */
   updated_at: z.string().max(64).nullish(),
   /**
@@ -176,8 +191,18 @@ export type ProgressFile = z.infer<typeof progressFileSchema>;
 export type ProgressParseErrorClass =
   | 'ProgressFileMissing'
   | 'ProgressFileNotJson'
+  | 'ProgressFileTooLarge'
   | 'ProgressFileSchemaMismatch'
   | 'ProgressFileUnsupportedVersion';
+
+/**
+ * The one size bound on the file. GitHub's contents API will not hand back a
+ * blob over 1 MB, so nothing the reader can fetch exceeds this; it exists so
+ * that a file arriving by another route (a download merge, a pasted body)
+ * meets the same ceiling. Per-field caps on student text were removed in
+ * favour of this: see `notes` on the story schema.
+ */
+export const PROGRESS_FILE_MAX_BYTES = 1_000_000;
 
 export interface ProgressParseFailure {
   ok: false;
@@ -194,6 +219,28 @@ export interface ProgressParseSuccess {
 }
 
 export type ProgressParseResult = ProgressParseSuccess | ProgressParseFailure;
+
+/** Every issue sits at the top level, so the file's SHAPE is what is wrong. */
+function rootLevelOnly(issues: Array<{ path: PropertyKey[] }>): boolean {
+  return issues.length === 0 || issues.every((i) => i.path.length <= 1);
+}
+
+/**
+ * `stories.4.notes: Too big` means nothing to a student; `STORY-006 notes: Too
+ * big` is a line they can act on. Swap the array index for the story's own id
+ * whenever the raw file offers one.
+ */
+function describeIssue(path: PropertyKey[], message: string, raw: unknown): string {
+  const segs = path.map(String);
+  if (segs[0] === 'stories' && /^\d+$/.test(segs[1] ?? '')) {
+    const entry = (raw as { stories?: unknown[] })?.stories?.[Number(segs[1])] as { id?: unknown } | undefined;
+    if (entry && typeof entry.id === 'string' && entry.id.trim()) {
+      const rest = segs.slice(2).join('.');
+      return `${entry.id.trim()}${rest ? ' ' + rest : ''}: ${message}`;
+    }
+  }
+  return `${segs.join('.') || '(root)'}: ${message}`;
+}
 
 /**
  * Parse the raw file contents.
@@ -216,6 +263,17 @@ export function parseProgressFile(raw: string | null | undefined): ProgressParse
       reason:
         `${PROGRESS_FILE_PATH} is not in your repo. Sync your build plan from the portal to get it, `
         + 'then let Claude Code fill it in as it finishes stories.',
+    };
+  }
+
+  if (raw.length > PROGRESS_FILE_MAX_BYTES) {
+    return {
+      ok: false,
+      error_class: 'ProgressFileTooLarge',
+      reason:
+        `${PROGRESS_FILE_PATH} is ${Math.round(raw.length / 1000)} KB, and the platform reads it up to `
+        + `${PROGRESS_FILE_MAX_BYTES / 1000} KB. Trim the notes or evidence text, commit, and push.`,
+      issues: [`size ${raw.length} > ${PROGRESS_FILE_MAX_BYTES}`],
     };
   }
 
@@ -257,6 +315,7 @@ export function parseProgressFile(raw: string | null | undefined): ProgressParse
 
   const result = progressFileSchema.safeParse(parsed);
   if (!result.success) {
+    const issues = result.error.issues.map((issue) => describeIssue(issue.path, issue.message, parsed));
     return {
       ok: false,
       error_class: 'ProgressFileSchemaMismatch',
@@ -268,13 +327,22 @@ export function parseProgressFile(raw: string | null | undefined): ProgressParse
       // ColaberryIntern's permissions on one student's repo were
       // {"admin":false,"maintain":false,"push":false,"triage":false,"pull":true}.
       // No number of Syncs could ever have restored her file, so the sentence
-      // sent her round a loop with no exit. The shape is the thing she can
-      // actually fix, so the shape is what it names.
-      reason:
-        `${PROGRESS_FILE_PATH} does not match the expected shape, so the platform cannot tell which `
-        + 'criteria you marked as passing. It needs a top-level "schema_version" number and a '
-        + '"stories" array — correct those in the file, commit it, and push.',
-      issues: result.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`),
+      // sent her round a loop with no exit.
+      //
+      // AND IT MUST NAME THE FIELD THAT FAILED. The shape sentence below used to
+      // be the only one, whatever had failed. A student whose file had both
+      // `schema_version` and `stories` and one over-long `notes` was told to add
+      // `schema_version` and `stories`, could not, and wrote in twice. So: the
+      // shape advice only when the shape is what is wrong; otherwise the fields,
+      // by story id where the file gives us one.
+      reason: rootLevelOnly(result.error.issues)
+        ? `${PROGRESS_FILE_PATH} does not match the expected shape, so the platform cannot tell which `
+          + 'criteria you marked as passing. It needs a top-level "schema_version" number and a '
+          + '"stories" array — correct those in the file, commit it, and push.'
+        : `${PROGRESS_FILE_PATH} has ${issues.length === 1 ? 'a field' : `${issues.length} fields`} the platform cannot read: `
+          + issues.slice(0, 3).join('; ') + (issues.length > 3 ? `; and ${issues.length - 3} more` : '')
+          + '. The rest of the file is fine. Fix those, commit, and push.',
+      issues,
     };
   }
   return { ok: true, file: result.data };
@@ -433,14 +501,28 @@ export function renderProgressFile(
  * `verification` is explicitly on the platform side: it is our conclusion about
  * their evidence, so reading it back out of the repo would let the file assert
  * its own verification.
+ *
+ * AN UNREADABLE EXISTING FILE IS A REFUSAL, NOT A CLEAN START. This used to
+ * `return rendered` when the repo's copy failed to parse, on the theory that
+ * "we lose nothing we could read". We lost everything the STUDENT could read:
+ * one over-long notes field made a 42 KB file of 26 ticked criteria unparseable,
+ * the merge handed back the template, and the sync committed it over his work.
+ * He restored it by hand, the next sync did it again. A merge that cannot see
+ * one side must not write; the caller decides what that means (the repo
+ * writer skips the file, the download path gives the student the fresh render
+ * they asked for).
  */
-export function mergeProgressFile(rendered: ProgressFile, existingRaw: string | null | undefined): ProgressFile {
+export type ProgressMergeResult =
+  | { ok: true; file: ProgressFile }
+  | { ok: false; error_class: ProgressParseErrorClass; reason: string; issues?: string[] };
+
+export function mergeProgressFile(rendered: ProgressFile, existingRaw: string | null | undefined): ProgressMergeResult {
   const parsed = parseProgressFile(existingRaw);
-  if (!parsed.ok) return rendered;   // unreadable ⇒ start clean; we lose nothing we could read
+  if (!parsed.ok) return { ok: false, error_class: parsed.error_class, reason: parsed.reason, issues: parsed.issues };
 
   const priorByStory = new Map(parsed.file.stories.map((s) => [s.id, s]));
 
-  return {
+  const file: ProgressFile = {
     ...rendered,
     stories: rendered.stories.map((story) => {
       const prior = priorByStory.get(story.id);
@@ -492,6 +574,7 @@ export function mergeProgressFile(rendered: ProgressFile, existingRaw: string | 
       };
     }),
   };
+  return { ok: true, file };
 }
 
 /** Serialise for the repo: stable key order via the schema, trailing newline. */
