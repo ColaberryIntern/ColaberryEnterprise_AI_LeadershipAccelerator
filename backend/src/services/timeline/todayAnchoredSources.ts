@@ -17,6 +17,7 @@ import { resolve as resolveType } from './typeRegistry';
 import { blendSurfaces } from './todayAnchoredBlend';
 import { getActiveProjectTree } from '../projects/projectReadService';
 import { taskPointsForProject } from '../sbp/verification/storyPoints';
+import { prepCtaVerb } from '../sbp/verification/prepPoints';
 import TimelineCard from '../../models/TimelineCard';
 import CommunityPost from '../../models/CommunityPost';
 import CommunityMember from '../../models/CommunityMember';
@@ -115,7 +116,7 @@ export async function rehydrateCardItems(items: TodayFeedItem[]): Promise<void> 
 }
 
 function projectItem(
-  t: { id: string; title: string | null; description: string | null; status: string; release_key: string | null; points?: number | null },
+  t: { id: string; title: string | null; description: string | null; status: string; release_key: string | null; points?: number | null; story_id?: string | null },
   projectId: string,
 ): TodayFeedItem {
   return {
@@ -126,6 +127,11 @@ function projectItem(
     type: 'project_task',
     render_band: resolveType('project_task')?.render_band ?? 'task',
     card_id: null,
+    // A demo-prep task is handed in, not built. The Projects page already says
+    // so on its cards (cab84953); the Today tile priced the same task at the
+    // same rate but kept saying "Build" over a rehearsal. Same verb, same
+    // source ids, and a label so the chip does not read "Project Task".
+    ...prepPresentation(t.story_id),
     // A project task is not a curriculum card either — same defect class as the
     // community items above. It has a real destination of its own (the project
     // workspace, /portal/projects/workspace/:projectId/:taskId), so it carries
@@ -149,6 +155,17 @@ function projectItem(
     points: projectPoints(t.points),
     interacted: false,
   };
+}
+
+/**
+ * How a project task presents on the tile beyond its price: the button's verb
+ * and the chip's label. A build story gets neither (defaults: "Build",
+ * "Project Task"); a demo-prep task is handed in ("Submit") and Demo Day is
+ * marked by staff ("Demo Day"), both under a "Demo Prep" chip.
+ */
+function prepPresentation(storyId: string | null | undefined): Pick<TodayFeedItem, 'cta_verb' | 'student_label'> {
+  const verb = prepCtaVerb(storyId);
+  return verb ? { cta_verb: verb, student_label: 'Demo Prep' } : {};
 }
 
 /** A story's price tag as the tile's `points`, or null when there is none. */
@@ -331,6 +348,9 @@ export async function rehydrateProjectItems(items: TodayFeedItem[]): Promise<voi
       it.status = t.status === 'complete' ? 'completed' : t.status === 'in_progress' ? 'in_progress' : 'available';
       const price = t.story_id ? priceByProject.get(String(t.project_id))?.get(String(t.story_id)) : undefined;
       it.points = projectPoints(price);
+      // Rows frozen before the verb existed get it here — the same rule as the
+      // price above: what the tile says is decided at serve time.
+      Object.assign(it, prepPresentation(t.story_id));
     }
   } catch (err: any) {
     console.warn('[todayAnchoredSources] project rehydrate failed:', err?.message?.split('\n')[0]);

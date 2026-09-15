@@ -75,6 +75,24 @@ describe('Open workstation opens the workstation', () => {
     for (const tile of rail!.tiles) expect(tile.action?.label).toBe('Open workstation');
   });
 
+  /**
+   * cab84953 priced demo-prep tasks and gave the Projects page its own verbs;
+   * this rail kept saying "Build" over a rehearsal. Same verbs, same ids.
+   */
+  it('says "Submit" for a demo-prep task and "Demo Day" for the staff-marked one', async () => {
+    mTree.mockResolvedValue({
+      id: 'p1', name: 'P',
+      lists: [{ title: 'prep', tasks: [
+        { id: 't1', story_id: 'PREP-2', title: 'Record a run-through', status: 'not_started', points: 40 },
+        { id: 't2', story_id: 'PREP-6', title: 'Present at Demo Day', status: 'not_started', points: 60 },
+        { id: 't3', story_id: 'STORY-003', title: 'A story', status: 'not_started', points: 50 },
+      ] }],
+    });
+    const rail = await resolveProjectRail(ctx);
+    expect(rail?.tiles.map((t) => t.action?.label)).toEqual(['Submit · +40 pts', 'Demo Day · +60 pts', 'Build · +50 pts']);
+    expect(rail?.tiles[0].action?.href).toBe('/portal/projects/workspace/p1/PREP-2');
+  });
+
   it('gives every project tile a picture', async () => {
     mTree.mockResolvedValue({
       id: 'p1', name: 'P',

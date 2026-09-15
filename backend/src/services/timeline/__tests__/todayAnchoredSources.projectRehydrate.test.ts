@@ -149,6 +149,27 @@ describe('rehydrateProjectItems — the story price tag', () => {
     expect(item.points).toBeNull();
   });
 
+  /**
+   * The VERB, at serve time. cab84953 priced demo-prep tasks and gave the
+   * Projects page its own verbs ("Submit", "Demo Day"); the Today tile priced
+   * the same task at the same rate but kept saying "Build" over a rehearsal,
+   * under a "Project Task" chip. Rows frozen before the verb existed get it here.
+   */
+  it('retypes a demo-prep row: "Submit" verb and a "Demo Prep" chip; Demo Day gets its own verb', async () => {
+    const a = mkStale('t1'); const b = mkStale('t2'); const c = mkStale('t3');
+    stub([
+      { id: 't1', project_id: PROJ, story_id: 'PREP-2', title: 'Record a run-through', description: null, status: 'not_started', release_key: 'prep' },
+      { id: 't2', project_id: PROJ, story_id: 'PREP-6', title: 'Present at Demo Day', description: null, status: 'not_started', release_key: 'prep' },
+      { id: 't3', project_id: PROJ, story_id: 'STORY-014', title: 'A story', description: null, status: 'not_started', release_key: 'r0' },
+    ]);
+    priced();
+    await rehydrateProjectItems([a, b, c]);
+    expect([a.cta_verb, a.student_label]).toEqual(['Submit', 'Demo Prep']);
+    expect([b.cta_verb, b.student_label]).toEqual(['Demo Day', 'Demo Prep']);
+    expect(c.cta_verb).toBeUndefined();          // a story keeps the default "Build"
+    expect(c.student_label).toBeUndefined();
+  });
+
   it('prices nothing when the project has no published plan, and nothing when the budget is unset', async () => {
     const a = mkStale();
     stub([{ id: TASK, project_id: PROJ, story_id: 'STORY-014', title: 'T', description: null, status: 'not_started', release_key: 'r0' }]);

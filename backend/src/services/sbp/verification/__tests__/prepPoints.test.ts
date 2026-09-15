@@ -11,7 +11,8 @@ jest.mock('../../../progression/pointsConfigService', () => ({
 }));
 jest.mock('../../planStore', () => ({ getPublishedPlan: (...a: any[]) => mockGetPublishedPlan(...a) }));
 
-import { prepPointsMap, prepXpKey, isPrepStory, PREP_STORY_IDS, DEMO_DAY_STORY_ID } from '../prepPoints';
+import {
+  prepCtaVerb, prepPointsMap, prepXpKey, isPrepStory, PREP_STORY_IDS, DEMO_DAY_STORY_ID } from '../prepPoints';
 import { taskPointsForProject } from '../storyPoints';
 
 beforeEach(() => {
@@ -64,5 +65,13 @@ describe('taskPointsForProject', () => {
     expect(m.has('STORY-000')).toBe(false);
     expect(m.get('PREP-2')).toBe(40);
     expect(m.size).toBe(6);
+  });
+});
+
+describe('prepCtaVerb — the button verb every server-priced surface uses', () => {
+  it('is "Submit" for PREP-1..5, "Demo Day" for PREP-6, and null for a story', () => {
+    for (const id of ['PREP-1', 'PREP-2', 'PREP-3', 'PREP-4', 'PREP-5']) expect(prepCtaVerb(id)).toBe('Submit');
+    expect(prepCtaVerb('PREP-6')).toBe('Demo Day');
+    for (const id of ['STORY-001', 'STORY-000', 'PREP-7', '', null, undefined]) expect(prepCtaVerb(id)).toBeNull();
   });
 });
