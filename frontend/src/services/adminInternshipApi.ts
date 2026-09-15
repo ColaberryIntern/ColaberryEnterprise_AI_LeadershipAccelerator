@@ -200,10 +200,16 @@ export async function fetchInternshipDocumentsAdmin(applicationId: string): Prom
   return data;
 }
 
-/** The reviewer has to actually look at the page before accepting it. */
-export function internshipDocumentFileUrl(documentId: string): string {
-  const base = process.env.REACT_APP_API_URL || '';
-  return `${base}/api/admin/internship/documents/${documentId}/file`;
+/**
+ * Fetch a signed document AS AN AUTHENTICATED BLOB and hand back an object URL to
+ * open. The file route is `requireSection('internship')`-guarded, so a plain
+ * `window.open(url)` (a browser navigation that carries no bearer token) is
+ * rejected — which is why "Open the file" did nothing. Going through the api
+ * client attaches the token; the caller opens the blob URL and revokes it later.
+ */
+export async function openInternshipDocumentBlob(documentId: string): Promise<string> {
+  const res = await api.get(`/api/admin/internship/documents/${documentId}/file`, { responseType: 'blob' });
+  return window.URL.createObjectURL(res.data as Blob);
 }
 
 export async function verifyInternshipDocument(documentId: string, body: {
