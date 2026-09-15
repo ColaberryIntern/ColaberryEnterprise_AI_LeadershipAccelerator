@@ -232,11 +232,29 @@ const KIND_LABEL: Record<string, string> = {
   other: 'Other',
 };
 
-export function buildTriageReportHtml(input: TriageReportInput): string {
-  const flaggedCount = input.flagged.length;
-  const quiet = Math.max(0, input.scoredCount - flaggedCount);
+/**
+ * The reading list versus the record. Under v3 a LOW verdict means the reviewer
+ * built an argument that a reader without the key was not moved by. Those are
+ * kept, because a person may still want them, and they are listed apart,
+ * because a report that puts 137 of them in front of 25 blind disputes buries
+ * the twenty-five. Everything that is not low - high, medium, or a reviewer
+ * error - is required reading.
+ */
+const SEVERITY_RANK: Record<string, number> = { high: 0, medium: 1, low: 3 };
+const rank = (item: TriageReportItem): number => SEVERITY_RANK[String(item.severity)] ?? 2;
+const isNoted = (item: TriageReportItem): boolean => item.severity === 'low';
 
-  const items = input.flagged.map((item, i) => {
+export function splitTriageReport(flagged: TriageReportItem[]): { read: TriageReportItem[]; noted: TriageReportItem[] } {
+  const sorted = [...flagged].sort((a, b) => rank(a) - rank(b) || a.question_key.localeCompare(b.question_key));
+  return { read: sorted.filter((i) => !isNoted(i)), noted: sorted.filter(isNoted) };
+}
+
+export function buildTriageReportHtml(input: TriageReportInput): string {
+  const { read, noted } = splitTriageReport(input.flagged);
+  const flaggedCount = read.length;
+  const quiet = Math.max(0, input.scoredCount - input.flagged.length);
+
+  const items = read.map((item, i) => {
     const colour = SEVERITY_COLOR[String(item.severity)] ?? '#6B7280';
     const concerns = item.concerns.map((c) => `
       <div style="margin-top:7px;padding-left:11px;border-left:2px solid ${colour}">
@@ -274,13 +292,16 @@ export function buildTriageReportHtml(input: TriageReportInput): string {
         <p style="margin:0;font-size:15px;color:#2E3138;line-height:1.65">
           <b>${input.scoredCount} scored by ${esc(input.reviewerModel)}.
           ${quiet} drew no objection, which is not the same as checked by a person.
-          ${flaggedCount} need your judgement. Nothing was approved and nothing became servable.</b>
+          ${flaggedCount} need your judgement${noted.length ? `; ${noted.length} more are noted below` : ''}.
+          Nothing was approved and nothing became servable.</b>
         </p>
         <p style="margin:12px 0 0;font-size:13px;color:#6B7280;line-height:1.6">
-          The reviewer is a language model asked to argue against each marked answer. It is a
-          different model from the one that wrote these questions, which makes it a second
-          opinion rather than a check. Start with the list below; it is where the reading is
-          most likely to pay off, not the only place a problem could be.
+          Each question was first answered by a language model that had not seen the key. Where
+          it chose a different option, that is the finding, with its reason. Where it agreed, a
+          second model was asked to argue against the marked answer. It is a different model from
+          the one that wrote these questions, which makes it a second opinion rather than a check.
+          Start with the list below; it is where the reading is most likely to pay off, not the
+          only place a problem could be.
         </p>
       </div>
 
@@ -289,6 +310,26 @@ export function buildTriageReportHtml(input: TriageReportInput): string {
           The reviewer raised no objection to any question. That is not clearance &mdash; it
           means one model failed to break them, and the bank still has not been read by a
           person.</div>`}
+
+      ${noted.length ? `
+      <div style="background:#FFFFFF;border:1px solid #E4E6EB;border-radius:12px;padding:16px 18px;margin:20px 0 12px">
+        <div style="font-family:Consolas,monospace;font-size:11px;letter-spacing:.12em;
+                    text-transform:uppercase;color:#6B7280;margin-bottom:6px">
+          Noted, not required reading
+        </div>
+        <p style="margin:0 0 10px;font-size:13px;color:#2E3138;line-height:1.6">
+          ${noted.length} question${noted.length === 1 ? '' : 's'} where the reviewer built an argument
+          against the marked answer but a reader who had not seen the key chose it anyway. On the
+          record for when you want them; not where the reading pays off.
+        </p>
+        ${noted.map((item) => `
+        <div style="font-size:12px;color:#6B7280;line-height:1.5;padding:4px 0;border-top:1px solid #F0F1F3">
+          <b style="font-family:Consolas,monospace;color:#2E3138">${esc(item.question_key)}</b>
+          &nbsp;&middot;&nbsp; ${esc(item.objective_id)}
+          ${item.concerns[0]?.option ? ` &nbsp;&middot;&nbsp; option ${esc(item.concerns[0].option)}` : ''}
+          <div>${esc(item.concerns[0]?.detail ?? '')}</div>
+        </div>`).join('')}
+      </div>` : ''}
 
       <div style="font-size:12px;color:#9AA0AA;line-height:1.6;padding:8px 4px 0">
         Run <span style="font-family:Consolas,monospace">${esc(input.runId)}</span>.
@@ -303,7 +344,9 @@ export async function sendTriageReportEmail(
   input: TriageReportInput,
 ): Promise<{ subject: string; messageId?: string }> {
   const stamp = new Date().toISOString().slice(0, 10);
-  const subject = `CCAR-F triage: ${input.flagged.length} of ${input.scoredCount} need your judgement (${stamp})`;
+  const { read, noted } = splitTriageReport(input.flagged);
+  const subject = `CCAR-F triage: ${read.length} of ${input.scoredCount} need your judgement`
+    + `${noted.length ? `, ${noted.length} noted` : ''} (${stamp})`;
 
   const html = buildTriageReportHtml(input);
   const r = await resolveEmailRecipient(input.to, subject);

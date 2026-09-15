@@ -1,5 +1,6 @@
 import {
   CASE_STUDY_MATURITIES,
+  HYPOTHESIS_ONLY_LIMITATION,
   buildCaseStudyHypothesis,
   hypothesisCoverage,
   type CaseStudyHypothesis,
@@ -203,8 +204,12 @@ export function buildCaseStudyFoundation(input: FoundationInput): CaseStudyFound
     items, truthRevision: input.truthRevision ?? null, plan: input.plan ?? null,
   });
 
+  // The hypothesis section always says nothing has been built, because within
+  // that section nothing has. At record level the sentence is only true on the
+  // bottom rung; above it, it contradicts the rung one line up.
+  const built = rungIndex(maturity) > 0;
   const limitations: string[] = [
-    ...hypothesis.limitations,
+    ...hypothesis.limitations.filter((l) => !built || l !== HYPOTHESIS_ONLY_LIMITATION),
     OUTCOME_WHY,
   ];
   if (openQuestions > 0) {

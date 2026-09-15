@@ -1,0 +1,109 @@
+import React from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { act } from 'react-dom/test-utils';
+import ComposerMedia from '../composer/ComposerMedia';
+import type { ItemMedia } from '../../../../services/contentComposerApi';
+
+/**
+ * The attach control's one rule: no file leaves the browser without a description. The
+ * backend refuses an upload without alt text, so the button must not be pressable until
+ * both halves exist - otherwise the operator uploads a 40 MB video, waits, and gets a 400.
+ */
+
+let container: HTMLDivElement;
+let root: Root;
+
+const ATTACHED: ItemMedia[] = [
+  { mediaAssetId: 'a1a1a1a1-0000-4000-8000-000000000001', mimeType: 'image/png', byteSize: 2_400_000, width: 1200, height: 628, altText: 'Two people at a whiteboard', position: 0, originalFilename: 'class.png' },
+  { mediaAssetId: 'a1a1a1a1-0000-4000-8000-000000000002', mimeType: 'video/mp4', byteSize: 41_000_000, width: null, height: null, altText: 'A short clip', position: 1, originalFilename: null },
+];
+
+function render(props: Partial<React.ComponentProps<typeof ComposerMedia>> = {}) {
+  act(() => {
+    root.render(<ComposerMedia media={[]} busy={false} enabled onAttach={() => {}} onDetach={() => {}} {...props} />);
+  });
+}
+
+function setNativeValue(input: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+  setter.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function pickFile(input: HTMLInputElement, file: File) {
+  Object.defineProperty(input, 'files', { value: [file], configurable: true });
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+const attachButton = () => container.querySelector<HTMLButtonElement>('[data-testid="media-attach"]')!;
+const altInput = () => container.querySelector<HTMLInputElement>('[data-testid="media-alt"]')!;
+const fileInput = () => container.querySelector<HTMLInputElement>('[data-testid="media-file"]')!;
+
+beforeEach(() => {
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+});
+afterEach(() => { act(() => { root.unmount(); }); container.remove(); });
+
+describe('ComposerMedia attach rule', () => {
+  it('keeps Attach disabled until BOTH a file and a description (3+ chars) exist', () => {
+    const onAttach = jest.fn();
+    render({ onAttach });
+    expect(attachButton().disabled).toBe(true);
+
+    act(() => { pickFile(fileInput(), new File(['png-bytes'], 'class.png', { type: 'image/png' })); });
+    expect(attachButton().disabled).toBe(true); // file alone is not enough
+
+    act(() => { setNativeValue(altInput(), 'ab'); });
+    expect(attachButton().disabled).toBe(true); // two characters is not a description
+
+    act(() => { setNativeValue(altInput(), '  Two people at a whiteboard  '); });
+    expect(attachButton().disabled).toBe(false);
+
+    act(() => { attachButton().click(); });
+    expect(onAttach).toHaveBeenCalledTimes(1);
+    const [file, alt] = onAttach.mock.calls[0];
+    expect((file as File).name).toBe('class.png');
+    expect(alt).toBe('Two people at a whiteboard'); // trimmed, as the backend would trim it
+    // The form clears so the next attach cannot accidentally reuse the last description.
+    expect(altInput().value).toBe('');
+    expect(attachButton().disabled).toBe(true);
+  });
+
+  it('is fully disabled before the draft exists, and says why', () => {
+    render({ enabled: false });
+    expect(fileInput().disabled).toBe(true);
+    expect(altInput().disabled).toBe(true);
+    expect(container.textContent).toMatch(/Create the draft first/);
+  });
+
+  it('names the limits and accepted types up front', () => {
+    render();
+    expect(container.textContent).toMatch(/10 MB/);
+    expect(container.textContent).toMatch(/200 MB/);
+    expect(fileInput().accept).toBe('image/png,image/jpeg,image/gif,video/mp4');
+  });
+});
+
+describe('ComposerMedia attached list', () => {
+  it('lists each attachment with its description and removes by asset id', () => {
+    const onDetach = jest.fn();
+    render({ media: ATTACHED, onDetach });
+    expect(container.textContent).toMatch(/class\.png/);
+    expect(container.textContent).toMatch(/1200×628/);
+    expect(container.textContent).toMatch(/2\.3 MB/);
+    expect(container.textContent).toMatch(/Two people at a whiteboard/);
+    expect(container.textContent).toMatch(/A short clip/);
+
+    act(() => { container.querySelector<HTMLButtonElement>(`[data-testid="detach-${ATTACHED[1].mediaAssetId}"]`)!.click(); });
+    expect(onDetach).toHaveBeenCalledWith(ATTACHED[1].mediaAssetId);
+  });
+
+  it('disables Remove while a request is in flight, so a double click is not a double detach', () => {
+    render({ media: ATTACHED, busy: true });
+    const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>('[data-testid^="detach-"]'));
+    expect(buttons).toHaveLength(2);
+    expect(buttons.every((b) => b.disabled)).toBe(true);
+  });
+});

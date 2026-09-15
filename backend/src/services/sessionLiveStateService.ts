@@ -101,16 +101,49 @@ export interface BroadcastState {
    * full-screened on the projected deck — that is the moment the projected
    * screen shows no text at all, so it is when the phone should surface it. */
   diagram_fullscreen?: boolean;
+  /** Ordering stamp from the deck tab that sent this state. `deck_id` is minted
+   * once per Present tab and `seq` increments on every broadcast it makes.
+   * Together they let setBroadcast refuse a LATE write: two quick slide
+   * advances put two POSTs in flight, and when the earlier one landed last the
+   * stored position was one slide behind the projector until the next
+   * broadcast — the instructor's phone showed the previous slide's arrival
+   * notes and only corrected itself on the diagram click (Session 16,
+   * 2026-09-14). A stale deck tab without these fields still writes
+   * unconditionally, as before. */
+  seq?: number;
+  deck_id?: string;
   updated_at?: string;
 }
 
-/** The deck writes its current view; phones read it and switch to match. */
+/** True when a broadcast carries the ordering stamp that lets the upsert be
+ * conditional. Exported so the guard can be tested without a database. */
+export function isOrderedBroadcast(state: Pick<BroadcastState, 'seq' | 'deck_id'>): boolean {
+  return Number.isFinite(state.seq) && typeof state.deck_id === 'string' && state.deck_id.length > 0;
+}
+
+/** The ON CONFLICT clause for one broadcast write. Ordered writes only replace
+ * the row when they come from a different deck tab (a reopened Present tab
+ * restarts seq from 1 and must win) or carry a higher seq than what is
+ * stored; an unordered write always replaces. */
+export function broadcastConflictClause(state: Pick<BroadcastState, 'seq' | 'deck_id'>): string {
+  const base = `DO UPDATE SET state = EXCLUDED.state, updated_at = NOW()`;
+  if (!isOrderedBroadcast(state)) return base;
+  return `${base}
+       WHERE (session_broadcast.state->>'deck_id') IS DISTINCT FROM (EXCLUDED.state->>'deck_id')
+          OR COALESCE((session_broadcast.state->>'seq')::bigint, -1) < (EXCLUDED.state->>'seq')::bigint`;
+}
+
+/** The deck writes its current view; phones read it and switch to match.
+ * Last-write-wins for a deck that sends no ordering stamp; ordered for one
+ * that does (see BroadcastState.seq). The condition lives in the upsert so a
+ * late write is refused atomically — a read-compare-write would just move the
+ * race. */
 export async function setBroadcast(sessionId: string, state: BroadcastState): Promise<void> {
   await sequelize.query(
     `INSERT INTO session_broadcast (session_id, state, updated_at)
        VALUES (:sid, :state, NOW())
      ON CONFLICT (session_id)
-       DO UPDATE SET state = EXCLUDED.state, updated_at = NOW()`,
+       ${broadcastConflictClause(state)}`,
     { replacements: { sid: sessionId, state: JSON.stringify(state) }, type: QueryTypes.INSERT },
   );
 }

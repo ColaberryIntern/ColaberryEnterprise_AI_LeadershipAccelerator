@@ -99,13 +99,25 @@ export async function assessAutonomy(processId: string): Promise<AutonomyAssessm
   };
 }
 
-export async function applyAutonomyChange(processId: string, newLevel: string, reason: string): Promise<void> {
+/**
+ * `triggeredBy` is who actually made the change, and the caller must say.
+ * This function has two callers, an admin route and a participant route, and
+ * until 2026-09-15 it wrote `triggered_by: 'admin'` for both, so a student
+ * adjusting their own process would have been recorded as an admin action.
+ * There is no default on purpose: a caller that does not know who it is
+ * acting for should not be writing provenance.
+ */
+export async function applyAutonomyChange(
+  processId: string, newLevel: string, reason: string, triggeredBy: string,
+): Promise<void> {
   const process = await Capability.findByPk(processId);
   if (!process) throw new Error('Process not found');
   if (!LEVELS.includes(newLevel)) throw new Error('Invalid autonomy level');
+  const actor = typeof triggeredBy === 'string' ? triggeredBy.trim() : '';
+  if (!actor) throw new Error('triggeredBy is required: autonomy history records who made the change');
 
   const history = process.autonomy_history || [];
-  history.push({ from: process.autonomy_level, to: newLevel, reason, timestamp: new Date().toISOString(), triggered_by: 'admin' });
+  history.push({ from: process.autonomy_level, to: newLevel, reason, timestamp: new Date().toISOString(), triggered_by: actor });
 
   process.autonomy_level = newLevel;
   process.autonomy_history = history;

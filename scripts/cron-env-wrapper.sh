@@ -119,7 +119,50 @@ if ! probe_bc_token; then
         printf '%s' "$FRESH" > "$TMP_CACHE" && chmod 600 "$TMP_CACHE" && mv -f "$TMP_CACHE" "$BC_TOKEN_CACHE"
         echo "[cron-env-wrapper] refreshed BC token from CCPP, cached" >&2
       else
-        echo "[cron-env-wrapper] WARN: refreshed token still failing probe; downstream calls may 401" >&2
+        # 4. CCPP has the same dead token. Mint a new one.
+        #
+        # WHY THIS EXISTS. The daily 08:00 refresh asks the advisor for a token,
+        # and the advisor returns the one it already holds whenever that token has
+        # more than ACCESS_TOKEN_REFRESH_BUFFER_SEC (300s) of life left. So the
+        # daily run can write a token with only hours remaining, declare DONE, and
+        # leave every Basecamp consumer to die the moment it expires - with nothing
+        # re-minting until 08:00 the next day.
+        #
+        # Observed 2026-09-14: token cached 08:02 after a green refresh, 401 "old
+        # age" by 13:45, and the Monday intern delivery briefing failed all three
+        # of its harvest retries and never sent. A manual mint at 13:58 fixed it
+        # immediately, which is the whole proof that minting here recovers: once
+        # the token is genuinely expired the advisor stops serving its cached copy
+        # and exchanges the refresh_token for a real new one.
+        #
+        # flock because every cron job runs this wrapper: without it a burst of
+        # jobs on a dead token would all mint at once and rewrite CCPP underneath
+        # each other. The waiter re-probes after the lock rather than minting again.
+        MINT_LOCK=/opt/colaberry-accelerator/tmp/ops-engine/bc-mint.lock
+        MINT_SCRIPT=/opt/colaberry-accelerator/scripts/refreshBasecampTokenFromVault.sh
+        if [ -x "$MINT_SCRIPT" ] && command -v flock >/dev/null 2>&1; then
+          echo "[cron-env-wrapper] CCPP token also stale; minting a fresh one" >&2
+          mkdir -p "$(dirname "$MINT_LOCK")"
+          flock "$MINT_LOCK" "$MINT_SCRIPT" --commit >/dev/null 2>&1 || true
+          # Re-read whatever the mint left in CCPP and probe it. Never cache a
+          # token that has not answered a real API call.
+          MINTED=$(node /opt/colaberry-accelerator/backend/src/scripts/lib/printBasecampToken.js 2>/dev/null)
+          if [ -n "$MINTED" ]; then
+            export BASECAMP_ACCESS_TOKEN="$MINTED"
+            if probe_bc_token; then
+              mkdir -p "$(dirname "$BC_TOKEN_CACHE")"
+              TMP_CACHE="${BC_TOKEN_CACHE}.$$"
+              printf '%s' "$MINTED" > "$TMP_CACHE" && chmod 600 "$TMP_CACHE" && mv -f "$TMP_CACHE" "$BC_TOKEN_CACHE"
+              echo "[cron-env-wrapper] minted a fresh BC token, cached" >&2
+            else
+              echo "[cron-env-wrapper] WARN: freshly minted token still failing probe; downstream calls will 401" >&2
+            fi
+          else
+            echo "[cron-env-wrapper] WARN: mint produced no token; downstream calls will 401" >&2
+          fi
+        else
+          echo "[cron-env-wrapper] WARN: refreshed token still failing probe and no mint path available; downstream calls may 401" >&2
+        fi
       fi
     else
       echo "[cron-env-wrapper] WARN: could not refetch BC token from CCPP; downstream calls will 401" >&2

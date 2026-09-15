@@ -122,6 +122,35 @@ export function contentRetention(before: string, after: string): number {
 }
 
 /**
+ * Phrasings that exist only to disparage what they are attached to. A wrong
+ * option must be wrong on the merits, not because it tells the reader not to
+ * pick it: "... even if it risks errors" measures whether a student can read
+ * a hint, not whether they know the material.
+ *
+ * The prompt forbids these, and the model wrote three of them into 47
+ * additions anyway. A rule the prompt states and nothing measures is a
+ * preference, not a rule.
+ *
+ * Concessive constructions only, not negative words. An option may perfectly
+ * well say something went wrong - half the bank's distractors are diagnoses
+ * of a failure - so "causing delays" is fine and "even if" is not.
+ */
+export const SELF_DEFEATING = [
+  'even if', 'even though', 'even when', 'regardless of', 'despite', 'although',
+  'whether or not', 'artificially', 'needlessly', 'pointlessly', 'without regard',
+];
+
+/** The phrase that disparages, or null. Only counts what `before` did not say. */
+export function selfDefeatingPhrase(before: string, after: string): string | null {
+  const b = before.toLowerCase();
+  const a = after.toLowerCase();
+  for (const phrase of SELF_DEFEATING) {
+    if (a.includes(phrase) && !b.includes(phrase)) return phrase;
+  }
+  return null;
+}
+
+/**
  * Why `after` is not an extension of `before`, or null when it is. Pure, so
  * the contract can be tested without a model and read without running one.
  */
@@ -137,6 +166,8 @@ export function extensionProblem(before: string, after: string): string | null {
   if (keep < CONTENT_RETENTION_MIN) {
     return `rewritten rather than extended: ${Math.round(keep * 100)}% of the original's words kept, floor ${Math.round(CONTENT_RETENTION_MIN * 100)}%`;
   }
+  const disparaging = selfDefeatingPhrase(before, after);
+  if (disparaging) return `added "${disparaging}", which tells the reader not to pick this option`;
   return null;
 }
 

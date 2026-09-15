@@ -607,12 +607,14 @@ something that does not make sense** — the same standing rule the hero row lea
 
 ### Two things that will bite
 
-**Promotion has no caller yet.** `caseStudyArtifactPromotion` exists because the artifact
-surface could not populate through the application at all — the pilot record's three
-approved artifacts were promoted by direct SQL — but as of 2026-09-14 nothing outside its
-own tests calls it. Expect to approve rows by hand, and check `status: 'approved'` and
-`visibility: 'public'` afterwards, because `projectArtifacts` silently drops anything that
-is not approved.
+**Promotion is a button, and a candidate is invisible until you press it.** Approve an
+artifact on the Studio's **Visuals** tab ("Approve + publish"), which calls
+`PATCH /api/admin/case-studies/:id/artifacts/:artifactId` and sets `status: 'approved'`,
+`visibility: 'public'` in one idempotent write. Nothing else moves an artifact off
+`candidate`, and `projectArtifacts` silently drops anything that is not approved, so a
+record can carry sixty candidates and render none. (This section said on 2026-09-14 that
+the promotion path had no caller. It did; the file's header describes the gap it was
+written to close, not the present. Read headers here as dates, not status.)
 
 **A private repo is a publish blocker, not a warning.** An artifact whose `public_url`
 points into a private repository trips `private_repo_exposed` at the gate. Check the
@@ -885,12 +887,18 @@ that is not in your draft — approving the current snapshot clears them.
 Blockers naming `case_study_not_approved` and `snapshot_not_approved` are the **intended
 resting state** for an unpublished draft.
 
-### A record linked to a student project carries that project's maturity
+### A record about a student project carries that project's maturity
 
-Two blockers were added on 2026-09-11 and they fire **only when `case_studies.project_id`
-is set**. A record with no linked project never sees them, which is why the existing
-library was unaffected: on 2026-09-12 all three live records were unlinked, all seven
-publications still passed the gate, and nothing on the public pages changed.
+Two blockers were added on 2026-09-11. They fire when the record is **about a student
+project**, which the gate establishes two ways: `case_studies.project_id` is set, or the
+record has no `project_id` and one of its cited repositories belongs to a student project
+(a stored `project_id` on the repository row, or an owner/name match in
+`github_connections`). The second route was added on 2026-09-14 because until then
+`from-repositories` skipped the rule entirely, and one live record cited a student's
+connected repository that way. A record whose repositories belong to no student project
+(the enterprise repo, a stranger's repo) never sees them, which is why the library of
+records about our own work was unaffected. When several projects resolve, the least
+mature and the most unsettled decide.
 
 | code | what it means |
 |---|---|
@@ -968,7 +976,7 @@ an already-live record too, so consent withdrawn between two clicks is caught.
 | An outcome or ROI claim appears in prose with no metric behind it | `unverified_claim` |
 | A shaped figure disagrees with itself | `metric_shape_payload_mismatch`, `metric_ratio_missing_denominator`, `metric_members_count_mismatch` |
 | A figure is computed at a commit the record is not pinned to | `metric_collected_sha_mismatch` |
-| A build record is published as a case study | `maturity_below_operational_result` — only on a record linked to a student project |
+| A build record is published as a case study | `maturity_below_operational_result` — on a record linked to a student project, or one whose cited repository belongs to one |
 | A record is published while the project's truth contradicts itself | `project_truth_has_open_questions` |
 | An inventory count stands in the headline | `headline_metric_is_a_bare_count` |
 | A headline figure never says what it does not tell you | `headline_metric_missing_plain_answers` |

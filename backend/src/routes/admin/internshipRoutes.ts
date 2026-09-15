@@ -58,8 +58,13 @@ const decideSchema = z.object({
     'waitlist', 'request_information', 'schedule_human_follow_up',
   ]),
   // Optional: a reason is required only for reject / waitlist / request_information
-  // (enforced in decide()). Approving needs none.
-  reason_code: z.enum(REASON_CODES as [string, ...string[]]).nullish(),
+  // (enforced in decide()). Approving needs none. The dropdown sends '' when no
+  // reason is picked, so coerce that empty string to "absent" before the enum
+  // check — otherwise an approval with no reason fails as an invalid decision.
+  reason_code: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.enum(REASON_CODES as [string, ...string[]]).nullish(),
+  ),
   student_message: z.string().max(4000).nullish(),
   reviewer_notes: z.string().max(4000).nullish(),
   conditions: z.string().max(2000).nullish(),

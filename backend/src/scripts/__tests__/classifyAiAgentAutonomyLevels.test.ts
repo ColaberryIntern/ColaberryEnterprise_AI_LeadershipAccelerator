@@ -147,3 +147,21 @@ describe('classify — idempotency and human-decision safety', () => {
     expect(agent.update).toHaveBeenCalledWith(expect.objectContaining({ autonomy_level: 'observe' }));
   });
 });
+
+describe('classify — scoping to a single agent (the "migrate one at a time" shape)', () => {
+  it('passing an agentName filters the DB query to that agent, on top of the existing enabled:true filter', async () => {
+    mockAiAgentFindAll.mockResolvedValue([fakeAgent({ agent_name: 'Reese' })]);
+
+    await classify(true, 'Reese');
+
+    expect(mockAiAgentFindAll).toHaveBeenCalledWith({ where: { enabled: true, agent_name: 'Reese' } });
+  });
+
+  it('omitting agentName runs the original whole-fleet query, unchanged', async () => {
+    mockAiAgentFindAll.mockResolvedValue([fakeAgent()]);
+
+    await classify(true);
+
+    expect(mockAiAgentFindAll).toHaveBeenCalledWith({ where: { enabled: true } });
+  });
+});

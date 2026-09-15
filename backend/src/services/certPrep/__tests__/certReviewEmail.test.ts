@@ -153,12 +153,48 @@ describe('the triage report header', () => {
 
   it('names the reviewer as a model, and as a different one from the author', () => {
     const html = report();
-    expect(html).toContain('a language model asked to argue against');
+    expect(html).toContain('a language model');
+    expect(html).toContain('asked to argue against the marked answer');
     expect(html).toContain('a second');   // "a second opinion rather than a check"
   });
 
   it('does not claim the unflagged were checked', () => {
     expect(report()).not.toMatch(/passed review|cleared|verified|approved by/i);
+  });
+});
+
+describe('the reading list versus the record (v3)', () => {
+  const high = (key: string) => flaggedItem({
+    question_key: key, severity: 'high',
+    concerns: [{ kind: 'answer_disputed', option: 'C', detail: 'A reader without the key chose C (sure). The key is B.' }],
+  });
+  const low = (key: string) => flaggedItem({
+    question_key: key, severity: 'low',
+    concerns: [{ kind: 'defensible_distractor', option: 'B', detail: 'Blind read agreed with the key (sure). B could be seen as valid.' }],
+  });
+
+  it('puts every high before every low, whatever order they arrived in', () => {
+    const html = report({ scoredCount: 300, flagged: [low('CCARF-D1-01'), high('CCARF-D5-99'), low('CCARF-D1-02'), high('CCARF-D1-03')] });
+    const at = (k: string) => html.indexOf(k);
+    expect(at('CCARF-D1-03')).toBeLessThan(at('CCARF-D5-99'));
+    expect(at('CCARF-D5-99')).toBeLessThan(at('CCARF-D1-01'));
+    expect(at('CCARF-D1-01')).toBeLessThan(at('CCARF-D1-02'));
+  });
+
+  it('counts only the reading list as "need your judgement", and files the lows as noted', () => {
+    const html = report({ scoredCount: 300, flagged: [high('CCARF-D1-03'), high('CCARF-D5-99'), low('CCARF-D1-01')] });
+    expect(html).toContain('2 need your judgement; 1 more are noted below');
+    expect(html).toContain('297 drew no objection');
+    expect(html).toContain('Noted, not required reading');
+    expect(html).toContain('1 question where the reviewer built an argument');
+  });
+
+  it('omits the noted section entirely when there is nothing to note', () => {
+    expect(report({ flagged: [high('CCARF-D1-03')] })).not.toContain('Noted, not required reading');
+  });
+
+  it('explains the blind read, so the reader knows what "disputed" means', () => {
+    expect(report()).toContain('had not seen the key');
   });
 });
 

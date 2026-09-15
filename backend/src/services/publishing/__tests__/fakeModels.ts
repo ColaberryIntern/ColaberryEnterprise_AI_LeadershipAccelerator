@@ -67,6 +67,7 @@ export interface FakeModel {
   findOrCreate(opts: { where: Row; defaults?: Row }): Promise<[Row, boolean]>;
   count(opts?: { where?: Row }): Promise<number>;
   update(values: Row, opts: { where: Row }): Promise<[number]>;
+  destroy(opts: { where: Row }): Promise<number>;
 }
 
 export function fakeModel(name: string, idPrefix: string, defaults: Row = {}): FakeModel {
@@ -117,6 +118,13 @@ export function fakeModel(name: string, idPrefix: string, defaults: Row = {}): F
       const hits = rows.filter((r) => matches(r, where));
       for (const r of hits) Object.assign(r, values, { updated_at: new Date() });
       return [hits.length];
+    },
+    async destroy({ where }) {
+      const keep = rows.filter((r) => !matches(r, where));
+      const removed = rows.length - keep.length;
+      rows.length = 0;
+      rows.push(...keep);
+      return removed;
     },
   };
   return model;

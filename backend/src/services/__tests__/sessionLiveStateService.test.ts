@@ -1,4 +1,4 @@
-import { getPollCorrectResponders, getLiveState, BroadcastState, BroadcastQuestion } from '../sessionLiveStateService';
+import { getPollCorrectResponders, getLiveState, setBroadcast, isOrderedBroadcast, broadcastConflictClause, BroadcastState, BroadcastQuestion } from '../sessionLiveStateService';
 import { sequelize } from '../../config/database';
 
 // Hermetic: no real DB. `sequelize.query` is mocked and dispatches on a
@@ -115,5 +115,49 @@ describe('getLiveState — poll.correctResponders gating', () => {
     mockLiveStateQueries({ broadcast: null });
     const state = await getLiveState('sess-1');
     expect(state.poll).toBeNull();
+  });
+});
+
+// Session 16 (2026-09-14): two quick slide advances put two broadcast POSTs in
+// flight; the earlier one landed last and the phone showed the previous
+// slide's arrival notes until the diagram click re-broadcast. The upsert is
+// now conditional on (deck_id, seq) when the deck sends them.
+describe('setBroadcast ordering', () => {
+  const base: BroadcastState = {
+    slide_index: 20, slide_id: 'micro-build-204', title: 'One small unattended run',
+    segment_label: 'micro-build', phase: 'status', question: null,
+  };
+
+  beforeEach(() => { mockQuery.mockReset(); mockQuery.mockResolvedValue([]); });
+
+  it('recognises a stamped broadcast and rejects a half-stamped one', () => {
+    expect(isOrderedBroadcast({ seq: 7, deck_id: 'dabc' })).toBe(true);
+    expect(isOrderedBroadcast({ seq: 0, deck_id: 'dabc' })).toBe(true);
+    expect(isOrderedBroadcast({ seq: 7 })).toBe(false);
+    expect(isOrderedBroadcast({ deck_id: 'dabc' })).toBe(false);
+    expect(isOrderedBroadcast({ seq: NaN, deck_id: 'dabc' })).toBe(false);
+    expect(isOrderedBroadcast({ seq: 7, deck_id: '' })).toBe(false);
+  });
+
+  it('an unstamped deck keeps last-write-wins (no WHERE on the upsert)', async () => {
+    expect(broadcastConflictClause({})).not.toMatch(/WHERE/);
+    await setBroadcast('sess-1', base);
+    const [sql, opts] = mockQuery.mock.calls[0];
+    expect(sql).toMatch(/ON CONFLICT \(session_id\)/);
+    expect(sql).not.toMatch(/WHERE/);
+    expect(JSON.parse(opts.replacements.state)).toEqual(base);
+  });
+
+  it('a stamped deck only replaces a lower seq from the same tab, or any seq from another tab', async () => {
+    const clause = broadcastConflictClause({ seq: 8, deck_id: 'dabc' });
+    // Different tab (a reopened Present) always wins: seq restarts from 1 there.
+    expect(clause).toMatch(/state->>'deck_id'\) IS DISTINCT FROM \(EXCLUDED\.state->>'deck_id'\)/);
+    // Same tab: strictly higher seq only, so the late POST for slide 19 cannot
+    // overwrite the stored slide 20.
+    expect(clause).toMatch(/COALESCE\(\(session_broadcast\.state->>'seq'\)::bigint, -1\) < \(EXCLUDED\.state->>'seq'\)::bigint/);
+    await setBroadcast('sess-1', { ...base, seq: 8, deck_id: 'dabc' });
+    const [sql, opts] = mockQuery.mock.calls[0];
+    expect(sql).toContain(clause);
+    expect(JSON.parse(opts.replacements.state)).toMatchObject({ seq: 8, deck_id: 'dabc', slide_index: 20 });
   });
 });

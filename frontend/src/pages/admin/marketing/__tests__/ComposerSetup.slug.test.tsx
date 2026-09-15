@@ -59,3 +59,29 @@ describe('ComposerSetup slug assignment', () => {
     expect(btn.disabled).toBe(true);
   });
 });
+
+describe('ComposerSetup content type', () => {
+  it('says, at the moment a media type is chosen, where the file gets attached', () => {
+    // The trap Ali hit: "image" selected, nothing attached, blocked two steps later at
+    // validation with a message about media items. Say it here instead, and point at the
+    // control that resolves it rather than at a workaround.
+    render({ values: { ...VALUES, content_type: 'image' } });
+    const warning = container.querySelector('[data-testid="media-type-warning"]')!;
+    expect(warning).not.toBeNull();
+    expect(warning.textContent).toMatch(/does not create one/);
+    expect(warning.textContent).toMatch(/Channels › Media/);
+    expect(warning.textContent).not.toMatch(/not available/);
+  });
+
+  it('says nothing for a text post, which works end to end today', () => {
+    render({ values: { ...VALUES, content_type: 'text' } });
+    expect(container.querySelector('[data-testid="media-type-warning"]')).toBeNull();
+  });
+
+  it('labels the media options in the dropdown itself with where the file goes', () => {
+    render();
+    const options = Array.from(container.querySelectorAll('#composer-type option')).map((o) => o.textContent);
+    expect(options).toContain('image (attach a file under Channels)');
+    expect(options).toContain('text');
+  });
+});

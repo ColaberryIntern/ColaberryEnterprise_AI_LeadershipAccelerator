@@ -1,7 +1,7 @@
 import { lengthPlan, stripOptionLabels, LengthPlan } from '../../services/certPrep/certOptionLength';
 import { lengthenDistractor } from '../../services/certPrep/certDistractorLengthener';
 import { ImproverItem } from '../../services/certPrep/certQuestionImprover';
-import { triageQuestion } from '../../services/certPrep/certQuestionTriage';
+import { reviewQuestion } from '../../services/certPrep/certQuestionTriage';
 import { TriageResult } from '../../services/certPrep/triageTypes';
 
 /**
@@ -48,7 +48,7 @@ export async function passItem(input: ImproverItem): Promise<PassOutcome> {
 
   // The lengthener cannot tell whether the added detail made the distractor
   // arguable. The triage can, and a high-severity concern is a discard.
-  const triage = await triageQuestion({
+  const triage = await reviewQuestion({
     question_key: out.item.question_key,
     stem: out.item.stem,
     options: out.item.options,

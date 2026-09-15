@@ -31,6 +31,7 @@ import alumniReferralRoutes from './routes/alumniReferralRoutes';
 import qrRedirectRoutes from './routes/qrRedirectRoutes';
 import trackedLinkRedirectRoutes from './routes/trackedLinkRedirectRoutes';
 import openclawShortLinkRoutes from './routes/openclawShortLinkRoutes';
+import mediaFetchRoutes from './routes/mediaFetchRoutes';
 import v1Routes from './routes/v1Routes';
 import advisorRoutes from './routes/advisorRoutes';
 import showcaseArtifactRoutes from './routes/showcaseArtifactRoutes';
@@ -212,6 +213,9 @@ app.use(trackedLinkRedirectRoutes);
 // OpenClaw outreach short link (/i/:tag) - public, same reason and same rule as /r/ above.
 // It sat BELOW adminRoutes from 2026-08-27 to 2026-09-11 and 401'd every visitor.
 app.use(openclawShortLinkRoutes);
+// Signed media fetch (/m/...) - public, a provider fetches it at publish time with no session.
+// Same rule as /r/ and /i/: above adminRoutes or the guard 401s it. Pinned by its own test.
+app.use(mediaFetchRoutes);
 app.use(v1Routes);
 
 // PUBLIC API routes — MUST stay mounted BEFORE adminRoutes. adminRoutes is mounted

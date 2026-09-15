@@ -34,9 +34,17 @@
  * (see docs/plans — the shadow-mode -> enforce track) wires a real send
  * path to actually respect it.
  *
+ * ── SCOPING TO ONE AGENT ─────────────────────────────────────────────────────
+ *
+ * `--agent=<agent_name>` restricts the run to a single real agent — the shape
+ * needed to migrate the fleet "one at a time" (Ali's stated onboarding
+ * process, see the onboard-ai-agent skill) rather than only ever running a
+ * blanket fleet-wide pass. Same idempotency/no-overwrite contract applies.
+ *
  * Usage:
- *   node dist/scripts/classifyAiAgentAutonomyLevels.js            # dry run
- *   node dist/scripts/classifyAiAgentAutonomyLevels.js --apply
+ *   node dist/scripts/classifyAiAgentAutonomyLevels.js                        # dry run, whole fleet
+ *   node dist/scripts/classifyAiAgentAutonomyLevels.js --apply                # apply, whole fleet
+ *   node dist/scripts/classifyAiAgentAutonomyLevels.js --apply --agent=Reese  # apply, one agent only
  */
 import { classifyAgentAutonomyLevel } from '../services/agentCapabilityClassifier';
 import { AutonomyLevel } from '../services/workforce/agentReactivationService';
@@ -52,9 +60,11 @@ interface Row {
   applied: boolean;
 }
 
-export async function classify(apply: boolean): Promise<Row[]> {
+export async function classify(apply: boolean, agentName?: string): Promise<Row[]> {
   const { default: AiAgent } = await import('../models/AiAgent');
-  const agents: any[] = await AiAgent.findAll({ where: { enabled: true } });
+  const where: Record<string, unknown> = { enabled: true };
+  if (agentName) where.agent_name = agentName;
+  const agents: any[] = await AiAgent.findAll({ where });
 
   const rows: Row[] = [];
   for (const agent of agents) {
@@ -123,8 +133,11 @@ export function summarise(rows: Row[]): string {
 
 async function main(): Promise<void> {
   const apply = process.argv.includes('--apply');
-  const rows = await classify(apply);
+  const agentArg = process.argv.find((a) => a.startsWith('--agent='));
+  const agentName = agentArg ? agentArg.slice('--agent='.length) : undefined;
+  const rows = await classify(apply, agentName);
   console.log(apply ? '=== APPLIED ===' : '=== DRY RUN (pass --apply to write) ===');
+  if (agentName) console.log(`(scoped to agent: ${agentName})`);
   console.log(summarise(rows));
 }
 

@@ -113,3 +113,25 @@ describe('a story is the Classroom card', () => {
     expect((container.querySelector('.te-grid .fc-cta') as HTMLElement).textContent).toMatch(/Start/);
   });
 });
+
+/**
+ * The hero says the same verb as the cards under it. cab84953 gave the cards
+ * "Submit" / "Demo Day" for demo-prep tasks; the hero above them still said
+ * "Build" when the next step WAS a rehearsal.
+ */
+describe('the hero uses the card\'s verb', () => {
+  it('says "Submit" when the next step is a demo-prep task, "Demo Day" for PREP-6, "Build" for a story', async () => {
+    const heroCta = () => (container.querySelector('.tl-nextweek .tl-btn.primary') as HTMLButtonElement).textContent;
+
+    await mount(<ProjectInterior project={project([task('PREP-2', 'Record a first run-through', { due: 'today', points: 40 })])} onBack={noop} onOpenTask={noop} />);
+    expect(heroCta()).toBe('Submit · +40 pts');
+    act(() => { root.unmount(); });
+
+    await mount(<ProjectInterior project={project([task('PREP-6', 'Present at Demo Day', { due: 'today', points: 60 })])} onBack={noop} onOpenTask={noop} />);
+    expect(heroCta()).toBe('Demo Day · +60 pts');
+    act(() => { root.unmount(); });
+
+    await mount(<ProjectInterior project={project([task('STORY-001', 'Build the thing', { due: 'today', points: 50 })])} onBack={noop} onOpenTask={noop} />);
+    expect(heroCta()).toBe('Build · +50 pts');
+  });
+});

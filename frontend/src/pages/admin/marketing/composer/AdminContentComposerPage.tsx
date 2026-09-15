@@ -4,8 +4,9 @@ import { PageHeader, SectionCard } from '../../../../components/admin/shell';
 import { listBrands, type Brand } from '../../../../services/adminBrandApi';
 import api from '../../../../utils/api';
 import * as composer from '../../../../services/contentComposerApi';
-import type { ComposerAction, ConfirmationSummary, ContentItem, ContentVariant, ExternalPublication, ItemLink, ProviderKey, ProviderSummary, PublishingJob, VariantProblem } from '../../../../services/contentComposerApi';
+import type { ComposerAction, ConfirmationSummary, ContentItem, ContentVariant, ExternalPublication, ItemLink, ItemMedia, ProviderKey, ProviderSummary, PublishingJob, VariantProblem } from '../../../../services/contentComposerApi';
 import ComposerSetup, { type CampaignOption, type SetupValues } from './ComposerSetup';
+import ComposerMedia from './ComposerMedia';
 import ComposerVariants from './ComposerVariants';
 import ComposerPreview from './ComposerPreview';
 import ComposerConfirmation from './ComposerConfirmation';
@@ -39,6 +40,7 @@ export default function AdminContentComposerPage() {
   const [item, setItem] = useState<ContentItem | null>(null);
   const [variants, setVariants] = useState<ContentVariant[]>([]);
   const [links, setLinks] = useState<ItemLink[]>([]);
+  const [media, setMedia] = useState<ItemMedia[]>([]);
   const [selected, setSelected] = useState<ProviderKey[]>([]);
   const [problems, setProblems] = useState<Record<string, VariantProblem[]>>({});
   const [confirmation, setConfirmation] = useState<ConfirmationSummary | null>(null);
@@ -82,10 +84,11 @@ export default function AdminContentComposerPage() {
     const problemMap: Record<string, VariantProblem[]> = {};
     for (const v of vs) problemMap[v.provider] = Array.isArray(v.validation_errors) ? v.validation_errors : [];
     setProblems(problemMap);
-    const [conf, js, pubs] = await Promise.all([composer.getConfirmation(id), composer.listJobs(id), composer.listPublications(id)]);
+    const [conf, js, pubs, med] = await Promise.all([composer.getConfirmation(id), composer.listJobs(id), composer.listPublications(id), composer.listItemMedia(id)]);
     setConfirmation(conf);
     setJobs(js);
     setPublications(pubs);
+    setMedia(med);
     setLinks(conf.links.map((l) => ({ provider: l.provider, trackedLinkId: '', shortUrl: l.shortUrl, finalUrl: l.finalUrl, utm: l.utm, reused: true })));
   }, []);
 
@@ -97,12 +100,43 @@ export default function AdminContentComposerPage() {
 
   const brand = useMemo(() => brands.find((b) => b.id === setup.brand_id) ?? null, [brands, setup.brand_id]);
 
+  // ── First draft from a topic ────────────────────────────────────────────────────────────
+  const [draftNotes, setDraftNotes] = useState<{ placeholders: string[]; unverifiedClaims: string[] } | null>(null);
+
+  const draftMessage = async (topic: string) => {
+    setBusy(true);
+    try {
+      const d = await composer.draftCanonicalMessage({
+        topic,
+        brand_id: setup.brand_id,
+        campaign_id: setup.campaign_id || null,
+        content_type: setup.content_type,
+        is_paid: setup.is_paid,
+        has_offer: setup.has_offer,
+        destination_url: setup.destination_url || null,
+      });
+      setSetup((v) => ({ ...v, canonical_body: d.message }));
+      setDraftNotes({ placeholders: d.placeholders, unverifiedClaims: d.unverifiedClaims });
+      say(
+        d.unverifiedClaims.length > 0 ? 'info' : 'success',
+        d.unverifiedClaims.length > 0
+          ? 'Draft written. Check the flagged specifics before you publish.'
+          : 'Draft written. Edit it freely, it is only a starting point.',
+      );
+    } catch (err) { fail(err, 'The draft could not be written.'); } finally { setBusy(false); }
+  };
+
   // ── Campaign slug (the tracked-link chain's root) ───────────────────────────────────────
   const assignSlug = async (campaignId: string) => {
     setBusy(true);
     try {
-      const r = await composer.assignCampaignSlug(campaignId);
-      setCampaigns((cs) => cs.map((c) => (c.id === campaignId ? { ...c, utm_campaign_slug: r.utm_campaign_slug } : c)));
+      // Send the brand the operator already chose. A campaign with no brand of its own would
+      // otherwise dead-end here: the old error told them to set one on a screen that has no
+      // field for it.
+      const r = await composer.assignCampaignSlug(campaignId, { brand_id: setup.brand_id || null });
+      setCampaigns((cs) => cs.map((c) => (
+        c.id === campaignId ? { ...c, utm_campaign_slug: r.utm_campaign_slug, brand_id: r.brand_id } : c
+      )));
       say('success', `UTM slug assigned: ${r.utm_campaign_slug}`);
     } catch (err) { fail(err, 'The slug could not be assigned.'); } finally { setBusy(false); }
   };
@@ -148,6 +182,20 @@ export default function AdminContentComposerPage() {
     await composer.revertVariant(id, provider);
     await reload(id);
   }, 'The variant could not be reverted.')();
+
+  // Media. Reload after each change because the attachment count feeds validation (an
+  // `image` post with nothing attached is a blocker) and the confirmation's asset list.
+  const attachMedia = (file: File, altText: string) => withItem(async (id) => {
+    const next = await composer.attachMedia(id, file, altText);
+    setMedia(next);
+    await reload(id);
+    say('success', `Attached. ${next.length} media item${next.length === 1 ? '' : 's'} on this post.`);
+  }, 'The file could not be attached.')();
+
+  const detachMedia = (mediaAssetId: string) => withItem(async (id) => {
+    setMedia(await composer.detachMedia(id, mediaAssetId));
+    await reload(id);
+  }, 'The file could not be removed.')();
 
   const makeLinks = withItem(async (id) => {
     const ls = await composer.generateLinks(id, setup.destination_url);
@@ -211,7 +259,7 @@ export default function AdminContentComposerPage() {
       )}
 
       <SectionCard title="1. Setup" subtitle="Brand, campaign, landing page and the canonical message." icon="settings-3-line">
-        <ComposerSetup values={setup} brands={brands} campaigns={campaigns} locked={Boolean(item)} busy={busy} onChange={setSetup} onSubmit={saveSetup} onAssignSlug={assignSlug} />
+        <ComposerSetup values={setup} brands={brands} campaigns={campaigns} locked={Boolean(item)} busy={busy} onChange={setSetup} onSubmit={saveSetup} onAssignSlug={assignSlug} onDraftMessage={draftMessage} draftNotes={draftNotes} />
       </SectionCard>
 
       <SectionCard title="2. Channels and variants" subtitle="Pick networks, generate, edit, add tracked links, validate." icon="share-line">
@@ -225,6 +273,7 @@ export default function AdminContentComposerPage() {
             </label>
           ))}
         </div>
+        <ComposerMedia media={media} busy={busy} enabled={Boolean(item)} onAttach={attachMedia} onDetach={detachMedia} />
         <div className="d-flex flex-wrap gap-2 mb-3">
           <button type="button" className="btn btn-sm btn-primary" disabled={!item || busy || selected.length === 0} onClick={generate}>Generate variants</button>
           <button type="button" className="btn btn-sm btn-outline-primary" disabled={!item || busy || variants.length === 0 || !setup.destination_url} onClick={makeLinks}>Generate tracked links</button>

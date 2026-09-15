@@ -104,8 +104,16 @@ export async function handleSetBroadcast(req: Request, res: Response, next: Next
       broadcast_prompts: Array.isArray(b.broadcast_prompts) ? b.broadcast_prompts.map((p) => String(p)) : undefined,
       prompt,
       presenter_tip: typeof b.presenter_tip === 'string' ? b.presenter_tip : undefined,
+      // The deck has always sent this; it was never copied through, so the
+      // phone's fallback for the arrival screen (when the server cannot derive
+      // the slide) rendered "No set-up notes" instead of the deck's own text.
+      presenter_preface: typeof b.presenter_preface === 'string' ? b.presenter_preface : undefined,
       next_title: typeof b.next_title === 'string' ? b.next_title : undefined,
       diagram_fullscreen: !!b.diagram_fullscreen,
+      // Ordering stamp — see BroadcastState.seq. Only honoured when both halves
+      // are well-formed, so a deck that sends neither keeps last-write-wins.
+      seq: Number.isFinite(Number(b.seq)) && b.seq !== undefined && b.seq !== null ? Number(b.seq) : undefined,
+      deck_id: typeof b.deck_id === 'string' && b.deck_id.length <= 64 ? b.deck_id : undefined,
     };
     await setBroadcast(req.params.id as string, state);
     res.json({ success: true });

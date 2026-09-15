@@ -38,6 +38,8 @@ export interface TodayFeedItem {
   // card drawer. Both ids are needed for /portal/projects/workspace/:p/:t.
   project_id?: string | null;
   project_task_id?: string | null;
+  /** Project items: the button verb for a task that is not built ("Submit", "Demo Day"). */
+  cta_verb?: string | null;
 }
 
 export interface TodayPage {
