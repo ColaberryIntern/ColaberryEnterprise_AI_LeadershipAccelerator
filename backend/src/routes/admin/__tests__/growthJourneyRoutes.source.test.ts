@@ -3,8 +3,8 @@ import * as path from 'path';
 import { GROWTH_JOURNEY_ENV_KEYS } from '../../../config/growthJourneyFlags';
 
 /**
- * Static assertions on the Growth Journey admin route module and its two
- * controllers (T207 read routes, T229 classification routes). Split out of the
+ * Static assertions on the Growth Journey admin route module and its three
+ * controllers (T207 read routes, T229 classification routes, T312 decision routes). Split out of the
  * HTTP access suite when that file crossed the 500-line ceiling: these read
  * SOURCE, need no app, no token and no mock, and guard properties a behaviour
  * test cannot see (a flag name that never appears; a header that is never read).
@@ -45,7 +45,7 @@ describe('neither controller has a code path that reads a host header', () => {
   // source so a future `req.hostname` cannot slip in beside the guard.
   const HOST_READ = /req\.hostname|req\.host\b|headers\[?['"`]?host|x-forwarded-host|x-brand|req\.get\(/i;
 
-  for (const file of ['growthJourneyController.ts', 'growthJourneyClassificationController.ts']) {
+  for (const file of ['growthJourneyController.ts', 'growthJourneyClassificationController.ts', 'growthJourneyDecisionController.ts']) {
     it(`${file} reads no host header`, () => {
       const code = stripComments(read('..', '..', '..', 'controllers', file));
       expect(code.length).toBeGreaterThan(1000); // the scan is not vacuous
