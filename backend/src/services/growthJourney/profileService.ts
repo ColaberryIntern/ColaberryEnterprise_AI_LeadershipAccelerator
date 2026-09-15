@@ -98,9 +98,10 @@ function log(event: string, fields: Record<string, unknown>): void {
  * Write the projection, and record the transition when the state really moved.
  *
  * Order matters: the profile is written FIRST, then the transition. If the
- * transition write fails, the projection is still correct and the next run
- * records the change — the reverse order would leave a transition claiming a
- * state the profile does not hold.
+ * transition write fails, the projection is still correct and the audit row is
+ * LOST (see the header: the next run derives no change and never retries) —
+ * the reverse order would leave a transition claiming a state the profile does
+ * not hold, which is the worse loss.
  */
 export async function upsertProfile(args: UpsertProfileArgs): Promise<UpsertProfileResult> {
   const existing = await GrowthJourneyProfile.findOne({
