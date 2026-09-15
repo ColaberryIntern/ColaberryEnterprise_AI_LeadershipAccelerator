@@ -126,11 +126,17 @@ export interface CaseStudyPublishGateInput {
   readonly caseStudy: CaseStudyPublishRecord;
   readonly snapshot: CaseStudyPublishSnapshot | null;
   /**
-   * The linked student project's computed maturity and open questions, when
-   * the record has one. Absent or null means "nothing to judge" and the
-   * maturity rule is a no-op, so every record that predates this is untouched.
+   * The student project's computed maturity and open questions, when the
+   * record is about one: linked by `project_id`, or found through a cited
+   * repository that belongs to a student project (`via`). Absent or null means
+   * "nothing to judge" and the maturity rule is a no-op, so every record about
+   * our own work is untouched.
    */
-  readonly foundation?: { readonly maturity: string; readonly openQuestions: number } | null;
+  readonly foundation?: {
+    readonly maturity: string;
+    readonly openQuestions: number;
+    readonly via?: 'linked' | 'repository';
+  } | null;
 }
 
 export interface CaseStudyPublishDecision {

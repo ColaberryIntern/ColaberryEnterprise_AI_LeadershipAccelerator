@@ -887,12 +887,18 @@ that is not in your draft — approving the current snapshot clears them.
 Blockers naming `case_study_not_approved` and `snapshot_not_approved` are the **intended
 resting state** for an unpublished draft.
 
-### A record linked to a student project carries that project's maturity
+### A record about a student project carries that project's maturity
 
-Two blockers were added on 2026-09-11 and they fire **only when `case_studies.project_id`
-is set**. A record with no linked project never sees them, which is why the existing
-library was unaffected: on 2026-09-12 all three live records were unlinked, all seven
-publications still passed the gate, and nothing on the public pages changed.
+Two blockers were added on 2026-09-11. They fire when the record is **about a student
+project**, which the gate establishes two ways: `case_studies.project_id` is set, or the
+record has no `project_id` and one of its cited repositories belongs to a student project
+(a stored `project_id` on the repository row, or an owner/name match in
+`github_connections`). The second route was added on 2026-09-14 because until then
+`from-repositories` skipped the rule entirely, and one live record cited a student's
+connected repository that way. A record whose repositories belong to no student project
+(the enterprise repo, a stranger's repo) never sees them, which is why the library of
+records about our own work was unaffected. When several projects resolve, the least
+mature and the most unsettled decide.
 
 | code | what it means |
 |---|---|
@@ -970,7 +976,7 @@ an already-live record too, so consent withdrawn between two clicks is caught.
 | An outcome or ROI claim appears in prose with no metric behind it | `unverified_claim` |
 | A shaped figure disagrees with itself | `metric_shape_payload_mismatch`, `metric_ratio_missing_denominator`, `metric_members_count_mismatch` |
 | A figure is computed at a commit the record is not pinned to | `metric_collected_sha_mismatch` |
-| A build record is published as a case study | `maturity_below_operational_result` — only on a record linked to a student project |
+| A build record is published as a case study | `maturity_below_operational_result` — on a record linked to a student project, or one whose cited repository belongs to one |
 | A record is published while the project's truth contradicts itself | `project_truth_has_open_questions` |
 | An inventory count stands in the headline | `headline_metric_is_a_bare_count` |
 | A headline figure never says what it does not tell you | `headline_metric_missing_plain_answers` |
