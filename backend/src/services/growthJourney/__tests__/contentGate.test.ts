@@ -139,17 +139,32 @@ describe('through decideForSubject, with T305\'s real gate behind the resolver s
   });
 
   it.each([
-    ['Colaberry Enterprise', businessStrategy, bizCtx, 'QUALIFIED_OPPORTUNITY', 'sales'],
-    ['AI Flotation', flotationStrategy, flotCtx, 'BUILD_QUALIFIED', 'solution_architect'],
+    ['Colaberry Enterprise', businessStrategy, bizCtx, 'QUALIFIED_OPPORTUNITY'],
+    ['AI Flotation', flotationStrategy, flotCtx, 'BUILD_QUALIFIED'],
+  ] as const)('%s: one reply is a named refusal carrying the Layer-2 shapes it would take, never a handoff', async (_n, strategy, ctx, state) => {
+    const out = await decideForSubject(ctx({ state }), strategy, pipelineDeps(), flags());
+    if (out.status !== 'decided') throw new Error('disabled');
+    expect(out.decision.selected_action).toBe('WAIT');
+    expect(out.decision.reason).toBe(`no_candidate:qualified_state_needs_layer_2:${state}`);
+    expect(out.decision.deferred_actions.map((d) => [d.would, d.payload.layer])).toEqual(expect.arrayContaining([
+      ['discovery_questions', 2],
+      ['scheduling_offer', 2],
+    ]));
+    expect(out.decision.deferred_actions.some((d) => d.would === 'create_handoff')).toBe(false);
+  });
+
+  it.each([
+    ['Colaberry Enterprise', businessStrategy, bizCtx, 'DISCOVERY_READY', 'sales'],
+    ['AI Flotation', flotationStrategy, flotCtx, 'DISCOVERY_READY', 'solution_architect'],
   ] as const)('%s: a commercial state is a named refusal carrying the handoff it would make', async (_n, strategy, ctx, state, owner) => {
     const out = await decideForSubject(ctx({ state }), strategy, pipelineDeps(), flags());
     if (out.status !== 'decided') throw new Error('disabled');
     expect(out.decision.selected_action).toBe('WAIT');
-    expect(out.decision.reason).toBe(`no_candidate:commercial_state_needs_layer_2_plus:${state}`);
+    expect(out.decision.reason).toBe(`no_candidate:commercial_state_needs_layer_4:${state}`);
     expect(out.decision.candidates).toEqual([]);
-    expect(out.decision.deferred_actions).toEqual([
+    expect(out.decision.deferred_actions).toContainEqual(
       { would: 'create_handoff', reason: `commercial_state:${state}`, payload: { brand: ctx().brand_slug, state, path: ctx().classification?.primary_path, layer: 4, owner } },
-    ]);
+    );
   });
 
   it('a decline: the suppression wins, and nothing was proposed beside it', async () => {
@@ -161,7 +176,8 @@ describe('through decideForSubject, with T305\'s real gate behind the resolver s
   });
 
   it('a converted customer is a hard stop, and the deferral list is empty because there is nothing to escalate', async () => {
-    const out = await decideForSubject(bizCtx({ state: 'CUSTOMER' }), businessStrategy, pipelineDeps(), flags());
+    // T307 stamps no NO_RESPONSE on a customer, so the overlays are empty here as they would be.
+    const out = await decideForSubject(bizCtx({ state: 'CUSTOMER', overlays: [] }), businessStrategy, pipelineDeps(), flags());
     if (out.status !== 'decided') throw new Error('disabled');
     expect(out.decision.reason).toBe('hard_stop:converted');
     expect(out.decision.deferred_actions).toEqual([]);

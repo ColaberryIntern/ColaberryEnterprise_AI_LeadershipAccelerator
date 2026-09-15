@@ -65,7 +65,7 @@ describe('only Layer 1 is ever generated', () => {
 
 describe('the state groups partition the programme\'s vocabulary exactly', () => {
   it.each(PROGRAMMES)('%s', (_name, p, _ctx, states) => {
-    const groups = [...p.states.fresh, ...p.states.problemKnown, ...p.states.exploring, ...p.states.commercial, p.states.terminal];
+    const groups = [...p.states.fresh, ...p.states.problemKnown, ...p.states.exploring, ...p.states.qualified, ...p.states.commercial, p.states.terminal];
     expect([...groups].sort()).toEqual([...states].sort());
     expect(new Set(groups).size).toBe(groups.length);
   });
@@ -88,34 +88,49 @@ describe('one happy path per candidate type, per brand, with its tier and a rati
       expect(c.rationale.join(' ')).toMatch(/nothing is known yet.*no path classified yet/);
     });
 
-    it('a lead whose problem is known gets capability education at tier 7, for its path', () => {
-      const c = one({ state: p.states.problemKnown[0] });
+    it('a lead exploring a known path, not yet reached out to, gets capability education at tier 7', () => {
+      const c = one({ state: p.states.exploring[0] });
       const path = ctx().classification?.primary_path;
       expect([c.action_type, c.priority_tier]).toEqual(['SEND_EMAIL', 7]);
       expect(c.required_assets[0]).toEqual({ asset_type: 'capability_education', offer_family: path, program_slug: ctx().program_slug });
       expect(c.rationale.join(' ')).toContain(`educate on the ${path} capability`);
     });
 
-    it('a lead weighing options gets a case study at tier 7', () => {
-      const c = one({ state: p.states.exploring[0] });
+    it('the same lead, once we HAVE reached out in the window, gets the case study at tier 7 instead', () => {
+      const c = one({ state: p.states.exploring[0], contact: { ...contact(), recent_contact_count: 1 } });
       expect([c.action_type, c.priority_tier]).toEqual(['SEND_EMAIL', 7]);
       expect(c.required_assets[0].asset_type).toBe('case_study');
+      expect(c.rationale.join(' ')).toContain('already reached out (1 in the window)');
+    });
+
+    it('a lead whose problem is known but whose path is not gets the path-finding clarification at tier 8', () => {
+      const c = one({ state: p.states.problemKnown[0], classification: withClassification({ primary_path: null, brand_relationship: ctx().brand_slug }) });
+      expect([c.action_type, c.priority_tier]).toEqual(['SEND_EMAIL', 8]);
+      expect(c.required_assets[0]).toEqual({ asset_type: 'clarification_question', program_slug: ctx().program_slug });
+      expect(c.rationale[0]).toContain('the problem is known but no path is');
     });
 
     it('a stalled conversation gets a re-engagement at tier 6, ahead of the state\'s own candidate', () => {
-      const c = one({ state: p.states.problemKnown[0], overlays: ['STALLED'] });
+      const c = one({ state: p.states.exploring[0], overlays: ['STALLED', 'NO_RESPONSE'] });
       expect([c.action_type, c.priority_tier]).toEqual(['SEND_EMAIL', 6]);
       expect(c.required_assets[0].asset_type).toBe('clarification_question');
       expect(c.rationale.join(' ')).toContain('STALLED overlay');
     });
 
+    it('a stalled FRESH lead with no path still gets its re-engagement', () => {
+      // The gap the review named: the first draft required a family here.
+      const c = one({ state: p.states.fresh[0], overlays: ['STALLED'], classification: null });
+      expect([c.action_type, c.priority_tier, c.required_assets[0].asset_type]).toEqual(['SEND_EMAIL', 6, 'clarification_question']);
+      expect(c.required_assets[0]).not.toHaveProperty('offer_family');
+    });
+
     it('a decline suppresses at tier 1 and nothing else is proposed', () => {
-      const c = one({ state: p.states.problemKnown[0], overlays: ['DECLINED'] });
+      const c = one({ state: p.states.exploring[0], overlays: ['DECLINED', 'NO_RESPONSE'] });
       expect([c.action_type, c.priority_tier, c.channel]).toEqual(['SUPPRESS_CONTACT', 1, 'none']);
     });
 
     it('a portal account gets the in-app nudge at tier 9, beside the state\'s email', () => {
-      const g = generateB2b(p, ctx({ state: p.states.problemKnown[0], enrollment_id: 'enr-9' }));
+      const g = generateB2b(p, ctx({ state: p.states.exploring[0], enrollment_id: 'enr-9' }));
       expect(g.candidates.map((c) => [c.action_type, c.priority_tier])).toEqual([
         ['SEND_EMAIL', 7],
         ['SHOW_IN_APP_NUDGE', 9],
@@ -123,7 +138,7 @@ describe('one happy path per candidate type, per brand, with its tier and a rati
     });
 
     it('the rationale names what T306 measured, or that nothing was', () => {
-      const c = one({ state: p.states.problemKnown[0] });
+      const c = one({ state: p.states.exploring[0] });
       expect(c.rationale[c.rationale.length - 1]).toMatch(/^scores: /);
     });
 
@@ -143,13 +158,13 @@ describe('one happy path per candidate type, per brand, with its tier and a rati
 describe('a candidate never names a channel the contact evidence closed', () => {
   describe.each(PROGRAMMES)('%s', (_name, p, ctx) => {
     it('email closed: no email candidate, and the reason is the evidence\'s own', () => {
-      const g = generateB2b(p, ctx({ state: p.states.problemKnown[0], contact: contact({ email: channel(false, 'no_express_consent') }) }));
+      const g = generateB2b(p, ctx({ state: p.states.exploring[0], contact: contact({ email: channel(false, 'no_express_consent') }) }));
       expect(g.candidates.filter((c) => c.channel === 'email')).toEqual([]);
       expect(g.not_emitted.find((n) => n.generator === 'capabilityEducation')?.reason).toBe('email_ineligible:no_express_consent');
     });
 
     it('in-app closed: no nudge even with a portal account', () => {
-      const g = generateB2b(p, ctx({ state: p.states.problemKnown[0], enrollment_id: 'enr-9', contact: contact({ in_app: channel(false, 'no_app', 'none') }) }));
+      const g = generateB2b(p, ctx({ state: p.states.exploring[0], enrollment_id: 'enr-9', contact: contact({ in_app: channel(false, 'no_app', 'none') }) }));
       expect(g.candidates.filter((c) => c.channel === 'in_app')).toEqual([]);
     });
 
@@ -204,10 +219,27 @@ describe('what the strategy WOULD do beyond Layer 1 is named in defer and never 
     it.each([...p.states.commercial])('%s: no candidate; a create_handoff to the owner §8 names', (state) => {
       const g = generateB2b(p, ctx({ state, enrollment_id: 'enr-9' }));
       expect(g.candidates).toEqual([]);
-      expect(g.deferred).toEqual([
+      // The fixture carries NO_RESPONSE as a real lead does, so the reply-aware
+      // sequence is named beside the handoff; the handoff is what this asserts.
+      expect(g.deferred).toContainEqual(
         { would: 'create_handoff', reason: `commercial_state:${state}`, payload: { brand: ctx().brand_slug, state, path: ctx().classification?.primary_path, layer: 4, owner: p.handoff.owner } },
-      ]);
-      expect(b2bEmptyReason(p, ctx({ state }), g)).toBe(`commercial_state_needs_layer_2_plus:${state}`);
+      );
+      expect(g.deferred.filter((d) => d.would === 'create_handoff')).toHaveLength(1);
+      expect(b2bEmptyReason(p, ctx({ state }), g)).toBe(`commercial_state_needs_layer_4:${state}`);
+    });
+
+    it.each([...p.states.qualified])('%s: ONE reply is Layer 2, not a handoff - discovery questions and a scheduling offer are named', (state) => {
+      // The review read §8 better than the first draft, which named a handoff
+      // to Sales here. A single reply is the textbook Layer-2 trigger.
+      const g = generateB2b(p, ctx({ state, enrollment_id: 'enr-9' }));
+      expect(g.candidates).toEqual([]);
+      expect(g.deferred.map((d) => [d.would, d.payload.layer])).toEqual(expect.arrayContaining([
+        ['discovery_questions', 2],
+        ['scheduling_offer', 2],
+      ]));
+      expect(g.deferred.some((d) => d.would === 'create_handoff')).toBe(false);
+      expect(g.deferred.every((d) => d.payload.layer === 2)).toBe(true);
+      expect(b2bEmptyReason(p, ctx({ state }), g)).toBe(`qualified_state_needs_layer_2:${state}`);
     });
 
     it('HUMAN_REVIEW: no email at all, and a handoff to human review is named', () => {
@@ -217,9 +249,13 @@ describe('what the strategy WOULD do beyond Layer 1 is named in defer and never 
       expect(b2bEmptyReason(p, ctx({ overlays: ['HUMAN_REVIEW'] }), g)).toBe('human_review_overlay');
     });
 
-    it('NO_RESPONSE: nurture stops, and a reply-aware sequence (Layer 2) is named, not run', () => {
+    it('NO_RESPONSE: nurture CONTINUES under the contact policy\'s cap, and a reply-aware sequence (Layer 2) is named beside it', () => {
+      // Moved deliberately (the review's V3). T307's NO_RESPONSE means "has never
+      // replied", which is every pre-qualified non-fresh lead by construction -
+      // exactly who Layer-1 nurture is for. The first draft read it as "we sent
+      // and they went quiet" and made education and the case study dead code.
       const g = generateB2b(p, ctx({ overlays: ['NO_RESPONSE'] }));
-      expect(g.candidates).toEqual([]);
+      expect(g.candidates.map((c) => c.required_assets[0]?.asset_type)).toEqual(['capability_education']);
       expect(g.deferred.map((d) => [d.would, d.payload.layer])).toEqual([['reply_aware_sequence', 2]]);
     });
 
@@ -229,10 +265,10 @@ describe('what the strategy WOULD do beyond Layer 1 is named in defer and never 
     });
 
     it('a create_handoff shape never appears as a candidate, only as a deferral', () => {
-      for (const state of p.states.commercial) {
+      for (const state of [...p.states.qualified, ...p.states.commercial]) {
         const g = generateB2b(p, ctx({ state }));
         expect(g.candidates.map((c) => c.action_type)).not.toContain('CREATE_HUMAN_TASK');
-        expect(g.deferred.some((d) => d.would === 'create_handoff')).toBe(true);
+        expect(g.deferred.length).toBeGreaterThan(0);
       }
     });
   });

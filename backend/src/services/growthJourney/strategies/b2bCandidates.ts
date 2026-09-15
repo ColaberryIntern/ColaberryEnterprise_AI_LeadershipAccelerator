@@ -37,6 +37,20 @@ import type {
  * pins the action set, and the plan's control — emit a Layer 3 candidate —
  * fails it.
  *
+ * ─── THE OVERLAYS MEAN WHAT T307 SAYS THEY MEAN ─────────────────────────────
+ *
+ * `NO_RESPONSE` is "has never replied" — and every pre-commercial state that is
+ * not the fresh one carries it BY CONSTRUCTION, because a reply is what
+ * evidences the qualified state and the ladder never steps down. It is
+ * therefore not a reason to withhold Layer-1 nurture: a lead who has never
+ * replied is exactly who nurture is for. The first draft read it as "we sent
+ * and they went quiet" and refused every email, which made education and the
+ * case study unreachable under the real lifecycle — found by T310's verifier
+ * driving the real classifiers into these generators. The sanctioned "do not
+ * pile on" gate is the contact policy's frequency cap on the winner; the Layer-2
+ * reply-aware sequence stays NAMED beside the nurture. A seam test now drives
+ * the real lifecycles into these generators and requires every one to fire.
+ *
  * ─── A CANDIDATE CARRIES ITS CONTENT NEED, AND THE GATE DECIDES ─────────────
  *
  * Every email candidate declares a journey content purpose with the offer
@@ -87,9 +101,11 @@ export interface B2bProgramme {
     fresh: readonly string[];
     /** The problem is known: educate on the capability or solution. */
     problemKnown: readonly string[];
-    /** They are weighing options: a case study. */
+    /** A path is known: education first, then a case study once we have reached out. */
     exploring: readonly string[];
-    /** Layer 2+ territory: deferred to the human §8 names. */
+    /** They replied: Layer 2 territory — discovery questions and a scheduling offer are named, nurture stops. */
+    qualified: readonly string[];
+    /** Discovery onward: Layer 4, deferred to the human §8 names. */
     commercial: readonly string[];
     terminal: string;
   };
@@ -120,7 +136,9 @@ const POSITION = { suppress: 90, stalled: 40, educate: 50, caseStudy: 50, clarif
 const familyOf = (ctx: JourneySubjectContext) => ctx.classification?.primary_path ?? null;
 const has = (ctx: JourneySubjectContext, overlay: string) => ctx.overlays.includes(overlay);
 const pastLayerOne = (p: B2bProgramme, ctx: JourneySubjectContext) =>
-  p.states.commercial.includes(ctx.state) || ctx.state === p.states.terminal;
+  p.states.qualified.includes(ctx.state) || p.states.commercial.includes(ctx.state) || ctx.state === p.states.terminal;
+/** T304's fact: we have already reached out to this person inside the contact window. */
+const reachedOutRecently = (ctx: JourneySubjectContext) => ctx.contact.recent_contact_count > 0;
 
 /** What T306 measured, for the rationale — named where it has a value, and named as absent otherwise. */
 function scoreNote(ctx: JourneySubjectContext): string {
@@ -135,7 +153,7 @@ function emailBlock(ctx: JourneySubjectContext): string | null {
   // not show nurture being considered for them.
   if (has(ctx, 'DECLINED')) return 'declined_overlay';
   if (has(ctx, 'HUMAN_REVIEW')) return 'human_review_overlay';
-  if (has(ctx, 'NO_RESPONSE')) return 'no_response_overlay';
+  // NO_RESPONSE is deliberately NOT here: see the header.
   if (ctx.contact.channels.email.eligible !== true) return `email_ineligible:${ctx.contact.channels.email.reason}`;
   return null;
 }
@@ -193,22 +211,37 @@ const declinedSuppress: Generator = (_p, ctx) => {
 const stalledReengage: Generator = (p, ctx) => {
   if (!has(ctx, 'STALLED')) return 'predicate_false';
   if (pastLayerOne(p, ctx)) return `stalled_in_commercial_state:${ctx.state}`;
-  const blocked = emailBlock(ctx) ?? familyBlock(p, ctx);
+  const blocked = emailBlock(ctx);
   if (blocked) return blocked;
-  return emailCandidate(ctx, 'clarification_question', TIER.stalled, POSITION.stalled, familyOf(ctx), [
+  // A stalled lead need not have a path — a fresh lead can stall too — but a
+  // path that IS known must be one this brand may speak to.
+  const f = familyOf(ctx);
+  const refused = f ? p.familyGate(f) : null;
+  if (refused) return refused;
+  return emailCandidate(ctx, 'clarification_question', TIER.stalled, POSITION.stalled, f, [
     `STALLED overlay in ${ctx.state}: a safe clarification re-opens a conversation that stopped`,
-    `path=${familyOf(ctx)}`,
+    f ? `path=${f}` : 'no path classified yet',
   ]);
 };
 
+/**
+ * Education fires where a PATH is known: a problem-known state that happens to
+ * carry one, or an exploring state we have not yet reached out in. The case
+ * study takes over in an exploring state once we HAVE reached out — T304's
+ * `recent_contact_count` — so the two are exclusive by evidence, and a second
+ * touch in the same state varies the content instead of repeating it.
+ */
 const capabilityEducation: Generator = (p, ctx) => {
-  if (!p.states.problemKnown.includes(ctx.state)) return 'predicate_false';
+  const problemKnown = p.states.problemKnown.includes(ctx.state);
+  const exploring = p.states.exploring.includes(ctx.state);
+  if (!problemKnown && !exploring) return 'predicate_false';
   if (has(ctx, 'STALLED')) return 'stalled_overlay_takes_precedence';
+  if (exploring && reachedOutRecently(ctx)) return 'already_reached_out:case_study_takes_over';
   const blocked = emailBlock(ctx) ?? familyBlock(p, ctx);
   if (blocked) return blocked;
   const others = ctx.classification?.secondary_paths ?? [];
   return emailCandidate(ctx, 'capability_education', TIER.educate, POSITION.educate, familyOf(ctx), [
-    `${ctx.state}: the problem is known, educate on the ${familyOf(ctx)} capability`,
+    `${ctx.state}: the path is known, educate on the ${familyOf(ctx)} capability`,
     others.length ? `one message only: ${others.join(', ')} noted, not addressed (MULTI_PATH)` : 'single path',
   ]);
 };
@@ -216,24 +249,32 @@ const capabilityEducation: Generator = (p, ctx) => {
 const caseStudy: Generator = (p, ctx) => {
   if (!p.states.exploring.includes(ctx.state)) return 'predicate_false';
   if (has(ctx, 'STALLED')) return 'stalled_overlay_takes_precedence';
+  if (!reachedOutRecently(ctx)) return 'not_yet_reached_out:education_first';
   const blocked = emailBlock(ctx) ?? familyBlock(p, ctx);
   if (blocked) return blocked;
   return emailCandidate(ctx, 'case_study', TIER.caseStudy, POSITION.caseStudy, familyOf(ctx), [
-    `${ctx.state}: they are weighing options, a relevant case study for ${familyOf(ctx)}`,
+    `${ctx.state}: already reached out (${ctx.contact.recent_contact_count} in the window), a relevant case study for ${familyOf(ctx)}`,
   ]);
 };
 
+/**
+ * The question that finds a path: for a fresh lead, and for a lead whose
+ * PROBLEM is known but whose path is not — which under Enterprise's lifecycle
+ * is every `PROBLEM_IDENTIFIED` lead, since a path would have evidenced
+ * `EXPLORING_SOLUTIONS`.
+ */
 const clarificationQuestion: Generator = (p, ctx) => {
-  if (!p.states.fresh.includes(ctx.state)) return 'predicate_false';
+  const fresh = p.states.fresh.includes(ctx.state);
+  const problemWithoutPath = p.states.problemKnown.includes(ctx.state) && !familyOf(ctx);
+  if (!fresh && !problemWithoutPath) return 'predicate_false';
   if (has(ctx, 'STALLED')) return 'stalled_overlay_takes_precedence';
   const blocked = emailBlock(ctx);
   if (blocked) return blocked;
-  // A fresh lead may have no path yet; the question is how one gets found.
   const f = familyOf(ctx);
   const refused = f ? p.familyGate(f) : null;
   if (refused) return refused;
   return emailCandidate(ctx, 'clarification_question', TIER.clarify, POSITION.clarify, f, [
-    `${ctx.state}: nothing is known yet, ask a safe clarification question`,
+    fresh ? `${ctx.state}: nothing is known yet, ask a safe clarification question` : `${ctx.state}: the problem is known but no path is, ask which`,
     f ? `path=${f}` : 'no path classified yet',
   ]);
 };
@@ -242,7 +283,7 @@ const inAppNudge: Generator = (p, ctx) => {
   if (has(ctx, 'DECLINED')) return 'declined_overlay';
   if (!ctx.enrollment_id) return 'no_portal_account';
   if (ctx.contact.channels.in_app.eligible !== true) return `in_app_ineligible:${ctx.contact.channels.in_app.reason}`;
-  if (pastLayerOne(p, ctx)) return `commercial_state:${ctx.state}`;
+  if (pastLayerOne(p, ctx)) return `past_layer_one:${ctx.state}`;
   return {
     action_type: 'SHOW_IN_APP_NUDGE',
     campaign_key: null,
@@ -268,6 +309,13 @@ export const B2B_GENERATORS: ReadonlyArray<{ name: string; run: Generator }> = O
 function deferrals(p: B2bProgramme, ctx: JourneySubjectContext): JourneyDeferral[] {
   const out: JourneyDeferral[] = [];
   const base = { brand: ctx.brand_slug, state: ctx.state, path: familyOf(ctx) };
+  if (p.states.qualified.includes(ctx.state)) {
+    // ONE reply is §8's Layer-2 trigger — discovery questions, a scheduling
+    // offer — not yet a person's time. The first draft named a handoff to
+    // Sales here; T310's verifier read §8 more carefully than I had.
+    out.push({ would: 'discovery_questions', reason: `qualified_state:${ctx.state}`, payload: { ...base, layer: 2 } });
+    out.push({ would: 'scheduling_offer', reason: `qualified_state:${ctx.state}`, payload: { ...base, layer: 2 } });
+  }
   if (p.states.commercial.includes(ctx.state)) {
     out.push({ would: 'create_handoff', reason: `commercial_state:${ctx.state}`, payload: { ...base, layer: 4, owner: p.handoff.owner } });
   }
@@ -307,7 +355,8 @@ export function generateB2b(p: B2bProgramme, ctx: JourneySubjectContext): B2bGen
 /** The most specific reason nothing was proposed. Pure over the generation record. */
 export function b2bEmptyReason(p: B2bProgramme, ctx: JourneySubjectContext, g: B2bGeneration): string | null {
   if (g.candidates.length > 0) return null;
-  if (p.states.commercial.includes(ctx.state)) return `commercial_state_needs_layer_2_plus:${ctx.state}`;
+  if (p.states.qualified.includes(ctx.state)) return `qualified_state_needs_layer_2:${ctx.state}`;
+  if (p.states.commercial.includes(ctx.state)) return `commercial_state_needs_layer_4:${ctx.state}`;
   const specific = g.not_emitted.find((n) => n.reason !== 'predicate_false' && n.reason !== 'no_portal_account');
   return specific?.reason ?? null;
 }

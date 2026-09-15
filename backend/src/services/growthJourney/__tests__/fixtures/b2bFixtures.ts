@@ -32,9 +32,12 @@ const base = (over: Partial<JourneySubjectContext> = {}): JourneySubjectContext 
   lead_id: 501,
   enrollment_id: null,
   classification: classification(),
-  state: 'PROBLEM_IDENTIFIED',
+  // A context T307 actually produces: a path is known (so EXPLORING_SOLUTIONS,
+  // not PROBLEM_IDENTIFIED, which never carries one) and the lead has never
+  // replied, which is NO_RESPONSE by construction.
+  state: 'EXPLORING_SOLUTIONS',
   state_entered_at: new Date('2026-09-01T00:00:00Z'),
-  overlays: [],
+  overlays: ['NO_RESPONSE'],
   scores: scoreSubject({ lead: { industry: 'logistics' }, computed_at: AS_OF } as unknown as Parameters<typeof scoreSubject>[0], 'business'),
   contact: contact(),
   hardStop: { ...NO_STOPS },
@@ -44,7 +47,7 @@ const base = (over: Partial<JourneySubjectContext> = {}): JourneySubjectContext 
   ...over,
 });
 
-/** A Colaberry Enterprise lead whose problem is known. */
+/** A Colaberry Enterprise lead exploring a known path, who has never replied. */
 export const bizCtx = (over: Partial<JourneySubjectContext> = {}): JourneySubjectContext => base(over);
 
 /** An AI Flotation lead who has captured an idea. */
@@ -59,6 +62,8 @@ export const flotCtx = (over: Partial<JourneySubjectContext> = {}): JourneySubje
     subject_ref: 'lead:701',
     lead_id: 701,
     classification: classification({ brand_relationship: 'ai-flotation', primary_path: 'application_build', intent: 'build_request' }),
+    // Flotation's problem-known state CAN carry a path (a path does not move
+    // its ladder; intent plus named systems does), so education is real here.
     state: 'IDEA_OR_PROBLEM_CAPTURED',
     scores: scoreSubject({ lead: {}, computed_at: AS_OF } as unknown as Parameters<typeof scoreSubject>[0], 'consulting'),
     ...over,

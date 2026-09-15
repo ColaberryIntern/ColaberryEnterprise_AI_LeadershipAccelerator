@@ -10,11 +10,14 @@ import { makeB2bStrategy, type B2bProgramme } from './b2bCandidates';
  *   * fresh — `NEW_PROJECT_LEAD`: ask.
  *   * problem known — `IDEA_OR_PROBLEM_CAPTURED`: solution education, §8's
  *     "capability/solution education for B2B programs".
- *   * exploring — `PROBLEM_CLARIFIED`, `SOLUTION_VISUALIZED`: a case study.
- *     `SOLUTION_VISUALIZED` means a concept was PRODUCED for them (T308's
- *     caveat), and a case study is the honest follow-up to a concept nobody
- *     has yet engaged with.
- *   * commercial — `BUILD_QUALIFIED` onward: §8 Layer 4, "Solution Architect
+ *   * exploring — `PROBLEM_CLARIFIED`, `SOLUTION_VISUALIZED`: education
+ *     first, then a case study once we have reached out. `SOLUTION_VISUALIZED`
+ *     means a concept was PRODUCED for them (T308's caveat), which is why the
+ *     first touch is still education rather than a follow-up to something
+ *     nobody has engaged with.
+ *   * qualified — `BUILD_QUALIFIED`: one reply, §8's Layer-2 trigger; named,
+ *     never applied, nurture stops.
+ *   * commercial — `DISCOVERY_READY` onward: §8 Layer 4, "Solution Architect
  *     for technically credible build opportunities", named in
  *     `deferred_actions` and never applied.
  *   * terminal — `PROJECT_STARTED`: a hard stop.
@@ -35,7 +38,8 @@ export const FLOTATION_PROGRAMME: B2bProgramme = Object.freeze({
     fresh: Object.freeze(['NEW_PROJECT_LEAD']),
     problemKnown: Object.freeze(['IDEA_OR_PROBLEM_CAPTURED']),
     exploring: Object.freeze(['PROBLEM_CLARIFIED', 'SOLUTION_VISUALIZED']),
-    commercial: Object.freeze(['BUILD_QUALIFIED', 'DISCOVERY_READY', 'SCOPE_IN_PROGRESS', 'PROPOSAL_OR_PAYMENT_READY']),
+    qualified: Object.freeze(['BUILD_QUALIFIED']),
+    commercial: Object.freeze(['DISCOVERY_READY', 'SCOPE_IN_PROGRESS', 'PROPOSAL_OR_PAYMENT_READY']),
     terminal: 'PROJECT_STARTED',
   }),
   handoff: Object.freeze({ owner: 'solution_architect' }),
