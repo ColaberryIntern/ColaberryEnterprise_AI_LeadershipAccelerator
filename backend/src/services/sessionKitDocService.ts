@@ -233,6 +233,11 @@ export async function renderPresenterPage(sessionId: string): Promise<string | n
       nextEl = document.getElementById('next'), updEl = document.getElementById('upd'),
       errEl = document.getElementById('err');
   var lastTip = null, lastPre = null, lastPoll = null;
+  // Polls must not overlap or render out of order: a slow response for the
+  // previous slide landing after a fast one for the current slide would put
+  // the previous slide's notes back on screen. One request in flight at a
+  // time, and a response older than the last one painted is dropped.
+  var inFlight = false, lastSeenAt = 0;
   function esc(s){ return String(s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
   // Turn tagged script lines into colour-coded blocks. A line's leading tag
   // decides its role; anything untagged inherits the block's default role, so
@@ -263,10 +268,16 @@ export async function renderPresenterPage(sessionId: string): Promise<string | n
     return out.join('');
   }
   function tick(){
+    if (inFlight) return;
+    inFlight = true;
     fetch(endpoint).then(function(r){
       if (!r.ok) throw new Error('http ' + r.status);
       return r.json();
     }).then(function(d){
+      inFlight = false;
+      var seenAt = d.updated_at ? new Date(d.updated_at).getTime() : 0;
+      if (seenAt && seenAt < lastSeenAt) return;
+      if (seenAt) lastSeenAt = seenAt;
       errEl.textContent = '';
       segEl.textContent = (d.segment_label || '') + (d.title ? ' — ' + d.title : '');
 
@@ -335,7 +346,7 @@ export async function renderPresenterPage(sessionId: string): Promise<string | n
         var secs = Math.max(0, Math.round((Date.now() - new Date(d.updated_at).getTime()) / 1000));
         updEl.textContent = secs < 8 ? 'live' : secs + 's ago';
       }
-    }).catch(function(e){ errEl.textContent = 'Connection hiccup — retrying… (' + e.message + ')'; });
+    }).catch(function(e){ inFlight = false; errEl.textContent = 'Connection hiccup — retrying… (' + e.message + ')'; });
   }
   tick();
   setInterval(tick, 2500);
