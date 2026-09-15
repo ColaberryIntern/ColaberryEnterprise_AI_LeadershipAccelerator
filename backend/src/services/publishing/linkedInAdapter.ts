@@ -1,5 +1,8 @@
 import { getProviderCapabilities, type ProviderCapabilities, type ProviderKey } from './providerCapabilities';
 import { commentaryExceedsLimit, escapeLittleText, COMMENTARY_MAX_CHARS } from './linkedInText';
+import { headerValue, isPermanentStatus, messageOf, providerCodeOf } from './linkedInErrors';
+import type { LinkedInHttp } from './linkedInHttp';
+import { LINKEDIN_IMAGE_MIME_TYPES, uploadImages, type UploadedImage } from './linkedInImages';
 import {
   AdapterUnsupportedError,
   ProviderPublishError,
@@ -37,6 +40,10 @@ import {
  *   3. The created post's URN comes back in the `x-restli-id` RESPONSE HEADER, not the body. An
  *      adapter that reads only the body records no external id and permanently loses the
  *      ability to reconcile that post.
+ *   4. Images are not attached, they are REFERENCED: each one is uploaded first through the
+ *      Images API (linkedInImages.ts) and the post carries the resulting URN. One image is
+ *      `content.media`; two or more is `content.multiImage`. Different shapes, and the wrong
+ *      one is a 422.
  *
  * NO TOKEN IS STORED, CACHED OR LOGGED HERE. The adapter is constructed with a function that
  * fetches the account's access token on demand (`channelAccountService.getAccessToken`, which
@@ -56,19 +63,7 @@ export const LINKEDIN_API_VERSION = '202609';
 
 const POSTS_URL = 'https://api.linkedin.com/rest/posts';
 
-/** Minimal shape of the HTTP call, so the adapter is testable without a network. */
-export interface LinkedInHttpResponse {
-  status: number;
-  headers: Record<string, string>;
-  body: unknown;
-}
-
-export type LinkedInHttp = (input: {
-  method: string;
-  url: string;
-  headers: Record<string, string>;
-  body?: unknown;
-}) => Promise<LinkedInHttpResponse>;
+export type { LinkedInHttp, LinkedInHttpResponse } from './linkedInHttp';
 
 export interface LinkedInAdapterOptions {
   provider: Extract<ProviderKey, 'linkedin_member' | 'linkedin_organization'>;
@@ -76,40 +71,12 @@ export interface LinkedInAdapterOptions {
   getToken: (accountId: string) => Promise<string>;
   /** `urn:li:person:{sub}` or `urn:li:organization:{id}` for the account. */
   getAuthorUrn: (accountId: string) => Promise<string>;
+  /** Bytes for an attachment by storage key (`mediaStore.read` in production). */
+  readMedia: (ref: string) => Promise<Buffer>;
   http: LinkedInHttp;
   clock?: () => Date;
-}
-
-/**
- * Which HTTP statuses must never be retried.
- *
- * Getting this wrong is expensive in both directions: retrying a 422 burns every attempt and
- * dead-letters anyway, while NOT retrying a 503 silently loses a scheduled post. 429 is
- * transient on purpose - it means slow down, not stop.
- */
-function isPermanentStatus(status: number): boolean {
-  if (status === 429) return false;              // rate limited: back off and retry
-  if (status === 426) return true;               // sunset API version: needs a code change
-  return status >= 400 && status < 500;          // auth, permission, validation
-}
-
-function providerCodeOf(body: unknown): string | null {
-  if (body && typeof body === 'object') {
-    const b = body as Record<string, unknown>;
-    for (const key of ['code', 'serviceErrorCode', 'status']) {
-      if (typeof b[key] === 'string') return b[key] as string;
-      if (typeof b[key] === 'number') return String(b[key]);
-    }
-  }
-  return null;
-}
-
-function messageOf(body: unknown, fallback: string): string {
-  if (body && typeof body === 'object') {
-    const m = (body as Record<string, unknown>).message;
-    if (typeof m === 'string' && m.trim() !== '') return m;
-  }
-  return fallback;
+  /** Injected so the image-processing wait is instant in tests. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 export class LinkedInAdapter implements SocialProviderAdapter {
@@ -119,10 +86,13 @@ export class LinkedInAdapter implements SocialProviderAdapter {
 
   private readonly clock: () => Date;
 
+  private readonly sleep: (ms: number) => Promise<void>;
+
   constructor(opts: LinkedInAdapterOptions) {
     this.provider = opts.provider;
     this.opts = opts;
     this.clock = opts.clock ?? (() => new Date());
+    this.sleep = opts.sleep ?? ((ms) => new Promise((resolve) => { setTimeout(resolve, ms); }));
   }
 
   /**
@@ -165,16 +135,29 @@ export class LinkedInAdapter implements SocialProviderAdapter {
     if (commentaryExceedsLimit(content.text)) {
       reasons.push(`LinkedIn allows ${COMMENTARY_MAX_CHARS} characters; this post is longer.`);
     }
-    // SVG is rejected by the image upload endpoint. Caught here because the three-step upload
-    // would otherwise fail on step two, after the post text had already been accepted.
-    const svg = content.mediaRefs.filter((ref) => ref.toLowerCase().endsWith('.svg'));
-    if (svg.length > 0) {
-      reasons.push(`LinkedIn does not accept SVG images (${svg.join(', ')}). Use PNG, JPEG or GIF.`);
-    }
-    if (content.mediaRefs.length > 0) {
-      // Stated rather than silently dropped: a post that published without its image would look
+    // Everything about the attachments that can be known without reading them. Each of these
+    // would otherwise fail on step one or two of the upload, after the text had been accepted.
+    const caps = getProviderCapabilities(this.provider);
+    const videos = content.media.filter((m) => m.mimeType.startsWith('video/'));
+    if (videos.length > 0) {
+      // Stated rather than silently dropped: a post that published without its video would look
       // successful and be wrong.
-      reasons.push('Image posting is not implemented in this adapter yet; publish text-only or use handoff.');
+      reasons.push('LinkedIn video posting is not implemented in this adapter yet; publish the video by handoff.');
+    }
+    const unsupported = content.media.filter((m) => !m.mimeType.startsWith('video/') && !LINKEDIN_IMAGE_MIME_TYPES.has(m.mimeType));
+    if (unsupported.length > 0) {
+      reasons.push(`LinkedIn does not accept ${unsupported.map((m) => m.mimeType).join(', ')}. Use PNG, JPEG or GIF.`);
+    }
+    if (caps.image && content.media.length > caps.image.maxPerPost) {
+      reasons.push(`LinkedIn allows ${caps.image.maxPerPost} image${caps.image.maxPerPost === 1 ? '' : 's'} on this kind of post; this one has ${content.media.length}.`);
+    }
+    if (caps.image) {
+      const limit = caps.image.maxSizeMb * 1024 * 1024;
+      for (const m of content.media) {
+        if (m.byteSize !== null && m.byteSize > limit) {
+          reasons.push(`${m.ref} is ${(m.byteSize / 1024 / 1024).toFixed(1)} MB; LinkedIn's limit is ${caps.image.maxSizeMb} MB.`);
+        }
+      }
     }
 
     return reasons.length === 0 ? { ok: true } : { ok: false, permanent: true, reasons };
@@ -193,6 +176,13 @@ export class LinkedInAdapter implements SocialProviderAdapter {
     const commentary = escapeLittleText(
       content.disclosureText ? `${content.text}\n\n${content.disclosureText}` : content.text,
     );
+
+    // Images go first, and all of them, before the post exists. A failure here leaves no post
+    // behind to reconcile; a failure after would.
+    const images: UploadedImage[] = content.media.length === 0 ? [] : await uploadImages({
+      http: this.opts.http, token, owner: author, apiVersion: LINKEDIN_API_VERSION,
+      media: content.media, readMedia: this.opts.readMedia, sleep: this.sleep,
+    });
 
     const response = await this.opts.http({
       method: 'POST',
@@ -215,6 +205,7 @@ export class LinkedInAdapter implements SocialProviderAdapter {
         distribution: { feedDistribution: 'MAIN_FEED', targetEntities: [], thirdPartyDistributionChannels: [] },
         lifecycleState: 'PUBLISHED',
         isReshareDisabledByAuthor: false,
+        ...postContent(images),
       },
     });
 
@@ -260,7 +251,8 @@ export class LinkedInAdapter implements SocialProviderAdapter {
         author_type: author.startsWith('urn:li:organization:') ? 'organization' : 'person',
         commentary_chars: commentary.length,
         had_disclosure: content.disclosureText !== null,
-        media_count: content.mediaRefs.length,
+        media_count: content.media.length,
+        image_urns: images.map((i) => i.urn),
       },
     };
   }
@@ -286,10 +278,13 @@ export class LinkedInAdapter implements SocialProviderAdapter {
   }
 }
 
-function headerValue(headers: Record<string, string>, name: string): string | null {
-  const target = name.toLowerCase();
-  for (const [key, value] of Object.entries(headers)) {
-    if (key.toLowerCase() === target && typeof value === 'string' && value.trim() !== '') return value;
-  }
-  return null;
+/**
+ * One image and several images are different shapes in the Posts API, and sending a
+ * one-element `multiImage` is a 422. Empty means a text post: no `content` key at all.
+ */
+function postContent(images: UploadedImage[]): Record<string, unknown> {
+  if (images.length === 0) return {};
+  const toRef = (i: UploadedImage) => (i.altText ? { id: i.urn, altText: i.altText } : { id: i.urn });
+  if (images.length === 1) return { content: { media: toRef(images[0]) } };
+  return { content: { multiImage: { images: images.map(toRef) } } };
 }

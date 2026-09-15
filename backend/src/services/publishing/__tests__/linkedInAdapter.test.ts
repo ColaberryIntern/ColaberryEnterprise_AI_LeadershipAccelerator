@@ -16,7 +16,7 @@ const POST_URN = 'urn:li:share:7123456789012345678';
 function payload(over: Partial<PublishPayload> = {}): PublishPayload {
   return {
     jobId: 'job-1', provider: 'linkedin_member', contentItemId: 'ci-1', variantId: 'cv-1',
-    accountId: 'acc-1', text: 'Join our free AI class Thursday at 6pm CT.', mediaRefs: [],
+    accountId: 'acc-1', text: 'Join our free AI class Thursday at 6pm CT.', mediaRefs: [], media: [],
     linkUrl: null, disclosureText: null, scheduledFor: '2026-09-14T18:00:00.000Z',
     contentRevision: 3, ...over,
   };
@@ -27,8 +27,10 @@ function adapter(http: LinkedInHttp, author = 'urn:li:person:abc123') {
     provider: 'linkedin_member',
     getToken: async () => TOKEN,
     getAuthorUrn: async () => author,
+    readMedia: async () => Buffer.from('not read in these tests'),
     http,
     clock: () => new Date('2026-09-14T18:00:05.000Z'),
+    sleep: async () => undefined,
   });
 }
 
@@ -148,14 +150,30 @@ describe('validate - failing in the composer instead of at 6am', () => {
     await expect(adapter(ok()).validate(payload({ text: '('.repeat(2000) }))).resolves.toEqual({ ok: true });
   });
 
-  it('names SVG specifically, because the upload endpoint rejects it at step two', async () => {
-    const r = await adapter(ok()).validate(payload({ mediaRefs: ['brand/logo.svg'] }));
-    expect((r as { reasons: string[] }).reasons.join(' ')).toMatch(/does not accept SVG/);
+  it('names an unsupported image type specifically, because the upload endpoint rejects it at step two', async () => {
+    const r = await adapter(ok()).validate(payload({ media: [{ ref: 'media/b/x.svg', mimeType: 'image/svg+xml', altText: 'Logo', byteSize: 4096 }] }));
+    expect((r as { reasons: string[] }).reasons.join(' ')).toMatch(/does not accept image\/svg\+xml/);
   });
 
-  it('says image posting is not implemented rather than publishing text and dropping the image', async () => {
-    const r = await adapter(ok()).validate(payload({ mediaRefs: ['brand/hero.png'] }));
-    expect((r as { reasons: string[] }).reasons.join(' ')).toMatch(/not implemented/);
+  it('accepts a PNG within the network limits', async () => {
+    const r = await adapter(ok()).validate(payload({ media: [{ ref: 'media/b/hero.png', mimeType: 'image/png', altText: 'Hero', byteSize: 2_000_000 }] }));
+    expect(r).toEqual({ ok: true });
+  });
+
+  it('says video posting is not implemented rather than publishing text and dropping the video', async () => {
+    const r = await adapter(ok()).validate(payload({ media: [{ ref: 'media/b/clip.mp4', mimeType: 'video/mp4', altText: 'Clip', byteSize: 9_000_000 }] }));
+    expect((r as { reasons: string[] }).reasons.join(' ')).toMatch(/video posting is not implemented/);
+  });
+
+  it('refuses more images than the network allows on this kind of post, and an oversize one', async () => {
+    // linkedin_member: 1 image, 8 MB (providerCapabilities).
+    const two = await adapter(ok()).validate(payload({ media: [
+      { ref: 'media/b/a.png', mimeType: 'image/png', altText: 'A', byteSize: 1000 },
+      { ref: 'media/b/b.png', mimeType: 'image/png', altText: 'B', byteSize: 1000 },
+    ] }));
+    expect((two as { reasons: string[] }).reasons.join(' ')).toMatch(/allows 1 image on this kind of post; this one has 2/);
+    const big = await adapter(ok()).validate(payload({ media: [{ ref: 'media/b/big.png', mimeType: 'image/png', altText: 'Big', byteSize: 9 * 1024 * 1024 }] }));
+    expect((big as { reasons: string[] }).reasons.join(' ')).toMatch(/9\.0 MB; LinkedIn's limit is 8 MB/);
   });
 });
 

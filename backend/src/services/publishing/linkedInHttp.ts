@@ -1,5 +1,3 @@
-import type { LinkedInHttp, LinkedInHttpResponse } from './linkedInAdapter';
-
 /**
  * The real HTTP transport for the LinkedIn adapter, kept in its own file so the adapter itself
  * stays network-free and fully testable.
@@ -8,7 +6,9 @@ import type { LinkedInHttp, LinkedInHttpResponse } from './linkedInAdapter';
  * the reason is specific here: the publishing worker claims a job before calling an adapter, so
  * a hung request holds that claim until the process restarts. One socket waiting on LinkedIn
  * forever is one post that never publishes and never dead-letters, which is the worst of both.
- * 20 s is well past LinkedIn's normal response and well short of the worker's tick.
+ * 20 s is well past LinkedIn's normal response and well short of the worker's tick. The image
+ * upload step passes its own, longer budget: 10 MB to LinkedIn's upload host is a transfer,
+ * not an API call.
  *
  * A timeout throws, and the adapter's caller treats a thrown non-`ProviderPublishError` as
  * TRANSIENT, which is right: a timed-out publish may or may not have landed, and the worker's
@@ -16,6 +16,25 @@ import type { LinkedInHttp, LinkedInHttpResponse } from './linkedInAdapter';
  */
 
 export const LINKEDIN_TIMEOUT_MS = 20_000;
+
+/** Minimal shape of the HTTP call, so the adapter is testable without a network. */
+export interface LinkedInHttpResponse {
+  status: number;
+  headers: Record<string, string>;
+  body: unknown;
+}
+
+export interface LinkedInHttpRequest {
+  method: string;
+  url: string;
+  headers: Record<string, string>;
+  /** A `Buffer` is sent as-is (the image upload); anything else is JSON-encoded. */
+  body?: unknown;
+  /** Per-call override of the transport's default timeout. */
+  timeoutMs?: number;
+}
+
+export type LinkedInHttp = (input: LinkedInHttpRequest) => Promise<LinkedInHttpResponse>;
 
 export class LinkedInTransportError extends Error {
   constructor(message: string, public readonly cause?: unknown) {
@@ -25,14 +44,14 @@ export class LinkedInTransportError extends Error {
 }
 
 export function makeLinkedInHttp(timeoutMs: number = LINKEDIN_TIMEOUT_MS): LinkedInHttp {
-  return async ({ method, url, headers, body }): Promise<LinkedInHttpResponse> => {
+  return async ({ method, url, headers, body, timeoutMs: perCall }): Promise<LinkedInHttpResponse> => {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), perCall ?? timeoutMs);
     try {
       const res = await fetch(url, {
         method,
         headers,
-        body: body === undefined ? undefined : JSON.stringify(body),
+        body: body === undefined ? undefined : Buffer.isBuffer(body) ? new Uint8Array(body) : JSON.stringify(body),
         signal: controller.signal,
       });
 
@@ -53,7 +72,7 @@ export function makeLinkedInHttp(timeoutMs: number = LINKEDIN_TIMEOUT_MS): Linke
       return { status: res.status, headers: flat, body: parsed };
     } catch (err) {
       if ((err as { name?: string })?.name === 'AbortError') {
-        throw new LinkedInTransportError(`LinkedIn did not respond within ${timeoutMs} ms.`, err);
+        throw new LinkedInTransportError(`LinkedIn did not respond within ${perCall ?? timeoutMs} ms.`, err);
       }
       throw new LinkedInTransportError('The request to LinkedIn failed before a response arrived.', err);
     } finally {

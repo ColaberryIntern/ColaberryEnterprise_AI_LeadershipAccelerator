@@ -57,6 +57,8 @@ export type AdapterFactory = (provider: ProviderKey) => SocialProviderAdapter;
 export interface LiveAdapterDeps {
   getToken: (accountId: string) => Promise<string>;
   getAuthorUrn: (accountId: string) => Promise<string>;
+  /** Bytes of an attachment by storage key. Verified against the key's hash on read. */
+  readMedia: (ref: string) => Promise<Buffer>;
 }
 
 /** Lazily resolved so a dry-run factory never loads the models or the vault. */
@@ -70,6 +72,10 @@ function defaultLiveDeps(): LiveAdapterDeps {
       const { getAuthorUrn } = await import('../marketing/channelAccountService');
       return getAuthorUrn(accountId);
     },
+    readMedia: async (ref) => {
+      const { read } = await import('../media/mediaStore');
+      return read(ref);
+    },
   };
 }
 
@@ -81,11 +87,11 @@ function defaultLiveDeps(): LiveAdapterDeps {
  */
 const LIVE_ADAPTERS: Partial<Record<ProviderKey, (deps: LiveAdapterDeps, clock: () => Date) => SocialProviderAdapter>> = {
   linkedin_member: (deps, clock) => new LinkedInAdapter({
-    provider: 'linkedin_member', getToken: deps.getToken, getAuthorUrn: deps.getAuthorUrn,
+    provider: 'linkedin_member', getToken: deps.getToken, getAuthorUrn: deps.getAuthorUrn, readMedia: deps.readMedia,
     http: makeLinkedInHttp(), clock,
   }),
   linkedin_organization: (deps, clock) => new LinkedInAdapter({
-    provider: 'linkedin_organization', getToken: deps.getToken, getAuthorUrn: deps.getAuthorUrn,
+    provider: 'linkedin_organization', getToken: deps.getToken, getAuthorUrn: deps.getAuthorUrn, readMedia: deps.readMedia,
     http: makeLinkedInHttp(), clock,
   }),
 };

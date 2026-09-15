@@ -42,6 +42,20 @@ export interface ConnectionResult {
   expiresAt: string | null;
 }
 
+/**
+ * One attached file, as an adapter needs to see it. The ref is the storage key; the rest is
+ * what a provider's upload step asks for before it will take the bytes (type, size) and what
+ * the post itself carries (alt text). Everything an adapter can check WITHOUT reading the file
+ * is here, so `validate` can refuse a 12 MB PNG on an 8 MB network without touching the disk.
+ */
+export interface PublishMedia {
+  /** Storage key, e.g. `media/<brand>/<sha256>.png`; the same string as in `mediaRefs`. */
+  ref: string;
+  mimeType: string;
+  altText: string | null;
+  byteSize: number | null;
+}
+
 export interface PublishPayload {
   jobId: string;
   provider: ProviderKey;
@@ -50,8 +64,13 @@ export interface PublishPayload {
   /** Null until T003 - no account is connected. Adapters must tolerate it. */
   accountId: string | null;
   text: string;
-  /** Storage keys of attached media, in order. */
+  /**
+   * Storage keys of attached media, in order. Always equal to `media.map((m) => m.ref)`; kept
+   * as its own field because handoff packages persist it by this name.
+   */
   mediaRefs: string[];
+  /** The same attachments with the fields an upload step needs. */
+  media: PublishMedia[];
   linkUrl: string | null;
   disclosureText: string | null;
   /** The UTC instant the job was due. */
