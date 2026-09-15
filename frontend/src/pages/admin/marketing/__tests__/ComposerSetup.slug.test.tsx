@@ -61,14 +61,16 @@ describe('ComposerSetup slug assignment', () => {
 });
 
 describe('ComposerSetup content type', () => {
-  it('warns at the moment a media type is chosen that nothing can be attached yet', () => {
-    // The trap Ali hit: "image" selected, no way to attach one, blocked two steps later at
-    // validation with a message about media items. Say it here instead.
+  it('says, at the moment a media type is chosen, where the file gets attached', () => {
+    // The trap Ali hit: "image" selected, nothing attached, blocked two steps later at
+    // validation with a message about media items. Say it here instead, and point at the
+    // control that resolves it rather than at a workaround.
     render({ values: { ...VALUES, content_type: 'image' } });
     const warning = container.querySelector('[data-testid="media-type-warning"]')!;
     expect(warning).not.toBeNull();
     expect(warning.textContent).toMatch(/does not create one/);
-    expect(warning.textContent).toMatch(/Use text for now/);
+    expect(warning.textContent).toMatch(/Channels › Media/);
+    expect(warning.textContent).not.toMatch(/not available/);
   });
 
   it('says nothing for a text post, which works end to end today', () => {
@@ -76,10 +78,10 @@ describe('ComposerSetup content type', () => {
     expect(container.querySelector('[data-testid="media-type-warning"]')).toBeNull();
   });
 
-  it('labels the media options as unavailable in the dropdown itself', () => {
+  it('labels the media options in the dropdown itself with where the file goes', () => {
     render();
     const options = Array.from(container.querySelectorAll('#composer-type option')).map((o) => o.textContent);
-    expect(options).toContain('image (needs an upload, not available yet)');
+    expect(options).toContain('image (attach a file under Channels)');
     expect(options).toContain('text');
   });
 });

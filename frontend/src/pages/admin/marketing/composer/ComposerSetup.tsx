@@ -46,7 +46,7 @@ export interface ComposerSetupProps {
 }
 
 const CONTENT_TYPES: ContentType[] = ['text', 'image', 'video', 'carousel', 'thread', 'link'];
-/** Types the validator refuses without at least one media item. There is no upload yet. */
+/** Types the validator refuses without at least one media item; attach one under Channels. */
 const MEDIA_TYPES: ReadonlySet<ContentType> = new Set<ContentType>(['image', 'video', 'carousel']);
 
 export default function ComposerSetup({
@@ -89,7 +89,7 @@ export default function ComposerSetup({
           <label className="form-label small mb-1" htmlFor="composer-type">Content type</label>
           <select id="composer-type" className="form-select form-select-sm" value={values.content_type} disabled={busy} onChange={(e) => set('content_type', e.target.value as ContentType)}>
             {CONTENT_TYPES.map((t) => (
-              <option key={t} value={t}>{MEDIA_TYPES.has(t) ? `${t} (needs an upload, not available yet)` : t}</option>
+              <option key={t} value={t}>{MEDIA_TYPES.has(t) ? `${t} (attach a file under Channels)` : t}</option>
             ))}
           </select>
           {MEDIA_TYPES.has(values.content_type) && (
@@ -98,8 +98,9 @@ export default function ComposerSetup({
             // validation with "needs at least one media item" - a trap Ali walked into on the
             // first run. Said here, at the moment of choosing, not two steps later.
             <div className="form-text text-warning" data-testid="media-type-warning">
-              This declares what you will attach; it does not create one. Attaching media is not
-              available yet, so validation will block this post. Use <strong>text</strong> for now.
+              This declares what you will attach; it does not create one. Once the draft exists,
+              attach the file under <strong>Channels &rsaquo; Media</strong>, or validation will
+              block this post.
             </div>
           )}
         </div>

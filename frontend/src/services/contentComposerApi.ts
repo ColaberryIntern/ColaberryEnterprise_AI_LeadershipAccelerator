@@ -232,6 +232,45 @@ export async function draftCanonicalMessage(input: {
   return res.data;
 }
 
+/** Mirrors `ItemMediaView` in backend/src/services/media/mediaAssetService.ts, field for field. */
+export interface ItemMedia {
+  mediaAssetId: string;
+  mimeType: string;
+  byteSize: number | null;
+  width: number | null;
+  height: number | null;
+  altText: string | null;
+  position: number;
+  originalFilename: string | null;
+}
+
+export async function listItemMedia(id: string): Promise<ItemMedia[]> {
+  const res = await api.get(`/api/admin/content/${id}/media`);
+  return res.data.media ?? [];
+}
+
+/**
+ * Multipart, not JSON: the file goes in `file`, the description in `alt_text`.
+ *
+ * The header override is load-bearing. The shared `api` instance defaults to
+ * `Content-Type: application/json`, and axios 1.x, seeing FormData under a JSON content type,
+ * SERIALISES THE FORM TO JSON (`formDataToJSON`) - the file arrives as `{}` and multer sees no
+ * upload. Naming `multipart/form-data` makes axios drop the header and let the browser set the
+ * boundary. Same trick `AdminImportPage.tsx` uses.
+ */
+export async function attachMedia(id: string, file: File, altText: string): Promise<ItemMedia[]> {
+  const form = new FormData();
+  form.append('alt_text', altText);
+  form.append('file', file, file.name);
+  await api.post(`/api/admin/content/${id}/media`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  return listItemMedia(id);
+}
+
+export async function detachMedia(id: string, mediaAssetId: string): Promise<ItemMedia[]> {
+  const res = await api.delete(`/api/admin/content/${id}/media/${mediaAssetId}`);
+  return res.data.media ?? [];
+}
+
 export type ApprovalDecision = 'approved' | 'changes_requested' | 'rejected';
 
 export async function decideApproval(id: string, decision: ApprovalDecision, note: string | null): Promise<{ item: ContentItem }> {
