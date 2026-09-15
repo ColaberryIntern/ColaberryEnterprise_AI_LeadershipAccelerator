@@ -127,3 +127,30 @@ describe('adapt — ordinary curriculum cards are untouched', () => {
     expect(adapt(cardItem({ student_label: 'Self Study' })).student_label).toBe('Self Study');
   });
 });
+
+/**
+ * Project items: the server names the button verb for a task that is not
+ * built (cab84953 gave the Projects page "Submit" / "Demo Day"; the Today tile
+ * kept saying "Build" over a rehearsal). The adapter must carry it through, and
+ * must not invent one for a story.
+ */
+describe('adapt — project items carry the server\'s verb and label', () => {
+  const projectItem = (over: Partial<TodayFeedItem> = {}): TodayFeedItem => cardItem({
+    ref: 'project:t-1', surface: 'project', type: 'project_task', render_band: 'task', card_id: null,
+    title: 'Record a first run-through', project_id: 'p-1', project_task_id: 't-1',
+    points: { builder: 40 }, ...over,
+  });
+
+  it('passes a demo-prep task\'s verb and "Demo Prep" chip to the card', () => {
+    const card = adapt(projectItem({ cta_verb: 'Submit', student_label: 'Demo Prep' }));
+    expect(card.cta_verb).toBe('Submit');
+    expect(card.student_label).toBe('Demo Prep');
+    expect(card.project_task_id).toBe('t-1');
+  });
+
+  it('leaves a build story on the default: null verb, derived label', () => {
+    const card = adapt(projectItem());
+    expect(card.cta_verb).toBeNull();
+    expect(card.student_label).toBe('Project Task');
+  });
+});

@@ -74,6 +74,9 @@ export function adapt(item: TodayFeedItem): TimelineFeedCard {
     // card id (`project:<uuid>`) no card endpoint can resolve.
     project_id: item.project_id ?? null,
     project_task_id: item.project_task_id ?? null,
+    // A demo-prep task is handed in, not built: the server names the verb
+    // ("Submit" / "Demo Day") and the card renders it in place of "Build".
+    cta_verb: item.cta_verb ?? null,
   };
 }
 

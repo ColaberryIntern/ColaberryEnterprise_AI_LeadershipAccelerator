@@ -44,6 +44,20 @@ export function prepXpKey(storyId: PrepStoryId): string {
 }
 
 /**
+ * The verb a tile's button uses for a prep task, or null for anything else.
+ * A story is BUILT and verified from the repo; a prep task is handed in
+ * ("Submit"), and Demo Day is marked by staff ("Demo Day") — the button must
+ * not promise a build where there is nothing to build. The Projects page
+ * mapper (frontend DemoEvidencePanel) makes the same call from the same ids;
+ * this is the server's copy for the Today feed item and the Classroom rail,
+ * which price a task before the frontend ever sees it. Pure.
+ */
+export function prepCtaVerb(storyId: string | null | undefined): 'Submit' | 'Demo Day' | null {
+  if (!isPrepStory(storyId)) return null;
+  return storyId === DEMO_DAY_STORY_ID ? 'Demo Day' : 'Submit';
+}
+
+/**
  * `story_id → points` for every prep task. Reads the two rows once, not per
  * task. A row that is missing or priced at 0 prices its tasks at nothing —
  * they are left OUT of the map, which every consumer already treats as

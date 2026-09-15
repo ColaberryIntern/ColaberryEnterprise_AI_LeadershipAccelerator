@@ -53,6 +53,11 @@ export interface TodayFeedItem {
    *  ("Skill Drop", "Cohort Wins") for a ritual post. Clients MUST prefer this
    *  over deriving a label from `type`, which only ever yields the raw slug. */
   student_label?: string | null;
+  /** Project items only: the verb the tile's button uses when the task is not
+   *  built — "Submit" for a demo-prep task, "Demo Day" for the staff-marked
+   *  presentation. Null/absent means the default ("Build"). Mirrors the
+   *  frontend card's `cta_verb`, which the Projects page sets client-side. */
+  cta_verb?: string | null;
   like_count?: number | null;
   comment_count?: number | null;
 }
