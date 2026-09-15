@@ -101,11 +101,27 @@ describe('attach', () => {
       .rejects.toMatchObject({ errorClass: 'BrandRequired' });
   });
 
-  it('stores a video as-is, with no dimensions claimed', async () => {
-    // Not a real MP4, but the store does not decode video; the honest record is "no dimensions".
-    const out = await attachMedia({ contentItemId: itemId, bytes: Buffer.from('ftypisom-fake-video-bytes-0123456789'), claimedMimeType: 'video/mp4', originalFilename: 'clip.mp4', altText: 'A short clip', uploadedBy: null });
-    expect(out).toMatchObject({ mimeType: 'video/mp4', width: null, height: null });
-    expect(models.MediaAsset.rows[0].metadata.exif_stripped).toBe(false);
+  it('stores a video as-is but READS it: duration, display size (rotation applied), codec, audio', async () => {
+    const mp4 = await fs.readFile(path.join(__dirname, 'fixtures', 'phone-rotated-90.mp4'));
+    const out = await attachMedia({ contentItemId: itemId, bytes: mp4, claimedMimeType: 'video/mp4', originalFilename: 'clip.mp4', altText: 'A short clip', uploadedBy: null });
+    // Coded 96x54 with a 90 degree matrix: the viewer sees 54x96, and so must the validator.
+    expect(out).toMatchObject({ mimeType: 'video/mp4', width: 54, height: 96, durationMs: 1000 });
+    const row = models.MediaAsset.rows[0];
+    expect(row.duration_ms).toBe(1000);
+    expect(row.metadata.exif_stripped).toBe(false);
+    expect(row.metadata.video).toEqual({ codec: 'avc1', codec_family: 'h264', has_audio: false, rotation: 90, major_brand: 'isom' });
+    // Stored as-is: the bytes on disk are the bytes that came in.
+    const stored = await fs.readFile(path.join(tmpRoot, out.storageKey.slice('media/'.length)));
+    expect(stored.equals(mp4)).toBe(true);
+  });
+
+  it('refuses a "video" that is not a readable MP4, at upload, with the fix in the message', async () => {
+    await expect(attachMedia({ contentItemId: itemId, bytes: Buffer.from('ftypisom-fake-video-bytes-0123456789'), claimedMimeType: 'video/mp4', originalFilename: 'clip.mp4', altText: 'A short clip', uploadedBy: null }))
+      .rejects.toMatchObject({ errorClass: 'UnreadableVideo', status: 415 });
+    const fragmented = await fs.readFile(path.join(__dirname, 'fixtures', 'fragmented.mp4'));
+    await expect(attachMedia({ contentItemId: itemId, bytes: fragmented, claimedMimeType: 'video/mp4', originalFilename: 'frag.mp4', altText: 'A short clip', uploadedBy: null }))
+      .rejects.toMatchObject({ errorClass: 'UnreadableVideo', message: expect.stringMatching(/Re-export/) });
+    expect(models.MediaAsset.rows).toHaveLength(0);
   });
 });
 
