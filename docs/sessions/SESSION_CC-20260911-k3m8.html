@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, September 14, 2026 at 3:36 PM</div>
-    <div><span class="sid">CC-20260911-k3m8</span><span class="count">14 changes</span></div>
+    <div class="meta">Generated Tuesday, September 15, 2026 at 9:57 AM</div>
+    <div><span class="sid">CC-20260911-k3m8</span><span class="count">17 changes</span></div>
   </header>
   <main>
     
@@ -267,6 +267,51 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">Production, independent of the scripts that wrote it - `verifyCertBankDrift` OK, `auditCertBank` exit 0 with every measurement pasted above, bank counts approved 534 · draft 149 · retired 99 read from the database.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Not visually verified in the admin panel (the scorecard&#39;s API contract is unit-tested and the panel type-checks). The lengthener&#39;s three contract rounds this session - letter labels, extend-not-rewrite, no disparaging additions - each came from reading the output after every gate had passed; the hardening log in the sweep skill carries all three.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">15</span>
+          <h2>**Triage v3: a blind read before the argument, so the reading list is what a person would get wrong**</h2>
+          <span class="badge">2026-09-14</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Re-running the stored triage over the current 300 (the table held verdicts from before the rewrite) flagged **53 of the first 100 - every one medium, every one `defensible_distractor`, every one phrased &quot;could be seen as&quot; or &quot;a valid alternative&quot;**, the hedged form the v2 prompt says loses. A reviewer judging its own argument is not independent of it. `reviewQuestion` now runs a **blind read first** (`blindAnswer`, gpt-4o, sees the stem and options only, never the key or rationales): a reader who chooses a different option is `needs_human`/**high**/`answer_disputed` and no argue call is spent; only when the blind read agrees does the argue-against step run, and an argument the blind read did not share is recorded at **low** - on the record, off the reading list. `triageQuestion` is unchanged as the pure argue step, so its 25 tests stand. Prompt version `v3-blind-then-argue`, so the run is a new opinion and the report (which filters by model and version) shows v3 only. The runner, the length pass and the generator all use `reviewQuestion`; the runner&#39;s summary breaks the count down by severity and says how many were blind disputes. The v2 partial run (100 rows, `triage-20260914T210222`) is left as history.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` clean; `jest -c jest.ci.config.ts` over certPrep and scripts: **71 suites, 997 tests pass** - the blind prompt is asserted never to contain the key, the marking or a rationale; disagreement is high with one call; agreement plus a medium argument is low with the reason prefixed; agreement plus a high argument stays high; a failed blind read leaves the argue verdict unchanged and says so; an argue error is still an error.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The stored `reviewer_model` column records the argue model; the process is identified by the prompt version. Docs PR #2549 had its PROGRESS.md hunk dropped after a conflict - this tree treats that file as sealed - and carries `docs/sessions/` only.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">16</span>
+          <h2>**Triage v3 run over all 300 on production; the report leads with the reading list and files the rest as noted**</h2>
+          <span class="badge">2026-09-14</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">#2554 deployed (`f0a6d605`); `triageCertQuestions --write` in three resumable chunks of 100 under `v3-blind-then-argue`. **Across 300: 25 high (every one a blind read choosing a different answer, with its reason), 1 medium (a failed blind call, argue verdict stood), 137 low, 137 no objection.** Under v2 the first 100 alone had produced 53 mediums. The report email would then have listed all 163 flagged rows in key order under a subject saying &quot;163 of 300 need your judgement&quot; - the highs not even first. `buildTriageReportHtml` now sorts by severity, counts only high/medium/error as &quot;need your judgement&quot;, files the lows under &quot;Noted, not required reading&quot; as one-line rows, explains the blind read in the header, and the subject reads &quot;25 of 300 need your judgement, 137 noted&quot;.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` clean; `jest -c jest.ci.config.ts` over certPrep and scripts: **71 suites, 1001 tests pass** - highs before lows whatever the arrival order, the counts split correctly with the quiet count still computed from the full flagged set, the noted section absent when empty. Production counts read from `cert_question_triage` by prompt version.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Report to be sent to ali@colaberry.com with `--report-only --send` once this deploys. The 25 are 8% of the bank; each carries what a strong reader chose instead and why - the list a person can actually work through.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">17</span>
+          <h2>**Triage report sent; the certification workstream closed out**</h2>
+          <span class="badge">2026-09-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">#2557 merged and deployed (`e01e463c`). `triageCertQuestions --report-only --send --to ali@colaberry.com` read the 300 stored v3 verdicts and sent **&quot;CCAR-F triage: 26 of 300 need your judgement, 137 noted&quot;** - the 25 blind disputes plus the one item whose blind read failed, with the 137 low-severity arguments filed below as noted. Nothing was approved and nothing became servable by the send.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Runner output on production: `already: 300 triaged at this revision by this model and prompt`, `report: sent to ali@colaberry.com` with the subject above.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Where the bank stands at close:** 300 items approved, 5 non-overlapping mocks, 13 of 13 whole-bank checks passing live (positions 25% each way, correct-is-longest 27% against 66% at the start of the week, no letter labels, no mixed punctuation, 300/300 at their rubric ceiling), drift clean, every item carrying a v3 triage verdict, and a 26-item reading list in Ali&#39;s inbox. **Left open, deliberately:** the sweep&#39;s approve step re-stamps already-approved rows (harmless); the drift checker counts the two withdrawn identities as `EXTRA: 2`; 149 superseded drafts sit hidden in the table; the generated half&#39;s 70 balancer edits were rewrites rather than extensions (model text, re-triaged, no author&#39;s voice at stake). Item statistics need ~20 exposures per item before real difficulty can be read - 22 sittings so far. This session&#39;s `PROGRESS.md` entries predate the discovery that this tree treats the file as sealed; this file is the record.</span></div>
           
         </div>
       </article>
