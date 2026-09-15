@@ -6,6 +6,7 @@ import { useIsExplorer } from '../useIsExplorer';
 import ProjectPreview from './ProjectPreview';
 import ProjectInterior, { taskToFeedCard } from './ProjectInterior';
 import AddStoryPanel from './AddStoryPanel';
+import RepoWriteAccessBanner from './RepoWriteAccessBanner';
 import NextSessionStrip from './NextSessionStrip';
 import {
   resolveBackendProjectId, startBuild as startServerBuild, pollBuild,
@@ -255,6 +256,7 @@ const ProjectsPage: React.FC = () => {
    * empty map, which renders no badges at all.
    */
   const [repoSync, setRepoSync] = useState<Record<string, string>>({});
+  const [repoUrl, setRepoUrl] = useState<Record<string, string>>({});
 
   const loadArchived = useCallback(async () => {
     const r = await fetchArchivedProjects();
@@ -276,10 +278,13 @@ const ProjectsPage: React.FC = () => {
         const rows = res?.data?.projects;
         if (!Array.isArray(rows)) return;
         const next: Record<string, string> = {};
+        const urls: Record<string, string> = {};
         for (const r of rows) {
           if (r?.id && typeof r.repo_sync === 'string') next[String(r.id)] = r.repo_sync;
+          if (r?.id && typeof r.repo_url === 'string') urls[String(r.id)] = r.repo_url;
         }
         setRepoSync(next);
+        setRepoUrl(urls);
       })
       .catch(() => { /* no badge is the correct degraded state */ });
     return () => { alive = false; };
@@ -611,6 +616,14 @@ const ProjectsPage: React.FC = () => {
                 0 of 3. Farhat read exactly that on a project she was not
                 building in, and had no way to find out. */}
             <ProjectDriftBanner onSwitched={() => { void refreshProjectsFromBackend(); }} />
+            {/* Read works, write does not: the Command Center and the pushed
+                documents freeze. Rendered here, not as a tooltip, because this
+                is the screen a student is on when they notice. */}
+            <RepoWriteAccessBanner
+              state={repoSync[active.id]}
+              repoUrl={repoUrl[active.id]}
+              onOpenWorkspace={() => openTaskWorkspace(active.id, activeNext?.task ?? null)}
+            />
             <ProjectInterior
               project={active}
               condensed={condensed}
