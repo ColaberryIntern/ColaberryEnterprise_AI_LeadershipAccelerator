@@ -1,6 +1,7 @@
 import React from 'react';
 import { AgentDetail } from '../../../services/agentDetailApi';
 import { AUTONOMY_LEVELS, AUTONOMY_LEVEL_DESCRIPTIONS, AutonomyLevel } from '../../../services/workforceOrgChartApi';
+import { LEVEL_PILL_CLASS } from './AgentDetailV2Header';
 import { timeAgo } from '../shell/trust';
 import { getTicketTypeLabel } from '../../../utils/ticketTypeMeta';
 import AgentOverviewV2Tickets from './AgentOverviewV2Tickets';
@@ -74,7 +75,7 @@ export default function AgentOverviewV2MainColumn({ detail }: Props) {
 
           <dl className="adv2-rows" style={{ marginTop: 18 }}>
             <dt>Autonomy level (Permitted)</dt>
-            <dd>{agent.autonomy_level || 'Not yet set'}</dd>
+            <dd>{agent.autonomy_level ? <span className={`adv2-pill ${LEVEL_PILL_CLASS[agent.autonomy_level]}`}>{agent.autonomy_level}</span> : 'Not yet set'}</dd>
             {trust_contract.trigger_type ? (
               <>
                 <dt>Trigger</dt><dd>{trust_contract.trigger_type}</dd>
