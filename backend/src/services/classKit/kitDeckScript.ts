@@ -132,6 +132,19 @@ export function deckScript(): string {
   // kit-token/admin-gated presenter-notes endpoint, never the student-facing
   // companion-state one (see sessionLiveStateService.ts / getCompanionState,
   // which whitelists its own return fields and does not include this).
+  //
+  // ORDERING. Every broadcast is stamped with this tab's deck_id and a rising
+  // seq, and the server refuses a write whose seq is below what it already
+  // holds from the same tab. Without that, two quick slide advances put two
+  // POSTs in flight; when the earlier one landed last, the stored position sat
+  // one slide behind the projector until the next broadcast, and the phone
+  // showed the previous slide's arrival notes (Session 16, 2026-09-14). The
+  // superseded request is also aborted client-side, and a heartbeat re-sends
+  // the current view every few seconds so a dropped POST heals on its own
+  // instead of waiting for the next click.
+  var deckId = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  var broadcastSeq = 0;
+  var broadcastAbort = null;
   function broadcastCurrent(){
     var live = K.live || {};
     if (!live.enabled || !live.broadcastEndpoint) return;
@@ -169,9 +182,13 @@ export function deckScript(): string {
       prompt: sm.prompt || undefined,
       presenter_tip: sayText, presenter_preface: preface, next_title: nextTitle,
       diagram_fullscreen: diagramFull,
+      deck_id: deckId, seq: ++broadcastSeq,
     };
+    if (broadcastAbort) { try { broadcastAbort.abort(); } catch (e) {} }
+    broadcastAbort = (typeof AbortController === 'function') ? new AbortController() : null;
     fetch(live.broadcastEndpoint + '?t=' + encodeURIComponent(live.token || ''), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      signal: broadcastAbort ? broadcastAbort.signal : undefined,
     }).catch(function(){});
   }
 
@@ -556,6 +573,12 @@ export function deckScript(): string {
   renderPulse(); show(0);
   setInterval(updatePace, 1000);
   if (live.enabled){ pollLive(); setInterval(pollLive, live.pollMs || 4000); }
+  // Broadcast heartbeat: the current view again every 5s. Idempotent on the
+  // server (same slide, higher seq); it is what recovers a POST that never
+  // arrived, so the phone stops depending on the next click to catch up.
+  if (live.enabled && live.broadcastEndpoint){
+    setInterval(function(){ if (document.visibilityState !== 'hidden') broadcastCurrent(); }, 5000);
+  }
 })();
 `;
 }

@@ -66,6 +66,8 @@ function bootDeck(opts: {
   /** Extra fields merged onto each slide's __KIT__ model (prompt_brief, etc). */
   slideMeta?: Array<Record<string, unknown>>;
   fetch?: (...args: unknown[]) => Promise<unknown>;
+  /** Extra globals for the sandbox (e.g. a fake AbortController). */
+  extraGlobals?: Record<string, unknown>;
 } = {}) {
   const elementIds = [
     'kprogress', 'kcounter', 'knotes', 'kstart', 'kpaceclock', 'kpaceseg',
@@ -124,6 +126,7 @@ function bootDeck(opts: {
     clearTimeout: () => {},
     console,
     __mockNow__: 1_700_000_000_000,
+    ...(opts.extraGlobals || {}),
   };
 
   const context = vm.createContext(sandbox);
@@ -403,5 +406,89 @@ describe('Class Kit deck latecomer QR', () => {
 
     deck.clickPrev(); // back to the cover
     expect(deck.elements.klateqr.classList.contains('show')).toBe(false);
+  });
+});
+
+
+/**
+ * Session 16 (2026-09-14): the instructor's phone showed the PREVIOUS slide's
+ * arrival notes on some slides, and corrected itself only when the diagram
+ * was clicked. Two quick advances put two broadcast POSTs in flight; the
+ * earlier one landed last and the stored position sat one slide behind. Every
+ * broadcast now carries a per-tab deck_id and a rising seq (the server
+ * refuses a lower seq from the same tab), the superseded request is aborted,
+ * and a heartbeat re-sends the current view so a dropped POST heals itself.
+ */
+describe('broadcastCurrent ordering', () => {
+  const live = { enabled: true, broadcastEndpoint: 'https://example.test/broadcast', token: 'tok' };
+
+  it('stamps every broadcast with one deck_id per tab and a strictly rising seq', () => {
+    const calls: Array<{ body: any }> = [];
+    const deck = bootDeck({
+      slideCount: 3, live,
+      fetch: (_url: unknown, init: unknown) => {
+        calls.push({ body: JSON.parse((init as { body: string }).body) });
+        return Promise.resolve({ ok: true });
+      },
+    });
+    deck.clickNext();
+    deck.clickNext();
+    expect(calls.map((c) => c.body.slide_index)).toEqual([0, 1, 2]);
+    expect(calls.map((c) => c.body.seq)).toEqual([1, 2, 3]);
+    const ids = new Set(calls.map((c) => c.body.deck_id));
+    expect(ids.size).toBe(1);
+    expect([...ids][0]).toMatch(/^d[a-z0-9]+$/);
+  });
+
+  it('aborts the in-flight POST when a newer broadcast supersedes it', () => {
+    const aborted: number[] = [];
+    let created = 0;
+    class FakeAbortController {
+      signal: { n: number };
+      constructor() { created += 1; this.signal = { n: created }; }
+      abort() { aborted.push(this.signal.n); }
+    }
+    const signals: number[] = [];
+    const deck = bootDeck({
+      slideCount: 3, live,
+      extraGlobals: { AbortController: FakeAbortController },
+      fetch: (_url: unknown, init: unknown) => {
+        signals.push((init as { signal: { n: number } }).signal.n);
+        return new Promise(() => {}); // never resolves — stays in flight
+      },
+    });
+    deck.clickNext();
+    deck.clickNext();
+    // Three requests were started; the first two were cancelled the moment the
+    // next one fired, so only the latest can ever land.
+    expect(signals).toEqual([1, 2, 3]);
+    expect(aborted).toEqual([1, 2]);
+  });
+
+  it('re-sends the current view on a heartbeat with a higher seq, so a lost POST recovers', () => {
+    const calls: Array<{ body: any }> = [];
+    const deck = bootDeck({
+      slideCount: 2, live,
+      fetch: (_url: unknown, init: unknown) => {
+        calls.push({ body: JSON.parse((init as { body: string }).body) });
+        return Promise.resolve({ ok: true });
+      },
+    });
+    deck.clickNext();
+    const before = calls.length;
+    // The heartbeat is the last interval registered (after the pace clock and
+    // the pulse poll), so the pace-clock `tick()` helper is unaffected.
+    deck.intervalFns[deck.intervalFns.length - 1]();
+    expect(calls.length).toBe(before + 1);
+    const last = calls[calls.length - 1].body;
+    expect(last.slide_index).toBe(1);
+    expect(last.seq).toBe(calls[before - 1].body.seq + 1);
+    expect(last.deck_id).toBe(calls[before - 1].body.deck_id);
+  });
+
+  it('registers no heartbeat when live is disabled', () => {
+    const deck = bootDeck({ slideCount: 1, live: { enabled: false } });
+    // pace clock only
+    expect(deck.intervalFns.length).toBe(1);
   });
 });
