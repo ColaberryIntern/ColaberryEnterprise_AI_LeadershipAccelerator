@@ -226,8 +226,9 @@ describe('the list: scope, projection, filters', () => {
 });
 
 describe('validation (Zod) — 400 before any business logic', () => {
-  it('limit 0, limit 101, an unknown mode, an empty subject_ref, a non-uuid brand, a non-uuid id', async () => {
-    for (const q of ['limit=0', 'limit=101', 'mode=nonsense', 'subject_ref=', 'brand_id=not-a-uuid']) {
+  it('limit 0, limit 101, offset -1, an unknown mode, an empty and an over-long subject_ref, a non-uuid brand or tenant, a non-uuid id', async () => {
+    const tooLong = 'subject_ref=' + 'x'.repeat(129); // the column is STRING(128)
+    for (const q of ['limit=0', 'limit=101', 'offset=-1', 'mode=nonsense', 'subject_ref=', tooLong, 'brand_id=not-a-uuid', 'tenant_id=not-a-uuid']) {
       const res = await auth(request(app()).get(`${LIST}?${q}`));
       expect(res.status).toBe(400);
       expect(res.body).toMatchObject({ error: 'Invalid request', details: expect.any(Array) });
