@@ -214,6 +214,12 @@ export interface ProjectSummaryDto {
   /** Null when the caller did not resolve connection state for this list. */
   repo_sync: ProjectRepoSync | null;
   /**
+   * Where the repo lives, so a `blocked` student can be sent straight to its
+   * collaborators page on GitHub instead of being told to go and find it.
+   * Null when the caller did not resolve connection state, or there is no repo.
+   */
+  repo_url: string | null;
+  /**
    * True when this row is platform infrastructure rather than student work.
    *
    * Exists so the CLIENT can tell the two apart. The listing itself must keep
@@ -515,6 +521,7 @@ export function toProjectSummaryDto(
     health_score: p.health_score ?? null,
     is_active: activeProjectId != null && String(p.id) === String(activeProjectId),
     repo_sync: connection === undefined ? null : repoSyncFrom(connection),
+    repo_url: connection?.repo_url ?? null,
     is_protected: isProtectedProject(p.id),
   };
 }
