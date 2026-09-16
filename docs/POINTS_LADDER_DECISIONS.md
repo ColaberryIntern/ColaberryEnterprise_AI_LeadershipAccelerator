@@ -27,7 +27,7 @@ Decided by Ali on 2026-09-16 against `docs/POINTS_LADDER_AUDIT_2026-09-16.md` §
 
 ## Milestone definitions
 
-- **Curriculum complete:** every published graded card in each of the 12 weeks is completed by the student. Latched with a date on first satisfaction.
+- **Curriculum complete:** every published graded card *required of the student's cohort* (D8) in each of the 12 weeks is completed by the student. Latched with a date on first satisfaction.
 - **Project complete:** a published Student Build Pipeline plan in which every plan story, including STORY-000, is `verified` under the Build Verification Contract. Latched (first-write-wins) on the project.
 - **Certification approved:** a `student_certifications` row the student created by upload, that a staff member approved. Pending and rejected rows do not count.
 
@@ -45,11 +45,13 @@ Decided by Ali on 2026-09-16 against `docs/POINTS_LADDER_AUDIT_2026-09-16.md` §
 - Projects: 7 students hold at least one fully verified build. Farhat: *AI Support Workflow Assistant* 8/8 ✓, *Kashmir Craft AI Order Assistant* 14/15. Swati Raman: *SupplyMind AI* 16/16 ✓.
 - 11 students hold a partially verified build and would move on their next verified story.
 
-### D8 — pending: does Claude Studio count toward "curriculum complete"?
+### D8 — decided (Ali, 2026-09-16): Claude Studio counts from the next batch
 
-- **(A) No — treat Claude Studio as enrichment for the milestone** (recommended). One registry flag; the other seven graded types stay required. Effect: Farhat → AI Builder II today (curriculum ✓ + 1 project), AI Builder III when Kashmir Craft's last story verifies; Quincy → AI Builder III.
-- **(B) Yes — it counts.** Nobody is Program Graduate until they complete twelve Studios; Farhat stays AI Builder I until then.
-- **(C) It counts from a date** — required for cohorts that started after the Studios were published, enrichment for earlier ones.
+> "A but only for this batch because I added it late. Future batches it will count."
+
+Implemented as a rule, not an exemption: a graded card type may declare `curriculum_required_from` (an ISO date) in the type registry, and it is required only of cohorts whose `start_date` is on or after that date. Claude Studio carries `2026-11-01`, so it is not required of the April 2026 and July 2026 cohorts and is required from the November 2026 cohort (starts 2026-11-12) onward. A student with no cohort is held to everything. Any type added late in future gets its own date the same way. (Card `created_at` could not be the rule: the whole July curriculum was authored week-by-week during the cohort, July 9 – Aug 26; only the Studios came after, on Sept 8.)
+
+**Dry run re-run with D8 (read-only, 14:51 UTC):** 77 required graded cards for the July cohort. Curriculum complete: **2** (Farhat Beig 77/77, Quincy Nkwain Ninying 77/77). Movers: **Farhat Beig → AI Builder II** (curriculum + *AI Support Workflow Assistant* 8/8; *Kashmir Craft* 14/15 pending), **Quincy → AI Builder III** (curriculum + CoreOps + Ambit), **Firas → AI Builder II** (Ledgerly + Sifra; curriculum 16/77). After: entry 457 · I 26 · II 2 · III 1.
 
 ## Invariants kept
 
