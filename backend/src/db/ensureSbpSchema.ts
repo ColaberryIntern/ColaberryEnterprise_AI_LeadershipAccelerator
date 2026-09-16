@@ -108,6 +108,12 @@ export async function ensureSbpSchema(): Promise<void> {
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS verification_json JSONB`,
 
     `ALTER TABLE build_intake ADD COLUMN IF NOT EXISTS answers JSONB`,
+    // Why the last generation failed: { error_class, message, at }. Null while
+    // generating and after a success. Until 2026-09-16 the only record of a
+    // failed build was a log line, and container recreation ate it: a student
+    // whose wizard failed on 11 Sep was found on the 16th with nothing to
+    // explain the five days she spent on the starter template.
+    `ALTER TABLE build_intake ADD COLUMN IF NOT EXISTS last_error JSONB`,
     `CREATE UNIQUE INDEX IF NOT EXISTS build_intake_unique_project ON build_intake (project_id)`,
     `CREATE INDEX IF NOT EXISTS idx_build_intake_enrollment ON build_intake (enrollment_id)`,
     `CREATE INDEX IF NOT EXISTS idx_build_intake_status ON build_intake (status)`,
