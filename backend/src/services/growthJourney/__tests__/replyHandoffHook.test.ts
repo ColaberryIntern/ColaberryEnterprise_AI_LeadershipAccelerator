@@ -52,9 +52,9 @@ describe('recordReplyHandoff', () => {
     expect(m.assignHandoff).toHaveBeenCalledWith({ id: 'h-1' }, ON, AS_OF);
   });
 
-  it('READY_TO_ENROLL is an explicit request: admissions, with the urgent hint; without a message id there is no event ref', async () => {
+  it('READY_TO_ENROLL is an explicit request: admissions, with the urgent hint; without a message id the event is the arrival time, never a constant', async () => {
     await recordReplyHandoff({ leadId: 42, replyClass: 'READY_TO_ENROLL' }, ON, AS_OF);
-    expect(m.createHandoff.mock.calls[0][0].trigger).toEqual({ source: 'reply_route', owner_queue: 'admissions', reason: 'reply_class:READY_TO_ENROLL', urgent_hint: true });
+    expect(m.createHandoff.mock.calls[0][0].trigger).toEqual({ source: 'reply_route', owner_queue: 'admissions', reason: 'reply_class:READY_TO_ENROLL', urgent_hint: true, event_ref: 'received_at:2026-09-16T12:00:00.000Z' });
   });
 
   it('a NOT_INTERESTED reply, a generator-answered class, or no class yields no handoff and touches nothing', async () => {

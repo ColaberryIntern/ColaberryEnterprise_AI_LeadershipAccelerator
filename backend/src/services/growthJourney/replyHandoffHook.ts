@@ -81,7 +81,9 @@ export async function recordReplyHandoff(args: ReplyHandoffArgs, flags: GrowthJo
       },
       trigger: {
         source: 'reply_route', owner_queue, reason: `reply_class:${args.replyClass}`, urgent_hint: args.replyClass === 'READY_TO_ENROLL',
-        ...(args.providerMessageId ? { event_ref: `provider_message:${args.providerMessageId}` } : {}),
+        // The provider message id is the event; an inbound without one (Mandrill always
+        // sets it) is keyed on its arrival, so a later reply is never lost on a closed row.
+        event_ref: args.providerMessageId ? `provider_message:${args.providerMessageId}` : `received_at:${asOf.toISOString()}`,
       },
       decision: null,
       asOf,
