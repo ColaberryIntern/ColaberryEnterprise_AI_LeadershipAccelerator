@@ -6,6 +6,7 @@ import { requestCallback } from '../controllers/v1CallbackController';
 import { handleOpenHouseRegister, handleGetOpenHouseEvent } from '../controllers/openHouseController';
 import { handleGetSalesKb } from '../controllers/publicKbController';
 import { handleGetPublicEventsList } from '../controllers/publicEventsController';
+import { lookupEnrollment } from '../controllers/v1EnrollmentLookupController';
 
 // Generous limit: 300 req/min absorbs bursty training-site traffic while blocking abuse.
 const v1RateLimiter = rateLimit({
@@ -33,5 +34,9 @@ router.get('/api/v1/events', v1RateLimiter, handleGetPublicEventsList);
 // Phase 2 KB Ops (BC #10036783688): DB-backed sales KB. Public GET, no token —
 // frontend/public/knowledge/sales/app.js falls back to its bundled kb-data.js on any failure.
 router.get('/api/v1/knowledge/sales', v1RateLimiter, handleGetSalesKb);
+// Repo2Reputation login gate: "is this email an Accelerator student" against the live
+// enrollment roster, so a partner app never has to fall back to the school database
+// for launch students. Service token required; the email is hashed in the log, never written.
+router.get('/api/v1/enrollments/lookup', v1RateLimiter, requireServiceToken, lookupEnrollment);
 
 export default router;
