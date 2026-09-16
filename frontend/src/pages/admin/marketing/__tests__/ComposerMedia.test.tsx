@@ -86,6 +86,30 @@ describe('ComposerMedia attach rule', () => {
   });
 });
 
+describe('ComposerMedia upload progress', () => {
+  it('shows nothing when no upload is in flight', () => {
+    render();
+    expect(container.querySelector('[data-testid="media-upload"]')).toBeNull();
+  });
+
+  it('while bytes are on the wire: percentage, sent of total, and the file name', () => {
+    render({ upload: { name: 'class-recap.mp4', sent: 41 * 1024 * 1024, total: 82 * 1024 * 1024 } });
+    const label = container.querySelector('[data-testid="media-upload-label"]')!.textContent;
+    expect(label).toBe('50% · 41.0 MB of 82.0 MB');
+    expect(container.textContent).toMatch(/Uploading class-recap\.mp4/);
+    expect(container.querySelector('[role="progressbar"]')!.getAttribute('aria-valuenow')).toBe('50');
+  });
+
+  it('once every byte is sent, says Processing rather than sitting at 100%', () => {
+    // The server still hashes, sniffs and strips EXIF after the last byte; a bar stuck at 100%
+    // reads as hung. The word is the difference.
+    render({ upload: { name: 'hero.png', sent: 9_000_000, total: 9_000_000 } });
+    expect(container.textContent).toMatch(/Processing hero\.png/);
+    expect(container.querySelector('[data-testid="media-upload-label"]')!.textContent).toBe('checking the file');
+    expect(container.querySelector('.progress-bar-animated')).not.toBeNull();
+  });
+});
+
 describe('ComposerMedia attached list', () => {
   it('lists each attachment with its description and removes by asset id', () => {
     const onDetach = jest.fn();

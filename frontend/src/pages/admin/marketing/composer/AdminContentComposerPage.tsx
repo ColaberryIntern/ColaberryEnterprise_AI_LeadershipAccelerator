@@ -6,7 +6,7 @@ import api from '../../../../utils/api';
 import * as composer from '../../../../services/contentComposerApi';
 import type { ComposerAction, ConfirmationSummary, ContentItem, ContentVariant, ExternalPublication, ItemLink, ItemMedia, ProviderKey, ProviderSummary, PublishingJob, VariantProblem } from '../../../../services/contentComposerApi';
 import ComposerSetup, { type CampaignOption, type SetupValues } from './ComposerSetup';
-import ComposerMedia from './ComposerMedia';
+import ComposerMedia, { type UploadState } from './ComposerMedia';
 import ComposerVariants from './ComposerVariants';
 import ComposerPreview from './ComposerPreview';
 import ComposerConfirmation from './ComposerConfirmation';
@@ -41,6 +41,7 @@ export default function AdminContentComposerPage() {
   const [variants, setVariants] = useState<ContentVariant[]>([]);
   const [links, setLinks] = useState<ItemLink[]>([]);
   const [media, setMedia] = useState<ItemMedia[]>([]);
+  const [upload, setUpload] = useState<UploadState | null>(null);
   const [selected, setSelected] = useState<ProviderKey[]>([]);
   const [problems, setProblems] = useState<Record<string, VariantProblem[]>>({});
   const [confirmation, setConfirmation] = useState<ConfirmationSummary | null>(null);
@@ -186,10 +187,15 @@ export default function AdminContentComposerPage() {
   // Media. Reload after each change because the attachment count feeds validation (an
   // `image` post with nothing attached is a blocker) and the confirmation's asset list.
   const attachMedia = (file: File, altText: string) => withItem(async (id) => {
-    const next = await composer.attachMedia(id, file, altText);
-    setMedia(next);
-    await reload(id);
-    say('success', `Attached. ${next.length} media item${next.length === 1 ? '' : 's'} on this post.`);
+    setUpload({ name: file.name, sent: 0, total: file.size });
+    try {
+      const next = await composer.attachMedia(id, file, altText, (sent, total) => setUpload({ name: file.name, sent, total }));
+      setMedia(next);
+      await reload(id);
+      say('success', `Attached. ${next.length} media item${next.length === 1 ? '' : 's'} on this post.`);
+    } finally {
+      setUpload(null);
+    }
   }, 'The file could not be attached.')();
 
   const detachMedia = (mediaAssetId: string) => withItem(async (id) => {
@@ -273,7 +279,7 @@ export default function AdminContentComposerPage() {
             </label>
           ))}
         </div>
-        <ComposerMedia media={media} busy={busy} enabled={Boolean(item)} onAttach={attachMedia} onDetach={detachMedia} />
+        <ComposerMedia media={media} busy={busy} enabled={Boolean(item)} upload={upload} onAttach={attachMedia} onDetach={detachMedia} />
         <div className="d-flex flex-wrap gap-2 mb-3">
           <button type="button" className="btn btn-sm btn-primary" disabled={!item || busy || selected.length === 0} onClick={generate}>Generate variants</button>
           <button type="button" className="btn btn-sm btn-outline-primary" disabled={!item || busy || variants.length === 0 || !setup.destination_url} onClick={makeLinks}>Generate tracked links</button>
