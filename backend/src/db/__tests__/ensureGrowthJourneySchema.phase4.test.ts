@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { GROWTH_JOURNEY_STATEMENTS } from '../ensureGrowthJourneySchema';
+import { GROWTH_JOURNEY_PHASE4_STATEMENTS } from '../growthJourneyPhase4Statements';
 import GrowthJourneyHandoff, { OPEN_HANDOFF_STATUSES } from '../../models/GrowthJourneyHandoff';
 import GrowthJourneyOutcome from '../../models/GrowthJourneyOutcome';
 import GrowthJourneyPolicy from '../../models/GrowthJourneyPolicy';
@@ -286,6 +287,10 @@ describe('growth_journey_policies', () => {
 
 describe('where the three sit, and what they never do', () => {
   it('the run now owns fourteen tables, the Phase 4 three last among the CREATEs and before the brands ALTER', () => {
+    // The three come from the sibling module, spread into the one list: the
+    // sibling's own export is exactly the twelve Phase 4 statements, in order.
+    expect(GROWTH_JOURNEY_PHASE4_STATEMENTS).toHaveLength(12);
+    expect(GROWTH_JOURNEY_PHASE4_STATEMENTS.every((s) => GROWTH_JOURNEY_STATEMENTS.includes(s))).toBe(true);
     const tables = tablesCreated();
     expect(tables).toHaveLength(14);
     expect(tables.slice(-3)).toEqual(['growth_journey_handoffs', 'growth_journey_outcomes', 'growth_journey_policies']);
@@ -326,9 +331,10 @@ describe('where the three sit, and what they never do', () => {
     }
   });
 
-  it('this file and the three models carry no literal control byte (heredoc tripwire)', () => {
+  it('this file, the Phase 4 statements module and the three models carry no literal control byte (heredoc tripwire)', () => {
     for (const file of [
       __filename,
+      path.join(__dirname, '..', 'growthJourneyPhase4Statements.ts'),
       path.join(__dirname, '..', '..', 'models', 'GrowthJourneyHandoff.ts'),
       path.join(__dirname, '..', '..', 'models', 'GrowthJourneyOutcome.ts'),
       path.join(__dirname, '..', '..', 'models', 'GrowthJourneyPolicy.ts'),
