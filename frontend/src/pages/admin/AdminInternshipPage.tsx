@@ -11,6 +11,7 @@ import { InternshipKpi, fetchInternshipKpis } from '../../services/adminInternsh
 import InternshipDocumentPanel from '../../components/admin/internship/InternshipDocumentPanel';
 import InternshipConversionPanel from '../../components/admin/internship/InternshipConversionPanel';
 import InternshipProjectAuthor from './components/InternshipProjectAuthor';
+import FlotationIntakePanel from '../../components/admin/internship/FlotationIntakePanel';
 
 /**
  * AdminInternshipPage — the AI Internship review queue and decision surface.
@@ -269,6 +270,8 @@ const AdminInternshipPage: React.FC = () => {
           </div>
         </SectionCard>
       )}
+
+      <FlotationIntakePanel />
 
       <SectionCard title="Queue" icon="inbox-2-line">
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
