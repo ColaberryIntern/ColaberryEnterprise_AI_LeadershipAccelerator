@@ -242,6 +242,8 @@ export interface ItemMedia {
   altText: string | null;
   position: number;
   originalFilename: string | null;
+  /** Videos only; what the container's own header says. */
+  durationMs: number | null;
 }
 
 export async function listItemMedia(id: string): Promise<ItemMedia[]> {

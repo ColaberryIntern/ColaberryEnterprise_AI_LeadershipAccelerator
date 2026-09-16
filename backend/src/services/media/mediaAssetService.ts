@@ -1,4 +1,5 @@
 import sharp from 'sharp';
+import { looksLikeMp4, probeMp4, Mp4ParseError, type Mp4Facts } from './mp4Probe';
 import { ContentItem, ContentItemMedia, MediaAsset } from '../../models';
 import { WorkflowError, assertWritable } from '../content/contentWorkflowService';
 import { MediaStoreError, assertAcceptable, put } from './mediaStore';
@@ -14,7 +15,10 @@ import { MediaStoreError, assertAcceptable, put } from './mediaStore';
  *   2. STRIP EXIF. A marketing photo taken on a phone carries GPS coordinates, the device
  *      model and a timestamp. Posting that is a privacy leak for whoever took it and a
  *      location disclosure for wherever it was taken. `sharp` re-encodes without metadata.
- *      Videos are stored as-is (stripping video metadata is a different tool and out of
+ *      Videos are stored as-is but READ: the container's own boxes give duration, display
+ *      size (rotation applied), codec and audio presence, which is what every network's video
+ *      rule asks about (mp4Probe.ts). A file that is not a readable MP4 is refused here, at
+ *      upload, not at publish. (Stripping video metadata is a different tool and out of
  *      scope); stated, not hidden.
  *
  * ALT TEXT IS REQUIRED AT UPLOAD, not at publish. Spec 8.4 makes accessibility a
@@ -40,6 +44,7 @@ export interface AttachedMedia {
   byteSize: number;
   width: number | null;
   height: number | null;
+  durationMs: number | null;
   altText: string;
   position: number;
   /** True when the exact bytes were already in this brand's library and were reused. */
@@ -74,6 +79,23 @@ async function normaliseImage(bytes: Buffer, claimed: string): Promise<{ bytes: 
   return { bytes: stripped, mimeType, width: meta.width ?? 0, height: meta.pageHeight ?? meta.height ?? 0 };
 }
 
+/**
+ * What we know about a video before it is stored. Refused with the parser's own reason: the
+ * operator can re-export in seconds, and a wrong duration would let a 12-minute clip through a
+ * 10-minute rule.
+ */
+function probeVideo(bytes: Buffer): Mp4Facts {
+  if (!looksLikeMp4(bytes)) {
+    throw new WorkflowError('That file is not an MP4 video. Export it as MP4 (H.264) and attach it again.', 415, 'UnreadableVideo');
+  }
+  try {
+    return probeMp4(bytes);
+  } catch (err) {
+    if (err instanceof Mp4ParseError) throw new WorkflowError(err.message, 415, 'UnreadableVideo');
+    throw err;
+  }
+}
+
 export async function attachMedia(input: AttachInput): Promise<AttachedMedia> {
   const altText = input.altText.trim();
   if (altText.length < 3) {
@@ -103,12 +125,19 @@ export async function attachMedia(input: AttachInput): Promise<AttachedMedia> {
   let mimeType = input.claimedMimeType;
   let width: number | null = null;
   let height: number | null = null;
+  let durationMs: number | null = null;
+  let video: Mp4Facts | null = null;
   if (entry.kind === 'image') {
     const normalised = await normaliseImage(input.bytes, input.claimedMimeType);
     bytes = normalised.bytes;
     mimeType = normalised.mimeType;
     width = normalised.width;
     height = normalised.height;
+  } else {
+    video = probeVideo(input.bytes);
+    width = video.width;
+    height = video.height;
+    durationMs = video.durationMs;
   }
 
   const stored = await put(item.brand_id, mimeType, bytes);
@@ -128,10 +157,14 @@ export async function attachMedia(input: AttachInput): Promise<AttachedMedia> {
       checksum_sha256: stored.sha256,
       width,
       height,
-      duration_ms: null,
+      duration_ms: durationMs,
       alt_text: altText,
       uploaded_by: input.uploadedBy,
-      metadata: { exif_stripped: entry.kind === 'image', claimed_mime: input.claimedMimeType },
+      metadata: {
+        exif_stripped: entry.kind === 'image',
+        claimed_mime: input.claimedMimeType,
+        ...(video ? { video: { codec: video.codec, codec_family: video.codecFamily, has_audio: video.hasAudio, rotation: video.rotation, major_brand: video.majorBrand } } : {}),
+      },
     } as any);
   } else if (!asset.alt_text) {
     await asset.update({ alt_text: altText });
@@ -156,6 +189,7 @@ export async function attachMedia(input: AttachInput): Promise<AttachedMedia> {
     byteSize: stored.byteSize,
     width,
     height,
+    durationMs,
     altText: asset.alt_text ?? altText,
     position,
     reused,
@@ -171,6 +205,7 @@ export interface ItemMediaView {
   altText: string | null;
   position: number;
   originalFilename: string | null;
+  durationMs: number | null;
 }
 
 export async function listItemMedia(contentItemId: string): Promise<ItemMediaView[]> {
@@ -182,8 +217,9 @@ export async function listItemMedia(contentItemId: string): Promise<ItemMediaVie
     const a = byId.get(l.media_asset_id);
     if (!a) return [];
     return [{
-      mediaAssetId: a.id, mimeType: a.mime_type, byteSize: a.byte_size, width: a.width, height: a.height,
-      altText: a.alt_text, position: l.position, originalFilename: a.original_filename,
+      // BIGINT arrives from Postgres as a string; the view promises a number.
+      mediaAssetId: a.id, mimeType: a.mime_type, byteSize: a.byte_size == null ? null : Number(a.byte_size), width: a.width, height: a.height,
+      altText: a.alt_text, position: l.position, originalFilename: a.original_filename, durationMs: a.duration_ms,
     }];
   });
 }

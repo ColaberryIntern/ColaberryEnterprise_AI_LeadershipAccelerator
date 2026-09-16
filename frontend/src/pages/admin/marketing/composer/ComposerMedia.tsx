@@ -24,6 +24,11 @@ export interface ComposerMediaProps {
 
 const ACCEPT = 'image/png,image/jpeg,image/gif,video/mp4';
 
+function durationLabel(ms: number): string {
+  const s = Math.round(ms / 1000);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
 function sizeLabel(bytes: number | null): string {
   if (bytes === null) return '';
   return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.round(bytes / 1024)} KB`;
@@ -54,6 +59,7 @@ export default function ComposerMedia({ media, busy, enabled, onAttach, onDetach
               <span className="badge text-bg-light border">{m.mimeType.replace(/^(image|video)\//, '')}</span>
               <span className="text-truncate" style={{ maxWidth: '18rem' }}>{m.originalFilename ?? m.mediaAssetId}</span>
               {m.width && m.height && <span className="text-muted">{m.width}×{m.height}</span>}
+              {m.durationMs !== null && <span className="text-muted" data-testid="media-duration">{durationLabel(m.durationMs)}</span>}
               <span className="text-muted">{sizeLabel(m.byteSize)}</span>
               <span className="text-muted fst-italic text-truncate" style={{ maxWidth: '20rem' }}>“{m.altText}”</span>
               <button type="button" className="btn btn-sm btn-link text-danger py-0" disabled={busy} onClick={() => onDetach(m.mediaAssetId)} data-testid={`detach-${m.mediaAssetId}`}>

@@ -14,8 +14,8 @@ let container: HTMLDivElement;
 let root: Root;
 
 const ATTACHED: ItemMedia[] = [
-  { mediaAssetId: 'a1a1a1a1-0000-4000-8000-000000000001', mimeType: 'image/png', byteSize: 2_400_000, width: 1200, height: 628, altText: 'Two people at a whiteboard', position: 0, originalFilename: 'class.png' },
-  { mediaAssetId: 'a1a1a1a1-0000-4000-8000-000000000002', mimeType: 'video/mp4', byteSize: 41_000_000, width: null, height: null, altText: 'A short clip', position: 1, originalFilename: null },
+  { mediaAssetId: 'a1a1a1a1-0000-4000-8000-000000000001', mimeType: 'image/png', byteSize: 2_400_000, width: 1200, height: 628, altText: 'Two people at a whiteboard', position: 0, originalFilename: 'class.png', durationMs: null },
+  { mediaAssetId: 'a1a1a1a1-0000-4000-8000-000000000002', mimeType: 'video/mp4', byteSize: 41_000_000, width: 1080, height: 1920, altText: 'A short clip', position: 1, originalFilename: null, durationMs: 45_000 },
 ];
 
 function render(props: Partial<React.ComponentProps<typeof ComposerMedia>> = {}) {
@@ -95,6 +95,9 @@ describe('ComposerMedia attached list', () => {
     expect(container.textContent).toMatch(/2\.3 MB/);
     expect(container.textContent).toMatch(/Two people at a whiteboard/);
     expect(container.textContent).toMatch(/A short clip/);
+    // The video's length, read from the file, shown before validation has to say it is too long.
+    expect(container.querySelector('[data-testid="media-duration"]')!.textContent).toBe('0:45');
+    expect(container.querySelectorAll('[data-testid="media-duration"]')).toHaveLength(1); // images have none
 
     act(() => { container.querySelector<HTMLButtonElement>(`[data-testid="detach-${ATTACHED[1].mediaAssetId}"]`)!.click(); });
     expect(onDetach).toHaveBeenCalledWith(ATTACHED[1].mediaAssetId);
