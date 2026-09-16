@@ -160,9 +160,15 @@ describe('validate - failing in the composer instead of at 6am', () => {
     expect(r).toEqual({ ok: true });
   });
 
-  it('says video posting is not implemented rather than publishing text and dropping the video', async () => {
-    const r = await adapter(ok()).validate(payload({ media: [{ ref: 'media/b/clip.mp4', mimeType: 'video/mp4', altText: 'Clip', byteSize: 9_000_000 }] }));
-    expect((r as { reasons: string[] }).reasons.join(' ')).toMatch(/video posting is not implemented/);
+  it('accepts one MP4 within the network limits, and refuses over-size, over-length, non-MP4, two videos, or video with an image', async () => {
+    const clip = { ref: 'media/b/clip.mp4', mimeType: 'video/mp4', altText: 'Clip', byteSize: 90_000_000, durationMs: 45_000 };
+    await expect(adapter(ok()).validate(payload({ media: [clip] }))).resolves.toEqual({ ok: true });
+    const reasons = async (media: NonNullable<Partial<PublishPayload>['media']>) => ((await adapter(ok()).validate(payload({ media }))) as { reasons: string[] }).reasons.join(' ');
+    expect(await reasons([{ ...clip, byteSize: 201 * 1024 * 1024 }])).toMatch(/201\.0 MB; LinkedIn's video limit is 200 MB/);
+    expect(await reasons([{ ...clip, durationMs: 601_000 }])).toMatch(/runs 601 s; LinkedIn's limit is 600 s/);
+    expect(await reasons([{ ...clip, mimeType: 'video/quicktime' }])).toMatch(/MP4 video only, not video\/quicktime/);
+    expect(await reasons([clip, clip])).toMatch(/one video per post; this post has 2/);
+    expect(await reasons([clip, { ref: 'media/b/hero.png', mimeType: 'image/png', altText: 'Hero', byteSize: 1000 }])).toMatch(/cannot also carry images or a document/);
   });
 
   it('refuses more images than the network allows on this kind of post, and an oversize one', async () => {
