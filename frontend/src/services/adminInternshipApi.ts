@@ -226,6 +226,43 @@ export async function reviewInternshipProject(applicationId: string, question?: 
   return data;
 }
 
+// ── Author & assign a project (manager's delivery surface) ───────────────────
+
+export interface AuthoredStoryInput {
+  title: string;
+  narrative?: string | null;
+  acceptance?: string[] | null;
+  build?: string | null;
+  blocked_by?: string[];
+}
+export interface AuthoredReleaseInput {
+  key: string;
+  name: string;
+  stories: AuthoredStoryInput[];
+}
+export interface AuthoredProjectInput {
+  name: string;
+  industry?: string | null;
+  releases: AuthoredReleaseInput[];
+}
+export interface AuthoredProjectResult {
+  project_id: string;
+  name: string;
+  releases: number;
+  stories: number;
+}
+
+export async function authorInternshipProject(
+  applicationId: string,
+  project: AuthoredProjectInput,
+): Promise<AuthoredProjectResult> {
+  const { data } = await api.post<AuthoredProjectResult>(
+    `/api/admin/internship/applications/${applicationId}/author-project`,
+    project,
+  );
+  return data;
+}
+
 // ── Documents ───────────────────────────────────────────────────────────────
 
 export interface AdminDocumentRow {
