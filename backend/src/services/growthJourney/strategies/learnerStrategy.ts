@@ -281,11 +281,22 @@ export function generateLearnerCandidates(ctx: JourneySubjectContext): LearnerGe
 
 /* ── the strategy ──────────────────────────────────────────────────────────── */
 
-export const learnerStrategy: JourneyStrategy = Object.freeze({
+/**
+ * The strategy, with the generation record exposed the way the B2B strategies
+ * expose theirs. T313's shadow-run fixtures found the gap: T311's writer
+ * persists what each generator declined and why through `generateWithReport`,
+ * and without the hook every learner decision's `eligibility.not_emitted` was
+ * an empty list - the eight "no profile" entries this module already computed
+ * never reached the row.
+ */
+export type LearnerStrategy = JourneyStrategy & { generateWithReport: (ctx: JourneySubjectContext) => LearnerGeneration };
+
+export const learnerStrategy: LearnerStrategy = Object.freeze({
   program_kind: 'learner' as const,
   ruleset_version: LEARNER_RULESET_VERSION,
   hardStops: learnerHardStops,
   generate: (ctx: JourneySubjectContext): JourneyCandidate[] => generateLearnerCandidates(ctx).candidates,
+  generateWithReport: (ctx: JourneySubjectContext): LearnerGeneration => generateLearnerCandidates(ctx),
   emptyReason: (ctx: JourneySubjectContext): string | null => learnerEmptyReason(generateLearnerCandidates(ctx)),
 });
 
