@@ -383,16 +383,19 @@ async function ingestZoomRecordingsForSession(
         parts: instances.length,
       });
       if (finding) {
-        // Lazy: alertService pulls the Alert model in, and suites that import
-        // this service stub the database.
-        const { emitAlert } = await import('./alertService');
-        await emitAlert({
-          type: 'warning', severity: 3, urgency: 'high', sourceType: 'system', impactArea: 'live_sessions',
-          entityType: 'live_session', entityId: session.id,
-          title: finding.title, description: finding.description, metadata: finding.metadata,
-        }).catch((err: any) => {
+        // The alert can never take the recording down: the import is lazy
+        // (alertService pulls the Alert model in, and suites that import this
+        // service stub the database) and the whole step is caught.
+        try {
+          const { emitAlert } = await import('./alertService');
+          await emitAlert({
+            type: 'warning', severity: 3, urgency: 'high', sourceType: 'system', impactArea: 'live_sessions',
+            entityType: 'live_session', entityId: session.id,
+            title: finding.title, description: finding.description, metadata: finding.metadata,
+          });
+        } catch (err: any) {
           console.error(JSON.stringify({ timestamp: new Date().toISOString(), level: 'error', service: 'backend', event: 'recording_composition_alert_failed', outcome: 'failure', error_class: err?.error_class || err?.name || 'Error', context: { session_id: session.id, message: err?.message } }));
-        });
+        }
       }
     }
   }
