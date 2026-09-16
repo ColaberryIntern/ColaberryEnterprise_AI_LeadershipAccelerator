@@ -2672,6 +2672,18 @@ async function start(): Promise<void> {
   // Sponsor portal magic-link audit trail (STORY-001) — sponsor_portal_audit_log.
   await ensureSponsorPortalAuditSchema();
   await ensureSbpSchema();
+  // Builds the last process left mid-generation. The queue that owned them died with it;
+  // the rows did not. Before listen, so nothing can race a resumed run - and a failure here
+  // is a log line, never a boot that does not happen.
+  try {
+    const { recoverStrandedBuilds } = await import('./services/sbp/sbpOrchestrator');
+    const swept = await recoverStrandedBuilds();
+    if (swept.resumed.length || swept.abandoned.length) {
+      console.log(`[SBP] resumed ${swept.resumed.length} stranded build(s), abandoned ${swept.abandoned.length}`);
+    }
+  } catch (err: any) {
+    console.warn('[SBP] stranded-build sweep failed:', err?.message);
+  }
   // Cert Prep (Claude Certified Architect readiness) — eight additive tables.
   // Ensured at boot like its siblings, and NOT gated on CERT_PREP_ENABLED: the
   // flag decides whether the feature answers requests, not whether its tables

@@ -270,6 +270,18 @@ export async function saveIntake(intake: BuildIntake): Promise<{ project_id: str
   return rows[0];
 }
 
+/**
+ * Every intake in a given state, oldest first. Exists for the one reader that needs the
+ * whole set rather than one project: boot-time recovery of builds stranded at `generating`
+ * when the process that was generating them went away.
+ */
+export async function listIntakesByStatus(status: string, limit = 100): Promise<BuildIntake[]> {
+  return sequelize.query<BuildIntake>(
+    `SELECT * FROM build_intake WHERE status = :status ORDER BY updated_at ASC LIMIT :limit`,
+    { type: QueryTypes.SELECT, replacements: { status, limit } },
+  );
+}
+
 /** Read the intake so a failed generation can be replayed from it. */
 export async function getIntake(projectId: string): Promise<BuildIntake | null> {
   const rows = await sequelize.query<BuildIntake>(
