@@ -157,6 +157,15 @@ const InternshipOnboarding: React.FC<{ onChanged?: () => void }> = ({ onChanged 
                   </span>
                 </div>
               )}
+
+              {step.key === 'first_week_checkin' && !step.complete && (
+                <div className="ip-cl__actions">
+                  {/* Interns already have curriculum access; this just points them
+                      at it so they start moving through the first three weeks. */}
+                  <Link to="/portal/classroom" className="te-btn berry sm">Open the Classroom</Link>
+                  <span className="ip-muted ip-cl__hint">Start Week 1 - this step completes when you finish it.</span>
+                </div>
+              )}
             </div>
           </li>
         ))}
