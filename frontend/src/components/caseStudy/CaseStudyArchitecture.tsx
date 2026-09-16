@@ -26,6 +26,13 @@ import './caseStudy.css';
  * EVERYTHING IS OPTIONAL. Empty arrays and a null diagram mean "hide the
  * subsection"; when all of them are empty the component renders nothing at all,
  * so the page never shows an architecture heading over blank space.
+ *
+ * TWO HALVES, EXPORTED SEPARATELY. `CaseStudyArchitectureProse` is the
+ * narrative; `CaseStudyArchitectureInventory` is every derived list (tags,
+ * components, connections). The default export still renders both in that
+ * order, so every existing caller is unchanged. The public story page takes
+ * the halves apart to put a drawn diagram between them and fold the inventory
+ * away - see `storyDetailV2Sections.tsx` for why.
  */
 
 export interface CaseStudyArchitectureProps {
@@ -77,7 +84,6 @@ export function CaseStudyArchitecture({
   headingLevel = 3,
   className,
 }: CaseStudyArchitectureProps): React.ReactElement | null {
-  const Heading = `h${headingLevel}` as 'h3' | 'h4' | 'h5';
   const diagram = architecture.diagram;
   const nodes = diagram?.nodes ?? [];
   const edges = diagram?.edges ?? [];
@@ -93,14 +99,44 @@ export function CaseStudyArchitecture({
 
   return (
     <div className={`cbv2-cs-arch${className ? ` ${className}` : ''}`}>
-      {architecture.narrative.length > 0 ? (
-        <div className="cbv2-cs-arch__prose">
-          {architecture.narrative.map((paragraph, index) => (
-            <p key={`${index}-${paragraph.slice(0, 24)}`}>{paragraph}</p>
-          ))}
-        </div>
-      ) : null}
+      <CaseStudyArchitectureProse architecture={architecture} />
+      <CaseStudyArchitectureInventory architecture={architecture} headingLevel={headingLevel} />
+    </div>
+  );
+}
 
+/** The narrative paragraphs only. Null when the record wrote none. */
+export function CaseStudyArchitectureProse({
+  architecture,
+}: Pick<CaseStudyArchitectureProps, 'architecture'>): React.ReactElement | null {
+  if (architecture.narrative.length === 0) return null;
+  return (
+    <div className="cbv2-cs-arch__prose">
+      {architecture.narrative.map((paragraph, index) => (
+        <p key={`${index}-${paragraph.slice(0, 24)}`}>{paragraph}</p>
+      ))}
+    </div>
+  );
+}
+
+/** Every derived list: the four tag groups, the components, the connections. */
+export function CaseStudyArchitectureInventory({
+  architecture,
+  headingLevel = 3,
+}: Pick<CaseStudyArchitectureProps, 'architecture' | 'headingLevel'>): React.ReactElement | null {
+  const Heading = `h${headingLevel}` as 'h3' | 'h4' | 'h5';
+  const nodes = architecture.diagram?.nodes ?? [];
+  const edges = architecture.diagram?.edges ?? [];
+  const empty = architecture.stack.length === 0
+    && architecture.capabilities.length === 0
+    && architecture.integrations.length === 0
+    && architecture.dataStores.length === 0
+    && nodes.length === 0
+    && edges.length === 0;
+  if (empty) return null;
+
+  return (
+    <>
       <TagGroup title="Capabilities" items={architecture.capabilities} Heading={Heading} />
       <TagGroup title="Stack" items={architecture.stack} Heading={Heading} />
       <TagGroup title="Integrations" items={architecture.integrations} Heading={Heading} />
@@ -138,7 +174,7 @@ export function CaseStudyArchitecture({
           </ul>
         </div>
       ) : null}
-    </div>
+    </>
   );
 }
 

@@ -66,7 +66,11 @@ export function storyIndicators(
       count: detail.stack.length,
       label: plural(detail.stack.length, 'technology', 'technologies'),
     },
-    { key: 'evidence', count: evidence, label: plural(evidence, 'evidence item', 'evidence items') },
+    // "Visual artifact", not "evidence item". The record's evidence is its
+    // commit-pinned rows, which are not what this counts: a reader who saw
+    // "2 evidence items" on a record with nineteen evidence rows read the
+    // number as the whole case. The count is the pictures they can open.
+    { key: 'evidence', count: evidence, label: plural(evidence, 'visual artifact', 'visual artifacts') },
     {
       key: 'repositories',
       count: detail.repositories.length,
@@ -77,7 +81,10 @@ export function storyIndicators(
     {
       key: 'roadmap',
       count: detail.roadmap.length,
-      label: plural(detail.roadmap.length, 'next step', 'next steps'),
+      // The roadmap lists shipped work and paths not pursued alongside what is
+      // still planned, so "next steps" over-promised on every record that had
+      // closed items. "Decisions" is true of all three kinds.
+      label: plural(detail.roadmap.length, 'roadmap decision', 'roadmap decisions'),
     },
   ];
 
@@ -99,6 +106,24 @@ export const SECTION_COUNT_NOUNS: Readonly<Record<string, string>> = Object.free
   artifacts: 'artifacts',
   repositories: 'linked repositories',
 });
+
+/**
+ * The noun for one section's count, resolved against the record.
+ *
+ * `SECTION_COUNT_NOUNS` is static, and one entry cannot be: "1 named
+ * contributors" was read aloud on a record whose only contributor was a role
+ * with no name, which is a false statement about consent, not a wording nit.
+ * Contributors are "named" only when every one of them is; otherwise they are
+ * roles. Every other key keeps its static noun.
+ */
+export function sectionCountNoun(detail: PublicCaseStudyDetail, key: CaseStudySectionKey): string {
+  if (key === 'contributors') {
+    const allNamed = detail.contributors.length > 0
+      && detail.contributors.every((c) => c.displayMode === 'named');
+    return allNamed ? 'named contributors' : 'contributor roles';
+  }
+  return SECTION_COUNT_NOUNS[key] ?? 'items';
+}
 
 /**
  * The count that belongs beside one section's heading, or null.

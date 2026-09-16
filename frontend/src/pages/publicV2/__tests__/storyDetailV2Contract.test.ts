@@ -217,9 +217,12 @@ describe('the case-study component directory is untouched', () => {
     // rest; the page holds neither since the article was extracted. All three
     // are read, because "which file imports it" is a layout decision and this
     // rule is about not reimplementing any of them.
+    // ...and the architecture band, once the dispatcher handed that section to
+    // a page-local component so it could fold the inventory under the diagram.
     const source = stripComments(read(PAGE))
       + stripComments(read(ARTICLE))
-      + stripComments(read(SECTIONS));
+      + stripComments(read(SECTIONS))
+      + stripComments(read(path.join(PAGE_DIR, 'StoryArchitectureBand.tsx')));
     for (const component of ['CaseStudyTimeline', 'CaseStudyArchitecture',
       'CaseStudyMeasurement', 'CaseStudyRoadmap', 'CaseStudyArtifacts', 'CaseStudyCTA',
       'CaseStudyVerificationBadge']) {

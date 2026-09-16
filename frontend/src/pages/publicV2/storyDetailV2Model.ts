@@ -1,5 +1,6 @@
 import { formatIsoDate } from '../../components/caseStudy/CaseStudyTimeline';
 import { BUILT_BY_LABELS, ROADMAP_STATUS_LABELS } from '../../config/caseStudySurfaces';
+import { evidenceMaturity } from './storyMaturityModel';
 import type {
   CaseStudySectionKey,
   PublicCaseStudyArchitecture,
@@ -237,6 +238,9 @@ export function heroFacts(detail: PublicCaseStudyDetail): readonly StoryFact[] {
     ['Capability', detail.primaryCapability],
     ['Duration', detail.engagementDuration],
     ['Status', detail.productionStatus ? ROADMAP_STATUS_LABELS[detail.productionStatus] : null],
+    // Beside the status on purpose: "Shipped" and "Capability demonstration"
+    // are the two facts a reviewer found conflated, so they sit together.
+    ['Evidence', evidenceMaturity(detail)?.label ?? null],
     ['Built by', detail.builtBy ? BUILT_BY_LABELS[detail.builtBy] : null],
     ['Published', detail.publishedAt ? formatPublishedDate(detail.publishedAt) : null],
   ];

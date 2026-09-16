@@ -3,7 +3,7 @@ import { SECTION_HEADINGS } from './storyDetailV2Model';
 import { StorySectionBody } from './storyDetailV2Sections';
 import { StoryFigureBand } from './StoryFigure';
 import { StorySectionCount } from './StoryIndicators';
-import { SECTION_COUNT_NOUNS, sectionCount } from './storyIndicatorModel';
+import { sectionCount, sectionCountNoun } from './storyIndicatorModel';
 import { figuresAfter } from './storyFigurePlacement';
 import type { StoryFigurePlacement } from './storyFigurePlacement';
 import type {
@@ -103,7 +103,7 @@ export function StorySectionList({
                   </h2>
                   <StorySectionCount
                     count={sectionCount(record, key)}
-                    noun={SECTION_COUNT_NOUNS[key] ?? 'items'}
+                    noun={sectionCountNoun(record, key)}
                   />
                 </div>
                 <StorySectionBody
