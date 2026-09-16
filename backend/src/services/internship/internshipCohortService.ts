@@ -31,11 +31,40 @@ import Cohort from '../../models/Cohort';
 export const INTERNSHIP_COHORT_TYPE = 'ai_internship';
 export const INTERNSHIP_COHORT_NAME = 'AI Internship';
 
+/**
+ * One standing weekly meeting an intern is expected at.
+ *
+ * `day`/`kind` are the original two fields; the rest were added when the meetings
+ * moved off Discord into Zoom-in-Rooms. `audience` separates the interns-only
+ * standup from the three public community sessions (which also take Eventbrite
+ * registration). `join_url` is the room's persistent Zoom link and `room_slug`
+ * deep-links into /portal/rooms so a join can be attendance-tracked; both are
+ * filled once the room exists, so they stay optional and null-safe.
+ */
+export interface RequiredMeeting {
+  day: string;
+  kind: string;
+  /** Local start time, e.g. "9:00 AM". */
+  time?: string;
+  /** Short timezone label shown next to the time, e.g. "CT". */
+  timezone?: string;
+  audience?: 'interns_only' | 'public';
+  /** Display title, e.g. "AI Friday Trends". Falls back to kind when absent. */
+  title?: string;
+  /** The room's persistent Zoom join link. Null until the room is provisioned. */
+  join_url?: string | null;
+  /** Slug of the /portal/rooms room, so a join routes through attendance capture. */
+  room_slug?: string | null;
+  /** Eventbrite series URL for the public sessions; null for the interns-only call. */
+  registration_url?: string | null;
+}
+
 export interface InternshipCohortSettings {
   /** Contract: "Minimum weekly hours: 25". */
   minimum_weekly_hours: number;
-  /** Contract: "Required meeting schedule". Project work Tue-Thu, scrum Mon and Fri. */
-  required_meetings: readonly { day: string; kind: string }[];
+  /** Contract: "Required meeting schedule". Interns-only standup Mon; public AI
+   *  community sessions Tue/Wed/Fri; project work fills the rest of the week. */
+  required_meetings: readonly RequiredMeeting[];
   /** Contract: "Maximum active projects: 2". */
   max_active_projects: number;
   curriculum_version: string;
@@ -60,9 +89,14 @@ export interface InternshipCohortSettings {
 
 export const DEFAULT_INTERNSHIP_SETTINGS: InternshipCohortSettings = {
   minimum_weekly_hours: 25,
+  // The interns-only standup plus the three public AI community sessions, at their
+  // real times. join_url / room_slug are filled when the Zoom-in-Rooms rooms are
+  // provisioned; the public sessions also take Eventbrite registration.
   required_meetings: [
-    { day: 'Monday', kind: 'scrum' },
-    { day: 'Friday', kind: 'scrum' },
+    { day: 'Monday', kind: 'standup', time: '9:00 AM', timezone: 'CT', audience: 'interns_only', title: 'Intern standup' },
+    { day: 'Tuesday', kind: 'session', time: '10:00 AM', timezone: 'CT', audience: 'public', title: 'AI Internship Presentation' },
+    { day: 'Wednesday', kind: 'session', time: '10:00 AM', timezone: 'CT', audience: 'public', title: 'AI Strategy & Collaboration' },
+    { day: 'Friday', kind: 'session', time: '9:00 AM', timezone: 'CT', audience: 'public', title: 'AI Friday Trends' },
   ],
   max_active_projects: 2,
   curriculum_version: 'v1',
