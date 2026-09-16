@@ -150,7 +150,7 @@ const PathPage: React.FC = () => {
         <CondensedHeaderCard
           icon={<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="2" /><path d="M12 8v4l3 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>}
           tone={readinessTone}
-          label="Architect readiness"
+          label="Curriculum progress"
           title={`Week ${currentWeek} / 12`}
           sub={`${lvl.name} · ${readiness}%`}
         />
@@ -199,7 +199,7 @@ const PathPage: React.FC = () => {
                 </text>
               </svg>
               <div className="ring-meta">
-                <b>Architect Readiness</b>
+                <b>Curriculum progress</b>
                 <span>
                   Level <b style={{ color: 'var(--cherry-text)', display: 'inline' }}>{lvl.name}</b>
                   {' · '}{points.toLocaleString()} pts · Week {currentWeek} / 12

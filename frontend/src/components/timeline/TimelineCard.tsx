@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { bandRungForLevel } from '../../services/bandLadder';
 import { parseVideoUrl, videoThumbnail, isAudioUrl } from '../../utils/videoEmbed';
 import VideoEmbed from './VideoEmbed';
 import CardComments from './CardComments';
@@ -28,7 +29,6 @@ const POST_CLAMP_LINES = 3;
 
 // Community byline helpers — a card carrying `author` renders as a post (avatar +
 // name + level badge) instead of the generic curriculum header.
-const LEVEL_NAMES: Record<number, string> = { 1: 'Apprentice', 2: 'Builder', 3: 'Architect', 4: 'Principal' };
 const authorInitials = (n: string) => n.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || '').join('') || '?';
 const authorColor = (n: string) => { let h = 0; for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0; return `hsl(${h % 360} 48% 42%)`; };
 
@@ -541,7 +541,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
           <div className="ttl">{card.author ? card.author.name : tc(card.week_title || card.content?.title || card.title)}</div>
           <div className="sub">
             {card.author
-              ? <span className={`tc-lvl-badge lvl-${card.author.level}`}>Level {card.author.level} · {LEVEL_NAMES[card.author.level] || `Level ${card.author.level}`}</span>
+              ? <span className={`tc-lvl-badge lvl-${card.author.level}`}>{bandRungForLevel(card.author.level)}</span>
               : <span className={`tl-chip ${v.kind === 'skilljar' || v.kind === 'survey' ? 'cert' : 'learning'}`} style={{ padding: '2px 9px' }}><span className="sw" />{card.student_label}</span>}
             {!card.author && pts > 0 && <span className={`tl-ptbadge${done ? ' earned' : ''}`}>+{pts} pts</span>}
           </div>

@@ -17,12 +17,13 @@ import type { Band } from '../../../services/onboardingApi';
 const PointsRail: React.FC = () => {
   const [total, setTotal] = useState<number | null>(null);
   const [band, setBand] = useState<Band | null>(null);
+  const [entitled, setEntitled] = useState<boolean>(true);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let live = true;
     fetchPoints()
-      .then((p) => { if (live) { setTotal(p.total); setBand(p.band ?? null); } })
+      .then((p) => { if (live) { setTotal(p.total); setBand(p.band ?? null); setEntitled(p.buildEntitled ?? true); } })
       .catch(() => { if (live) setFailed(true); });
     return () => { live = false; };
   }, []);
@@ -49,7 +50,7 @@ const PointsRail: React.FC = () => {
   const lvl = levelFor(total);
   const name = useBand ? band!.rungName : lvl.name;
   const next = useBand
-    ? bandHudNext(band!, total)
+    ? bandHudNext(band!, total, entitled)
     : (lvl.next ? `${(lvl.next.min - total).toLocaleString()} pts to ${lvl.next.name}` : 'Top level reached');
 
   return (

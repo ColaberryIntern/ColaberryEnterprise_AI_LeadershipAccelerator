@@ -5,7 +5,7 @@ import type { Band } from './bandLadder';
 // Re-export the pure 5-band mirror so callers have one import surface for the
 // ladder. The pure module (bandLadder.ts) stays network-free for its unit test.
 export type { Band } from './bandLadder';
-export { BAND_RUNGS, bandRungForPoints, bandRungForLevel, bandHudNext } from './bandLadder';
+export { BAND_RUNGS, bandRungForPoints, bandRungForLevel, bandHudNext, buildRungForSlug, showJoinToBuildCard } from './bandLadder';
 
 // ── Shapes returned by the Phase-1 onboarding endpoints (S1–S5) ──────────────
 
@@ -23,6 +23,13 @@ export interface PointsSummary {
   // The frontend only reads `band` when `fiveBandUiEnabled` is true.
   band?: Band;
   fiveBandUiEnabled?: boolean;
+  /**
+   * Whether this person is already in the program (paid, comped, staff, sponsor
+   * or accelerator seat). Decides the "next" line at the AI Enabled ceiling:
+   * entitled → "Ship your first build"; not entitled → "Join to unlock". Absent
+   * on an older backend, which the helpers treat as entitled (fail open).
+   */
+  buildEntitled?: boolean;
 }
 
 // Runtime cache of the 5-band UI flag, populated whenever the HUD fetches points
@@ -351,13 +358,19 @@ export async function ingestBackground(
   return data;
 }
 
-// ── Points → level (presentational; mirrors the Design E ladder) ─────────────
+// ── Points → level (presentational) ──────────────────────────────────────────
+// The free rungs of the ONE band ladder (AI Aware I → AI Enabled II). The names
+// used to be the Design-E mock's "Apprentice / Builder / Architect / Principal";
+// those were retired on 2026-09-16 (Ali, ladder decision D6) so that every
+// surface — HUD, Today, Path, timeline badges, community — speaks the same
+// vocabulary as the Points page. Thresholds are unchanged and shared with
+// bandLadder.BAND_RUNGS and backend pointsService.LEVELS.
 
 export const LEVELS = [
-  { name: 'Apprentice', min: 0 },
-  { name: 'Builder', min: 150 },
-  { name: 'Architect', min: 400 },
-  { name: 'Principal', min: 900 },
+  { name: 'AI Aware I', min: 0 },
+  { name: 'AI Aware II', min: 150 },
+  { name: 'AI Enabled I', min: 400 },
+  { name: 'AI Enabled II', min: 900 },
 ];
 
 export function levelFor(points: number): { name: string; min: number; next: { name: string; min: number } | null; pct: number } {

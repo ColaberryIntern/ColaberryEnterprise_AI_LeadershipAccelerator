@@ -9,6 +9,7 @@ import { joinLiveSession, leaveMeetingSession } from '../services/liveSessionAtt
 import { createFreeAccount } from '../services/freeSignupService';
 import { getPointsSummary } from '../services/pointsService';
 import { getBandForEnrollment } from '../services/progression/progressionService';
+import { resolveBuildEntitlement } from '../middlewares/requireBuildEntitlement';
 import { env } from '../config/env';
 import { getStreak, claimStreak } from '../services/streakService';
 import { getPointsDrilldown } from '../services/pointsDrilldownService';
@@ -81,8 +82,16 @@ export async function handleGetPoints(req: Request, res: Response, next: NextFun
     // HUD can switch to the band ladder without a rebuild. Existing fields (total,
     // events) are untouched; unknown fields are ignored by legacy clients, and the
     // frontend only reads `band` when `fiveBandUiEnabled` is true.
-    const band = await getBandForEnrollment(enrollmentId, summary.total);
-    res.json({ ...summary, band, fiveBandUiEnabled: env.fiveBandUiEnabled });
+    // `buildEntitled` tells the HUD and the Points page whether this person is
+    // already IN the program. A capped-by-points learner who is entitled is told
+    // to ship a build; only a confirmed free Explorer is invited to join. Fails
+    // open to true inside resolveBuildEntitlement, so a lookup hiccup can never
+    // show a paying student the join prompt.
+    const [band, entitlement] = await Promise.all([
+      getBandForEnrollment(enrollmentId, summary.total),
+      resolveBuildEntitlement(enrollmentId),
+    ]);
+    res.json({ ...summary, band, buildEntitled: entitlement.entitled, fiveBandUiEnabled: env.fiveBandUiEnabled });
   } catch (err) { next(err); }
 }
 
