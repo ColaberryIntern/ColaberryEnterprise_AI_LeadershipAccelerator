@@ -14,7 +14,7 @@ let root: Root;
 
 const VALUES: SetupValues = {
   brand_id: 'b-1', campaign_id: 'c-1', title: '', destination_url: '', canonical_body: '',
-  content_type: 'text', is_paid: false, has_offer: false,
+  content_type: 'text', is_paid: false, has_offer: false, poll: null,
 };
 const CAMPAIGNS: CampaignOption[] = [
   { id: 'c-1', name: 'Nov Open House', brand_id: 'b-1', utm_campaign_slug: null },
@@ -57,6 +57,36 @@ describe('ComposerSetup slug assignment', () => {
     render({ onAssignSlug: jest.fn(), busy: true });
     const btn = container.querySelector('[data-testid="assign-slug"]') as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
+  });
+});
+
+describe('ComposerSetup poll', () => {
+  it('shows the poll editor only for a poll post, seeded with two empty options', () => {
+    render({ values: { ...VALUES, content_type: 'text' } });
+    expect(container.querySelector('[data-testid="poll-editor"]')).toBeNull();
+    render({ values: { ...VALUES, content_type: 'poll' } });
+    expect(container.querySelector('[data-testid="poll-editor"]')).not.toBeNull();
+    expect(container.querySelectorAll('[data-testid^="poll-option-"]')).toHaveLength(2);
+  });
+
+  it('adds up to four options, removes down to two, and reports every change through onChange', () => {
+    const onChange = jest.fn();
+    render({ values: { ...VALUES, content_type: 'poll', poll: { question: 'Which?', options: ['A', 'B', 'C', 'D'], durationDays: 7 } }, onChange });
+    const add = container.querySelector<HTMLButtonElement>('[data-testid="poll-add-option"]')!;
+    expect(add.disabled).toBe(true); // four is the ceiling
+    act(() => { container.querySelector<HTMLButtonElement>('[aria-label="Remove option 4"]')!.click(); });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ poll: { question: 'Which?', options: ['A', 'B', 'C'], durationDays: 7 } }));
+
+    render({ values: { ...VALUES, content_type: 'poll', poll: { question: 'Which?', options: ['A', 'B'], durationDays: 3 } }, onChange });
+    const removes = Array.from(container.querySelectorAll<HTMLButtonElement>('[aria-label^="Remove option"]'));
+    expect(removes.every((b) => b.disabled)).toBe(true); // two is the floor
+    act(() => { container.querySelector<HTMLButtonElement>('[data-testid="poll-add-option"]')!.click(); });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ poll: { question: 'Which?', options: ['A', 'B', ''], durationDays: 3 } }));
+  });
+
+  it("names both networks' option limits, because the editor cannot know which one is chosen", () => {
+    render({ values: { ...VALUES, content_type: 'poll' } });
+    expect(container.textContent).toMatch(/LinkedIn allows 30 characters per option, X allows 25/);
   });
 });
 

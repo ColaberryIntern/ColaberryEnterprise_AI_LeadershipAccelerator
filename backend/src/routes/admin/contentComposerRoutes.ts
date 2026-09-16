@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import { PollSchema } from '../../services/content/pollSpec';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import { ContentItem } from '../../models';
 import { adminTenantScope, scopeAllows } from '../../modules/tenancy/adminScopeBridge';
@@ -34,7 +35,7 @@ import { APPROVAL_DECISIONS, decideApproval, type ApprovalDecision } from '../..
 const router = Router();
 const UUID = z.string().uuid();
 const providerSchema = z.enum(PROVIDER_KEYS as unknown as [string, ...string[]]);
-const contentTypeSchema = z.enum(['text', 'image', 'video', 'carousel', 'thread', 'link']);
+const contentTypeSchema = z.enum(['text', 'image', 'video', 'carousel', 'thread', 'link', 'poll']);
 
 const CreateDraftSchema = z.object({
   brand_id: UUID,
@@ -46,6 +47,8 @@ const CreateDraftSchema = z.object({
   is_paid: z.boolean().default(false),
   has_offer: z.boolean().default(false),
   kinds: z.array(z.string()).default([]),
+  /** Required by validation when content_type is `poll`; ignored otherwise. */
+  poll: PollSchema.nullable().optional(),
 }).strict();
 
 const UpdateDraftSchema = z.object({
@@ -53,6 +56,8 @@ const UpdateDraftSchema = z.object({
   canonical_body: z.string().max(20000).optional(),
   content_type: contentTypeSchema.optional(),
   scheduled_for: z.string().datetime().nullable().optional(),
+  /** Null clears the poll; absent leaves it. */
+  poll: PollSchema.nullable().optional(),
 }).strict().refine((v) => Object.keys(v).length > 0, { message: 'Nothing to update' });
 
 const GenerateSchema = z.object({ providers: z.array(providerSchema).min(1) }).strict();
@@ -169,7 +174,7 @@ router.post('/api/admin/content', requireAdmin, async (req: Request, res: Respon
       // `created_by` is a UUID column: the admin id (`sub`), never the email. Writing the
       // email here 500'd every "Create draft" on production (found 2026-09-11, T032).
       created_by: req.admin?.sub ?? null,
-      metadata: { isPaid: parsed.data.is_paid, hasOffer: parsed.data.has_offer, kinds: parsed.data.kinds },
+      metadata: { isPaid: parsed.data.is_paid, hasOffer: parsed.data.has_offer, kinds: parsed.data.kinds, ...(parsed.data.poll ? { poll: parsed.data.poll } : {}) },
       // Sequelize's creation-attributes type predates the model's `declare` fields (repo idiom).
     } as any);
     res.status(201).json({ item });

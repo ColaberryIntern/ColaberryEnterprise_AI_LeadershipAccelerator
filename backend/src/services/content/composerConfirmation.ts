@@ -80,6 +80,8 @@ export interface ConfirmationItem {
   scheduled_for: string | null;
   human_approved: boolean;
   revision: number;
+  /** The poll, when the item is a poll post. */
+  poll: { question: string; options: string[]; durationDays: number } | null;
 }
 
 export interface ConfirmationBrand {
@@ -178,7 +180,7 @@ export type ApprovalLabel =
   | 'Withdrawn';
 
 export interface ConfirmationSummary {
-  item: { id: string; title: string; status: ContentItemStatus; contentType: string; revision: number };
+  item: { id: string; title: string; status: ContentItemStatus; contentType: string; revision: number; poll: { question: string; options: string[]; durationDays: number } | null };
   brand: { id: string; name: string; timezone: string; timezoneSource: 'brand' | 'default' } | null;
   campaign: { id: string; name: string; slug: string | null } | null;
   accounts: ConfirmationAccount[];
@@ -296,7 +298,7 @@ export function buildConfirmation(input: ConfirmationInput): ConfirmationSummary
     : direct === 0 ? 'Create handoff packages' : `Publish now (${direct} direct, ${handoff} handoff)`;
 
   return {
-    item: { id: item.id, title: item.title, status: item.status, contentType: item.content_type, revision: item.revision },
+    item: { id: item.id, title: item.title, status: item.status, contentType: item.content_type, revision: item.revision, poll: item.poll },
     brand: brand ? { id: brand.id, name: brand.name, timezone, timezoneSource } : null,
     campaign: campaign ? { id: campaign.id, name: campaign.name, slug: campaign.utm_campaign_slug } : null,
     accounts,

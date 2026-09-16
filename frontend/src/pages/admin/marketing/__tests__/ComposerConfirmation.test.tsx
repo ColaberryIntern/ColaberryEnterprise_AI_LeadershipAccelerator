@@ -20,7 +20,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 const SUMMARY: ConfirmationSummary = {
-  item: { id: 'ci-1', title: 'Free AI class - November', status: 'approved', contentType: 'image', revision: 3 },
+  item: { id: 'ci-1', title: 'Free AI class - November', status: 'approved', contentType: 'image', revision: 3, poll: null },
   brand: { id: 'b-1', name: 'Colaberry', timezone: 'America/Chicago', timezoneSource: 'brand' },
   campaign: { id: 'c-1', name: 'Nov Open House', slug: 'colaberry-awareness-2026-11' },
   accounts: [
@@ -201,5 +201,21 @@ describe('actions follow the server readiness verdict', () => {
   it('busy disables everything regardless of readiness', () => {
     render(SUMMARY, () => undefined, true);
     for (const b of Object.values(buttons())) expect(b.disabled).toBe(true);
+  });
+});
+
+describe('poll', () => {
+  it('shows the question, the options in order, and the voting window when the item is a poll', () => {
+    render({ ...SUMMARY, item: { ...SUMMARY.item, contentType: 'poll', poll: { question: 'Which skill first?', options: ['Prompting', 'Agents'], durationDays: 7 } } });
+    const field = container.querySelector('[data-testid="confirm-poll"]')!;
+    expect(field).not.toBeNull();
+    expect(field.textContent).toMatch(/Which skill first\?/);
+    expect(Array.from(field.querySelectorAll('li')).map((li) => li.textContent)).toEqual(['Prompting', 'Agents']);
+    expect(field.textContent).toMatch(/Voting open 7 days\./);
+  });
+
+  it('shows no poll field for a post that is not a poll', () => {
+    render(SUMMARY);
+    expect(container.querySelector('[data-testid="confirm-poll"]')).toBeNull();
   });
 });

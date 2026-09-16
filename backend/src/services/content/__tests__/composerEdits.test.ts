@@ -161,3 +161,57 @@ describe('the worker does not trust the path that led to it', () => {
     expect(models.PublishingJob.rows[0].last_error_class).toBe('ItemNotPublishable');
   });
 });
+
+describe('a poll on the item: stored, judged, carried, cleared', () => {
+  const POLL = { question: 'Which skill first?', options: ['Prompting', 'Agents'], durationDays: 3 };
+
+  async function pollItem(): Promise<string> {
+    const brand = await models.Brand.create({ tenant_id: 't-1', slug: 'colaberry', name: 'Colaberry', status: 'active', timezone: 'America/Chicago' });
+    const item = await models.ContentItem.create({
+      tenant_id: 't-1', brand_id: brand.id, title: 'Poll', canonical_body: 'Vote below.', content_type: 'poll', status: 'draft', revision: 1,
+      metadata: { isPaid: false, hasOffer: true, kinds: ['awareness'], poll: POLL },
+    });
+    await generateItemVariants(item.id, ['linkedin_member', 'x'], AUTHOR);
+    return item.id;
+  }
+
+  it('validates with the network numbers, and the confirmation carries the poll', async () => {
+    const id = await pollItem();
+    expect((await validateItem(id)).ok).toBe(true);
+    expect((await buildItemConfirmation(id)).item.poll).toEqual(POLL);
+  });
+
+  it('a title-only patch keeps the poll and every other metadata key, and resets no verdict', async () => {
+    const id = await pollItem();
+    await validateItem(id);
+    await updateItemDraft(id, { title: 'Renamed' }, AUTHOR);
+    const item = (await models.ContentItem.findByPk(id))!;
+    expect(item.metadata).toEqual({ isPaid: false, hasOffer: true, kinds: ['awareness'], poll: POLL });
+    const rows = await models.ContentVariant.findAll({ where: { content_item_id: id } });
+    expect(rows.map((r) => r.validation_state)).toEqual(['valid', 'valid']);
+  });
+
+  it('a poll change replaces the poll, keeps the other keys, invalidates every variant, and validation sees the new numbers', async () => {
+    const id = await pollItem();
+    await validateItem(id);
+    await updateItemDraft(id, { poll: { ...POLL, durationDays: 5 } }, AUTHOR);
+    const item = (await models.ContentItem.findByPk(id))!;
+    expect(item.metadata).toEqual({ isPaid: false, hasOffer: true, kinds: ['awareness'], poll: { ...POLL, durationDays: 5 } });
+    const rows = await models.ContentVariant.findAll({ where: { content_item_id: id } });
+    expect(rows.every((r) => r.validation_state !== 'valid')).toBe(true);
+    const v = await validateItem(id);
+    expect(v.ok).toBe(false);
+    // LinkedIn offers 1/3/7/14; X offers any of 1-7. Same poll, one blocker.
+    expect(v.providers.blockers.map((b) => `${b.provider}: ${b.message}`)).toEqual(['linkedin_member: LinkedIn (personal profile): polls run for 1, 3, 7, 14 days; 5 is not offered.']);
+  });
+
+  it('null clears ONLY the poll; the post then fails validation as a poll with nothing in it', async () => {
+    const id = await pollItem();
+    await updateItemDraft(id, { poll: null }, AUTHOR);
+    const item = (await models.ContentItem.findByPk(id))!;
+    expect(item.metadata).toEqual({ isPaid: false, hasOffer: true, kinds: ['awareness'] });
+    const v = await validateItem(id);
+    expect(v.providers.blockers.map((b) => b.message)).toEqual(expect.arrayContaining([expect.stringMatching(/a poll post needs a question and 2 to 4 options/)]));
+    expect((await buildItemConfirmation(id)).item.poll).toBeNull();
+  });
+});
