@@ -234,3 +234,25 @@
 .pts-rail-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--leaf, #2F7A46); }
 .pts-rail-next { margin: 0; font-size: 13px; color: var(--muted, #6B6B6B); }
 .pts-rail-note { margin: 0; font-size: 13px; color: var(--muted, #6B6B6B); }
+
+/* Program milestones (lens 2 once the milestone ladder is on) */
+.points-root .pts-ms-list { list-style: none; margin: 10px 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.points-root .pts-ms-row { border-top: 1px solid var(--pr-line); }
+.points-root .pts-ms-row:first-child { border-top: none; }
+.points-root .pts-ms-link { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start; padding: 8px 0; color: inherit; text-decoration: none; border-radius: 8px; }
+.points-root a.pts-ms-link:hover .pts-ms-label, .points-root a.pts-ms-link:focus-visible .pts-ms-label { text-decoration: underline; }
+.points-root a.pts-ms-link:focus-visible { outline: 2px solid #367895; outline-offset: 2px; }
+.points-root .pts-ms-mark { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; margin-top: 1px; }
+.points-root .pts-ms-mark svg { width: 20px; height: 20px; }
+.points-root .pts-ms-mark.is-done { color: #3D8A38; }
+.points-root .pts-ms-mark.is-progress { color: #E8920C; }
+.points-root .pts-ms-mark.is-todo { color: #B9B7B2; }
+.points-root .pts-ms-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.points-root .pts-ms-label { font-size: 13.5px; font-weight: 700; color: var(--pr-ink); }
+.points-root .pts-ms-row.is-done .pts-ms-label { color: var(--pr-mut); font-weight: 600; }
+.points-root .pts-ms-detail { font-size: 12.5px; color: var(--pr-mut); line-height: 1.4; }
+
+/* Skill XP, demoted below the milestone checklist (D7) */
+.points-root .pts-xp-demoted { grid-column: 1 / -1; border-top: 1px solid var(--pr-line); padding-top: 12px; margin-top: 4px; }
+.points-root .pts-xp-demoted .pts-xp-inline { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--pr-mut); }
+.points-root .pts-xp-demoted .pts-xp-inline b { color: var(--pr-ink); font-family: 'Roboto Mono', monospace; font-weight: 800; }
