@@ -77,6 +77,31 @@ export function panelSelectionOrder(panel: PublicCaseStudyWorkflowPanel): readon
   return order;
 }
 
+/**
+ * Split a node label into at most `lines` lines of about `width` characters,
+ * breaking only at spaces. SVG text does not wrap on its own; a word longer
+ * than the width stands alone on its line rather than being cut.
+ */
+export function wrapLabel(text: string, width = 22, lines = 2): readonly string[] {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  const out: string[] = [];
+  let line = '';
+  for (const word of words) {
+    if (line && (line + ' ' + word).length > width) {
+      out.push(line);
+      line = word;
+    } else {
+      line = line ? `${line} ${word}` : word;
+    }
+  }
+  if (line) out.push(line);
+  if (out.length <= lines) return out;
+  // Over budget: keep the first lines and end the last one with an ellipsis.
+  const kept = out.slice(0, lines);
+  kept[lines - 1] = `${kept[lines - 1].slice(0, Math.max(1, width - 1))}…`;
+  return kept;
+}
+
 /* ------------------------------------------------------------ outcome cards --- */
 
 export interface OutcomeCardView {
