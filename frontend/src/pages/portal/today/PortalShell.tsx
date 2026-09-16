@@ -20,6 +20,7 @@ import MessagesButton from './MessagesButton';
 import { useEntitlement } from '../useEntitlement';
 import { useOrgManager, companyLabel } from '../useIsOrgManager';
 import { useMgmtStatus } from '../useMgmtStatus';
+import { useInternshipNav } from '../useInternshipNav';
 import ConfettiCelebration from '../../../components/ConfettiCelebration';
 import type { GatedFeatureKey } from '../../../components/paywall/gatedFeatures';
 import { useScrollCondense } from '../../../hooks/useScrollCondense';
@@ -154,6 +155,18 @@ const MGMT_NAV_GROUP: NavGroup = {
   ],
 };
 
+// "Internship" — appended to the "Build and learn" group, but only for people
+// who are IN the internship process or are active interns (useInternshipNav).
+// The route /portal/internship is already reachable at any stage; this is the
+// nav destination that makes it findable, so an intern is never stranded with
+// no way back to their application. Ungated (no lock badge): if the tab shows,
+// the person already belongs in the internship.
+const INTERNSHIP_NAV_ITEM: NavItem = {
+  label: 'Internship', to: '/portal/internship', icon: (
+    <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="7" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+  ),
+};
+
 type PortalShellProps = {
   /** Plain node for pages that don't condense; a function form for pages that
    *  need the live condensed boolean to sync their body hero's animation with
@@ -183,15 +196,26 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
   const { isManager: isOrgManager, org } = useOrgManager();
   const companyNavLabel = companyLabel(org);
   const mgmt = useMgmtStatus();           // employee with a mgmt role = "Management Portal" link
+  const { isIntern } = useInternshipNav(); // in the internship process / active intern = "Internship" tab
   // Effective nav: employees get "Management Portal", managers get "Your company",
-  // both prepended above "Your day".
+  // both prepended above "Your day"; interns get an "Internship" tab inside
+  // "Build and learn". Non-interns see the group exactly as before.
   const groups = useMemo<NavGroup[]>(
-    () => [
-      ...(mgmt.is_mgmt ? [MGMT_NAV_GROUP] : []),
-      ...(isOrgManager ? [buildCompanyNavGroup(companyNavLabel)] : []),
-      ...NAV_GROUPS,
-    ],
-    [isOrgManager, companyNavLabel, mgmt.is_mgmt],
+    () => {
+      const base = isIntern
+        ? NAV_GROUPS.map((g) =>
+            g.grp === 'Build and learn'
+              ? { ...g, items: [...g.items, INTERNSHIP_NAV_ITEM] }
+              : g,
+          )
+        : NAV_GROUPS;
+      return [
+        ...(mgmt.is_mgmt ? [MGMT_NAV_GROUP] : []),
+        ...(isOrgManager ? [buildCompanyNavGroup(companyNavLabel)] : []),
+        ...base,
+      ];
+    },
+    [isOrgManager, companyNavLabel, mgmt.is_mgmt, isIntern],
   );
   // Mobile bottom tab bar mirrors the effective, navigable destinations.
   const tabItems = useMemo(
