@@ -22,7 +22,9 @@ const mockLeadFindAll = jest.fn();
 const mockLeadFindByPk = jest.fn();
 const mockEnrollmentFindAll = jest.fn();
 const mockEnrollmentFindOne = jest.fn();
+const mockEnrollmentFindByPk = jest.fn();
 const mockStart = jest.fn();
+const mockTurn = jest.fn();
 
 jest.mock('../../../models/ProjectUnderstandingRecord', () => ({
   __esModule: true,
@@ -33,10 +35,17 @@ jest.mock('../../../models/ProjectUnderstandingRecord', () => ({
 }));
 jest.mock('../../../models', () => ({
   Lead: { findAll: (...a: any[]) => mockLeadFindAll(...a), findByPk: (...a: any[]) => mockLeadFindByPk(...a) },
-  Enrollment: { findAll: (...a: any[]) => mockEnrollmentFindAll(...a), findOne: (...a: any[]) => mockEnrollmentFindOne(...a) },
+  Enrollment: {
+    findAll: (...a: any[]) => mockEnrollmentFindAll(...a),
+    findOne: (...a: any[]) => mockEnrollmentFindOne(...a),
+    findByPk: (...a: any[]) => mockEnrollmentFindByPk(...a),
+  },
 }));
 jest.mock('../../../services/delivery/buildFromUnderstanding', () => ({
   startBuildFromUnderstanding: (...a: any[]) => mockStart(...a),
+}));
+jest.mock('../../../services/delivery/projectIntake', () => ({
+  runIntakeTurn: (...a: any[]) => mockTurn(...a),
 }));
 
 import flotationIntakeRoutes from '../flotationIntakeRoutes';
@@ -48,6 +57,7 @@ app.use(flotationIntakeRoutes);
 const ADMIN = jwt.sign({ sub: 'staff-1', email: 'staff@colaberry.com', role: 'admin' }, 'test-secret');
 const REC = '11111111-1111-4111-8111-111111111111';
 const ENR = '22222222-2222-4222-8222-222222222222';
+const SESSION = '33333333-3333-4333-8333-333333333333';
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -152,5 +162,99 @@ describe('POST /api/admin/flotation/understandings/:id/build', () => {
     const res = await request(app).post(`/api/admin/flotation/understandings/${REC}/build`).set('Authorization', `Bearer ${ADMIN}`).send({ enrollment_id: 'not-a-uuid' });
     expect(res.status).toBe(400);
     expect(mockStart).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/admin/flotation/intake/turn - the interview, from the management side', () => {
+  const turns = [{ role: 'user', text: 'We run a repair cafe and track loans on paper.' }];
+
+  beforeEach(() => {
+    mockEnrollmentFindByPk.mockResolvedValue({ id: ENR, full_name: 'Marta Okafor', company: 'Northside Repair Cafe', email: 'marta@northside.test' });
+    mockTurn.mockResolvedValue({ done: false, message: 'Who runs the desk?', exchanges: 1 });
+  });
+
+  it('refuses without a token', async () => {
+    const res = await request(app).post('/api/admin/flotation/intake/turn').send({ enrollment_id: ENR, session_id: SESSION, turns });
+    expect(res.status).toBe(401);
+    expect(mockTurn).not.toHaveBeenCalled();
+  });
+
+  it('runs the ONE intake for the named student, addressed by their name', async () => {
+    const res = await request(app).post('/api/admin/flotation/intake/turn').set('Authorization', `Bearer ${ADMIN}`).send({ enrollment_id: ENR, session_id: SESSION, turns });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ done: false, message: 'Who runs the desk?', exchanges: 1 });
+    expect(mockTurn).toHaveBeenCalledWith({
+      turns,
+      facts: { name: 'Marta Okafor', company: 'Northside Repair Cafe', role: null },
+      sourceRef: `admin:${SESSION}`,
+      leadId: null,
+      buildFor: { kind: 'enrollment', enrollmentId: ENR },
+    });
+  });
+
+  it('passes the finished result through untouched, project and all', async () => {
+    mockTurn.mockResolvedValue({ done: true, message: 'Thanks.', understanding: 'created', understanding_id: REC, build: { started: true, project_id: 'proj-1' } });
+
+    const res = await request(app).post('/api/admin/flotation/intake/turn').set('Authorization', `Bearer ${ADMIN}`).send({ enrollment_id: ENR, session_id: SESSION, turns });
+
+    expect(res.status).toBe(200);
+    expect(res.body.build).toEqual({ started: true, project_id: 'proj-1' });
+  });
+
+  it('404s an unknown student before running anything', async () => {
+    mockEnrollmentFindByPk.mockResolvedValue(null);
+    const res = await request(app).post('/api/admin/flotation/intake/turn').set('Authorization', `Bearer ${ADMIN}`).send({ enrollment_id: ENR, session_id: SESSION, turns });
+    expect(res.status).toBe(404);
+    expect(mockTurn).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['no turns', { enrollment_id: ENR, session_id: SESSION, turns: [] }],
+    ['a bad role', { enrollment_id: ENR, session_id: SESSION, turns: [{ role: 'system', text: 'x' }] }],
+    ['an over-long turn', { enrollment_id: ENR, session_id: SESSION, turns: [{ role: 'user', text: 'x'.repeat(4001) }] }],
+    ['a non-uuid session', { enrollment_id: ENR, session_id: 'sess-1', turns }],
+    ['no enrolment', { session_id: SESSION, turns }],
+  ])('400s %s at the boundary', async (_name, body) => {
+    const res = await request(app).post('/api/admin/flotation/intake/turn').set('Authorization', `Bearer ${ADMIN}`).send(body);
+    expect(res.status).toBe(400);
+    expect(mockTurn).not.toHaveBeenCalled();
+  });
+
+  it('answers a thrown intake with a plain sentence, not the stack', async () => {
+    mockTurn.mockRejectedValue(new Error('ECONNRESET upstream'));
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const res = await request(app).post('/api/admin/flotation/intake/turn').set('Authorization', `Bearer ${ADMIN}`).send({ enrollment_id: ENR, session_id: SESSION, turns });
+    expect(res.status).toBe(500);
+    expect(res.body.error).not.toContain('ECONNRESET');
+    errSpy.mockRestore();
+  });
+});
+
+describe('GET /api/admin/flotation/intake/enrollments - finding the student', () => {
+  it('needs at least two characters, so a keystroke does not scan the table', async () => {
+    const res = await request(app).get('/api/admin/flotation/intake/enrollments?q=m').set('Authorization', `Bearer ${ADMIN}`);
+    expect(res.status).toBe(200);
+    expect(res.body.enrollments).toEqual([]);
+    expect(mockEnrollmentFindAll).not.toHaveBeenCalled();
+  });
+
+  it('matches name or email, case-insensitively, and returns what the picker needs', async () => {
+    mockEnrollmentFindAll.mockResolvedValue([{ id: ENR, full_name: 'Marta Okafor', email: 'marta@northside.test', tier: 'guest', cohort_id: 'c1', password_hash: 'never' }]);
+
+    const res = await request(app).get('/api/admin/flotation/intake/enrollments?q=MARTA').set('Authorization', `Bearer ${ADMIN}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.enrollments).toEqual([{ id: ENR, full_name: 'Marta Okafor', email: 'marta@northside.test', tier: 'guest', cohort_id: 'c1' }]);
+    const where = mockEnrollmentFindAll.mock.calls[0][0].where;
+    const branches = Object.getOwnPropertySymbols(where).map((sym) => (where as any)[sym])[0];
+    expect(branches).toHaveLength(2);
+    const pattern = (o: any) => Object.getOwnPropertySymbols(o).map((sym) => o[sym])[0];
+    expect(pattern(branches[0].email)).toBe('%marta%');
+    expect(pattern(branches[1].full_name)).toBe('%marta%');
+  });
+
+  it('refuses without a token', async () => {
+    expect((await request(app).get('/api/admin/flotation/intake/enrollments?q=marta')).status).toBe(401);
   });
 });

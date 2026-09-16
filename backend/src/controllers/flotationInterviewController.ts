@@ -1,13 +1,7 @@
 import { Request, Response } from 'express';
 import RawLeadPayload from '../models/RawLeadPayload';
 import Lead from '../models/Lead';
-import {
-  nextInterviewMessage,
-  interviewTranscript,
-  MAX_EXCHANGES,
-  type InterviewTurn,
-} from '../services/delivery/flotationInterviewService';
-import { recordUnderstandingFromConversation } from '../services/delivery/recordProjectUnderstanding';
+import { runIntakeTurn, boundTurns } from '../services/delivery/projectIntake';
 
 /**
  * POST /api/flotation/interview
@@ -36,14 +30,7 @@ export async function handleFlotationInterview(req: Request, res: Response): Pro
   try {
     const body = req.body || {};
     const token = String(body.token || '').trim();
-    const rawTurns: InterviewTurn[] = Array.isArray(body.turns) ? body.turns : [];
-
-    // Bounded server-side. A client that sends a thousand turns must not be able to buy a
-    // thousand-turn prompt.
-    const turns = rawTurns
-      .filter((t) => t && (t.role === 'user' || t.role === 'assistant') && typeof t.text === 'string')
-      .map((t) => ({ role: t.role, text: String(t.text).slice(0, 4000) }))
-      .slice(-(MAX_EXCHANGES * 2 + 2));
+    const turns = boundTurns(body.turns);
 
     if (!token || turns.length === 0) {
       res.status(400).json({ error: 'token and turns are required' });
@@ -65,55 +52,30 @@ export async function handleFlotationInterview(req: Request, res: Response): Pro
     }
 
     const lead: any = await Lead.findByPk(payload.resulting_lead_id);
-    const facts = {
-      name: lead?.name || null,
-      company: lead?.company || null,
-      role: lead?.role || lead?.title || null,
-    };
 
-    const result = await nextInterviewMessage({ turns, facts });
-
-    if (!result.ok) {
-      res.status(200).json({
-        done: false,
-        message: 'Sorry — I lost my thread there. Could you say that again?',
-        error_class: result.error_class,
-      });
-      return;
-    }
+    // Everything from here is the ONE intake, shared with the admin door. This controller
+    // only decides who is talking and where their project lands: a prospect, identified by
+    // the token, whose enquiry already created an enrolment under their email.
+    const result = await runIntakeTurn({
+      turns,
+      facts: {
+        name: lead?.name || null,
+        company: lead?.company || null,
+        role: lead?.role || lead?.title || null,
+      },
+      sourceRef: `chat:${token}`,
+      leadId: payload.resulting_lead_id,
+      buildFor: lead?.email ? { kind: 'by_email', email: lead.email } : { kind: 'none' },
+    });
 
     if (result.done) {
-      // Extraction runs on the FULL transcript including the closing message, and is
-      // deliberately awaited: the page switches straight to the write-up, so producing it
-      // before responding is what makes that transition honest rather than a spinner over
-      // a promise.
-      const conversation = interviewTranscript([...turns, { role: 'assistant', text: result.message }]);
-
-      const outcome = await recordUnderstandingFromConversation({
-        leadId: payload.resulting_lead_id,
-        source: 'chat',
-        sourceRef: `chat:${token}`,
-        conversation,
-        facts,
-      });
-
       console.log(
-        `[FlotationInterview] understanding ${outcome.status}` +
-          `${outcome.reason ? ` (${outcome.reason})` : ''}` +
-          `${outcome.kept !== undefined ? ` kept=${outcome.kept} rejected=${outcome.rejected}` : ''}`,
+        `[FlotationInterview] understanding ${result.understanding}` +
+          (result.build ? ` build=${result.build.started ? result.build.project_id : 'not started: ' + result.build.reason}` : ''),
       );
-
-      res.status(200).json({
-        done: true,
-        message: result.message,
-        // The page polls the preview endpoint next; tell it whether there is anything to
-        // find, so it does not poll for something that failed.
-        understanding: outcome.status,
-      });
-      return;
     }
 
-    res.status(200).json({ done: false, message: result.message, exchanges: result.exchanges });
+    res.status(200).json(result);
   } catch (err: any) {
     console.error('[FlotationInterview] error:', err?.message);
     res.status(500).json({ error: 'We could not continue the conversation right now.' });

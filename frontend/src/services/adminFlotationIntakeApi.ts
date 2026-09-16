@@ -56,3 +56,48 @@ export function describeBuildError(err: unknown): string {
   if (res?.status === 401 || res?.status === 403) return 'Your session cannot do this. Sign in again.';
   return 'The build could not be started. Nothing was created.';
 }
+
+// ── The interview itself, from the management side ──────────────────────────────────────
+//
+//     "I want that same exact intake on the Mgmt side so I can build projects for students."
+//
+// The server runs the same `runIntakeTurn` the public /start page calls. This client does
+// what /start's does: keeps the transcript, mints one session id, posts the whole thing
+// each turn. The session id is the extraction's idempotency key.
+
+export interface IntakeTurn {
+  role: 'user' | 'assistant';
+  text: string;
+}
+
+export interface IntakeStudent {
+  id: string;
+  full_name: string | null;
+  email: string;
+  tier: string;
+  cohort_id: string | null;
+}
+
+export type IntakeTurnResult =
+  | { done: false; message: string; exchanges?: number; error_class?: string }
+  | {
+      done: true;
+      message: string;
+      understanding: 'created' | 'deduplicated' | 'failed' | 'skipped';
+      understanding_id?: string;
+      build?: { started: boolean; project_id?: string; reason?: string };
+    };
+
+export async function searchIntakeStudents(q: string): Promise<IntakeStudent[]> {
+  const { data } = await api.get<{ enrollments: IntakeStudent[] }>('/api/admin/flotation/intake/enrollments', { params: { q } });
+  return data.enrollments ?? [];
+}
+
+export async function sendIntakeTurn(params: { enrollmentId: string; sessionId: string; turns: IntakeTurn[] }): Promise<IntakeTurnResult> {
+  const { data } = await api.post<IntakeTurnResult>('/api/admin/flotation/intake/turn', {
+    enrollment_id: params.enrollmentId,
+    session_id: params.sessionId,
+    turns: params.turns,
+  });
+  return data;
+}
