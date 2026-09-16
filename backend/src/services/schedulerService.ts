@@ -1722,6 +1722,18 @@ export function startScheduler(): void {
     });
   });
 
+  // AI Employee Consolidation Program, Employee #1 (Curriculum/Dara), Phase 4
+  // — Dara's own real, tracked always-online cron, same generic mechanism as
+  // Reese's own heartbeat above (agentBlueprint/agentPresenceHeartbeat.ts).
+  cron.schedule('*/1 * * * *', () => {
+    instrumentCronJob('DaraPresenceHeartbeat', async () => {
+      const { runDaraPresenceHeartbeat } = await import('./curriculum/daraPresenceHeartbeat');
+      await runDaraPresenceHeartbeat();
+    }).catch((err) => {
+      console.error('[Scheduler] Dara presence heartbeat error:', err);
+    });
+  });
+
   // Process pending actions every 5 minutes
   cron.schedule('*/5 * * * *', () => {
     instrumentCronJob('ScheduledActionsProcessor', () => processScheduledActions()).catch((err) => {

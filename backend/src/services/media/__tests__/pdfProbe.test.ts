@@ -53,14 +53,16 @@ describe('what the verifier found on 2026-09-15', () => {
     expect(crafted.length).toBeGreaterThan(5 * 1024 * 1024);
     const t0 = Date.now();
     expect(probePdf(crafted)).toEqual({ version: '1.4', pages: null });
-    expect(Date.now() - t0).toBeLessThan(1000);
+    // Bounded work, not a benchmark: 14 ms locally, but a CI runner sharing 1,400 suites can
+    // be an order of magnitude slower. The point is minutes vs milliseconds.
+    expect(Date.now() - t0).toBeLessThan(5000);
   });
 
   it('a crafted file of /Type /Pages with no endobj is also bounded', () => {
     const crafted = Buffer.from('%PDF-1.4\n' + '9 0 obj << /Type /Pages /Count 2 '.repeat(150_000), 'latin1');
     const t0 = Date.now();
     probePdf(crafted);
-    expect(Date.now() - t0).toBeLessThan(500);
+    expect(Date.now() - t0).toBeLessThan(5000); // 66 ms locally; see the note above
   });
 });
 

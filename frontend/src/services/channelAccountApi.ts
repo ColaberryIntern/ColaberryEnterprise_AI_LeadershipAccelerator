@@ -90,6 +90,22 @@ export async function connectChannelAccount(input: ConnectAccountInput): Promise
   return res.data.account;
 }
 
+/** Whether the server has LinkedIn app credentials at all. False means the Connect button explains, not fails. */
+export async function getLinkedInStatus(): Promise<{ configured: boolean }> {
+  const res = await api.get('/api/admin/marketing/linkedin/status');
+  return res.data;
+}
+
+/**
+ * Start connecting a LinkedIn profile to a brand. Returns the LinkedIn consent URL; the page
+ * navigates the whole window there (a popup would lose the redirect), and LinkedIn sends the
+ * browser back to /admin/brands?linkedin=connected|error (the Brands page's real route).
+ */
+export async function startLinkedInConnect(brandId: string): Promise<{ url: string }> {
+  const res = await api.post('/api/admin/marketing/linkedin/connect', { brand_id: brandId });
+  return res.data;
+}
+
 export async function revokeChannelAccount(accountId: string): Promise<ChannelAccount> {
   const res = await api.delete(`/api/admin/channel-accounts/${accountId}`);
   return res.data.account;

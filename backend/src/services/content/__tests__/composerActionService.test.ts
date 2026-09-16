@@ -23,6 +23,8 @@ jest.mock('../../../models', () => ({
   ContentItem: { findByPk: jest.fn(async (id: string) => (id === 'ci-1' ? mockItem : null)) },
   ContentVariant: { findAll: jest.fn(async () => mockVariants) },
   ContentApprovalRequest: { update: mockApprovalUpdate, create: mockApprovalCreate, findOne: mockApprovalFindOne },
+  // No account connected. Both providers here are handoff, so the scheduler must not complain.
+  ChannelAccount: { findOne: jest.fn(async () => null) },
   PublishingJob: {
     findOrCreate: jest.fn(async ({ where }: { where: { idempotency_key: string } }) => {
       const key = where.idempotency_key;
@@ -61,7 +63,7 @@ describe('schedule', () => {
     expect(r.jobs.map((j) => [j.provider, j.created])).toEqual([['linkedin_organization', true], ['x', true]]);
     expect(r.jobs.every((j) => j.publishAt === WHEN.toISOString())).toBe(true);
     expect(mockItem.status).toBe('scheduled');
-    expect(mockItem.update).toHaveBeenCalledWith({ scheduled_for: WHEN });
+    expect(mockItem.update).toHaveBeenCalledWith({ scheduled_for: WHEN, status: 'scheduled' }) // one write, after the jobs exist;
   });
 
   it('is idempotent: the same call again creates no new jobs and returns the same ids', async () => {

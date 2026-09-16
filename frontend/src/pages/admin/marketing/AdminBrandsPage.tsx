@@ -1,12 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { PageHeader, SectionCard } from '../../../components/admin/shell';
 import { TrustSignal } from '../../../components/admin/shell/trust';
 import BrandReadinessPanel from './BrandReadinessPanel';
 import ChannelAccountsPanel from './ChannelAccountsPanel';
 import {
   getVaultStatus,
+  getLinkedInStatus,
   listChannelAccounts,
   revokeChannelAccount,
+  startLinkedInConnect,
   errorMessageOf,
   type ChannelAccount,
   type VaultStatus,
@@ -45,6 +48,47 @@ function AdminBrandsPage() {
   const [accountsLoading, setAccountsLoading] = useState(true);
   const [accountsError, setAccountsError] = useState<string | null>(null);
   const [accountsBusy, setAccountsBusy] = useState(false);
+  const [linkedInConfigured, setLinkedInConfigured] = useState<boolean | null>(null);
+  const [connectNotice, setConnectNotice] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
+
+  // LinkedIn sends the browser back here after consent with ?linkedin=connected|error. Read it
+  // once, say what happened in words, and clear it from the address bar so a reload does not
+  // repeat the message. Through the router, not window.location, so the page behaves the same
+  // wherever it is mounted.
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const outcome = params.get('linkedin');
+    if (!outcome) return;
+    if (outcome === 'connected') {
+      setConnectNotice({ tone: 'success', text: 'LinkedIn account connected. Posts for this brand can now publish directly.' });
+      const brand = params.get('brand');
+      if (brand) setSelectedBrandId(brand);
+    } else {
+      setConnectNotice({ tone: 'danger', text: connectFailureText(params.get('reason')) });
+    }
+    // Consuming the query changes location.search, which re-runs this effect once more; it then
+    // finds no `linkedin` key and returns. No dependency is hidden to stop that.
+    navigate(location.pathname, { replace: true });
+  }, [location.search, location.pathname, navigate]);
+
+  useEffect(() => {
+    getLinkedInStatus().then((s) => setLinkedInConfigured(s.configured)).catch(() => setLinkedInConfigured(false));
+  }, []);
+
+  const handleConnect = useCallback(async () => {
+    if (!selectedBrandId) return;
+    setAccountsBusy(true);
+    try {
+      const { url } = await startLinkedInConnect(selectedBrandId);
+      // The whole window goes to LinkedIn; it comes back to this page via the callback.
+      window.location.assign(url);
+    } catch (err) {
+      setConnectNotice({ tone: 'danger', text: errorMessageOf(err, 'The LinkedIn connection could not be started.') });
+      setAccountsBusy(false);
+    }
+  }, [selectedBrandId]);
 
   /**
    * Accounts and vault status are fetched together because the panel cannot tell an honest
@@ -164,25 +208,44 @@ function AdminBrandsPage() {
         />
       </SectionCard>
       <SectionCard title="Connected accounts" icon="links-line" padded={false}>
+        {connectNotice && (
+          <div className={`alert alert-${connectNotice.tone} m-3 mb-0 py-2 small`} role="status" data-testid="linkedin-connect-notice">
+            {connectNotice.text}
+          </div>
+        )}
         <ChannelAccountsPanel
           loading={accountsLoading}
           error={accountsError}
           vault={vault}
           accounts={accounts}
           brandId={selectedBrandId}
-          // Stated rather than hidden: the storage half shipped (T003) and the sign-in half has
-          // not. A paste-a-token form would have "worked" and put a live credential into a
-          // browser field, a screenshot and a support thread - the exact thing the spec's
-          // credential rules forbid.
-          connectDisabledReason={'Connecting needs the provider sign-in flow, which is not built yet. Networks stay in handoff mode until it is.'}
+          // The sign-in flow exists; what can still be missing is the LinkedIn app itself (the
+          // server has no client id/secret). Said in words rather than as a dead button.
+          connectDisabledReason={linkedInConfigured === false
+            ? 'LinkedIn is not configured on this server yet (LINKEDIN_CLIENT_ID / SECRET / REDIRECT_URI). Networks stay in handoff mode until it is.'
+            : null}
           busy={accountsBusy}
-          onConnect={() => {}}
+          onConnect={handleConnect}
           onRevoke={handleRevoke}
           onRetry={fetchAccounts}
         />
       </SectionCard>
     </>
   );
+}
+
+/** The callback's `reason` codes, in words an operator can act on. */
+export function connectFailureText(reason: string | null): string {
+  switch (reason) {
+    case 'cancelled': return 'The LinkedIn connection was cancelled before finishing. Nothing was saved.';
+    case 'StateExpired': return 'The LinkedIn sign-in took longer than ten minutes and expired. Start it again.';
+    case 'StateInvalid': return 'The LinkedIn sign-in could not be verified. Start it again from this page.';
+    case 'ExchangeFailed': return 'LinkedIn refused the sign-in code. Start the connection again.';
+    case 'VaultUnavailable': return 'The credential store is not configured on this server, so the account could not be saved.';
+    case 'BrandNotFound': return 'The brand this connection was started for no longer exists.';
+    case 'provider_refused': return 'LinkedIn refused the connection. Check the app is approved for Share on LinkedIn and try again.';
+    default: return `The LinkedIn connection failed${reason ? ` (${reason})` : ''}. Start it again; if it repeats, check the server log.`;
+  }
 }
 
 export default AdminBrandsPage;

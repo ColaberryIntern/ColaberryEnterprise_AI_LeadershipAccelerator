@@ -191,7 +191,15 @@ export type AiAgentType =
   // underlying cron (e.g. 'cory-engine' here vs. the separate
   // 'AutonomousEngine' registry row used for run-count tracking). See
   // backend/src/services/agentBlueprint/ticketCreatorIdentitySeed.ts.
-  | 'ticket_creator_identity';
+  | 'ticket_creator_identity'
+  // AI Employee Consolidation Program (2026-09-15/16) — a real, durable AI
+  // employee built to Reese Employee Standard 2.0, WITHOUT Reese's own
+  // 'ai_staff_mentor' type's student-DM-mentor-specific meaning (its own
+  // comment above ties it to "student DM, ProofDesk-linked"). Employee #1
+  // (Dara, Curriculum/Learning/Certification) has no student-facing surface
+  // at all — a generic type, not a Reese-specific one, so future employees
+  // (#2-#10) reuse this same literal rather than each minting their own.
+  | 'ai_employee';
 
 export type AiAgentStatus = 'idle' | 'running' | 'paused' | 'error';
 export type AiAgentTriggerType = 'cron' | 'on_demand' | 'event_driven';
@@ -266,6 +274,13 @@ interface AiAgentAttributes {
   // vs 'manual' (a human set it via reactivateAgent()) vs null (neither has
   // ever touched this agent). See ensureAiAgentAutonomySourceSchema.ts.
   autonomy_level_source?: 'auto' | 'manual' | null;
+  // AI Employee Consolidation Program (2026-09-15/16) — the program's own
+  // legacy-item-to-employee ownership fields. See
+  // ensureAiAgentConsolidationSchema.ts. All three purely declarative and
+  // additive; `null` for any row the program hasn't classified/absorbed yet.
+  record_kind?: 'employee' | 'behavior' | 'tool' | null;
+  parent_agent_id?: string | null;
+  migration_status?: 'legacy' | 'absorbed' | 'archived' | null;
   // AI Workforce Reset, Phase D.1 "Inventory" (2026-08-24) — one of the 18 real
   // `departments` table slugs, or null when not yet classified / genuinely
   // cross-cutting (never forced). `scope` is JSONB, reserved for a future
@@ -311,6 +326,9 @@ class AiAgent extends Model<AiAgentAttributes> implements AiAgentAttributes {
   declare autonomy_level: 'observe' | 'suggest' | 'act_audited' | 'communicate' | null;
   declare autonomy_level_set_at: Date | null;
   declare autonomy_level_source: 'auto' | 'manual' | null;
+  declare record_kind: 'employee' | 'behavior' | 'tool' | null;
+  declare parent_agent_id: string | null;
+  declare migration_status: 'legacy' | 'absorbed' | 'archived' | null;
   declare department: string | null;
   declare scope: Record<string, any>;
 }
@@ -473,6 +491,18 @@ AiAgent.init(
     },
     autonomy_level_source: {
       type: DataTypes.STRING(10),
+      allowNull: true,
+    },
+    record_kind: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    parent_agent_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    migration_status: {
+      type: DataTypes.STRING(20),
       allowNull: true,
     },
     department: {

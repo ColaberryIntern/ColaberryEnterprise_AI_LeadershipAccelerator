@@ -21,6 +21,7 @@
  *   · `caseStudyPublic.ts`     — the only shapes the public API may return
  *   · `caseStudyFilters.ts`    — surface profiles and the canonical filter engine
  *   · `caseStudyGuards.ts`     — runtime narrowing plus the exhaustiveness proofs
+ *   · `caseStudyVisual.ts`     — runtime lists and size limits for the visual story section
  */
 
 /* ────────────────────────────────────────────── verification vocabulary ──── */
@@ -678,6 +679,211 @@ export interface CaseStudySnapshotContent {
   readonly repositories?: readonly CaseStudyRepositoryRef[];
   readonly taxonomy: CaseStudyTaxonomy;
   readonly walkthroughVideo?: CaseStudyWalkthroughVideo;
+  /** The before/after workflow illustration, outcome cards and charts. See `caseStudyVisual.ts`. Absent means the record renders as it did before the section existed. */
+  readonly visualStory?: CaseStudyVisualStorySection;
+}
+
+/* ──────────────────────────────────────────────── the visual story ──────── */
+
+/**
+ * The visual story: the typed illustration a Case Study record may carry:
+ * a before/after (or single-state) workflow illustration, up to three outcome
+ * cards, and evidence-backed charts. Rendered below the hero on the public
+ * story page and edited in the Studio.
+ *
+ * WHY A SECTION AND NOT A DRAWING. The first record under the V2 format was
+ * reviewed as "capabilities, stack, integrations, data stores, components and
+ * twelve connection sentences before a picture", and the picture was a mermaid
+ * diagram the platform could not render on two of its three surfaces. A visual
+ * story is DATA: nodes, edges, statuses and metric references that code-owned
+ * templates draw. Nothing here is markup, SVG or CSS, and nothing here is a
+ * number - every figure a chart or card shows is resolved at projection time
+ * from a verified metric on the same record by `metricKey`. A chart part may
+ * carry a literal `value` only when it also names the `evidenceId` on this
+ * record that supports it, and the validator checks it against the referenced
+ * metric's denominator.
+ *
+ * ILLUSTRATIVE, BY CONTRACT. Motion on the workflow represents the shape of a
+ * flow, never live activity or rates; `motionNote` is printed beside it. The
+ * before-state is never inferred: the generator only ever proposes a
+ * `single_state` workflow from the architecture diagram, and a `before_after`
+ * pair exists only when a person authored the before panel from evidence.
+ *
+ * NAMING RULE. No field is called `id`, `notes`, `metadata` or `sourceRef`:
+ * those are forbidden at any depth of the public payload
+ * (`FORBIDDEN_PUBLIC_KEYS`). Graph nodes use `key`, like the architecture
+ * diagram.
+ */
+
+export const CASE_STUDY_VISUAL_SCHEMA_VERSION = 1 as const;
+export type CaseStudyVisualSchemaVersion = typeof CASE_STUDY_VISUAL_SCHEMA_VERSION;
+
+/** Which page template draws the story. `v2` is the only one; a later redesign adds a value. */
+export const CASE_STUDY_VISUAL_PRESENTATION_VERSIONS = ['v2'] as const;
+export type CaseStudyVisualPresentationVersion = typeof CASE_STUDY_VISUAL_PRESENTATION_VERSIONS[number];
+
+/** Who or what a stage is. Drives the node glyph, nothing else. */
+export const CASE_STUDY_WORKFLOW_ROLES = ['human', 'system', 'external', 'data'] as const;
+export type CaseStudyWorkflowRole = typeof CASE_STUDY_WORKFLOW_ROLES[number];
+
+/**
+ * Semantic status, with one colour meaning each on every surface:
+ * processing = blue (information, the normal path); resolved = teal (positive);
+ * attention = amber (pending, a missing event, needs a look); failure = red (an
+ * actual failure); unknown = grey. Colour is never the only carrier: the
+ * renderer prints the word or a glyph beside it.
+ */
+export const CASE_STUDY_WORKFLOW_STATUSES = ['processing', 'resolved', 'attention', 'failure', 'unknown'] as const;
+export type CaseStudyWorkflowStatus = typeof CASE_STUDY_WORKFLOW_STATUSES[number];
+
+/** A horizontal band of the illustration. Labels are per panel (`laneLabels`). */
+export const CASE_STUDY_WORKFLOW_LANES = ['primary', 'recovery', 'manual'] as const;
+export type CaseStudyWorkflowLane = typeof CASE_STUDY_WORKFLOW_LANES[number];
+
+export const CASE_STUDY_WORKFLOW_TYPES = ['before_after', 'single_state'] as const;
+export type CaseStudyWorkflowType = typeof CASE_STUDY_WORKFLOW_TYPES[number];
+
+export const CASE_STUDY_WORKFLOW_PANEL_KEYS = ['before', 'after', 'single'] as const;
+export type CaseStudyWorkflowPanelKey = typeof CASE_STUDY_WORKFLOW_PANEL_KEYS[number];
+
+export interface CaseStudyWorkflowNode {
+  /** Local graph label, `[a-z0-9_-]{1,40}`, unique within its panel. */
+  readonly key: string;
+  readonly label: string;
+  readonly sublabel?: string;
+  /** The stage's purpose, printed in the detail panel. */
+  readonly detail?: string;
+  /** "Stage 1 of the live path". */
+  readonly kicker?: string;
+  readonly role: CaseStudyWorkflowRole;
+  readonly status?: CaseStudyWorkflowStatus;
+  readonly lane?: CaseStudyWorkflowLane;
+  /** "Where the proof lives", in words. Never a URL. */
+  readonly evidence?: string;
+  /** A `case_study_evidence` row on this record. Never projected. */
+  readonly evidenceId?: string;
+  /** A metric on this record whose figure the detail panel shows as the tally. */
+  readonly metricKey?: string;
+}
+
+export interface CaseStudyWorkflowEdge {
+  readonly from: string;
+  readonly to: string;
+  readonly label?: string;
+  readonly status?: CaseStudyWorkflowStatus;
+  /** A branch condition, "source call unavailable". */
+  readonly condition?: string;
+  /** Whether illustrative particles travel this edge. Default true. */
+  readonly motion?: boolean;
+}
+
+export interface CaseStudyWorkflowPanel {
+  readonly key: CaseStudyWorkflowPanelKey;
+  readonly label: string;
+  /** One sentence shown under the toggle while this panel is active. */
+  readonly summary?: string;
+  readonly laneLabels?: Partial<Record<CaseStudyWorkflowLane, string>>;
+  readonly nodes: readonly CaseStudyWorkflowNode[];
+  readonly edges: readonly CaseStudyWorkflowEdge[];
+  readonly initialNodeKey?: string;
+}
+
+export interface CaseStudyWorkflowVisual {
+  readonly key: string;
+  readonly type: CaseStudyWorkflowType;
+  readonly title: string;
+  readonly caption?: string;
+  /** Accessible text describing the whole flow; printed when motion is off and read by assistive technology. */
+  readonly description: string;
+  /** `before_after` carries exactly `before` then `after`; `single_state` carries `single`. */
+  readonly panels: readonly CaseStudyWorkflowPanel[];
+  /** Printed beside the illustration. Defaults to the platform's standard note. */
+  readonly motionNote?: string;
+}
+
+/**
+ * Chart kinds, one per evidence shape the brief allows, each with its guardrail:
+ * composition = a whole split into exclusive parts that sum to the metric's
+ * denominator; comparison = two or more ratios with a visible caveat about
+ * their windows; share = one ratio or share metric as a bar with its
+ * denominator; two_value = two summary statistics (median and p90) that are
+ * never a distribution or a trend; zero_card = a numerator of zero over a real
+ * denominator, because zero is valid and missing is not zero.
+ */
+export const CASE_STUDY_VISUAL_CHART_KINDS = ['composition', 'comparison', 'share', 'two_value', 'zero_card'] as const;
+export type CaseStudyVisualChartKind = typeof CASE_STUDY_VISUAL_CHART_KINDS[number];
+
+export interface CaseStudyVisualChartPart {
+  readonly label: string;
+  /** Resolved from this metric's payload when set; the anchoring metric otherwise. */
+  readonly metricKey?: string;
+  /** Literal count, allowed only with `evidenceId`; checked against the denominator. */
+  readonly value?: number;
+  /** For `comparison` bars: a literal denominator, allowed only with `evidenceId`. */
+  readonly denominator?: number;
+  readonly evidenceId?: string;
+  readonly status?: CaseStudyWorkflowStatus;
+  /** A short qualifier printed with the part, "Apr 27 to 29". */
+  readonly caveat?: string;
+}
+
+export interface CaseStudyVisualChart {
+  readonly key: string;
+  readonly kind: CaseStudyVisualChartKind;
+  readonly title: string;
+  /** Units and time window, printed under the title. */
+  readonly caption?: string;
+  /** The metric that anchors the chart: its denominator is the cohort. */
+  readonly metricKey: string;
+  readonly parts?: readonly CaseStudyVisualChartPart[];
+  readonly unit?: string;
+  /** `two_value` only: the axis maximum in `unit`. */
+  readonly axisMax?: number;
+  /** The interpretive caveat that must stay visible, not folded away. */
+  readonly caveat?: string;
+  readonly limitations?: readonly string[];
+}
+
+export interface CaseStudyVisualOutcomeCard {
+  readonly metricKey: string;
+  /** The one card drawn on the accent ground. At most one. */
+  readonly emphasis?: boolean;
+}
+
+export const CASE_STUDY_VISUAL_GENERATORS = ['evidence', 'human'] as const;
+export type CaseStudyVisualGenerator = typeof CASE_STUDY_VISUAL_GENERATORS[number];
+
+export const CASE_STUDY_VISUAL_STATES = ['draft', 'approved', 'stale'] as const;
+export type CaseStudyVisualState = typeof CASE_STUDY_VISUAL_STATES[number];
+
+export interface CaseStudyVisualProvenance {
+  readonly generator: CaseStudyVisualGenerator;
+  readonly generatedAt: IsoDateTime;
+  /** Snapshot the draft was generated from, when known. */
+  readonly sourceSnapshotId?: string;
+  /** sha256 over the source sections; a mismatch with the current snapshot marks the story stale. */
+  readonly sourceContentHash: string;
+  readonly state: CaseStudyVisualState;
+  /** True once a person changed anything the generator wrote. Sync never overwrites a human-edited story. */
+  readonly humanEdited: boolean;
+}
+
+export const CASE_STUDY_VISUAL_MOTION = ['auto', 'off'] as const;
+export type CaseStudyVisualMotion = typeof CASE_STUDY_VISUAL_MOTION[number];
+
+export interface CaseStudyVisualStorySection {
+  readonly schemaVersion: CaseStudyVisualSchemaVersion;
+  readonly presentationVersion: CaseStudyVisualPresentationVersion;
+  /** The per-record switch. Off means the record renders exactly as it did before the section existed. */
+  readonly enabled: boolean;
+  /** Surfaces the story renders on. The projection drops it everywhere else. */
+  readonly surfaces: readonly CaseStudySurfaceKey[];
+  /** Default motion preference; `prefers-reduced-motion` always wins. */
+  readonly motion: CaseStudyVisualMotion;
+  readonly workflow?: CaseStudyWorkflowVisual;
+  readonly outcomeCards: readonly CaseStudyVisualOutcomeCard[];
+  readonly charts: readonly CaseStudyVisualChart[];
+  readonly provenance: CaseStudyVisualProvenance;
 }
 
 /**

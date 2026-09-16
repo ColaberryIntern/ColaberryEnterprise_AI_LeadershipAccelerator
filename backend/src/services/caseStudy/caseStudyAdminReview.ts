@@ -36,6 +36,8 @@ import { surfaceView } from './caseStudySurfaceView';
 import { getCaseStudySurfaceProfile } from './caseStudySurfaceProfiles';
 import CaseStudySnapshot from '../../models/CaseStudySnapshot';
 import CaseStudySyncRun from '../../models/CaseStudySyncRun';
+import CaseStudyEvidence from '../../models/CaseStudyEvidence';
+import { validateVisualStory, visualStoryContextFromContent } from './caseStudyVisualStoryValidate';
 import { ensureTraceId } from '../../utils/requestContext';
 import { hashCanonical } from '../../utils/canonicalHash';
 import { applyOverrides } from './caseStudySnapshotOverrides';
@@ -236,6 +238,32 @@ export async function applyHumanOverride(input: unknown): Promise<ApplyOverrideR
   const row = requireSnapshot(await latestSnapshotRow(data.caseStudyId), data.caseStudyId);
   const content = (row.content ?? {}) as unknown as CaseStudySnapshotContent;
   const recordedAt = new Date().toISOString();
+
+  // THE VISUAL STORY IS VALIDATED BEFORE IT IS WRITTEN. Every other section is
+  // prose or a shape the gate already governs; this one is a graph plus figures
+  // that a renderer draws from directly, so a bad edge or a part that does not
+  // sum is refused here with the field it names, rather than discovered as a
+  // publish blocker three screens later. The context is the snapshot being
+  // edited plus the evidence rows on this record, so a literal chart value has
+  // to cite evidence that exists.
+  if (data.path === 'visualStory' && data.value !== null && data.value !== undefined) {
+    const evidenceRows = await CaseStudyEvidence.findAll({
+      where: { case_study_id: data.caseStudyId }, attributes: ['id'],
+    });
+    const result = validateVisualStory(
+      data.value,
+      visualStoryContextFromContent(content, evidenceRows.map((e) => String(e.id))),
+    );
+    if (!result.ok) {
+      log('case_study.override_applied', 'failure', correlationId, {
+        case_study_id: data.caseStudyId, snapshot_id: row.id, path: data.path,
+        error_class: 'ValidationError',
+      });
+      throw new CaseStudyAdminError('ValidationError',
+        `The visual story was not saved: ${result.errors.length} problem(s), the first at "${result.errors[0].path}": ${result.errors[0].message}`,
+        { path: data.path, errors: result.errors });
+    }
+  }
 
   const application = applyOverrides(content, [{
     path: data.path, value: data.value, actor: data.actor, recordedAt,

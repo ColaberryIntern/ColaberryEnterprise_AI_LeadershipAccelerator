@@ -50,8 +50,8 @@ describe('VALID_EVENT_TYPES - the 30-character column bound (AC1)', () => {
   });
 });
 
-describe('VALID_EVENT_TYPES - the seven Case Study events (AC1)', () => {
-  it('registers exactly the seven names the spec defines', () => {
+describe('VALID_EVENT_TYPES - the eight Case Study events (AC1)', () => {
+  it('registers exactly the seven names the spec defines, plus the visual story interaction', () => {
     expect([...CASE_STUDY_EVENT_TYPES]).toEqual([
       'case_study_view',
       'case_study_filter',
@@ -60,6 +60,7 @@ describe('VALID_EVENT_TYPES - the seven Case Study events (AC1)', () => {
       'case_study_artifact_click',
       'case_study_cta_click',
       'case_study_share',
+      'case_study_visual_interaction',
     ]);
   });
 
@@ -131,7 +132,7 @@ describe('validateTrackEvent - the /api/t/event contract is unchanged', () => {
 });
 
 describe('War Room feed allowlist (AC7)', () => {
-  it('carries all seven Case Study events', () => {
+  it('carries all eight Case Study events', () => {
     // cohortRoutes filters `pe.event_type IN (...)` BEFORE the CASE that builds
     // the label, so a missing entry is not an unlabelled row - it is no row.
     for (const type of CASE_STUDY_EVENT_TYPES) {

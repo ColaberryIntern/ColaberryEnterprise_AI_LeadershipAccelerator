@@ -106,14 +106,16 @@ describe('an unapproved app yields Handoff even for a supported action', () => {
 
   it('LinkedIn member posting is self-serve, and STILL a handoff until a live connector exists', () => {
     // Share on LinkedIn needs no app review, so the registry alone would call it direct.
-    // But nothing in this codebase can carry the request yet (LIVE_CONNECTORS is empty), and
-    // "Direct publish" over no connector is the fake Publish button spec 8.2 forbids. The
-    // first dev deploy showed exactly that label; this pins the fix.
+    // But the switch is off in this process (LIVE_CONNECTORS unset), and "Direct publish"
+    // over a switched-off connector is the fake Publish button spec 8.2 forbids. The first dev
+    // deploy showed exactly that label; this pins the fix - and, since the adapter now exists,
+    // the reason says "built but switched off", not "not implemented".
     const mode = decidePublishMode(getProviderCapabilities('linkedin_member'), 'publish');
     expect(mode.mode).toBe('handoff');
     if (mode.mode === 'handoff') {
       expect(mode.reasons).toHaveLength(1);
-      expect(mode.reasons[0]).toMatch(/No live connector is implemented/);
+      expect(mode.reasons[0]).toMatch(/built but switched off on this server \(LIVE_CONNECTORS\)/);
+      expect(mode.reasons[0]).not.toMatch(/not implemented/);
     }
     expect(publishButtonFor(mode).label).toBe('Handoff required');
     // With a connector registered it becomes the one direct path.

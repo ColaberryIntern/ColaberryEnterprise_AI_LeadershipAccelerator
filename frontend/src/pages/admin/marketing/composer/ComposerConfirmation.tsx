@@ -63,7 +63,9 @@ export default function ComposerConfirmation({ summary, busy, onAction }: Compos
               <li key={a.provider} className="d-flex align-items-center gap-2 mb-1" data-testid={`confirm-account-${a.provider}`}>
                 <span>{a.displayName}</span>
                 <StatusBadge label={a.mode === 'direct' ? 'Direct publish' : 'Handoff required'} tone={a.mode === 'direct' ? 'success' : 'warning'} />
-                <span className="small text-muted">Account: not connected</span>
+                {a.account
+                  ? <span className="small text-muted" data-testid={`confirm-account-name-${a.provider}`}>Account: {a.account.displayName}{a.account.handle ? ` (${a.account.handle})` : ''}</span>
+                  : <span className={`small ${a.mode === 'direct' ? 'text-danger' : 'text-muted'}`} data-testid={`confirm-account-name-${a.provider}`}>{a.mode === 'direct' ? 'Account: none connected - connect one on the Brands page' : 'Account: not needed (handoff)'}</span>}
                 {a.reasons.length > 0 && <span className="small text-muted">- {a.reasons[0]}</span>}
               </li>
             ))}

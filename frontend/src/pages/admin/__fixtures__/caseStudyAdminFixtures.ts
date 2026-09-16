@@ -399,6 +399,7 @@ export function projectionFixture(
       shape: null, payload: null, plain: null, reproduceCommand: null,
     }],
     walkthroughVideo: null,
+  visualStory: null,
     situation: {
       heading: 'The situation',
       body: ['Adjusters were triaging by hand.'],
