@@ -35,7 +35,7 @@ interface Props {
 }
 
 export default function AgentOverviewV2MainColumn({ detail }: Props) {
-  const { agent, trust_contract, cost_summary, authorization_summary, capabilities, related_tasks, tickets, ticket_breakdown } = detail;
+  const { agent, trust_contract, cost_summary, authorization_summary, capabilities, related_tasks, owned_behaviors, tickets, ticket_breakdown } = detail;
   const currentIndex = agent.autonomy_level ? AUTONOMY_LEVELS.indexOf(agent.autonomy_level) : -1;
 
   const shadowNote = authorization_summary.total === 0
@@ -180,6 +180,36 @@ export default function AgentOverviewV2MainColumn({ detail }: Props) {
               </div>
             </div>
             <div className="adv2-side"><div className="adv2-v">{task.run_count} / {task.error_count}</div>runs / errors</div>
+          </div>
+        ))}
+      </section>
+
+      {/* AI Employee Consolidation Program (2026-09-15/16) — mission Section
+          13: legacy workflows appear inside the employee's own "Capabilities
+          & Automations" area, never as peers pretending to be separate
+          employees. Real ownership via parent_agent_id
+          (agentDetailService.ts's owned_behaviors), not the same-module
+          inference "Scheduled work" above uses. Honest-empty for the whole
+          fleet on day one except Dara — never hidden, so an employee whose
+          absorption hasn't happened yet reads as genuinely empty, not broken. */}
+      <section className="adv2-card">
+        <h2>Capabilities &amp; Automations <span className="adv2-hint">{owned_behaviors.length} owned</span></h2>
+        {owned_behaviors.length === 0 ? (
+          <p className="adv2-muted" style={{ padding: '16px 18px', margin: 0 }}>This agent doesn't own any absorbed legacy behaviors or tools yet.</p>
+        ) : owned_behaviors.map((b) => (
+          <div className="adv2-task" key={b.id}>
+            <div>
+              <h3>
+                {b.agent_name}{' '}
+                <span className={`adv2-pill ${b.enabled ? 'adv2-trust' : 'adv2-neutral'}`}>{b.enabled ? 'Enabled' : 'Disabled'}</span>{' '}
+                {b.record_kind && <span className="adv2-pill adv2-neutral">{b.record_kind}</span>}
+              </h3>
+              {b.description && <p>{b.description}</p>}
+              <div className="adv2-meta">
+                {b.schedule && <div><span>Schedule</span> <code>{b.schedule}</code></div>}
+                <div><span>Migration status</span> {b.migration_status ?? 'unclassified'}</div>
+              </div>
+            </div>
           </div>
         ))}
       </section>

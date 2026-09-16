@@ -114,6 +114,19 @@ describe('deriveAgentCapabilities', () => {
     expect(result.produces).toContain('A fresh StudentAssessment row, only when the existing one is missing or past its own reassessment_date');
   });
 
+  it('happy path: Dara\'s real 4-tool set (AI Employee Consolidation Program, Employee #1, Phase 4) resolves fully documented', () => {
+    const result = deriveAgentCapabilities([
+      'flag_curriculum_content_gaps',
+      'flag_certification_readiness',
+      'scan_curriculum_integrity',
+      'monitor_curriculum_video_health',
+    ]);
+
+    expect(result.undocumentedTools).toEqual([]);
+    expect(result.produces.some((p) => p.includes('creates no ticket'))).toBe(true);
+    expect(result.produces.some((p) => p.includes('workforce_tasks row when a course area has zero blueprints'))).toBe(true);
+  });
+
   it('every entry in TOOL_CAPABILITIES has at least one read or produce fact (no dead/empty entries)', () => {
     for (const [tool, capability] of Object.entries(TOOL_CAPABILITIES)) {
       const hasContent = capability.reads.length > 0 || capability.produces.length > 0;

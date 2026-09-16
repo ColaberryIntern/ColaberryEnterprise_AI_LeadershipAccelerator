@@ -59,6 +59,7 @@ const DETAIL: AgentDetail = {
   tickets: [],
   ticket_breakdown: [],
   related_tasks: [],
+  owned_behaviors: [],
   persona_version_history: [],
   cost_summary: { cost_usd: 0.42, runs: 38 },
   authorization_summary: { window_days: 30, total: 38, allow: 34, approval: 3, block: 1, enforced_count: 0 },
@@ -142,5 +143,35 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
     getManagerInboxItems.mockClear();
     await openOverviewTab();
     expect(getManagerInboxItems).not.toHaveBeenCalled();
+  });
+
+  // AI Employee Consolidation Program (2026-09-15/16) — mission Section 13:
+  // legacy workflows appear inside the employee's own "Capabilities &
+  // Automations" area, real ownership via owned_behaviors (parent_agent_id),
+  // not related_tasks' same-module inference.
+  it('Capabilities & Automations: honest empty state when this agent owns nothing yet (the whole fleet on day one except Dara)', async () => {
+    await renderAgentPage();
+    await openOverviewTab();
+
+    expect(container.textContent).toContain('Capabilities & Automations');
+    expect(container.textContent).toContain("doesn't own any absorbed legacy behaviors or tools yet");
+  });
+
+  it('Capabilities & Automations: renders a real owned behavior when owned_behaviors has one', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      owned_behaviors: [{
+        id: 'director-id', agent_name: 'WorkforceCurriculumDirector', record_kind: 'behavior',
+        description: 'Flags curriculum gaps daily.', trigger_type: 'cron', schedule: '10 6 * * *',
+        enabled: true, migration_status: 'absorbed',
+      }],
+    });
+    await renderAgentPage();
+    await openOverviewTab();
+
+    expect(container.textContent).toContain('WorkforceCurriculumDirector');
+    expect(container.textContent).toContain('Flags curriculum gaps daily.');
+    expect(container.textContent).toContain('behavior');
+    expect(container.textContent).not.toContain("doesn't own any absorbed legacy behaviors");
   });
 });

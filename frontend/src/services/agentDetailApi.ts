@@ -56,6 +56,21 @@ export interface AgentDetailRelatedTask {
   error_count: number;
 }
 
+/** AI Employee Consolidation Program (2026-09-15/16) — "Capabilities &
+ * Automations": the real legacy behaviors/tools this employee OWNS via the
+ * program's real parent_agent_id ownership column, distinct from
+ * AgentDetailRelatedTask's same-module inference above. */
+export interface AgentDetailOwnedBehavior {
+  id: string;
+  agent_name: string;
+  record_kind: 'employee' | 'behavior' | 'tool' | null;
+  description: string | null;
+  trigger_type: string | null;
+  schedule: string | null;
+  enabled: boolean;
+  migration_status: 'legacy' | 'absorbed' | 'archived' | null;
+}
+
 /** One tool's own reads/produces, so the UI can show a per-tool drill-down
  * instead of only the flattened union below. */
 export interface AgentDetailToolCapability {
@@ -196,6 +211,7 @@ export interface AgentDetail {
   tickets: AgentDetailTicket[];
   ticket_breakdown: AgentDetailTicketTypeBreakdown[];
   related_tasks: AgentDetailRelatedTask[];
+  owned_behaviors: AgentDetailOwnedBehavior[];
   persona_version_history: AgentDetailPersonaVersionHistoryRow[];
   cost_summary: AgentDetailCostSummary | null;
   authorization_summary: AgentDetailAuthorizationSummary;

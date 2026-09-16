@@ -34,6 +34,7 @@ function makeDetail(overrides: Partial<AgentDetail> = {}): AgentDetail {
     tickets: [],
     ticket_breakdown: [],
     related_tasks: [],
+    owned_behaviors: [],
     persona_version_history: [],
     cost_summary: null,
     authorization_summary: { window_days: 30, total: 0, allow: 0, approval: 0, block: 0, enforced_count: 0 },
