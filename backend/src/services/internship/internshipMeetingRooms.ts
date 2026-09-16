@@ -1,7 +1,9 @@
 import CommunityRoom from '../../models/CommunityRoom';
 import RoomMembership from '../../models/RoomMembership';
 import CohortMembership from '../../models/CohortMembership';
-import { ensureInternshipCohort, internshipSettings, type RequiredMeeting } from './internshipCohortService';
+import {
+  DEFAULT_INTERNSHIP_SETTINGS, ensureInternshipCohort, internshipSettings, type RequiredMeeting,
+} from './internshipCohortService';
 import { createMeeting, isZoomConfigured } from '../zoomService';
 
 /**
@@ -119,6 +121,27 @@ async function ensureRoomLink(room: CommunityRoom): Promise<string | null> {
   }
 }
 
+/**
+ * Give one intern access to the interns-only standup room. Called on activation so
+ * an intern who joins after the rooms were provisioned still gets in. Idempotent
+ * (unique on room_id+enrollment_id); a no-op when the room does not exist yet,
+ * because the provisioning run seeds every current intern anyway.
+ */
+export async function ensureInternInStandupRoom(enrollmentId: string): Promise<void> {
+  const room = await CommunityRoom.findOne({ where: { slug: INTERNS_ROOM_SLUG } });
+  if (!room) return;
+  await RoomMembership.findOrCreate({
+    where: { room_id: room.id, enrollment_id: enrollmentId },
+    defaults: {
+      room_id: room.id,
+      enrollment_id: enrollmentId,
+      role: 'member',
+      access_state: 'active',
+      joined_at: new Date(),
+    },
+  });
+}
+
 export async function ensureInternshipMeetingRooms(): Promise<MeetingRoomsResult> {
   const { cohort } = await ensureInternshipCohort();
 
@@ -157,9 +180,14 @@ export async function ensureInternshipMeetingRooms(): Promise<MeetingRoomsResult
     });
   }
 
-  // Write the real links + room slugs into the cohort's meeting schedule.
+  // Write the real links + room slugs into the cohort's meeting schedule. Base the
+  // schedule on the canonical DEFAULT (the four real meetings with their audiences),
+  // NOT internshipSettings(cohort).required_meetings — a cohort provisioned before
+  // this feature still carries the stale 2-entry list in settings_json, and
+  // internshipSettings merges that OVER the defaults, so using it would re-link the
+  // wrong meetings. Every other settings key is preserved.
   const settings = internshipSettings(cohort);
-  const meetings = applyRoomLinks(settings.required_meetings, {
+  const meetings = applyRoomLinks(DEFAULT_INTERNSHIP_SETTINGS.required_meetings, {
     internsSlug: internsRoom.slug, internsLink,
     publicSlug: publicRoom.slug, publicLink,
   });

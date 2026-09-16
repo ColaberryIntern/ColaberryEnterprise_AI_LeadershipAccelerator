@@ -13,6 +13,7 @@ import { outstandingRequirements } from './internshipDocumentService';
 import { ensureInternshipCohort, internshipSettings, type RequiredMeeting } from './internshipCohortService';
 import { getProjectByEnrollment } from '../projectService';
 import { getStudentWeekBreakdown } from '../curriculumCompletionService';
+import { ensureInternInStandupRoom } from './internshipMeetingRooms';
 import {
   activationBlockers, checklistProgress, nextStudentAction, resolveChecklist,
   type ChecklistEvidence, type ChecklistStepStatus,
@@ -215,6 +216,19 @@ export async function activate(params: {
         meta: { application_id: application.id },
       });
     }
+  }
+
+  // Give the now-active intern access to the interns-only standup room. Best-effort:
+  // a failure here must never block activation, and the room-provisioning run also
+  // seeds current interns, so a miss is recovered there.
+  try {
+    await ensureInternInStandupRoom(application.enrollment_id);
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'intern_standup_room_grant_failed', outcome: 'partial',
+      error_class: err?.constructor?.name ?? 'Error', context: { enrollment_id: application.enrollment_id },
+    }));
   }
 
   await application.reload();
