@@ -68,9 +68,17 @@ async function runDomainFlag(slug: string, agentName: string, domain: string): P
 }
 
 export const runStudentSuccessDirector = () => runDomainFlag('student_success', 'WorkforceStudentSuccessDirector', 'student_success');
-export const runCurriculumDirector = () => runDomainFlag('curriculum', 'WorkforceCurriculumDirector', 'curriculum');
+// AI Employee Consolidation Program (2026-09-16) — Ali, live: "I want the AI
+// Agent to own the process. If Dara is down, that means no one is checking
+// the curriculum." Both curriculum-domain directors now gate, authorize, and
+// log under Dara's own identity ('Dara', not the legacy names) — if her own
+// AiAgent row is disabled or paused, gate() blocks both real writes exactly
+// as it would for any of her own actions, not a parallel identity that keeps
+// running regardless of her state. agentPermissionService.ts's Dara entry
+// covers both flag_curriculum/flag_certification operations.
+export const runCurriculumDirector = () => runDomainFlag('curriculum', 'Dara', 'curriculum');
 export const runCareerDirector = () => runDomainFlag('career', 'WorkforceCareerDirector', 'career');
-export const runCertificationDirector = () => runDomainFlag('certification', 'WorkforceCertificationDirector', 'certification');
+export const runCertificationDirector = () => runDomainFlag('certification', 'Dara', 'certification');
 export const runFinanceDirector = () => runDomainFlag('finance', 'WorkforceFinanceDirector', 'finance');
 export const runOperationsDirector = () => runDomainFlag('operations', 'WorkforceOperationsDirector', 'operations');
 export const runCommunityDirector = () => runDomainFlag('community', 'WorkforceCommunityDirector', 'community');
