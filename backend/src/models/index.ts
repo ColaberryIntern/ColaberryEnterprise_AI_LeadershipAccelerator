@@ -447,6 +447,9 @@ import GrowthJourneyClassification from './GrowthJourneyClassification';
 import GrowthJourneyTransition from './GrowthJourneyTransition';
 import GrowthJourneyContentRule from './GrowthJourneyContentRule';
 import GrowthJourneyDecision from './GrowthJourneyDecision';
+import GrowthJourneyHandoff from './GrowthJourneyHandoff';
+import GrowthJourneyOutcome from './GrowthJourneyOutcome';
+import GrowthJourneyPolicy from './GrowthJourneyPolicy';
 import GrowthJourneyProfile from './GrowthJourneyProfile';
 import GrowthJourneyScoreSnapshot from './GrowthJourneyScoreSnapshot';
 import SenderProfile from './SenderProfile';
@@ -1620,6 +1623,9 @@ export {
   GrowthJourneyTransition,
   GrowthJourneyContentRule,
   GrowthJourneyDecision,
+  GrowthJourneyHandoff,
+  GrowthJourneyOutcome,
+  GrowthJourneyPolicy,
   GrowthJourneyProfile,
   GrowthJourneyScoreSnapshot,
   SenderProfile,

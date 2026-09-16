@@ -33,6 +33,7 @@ const CAPABILITIES: GrowthJourneyCapability[] = [
   'journeySignalIngest',
   'journeyClassification',
   'journeyDecisions',
+  'journeyHandoffs',
   'journeyExecution',
 ];
 
@@ -47,14 +48,28 @@ describe('default OFF, per flag', () => {
     for (const key of FLAG_KEYS) expect(flags[key]).toBe(false);
   });
 
-  it('has exactly five flags — a master and four capabilities', () => {
-    // Phase 3 (T303) added `journeyDecisions`. The counts are asserted rather
-    // than derived so that adding a fifth capability is a deliberate edit here
-    // and not a line that slides in: every one of these flags is a thing that
-    // changes what the system does to a person.
-    expect(FLAG_KEYS).toHaveLength(5);
-    expect(SUB_FLAGS).toHaveLength(4);
-    expect(CAPABILITIES).toHaveLength(4);
+  it('has exactly six flags — a master and five capabilities', () => {
+    // Phase 3 (T303) added `journeyDecisions`; Phase 4 (T401) added
+    // `journeyHandoffs`. The counts are asserted rather than derived so that
+    // adding a capability is a deliberate edit here and not a line that slides
+    // in: every one of these flags is a thing that changes what the system
+    // does to a person.
+    expect(FLAG_KEYS).toHaveLength(6);
+    expect(SUB_FLAGS).toHaveLength(5);
+    expect(CAPABILITIES).toHaveLength(5);
+  });
+
+  it('journeyHandoffs gates the handoff row, never a contact — and the master still overrides it', () => {
+    const on = { GROWTH_JOURNEY_ENABLED: 'true', GROWTH_JOURNEY_HANDOFFS_ENABLED: 'true' };
+    expect(resolveGrowthJourneyFlags(env()).journeyHandoffs).toBe(false);
+    expect(resolveGrowthJourneyFlags(env(on)).journeyHandoffs).toBe(true);
+    expect(isGrowthJourneyCapabilityEnabled('journeyHandoffs', resolveGrowthJourneyFlags(env(on)))).toBe(true);
+    const masterOff = { GROWTH_JOURNEY_HANDOFFS_ENABLED: 'true' };
+    expect(isGrowthJourneyCapabilityEnabled('journeyHandoffs', resolveGrowthJourneyFlags(env(masterOff)))).toBe(false);
+    // A handoff is a row a human reads. It does not switch on execution, and it
+    // does not switch on decisions either: the two are independent gates.
+    expect(resolveGrowthJourneyFlags(env(on)).journeyExecution).toBe(false);
+    expect(isGrowthJourneyCapabilityEnabled('journeyDecisions', resolveGrowthJourneyFlags(env(on)))).toBe(false);
   });
 
   it('journeyDecisions gates deciding, never contacting — and the master still overrides it', () => {
@@ -109,7 +124,7 @@ describe('the master governs every capability', () => {
     expect(enabledGrowthJourneyCapabilities(flags)).toEqual(['journeyClassification']);
   });
 
-  it('everything on enables all four', () => {
+  it('everything on enables all five', () => {
     const flags = resolveGrowthJourneyFlags(allOn());
     expect(enabledGrowthJourneyCapabilities(flags).sort()).toEqual([...CAPABILITIES].sort());
   });

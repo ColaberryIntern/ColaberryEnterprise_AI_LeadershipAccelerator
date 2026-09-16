@@ -80,6 +80,7 @@ describe('parseArgs', () => {
       journeySignalIngest: false,
       journeyClassification: false,
       journeyDecisions: true,
+      journeyHandoffs: false,
       journeyExecution: false,
     });
     expect(Object.isFrozen(DRY_RUN_FLAGS)).toBe(true);

@@ -21,6 +21,7 @@ const flags = (over: Partial<GrowthJourneyFlags> = {}): GrowthJourneyFlags =>
     journeySignalIngest: false,
     journeyClassification: false,
     journeyDecisions: true,
+    journeyHandoffs: false,
     journeyExecution: false,
     ...over,
   });
