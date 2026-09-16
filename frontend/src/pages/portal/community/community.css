@@ -312,3 +312,19 @@ img.cm-avatar-btn{background:var(--sunken,#F1F1F0)}
   .cm-event-join{padding:8px 14px}
   .cm-people-grid{grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
 }
+
+/* One tone per rung (services/bandLadder.rungTone). Bands share a hue and
+   deepen by rung: Aware grey, Enabled berry, Builder I–III leaf, Builder IV
+   (Program Graduate) gold, Architect cherry, Senior plum. Text colours are
+   kept dark enough on their tints to pass AA on the white cards. */
+.cm-lvl-badge.tone-aware-1{background:rgba(107,107,107,.10);color:#6B6B6B;border-color:rgba(107,107,107,.20)}
+.cm-lvl-badge.tone-aware-2{background:rgba(107,107,107,.18);color:#4F4F4F;border-color:rgba(107,107,107,.30)}
+.cm-lvl-badge.tone-enabled-1{background:rgba(54,120,149,.12);color:#367895;border-color:rgba(54,120,149,.24)}
+.cm-lvl-badge.tone-enabled-2{background:rgba(54,120,149,.22);color:#2A5F78;border-color:rgba(54,120,149,.36)}
+.cm-lvl-badge.tone-builder-1{background:rgba(70,138,46,.12);color:#468A2E;border-color:rgba(70,138,46,.24)}
+.cm-lvl-badge.tone-builder-2{background:rgba(70,138,46,.20);color:#3B7A25;border-color:rgba(70,138,46,.34)}
+.cm-lvl-badge.tone-builder-3{background:rgba(70,138,46,.30);color:#2E6A1C;border-color:rgba(70,138,46,.46)}
+.cm-lvl-badge.tone-builder-4{background:rgba(232,146,12,.18);color:#8A5200;border-color:rgba(232,146,12,.40)}
+.cm-lvl-badge.tone-architect{background:rgba(229,18,29,.12);color:#C8102E;border-color:rgba(229,18,29,.26)}
+.cm-lvl-badge.tone-senior{background:rgba(107,45,92,.14);color:#6B2D5C;border-color:rgba(107,45,92,.30)}
+.cm-profile-stat b.cm-profile-rung{font-family:inherit;font-size:13px;line-height:1.3;font-weight:800}

@@ -98,6 +98,8 @@ export interface LeaderboardEntry {
   display_name: string;
   points: number;
   rank: number;
+  /** Canonical rung, resolved server-side for every row; absent on an older backend. */
+  rung_name?: string | null;
 }
 
 // ONE canonical level ladder (mirrors backend pointsService.LEVELS / frontend

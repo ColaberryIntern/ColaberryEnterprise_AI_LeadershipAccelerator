@@ -83,6 +83,41 @@ export function buildRungForSlug(slug: string | null | undefined): string {
   return BUILD_RUNG_BY_SLUG[slug] || slug.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/**
+ * The colour a rung badge wears — one tone per rung, so the ladder reads at a
+ * glance (Ali, 2026-09-16: "can the different ranks have different colors").
+ * Bands share a hue and rungs within a band deepen it: Aware in grey, Enabled
+ * in berry, Builder I–III in leaf, Builder IV (Program Graduate) in gold,
+ * Architect in cherry, Senior in plum. The class names are what community.css
+ * styles; an unknown rung falls back to the entry tone.
+ */
+export type RungTone =
+  | 'aware-1' | 'aware-2' | 'enabled-1' | 'enabled-2'
+  | 'builder-1' | 'builder-2' | 'builder-3' | 'builder-4'
+  | 'architect' | 'senior';
+
+const RUNG_TONES: Record<string, RungTone> = {
+  'AI Aware I': 'aware-1',
+  'AI Aware II': 'aware-2',
+  'AI Enabled I': 'enabled-1',
+  'AI Enabled II': 'enabled-2',
+  'AI Builder I': 'builder-1',
+  'AI Builder II': 'builder-2',
+  'AI Builder III': 'builder-3',
+  'AI Builder IV': 'builder-4',
+  'AI Builder IV · Program Graduate': 'builder-4',
+  // Legacy ladder rungs still on a few rows until the sweep re-slugs them.
+  'AI Builder V': 'builder-4',
+  'AI Builder VI': 'builder-4',
+  'AI Architect': 'architect',
+  'Senior AI Architect': 'senior',
+};
+
+export function rungTone(rungName: string | null | undefined): RungTone {
+  if (!rungName) return 'aware-1';
+  return RUNG_TONES[rungName] ?? 'aware-1';
+}
+
 /** Copy for a points-capped learner at the AI Enabled ceiling, by entitlement. */
 export const CEILING_NEXT_ENTITLED = 'Ship your first build to reach AI Builder I';
 export const CEILING_NEXT_FREE = 'Join the program to unlock AI Builder';

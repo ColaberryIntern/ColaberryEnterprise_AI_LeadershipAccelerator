@@ -1,6 +1,6 @@
 import React from 'react';
 import { levelName } from '../../../services/communityApi';
-import { isFiveBandUiEnabled, bandRungForLevel } from '../../../services/onboardingApi';
+import { isFiveBandUiEnabled, bandRungForLevel, rungTone } from '../../../services/onboardingApi';
 
 interface Props {
   level: number;
@@ -24,13 +24,17 @@ const LEVEL_CLASS: Record<number, string> = {
 };
 
 const LevelBadge: React.FC<Props> = ({ level, size = 'md', rungName }) => {
-  const cls = `cm-lvl-badge ${LEVEL_CLASS[level] || 'cm-lvl-1'}${size === 'sm' ? ' sm' : ''}`;
   // 5-band re-skin: show the canonical band rung (e.g. "AI Enabled II"). The rung
   // falls back to the free points-band derived from `level` when a caller has no
-  // server band on hand. Flag OFF → legacy "Level N · Apprentice/…/Principal".
+  // server band on hand. The COLOUR follows the rung too (one tone per rung, see
+  // rungTone) — before 2026-09-16 it followed the points level, so every promoted
+  // learner wore the same pink as the free ceiling. Flag OFF → legacy
+  // "Level N · Apprentice/…/Principal" with the legacy level colours.
   if (isFiveBandUiEnabled()) {
-    return <span className={cls}>{rungName ?? bandRungForLevel(level)}</span>;
+    const rung = rungName ?? bandRungForLevel(level);
+    return <span className={`cm-lvl-badge tone-${rungTone(rung)}${size === 'sm' ? ' sm' : ''}`}>{rung}</span>;
   }
+  const cls = `cm-lvl-badge ${LEVEL_CLASS[level] || 'cm-lvl-1'}${size === 'sm' ? ' sm' : ''}`;
   return (
     <span className={cls}>
       Level {level} · {levelName(level)}
