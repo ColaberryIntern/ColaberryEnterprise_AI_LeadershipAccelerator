@@ -80,6 +80,7 @@ const DETAIL: AgentDetail = {
   cost_summary: { cost_usd: 0.42, runs: 38 },
   authorization_summary: { window_days: 30, total: 38, allow: 34, approval: 3, block: 1, enforced_count: 0 },
   capabilities: { reads: [], produces: [], undocumented_tools: [], produced_ticket_types: [], by_tool: [] },
+  autonomy_explanation: { level: 'observe', reason: 'No tools_granted recorded for this agent — the safe, honest default, not a guess.', matched_tool: null },
   reports_to: null,
   trust_contract: {
     trigger_type: 'on_demand', schedule: null, status: 'idle', last_run_at: null, run_count: 0,

@@ -161,6 +161,15 @@ const DETAIL: AgentDetail = {
       { tool: 'read_learner_context', reads: ['ProofDesk learner-progress signals (XP, competencies, timeline state) for the student in the conversation'], produces: [], documented: true },
     ],
   },
+  // UI follow-up to fleet-wide autonomy classification (2026-09-15) — base
+  // fixture matches this DETAIL's own tools_granted: null, so the real
+  // classifier's honest no-data default (real reason text, copied verbatim
+  // from agentCapabilityClassifier.ts's DEFAULT_CLASSIFICATION).
+  autonomy_explanation: {
+    level: 'observe',
+    reason: 'No tools_granted recorded for this agent — the safe, honest default, not a guess.',
+    matched_tool: null,
+  },
   // Org-chart hierarchy build (2026-08-19) — Reese's real shape: AI Staff
   // reporting through workforce_intelligence_engine to Kes.
   reports_to: {
@@ -961,57 +970,100 @@ describe('AgentDetailPage — reactivation flow (deactivated agent)', () => {
     return Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Reactivate' || b.textContent === 'Set level' || b.textContent === 'Saving…' || b.textContent === 'Reactivating…') as HTMLButtonElement | undefined;
   }
 
+  // UI follow-up (2026-09-15) — Ali: "why give the user the ability to
+  // change it... it wouldn't take away capabilities from it." Changing an
+  // ENABLED agent's level has zero runtime effect (confirmed via a real
+  // code audit before this change shipped), so the picker is now a
+  // click-to-reveal "Override…" affordance rather than always-open — this
+  // helper opens it. A DISABLED agent's control is unchanged (still always
+  // visible — reactivating IS a real, meaningful action).
+  function openOverride(): void {
+    const btn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Override…') as HTMLButtonElement | undefined;
+    btn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  }
+
   // Ali, live, on Reese's own page: "why is the autonomy not past Observe"
   // — traced to this picker only ever rendering for a DISABLED agent, even
   // though the real reactivateAgent() mechanism behind it has no such
-  // restriction. Now always renders; framing/copy/button-label differ by
-  // real state instead of the control disappearing once an agent is active.
-  it('an enabled agent whose level was never deliberately set still shows the picker, framed honestly (not "inactive")', async () => {
+  // restriction. Now always renders (behind "Override…" once enabled);
+  // framing/copy/button-label differ by real state instead of the control
+  // disappearing once an agent is active.
+  it('an enabled agent whose level was never deliberately set shows the honest "untouched default" framing and the real classifier reason, not "inactive"', async () => {
     getAgentDetail.mockResolvedValue(DETAIL); // enabled: true, autonomy_level_set_at: null
 
     await renderAgentPage();
 
-    expect(reactivateSelect()).toBeDefined();
-    expect(container.textContent).toContain("This agent's autonomy level has never been deliberately set");
+    expect(container.textContent).toContain('Sitting at the untouched default');
+    expect(container.textContent).toContain('No tools_granted recorded for this agent');
     expect(container.textContent).not.toContain('This agent is inactive.');
+
+    await act(async () => { openOverride(); });
+    expect(reactivateSelect()).toBeDefined();
     expect(autonomyButton()!.textContent).toBe('Set level');
   });
 
-  it('an enabled agent with a real, previously-set autonomy level shows when it was last set, not the "never set" framing', async () => {
-    getAgentDetail.mockResolvedValue({ ...DETAIL, agent: { ...DETAIL.agent, autonomy_level: 'suggest', autonomy_level_set_at: '2026-09-01T00:00:00Z' } });
+  it('an enabled agent with a real, previously-set autonomy level that still matches its real granted tools shows the "still matches" framing, not "never set" or stale', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      agent: { ...DETAIL.agent, autonomy_level: 'suggest', autonomy_level_set_at: '2026-09-01T00:00:00Z' },
+      autonomy_explanation: { level: 'suggest', reason: 'Matched "propose_content_rewrite" — highest-capability tool among 1 granted.', matched_tool: 'propose_content_rewrite' },
+    });
 
     await renderAgentPage();
 
-    expect(container.textContent).toContain('Autonomy level last set');
+    expect(container.textContent).toContain('Set by a human');
+    expect(container.textContent).toContain('still matches what the agent\'s real granted tools would earn');
     expect(container.textContent).not.toContain('never been deliberately set');
+    expect(container.textContent).not.toContain('have since changed');
   });
 
   // Fleet-wide autonomy-level auto-classification, Phase 2 (2026-09-14) —
   // the system classified this, no human reviewed it; the UI must say so
-  // rather than looking identical to a real human decision.
-  it('an enabled agent auto-classified by the capability classifier shows an honest "no human has reviewed this" notice, not the manual-set framing', async () => {
+  // rather than looking identical to a real human decision, and must show
+  // the REAL reason (2026-09-15 follow-up), not a generic disclaimer.
+  it('an enabled agent auto-classified by the capability classifier shows the real classification reason, not the manual-set framing', async () => {
     getAgentDetail.mockResolvedValue({
       ...DETAIL,
       agent: { ...DETAIL.agent, autonomy_level: 'act_audited', autonomy_level_set_at: '2026-09-14T00:00:00Z', autonomy_level_source: 'auto' },
+      autonomy_explanation: { level: 'act_audited', reason: 'Matched "create_tickets" — highest-capability tool among 2 granted.', matched_tool: 'create_tickets' },
     });
 
     await renderAgentPage();
 
     expect(container.textContent).toContain('Auto-classified');
-    expect(container.textContent).toContain('no human has reviewed this');
-    expect(container.textContent).not.toContain('Autonomy level last set');
+    expect(container.textContent).toContain('Matched "create_tickets"');
+    expect(container.textContent).not.toContain('Set by a human');
   });
 
   it('an enabled agent with a real, previously-set autonomy level and NO recorded source (predates the source column) still shows the honest manual-set framing, never defaulted to auto', async () => {
     getAgentDetail.mockResolvedValue({
       ...DETAIL,
       agent: { ...DETAIL.agent, autonomy_level: 'suggest', autonomy_level_set_at: '2026-09-01T00:00:00Z', autonomy_level_source: null },
+      autonomy_explanation: { level: 'suggest', reason: 'Matched "propose_content_rewrite" — highest-capability tool among 1 granted.', matched_tool: 'propose_content_rewrite' },
     });
 
     await renderAgentPage();
 
-    expect(container.textContent).toContain('Autonomy level last set');
+    expect(container.textContent).toContain('Set by a human');
     expect(container.textContent).not.toContain('Auto-classified');
+  });
+
+  // UI follow-up (2026-09-15) — the honesty guardrail on the OTHER side of
+  // "never silently overwrite a human's manual choice": if this agent's real
+  // granted tools have since changed, a stale manual setting is disclosed,
+  // not left looking current forever.
+  it('a manually-set level that no longer matches the agent\'s CURRENT real granted tools discloses the staleness, naming what it would be now', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      agent: { ...DETAIL.agent, autonomy_level: 'suggest', autonomy_level_set_at: '2026-08-01T00:00:00Z', autonomy_level_source: 'manual' },
+      autonomy_explanation: { level: 'communicate', reason: 'Matched "respond_to_dm" — highest-capability tool among 4 granted.', matched_tool: 'respond_to_dm' },
+    });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('have since changed');
+    expect(container.textContent).toContain('now classify it as communicate');
+    expect(container.textContent).toContain('Matched "respond_to_dm"');
   });
 
   it('happy path: setting a level on an ALREADY-ENABLED agent calls the real reactivateAgent() and shows the "set", not "reactivated", confirmation', async () => {
@@ -1021,6 +1073,7 @@ describe('AgentDetailPage — reactivation flow (deactivated agent)', () => {
     getAgentDetail.mockResolvedValue(DETAIL); // enabled: true
     await renderAgentPage();
 
+    await act(async () => { openOverride(); });
     await act(async () => {
       const select = reactivateSelect()!;
       select.value = 'communicate';
