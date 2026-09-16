@@ -2,6 +2,8 @@ import { ContentApprovalRequest, ContentItem, ContentVariant, PublishingJob } fr
 import { transition } from './contentWorkflow';
 import { WorkflowError, type Actor } from './contentWorkflowService';
 import { validateItem, type ItemValidation } from './composerService';
+import { resolveAccountFor } from '../marketing/channelAccountResolver';
+import { decidePublishMode, getProviderCapabilities, type ProviderKey } from '../publishing/providerCapabilities';
 
 /**
  * composerActionService — spec 8.1 step 9: publish now, schedule, save draft, or send for
@@ -74,9 +76,29 @@ async function enqueueJobs(item: ContentItem, publishAt: Date): Promise<ActionRe
 
   const occurrence = publishAt.toISOString();
   const revision = item.revision ?? 1;
+
+  // The account is chosen HERE, when the job is made: a variant is per provider, the job is
+  // per account. Every variant is resolved BEFORE any job is created, so a direct provider
+  // with no connected account is refused with nothing written - and with the fix in the
+  // message - rather than dead-lettered at publish time with "no account".
+  const accountByVariant = new Map<string, string | null>();
+  for (const v of variants) {
+    const channelAccountId = v.channel_account_id ?? (await resolveAccountFor(item.tenant_id, item.brand_id, v.provider))?.id ?? null;
+    const caps = getProviderCapabilities(v.provider as ProviderKey);
+    if (!channelAccountId && decidePublishMode(caps, 'publish').mode === 'direct') {
+      throw new WorkflowError(
+        `${caps.displayName} publishes directly from a connected account, and this brand has none. Connect one on the Brands page, then schedule again.`,
+        409,
+        'NoConnectedAccount',
+      );
+    }
+    accountByVariant.set(v.id, channelAccountId);
+  }
+
   const out: ActionResult['jobs'] = [];
   for (const v of variants) {
     const idempotency_key = `${item.id}:${v.id}:${revision}:${occurrence}`;
+    const channelAccountId = accountByVariant.get(v.id) ?? null;
     const [job, created] = await PublishingJob.findOrCreate({
       where: { idempotency_key },
       defaults: {
@@ -84,7 +106,7 @@ async function enqueueJobs(item: ContentItem, publishAt: Date): Promise<ActionRe
         brand_id: item.brand_id,
         content_item_id: item.id,
         content_variant_id: v.id,
-        channel_account_id: v.channel_account_id ?? null,
+        channel_account_id: channelAccountId,
         provider: v.provider,
         publish_at: publishAt,
         scheduled_occurrence: occurrence,
@@ -156,9 +178,9 @@ export async function schedule(itemId: string, scheduledFor: Date, now: Date = n
   const item = await loadItem(itemId);
   move(item, 'scheduled');
   const validation = await gate(itemId);
-  await item.update({ scheduled_for: scheduledFor });
+  // Jobs first: a refusal inside (no connected account) leaves the item exactly as it was.
   const jobs = await enqueueJobs(item, scheduledFor);
-  await item.update({ status: 'scheduled' });
+  await item.update({ scheduled_for: scheduledFor, status: 'scheduled' });
   return { action: 'schedule', item, validation, approvalRequestId: null, jobs };
 }
 
@@ -166,9 +188,8 @@ export async function publishNow(itemId: string, now: Date = new Date()): Promis
   const item = await loadItem(itemId);
   move(item, 'scheduled');
   const validation = await gate(itemId);
-  await item.update({ scheduled_for: now });
   const jobs = await enqueueJobs(item, now);
-  await item.update({ status: 'scheduled' });
+  await item.update({ scheduled_for: now, status: 'scheduled' });
   return { action: 'publish_now', item, validation, approvalRequestId: null, jobs };
 }
 

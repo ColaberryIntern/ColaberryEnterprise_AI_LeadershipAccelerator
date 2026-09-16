@@ -285,16 +285,49 @@ export type PublishMode =
   | { mode: 'handoff'; reasons: string[] };
 
 /**
- * Providers with a LIVE connector implemented in this codebase - an adapter that actually
- * calls the network. Empty today: ESC-001 blocks account connection and no provider adapter
- * exists beyond DryRun and Handoff. A provider the registry marks approved/self-serve but
- * that is not in this set still resolves to handoff, because "the platform could publish
- * this directly" is only true when something can carry the request. The first dev deploy
- * showed LinkedIn (personal profile) as "Direct publish" for exactly this gap: its jobs would
- * have dead-lettered as no_live_adapter instead of giving the operator a handoff package.
- * Add a key here in the same commit that adds its adapter to adapterRegistry.
+ * Providers with a live adapter IMPLEMENTED in this codebase - something that can carry a
+ * request to the network. Add a key here in the same commit that adds its adapter to
+ * adapterRegistry's LIVE_ADAPTERS; a test holds the two lists equal. Being implemented is not
+ * being ON: see LIVE_CONNECTORS.
  */
-export const LIVE_CONNECTORS: ReadonlySet<ProviderKey> = new Set<ProviderKey>([]);
+export const IMPLEMENTED_CONNECTORS: ReadonlySet<ProviderKey> = new Set<ProviderKey>(['linkedin_member', 'linkedin_organization']);
+
+/**
+ * Read the ON switch from the environment: `LIVE_CONNECTORS="linkedin_member,linkedin_organization"`.
+ *
+ * Environment, not code, so that go-live is "set the variables, restart" rather than a PR and
+ * a deploy at the moment the credentials arrive. Two safeguards keep the env from doing damage:
+ *   - A key that is not a provider, or a provider with NO implemented adapter, is dropped with a
+ *     warning rather than switched on. Turning on a provider the registry cannot carry is the
+ *     exact failure the first dev deploy showed (jobs dead-lettering as no_live_adapter instead
+ *     of handing off); a typo in a `.env` must not reproduce it.
+ *   - Unset or empty means OFF. There is no default-on.
+ */
+export function liveConnectorsFromEnv(env: NodeJS.ProcessEnv = process.env): ReadonlySet<ProviderKey> {
+  const raw = (env.LIVE_CONNECTORS ?? '').split(',').map((s) => s.trim()).filter((s) => s !== '');
+  const on = new Set<ProviderKey>();
+  for (const key of raw) {
+    if (!(PROVIDER_KEYS as readonly string[]).includes(key)) {
+      console.warn(JSON.stringify({ timestamp: new Date().toISOString(), level: 'warn', service: 'publishing', event: 'live_connector_unknown', outcome: 'partial', context: { key } }));
+      continue;
+    }
+    if (!IMPLEMENTED_CONNECTORS.has(key as ProviderKey)) {
+      console.warn(JSON.stringify({ timestamp: new Date().toISOString(), level: 'warn', service: 'publishing', event: 'live_connector_not_implemented', outcome: 'partial', context: { key } }));
+      continue;
+    }
+    on.add(key as ProviderKey);
+  }
+  return on;
+}
+
+/**
+ * Providers that publish DIRECTLY to the network in this process. A provider the registry marks
+ * approved/self-serve but that is not in this set still resolves to handoff, because "the
+ * platform could publish this directly" is only true when something can carry the request AND
+ * the operator has turned it on. Evaluated once at boot from the environment; changing it is a
+ * restart, like every other config.
+ */
+export const LIVE_CONNECTORS: ReadonlySet<ProviderKey> = liveConnectorsFromEnv();
 
 /**
  * May this action run directly against the network, or must it be handed off?

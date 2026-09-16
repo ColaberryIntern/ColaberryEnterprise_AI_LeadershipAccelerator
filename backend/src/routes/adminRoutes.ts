@@ -14,6 +14,7 @@ import contentComposerRoutes from './admin/contentComposerRoutes';
 import publishingRoutes from './admin/publishingRoutes';
 import channelAccountRoutes from './admin/channelAccountRoutes';
 import contentMediaRoutes from './admin/contentMediaRoutes';
+import linkedInConnectRoutes from './admin/linkedInConnectRoutes';
 import caseStudyAdminRoutes from './admin/caseStudyAdminRoutes';
 import caseStudyStudioRoutes from './admin/caseStudyStudioRoutes';
 import caseStudyMetricRoutes from './admin/caseStudyMetricRoutes';
@@ -137,6 +138,7 @@ router.use(contentComposerRoutes);
 router.use(publishingRoutes);
 router.use(channelAccountRoutes);
 router.use(contentMediaRoutes);
+router.use(linkedInConnectRoutes);
 // Case Study OS admin surface. Every path is fully qualified
 // (/api/admin/case-studies/...) and carries requireAdmin per route, so its
 // position among the sibling sub-routers is not load-bearing — but it MUST stay

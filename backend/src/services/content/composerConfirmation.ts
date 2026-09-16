@@ -144,11 +144,21 @@ export interface ConfirmationInput {
   approval: ConfirmationApprovalRequest | null;
   /** Null when validation has not been run for the current revision. */
   validation: ConfirmationValidation | null;
+  /** The brand's connected, non-revoked accounts, newest first. */
+  connectedAccounts?: readonly ConnectedAccountSummary[];
 }
 
 // ── Output: exactly what the surface renders ─────────────────────────────────────────────
 
 export type PublishModeLabel = 'direct' | 'handoff';
+
+export interface ConnectedAccountSummary {
+  id: string;
+  provider: string;
+  displayName: string;
+  handle: string | null;
+  status: string;
+}
 
 export interface ConfirmationAccount {
   provider: ProviderKey;
@@ -156,8 +166,12 @@ export interface ConfirmationAccount {
   mode: PublishModeLabel;
   /** Why this provider is a handoff rather than a direct publish. Empty for direct. */
   reasons: string[];
-  /** Always null until account connection (T003) exists. Stated, not hidden. */
-  account: null;
+  /**
+   * The brand's connected account this post would publish FROM, chosen the way the scheduler
+   * chooses it (newest connected for the provider). Null when the brand has none - which for
+   * a direct provider is a readiness blocker, and for a handoff provider means nothing.
+   */
+  account: ConnectedAccountSummary | null;
 }
 
 export interface ConfirmationSchedule {
@@ -240,6 +254,7 @@ export function buildConfirmation(input: ConfirmationInput): ConfirmationSummary
   const timezone = brand?.timezone ?? DEFAULT_BRAND_TIMEZONE;
   const timezoneSource: 'brand' | 'default' = brand?.timezone ? 'brand' : 'default';
 
+  const connected = input.connectedAccounts ?? [];
   const accounts: ConfirmationAccount[] = variants.map((v) => {
     const caps = getProviderCapabilities(v.provider);
     const decision = decidePublishMode(caps, 'publish');
@@ -248,7 +263,7 @@ export function buildConfirmation(input: ConfirmationInput): ConfirmationSummary
       displayName: caps.displayName,
       mode: decision.mode,
       reasons: decision.mode === 'handoff' ? decision.reasons : [],
-      account: null,
+      account: connected.find((a) => a.provider === v.provider && a.status === 'connected') ?? null,
     };
   });
 
@@ -287,9 +302,14 @@ export function buildConfirmation(input: ConfirmationInput): ConfirmationSummary
   if (!isApproved && (item.status === 'draft' || item.status === 'ready_for_review' || item.status === 'changes_requested')) {
     reasons.push(`Publishing needs an approved item; this one is ${item.status.replace(/_/g, ' ')}.`);
   }
-  const canSchedule = clean && isApproved && item.scheduled_for !== null;
+  // A direct provider with no account cannot publish; say so here, with the fix, rather than
+  // letting the scheduler refuse it one click later.
+  const unconnected = accounts.filter((a) => a.mode === 'direct' && a.account === null);
+  for (const a of unconnected) reasons.push(`Connect a ${a.displayName} account for this brand before publishing.`);
+  const accountsReady = unconnected.length === 0;
+  const canSchedule = clean && isApproved && item.scheduled_for !== null && accountsReady;
   if (isApproved && item.scheduled_for === null) reasons.push('Set a time to schedule, or publish now.');
-  const canPublishNow = clean && isApproved;
+  const canPublishNow = clean && isApproved && accountsReady;
 
   const direct = accounts.filter((a) => publishButtonFor(decidePublishMode(getProviderCapabilities(a.provider), 'publish')).label === 'Publish').length;
   const handoff = accounts.length - direct;

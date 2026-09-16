@@ -81,7 +81,7 @@ describe('the confirmation surface renders every field the spec names', () => {
     const li = block('confirm-account-linkedin_organization').textContent ?? '';
     expect(li).toContain('LinkedIn Page');
     expect(li).toContain('Direct publish');
-    expect(li).toContain('Account: not connected');
+    expect(li).toContain('Account: none connected - connect one on the Brands page');
     const ig = block('confirm-account-meta_instagram').textContent ?? '';
     expect(ig).toContain('Handoff required');
     expect(ig).toContain('Instagram app review is pending.');
@@ -201,6 +201,19 @@ describe('actions follow the server readiness verdict', () => {
   it('busy disables everything regardless of readiness', () => {
     render(SUMMARY, () => undefined, true);
     for (const b of Object.values(buttons())) expect(b.disabled).toBe(true);
+  });
+});
+
+describe('connected account', () => {
+  it('names the account a direct provider publishes from, and says plainly when there is none', () => {
+    render({ ...SUMMARY, accounts: [
+      { provider: 'linkedin_member', displayName: 'LinkedIn (personal profile)', mode: 'direct', reasons: [], account: { id: 'acct-1', provider: 'linkedin_member', displayName: 'Sohail Khan', handle: null, status: 'connected' } },
+      { provider: 'linkedin_organization', displayName: 'LinkedIn Page (organization)', mode: 'direct', reasons: [], account: null },
+      { provider: 'x', displayName: 'X', mode: 'handoff', reasons: ['No live connector'], account: null },
+    ] });
+    expect(container.querySelector('[data-testid="confirm-account-name-linkedin_member"]')!.textContent).toBe('Account: Sohail Khan');
+    expect(container.querySelector('[data-testid="confirm-account-name-linkedin_organization"]')!.textContent).toMatch(/none connected - connect one on the Brands page/);
+    expect(container.querySelector('[data-testid="confirm-account-name-x"]')!.textContent).toBe('Account: not needed (handoff)');
   });
 });
 
