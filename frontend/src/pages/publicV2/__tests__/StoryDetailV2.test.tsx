@@ -934,6 +934,21 @@ describe('the visual story band appears only when the record carries one', () =>
     expect(measurement?.querySelectorAll('.cbv2-cs-measure__metric').length).toBe(notes?.querySelectorAll('.cbv2-cs-measure__metric').length);
   });
 
+  it('a workflow-only story says "How it works", promises no figures, and leaves the strip and cards alone', async () => {
+    detailMock.mockResolvedValue(response({ visualStory: { ...visualStory(), outcomeCards: [], charts: [] } }));
+    mount();
+    await settle();
+    const band = q('[data-testid="story-visual"]')!;
+    expect(band.querySelector('.cbv2-eyebrow')?.textContent).toBe('How it works');
+    expect(band.textContent).toContain('carries no measured outcome yet');
+    expect(band.textContent).not.toContain('Every figure above');
+    expect(q('[data-testid="story-outcome-cards"]')).toBeNull();
+    expect(q('[data-testid="story-charts"]')).toBeNull();
+    // With no figures in the band, the strip keeps its headline figure and the cards stay open.
+    expect(q('[data-testid="story-context"] .cbv2-story__metric')).not.toBeNull();
+    expect(q('[data-testid="story-measurement-notes"]')).toBeNull();
+  });
+
   it('keeps the measurement cards open on a record with no story', async () => {
     mount();
     await settle();

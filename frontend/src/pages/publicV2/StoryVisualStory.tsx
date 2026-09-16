@@ -39,6 +39,9 @@ export function StoryVisualStory({ story }: StoryVisualStoryProps): React.ReactE
   const cards = outcomeCardsFor(story);
   const charts = chartsFor(story);
   if (!story.workflow && cards.length === 0 && charts.length === 0) return null;
+  // A record with no verified outcome still draws how its system works; the
+  // band's words must not promise figures it does not show.
+  const hasFigures = cards.length > 0 || charts.length > 0;
   return (
     <section
       className="cbv2-rv cbv2-section cbv2-story-visual"
@@ -48,15 +51,16 @@ export function StoryVisualStory({ story }: StoryVisualStoryProps): React.ReactE
     >
       <div className="cbv2-wrap cbv2-story-visual__body">
         <header className="cbv2-story-visual__head">
-          <p className="cbv2-eyebrow">How it works, and what it measured</p>
+          <p className="cbv2-eyebrow">{hasFigures ? 'How it works, and what it measured' : 'How it works'}</p>
           <h2 id="cbv2-story-visual-title" className="cbv2-story-visual__heading">The system, drawn from its own record</h2>
         </header>
         {story.workflow ? <StoryWorkflowGraph workflow={story.workflow} motion={story.motion} /> : null}
         <StoryOutcomeCards cards={cards} />
         <StoryCharts charts={charts} />
         <p className="cbv2-story-visual__note">
-          Every figure above is a verified metric on this record, shown with its own verification badge.
-          The drawing is the team's illustration of the flow, not a live view of it.
+          {hasFigures
+            ? "Every figure above is a verified metric on this record, shown with its own verification badge. The drawing is the team's illustration of the flow, not a live view of it."
+            : "The drawing is the team's illustration of the flow, drawn from the repository's own evidence, not a live view of it. This record carries no measured outcome yet, so it shows no figures."}
         </p>
       </div>
     </section>

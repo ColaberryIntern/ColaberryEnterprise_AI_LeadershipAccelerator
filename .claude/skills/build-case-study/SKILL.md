@@ -12,8 +12,14 @@ a discovery report. The order below is the order that avoids repeating them.
 
 **This skill does not publish.** Publishing is a separate, explicit instruction.
 
-**The visual story (§8d) is authored last and from the record only.** It draws the
-flow and charts the figures the record already verifies; it introduces no number.
+**Every record carries a visual story, and the gate refuses one that does not.** Since
+2026-09-16 (Ali, on approving the CORA pilot: "harden the skill so every case study moving
+forward follows this format") publish-gate rule 21, `visual_story_missing`, refuses any
+snapshot with no `visualStory` that draws a workflow. §8d is therefore a required step,
+not an option: author it after the evidence and the metrics, from the record only. It
+draws the flow and charts the figures the record already verifies; it introduces no
+number. A record with no verified outcome still draws how its system works and shows no
+figures; the band says so in words.
 
 **Start section 8 (images) FIRST.** Dispatch an agent to find or produce the cover
 image before anything else begins — it takes longer than the rest and a case study
@@ -860,15 +866,26 @@ status code: two different videos both return 200.
 
 ---
 
-## 8d. The visual story: the flow drawn, the figures charted, from the record only
+## 8d. The visual story (required): the flow drawn, the figures charted, from the record only
 
-A record may carry a `visualStory` section on its snapshot: a **workflow illustration**
+Every record carries a `visualStory` section on its snapshot: a **workflow illustration**
 (single-state, or Before/After when the before-state is evidenced), up to **three outcome
 cards**, and up to **six charts**. The public page renders it as one band directly under
 the context strip, above the first prose section; when the band shows cards, the strip
-prints no headline figure, and the Mermaid drawing folds under "View technical proof".
-A record without the section renders exactly as before. §8d is the whole rule set; the
-rest of this file still applies to every word and figure in it.
+prints no headline figure, the measurement section folds its metric cards under "Full
+notes on all N metrics" (the figures are already on the page once), and the Mermaid
+drawing folds under "View technical proof". **The gate refuses a snapshot without one**
+(`visual_story_missing`, rule 21): presence and a workflow are required, figures are not.
+Every record published before 2026-09-16 was migrated the same day; a record with no
+verified outcome carries a workflow-only story and the band says it shows no figures.
+§8d is the whole rule set; the rest of this file still applies to every word and figure.
+
+**The drawing fits its width.** The layout sizes the flow to the canvas it is given and
+falls back to one column when a step would be unreadable; the page never scrolls sideways
+for it. Keep labels short (40 characters) and steps few (a panel over about eight columns
+becomes a column on a laptop); a connection label the drawing has no room for is said in
+the step panel under "Reached from", so nothing is lost, but a flow that reads only from
+the panel is a flow with too many steps.
 
 ### What it is not
 
@@ -1069,7 +1086,7 @@ dimensions came from a person, never from a commit.
 
 ## Hardening — what is prevented, and what is only remembered
 
-Audited 2026-09-13 against the source, not from memory. **19 blocker codes** run on
+Audited 2026-09-13 against the source and extended 2026-09-16. **21 blocker codes** run on
 every publish, and every path to a live page goes through them: `publishCaseStudy` is
 called from exactly two places, `caseStudyAdminRoutes` and `caseStudyAdminReview`, and
 nothing writes `case_study_publications` directly. The gate runs on a repeat publish of
@@ -1097,6 +1114,8 @@ an already-live record too, so consent withdrawn between two clicks is caught.
 | A new blocker ships with nothing that triggers it | The coverage sweep in `caseStudyPublicationService.test.ts` asserts every declared code is emitted by some fixture, and fails CI otherwise |
 | A blocker an admin cannot act on | Every blocker must carry a field, a remedy, and a message that is not the code restated. Also a test |
 | A high readiness score authorising a publish | Readiness is advisory and reported beside the decision, never consulted by it. There is a test named for it |
+| A record with no visual story reaches a reader | `visual_story_missing` (rule 21, since 2026-09-16): a snapshot with no story, or a story that draws no workflow, is refused with the Studio's Generate-from-evidence remedy. Figures are not required; presence and a flow are |
+| A visual story that stopped being true | `visual_story_invalid` (rule 20): the same validator the save runs, so a metric that lost its verification after the story cited it refuses the publish and names the field |
 
 ### Prevented only by someone remembering — the useful half
 
@@ -1135,6 +1154,9 @@ in the second half is a rule with a half-life.
 
 ## 11. Verify, then report with denominators
 
+- **The visual story is on the snapshot and validates** (§8d): `readVisualStoryState`
+  reports `validation.ok: true`, `stale: false`; the gate lists neither
+  `visual_story_missing` nor `visual_story_invalid`. Without this the record cannot publish.
 - Override survival: re-sync and confirm each section held. Should report `unchanged`.
 - `backend/node_modules/.bin/tsc --noEmit` — never bare `npx tsc` (resolves 4.9.5).
 - `npx jest src/services/caseStudy src/types src/routes/admin src/scripts`.
@@ -1178,7 +1200,7 @@ prefixes X · walkthrough video X seconds, cues loading on X of 3 surfaces ·
 | **images** | **3** | **0** ← the live gap |
 | **walkthrough video** | added later | added later |
 | metrics with methodology + limitations | 4 of 4 | 6 of 6 |
-| **visual story (§8d)** | none | none (pilot: CORA, 2026-09-16) |
+| **visual story (§8d)** | workflow only, no verified outcome | workflow only, no verified outcome (pilot with figures: CORA, 2026-09-16) |
 
 The tickets record scores higher on rigour and lower on pictures. Both patterns are
 worth copying in one direction only.
