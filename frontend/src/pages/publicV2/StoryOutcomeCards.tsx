@@ -6,16 +6,24 @@ import type { OutcomeCardView } from './storyVisualModel';
 /**
  * StoryOutcomeCards - up to three headline figures, counting up on scroll.
  *
- * THE FINAL WORDING IS IN THE FIRST RENDER. Each card carries the metric's
- * `valueDisplay` verbatim in a visually hidden span from the first paint, so
- * assistive tech, a crawler and a screenshot taken before the animation all
- * read the true figure. The animated digits are `aria-hidden` until they
- * settle, exactly as `Accolades` does with the same hook.
+ * THE FINAL FIGURE IS IN THE FIRST RENDER, VISIBLY. Each card carries the
+ * figure in a visually hidden span from the first paint for assistive tech,
+ * and the visible digits REST AT THE FINAL VALUE until the card scrolls into
+ * view (`useCountUp`'s `restAtFinal`), so a full-page capture, a print or a
+ * crawler never reads "0%". Once in view the digits count up from zero and
+ * settle on the same wording; they are `aria-hidden` while they move.
  *
  * ONLY A WHOLE NUMBER COUNTS UP. The model decided `animate` for each card:
  * "97%" may tick; "34.2 min" and "0 of 339" render as plain text, because a
  * count-up through 0.2, 1.2, ... would show a wrong figure on the way. The
  * two shapes are two components so the hook is never called conditionally.
+ *
+ * THE FIGURE IS SHORT, THE WORDING IS WHOLE. A record's `valueDisplay` is a
+ * sentence ("97% of lost completion events resolved, from 46% by hand"); at
+ * display size in a three-column row it wrapped to five lines and read as a
+ * headline, not a number. The model's `cardFigure` takes the figure the shape
+ * gives (97%), and the sentence is printed beneath it in full, so the reader
+ * gets the number at a glance and the record's own words a line later.
  *
  * EVERY CARD SHOWS ITS BASELINE AND BADGE. A figure at display size with no
  * context is the thing the page's hero invariant forbids; these are the same
@@ -23,7 +31,8 @@ import type { OutcomeCardView } from './storyVisualModel';
  */
 
 function CountingFigure({ wording }: { wording: string }): React.ReactElement {
-  const { ref, display, settled } = useCountUp(wording);
+  // Rests at the final figure until in view: a capture taken before any scroll shows the true value, never "0%".
+  const { ref, display, settled } = useCountUp(wording, 1100, true);
   return (
     <p className="cbv2-story-visual__card-figure" ref={ref as React.RefObject<HTMLParagraphElement>}>
       <span className="cbv2-sr-only">{wording}</span>
@@ -44,15 +53,15 @@ function OutcomeCard({ card, emphasis }: { card: OutcomeCardView; emphasis: bool
       data-testid="story-outcome-card"
       data-animate={card.animate}
     >
-      {card.animate ? <CountingFigure wording={m.valueDisplay} /> : <PlainFigure wording={m.valueDisplay} />}
+      {card.animate ? <CountingFigure wording={card.figure} /> : <PlainFigure wording={card.figure} />}
       <h3 className="cbv2-story-visual__card-label">{m.label}</h3>
+      {card.statement !== card.figure ? <p className="cbv2-story-visual__card-statement">{card.statement}</p> : null}
       {m.baseline ? (
         <p className="cbv2-story-visual__card-baseline">
           <span className="cbv2-story-visual__card-term">Baseline</span>
           {m.baseline}
         </p>
       ) : null}
-      {m.plain?.counts ? <p className="cbv2-story-visual__card-plain">{m.plain.counts}</p> : null}
       <CaseStudyVerificationBadge
         verificationClass={m.verificationClass}
         verificationMethod={m.verificationMethod}

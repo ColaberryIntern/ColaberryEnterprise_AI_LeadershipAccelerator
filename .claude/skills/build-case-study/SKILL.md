@@ -860,7 +860,7 @@ status code: two different videos both return 200.
 
 ---
 
-## 8d. The visual story — the flow drawn, the figures charted, from the record only
+## 8d. The visual story: the flow drawn, the figures charted, from the record only
 
 A record may carry a `visualStory` section on its snapshot: a **workflow illustration**
 (single-state, or Before/After when the before-state is evidenced), up to **three outcome
@@ -901,7 +901,7 @@ headline and comparative metrics as cards, and proposes one chart per ratio or s
 metric by its guardrail. Edit the words in the row editors, `Preview changes`, then
 `Save`. A generated draft is `enabled: false` on no surface: turning it on is your act.
 
-### Chart mapping — the metric's shape decides the chart, never the other way round
+### Chart mapping: the metric's shape decides the chart, never the other way round
 
 | Metric shape on the record | Chart kind | What it needs | What it refuses |
 |---|---|---|---|
@@ -936,18 +936,20 @@ names up to eight refusals by path. The claim scanner reads the workflow title, 
 description, motion note, every panel label and summary, every node label, sublabel,
 kicker, detail and evidence, every edge label and condition, and every chart title,
 caption, caveat, limitation and part label. **A percentage in any of those must be
-carried by a verified metric on the record** (§6): "4.2%" in a caveat forced a
-`missing_event_rate` metric onto the CORA record before the gate would pass.
+carried by a verified metric on the record** (§6), the same rule that forced a
+`missing_event_rate` metric onto the CORA record on 2026-09-15 when "4.2%" appeared in
+its prose; a caveat on a chart is prose to the scanner.
 
 ### Previews
 
 `scripts/previewStoryLayout.js` renders the band with the rest of the page; pass the
 `{surface, caseStudy}` envelope with the projected `visualStory` in it. Check 1440,
 768 and 390 (`pageScrollW === viewportW` at all three; the graph is one 360-wide
-column below 768), and once with `prefers-reduced-motion` on: no `.cbv2-story-visual__particle`,
-and the pause control reads "Reduced motion". Every figure must be visible as text
-before any animation; a screenshot taken before the count-up must already show the
-final wording.
+column below 768 and scrolls inside its canvas at natural size above), and once with
+`prefers-reduced-motion` on: no `.cbv2-story-visual__particle`, and the pause control
+reads "Reduced motion". Every figure is visible as text before any animation: the
+cards rest at the final figure until they scroll into view, so a capture taken before
+the count-up shows the true wording, never "0%".
 
 ### Done means
 

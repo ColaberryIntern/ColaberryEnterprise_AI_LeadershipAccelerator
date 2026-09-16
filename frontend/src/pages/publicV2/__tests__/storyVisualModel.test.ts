@@ -1,5 +1,6 @@
 import {
   STATUS_WORD,
+  cardFigure,
   chartsFor,
   compositionRemainder,
   countUpEligible,
@@ -76,7 +77,21 @@ describe('countUpEligible', () => {
 describe('outcomeCardsFor', () => {
   it('keeps at most three, in wire order, and marks only parsable figures for animation', () => {
     const cards = outcomeCardsFor(story({ outcomeCards: [metric('A', '97%'), metric('B', '34.2 min'), metric('C', '0 of 339'), metric('D', '5')] }));
-    expect(cards.map((c) => [c.metric.label, c.animate])).toEqual([['A', true], ['B', false], ['C', false]]);
+    expect(cards.map((c) => [c.metric.label, c.figure, c.animate])).toEqual([['A', '97%', true], ['B', '34.2 min', false], ['C', '0 of 339', false]]);
+  });
+
+  it('takes the figure from the metric shape and keeps the record wording as the statement', () => {
+    const ratio = { ...metric('Resolved', '97% of lost completion events resolved, from 46% by hand'), shape: 'ratio', payload: { shape: 'ratio', numerator: 586, denominator: 604 } } as PublicCaseStudyMetric;
+    const share = { ...metric('Lost', '4.2% of launches lost their completion event'), shape: 'share', payload: { shape: 'share', numerator: 604, denominator: 14510 } } as PublicCaseStudyMetric;
+    const count = { ...metric('Wait', 'median 34 minutes, p90 47 minutes'), shape: 'count', payload: { shape: 'count', value: 34.2 } } as PublicCaseStudyMetric;
+    const unit = { ...count, unit: 'min' } as PublicCaseStudyMetric;
+    expect(cardFigure(ratio)).toBe('97%');
+    expect(cardFigure(share)).toBe('4.2%');
+    expect(cardFigure(count)).toBe('median 34 minutes');
+    expect(cardFigure(unit)).toBe('34.2 min');
+    const [card] = outcomeCardsFor(story({ outcomeCards: [ratio] }));
+    expect(card.statement).toBe('97% of lost completion events resolved, from 46% by hand');
+    expect(card.animate).toBe(true);
   });
 });
 

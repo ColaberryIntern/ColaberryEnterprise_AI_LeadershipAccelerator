@@ -107,8 +107,30 @@ export function wrapLabel(text: string, width = 22, lines = 2): readonly string[
 export interface OutcomeCardView {
   readonly key: string;
   readonly metric: PublicCaseStudyMetric;
+  /** The short figure at display size: a percent from a ratio or share, a count with its unit, else the first clause of the wording. */
+  readonly figure: string;
+  /** The record's own wording, printed in full beneath the figure. */
+  readonly statement: string;
   /** True only when the figure is a whole number, optionally a percent, so the count-up cannot misread it. */
   readonly animate: boolean;
+}
+
+/**
+ * The figure a card shows at display size. The metric's shape decides it: a
+ * ratio or share is its percentage (one decimal below ten, as the record
+ * writes small shares), a count with a unit is the count and the unit, and
+ * anything else is the first clause of the record's own wording ("median 34
+ * minutes"). The full wording is always printed beneath, so nothing is lost.
+ */
+export function cardFigure(metric: PublicCaseStudyMetric): string {
+  const p = metric.payload;
+  if (p && (p.shape === 'ratio' || p.shape === 'share') && p.denominator > 0) {
+    const pct = (p.numerator / p.denominator) * 100;
+    return pct >= 10 || pct === 0 ? `${Math.round(pct)}%` : `${Math.round(pct * 10) / 10}%`;
+  }
+  if (p && p.shape === 'count' && metric.unit) return `${p.value.toLocaleString('en-US')} ${metric.unit}`;
+  const first = metric.valueDisplay.split(/[,;(]/)[0].trim();
+  return first || metric.valueDisplay;
 }
 
 /**
@@ -125,11 +147,16 @@ export function countUpEligible(valueDisplay: string): boolean {
 }
 
 export function outcomeCardsFor(story: PublicCaseStudyVisualStory): readonly OutcomeCardView[] {
-  return story.outcomeCards.slice(0, 3).map((metric, i) => ({
-    key: `${i}-${metric.label}`,
-    metric,
-    animate: countUpEligible(metric.valueDisplay),
-  }));
+  return story.outcomeCards.slice(0, 3).map((metric, i) => {
+    const figure = cardFigure(metric);
+    return {
+      key: `${i}-${metric.label}`,
+      metric,
+      figure,
+      statement: metric.valueDisplay,
+      animate: countUpEligible(figure),
+    };
+  });
 }
 
 /* ------------------------------------------------------------------ charts --- */

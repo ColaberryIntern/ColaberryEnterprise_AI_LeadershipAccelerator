@@ -123,6 +123,11 @@ export function StoryWorkflowGraph({ workflow, motion }: StoryWorkflowGraphProps
             ref={svgRef}
             className="cbv2-story-visual__svg"
             viewBox={layout.viewBox}
+            /* Natural size when horizontal, so a wide flow scrolls inside its
+               canvas at legible type instead of shrinking the whole drawing
+               to fit; the vertical column scales to the phone's width. */
+            width={orientation === 'horizontal' ? layout.width : undefined}
+            height={orientation === 'horizontal' ? layout.height : undefined}
             role="group"
             aria-label={`${panel.label}: ${panel.nodes.length} steps, ${panel.edges.length} connections`}
             data-testid="story-workflow-svg"

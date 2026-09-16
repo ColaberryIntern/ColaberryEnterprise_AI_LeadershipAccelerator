@@ -42,7 +42,6 @@ describe('StoryOutcomeCards', () => {
     expect(out).toContain('0 of 339');
     expect(out).not.toContain('Fourth');
     expect(out).toContain('46% (245 of 533) during the incident');
-    expect(out).toContain('Counts recovered calls.');
     expect(out).toContain('data-verification-class="verified"');
     expect(out).not.toMatch(/style="/);
   });
@@ -66,9 +65,11 @@ describe('StoryOutcomeCards', () => {
     const lead = animated[0];
     expect(lead.querySelector('.cbv2-sr-only')!.textContent).toBe('97%');
     const digits = lead.querySelector('[data-testid="story-card-digits"]')!;
-    // Before the observer fires the digits are at zero and hidden from assistive tech.
+    // Before the observer fires the visible digits already read the true figure (a capture
+    // before any scroll must never show "0%"), and they are hidden from assistive tech
+    // because they will move; the sr-only span carries the wording throughout.
     expect(digits.getAttribute('aria-hidden')).toBe('true');
-    expect(digits.textContent).toBe('0%');
+    expect(digits.textContent).toBe('97%');
     const plain = container.querySelectorAll('[data-animate="false"]');
     expect(plain).toHaveLength(2);
     expect(plain[0].querySelector('[data-testid="story-card-digits"]')).toBeNull();

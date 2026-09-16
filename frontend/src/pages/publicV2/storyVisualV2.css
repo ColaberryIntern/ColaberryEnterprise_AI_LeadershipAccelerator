@@ -104,17 +104,15 @@
 .cbv2-story-visual__nav-btn:focus-visible,
 .cbv2-story-visual__motion-btn:focus-visible { outline: var(--border-2) solid var(--border-focus); outline-offset: 2px; }
 
-/* The stage: canvas and panel side by side from 60rem, stacked below. */
+/* The stage: the canvas at full width, the step panel beneath it. A panel
+   beside the canvas took a third of the row and shrank a nine-step flow to
+   unreadable type; the drawing needs the width more than the words do. */
 .cbv2-story-visual__stage {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-6);
   align-items: start;
   min-width: 0;
-}
-
-@media (min-width: 60rem) {
-  .cbv2-story-visual__stage { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
 }
 
 .cbv2-story-visual__canvas {
@@ -126,16 +124,13 @@
   overflow-x: auto;
 }
 
-.cbv2-story-visual__svg {
-  display: block;
-  width: 100%;
-  height: auto;
-  font-family: var(--font-body);
-}
+.cbv2-story-visual__svg { display: block; font-family: var(--font-body); }
 
-/* Horizontal layouts are wide; keep them legible rather than shrinking to fit. */
-.cbv2-story-visual__workflow[data-orientation="horizontal"] .cbv2-story-visual__svg { min-width: 40rem; }
-.cbv2-story-visual__workflow[data-orientation="vertical"] .cbv2-story-visual__svg { max-width: 360px; margin-inline: auto; }
+/* Horizontal: natural size (the SVG carries its own width and height), so a
+   wide flow scrolls inside the canvas at legible type. Vertical: one column
+   that scales to the phone. */
+.cbv2-story-visual__workflow[data-orientation="horizontal"] .cbv2-story-visual__svg { max-width: none; }
+.cbv2-story-visual__workflow[data-orientation="vertical"] .cbv2-story-visual__svg { width: 100%; height: auto; max-width: 360px; margin-inline: auto; }
 
 /* Lanes: a faint band and a small label, tinted per lane so the eye can group. */
 .cbv2-story-visual__lane-band { fill: var(--surface-subtle); }
@@ -348,8 +343,9 @@
   line-height: var(--lh-snug);
 }
 
-.cbv2-story-visual__card-baseline,
-.cbv2-story-visual__card-plain {
+.cbv2-story-visual__card-statement { margin: 0; color: var(--text-body); line-height: var(--lh-relaxed); }
+
+.cbv2-story-visual__card-baseline {
   display: grid;
   gap: var(--space-1);
   margin: 0;
