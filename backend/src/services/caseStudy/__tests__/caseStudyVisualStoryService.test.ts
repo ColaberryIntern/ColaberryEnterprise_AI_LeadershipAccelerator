@@ -108,6 +108,10 @@ describe('draftVisualStory', () => {
     expect(out.draftValidation).toEqual({ ok: true, errors: [] });
     expect(out.current).toBeNull();
     expect(out.reasons).toEqual([]);
+    // One read: the state and the draft cannot describe two different snapshots.
+    expect(findOne).toHaveBeenCalledTimes(1);
+    expect(findAllEvidence).toHaveBeenCalledTimes(1);
+    expect(out.snapshotId).toBe(out.draft?.provenance.sourceSnapshotId);
   });
 
   it('explains an empty draft instead of inventing one', async () => {

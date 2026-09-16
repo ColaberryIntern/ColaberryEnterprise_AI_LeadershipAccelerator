@@ -53,13 +53,20 @@ async function evidenceIds(caseStudyId: string): Promise<string[]> {
   return rows.map((r) => String(r.id));
 }
 
-export async function readVisualStoryState(caseStudyId: string): Promise<VisualStoryState> {
+type Latest = Awaited<ReturnType<typeof latest>>;
+
+/** One read of the record, the snapshot and the evidence ids, shared by both entry points. */
+async function load(caseStudyId: string): Promise<{ snap: Latest; evidence: string[] }> {
   const snap = await latest(caseStudyId);
+  return { snap, evidence: await evidenceIds(caseStudyId) };
+}
+
+function stateOf(snap: Latest, evidence: readonly string[]): VisualStoryState {
   const raw = (snap.content as { visualStory?: unknown }).visualStory;
   if (!raw) {
     return { snapshotId: snap.id, version: snap.version, current: null, stale: false, validation: { ok: true, errors: [] }, limits: CASE_STUDY_VISUAL_LIMITS };
   }
-  const ctx = visualStoryContextFromContent(snap.content, await evidenceIds(caseStudyId));
+  const ctx = visualStoryContextFromContent(snap.content, evidence);
   const validation = validateVisualStory(raw, ctx);
   const current = validation.ok ? validation.section : (raw as CaseStudyVisualStorySection);
   const stale = current?.provenance?.sourceContentHash ? isVisualStoryStale(current, snap.content) : false;
@@ -73,14 +80,20 @@ export async function readVisualStoryState(caseStudyId: string): Promise<VisualS
   };
 }
 
+export async function readVisualStoryState(caseStudyId: string): Promise<VisualStoryState> {
+  const { snap, evidence } = await load(caseStudyId);
+  return stateOf(snap, evidence);
+}
+
+/** State and draft come from ONE read, so `snapshotId` and the draft's `sourceSnapshotId` cannot disagree. */
 export async function draftVisualStory(caseStudyId: string, now: () => Date = () => new Date()): Promise<VisualStoryDraft> {
-  const state = await readVisualStoryState(caseStudyId);
-  const snap = await latest(caseStudyId);
+  const { snap, evidence } = await load(caseStudyId);
+  const state = stateOf(snap, evidence);
   const { section, reasons } = generateVisualStory(snap.content, {
     generatedAt: now().toISOString(),
     sourceSnapshotId: snap.id,
   });
-  const ctx = visualStoryContextFromContent(snap.content, await evidenceIds(caseStudyId));
+  const ctx = visualStoryContextFromContent(snap.content, evidence);
   const draftValidation = section ? validateVisualStory(section, ctx) : { ok: false as const, errors: [] as VisualStoryValidationError[] };
   return {
     ...state,
