@@ -1,6 +1,7 @@
 import type { Brand } from '../../models';
 import { GrowthJourneyPolicy } from '../../models';
 import { resolveBrandBySlug } from '../../modules/tenancy/tenantResolver';
+import { isUniqueViolation } from '../../utils/uniqueViolation';
 import {
   INERT_ON_CREATE,
   QUEUE_CAPACITY_POLICY_TYPE,
@@ -44,15 +45,22 @@ async function seedOne(brand: Brand, def: QueuePolicyDefinition, result: SeedPol
     result.existing += 1;
     return;
   }
-  await GrowthJourneyPolicy.create({
-    tenant_id: brand.tenant_id,
-    brand_id: brand.id,
-    policy_type: QUEUE_CAPACITY_POLICY_TYPE,
-    owner_queue: def.owner_queue,
-    sla_hours: def.sla_hours,
-    ...INERT_ON_CREATE,
-  });
-  result.created += 1;
+  try {
+    await GrowthJourneyPolicy.create({
+      tenant_id: brand.tenant_id,
+      brand_id: brand.id,
+      policy_type: QUEUE_CAPACITY_POLICY_TYPE,
+      owner_queue: def.owner_queue,
+      sla_hours: def.sla_hours,
+      ...INERT_ON_CREATE,
+    });
+    result.created += 1;
+  } catch (err: unknown) {
+    // Two containers booting at once both saw no row; the unique index let one
+    // in. The loser's row exists - that is `existing`, not a failure.
+    if (!isUniqueViolation(err)) throw err;
+    result.existing += 1;
+  }
 }
 
 export async function seedGrowthJourneyPolicies(): Promise<SeedPoliciesResult> {

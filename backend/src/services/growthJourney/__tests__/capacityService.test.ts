@@ -43,7 +43,7 @@ import { phase2SourceFiles } from './phase2Sources';
 
 const ASOF = new Date('2026-09-16T15:30:00Z');
 const args = (over: Record<string, unknown> = {}) => ({ brandId: 'b-ent', ownerQueue: 'sales' as const, asOf: ASOF, ...over });
-const policy = (daily_capacity: number | null) => ({ id: 'pol-1', daily_capacity, sla_hours: 24 });
+const policy = (daily_capacity: number | null, status = 'active') => ({ id: 'pol-1', daily_capacity, sla_hours: 24, status });
 
 const row = (status: string, over: Partial<HandoffRow> = {}): HandoffRow => ({ brand_id: 'b-ent', owner_queue: 'sales', status, created_at: ASOF, ...over });
 
@@ -90,6 +90,12 @@ describe('the three answers', () => {
     expect(await resolveQueueCapacity(args())).toEqual({ capacity: null, used: 0, status: 'unknown', reason: 'capacity_policy_absent' });
   });
 
+  it('a PAUSED row is unknown too, named as paused - a number the operator switched off is not a number', async () => {
+    m.policyFindOne.mockResolvedValue(policy(3, 'paused'));
+    handoffs.push(row('assigned'));
+    expect(await resolveQueueCapacity(args())).toEqual({ capacity: null, used: 1, status: 'unknown', reason: 'capacity_policy_paused:paused' });
+  });
+
   it('capacity 0 is a number an operator set: full, not unknown', async () => {
     m.policyFindOne.mockResolvedValue(policy(0));
     expect((await resolveQueueCapacity(args())).status).toBe('full');
@@ -108,9 +114,9 @@ describe('the three answers', () => {
 });
 
 describe('what counts as used — the filter is the claim', () => {
-  it('reads the ACTIVE queue_capacity row for this brand × queue', async () => {
+  it('reads the queue_capacity row for this brand × queue, whatever its status - so a paused row can be NAMED, not mistaken for absent', async () => {
     await resolveQueueCapacity(args());
-    expect(m.policyFindOne.mock.calls[0][0]).toEqual({ where: { brand_id: 'b-ent', policy_type: 'queue_capacity', owner_queue: 'sales', status: 'active' } });
+    expect(m.policyFindOne.mock.calls[0][0]).toEqual({ where: { brand_id: 'b-ent', policy_type: 'queue_capacity', owner_queue: 'sales' } });
   });
 
   it('counts assigned + accepted handoffs created today (UTC) in this brand × queue — never queued, never done', async () => {

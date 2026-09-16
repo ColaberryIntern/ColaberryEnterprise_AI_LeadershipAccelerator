@@ -20,7 +20,8 @@ import type { SalesCapacity } from './governor/types';
  *                handoffs in this brand × queue are below it
  *   'full'       the operator set a number and today has reached it
  *   'unknown'    no number has been set (`capacity_not_set_by_operator`), the
- *                row is absent (`capacity_policy_absent`), or the lookup failed
+ *                row is absent (`capacity_policy_absent`), the operator paused
+ *                it (`capacity_policy_paused:<status>`), or the lookup failed
  *                (`lookup_failed:<class>`)
  *
  * `'unknown'` is the honest default until an operator writes a number, and it
@@ -79,7 +80,7 @@ export function utcDayOf(asOf: Date): { start: Date; end: Date } {
 export async function resolveQueueCapacity(args: ResolveQueueCapacityArgs): Promise<QueueCapacity> {
   try {
     const policy = await GrowthJourneyPolicy.findOne({
-      where: { brand_id: args.brandId, policy_type: 'queue_capacity', owner_queue: args.ownerQueue, status: 'active' },
+      where: { brand_id: args.brandId, policy_type: 'queue_capacity', owner_queue: args.ownerQueue },
     });
     const day = utcDayOf(args.asOf);
     const used = await GrowthJourneyHandoff.count({
@@ -92,6 +93,7 @@ export async function resolveQueueCapacity(args: ResolveQueueCapacityArgs): Prom
     });
 
     if (!policy) return { capacity: null, used, status: 'unknown', reason: 'capacity_policy_absent' };
+    if (policy.status !== 'active') return { capacity: null, used, status: 'unknown', reason: `capacity_policy_paused:${policy.status}` };
     const capacity = policy.daily_capacity;
     if (typeof capacity !== 'number' || !Number.isFinite(capacity)) {
       return { capacity: null, used, status: 'unknown', reason: 'capacity_not_set_by_operator' };

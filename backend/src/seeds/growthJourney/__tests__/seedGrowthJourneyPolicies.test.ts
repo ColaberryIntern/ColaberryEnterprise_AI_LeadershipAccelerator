@@ -125,6 +125,15 @@ describe('failure isolation', () => {
     expect(resolveBrand).toHaveBeenCalledTimes(4);
   });
 
+  it('two containers booting at once: the loser of the unique index counts the row as existing, not failed', async () => {
+    policyCreate.mockImplementation(async (row: Record<string, unknown>) => {
+      if (row.owner_queue === 'ali' && row.brand_id === 'brand-cpn') throw Object.assign(new Error('duplicate key'), { name: 'SequelizeUniqueConstraintError' });
+      return row;
+    });
+    const r = await seedGrowthJourneyPolicies();
+    expect(r).toEqual({ created: 23, existing: 1, skipped_brands: [], failed: [] });
+  });
+
   it('one row failing is recorded by name and does not stop the other 23', async () => {
     policyCreate.mockImplementation(async (row: Record<string, unknown>) => {
       if (row.owner_queue === 'support' && row.brand_id === 'brand-cpn') throw new Error('disk full');
