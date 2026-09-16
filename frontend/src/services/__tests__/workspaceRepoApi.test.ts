@@ -34,6 +34,7 @@ import {
   getWorkspaceRepo, provisionWorkspaceRepo, syncWorkspaceRepo,
   startRepoConnect, confirmRepoConnect, downloadDocsBundle, downloadProgressFile,
   connectErrorOf,
+  withReadableError,
 } from '../workspaceRepoApi';
 
 const PROJECT = '11111111-1111-1111-1111-111111111111';
@@ -205,5 +206,51 @@ describe('connectErrorOf', () => {
   it('falls back when the failure carries no body — a network drop, say', () => {
     expect(connectErrorOf(new Error('Network Error'), 'Could not connect that repo.'))
       .toEqual({ error: 'Could not connect that repo.', error_class: null });
+  });
+});
+
+// ─── errors inside a blob download reach the student ──────────────────────
+//
+// The server answered 409 with a sentence that told the student exactly what
+// to do; the client asked for a blob, got the sentence back as a Blob, and
+// showed the generic fallback instead. Five days, three support emails.
+
+function jsonBlobError(status: number, body: unknown) {
+  const text = JSON.stringify(body);
+  const blob = { text: async () => text } as unknown as Blob;   // what axios hands back for responseType 'blob'
+  return Object.assign(new Error(`Request failed with status code ${status}`), { response: { status, data: blob } });
+}
+
+describe('withReadableError', () => {
+  it('turns a JSON error body inside a blob into the sentence the server wrote', async () => {
+    mockGet.mockRejectedValueOnce(jsonBlobError(409, { error: 'This build has no plan yet, so there are no documents to download. Finish the build wizard first.', error_class: 'NoPublishedPlan' }));
+    let caught: any;
+    try { await downloadDocsBundle(PROJECT); } catch (e) { caught = e; }
+    expect(connectErrorOf(caught, 'Could not build your document bundle just now.')).toEqual({
+      error: 'This build has no plan yet, so there are no documents to download. Finish the build wizard first.',
+      error_class: 'NoPublishedPlan',
+      details: undefined,
+    });
+  });
+
+  it('does the same for the progress file download', async () => {
+    mockGet.mockRejectedValueOnce(jsonBlobError(409, { error: 'This build has no plan yet, so there is no progress file to build. Finish the build wizard first.', error_class: 'NoPublishedPlan' }));
+    let caught: any;
+    try { await downloadProgressFile(PROJECT); } catch (e) { caught = e; }
+    expect(connectErrorOf(caught, 'fallback').error).toMatch(/no progress file to build/);
+  });
+
+  it('leaves a non-JSON blob alone, so the fallback sentence still stands', async () => {
+    const blob = { text: async () => '<html>502 Bad Gateway</html>' } as unknown as Blob;
+    mockGet.mockRejectedValueOnce(Object.assign(new Error('502'), { response: { status: 502, data: blob } }));
+    let caught: any;
+    try { await downloadDocsBundle(PROJECT); } catch (e) { caught = e; }
+    expect(connectErrorOf(caught, 'Could not build your document bundle just now.').error).toBe('Could not build your document bundle just now.');
+  });
+
+  it('passes a successful blob through untouched', async () => {
+    const zip = { size: 3 } as unknown as Blob;
+    mockGet.mockResolvedValueOnce({ data: zip, headers: { 'content-disposition': 'attachment; filename="build-docs-v1.zip"' } });
+    expect(await withReadableError(() => downloadDocsBundle(PROJECT))).toEqual({ blob: zip, filename: 'build-docs-v1.zip' });
   });
 });
