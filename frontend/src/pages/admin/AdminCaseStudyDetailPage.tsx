@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { PageHeader, StatusBadge } from '../../components/admin/shell';
 import {
@@ -18,6 +18,8 @@ import { useCaseStudyStudio } from './useCaseStudyStudio';
 import { useCaseStudyMeasurement } from './useCaseStudyMeasurement';
 import CaseStudyMeasuredMetricsPanel from '../../components/admin/caseStudy/CaseStudyMeasuredMetricsPanel';
 import CaseStudyHeroVideoPanel from '../../components/admin/caseStudy/CaseStudyHeroVideoPanel';
+import CaseStudyVisualStoryPanel from '../../components/admin/caseStudy/CaseStudyVisualStoryPanel';
+import { generateVisualStory, readVisualStoryState } from '../../services/caseStudyStudioApi';
 
 /**
  * AdminCaseStudyDetailPage — the Story Studio, seven tabs over one record.
@@ -60,6 +62,10 @@ import CaseStudyHeroVideoPanel from '../../components/admin/caseStudy/CaseStudyH
 function AdminCaseStudyDetailPage(): React.ReactElement {
   const { id = '' } = useParams<{ id: string }>();
   const [tab, setTab] = useState<CaseStudyStudioTabKey>(DEFAULT_STUDIO_TAB);
+  // Stable readers for the Visual Story panel; declared with the other hooks,
+  // above every early return, so the hook order never changes between renders.
+  const onReadVisualStory = useCallback(() => readVisualStoryState(id), [id]);
+  const onGenerateVisualStory = useCallback(() => generateVisualStory(id), [id]);
 
   const desk = useCaseStudyDesk(id);
   const studio = useCaseStudyStudio(id, desk.load);
@@ -145,6 +151,13 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
       .map((metric) => metric.key)
       .filter((key): key is string => typeof key === 'string' && key.length > 0),
   ));
+  /* The visual story's metric picks come from the whole snapshot: the headline
+     metrics AND the measurement block, because a chart usually anchors on a
+     supporting figure the hero never shows. */
+  const storyMetricKeys = Array.from(new Set([
+    ...metricKeys,
+    ...desk.view.measurementMetrics.map((m) => m.key).filter((k): k is string => typeof k === 'string' && k.length > 0),
+  ]));
 
   return (
     <div className="container-fluid py-4">
@@ -288,6 +301,15 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
             {/* First in the tab because it is the first thing on the published page. */}
             <CaseStudyHeroVideoPanel
               video={desk.view.walkthroughVideo} busy={busy} onApplyOverride={desk.override}
+            />
+            {/* Second, because it sits directly under the hero on the published page. */}
+            <CaseStudyVisualStoryPanel
+              visualStory={desk.view.visualStory}
+              metricKeys={storyMetricKeys}
+              busy={busy}
+              onReadState={onReadVisualStory}
+              onGenerate={onGenerateVisualStory}
+              onSave={desk.overrideOrThrow}
             />
             <CaseStudyVisualsPanel
               artifacts={studio.artifacts}

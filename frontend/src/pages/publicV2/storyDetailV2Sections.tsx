@@ -246,7 +246,12 @@ export function StorySectionBody({
     case 'architecture':
       // Prose, drawing, then the verified inventory folded; the reasoning
       // lives with the markup in `StoryArchitectureBand`.
-      return <StoryArchitectureBand architecture={record.architecture} />;
+      return (
+        <StoryArchitectureBand
+          architecture={record.architecture}
+          diagramFolded={Boolean(record.visualStory?.workflow)}
+        />
+      );
     case 'measurement':
       return record.measurement ? (
         <CaseStudyMeasurement measurement={record.measurement} />

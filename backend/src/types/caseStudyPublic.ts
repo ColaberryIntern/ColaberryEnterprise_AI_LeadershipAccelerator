@@ -47,6 +47,17 @@ import type {
   IsoDate,
   IsoDateTime,
 } from './caseStudy';
+import type {
+  CaseStudyVisualChartKind,
+  CaseStudyVisualMotion,
+  CaseStudyVisualPresentationVersion,
+  CaseStudyVisualSchemaVersion,
+  CaseStudyWorkflowLane,
+  CaseStudyWorkflowPanelKey,
+  CaseStudyWorkflowRole,
+  CaseStudyWorkflowStatus,
+  CaseStudyWorkflowType,
+} from './caseStudyVisual';
 
 /* ─────────────────────────────────────────── public verification classes ──── */
 
@@ -303,6 +314,93 @@ export interface PublicCaseStudyRepository {
   readonly lastCommitDate: IsoDate | null;
 }
 
+/* ─────────────────────────────────────────────────── the visual story ────── */
+
+/**
+ * The public face of `CaseStudyVisualStorySection` (`caseStudyVisual.ts`).
+ * Same graph, minus anything that names a database row: node `evidenceId`s are
+ * dropped (the prose `evidence` line stays), provenance is reduced to its
+ * state, and every chart part arrives with its VALUE RESOLVED from a verified
+ * metric on this record, so a renderer never has to know where a number came
+ * from. Null when the section is absent, disabled, or not enabled for the
+ * surface being served.
+ */
+export interface PublicCaseStudyWorkflowNode {
+  readonly key: string;
+  readonly label: string;
+  readonly sublabel: string | null;
+  readonly detail: string | null;
+  readonly kicker: string | null;
+  readonly role: CaseStudyWorkflowRole;
+  readonly status: CaseStudyWorkflowStatus;
+  readonly lane: CaseStudyWorkflowLane;
+  readonly evidence: string | null;
+  /** The tally the detail panel prints: a resolved metric, or null. */
+  readonly tally: PublicCaseStudyMetric | null;
+}
+
+export interface PublicCaseStudyWorkflowEdge {
+  readonly from: string;
+  readonly to: string;
+  readonly label: string | null;
+  readonly status: CaseStudyWorkflowStatus;
+  readonly condition: string | null;
+  readonly motion: boolean;
+}
+
+export interface PublicCaseStudyWorkflowPanel {
+  readonly key: CaseStudyWorkflowPanelKey;
+  readonly label: string;
+  readonly summary: string | null;
+  readonly laneLabels: Readonly<Record<CaseStudyWorkflowLane, string>>;
+  readonly nodes: readonly PublicCaseStudyWorkflowNode[];
+  readonly edges: readonly PublicCaseStudyWorkflowEdge[];
+  readonly initialNodeKey: string;
+}
+
+export interface PublicCaseStudyWorkflow {
+  readonly key: string;
+  readonly type: CaseStudyWorkflowType;
+  readonly title: string;
+  readonly caption: string | null;
+  readonly description: string;
+  readonly panels: readonly PublicCaseStudyWorkflowPanel[];
+  readonly motionNote: string;
+}
+
+export interface PublicCaseStudyVisualChartPart {
+  readonly label: string;
+  readonly value: number;
+  readonly denominator: number;
+  readonly status: CaseStudyWorkflowStatus;
+  readonly caveat: string | null;
+}
+
+export interface PublicCaseStudyVisualChart {
+  readonly key: string;
+  readonly kind: CaseStudyVisualChartKind;
+  readonly title: string;
+  readonly caption: string | null;
+  /** The anchoring metric, for its evidence class and plain-language answers. */
+  readonly metric: PublicCaseStudyMetric;
+  readonly denominator: number;
+  readonly parts: readonly PublicCaseStudyVisualChartPart[];
+  readonly unit: string | null;
+  readonly axisMax: number | null;
+  readonly caveat: string | null;
+  readonly limitations: readonly string[];
+}
+
+export interface PublicCaseStudyVisualStory {
+  readonly schemaVersion: CaseStudyVisualSchemaVersion;
+  readonly presentationVersion: CaseStudyVisualPresentationVersion;
+  readonly motion: CaseStudyVisualMotion;
+  readonly workflow: PublicCaseStudyWorkflow | null;
+  /** Resolved metrics, at most three; the emphasised one first. */
+  readonly outcomeCards: readonly PublicCaseStudyMetric[];
+  readonly charts: readonly PublicCaseStudyVisualChart[];
+}
+
 export interface PublicCaseStudyCta {
   readonly eyebrow: string;
   readonly heading: string;
@@ -394,6 +492,8 @@ export interface PublicCaseStudyDetail {
     readonly provider: 'youtube' | 'vimeo' | null;
     readonly watchUrl: string | null;
   } | null;
+  /** Null unless the record carries a visual story enabled for this surface. */
+  readonly visualStory: PublicCaseStudyVisualStory | null;
   readonly architecture: PublicCaseStudyArchitecture | null;
   readonly measurement: PublicCaseStudyMeasurement | null;
   readonly roadmap: readonly PublicCaseStudyRoadmapItem[];
@@ -458,6 +558,7 @@ const PUBLIC_DETAIL_KEY_MAP: Record<keyof PublicCaseStudyDetail, true> = {
   productionStatus: true,
   heroMetrics: true,
   walkthroughVideo: true,
+  visualStory: true,
   situation: true,
   timeline: true,
   architecture: true,

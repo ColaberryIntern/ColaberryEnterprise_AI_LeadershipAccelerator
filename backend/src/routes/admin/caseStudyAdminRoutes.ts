@@ -199,13 +199,26 @@ const isTagged = (err: unknown): boolean =>
  */
 function sendError(res: Response, err: unknown): void {
   if (isTagged(err)) {
-    const tagged = err as { http_status: number; error_class: string; message: string };
+    const tagged = err as {
+      http_status: number; error_class: string; message: string; details?: Record<string, unknown>;
+    };
     const body: Record<string, unknown> = {
       error: tagged.message, error_class: tagged.error_class,
     };
     if (isCaseStudyPublicationError(err) && err.blockers.length > 0) {
       body.blockers = err.blockers;
       body.summary = err.message;
+    }
+    // A refused OVERRIDE of a validated section (the visual story) carries the
+    // validator's per-field refusals as `details.errors[{path, code, message}]`
+    // and the path it was writing. They cross VERBATIM, for the same reason a
+    // publish refusal carries its blockers: an operator told "ValidationError"
+    // cannot act, one told which node and why can. Nothing else in `details`
+    // crosses; a service that wants a field on the wire names it here.
+    const details = tagged.details;
+    if (details && Array.isArray(details.errors)) {
+      body.errors = details.errors;
+      if (typeof details.path === 'string') body.path = details.path;
     }
     res.status(tagged.http_status).json(body);
     return;

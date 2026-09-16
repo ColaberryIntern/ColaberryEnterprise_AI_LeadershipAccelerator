@@ -873,6 +873,33 @@ describe('AC9 — an unverified production / ROI / outcome claim exists', () => 
       .toBe('the standfirst states the figure "41%" but no verified metric on this Case Study carries it');
   });
 
+  it('scans the visual story: a percentage in a stage explanation with no metric behind it is refused at its path', () => {
+    const content = publishableContent();
+    const hero = (content.heroMetrics as any)[0];
+    (content as any).visualStory = {
+      schemaVersion: 1, presentationVersion: 'v2', enabled: true, surfaces: ['enterprise'], motion: 'auto',
+      workflow: {
+        key: 'wf', type: 'single_state', title: 'Flow', description: 'A flow.',
+        panels: [{
+          key: 'single', label: 'Now',
+          nodes: [
+            { key: 'a', label: 'A', role: 'system', detail: 'This stage resolves 88% of cases.' },
+            { key: 'b', label: 'B', role: 'system' },
+          ],
+          edges: [{ from: 'a', to: 'b' }],
+        }],
+      },
+      outcomeCards: [{ metricKey: hero.key }], charts: [],
+      provenance: { generator: 'human', generatedAt: '2026-09-16T00:00:00.000Z', sourceContentHash: 'a'.repeat(64), state: 'draft', humanEdited: true },
+    };
+    const decision = evaluate({ content });
+    const hit = withCode(decision, 'unverified_claim').find((x) => x.field.startsWith('visualStory.'));
+    expect(hit?.field).toBe('visualStory.workflow.panels[0].nodes[0].detail');
+    expect(hit?.message).toContain('states the figure "88%"');
+    // The graph itself is sound, so the only refusal is the claim, not the shape.
+    expect(withCode(decision, 'visual_story_invalid')).toEqual([]);
+  });
+
   it('refuses an unbacked money figure', () => {
     const decision = evaluate({ content: withStandfirst('The rebuild saved $1.2 million a year.') });
     expect(decision.allowed).toBe(false);
@@ -1117,6 +1144,22 @@ describe('the refusal is actionable and complete', () => {
       // headline_metric_missing_plain_answers — comparative, but silent about
       // what it does not tell you.
       { content: bend((c) => { delete (c.heroMetrics as any)[0].plain; }) },
+      // visual_story_invalid — a story whose edge points at a stage that is not
+      // in its panel, the kind of break a renderer would otherwise draw as a
+      // line to nowhere.
+      {
+        content: bend((c) => {
+          (c as any).visualStory = {
+            schemaVersion: 1, presentationVersion: 'v2', enabled: true, surfaces: ['enterprise'], motion: 'auto',
+            workflow: {
+              key: 'wf', type: 'single_state', title: 'Flow', description: 'A flow.',
+              panels: [{ key: 'single', label: 'Now', nodes: [{ key: 'a', label: 'A', role: 'system' }], edges: [{ from: 'a', to: 'missing' }] }],
+            },
+            outcomeCards: [], charts: [],
+            provenance: { generator: 'human', generatedAt: '2026-09-16T00:00:00.000Z', sourceContentHash: 'a'.repeat(64), state: 'draft', humanEdited: true },
+          };
+        }),
+      },
       // maturity_below_operational_result — a linked student project that has
       // built and demonstrated, and measured nothing in use.
       { foundation: { maturity: 'capability_demonstration', openQuestions: 0 } },

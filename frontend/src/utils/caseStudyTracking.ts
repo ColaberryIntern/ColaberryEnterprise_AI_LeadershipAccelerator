@@ -35,7 +35,7 @@ import { markOncePerSession } from './oncePerSession';
  */
 
 /**
- * The seven event names. Mirrors
+ * The eight event names. Mirrors
  * `backend/src/constants/caseStudyEventTypes.ts`, which is the source of truth;
  * a backend test reads this file and fails if the two lists diverge.
  */
@@ -47,6 +47,7 @@ export const CASE_STUDY_EVENT_TYPES = [
   'case_study_artifact_click',
   'case_study_cta_click',
   'case_study_share',
+  'case_study_visual_interaction',
 ] as const;
 
 export type CaseStudyEventType = (typeof CASE_STUDY_EVENT_TYPES)[number];
@@ -97,6 +98,10 @@ export const ALLOWED_EVENT_DATA_KEYS: readonly string[] = [
   // interaction shape
   'filter_key', 'filter_value', 'result_count', 'position',
   'artifact_kind', 'repo_role', 'repo_visibility', 'cta', 'placement', 'channel',
+  // the visual story band: which piece was used and what was done to it
+  // ('workflow' + 'panel:after' / 'node:<key>' / 'next' / 'pause'); node keys
+  // are the record's own slugs, never a person or a repository
+  'visual', 'action',
   // scroll depth, emitted under both keys its two consumers read
   'depth', 'depth_percent',
 ];
@@ -271,4 +276,16 @@ export function trackCaseStudyCtaClick(ref: CaseStudyRef & {
 /** A Case Study was shared. `channel` is the destination class, e.g. 'linkedin'. */
 export function trackCaseStudyShare(ref: CaseStudyRef & { channel: string }): void {
   emit('case_study_share', { ...ref });
+}
+
+/**
+ * A reader used the visual story band: switched Before/After, selected a step,
+ * walked Previous/Next, or paused the motion. `visual` names the piece,
+ * `action` the control; both are slugs the page assigned, never free text.
+ */
+export function trackCaseStudyVisualInteraction(ref: CaseStudyRef & {
+  visual: string;
+  action: string;
+}): void {
+  emit('case_study_visual_interaction', { ...ref });
 }

@@ -435,7 +435,14 @@ export function normalizeDetailResponse(
       dataStores: wireList((record.architecture as { dataStores?: unknown }).dataStores),
     }
     : null;
-  return { ...body, caseStudy: { ...record, situation, architecture } };
+  // A server that predates the visual story omits the key; the article reads
+  // `record.visualStory` directly, so absent must become null here rather than
+  // undefined reaching a renderer. Same deploy-ordering reason as the lists above.
+  const visualStory = (record as { visualStory?: unknown }).visualStory ?? null;
+  return {
+    ...body,
+    caseStudy: { ...record, situation, architecture, visualStory: visualStory as typeof record.visualStory },
+  };
 }
 
 export async function fetchCaseStudyDetail(

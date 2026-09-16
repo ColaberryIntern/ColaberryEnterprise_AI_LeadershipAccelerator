@@ -65,6 +65,9 @@ jest.mock('../../../services/caseStudy/caseStudyChartService', () => ({
 jest.mock('../../../services/caseStudy/caseStudyQuoteService', () => ({
   createQuote: jest.fn(), listQuotes: jest.fn(), setQuoteApproval: jest.fn(),
 }));
+jest.mock('../../../services/caseStudy/caseStudyVisualStoryService', () => ({
+  draftVisualStory: jest.fn(), readVisualStoryState: jest.fn(),
+}));
 
 import express from 'express';
 import request from 'supertest';

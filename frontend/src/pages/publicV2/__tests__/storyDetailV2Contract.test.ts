@@ -98,6 +98,22 @@ const MEDIA_SOURCES = [
          was never listed, which is the exact gap the comments above describe. */
   path.join(PAGE_DIR, 'StoryHeroFigure.tsx'),
   path.join(PAGE_DIR, 'StoryRelated.tsx'),
+  /* The visual story band: the workflow illustration, its step panel and motion
+     hook, the outcome cards, the charts and their primitives, the band that
+     composes them, and the two pure models beneath (view models and graph
+     geometry). Nine files, listed for the reason every entry above is. The
+     hook assigns its particle class through `setAttribute`, which the
+     className rule below cannot see; the graph test asserts the namespace on
+     the rendered DOM instead. */
+  path.join(PAGE_DIR, 'StoryVisualStory.tsx'),
+  path.join(PAGE_DIR, 'StoryWorkflowGraph.tsx'),
+  path.join(PAGE_DIR, 'StoryWorkflowPanel.tsx'),
+  path.join(PAGE_DIR, 'StoryOutcomeCards.tsx'),
+  path.join(PAGE_DIR, 'StoryCharts.tsx'),
+  path.join(PAGE_DIR, 'StoryChartPrimitives.tsx'),
+  path.join(PAGE_DIR, 'storyVisualModel.ts'),
+  path.join(PAGE_DIR, 'storyWorkflowLayout.ts'),
+  path.join(PAGE_DIR, 'useWorkflowMotion.ts'),
 ];
 
 /** The page-local file the article moved into. Read wherever PAGE is read. */
@@ -120,7 +136,14 @@ const MEDIA_CSS = path.join(PAGE_DIR, 'storyMediaV2.css');
  * not a way out of the checks.
  */
 const RELATED_CSS = path.join(PAGE_DIR, 'storyRelatedV2.css');
-const STYLESHEETS = [path.join(PAGE_DIR, 'storyDetailV2.css'), MEDIA_CSS, RELATED_CSS];
+/**
+ * The visual story band's sheet. Owned and imported by `StoryVisualStory.tsx`,
+ * the component that draws every `cbv2-story-visual` class, so the public page
+ * and the admin preview both get it through the article. Listed so the split
+ * is not a way out of the checks.
+ */
+const VISUAL_CSS = path.join(PAGE_DIR, 'storyVisualV2.css');
+const STYLESHEETS = [path.join(PAGE_DIR, 'storyDetailV2.css'), MEDIA_CSS, RELATED_CSS, VISUAL_CSS];
 const APP = path.join(SRC, 'App.tsx');
 const LEGACY_TOKENS = path.join(SRC, 'styles', 'tokens.css');
 const V2_TOKEN_DIR = path.join(SRC, 'colaberry', 'tokens');
@@ -528,6 +551,10 @@ describe('the story stylesheets name only tokens that exist', () => {
     // preview - which mounts the article - never renders it.
     expect(stripComments(read(path.join(PAGE_DIR, 'StoryRelated.tsx'))))
       .toContain("import './storyRelatedV2.css';");
+    // The fourth sheet follows the same rule: imported where its markup lives,
+    // which the article mounts for both the public page and the admin preview.
+    expect(stripComments(read(path.join(PAGE_DIR, 'StoryVisualStory.tsx'))))
+      .toContain("import './storyVisualV2.css';");
   });
 
   it('keeps every stylesheet under the 500-line ceiling that forced the splits', () => {

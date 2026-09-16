@@ -144,6 +144,17 @@ export interface SnapshotView {
      */
     readonly raw: Record<string, unknown>;
   } | null;
+  /**
+   * The visual story exactly as stored, for the same reason `walkthroughVideo.raw`
+   * exists: the Studio panel edits it as a whole section and must never drop a key
+   * it did not render. Null when the record has none.
+   */
+  readonly visualStory: {
+    readonly enabled: boolean;
+    readonly surfaces: readonly string[];
+    readonly state: string;
+    readonly raw: Record<string, unknown>;
+  } | null;
 }
 
 export const EMPTY_SNAPSHOT_VIEW: SnapshotView = {
@@ -152,7 +163,7 @@ export const EMPTY_SNAPSHOT_VIEW: SnapshotView = {
   builderNamingConsent: false, situationHeading: '', situationBody: [], heroMetrics: [],
   measurementMetrics: [], timeline: [], stack: [], capabilities: [], integrations: [],
   architectureNarrative: [], roadmap: [], contributors: [], artifacts: [], repositories: [],
-  industry: '', primaryCapability: '', walkthroughVideo: null,
+  industry: '', primaryCapability: '', walkthroughVideo: null, visualStory: null,
 };
 
 export function readSnapshot(content: Record<string, unknown> | null | undefined): SnapshotView {
@@ -234,6 +245,7 @@ export function readSnapshot(content: Record<string, unknown> | null | undefined
     industry: str(taxonomy.industry),
     primaryCapability: str(taxonomy.primaryCapability),
     walkthroughVideo: walkthroughOf(content),
+    visualStory: visualStoryOf(content),
   };
 }
 
@@ -245,6 +257,16 @@ export function readSnapshot(content: Record<string, unknown> | null | undefined
  * is not "a video with blank fields", it is no video, and the panel says so rather than
  * offering to restore something that was never there.
  */
+function visualStoryOf(content: Record<string, unknown>): SnapshotView['visualStory'] {
+  const v = asRecord(content.visualStory);
+  if (Object.keys(v).length === 0) return null;
+  const provenance = asRecord(v.provenance);
+  const surfaces = Array.isArray(v.surfaces)
+    ? v.surfaces.filter((s): s is string => typeof s === 'string')
+    : [];
+  return { enabled: v.enabled === true, surfaces, state: str(provenance.state) || 'draft', raw: v };
+}
+
 function walkthroughOf(content: Record<string, unknown>): SnapshotView['walkthroughVideo'] {
   const v = asRecord(content.walkthroughVideo);
   const url = str(v.url);

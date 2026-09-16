@@ -358,6 +358,19 @@ const AUTHORED: Record<string, Entry> = {
     emptyBehaviour: 'no player - the band is absent, not an empty frame',
     test: 'caseStudyWalkthroughVideo.test.ts',
   }),
+  // The visual story is the same kind of thing as the walkthrough: a whole section a
+  // person authors (or accepts from the deterministic generator and then owns), narrated
+  // content on a public page, validated on write and gated on publish. Every figure it
+  // shows resolves from a verified metric at projection time; it carries none itself.
+  'CaseStudySnapshotContent.visualStory': D({
+    disposition: 'human_approved', aiMayInfer: false,
+    authoring: 'admin, or the deterministic generator accepted by an admin; the before/after workflow illustration, outcome cards and charts',
+    sourcePriority: 'human override > evidence generator; sync never overwrites a human-edited story, it marks it stale',
+    detailHome: 'below the hero and context strip, above the situation band, on the surfaces it names',
+    publicBehaviour: 'projected only when enabled for the surface; validated; chart values resolved from verified metrics; evidence ids and provenance hash dropped',
+    emptyBehaviour: 'absent, disabled or off-surface: the record renders exactly as it did before the section existed',
+    test: 'caseStudyVisualStoryValidate.test.ts',
+  }),
   'CaseStudyArchitectureSection.diagramImageUrl': D({
     disposition: 'human_approved', aiMayInfer: false,
     authoring: 'admin narrative panel; rendered from diagramSource by scripts/renderCaseStudyDiagram.js',

@@ -63,6 +63,7 @@ import {
   truncate,
 } from './caseStudyPublicSections';
 import type { PublicVerificationPair } from './caseStudyPublicSections';
+import { projectVisualStory } from './caseStudyPublicVisualStory';
 import type {
   CaseStudyBuiltByType,
   CaseStudySnapshotContent,
@@ -246,6 +247,9 @@ export function projectPublicDetail(input: PublicProjectionInput): PublicCaseStu
     productionStatus: production && pairOf(production.verification) ? production.status : null,
     heroMetrics: projectMetrics(content?.heroMetrics ?? []),
     walkthroughVideo: projectWalkthroughVideo(content),
+    // Null unless the record carries a valid story enabled for THIS surface, so
+    // every other record's payload is unchanged apart from this one key.
+    visualStory: projectVisualStory(content, input.surfaceKey),
     situation: projectSituation(content),
     timeline: projectTimeline(content?.buildTimeline ?? []),
     architecture: projectArchitecture(content),

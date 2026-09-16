@@ -1,0 +1,492 @@
+/* ============================================================================
+   storyVisualV2.css -- the visual story band on the Enterprise detail surface.
+
+   ONE BAND, THREE PIECES. The workflow illustration (an SVG a keyboard can
+   drive, with a step panel beside it), the outcome cards, and the charts. All
+   of it sits under `.cbv2-story-visual`, so nothing here can reach the rest of
+   the page and the page's own sheet stays under its ceiling.
+
+   COLOUR IS SEMANTIC AND NEVER ALONE. Status paints through the four
+   `--status-*` tokens and each status is also a word beside its shape. Roles
+   and lanes use the neutral scale and `--chart-*`, never a literal.
+
+   MOTION IS OPT-OUT TWICE. The particles are removed by the hook under
+   reduced motion; this sheet also stops the transitions it owns, so a reader
+   who asked for less motion gets none from either half.
+
+   ON THE CONTRACT LIST. `storyDetailV2Contract.test.ts` reads this file: V2
+   tokens only, no raw colour, `cbv2-` selectors only, no `@import`, grid
+   tracks with a zero floor, long words allowed to break.
+   ========================================================================== */
+
+/* ------------------------------------------------------------------ band --- */
+
+.cbv2-story .cbv2-story-visual { padding-block: var(--space-16); }
+
+.cbv2-story-visual__body { display: grid; gap: var(--space-10); min-width: 0; }
+
+.cbv2-story-visual__head { display: grid; gap: var(--space-2); }
+
+.cbv2-story-visual__heading {
+  margin: 0;
+  font-size: var(--fs-h2);
+  line-height: var(--lh-tight);
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.cbv2-story-visual__note {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--text-muted);
+  font-size: var(--fs-body-sm);
+  line-height: var(--lh-relaxed);
+  overflow-wrap: anywhere;
+}
+
+/* -------------------------------------------------------------- workflow --- */
+
+.cbv2-story-visual__workflow { display: grid; gap: var(--space-6); min-width: 0; }
+
+.cbv2-story-visual__workflow-head { display: grid; gap: var(--space-2); max-width: 68ch; }
+
+.cbv2-story-visual__title {
+  margin: 0;
+  font-size: var(--fs-h3);
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+}
+
+.cbv2-story-visual__caption,
+.cbv2-story-visual__description,
+.cbv2-story-visual__panel-summary {
+  margin: 0;
+  color: var(--text-body);
+  line-height: var(--lh-relaxed);
+  overflow-wrap: anywhere;
+}
+
+.cbv2-story-visual__caption { color: var(--text-muted); }
+
+/* Before / After: a segmented control, pressed state by fill and by aria. */
+.cbv2-story-visual__toggle {
+  display: inline-flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background: var(--surface-sunken);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+}
+
+.cbv2-story-visual__toggle-btn,
+.cbv2-story-visual__nav-btn,
+.cbv2-story-visual__motion-btn {
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  font-weight: var(--fw-medium);
+  color: var(--text-body);
+  background: transparent;
+  border: var(--border-1) solid transparent;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.cbv2-story-visual__toggle-btn[aria-pressed="true"] { color: var(--text-on-accent); background: var(--action-bg); }
+
+.cbv2-story-visual__nav-btn,
+.cbv2-story-visual__motion-btn { border-color: var(--border-default); background: var(--surface-card); }
+
+.cbv2-story-visual__nav-btn:disabled,
+.cbv2-story-visual__motion-btn:disabled { color: var(--text-subtle); cursor: default; }
+
+.cbv2-story-visual__toggle-btn:focus-visible,
+.cbv2-story-visual__nav-btn:focus-visible,
+.cbv2-story-visual__motion-btn:focus-visible { outline: var(--border-2) solid var(--border-focus); outline-offset: 2px; }
+
+/* The stage: the canvas at full width, the step panel beneath it. A panel
+   beside the canvas took a third of the row and shrank a nine-step flow to
+   unreadable type; the drawing needs the width more than the words do. */
+.cbv2-story-visual__stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+  min-width: 0;
+}
+
+.cbv2-story-visual__canvas {
+  min-width: 0;
+  padding: var(--space-4);
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
+}
+
+.cbv2-story-visual__svg { display: block; font-family: var(--font-body); }
+
+/* Horizontal: natural size (the SVG carries its own width and height), so a
+   wide flow scrolls inside the canvas at legible type. Vertical: one column
+   that scales to the phone. */
+.cbv2-story-visual__workflow[data-orientation="horizontal"] .cbv2-story-visual__svg { max-width: none; }
+.cbv2-story-visual__workflow[data-orientation="vertical"] .cbv2-story-visual__svg { width: 100%; height: auto; max-width: 360px; margin-inline: auto; }
+
+/* Lanes: a faint band and a small label, tinted per lane so the eye can group. */
+.cbv2-story-visual__lane-band { fill: var(--surface-subtle); }
+.cbv2-story-visual__lane--recovery .cbv2-story-visual__lane-band { fill: var(--surface-blue-subtle); }
+.cbv2-story-visual__lane--manual .cbv2-story-visual__lane-band { fill: var(--status-warning-bg); }
+
+.cbv2-story-visual__lane-label {
+  fill: var(--text-muted);
+  font-size: 11px;
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-overline);
+  text-transform: uppercase;
+}
+
+/* Edges: a stroke per status, an arrowhead, a dashed return curve. */
+.cbv2-story-visual__edge-path { fill: none; stroke: var(--neutral-400); stroke-width: 1.75; }
+
+.cbv2-story-visual__edge--resolved .cbv2-story-visual__edge-path { stroke: var(--status-success); }
+.cbv2-story-visual__edge--attention .cbv2-story-visual__edge-path { stroke: var(--status-warning); }
+.cbv2-story-visual__edge--failure .cbv2-story-visual__edge-path { stroke: var(--status-danger); }
+.cbv2-story-visual__edge--returns .cbv2-story-visual__edge-path { stroke-dasharray: 5 4; }
+.cbv2-story-visual__arrowhead { fill: var(--neutral-500); }
+
+.cbv2-story-visual__edge-label {
+  fill: var(--text-muted);
+  font-size: 11px;
+  paint-order: stroke;
+  stroke: var(--surface-card);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+/* Nodes: a card with a role word, a status dot and up to two label lines. */
+.cbv2-story-visual__node { cursor: pointer; outline: none; }
+
+.cbv2-story-visual__node-box {
+  fill: var(--surface-page);
+  stroke: var(--border-default);
+  stroke-width: 1.5;
+  transition: stroke var(--dur-fast) var(--ease-standard), fill var(--dur-fast) var(--ease-standard);
+}
+
+.cbv2-story-visual__node--human .cbv2-story-visual__node-box { fill: var(--surface-green-subtle); }
+.cbv2-story-visual__node--external .cbv2-story-visual__node-box { stroke-dasharray: 4 3; }
+.cbv2-story-visual__node--data .cbv2-story-visual__node-box { fill: var(--surface-subtle); }
+
+.cbv2-story-visual__node:hover .cbv2-story-visual__node-box,
+.cbv2-story-visual__node:focus-visible .cbv2-story-visual__node-box { stroke: var(--border-focus); stroke-width: 2; }
+
+.cbv2-story-visual__node[aria-pressed="true"] .cbv2-story-visual__node-box { stroke: var(--brand-primary); stroke-width: 2.5; }
+
+.cbv2-story-visual__node-role {
+  fill: var(--text-subtle);
+  font-size: 10px;
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-overline);
+  text-transform: uppercase;
+}
+
+.cbv2-story-visual__node-label { fill: var(--text-strong); font-size: 13px; font-weight: var(--fw-medium); }
+
+.cbv2-story-visual__node-dot { fill: var(--neutral-400); }
+.cbv2-story-visual__node--resolved .cbv2-story-visual__node-dot { fill: var(--status-success); }
+.cbv2-story-visual__node--attention .cbv2-story-visual__node-dot { fill: var(--status-warning); }
+.cbv2-story-visual__node--failure .cbv2-story-visual__node-dot { fill: var(--status-danger); }
+.cbv2-story-visual__node--unknown .cbv2-story-visual__node-dot { fill: var(--neutral-300); }
+
+/* Particles: drawn by the hook, coloured by the edge's status. */
+.cbv2-story-visual__particle { fill: var(--brand-primary); }
+.cbv2-story-visual__particle--resolved { fill: var(--status-success); }
+.cbv2-story-visual__particle--attention { fill: var(--status-warning); }
+.cbv2-story-visual__particle--failure { fill: var(--status-danger); }
+
+/* The step panel. */
+.cbv2-story-visual__panel {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-6);
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.cbv2-story-visual__panel-body { display: grid; gap: var(--space-3); min-width: 0; }
+
+.cbv2-story-visual__panel-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-overline);
+  letter-spacing: var(--ls-overline);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.cbv2-story-visual__status {
+  display: inline-block;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-normal);
+  text-transform: none;
+  color: var(--text-body);
+  background: var(--surface-subtle);
+}
+
+.cbv2-story-visual__status--resolved { color: var(--status-success); background: var(--status-success-bg); }
+.cbv2-story-visual__status--attention { color: var(--status-warning); background: var(--status-warning-bg); }
+.cbv2-story-visual__status--failure { color: var(--status-danger); background: var(--status-danger-bg); }
+
+.cbv2-story-visual__panel-title {
+  margin: 0;
+  font-size: var(--fs-h4);
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+}
+
+.cbv2-story-visual__panel-sub,
+.cbv2-story-visual__panel-detail,
+.cbv2-story-visual__panel-evidence { margin: 0; line-height: var(--lh-relaxed); overflow-wrap: anywhere; }
+
+.cbv2-story-visual__panel-sub { color: var(--text-muted); }
+
+.cbv2-story-visual__panel-evidence { display: grid; gap: var(--space-1); font-size: var(--fs-body-sm); }
+
+.cbv2-story-visual__panel-term,
+.cbv2-story-visual__card-term {
+  font-family: var(--font-mono);
+  font-size: var(--fs-overline);
+  letter-spacing: var(--ls-overline);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.cbv2-story-visual__panel-tally {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding-top: var(--space-3);
+  border-top: var(--border-1) solid var(--border-subtle);
+}
+
+.cbv2-story-visual__panel-figure { font-size: var(--fs-h3); line-height: var(--lh-tight); font-variant-numeric: tabular-nums; }
+.cbv2-story-visual__panel-tally-label { color: var(--text-muted); font-size: var(--fs-body-sm); }
+
+.cbv2-story-visual__panel-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.cbv2-story-visual__panel-position { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+.cbv2-story-visual__motion-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-body-sm);
+  line-height: var(--lh-relaxed);
+  overflow-wrap: anywhere;
+}
+
+/* ----------------------------------------------------------------- cards --- */
+
+.cbv2-story-visual__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.cbv2-story-visual__card {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-6);
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow-wrap: anywhere;
+}
+
+.cbv2-story-visual__card--lead { border-color: var(--brand-primary); }
+
+.cbv2-story-visual__card-figure {
+  margin: 0;
+  font-size: var(--fs-display);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-tight);
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.cbv2-story-visual__card--lead .cbv2-story-visual__card-figure { color: var(--brand-primary); }
+
+.cbv2-story-visual__card-label {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-snug);
+}
+
+.cbv2-story-visual__card-statement { margin: 0; color: var(--text-body); line-height: var(--lh-relaxed); }
+
+.cbv2-story-visual__card-baseline {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-body-sm);
+  line-height: var(--lh-relaxed);
+}
+
+/* ---------------------------------------------------------------- charts --- */
+
+.cbv2-story-visual__charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.cbv2-story-visual__chart {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-6);
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow-wrap: anywhere;
+}
+
+.cbv2-story-visual__chart-head { display: grid; gap: var(--space-1); }
+.cbv2-story-visual__chart-title { font-weight: var(--fw-bold); font-size: var(--fs-body-lg); line-height: var(--lh-snug); }
+.cbv2-story-visual__chart-caption { color: var(--text-muted); font-size: var(--fs-body-sm); }
+
+.cbv2-story-visual__rows,
+.cbv2-story-visual__legend,
+.cbv2-story-visual__chart-limits {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cbv2-story-visual__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-3);
+  align-items: baseline;
+}
+
+.cbv2-story-visual__row-label { font-weight: var(--fw-medium); }
+.cbv2-story-visual__row-figure { font-variant-numeric: tabular-nums; color: var(--text-strong); }
+.cbv2-story-visual__row .cbv2-story-visual__bar { grid-column: 1 / -1; }
+.cbv2-story-visual__row-status { font-size: var(--fs-caption); color: var(--text-muted); }
+.cbv2-story-visual__row-caveat { grid-column: 1 / -1; font-size: var(--fs-caption); color: var(--text-muted); }
+
+.cbv2-story-visual__bar { display: block; width: 100%; height: 10px; }
+.cbv2-story-visual__bar--stacked { height: 16px; }
+.cbv2-story-visual__bar-track { fill: var(--surface-sunken); }
+.cbv2-story-visual__bar-fill { fill: var(--chart-1); }
+.cbv2-story-visual__bar-fill--resolved { fill: var(--status-success); }
+.cbv2-story-visual__bar-fill--attention { fill: var(--status-warning); }
+.cbv2-story-visual__bar-fill--failure { fill: var(--status-danger); }
+.cbv2-story-visual__bar-fill--unknown { fill: var(--neutral-300); }
+
+.cbv2-story-visual__legend-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.cbv2-story-visual__legend-swatch {
+  width: var(--space-3);
+  height: var(--space-3);
+  border-radius: var(--radius-xs);
+  background: var(--chart-1);
+}
+
+.cbv2-story-visual__legend-item--resolved .cbv2-story-visual__legend-swatch { background: var(--status-success); }
+.cbv2-story-visual__legend-item--attention .cbv2-story-visual__legend-swatch { background: var(--status-warning); }
+.cbv2-story-visual__legend-item--failure .cbv2-story-visual__legend-swatch { background: var(--status-danger); }
+.cbv2-story-visual__legend-item--unknown .cbv2-story-visual__legend-swatch { background: var(--neutral-300); }
+.cbv2-story-visual__legend-figure { font-variant-numeric: tabular-nums; color: var(--text-muted); }
+
+.cbv2-story-visual__chart-total,
+.cbv2-story-visual__chart-note,
+.cbv2-story-visual__chart-caveat {
+  margin: 0;
+  font-size: var(--fs-body-sm);
+  line-height: var(--lh-relaxed);
+  color: var(--text-muted);
+}
+
+.cbv2-story-visual__chart-note { color: var(--text-body); font-weight: var(--fw-medium); }
+.cbv2-story-visual__chart-limits { font-size: var(--fs-caption); color: var(--text-muted); }
+
+.cbv2-story-visual__zero {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.cbv2-story-visual__zero-figure {
+  font-size: var(--fs-display);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-tight);
+  color: var(--status-success);
+  font-variant-numeric: tabular-nums;
+}
+
+.cbv2-story-visual__zero-of { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.cbv2-story-visual__zero-label { font-weight: var(--fw-medium); }
+
+.cbv2-story-visual__table-fold { font-size: var(--fs-body-sm); }
+.cbv2-story-visual__table-summary { cursor: pointer; color: var(--text-link); }
+
+.cbv2-story-visual__table {
+  width: 100%;
+  margin-top: var(--space-3);
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.cbv2-story-visual__table th,
+.cbv2-story-visual__table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  border-bottom: var(--border-1) solid var(--border-subtle);
+  overflow-wrap: anywhere;
+}
+
+.cbv2-story-visual__table thead th { color: var(--text-muted); font-weight: var(--fw-medium); }
+.cbv2-story-visual__table-total th,
+.cbv2-story-visual__table-total td { font-weight: var(--fw-bold); }
+.cbv2-story-visual__table-caveat { font-weight: var(--fw-regular); color: var(--text-muted); }
+
+/* --------------------------------------------------------- reduced motion --- */
+
+@media (prefers-reduced-motion: reduce) {
+  .cbv2-story-visual__node-box { transition: none; }
+  .cbv2-story-visual__particle { display: none; }
+}

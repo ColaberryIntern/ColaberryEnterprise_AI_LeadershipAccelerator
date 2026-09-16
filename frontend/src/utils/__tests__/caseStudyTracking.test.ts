@@ -10,6 +10,7 @@ import {
   trackCaseStudyRepoClick,
   trackCaseStudyShare,
   trackCaseStudyView,
+  trackCaseStudyVisualInteraction,
 } from '../caseStudyTracking';
 import { trackEvent } from '../tracker';
 
@@ -174,9 +175,11 @@ describe('the emitters use the allowlisted names and sanitise every payload', ()
     trackCaseStudyArtifactClick({ slug: 'a', artifact_kind: 'notebook' });
     trackCaseStudyCtaClick({ slug: 'a', cta: 'enterprise' });
     trackCaseStudyShare({ slug: 'a', channel: 'linkedin' });
+    trackCaseStudyVisualInteraction({ slug: 'a', visual: 'workflow', action: 'panel:after' });
 
     const sent = trackEventMock.mock.calls.map((c) => c[0]);
     expect(sent).toEqual([...CASE_STUDY_EVENT_TYPES]);
+    expect(payloadOf(7)).toEqual({ slug: 'a', visual: 'workflow', action: 'panel:after' });
   });
 
   it('strips forbidden keys even when a call site passes them', () => {

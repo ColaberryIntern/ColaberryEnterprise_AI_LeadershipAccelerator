@@ -348,6 +348,92 @@ export interface PublicCaseStudyRepository {
   readonly lastCommitDate: string | null;
 }
 
+/**
+ * The visual story: the before/after workflow illustration, outcome cards and
+ * charts a record may carry below its hero. Mirrors `PublicCaseStudyVisualStory`
+ * in `backend/src/types/caseStudyPublic.ts`; every chart part arrives with its
+ * value already resolved from a verified metric, so nothing here computes a
+ * figure. Null when the record has none, or none for this surface.
+ */
+export type CaseStudyWorkflowRole = 'human' | 'system' | 'external' | 'data';
+export type CaseStudyWorkflowStatus = 'processing' | 'resolved' | 'attention' | 'failure' | 'unknown';
+export type CaseStudyWorkflowLane = 'primary' | 'recovery' | 'manual';
+export type CaseStudyWorkflowPanelKey = 'before' | 'after' | 'single';
+export type CaseStudyVisualChartKind = 'composition' | 'comparison' | 'share' | 'two_value' | 'zero_card';
+
+export interface PublicCaseStudyWorkflowNode {
+  readonly key: string;
+  readonly label: string;
+  readonly sublabel: string | null;
+  readonly detail: string | null;
+  readonly kicker: string | null;
+  readonly role: CaseStudyWorkflowRole;
+  readonly status: CaseStudyWorkflowStatus;
+  readonly lane: CaseStudyWorkflowLane;
+  readonly evidence: string | null;
+  readonly tally: PublicCaseStudyMetric | null;
+}
+
+export interface PublicCaseStudyWorkflowEdge {
+  readonly from: string;
+  readonly to: string;
+  readonly label: string | null;
+  readonly status: CaseStudyWorkflowStatus;
+  readonly condition: string | null;
+  readonly motion: boolean;
+}
+
+export interface PublicCaseStudyWorkflowPanel {
+  readonly key: CaseStudyWorkflowPanelKey;
+  readonly label: string;
+  readonly summary: string | null;
+  readonly laneLabels: Readonly<Record<CaseStudyWorkflowLane, string>>;
+  readonly nodes: readonly PublicCaseStudyWorkflowNode[];
+  readonly edges: readonly PublicCaseStudyWorkflowEdge[];
+  readonly initialNodeKey: string;
+}
+
+export interface PublicCaseStudyWorkflow {
+  readonly key: string;
+  readonly type: 'before_after' | 'single_state';
+  readonly title: string;
+  readonly caption: string | null;
+  readonly description: string;
+  readonly panels: readonly PublicCaseStudyWorkflowPanel[];
+  readonly motionNote: string;
+}
+
+export interface PublicCaseStudyVisualChartPart {
+  readonly label: string;
+  readonly value: number;
+  readonly denominator: number;
+  readonly status: CaseStudyWorkflowStatus;
+  readonly caveat: string | null;
+}
+
+export interface PublicCaseStudyVisualChart {
+  readonly key: string;
+  readonly kind: CaseStudyVisualChartKind;
+  readonly title: string;
+  readonly caption: string | null;
+  readonly metric: PublicCaseStudyMetric;
+  readonly denominator: number;
+  readonly parts: readonly PublicCaseStudyVisualChartPart[];
+  readonly unit: string | null;
+  readonly axisMax: number | null;
+  readonly caveat: string | null;
+  readonly limitations: readonly string[];
+}
+
+export interface PublicCaseStudyVisualStory {
+  readonly schemaVersion: 1;
+  readonly presentationVersion: 'v2';
+  readonly motion: 'auto' | 'off';
+  readonly workflow: PublicCaseStudyWorkflow | null;
+  readonly outcomeCards: readonly PublicCaseStudyMetric[];
+  readonly charts: readonly PublicCaseStudyVisualChart[];
+}
+
 export interface PublicCaseStudyCta {
   readonly eyebrow: string;
   readonly heading: string;
@@ -433,6 +519,8 @@ export interface PublicCaseStudyDetail {
     readonly provider: 'youtube' | 'vimeo' | null;
     readonly watchUrl: string | null;
   } | null;
+  /** Null unless the record carries a visual story enabled for this surface. */
+  readonly visualStory: PublicCaseStudyVisualStory | null;
   readonly situation: PublicCaseStudySituation | null;
   readonly timeline: readonly PublicCaseStudyTimelineEntry[];
   readonly architecture: PublicCaseStudyArchitecture | null;
