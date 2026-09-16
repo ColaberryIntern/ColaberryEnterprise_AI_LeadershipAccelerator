@@ -38,6 +38,7 @@ import { evaluateSend } from '../communicationSafetyService';
 import { triggerVoiceCall } from '../synthflowService';
 import { CommunicationLog } from '../../models';
 import { requestInstantCallback } from '../callbackRequestService';
+import { logCommunication } from '../communicationLogService';
 
 const mockIngest = ingestExternalLead as jest.Mock;
 const mockEvaluateSend = evaluateSend as jest.Mock;
@@ -195,5 +196,41 @@ describe('consent capture can never cost someone their callback', () => {
 
     expect(result.status).toBe('call_initiated');
     expect(mockTriggerCall).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('who the call is for travels with the call', () => {
+  // The completion webhook is the only thing that sees the transcript, and the vendor
+  // cannot tell it whose project this is. So the answer is stamped on the log row when
+  // the call is placed - on EVERY row it produces, because a skipped or failed call is
+  // still the admin's call and still needs to be found as such.
+  const mockLog = logCommunication as jest.Mock;
+  const ENR = '22222222-2222-4222-8222-222222222222';
+
+  it('stamps the enrolment and who asked on a placed call', async () => {
+    await requestInstantCallback(PAYLOAD, 'corr-1', { enrollmentId: ENR, requestedBy: 'admin' });
+    const meta = mockLog.mock.calls[0][0].metadata;
+    expect(meta).toMatchObject({ source: 'training_site', enrollment_id: ENR, requested_by: 'admin', correlation_id: 'corr-1' });
+  });
+
+  it('stamps it on a skipped call too', async () => {
+    mockTriggerCall.mockResolvedValue({ success: true, data: { skipped: true, reason: 'voice_disabled' } });
+    const result = await requestInstantCallback(PAYLOAD, 'corr-1', { enrollmentId: ENR, requestedBy: 'admin' });
+    expect(result.status).toBe('skipped');
+    expect(mockLog.mock.calls[0][0].metadata).toMatchObject({ enrollment_id: ENR, requested_by: 'admin' });
+  });
+
+  it('stamps it on a failed call too', async () => {
+    mockTriggerCall.mockResolvedValue({ success: false, error: 'upstream 503' });
+    const result = await requestInstantCallback(PAYLOAD, 'corr-1', { enrollmentId: ENR, requestedBy: 'admin' });
+    expect(result.status).toBe('failed');
+    expect(mockLog.mock.calls[0][0].metadata).toMatchObject({ enrollment_id: ENR, requested_by: 'admin' });
+  });
+
+  it("a prospect's own call carries neither - nothing to guess from later", async () => {
+    await requestInstantCallback(PAYLOAD, 'corr-1');
+    const meta = mockLog.mock.calls[0][0].metadata;
+    expect(meta).not.toHaveProperty('enrollment_id');
+    expect(meta).not.toHaveProperty('requested_by');
   });
 });

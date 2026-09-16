@@ -101,3 +101,51 @@ export async function sendIntakeTurn(params: { enrollmentId: string; sessionId: 
   });
   return data;
 }
+
+// ── The spoken interview, from the management side ──────────────────────────────────────
+//
+// Places the same call "Call me now" on /start places, stamped with the student it is
+// for. The vendor then talks to the webhook, not to the browser, so the page watches the
+// call through `getIntakeCall` until it has become a project.
+
+export type CallbackStatus = 'call_initiated' | 'deduplicated' | 'skipped' | 'failed';
+
+export interface PlacedCall {
+  status: CallbackStatus;
+  lead_id: number;
+  call_id: string | null;
+  deduped: boolean;
+  reason?: string;
+  correlation_id: string;
+}
+
+export interface IntakeCallProgress {
+  /** 'sent' = placed, 'delivered' = ended with the transcript in, 'failed' = did not complete. */
+  call: { status: string; duration: number | null; has_transcript: boolean; end_reason: string | null };
+  understanding: { id: string; status: string; title: string | null; items: number } | null;
+  build: { project_id: string; started_at: string } | null;
+}
+
+export async function placeIntakeCall(params: { enrollmentId: string; phone: string; idea?: string }): Promise<PlacedCall> {
+  const { data } = await api.post<PlacedCall>('/api/admin/flotation/intake/call', {
+    enrollment_id: params.enrollmentId,
+    phone: params.phone,
+    ...(params.idea ? { idea: params.idea } : {}),
+  });
+  return data;
+}
+
+export async function getIntakeCall(callId: string): Promise<IntakeCallProgress> {
+  const { data } = await api.get<IntakeCallProgress>(`/api/admin/flotation/intake/call/${encodeURIComponent(callId)}`);
+  return data;
+}
+
+/** Why a call was not placed, in a sentence. The server says which, and so must this. */
+export function describeCallError(err: unknown): string {
+  const res = (err as { response?: { status?: number; data?: { error?: string; reason?: string; status?: string } } })?.response;
+  const reason = res?.data?.reason;
+  if (res?.data?.status === 'skipped') return `The call was not placed: ${reason || 'voice is not available right now'}.`;
+  if (res?.data?.status === 'failed') return `The phone system refused the call: ${reason || 'upstream error'}. Nothing was created.`;
+  if (res?.data?.error) return res.data.error;
+  return 'The call could not be placed. Nothing was created.';
+}

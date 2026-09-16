@@ -34,7 +34,7 @@ jest.mock('../../../models', () => ({
   Enrollment: { findOne: (...a: any[]) => mockEnrollmentFindOne(...a) },
 }));
 
-import { runIntakeTurn, boundTurns, MAX_TURN_TEXT } from '../projectIntake';
+import { runIntakeTurn, finishIntake, buildTargetFromCall, boundTurns, MAX_TURN_TEXT } from '../projectIntake';
 import { MAX_EXCHANGES } from '../flotationInterviewService';
 
 const TURNS = [
@@ -212,10 +212,64 @@ describe('runIntakeTurn - when the interviewer is done', () => {
   });
 });
 
+describe('finishIntake - the spoken mouth ends the same way as the typed one', () => {
+  const TRANSCRIPT = 'Agent: What do you do?\nCustomer: We run a repair cafe and track loans on paper.';
+
+  beforeEach(() => {
+    mockRecord.mockResolvedValue({ status: 'created', id: 'rec-7', kept: 4, rejected: 0 });
+  });
+
+  it('records a voice transcript under the call id and builds on the stamped enrolment', async () => {
+    const out = await finishIntake({
+      conversation: TRANSCRIPT, source: 'voice_transcript', sourceRef: 'call_abc', facts: FACTS, leadId: 7,
+      buildFor: { kind: 'enrollment', enrollmentId: 'enr-9' },
+    });
+
+    expect(mockRecord).toHaveBeenCalledWith({ leadId: 7, source: 'voice_transcript', sourceRef: 'call_abc', conversation: TRANSCRIPT, facts: FACTS });
+    expect(mockStart).toHaveBeenCalledWith({ recordId: 'rec-7', enrollmentId: 'enr-9' });
+    expect(out).toEqual({ understanding: 'created', understanding_id: 'rec-7', build: { started: true, project_id: 'proj-1' } });
+    expect(mockNext).not.toHaveBeenCalled();
+  });
+
+  it("a prospect's call lands by their email, the way the typed door does", async () => {
+    mockEnrollmentFindOne.mockResolvedValue({ id: 'enr-3' });
+    await finishIntake({
+      conversation: TRANSCRIPT, source: 'voice_transcript', sourceRef: 'call_abc', facts: FACTS, leadId: 7,
+      buildFor: buildTargetFromCall({ enrollmentId: null, email: 'Marta@Northside.test' }),
+    });
+    expect(mockEnrollmentFindOne).toHaveBeenCalledWith({ where: { email: 'marta@northside.test' } });
+    expect(mockStart).toHaveBeenCalledWith({ recordId: 'rec-7', enrollmentId: 'enr-3' });
+  });
+
+  it('is what the typed interview calls when it is done - same outcome shape, same build', async () => {
+    mockNext.mockResolvedValue({ ok: true, done: true, message: 'Thanks.', exchanges: 3 });
+    const typed = await runIntakeTurn({ turns: TURNS, facts: FACTS, sourceRef: 'chat:t1', leadId: 7, buildFor: { kind: 'enrollment', enrollmentId: 'enr-9' } });
+    const spoken = await finishIntake({ conversation: TRANSCRIPT, source: 'voice_transcript', sourceRef: 'call_abc', facts: FACTS, leadId: 7, buildFor: { kind: 'enrollment', enrollmentId: 'enr-9' } });
+
+    const { done, message, ...typedOutcome } = typed as any;
+    expect(typedOutcome).toEqual(spoken);
+    expect(mockStart).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('buildTargetFromCall - what the call was stamped with decides where it lands', () => {
+  it('prefers the stamped enrolment', () => {
+    expect(buildTargetFromCall({ enrollmentId: 'enr-1', email: 'x@y.test' })).toEqual({ kind: 'enrollment', enrollmentId: 'enr-1' });
+  });
+  it('falls back to the email', () => {
+    expect(buildTargetFromCall({ enrollmentId: null, email: 'x@y.test' })).toEqual({ kind: 'by_email', email: 'x@y.test' });
+  });
+  it('has nowhere to land with neither', () => {
+    expect(buildTargetFromCall({})).toEqual({ kind: 'none' });
+  });
+});
+
 describe('the mirror - both doors are the same function', () => {
   const read = (...p: string[]) => fs.readFileSync(path.resolve(__dirname, '..', '..', '..', ...p), 'utf8');
   const publicDoor = read('controllers', 'flotationInterviewController.ts');
   const adminDoor = read('routes', 'admin', 'flotationIntakeRoutes.ts');
+  const spokenDoor = read('controllers', 'synthflowWebhookController.ts');
+  const publicCall = read('services', 'routingActionsService.ts');
 
   it.each([
     ['public /start', publicDoor],
@@ -243,5 +297,28 @@ describe('the mirror - both doors are the same function', () => {
   it('the admin door names the student as the build target; the public door goes by the lead email', () => {
     expect(adminDoor).toContain("buildFor: { kind: 'enrollment'");
     expect(publicDoor).toContain("{ kind: 'by_email', email: lead.email }");
+  });
+
+  it('the spoken mouth ends through finishIntake, never through the extractor directly', () => {
+    // A call's transcript arrives at the Synthflow webhook. If that file recorded the
+    // understanding itself, voice would stop where chat continues - which is exactly the
+    // gap this test was written to close.
+    expect(spokenDoor).toMatch(/from '[./]+services\/delivery\/projectIntake'/);
+    expect(spokenDoor).toContain('await finishIntake({');
+    expect(spokenDoor).toContain("source: 'voice_transcript'");
+    expect(spokenDoor).not.toContain('recordUnderstandingFromConversation');
+    expect(spokenDoor).toContain('buildTargetFromCall({ enrollmentId: commMeta.enrollment_id');
+  });
+
+  it('both doors place the call through requestInstantCallback with the same brand', () => {
+    // The public site places it via the request_callback routing action; the admin page
+    // via its own route. One function dials, scripts, gates and logs the call for both.
+    expect(publicCall).toContain('await requestInstantCallback({');
+    expect(adminDoor).toContain('await requestInstantCallback(');
+    expect(adminDoor).toContain("const FLOTATION_SOURCE = 'ai-flotation'");
+    expect(adminDoor).toContain("{ enrollmentId: enrollment.id, requestedBy: 'admin' }");
+    for (const door of [publicCall, adminDoor]) {
+      expect(door).not.toContain('triggerVoiceCall');
+    }
   });
 });

@@ -91,10 +91,29 @@ function log(
  * checks -> trigger the Synthflow outbound agent (whose knowledge base stays
  * attached server-side) -> log the communication for audit + webhook matching.
  */
+export interface CallbackOptions {
+  /**
+   * The enrolment the resulting project belongs to, when someone other than the person
+   * being called asked for the call - an admin starting a project for a student. Stamped
+   * on the communication log so the completion webhook can land the build without
+   * guessing. A prospect's own call carries none; their build is found by their email.
+   */
+  enrollmentId?: string;
+  requestedBy?: 'admin';
+}
+
 export async function requestInstantCallback(
   payload: V1CallbackInput,
   correlation_id: string,
+  options: CallbackOptions = {},
 ): Promise<CallbackResult> {
+  // What the completion webhook needs to know about this call that the vendor cannot tell
+  // it. Present on every log row the call produces, whatever its outcome.
+  const forWhom = {
+    ...(options.enrollmentId ? { enrollment_id: options.enrollmentId } : {}),
+    ...(options.requestedBy ? { requested_by: options.requestedBy } : {}),
+  };
+
   // 1. Resolve the lead idempotently (dedup by strapi_lead_id/email inside the
   //    shared ingest service). A person asking to be called IS a lead.
   const lead = await ingestExternalLead(payload, correlation_id);
@@ -238,7 +257,7 @@ export async function requestInstantCallback(
       to_address: targetPhone,
       provider: 'synthflow',
       error_message: reason,
-      metadata: { trigger: 'instant_callback', call_type: 'callback', source: payload.source, correlation_id },
+      metadata: { trigger: 'instant_callback', call_type: 'callback', source: payload.source, correlation_id, ...forWhom },
     }).catch(() => {});
     log('warn', 'callback_skipped', 'partial', { correlation_id, lead_id: leadId, reason });
     return { status: 'skipped', lead_id: leadId, call_id: null, deduped: false, reason };
@@ -254,7 +273,7 @@ export async function requestInstantCallback(
       to_address: targetPhone,
       provider: 'synthflow',
       error_message: callResult.error || 'synthflow_error',
-      metadata: { trigger: 'instant_callback', call_type: 'callback', source: payload.source, correlation_id },
+      metadata: { trigger: 'instant_callback', call_type: 'callback', source: payload.source, correlation_id, ...forWhom },
     }).catch(() => {});
     log('error', 'callback_failed', 'failure', { correlation_id, lead_id: leadId, error_class: 'UpstreamUnavailable', reason: callResult.error });
     return { status: 'failed', lead_id: leadId, call_id: null, deduped: false, reason: callResult.error };
@@ -277,6 +296,7 @@ export async function requestInstantCallback(
       interest_area: payload.interest_area,
       test_mode: decision.testMode,
       correlation_id,
+      ...forWhom,
     },
   }).catch(() => {});
 

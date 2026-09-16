@@ -6,7 +6,7 @@ import { CallContactLog } from '../models';
 import { processCallTranscript } from '../services/callTranscriptProcessor';
 import { sendSmsViaGhl, syncLeadToGhl, findContactByEmail } from '../services/ghlService';
 import { logActivity } from '../services/activityService';
-import { recordUnderstandingFromConversation } from '../services/delivery/recordProjectUnderstanding';
+import { finishIntake, buildTargetFromCall } from '../services/delivery/projectIntake';
 import OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import { env } from '../config/env';
@@ -143,7 +143,7 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
     //
     // Non-fatal and deliberately last: recording that the call happened is this endpoint's
     // actual contract with the vendor, and it must not be lost because a downstream step
-    // failed. `recordUnderstandingFromConversation` never throws, but the guard stays
+    // failed. `finishIntake` never throws, but the guard stays
     // because that is a promise made by another module and this one should not depend on
     // it holding forever.
     // ── AI Internship interview calls ──────────────────────────────────────
@@ -196,21 +196,25 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
     if (callCompleted && transcript && commMeta.source === 'ai-flotation') {
       try {
         const leadRecord = commLog.lead_id ? await Lead.findByPk(commLog.lead_id) : null;
-        const outcome = await recordUnderstandingFromConversation({
-          leadId: commLog.lead_id as number | null,
+        // The spoken mouth of the ONE intake. Everything after the last word - extraction,
+        // and the build that starts on its own - is `finishIntake`, the same function the
+        // typed interview calls when it is done. An admin-requested call was stamped with
+        // the student it is for; a prospect's call is found by their email.
+        const outcome = await finishIntake({
+          conversation: transcript,
           source: 'voice_transcript',
           sourceRef: call_id,
-          conversation: transcript,
           facts: {
             name: (leadRecord as any)?.name || null,
             company: (leadRecord as any)?.company || null,
             role: (leadRecord as any)?.role || (leadRecord as any)?.title || null,
           },
+          leadId: commLog.lead_id as number | null,
+          buildFor: buildTargetFromCall({ enrollmentId: commMeta.enrollment_id, email: (leadRecord as any)?.email }),
         });
         console.log(
-          `[Synthflow Webhook] project understanding ${outcome.status}` +
-            `${outcome.reason ? ` (${outcome.reason})` : ''}` +
-            `${outcome.kept !== undefined ? ` kept=${outcome.kept} rejected=${outcome.rejected}` : ''}`,
+          `[Synthflow Webhook] project understanding ${outcome.understanding}` +
+            (outcome.build ? ` build=${outcome.build.started ? outcome.build.project_id : 'not started: ' + outcome.build.reason}` : ''),
         );
       } catch (undErr: any) {
         console.warn('[Synthflow Webhook] project understanding error:', undErr.message);

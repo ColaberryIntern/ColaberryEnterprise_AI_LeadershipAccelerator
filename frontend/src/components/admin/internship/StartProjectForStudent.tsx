@@ -9,6 +9,7 @@ import {
   sendIntakeTurn,
 } from '../../../services/adminFlotationIntakeApi';
 import { getViewAsUrl } from '../../../services/adminOrgApi';
+import SpokenIntake from './SpokenIntake';
 
 /**
  * The interview, from the management side.
@@ -22,11 +23,15 @@ import { getViewAsUrl } from '../../../services/adminOrgApi';
  * own - through the same `runIntakeTurn` the public /start page calls, so what happens here
  * is what happens to a prospect, question for question.
  *
+ * Two ways in, the same two /start offers: type it out, or have it call. The typed one
+ * lives here; the spoken one is `SpokenIntake`. Both end in the same function server-side.
+ *
  * The transcript lives in this component, exactly as /start keeps it in the page. One
  * session id per conversation; the server uses it to make the final turn idempotent.
  */
 
 type Phase = 'pick' | 'talk' | 'done';
+type Mode = 'typed' | 'spoken';
 
 const newSessionId = (): string =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -42,6 +47,7 @@ export default function StartProjectForStudent() {
   const [matches, setMatches] = useState<IntakeStudent[]>([]);
   const [searching, setSearching] = useState(false);
   const [student, setStudent] = useState<IntakeStudent | null>(null);
+  const [mode, setMode] = useState<Mode>('typed');
 
   const [sessionId, setSessionId] = useState(newSessionId);
   const [turns, setTurns] = useState<IntakeTurn[]>([]);
@@ -108,6 +114,7 @@ export default function StartProjectForStudent() {
   const reset = () => {
     setPhase('pick');
     setStudent(null);
+    setMode('typed');
     setSessionId(newSessionId());
     setTurns([]);
     setDraft('');
@@ -125,7 +132,7 @@ export default function StartProjectForStudent() {
     <SectionCard
       title="Start a project for a student"
       icon="chat-new-line"
-      subtitle="The same interview a prospect gets on aiflotation.com. Describe the project as they would; the build starts when it has enough."
+      subtitle="The same interview a prospect gets on aiflotation.com, typed or by phone. The build starts when it has enough."
       actions={
         phase !== 'pick' ? (
           <button type="button" className="btn btn-sm btn-outline-secondary" onClick={reset} disabled={busy}>
@@ -169,12 +176,26 @@ export default function StartProjectForStudent() {
 
       {phase !== 'pick' && student && (
         <>
-          <div className="d-flex align-items-center gap-2 mb-3 small">
+          <div className="d-flex align-items-center gap-2 mb-3 small flex-wrap">
             <i className="ri-user-line text-muted" aria-hidden="true" />
             <span>Building for <strong>{student.full_name || student.email}</strong></span>
             {student.full_name && <span className="text-muted">{student.email}</span>}
+            {turns.length === 0 && phase === 'talk' && (
+              <div className="btn-group btn-group-sm ms-auto" role="group" aria-label="How to run the interview">
+                <button type="button" className={`btn ${mode === 'typed' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setMode('typed')}>
+                  <i className="ri-keyboard-line me-1" />Type it out
+                </button>
+                <button type="button" className={`btn ${mode === 'spoken' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setMode('spoken')}>
+                  <i className="ri-phone-line me-1" />Have it call
+                </button>
+              </div>
+            )}
           </div>
 
+          {mode === 'spoken' && phase === 'talk' && <SpokenIntake student={student} onViewAs={() => void viewAs()} />}
+
+          {mode === 'typed' && (
+          <>
           <div
             ref={logRef}
             className="border rounded p-3 mb-3"
@@ -258,6 +279,8 @@ export default function StartProjectForStudent() {
                 <i className="ri-eye-line me-1" />See it as they would
               </button>
             </div>
+          )}
+          </>
           )}
         </>
       )}

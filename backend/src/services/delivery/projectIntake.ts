@@ -12,6 +12,12 @@
  * differ only in who they let in and how they name the person - everything from the first
  * question to the published project runs through here.
  *
+ * The interview has two mouths, typed and spoken, and they end the same way. `runIntakeTurn`
+ * is the typed one. A phone call is the spoken one: Synthflow runs the conversation and
+ * hands back a transcript, and the webhook calls `finishIntake` with it - the same function
+ * the typed interview calls when it is done. What comes after the last word is identical
+ * whether the words were typed or said.
+ *
  * ## What one turn does
  *
  *   1. Bounds the transcript, so a client cannot buy a thousand-turn prompt.
@@ -65,16 +71,20 @@ export type BuildTarget =
   | { kind: 'by_email'; email: string }
   | { kind: 'none' };
 
+/** Which mouth the conversation came through. */
+export type IntakeSource = 'chat' | 'voice_transcript';
+
+/** What the end of an intake produces, whichever mouth it came through. */
+export interface IntakeOutcome {
+  understanding: 'created' | 'deduplicated' | 'failed' | 'skipped';
+  understanding_id?: string;
+  /** Present when a build was attempted. Absent when the extraction produced nothing to build. */
+  build?: { started: boolean; project_id?: string; reason?: string };
+}
+
 export type IntakeTurnResult =
   | { done: false; message: string; exchanges?: number; error_class?: string }
-  | {
-      done: true;
-      message: string;
-      understanding: 'created' | 'deduplicated' | 'failed' | 'skipped';
-      understanding_id?: string;
-      /** Present when a build was attempted. Absent when there was nowhere to land. */
-      build?: { started: boolean; project_id?: string; reason?: string };
-    };
+  | ({ done: true; message: string } & IntakeOutcome);
 
 /**
  * Resolve where a build should land, without throwing. A missing enrolment is a reason,
@@ -121,17 +131,43 @@ export async function runIntakeTurn(params: {
   // responding is what makes that transition honest rather than a spinner over a promise.
   const conversation = interviewTranscript([...params.turns, { role: 'assistant', text: result.message }]);
 
-  const outcome = await recordUnderstandingFromConversation({
-    leadId: params.leadId,
+  const outcome = await finishIntake({
+    conversation,
     source: 'chat',
     sourceRef: params.sourceRef,
-    conversation,
+    facts: params.facts,
+    leadId: params.leadId,
+    buildFor: params.buildFor,
+  });
+
+  return { done: true, message: result.message, ...outcome };
+}
+
+/**
+ * The end of an intake: record what was understood, then start the project.
+ *
+ * Called by the typed interview when it is done and by the Synthflow webhook when a call
+ * ends. This is the ONE place a conversation becomes a project. If a third mouth ever
+ * appears - a form, a document, a meeting recording - it calls this too.
+ */
+export async function finishIntake(params: {
+  conversation: string;
+  source: IntakeSource;
+  /** Names the conversation in its own system - the idempotency key for extraction. */
+  sourceRef: string;
+  facts: InterviewFacts;
+  leadId: number | null;
+  buildFor: BuildTarget;
+}): Promise<IntakeOutcome> {
+  const outcome = await recordUnderstandingFromConversation({
+    leadId: params.leadId,
+    source: params.source,
+    sourceRef: params.sourceRef,
+    conversation: params.conversation,
     facts: params.facts,
   });
 
-  const response: IntakeTurnResult = {
-    done: true,
-    message: result.message,
+  const response: IntakeOutcome = {
     understanding: outcome.status,
     understanding_id: outcome.id,
   };
@@ -153,6 +189,7 @@ export async function runIntakeTurn(params: {
       console.error('[ProjectIntake] build could not be started', {
         error_class: err instanceof Error ? err.constructor.name : 'Unknown',
         message: err?.message,
+        source: params.source,
         source_ref: params.sourceRef,
       });
       response.build = { started: false, reason: err?.message || 'build failed to start' };
@@ -160,4 +197,15 @@ export async function runIntakeTurn(params: {
   }
 
   return response;
+}
+
+/**
+ * Where a finished call's project should land, from what the call was stamped with when
+ * it was placed. An admin-requested call names the student; a prospect's call is found by
+ * their email, the way the typed door finds them.
+ */
+export function buildTargetFromCall(params: { enrollmentId?: string | null; email?: string | null }): BuildTarget {
+  if (params.enrollmentId) return { kind: 'enrollment', enrollmentId: String(params.enrollmentId) };
+  if (params.email) return { kind: 'by_email', email: String(params.email) };
+  return { kind: 'none' };
 }
