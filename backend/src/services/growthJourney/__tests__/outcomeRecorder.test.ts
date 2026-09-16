@@ -140,8 +140,8 @@ describe('recordOutcome — no address in the metadata', () => {
     expect(findAddressLikeValue({ stage: 'enrolled', count: 3, at: '2026-09-16T10:00:00Z', ids: ['a', 'b'], none: null })).toBeNull();
     expect(findAddressLikeValue(null)).toBeNull();
     expect(findAddressLikeValue('plain')).toBeNull();
-    expect(findAddressLikeValue('a@b')).toBe('metadata');
-    expect(findAddressLikeValue({ a: { b: ['c', 'd@e'] } })).toBe('metadata.a.b[1]');
+    expect(findAddressLikeValue('a@b', 'metadata')).toBe('metadata');
+    expect(findAddressLikeValue({ a: { b: ['c', 'd@e'] } }, 'metadata')).toBe('metadata.a.b[1]');
   });
 });
 

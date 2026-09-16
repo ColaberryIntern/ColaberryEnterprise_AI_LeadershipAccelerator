@@ -18,6 +18,7 @@ import {
   EXPLORER_GENERATORS,
   generateLearnerCandidates,
   LEARNER_BRAND_SLUGS,
+  learnerDeferrals,
   learnerEmptyReason,
   learnerStrategy,
   NO_LEARNER_PROFILE,
@@ -325,5 +326,53 @@ describe('T402 — a human owns the thread: the learner\'s email and lesson cand
       expect(g.candidates.every((x) => !PAUSED.has(x.action_type))).toBe(true);
       expect(learnerEmptyReason(g)).toBeNull();
     }
+  });
+});
+
+/* ── T404: the learner queues' producer ─────────────────────────────────────── */
+
+describe("T404 — what the learner strategy WOULD hand to a human, read from Explorer's own facts", () => {
+  const withOverlays = (primary_state: LearnerFacts['primary_state'], overlays: LearnerFacts['overlays'], over: Partial<JourneySubjectContext> = {}) =>
+    ctx({ learner: facts({ primary_state, overlays }), ...over });
+
+  it('ENROLLMENT_READY with HIGH_INTENT and IN_CONVERSATION → one admissions handoff, and the strategy exposes it as defer', () => {
+    const c = withOverlays('ENROLLMENT_READY', ['HIGH_INTENT', 'IN_CONVERSATION']);
+    expect(learnerDeferrals(c)).toEqual([
+      { would: 'create_handoff', reason: 'enrollment_ready_in_conversation', payload: { brand: 'colaberry-training', state: 'ENROLLMENT_READY', path: 'learner_free_training', layer: 4, owner: 'admissions' } },
+    ]);
+    expect(learnerStrategy.defer?.(c)).toEqual(learnerDeferrals(c));
+  });
+
+  it('ENROLLMENT_READY needs BOTH overlays; ACTIVATING with both yields none — the state is read, not guessed', () => {
+    expect(learnerDeferrals(withOverlays('ENROLLMENT_READY', ['HIGH_INTENT']))).toEqual([]);
+    expect(learnerDeferrals(withOverlays('ENROLLMENT_READY', ['IN_CONVERSATION']))).toEqual([]);
+    expect(learnerDeferrals(withOverlays('ACTIVATING', ['HIGH_INTENT', 'IN_CONVERSATION']))).toEqual([]);
+  });
+
+  it("FRICTION / NEEDS_SUPPORT / f >= 25 with email ineligible → one support handoff naming the evidence's reason; email reachable → none (Explorer's own predicate)", () => {
+    const bounced = contact({ email: channel(false, 'lead_bounced', 'lead_status') });
+    for (const c of [
+      withOverlays('ACTIVE_LEARNER', ['FRICTION'], { contact: bounced }),
+      withOverlays('ACTIVE_LEARNER', ['NEEDS_SUPPORT'], { contact: bounced }),
+      ctx({ learner: facts({ primary_state: 'ACTIVE_LEARNER', overlays: [], scores: { e: 30, i: 5, f: 60 } }), contact: bounced }),
+    ]) {
+      expect(learnerDeferrals(c)).toEqual([
+        { would: 'create_handoff', reason: 'friction_email_ineligible:lead_bounced', payload: { brand: 'colaberry-training', state: 'ACTIVE_LEARNER', path: 'learner_free_training', layer: 4, owner: 'support' } },
+      ]);
+    }
+    expect(learnerDeferrals(withOverlays('ACTIVE_LEARNER', ['FRICTION']))).toEqual([]);
+    expect(learnerDeferrals(ctx({ learner: facts({ primary_state: 'ACTIVE_LEARNER', overlays: [], scores: { e: 30, i: 5, f: 24 } }), contact: bounced }))).toEqual([]);
+  });
+
+  it('the friction line is Explorer\'s own, 25, read from frictionRecovery.ts', () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', '..', 'explorerGrowth', 'governor', 'candidates', 'frictionRecovery.ts'), 'utf8');
+    expect(src).toContain('const FRICTION_THRESHOLD = 25;');
+    const mine = fs.readFileSync(path.join(__dirname, '..', 'strategies', 'learnerStrategy.ts'), 'utf8');
+    expect(mine).toContain('const FRICTION_THRESHOLD = 25;');
+  });
+
+  it('no profile, or a non-learner programme, defers nothing', () => {
+    expect(learnerDeferrals(cpn())).toEqual([]);
+    expect(learnerDeferrals(withOverlays('ENROLLMENT_READY', ['HIGH_INTENT', 'IN_CONVERSATION'], { program_kind: 'business' }))).toEqual([]);
   });
 });

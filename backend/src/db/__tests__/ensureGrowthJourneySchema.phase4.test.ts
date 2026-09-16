@@ -33,6 +33,7 @@ const EXPECTED_HANDOFF_COLUMNS = [
   'assigned_to_type',
   'assigned_to_id',
   'ticket_id',
+  'assignment_blocked_reason',
   'priority',
   'expected_value',
   'urgent',

@@ -89,6 +89,7 @@ export interface GrowthJourneyHandoffAttributes {
   assigned_to_type?: string | null;
   assigned_to_id?: string | null;
   ticket_id?: string | null;
+  assignment_blocked_reason?: string | null;
   priority?: GrowthJourneyHandoffPriority;
   expected_value?: number | string | null;
   urgent?: boolean;
@@ -130,6 +131,7 @@ class GrowthJourneyHandoff
   declare assigned_to_type: string | null;
   declare assigned_to_id: string | null;
   declare ticket_id: string | null;
+  declare assignment_blocked_reason: string | null;
   declare priority: GrowthJourneyHandoffPriority;
   declare expected_value: number | string | null;
   declare urgent: boolean;
@@ -169,6 +171,7 @@ GrowthJourneyHandoff.init(
     assigned_to_type: { type: DataTypes.STRING(16), allowNull: true },
     assigned_to_id: { type: DataTypes.STRING(255), allowNull: true },
     ticket_id: { type: DataTypes.UUID, allowNull: true },
+    assignment_blocked_reason: { type: DataTypes.STRING(64), allowNull: true },
     priority: { type: DataTypes.STRING(8), allowNull: false, defaultValue: 'medium' },
     expected_value: { type: DataTypes.DECIMAL, allowNull: true },
     urgent: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },

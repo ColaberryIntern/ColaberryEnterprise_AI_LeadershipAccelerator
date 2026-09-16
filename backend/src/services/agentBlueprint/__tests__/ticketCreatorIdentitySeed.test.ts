@@ -16,7 +16,7 @@
  * automatically, so a future 17th/22nd entry only needs this one constant
  * updated, not a rewrite of every test.
  */
-const EXPECTED_COUNT = 22;
+const EXPECTED_COUNT = 23;
 jest.mock('../agentIdentitySeed', () => ({
   seedAgentIdentity: jest.fn(),
   getAgentAdminUserId: jest.fn(),
@@ -44,7 +44,7 @@ beforeEach(() => {
 });
 
 describe('TICKET_CREATOR_IDENTITIES', () => {
-  it('has exactly the 5 original high-volume processes, the 16 department Strategy Architects, and AgentBehaviorMonitorAgent', () => {
+  it('has exactly the 5 original high-volume processes, the 16 department Strategy Architects, AgentBehaviorMonitorAgent, and GrowthJourneyHandoffs (Phase 4, T404)', () => {
     const names = TICKET_CREATOR_IDENTITIES.map((c) => c.agentName).sort();
     expect(names).toHaveLength(EXPECTED_COUNT);
     expect(names).toEqual(
@@ -55,6 +55,7 @@ describe('TICKET_CREATOR_IDENTITIES', () => {
         'cory-engine',
         'workforce_intelligence_engine',
         'AgentBehaviorMonitorAgent',
+        'GrowthJourneyHandoffs',
         'AdmissionsConversionArchitect',
         'AlumniNetworkArchitect',
         'ExecutiveStrategyArchitect',
@@ -174,7 +175,7 @@ describe('TICKET_CREATOR_IDENTITIES', () => {
     expect([...REASSIGNED_TO_TAIWO_AGENT_NAMES].sort()).toEqual(actualTaiwoAgents);
   });
 
-  it('the remaining 16 entries are AI Staff, reporting through CoryBrain (the other 12 Architects) or workforce_intelligence_engine (cory-engine, InboxCaseEngine, bpos_orchestrator, AgentBehaviorMonitorAgent)', () => {
+  it('the remaining 17 entries are AI Staff, reporting through CoryBrain (the other 12 Architects) or workforce_intelligence_engine (cory-engine, InboxCaseEngine, bpos_orchestrator, AgentBehaviorMonitorAgent, GrowthJourneyHandoffs)', () => {
     const staff = TICKET_CREATOR_IDENTITIES.filter((c) => !!c.reportsToAgentName);
     const byAgentName = Object.fromEntries(staff.map((c) => [c.agentName, c.reportsToAgentName]));
 
@@ -184,6 +185,7 @@ describe('TICKET_CREATOR_IDENTITIES', () => {
       InboxCaseEngine: 'workforce_intelligence_engine',
       bpos_orchestrator: 'workforce_intelligence_engine',
       AgentBehaviorMonitorAgent: 'workforce_intelligence_engine',
+      GrowthJourneyHandoffs: 'workforce_intelligence_engine',
       AlumniNetworkArchitect: 'CoryBrain',
       ExecutiveStrategyArchitect: 'CoryBrain',
       GovernanceStrategyArchitect: 'CoryBrain',

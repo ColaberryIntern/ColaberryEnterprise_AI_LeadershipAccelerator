@@ -26,19 +26,19 @@ const ALL_TICKET_TYPES = [
   'strategic_initiative', 'ai_optimization', 'agent_restructure', 'agent_creation',
   'workflow_redesign', 'system_automation', 'company_directive', 'workforce_decision',
   'bpos_execution', 'student_support', 'reese_autonomous_outreach', 'inbox_case',
-  'data_reliability_incident',
+  'data_reliability_incident', 'growth_journey_handoff',
 ] as const;
 
 describe('getEvidenceExpectations — anti-vacuity floor', () => {
-  it('exercises exactly the 19 real TicketType values from models/Ticket.ts (fails loudly if the enum grows without a matching test case)', () => {
+  it('exercises exactly the 20 real TicketType values from models/Ticket.ts (fails loudly if the enum grows without a matching test case)', () => {
     const source = require('fs').readFileSync(
       require('path').join(__dirname, '../../../models/Ticket.ts'),
       'utf8',
     );
     const unionMatch = source.match(/export type TicketType =([\s\S]*?);/);
     expect(unionMatch).toBeTruthy();
-    const realTypes = Array.from(unionMatch![1].matchAll(/'([a-z_]+)'/g)).map((m) => m[1]);
-    expect(realTypes.length).toBeGreaterThanOrEqual(19);
+    const realTypes = Array.from((unionMatch![1] as string).matchAll(/'([a-z_]+)'/g), (m) => m[1]);
+    expect(realTypes.length).toBeGreaterThanOrEqual(20);
     expect(new Set(ALL_TICKET_TYPES)).toEqual(new Set(realTypes));
   });
 });
@@ -64,6 +64,7 @@ describe('getEvidenceExpectations — per-type defaults (created_by_type: agent,
     reese_autonomous_outreach: { visualProof: 'expected', workGraph: 'not_applicable', decisions: 'not_applicable' },
     inbox_case: { visualProof: 'not_applicable', workGraph: 'expected', decisions: 'expected' },
     data_reliability_incident: { visualProof: 'not_applicable', workGraph: 'not_applicable', decisions: 'expected' },
+    growth_journey_handoff: { visualProof: 'not_applicable', workGraph: 'not_applicable', decisions: 'expected' },
   };
 
   it.each(ALL_TICKET_TYPES)('%s classifies exactly as the grounded B3 table specifies', (type) => {

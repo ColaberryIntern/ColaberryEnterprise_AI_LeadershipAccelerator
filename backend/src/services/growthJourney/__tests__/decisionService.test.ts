@@ -29,6 +29,9 @@ jest.mock('../offerEligibility', () => ({
 }));
 // T305's gate is the writer's seam, not its subject: it answers with the gap
 // every journey purpose is today. The gate's own behaviour is T310's suite.
+// T404: the handoff writer is mocked at its boundary - its own suite drives the rows; this one owns the hand-over.
+const handoffs = { materializeHandoffs: jest.fn() };
+jest.mock('../handoffs/handoffService', () => ({ materializeHandoffs: (...a: unknown[]) => handoffs.materializeHandoffs(...a) }));
 jest.mock('../journeyContent', () => ({
   resolveJourneyContent: async (c: { required_assets: Array<{ asset_type: string }> }) => ({
     assets: [],
@@ -434,5 +437,55 @@ describe('the writer appends and the loader reads - pinned on the source', () =>
     const code = strip(read('decisionService.ts'));
     expect(code).toContain('mode: SHADOW_MODE');
     expect(code).not.toMatch(/mode:\s*['"]shadow['"]/);
+  });
+});
+
+/* ── T404: the persisted row goes to the handoff writer, as plain data ─────── */
+
+describe('T404 — after persistDecision, the row is handed to the handoff writer', () => {
+  beforeEach(() => {
+    handoffs.materializeHandoffs.mockReset().mockResolvedValue({ status: 'disabled' });
+  });
+
+  it('is called once, after the create, with the PERSISTED row as a view (its id, its deferred actions), the refs from the context, the flags and the clock', async () => {
+    arrange();
+    const out = await record();
+    if (out.status !== 'recorded') throw new Error(out.status);
+    expect(handoffs.materializeHandoffs).toHaveBeenCalledTimes(1);
+    expect(handoffs.materializeHandoffs.mock.invocationCallOrder[0]).toBeGreaterThan(m.decisionCreate.mock.invocationCallOrder[0]);
+    const args = handoffs.materializeHandoffs.mock.calls[0][0];
+    expect(args.decision).toMatchObject({ id: out.row.id, subject_ref: 'lead:501', brand_id: 'b-ent', deferred_actions: out.row.deferred_actions, requires_human_review: out.row.requires_human_review, reason: out.row.reason });
+    expect(args.refs).toMatchObject({ tenant_id: 't-col', brand_id: 'b-ent', brand_slug: 'colaberry-enterprise', subject_ref: 'lead:501', lead_id: 501, program: expect.objectContaining({ kind: 'business' }) });
+    expect(args.flags).toEqual(onFlags());
+    expect(args.asOf).toEqual(bizCtx().asOf);
+    expect(out.handoffs).toEqual({ status: 'disabled' });
+  });
+
+  it('the view is plain data - not the model instance - and the writer\'s answer rides on the result', async () => {
+    arrange();
+    handoffs.materializeHandoffs.mockResolvedValue({ status: 'materialized', handoffs: [{ trigger: { source: 'decision_deferral', owner_queue: 'sales', reason: 'r' }, handoff_id: 'h-1', replayed: false, assignment: { status: 'queued', reason: 'no_assignee_policy' } }] });
+    const out = await record();
+    if (out.status !== 'recorded') throw new Error(out.status);
+    const view = handoffs.materializeHandoffs.mock.calls[0][0].decision;
+    expect(Object.getPrototypeOf(view)).toBe(Object.prototype);
+    expect(out.handoffs.status).toBe('materialized');
+  });
+
+  it('a writer that throws is logged and the decision is still recorded - never fatal', async () => {
+    arrange();
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    handoffs.materializeHandoffs.mockRejectedValue(Object.assign(new Error('down'), { name: 'SequelizeConnectionError' }));
+    const out = await record();
+    expect(out.status).toBe('recorded');
+    expect(out.status === 'recorded' && out.handoffs).toEqual({ status: 'none', reason: expect.stringMatching(/^materialize_failed:/) });
+    const lines = warn.mock.calls.map((c) => String(c[0])).join('|');
+    expect(lines).toContain('growth_journey.handoff.materialize_failed');
+    warn.mockRestore();
+  });
+
+  it('with the decisions flag off nothing is decided, so the writer is never asked', async () => {
+    arrange();
+    await record({ flags: { ...onFlags(), journeyDecisions: false } });
+    expect(handoffs.materializeHandoffs).not.toHaveBeenCalled();
   });
 });

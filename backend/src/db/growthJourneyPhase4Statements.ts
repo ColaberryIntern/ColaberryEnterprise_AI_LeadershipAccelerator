@@ -40,6 +40,11 @@ export const GROWTH_JOURNEY_PHASE4_STATEMENTS: readonly string[] = [
   // manual handoff has no decision behind it. ON DELETE SET NULL: losing the
   // decision must not lose the human's work.
   //
+  // `assignment_blocked_reason` says why a `queued` row is still queued after
+  // the assignment step looked at it (flag off, kill switch, no assignee
+  // policy, capacity full, creator unregistered) - on the row, so the queue
+  // page can say it without re-running the checks.
+  //
   // `evidence` is the §9 packet, built from stored rows only, and carries ids,
   // counts, timestamps and outcome types — never an address, a message body or
   // a transcript. The contract makes that a phase-failing check, and the
@@ -58,6 +63,7 @@ export const GROWTH_JOURNEY_PHASE4_STATEMENTS: readonly string[] = [
      assigned_to_type VARCHAR(16),
      assigned_to_id VARCHAR(255),
      ticket_id UUID,
+     assignment_blocked_reason VARCHAR(64),
      priority VARCHAR(8) NOT NULL DEFAULT 'medium',
      expected_value NUMERIC,
      urgent BOOLEAN NOT NULL DEFAULT FALSE,

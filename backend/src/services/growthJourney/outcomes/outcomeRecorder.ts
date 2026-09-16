@@ -5,6 +5,7 @@ import type {
   GrowthJourneyOutcomeType,
 } from '../../../models/GrowthJourneyOutcome';
 import { isUniqueViolation } from '../../../utils/uniqueViolation';
+import { findAddressLikeValue } from '../noAddress';
 
 /**
  * The one outcome recorder (§6.1 `growth_journey_outcomes`; §13; Phase 4 T401).
@@ -62,27 +63,11 @@ export class OutcomeMetadataRejectedError extends Error {
   }
 }
 
-/** The first path at which a string value contains `@`, or null when none does. */
-export function findAddressLikeValue(value: unknown, path = 'metadata'): string | null {
-  if (typeof value === 'string') return value.includes('@') ? path : null;
-  if (Array.isArray(value)) {
-    for (let i = 0; i < value.length; i += 1) {
-      const hit = findAddressLikeValue(value[i], `${path}[${i}]`);
-      if (hit) return hit;
-    }
-    return null;
-  }
-  if (value && typeof value === 'object') {
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      const hit = findAddressLikeValue(v, `${path}.${k}`);
-      if (hit) return hit;
-    }
-  }
-  return null;
-}
+/** The rule lives in `../noAddress` (shared with the handoff writer); re-exported so T402's callers and tests keep their import. */
+export { findAddressLikeValue };
 
 export async function recordOutcome(input: RecordOutcomeInput): Promise<RecordOutcomeResult> {
-  const offending = findAddressLikeValue(input.metadata ?? null);
+  const offending = findAddressLikeValue(input.metadata ?? null, 'metadata');
   if (offending) throw new OutcomeMetadataRejectedError(offending);
 
   const row: GrowthJourneyOutcomeAttributes = {

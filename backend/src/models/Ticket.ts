@@ -30,7 +30,12 @@ export type TicketType = 'task' | 'bug' | 'feature' | 'curriculum' | 'agent_acti
   // links to. See managerReliabilityIntentService.ts's
   // applyConfirmedReliabilityChange(). Distinct from every other type so
   // reliability-incident history stays queryable on its own.
-  | 'data_reliability_incident';
+  | 'data_reliability_incident'
+  // Growth Journey OS Phase 4 (T404) - the human task behind a
+  // growth_journey_handoffs row: created only by the flag-gated assignment
+  // step with a policy assignee, deduped by createTicket() on
+  // (entity_type='growth_journey_handoff', entity_id=<handoff id>, type).
+  | 'growth_journey_handoff';
 export type TicketActorType = 'human' | 'cory' | 'agent'
   // Reese Phase 1 — a real AI staff-mentor identity, distinct from generic
   // autonomous background agents ('agent') so ticket activity attributed to Reese

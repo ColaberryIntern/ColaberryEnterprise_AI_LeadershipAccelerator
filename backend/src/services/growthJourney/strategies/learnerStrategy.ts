@@ -13,7 +13,7 @@ import { tierZeroStopsFromContact } from '../governor/contactEvidence';
 import { LEARNER_OFFER_FAMILIES } from '../../../models/OfferFamily';
 import { JOURNEY_PROGRAMS } from '../../../seeds/growthJourney/journeyProgramDefinitions';
 import { EXPLORER_PROGRAM } from '../explorerProgramBridge';
-import type { JourneyCandidate, JourneyStrategy, JourneySubjectContext, LearnerFacts } from '../governor/types';
+import type { JourneyCandidate, JourneyDeferral, JourneyStrategy, JourneySubjectContext, LearnerFacts } from '../governor/types';
 
 /**
  * The learner strategy — CPN and Colaberry Training over Explorer's own logic
@@ -296,6 +296,35 @@ export function generateLearnerCandidates(ctx: JourneySubjectContext): LearnerGe
   };
 }
 
+/* ── what the strategy WOULD do beyond Layer 1: the learner queues' producer (T404) ── */
+
+/** Explorer's own friction line (`frictionRecovery.ts`): F at or above it suppresses commercial action and starts recovery. */
+const FRICTION_THRESHOLD = 25;
+
+/**
+ * The two learner handoffs, read from what Explorer already knows and nothing
+ * invented: an enrolment-ready learner with HIGH_INTENT who is IN_CONVERSATION
+ * goes to admissions; a learner in friction (the overlay, the score, or
+ * NEEDS_SUPPORT - the same predicate `frictionRecovery` uses) whose email is
+ * ineligible goes to support, because a recovery message into a void is not
+ * recovery. Deferred, never emitted: Phase 4's writer materialises them.
+ */
+export function learnerDeferrals(ctx: JourneySubjectContext): JourneyDeferral[] {
+  const facts = ctx.learner;
+  if (!facts || ctx.program_kind !== 'learner') return [];
+  const out: JourneyDeferral[] = [];
+  const base = { brand: ctx.brand_slug, state: facts.primary_state, path: ctx.classification?.primary_path ?? null, layer: 4 };
+  const has = (o: string) => (facts.overlays as readonly string[]).includes(o);
+  if (facts.primary_state === 'ENROLLMENT_READY' && has('HIGH_INTENT') && has('IN_CONVERSATION')) {
+    out.push({ would: 'create_handoff', reason: 'enrollment_ready_in_conversation', payload: { ...base, owner: 'admissions' } });
+  }
+  const friction = has('FRICTION') || has('NEEDS_SUPPORT') || facts.scores.f >= FRICTION_THRESHOLD;
+  if (friction && ctx.contact.channels.email.eligible !== true) {
+    out.push({ would: 'create_handoff', reason: `friction_email_ineligible:${ctx.contact.channels.email.reason}`, payload: { ...base, owner: 'support' } });
+  }
+  return out;
+}
+
 /* ── the strategy ──────────────────────────────────────────────────────────── */
 
 /**
@@ -314,6 +343,7 @@ export const learnerStrategy: LearnerStrategy = Object.freeze({
   hardStops: learnerHardStops,
   generate: (ctx: JourneySubjectContext): JourneyCandidate[] => generateLearnerCandidates(ctx).candidates,
   generateWithReport: (ctx: JourneySubjectContext): LearnerGeneration => generateLearnerCandidates(ctx),
+  defer: learnerDeferrals,
   emptyReason: (ctx: JourneySubjectContext): string | null => learnerEmptyReason(generateLearnerCandidates(ctx)),
 });
 

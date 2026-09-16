@@ -147,6 +147,12 @@ const TYPE_DEFAULTS: Record<TicketType, TicketEvidenceExpectations> = {
   // classified the same way as company_directive/workforce_decision:
   // a governance decision, no visual or multi-step-workflow dimension.
   data_reliability_incident: { visualProof: NOT_APPLICABLE, workGraph: NOT_APPLICABLE, decisions: EXPECTED },
+
+  // Growth Journey OS Phase 4 (T404) - a handoff ticket is the human's
+  // decision about a person (qualified / not ready / nurture / no contact /
+  // disqualified / converted), recorded on the handoff row as a disposition.
+  // No visual dimension, no multi-step work graph: decisions EXPECTED.
+  growth_journey_handoff: { visualProof: NOT_APPLICABLE, workGraph: NOT_APPLICABLE, decisions: EXPECTED },
 };
 
 /**

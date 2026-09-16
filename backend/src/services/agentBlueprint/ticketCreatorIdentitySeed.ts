@@ -181,6 +181,24 @@ export const TICKET_CREATOR_IDENTITIES: AgentIdentityConfig[] = [
     legacyCreatorIds: ['b95d1700-1a2d-49d0-a8d0-a5859afd360a'],
     reportsToAgentName: AGENT_LEADERSHIP.WORKFORCE_INTELLIGENCE,
   },
+  {
+    // Growth Journey OS Phase 4 (T404) - the handoff writer's ticket-creator
+    // identity. AI Staff reporting through workforce_intelligence_engine, as
+    // cory-engine / InboxCaseEngine do, so the founder-given org chart's
+    // "exactly 6 AI Leadership" pin is untouched; whether it should report to
+    // Ali directly is a Phase 5 packet decision. The registry row of the same
+    // agent_name (agentRegistrySeed.ts) exists first: seedAgentIdentity()
+    // throws without it.
+    agentName: 'GrowthJourneyHandoffs',
+    email: 'growth-journey@colaberry.com',
+    displayName: 'Growth Journey Handoffs',
+    role: 'ai_staff',
+    communityRole: 'staff',
+    enrollmentDefaults: ENROLLMENT_DEFAULTS,
+    pilotCohortGate: false,
+    legacyCreatorIds: ['GrowthJourneyHandoffs'],
+    reportsToAgentName: AGENT_LEADERSHIP.WORKFORCE_INTELLIGENCE,
+  },
 
   // --- Department Strategy Architect agents (16) — Agent Ticket Standard audit, 2026-08-18,
   // session CC-20260818-a7d2. Founder-confirmed live: these 16 accounted for 3,576 open

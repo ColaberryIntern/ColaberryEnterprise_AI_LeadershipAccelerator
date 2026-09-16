@@ -13,6 +13,8 @@ import type { DecideDeps, JourneyCandidate, JourneyDecision, JourneySubjectConte
 import { resolveJourneyContent } from './journeyContent';
 import { assertOfferAllowed } from './offerEligibility';
 import { upsertProfile, type UpsertProfileResult } from './profileService';
+import { materializeHandoffs, type MaterializeResult } from './handoffs/handoffService';
+import type { DecisionRowView } from './handoffs/types';
 import type { SubjectAnchor, UnresolvedReason } from './subjectResolver';
 
 /**
@@ -89,6 +91,8 @@ export type DecideAndRecordResult =
       decision: JourneyDecision;
       profile: UpsertProfileResult | null;
       unavailable: string[];
+      /** T404: what the handoff writer did with the row - `disabled` while the flag is off. */
+      handoffs: MaterializeResult;
     };
 
 export const SHADOW_MODE = 'shadow' as const;
@@ -232,6 +236,38 @@ async function persistDecision(row: GrowthJourneyDecisionAttributes): Promise<{ 
   }
 }
 
+/**
+ * T404: hand the PERSISTED row to the handoff writer as plain data. The writer
+ * never imports the decision model (it updates the mutable handoff row and the
+ * append-only guard would refuse the pair), so the view is built here. Gated on
+ * `journeyHandoffs` inside the writer; a failure is logged, never fatal - the
+ * decision is already recorded and a handoff that did not materialise is a
+ * replay away.
+ */
+async function handoffsFor(row: GrowthJourneyDecision, loaded: LoadedDecisionContext, flags: GrowthJourneyFlags, asOf: Date): Promise<MaterializeResult> {
+  const view: DecisionRowView = {
+    id: row.id, tenant_id: row.tenant_id, brand_id: row.brand_id, program_id: row.program_id, subject_ref: row.subject_ref,
+    lead_id: row.lead_id, enrollment_id: row.enrollment_id, classification_id: row.classification_id, decision_date: row.decision_date,
+    selected_action: row.selected_action, selected_path: row.selected_path, state_at_decision: row.state_at_decision,
+    overlays_at_decision: row.overlays_at_decision ?? [], scores: row.scores, score_gaps: row.score_gaps ?? [],
+    contact_evidence: row.contact_evidence, human_conversation: row.human_conversation, sales_capacity: row.sales_capacity,
+    deferred_actions: row.deferred_actions ?? [], requires_human_review: row.requires_human_review, reason: row.reason,
+    ruleset_version: row.ruleset_version, created_at: row.created_at,
+  };
+  const refs = {
+    tenant_id: loaded.ctx.tenant_id, brand_id: loaded.ctx.brand_id, brand_slug: loaded.ctx.brand_slug,
+    program: loaded.ctx.program_id ? { id: loaded.ctx.program_id, slug: loaded.ctx.program_slug ?? '', kind: loaded.ctx.program_kind } : null,
+    subject_ref: loaded.ctx.subject_ref, lead_id: loaded.ctx.lead_id, enrollment_id: loaded.ctx.enrollment_id,
+    path: row.selected_path ?? loaded.ctx.classification?.primary_path ?? null,
+  };
+  try {
+    return await materializeHandoffs({ decision: view, refs, flags, asOf });
+  } catch (err: unknown) {
+    log('growth_journey.handoff.materialize_failed', { decision_id: row.id, subject_ref: row.subject_ref, brand_id: row.brand_id, error_class: classifyError(err) });
+    return { status: 'none', reason: `materialize_failed:${classifyError(err)}` };
+  }
+}
+
 /** What each generator declined to propose, and why - the strategies that report it expose `generateWithReport`. */
 function notEmittedOf(loaded: LoadedDecisionContext): unknown[] {
   const s = loaded.strategy as { generateWithReport?: (ctx: JourneySubjectContext) => { not_emitted: unknown[] } };
@@ -279,7 +315,8 @@ export async function decideForSubjectAndRecord(args: DecideAndRecordArgs): Prom
 
   const row = decisionRow(loaded, outcome.decision, args.trigger, notEmittedOf(loaded));
   const persisted = await persistDecision(row);
-  return { status: 'recorded', row: persisted.row, replayed: persisted.replayed, decision: outcome.decision, profile, unavailable: loaded.unavailable };
+  const handoffs = await handoffsFor(persisted.row, loaded, args.flags, asOf);
+  return { status: 'recorded', row: persisted.row, replayed: persisted.replayed, decision: outcome.decision, profile, unavailable: loaded.unavailable, handoffs };
 }
 
 /* ── the batch runner ──────────────────────────────────────────────────────── */

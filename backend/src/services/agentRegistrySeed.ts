@@ -2674,6 +2674,28 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     ],
   },
   {
+    agent_name: 'GrowthJourneyHandoffs',
+    agent_type: 'ticket_creator_identity',
+    module: 'growthJourney',
+    source_file: 'backend/src/services/growthJourney/handoffs/handoffService.ts',
+    trigger_type: 'on_demand',
+    schedule: '',
+    category: 'operations',
+    description:
+      'Ticket-creator identity for the Growth Journey OS handoff writer ' +
+      '(Phase 4, T404). A deferred decision becomes a ranked, evidence-complete ' +
+      'growth_journey_handoffs row; when the journeyHandoffs flag is on, a ' +
+      'queue_assignee policy names a person, the kill switch is off and the ' +
+      'queue has capacity, the assignment step creates the human task as a ' +
+      "tickets row stamped created_by_type='ai_staff' with this identity's " +
+      'admin user. Event-driven (a decision, a reply route, a routing rule), ' +
+      'never cron. Notifies nobody: a ticket is a row on a board.',
+    // The file's real exports: materializeHandoffs() (decision -> rows, one
+    // open per subject per brand), rankQueue() (urgent first, then expected
+    // value, then age), assignHandoff() (the gated tickets write).
+    tools_granted: ['materializeHandoffs', 'rankQueue', 'assignHandoff'],
+  },
+  {
     agent_name: 'workforce_intelligence_engine',
     agent_type: 'ticket_creator_identity',
     module: 'company',
