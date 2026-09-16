@@ -357,7 +357,12 @@ export function decidePublishMode(
   }
 
   if (!liveConnectors.has(caps.provider)) {
-    reasons.push(`No live connector is implemented for ${caps.displayName} yet; the platform produces a handoff package to post by hand.`);
+    // Two different situations, two different fixes: nothing built (engineering) versus built
+    // and switched off (an env variable). Saying "not implemented" for the second sent the
+    // team looking for work that was already done.
+    reasons.push(IMPLEMENTED_CONNECTORS.has(caps.provider)
+      ? `Direct publishing to ${caps.displayName} is built but switched off on this server (LIVE_CONNECTORS); the platform produces a handoff package to post by hand.`
+      : `No live connector is implemented for ${caps.displayName} yet; the platform produces a handoff package to post by hand.`);
   }
 
   return reasons.length === 0 ? { mode: 'direct' } : { mode: 'handoff', reasons };
