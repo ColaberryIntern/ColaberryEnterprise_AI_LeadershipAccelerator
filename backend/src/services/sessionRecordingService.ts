@@ -10,6 +10,8 @@ import RoomBooking from '../models/RoomBooking';
 import RoomResource from '../models/RoomResource';
 import CommunityRoom from '../models/CommunityRoom';
 import { ROOM_RECORDING_DIR, MAX_ROOM_RECORDING_SIZE } from '../config/upload';
+import { judgeClassRecording } from './recordingCompositionCheck';
+import { emitAlert } from './alertService';
 import { ensureRoomForSession } from './communityRooms/roomService';
 import { emitRoomEvent } from './communityRooms/roomOutboxService';
 import { ROOM_EVENTS } from './communityRooms/roomEvents';
@@ -366,6 +368,30 @@ async function ingestZoomRecordingsForSession(
     if (result.resourceId) {
       ingestedAny = true;
       if (!firstResourceId) firstResourceId = result.resourceId;
+    }
+
+    // Say so THE NIGHT IT HAPPENS if what we just stored has no screen in it.
+    // Non-fatal: the recording is still served; the alert is what makes it
+    // findable before a student does. See recordingCompositionCheck.
+    if (result.resourceId) {
+      const finding = judgeClassRecording({
+        sessionId: session.id,
+        sessionNumber: session.session_number ?? null,
+        title: session.title ?? null,
+        recordingType: inst.match.recordingType ?? null,
+        durationMinutes: inst.startedAt && inst.endedAt ? Math.round((inst.endedAt.getTime() - inst.startedAt.getTime()) / 60000) : null,
+        part: idx + 1,
+        parts: instances.length,
+      });
+      if (finding) {
+        await emitAlert({
+          type: 'warning', severity: 3, urgency: 'high', sourceType: 'system', impactArea: 'live_sessions',
+          entityType: 'live_session', entityId: session.id,
+          title: finding.title, description: finding.description, metadata: finding.metadata,
+        }).catch((err: any) => {
+          console.error(JSON.stringify({ timestamp: new Date().toISOString(), level: 'error', service: 'backend', event: 'recording_composition_alert_failed', outcome: 'failure', error_class: err?.error_class || err?.name || 'Error', context: { session_id: session.id, message: err?.message } }));
+        });
+      }
     }
   }
 
