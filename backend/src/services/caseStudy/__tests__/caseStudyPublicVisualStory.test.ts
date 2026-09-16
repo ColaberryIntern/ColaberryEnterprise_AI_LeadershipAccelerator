@@ -101,6 +101,13 @@ describe('projectVisualStory through projectPublicDetail', () => {
     expect(projectPublicDetail(input(unverified)).visualStory).toBeNull();
   });
 
+  it('drops the whole story, not one card, when a cited metric validates but cannot be projected', () => {
+    const c = withStory();
+    // Verified and publishable, so the validator accepts the card; a blank label means projectMetric refuses it.
+    ((c as unknown as { heroMetrics: { label: string }[] }).heroMetrics)[0].label = '   ';
+    expect(projectPublicDetail(input(c)).visualStory).toBeNull();
+  });
+
   it('never fills a missing figure with zero: a zero card on a non-zero metric fails validation and drops the story', () => {
     const c = withStory();
     const vs = (c as unknown as { visualStory: { charts: Record<string, unknown>[] } }).visualStory;

@@ -21,6 +21,9 @@ import {
 import {
   createQuote, listQuotes, setQuoteApproval,
 } from '../../services/caseStudy/caseStudyQuoteService';
+import {
+  draftVisualStory, readVisualStoryState,
+} from '../../services/caseStudy/caseStudyVisualStoryService';
 import { CASE_STUDY_CHART_TYPES, CASE_STUDY_QUOTE_SOURCES } from '../../types/caseStudyStory';
 
 /**
@@ -445,6 +448,27 @@ router.post('/api/admin/case-studies/:id/quotes/:quoteId/approval', requireAdmin
       actor: actorOf(req),
     }),
   }));
+});
+
+/* ───────────────────────────────────── step 7 — the visual story ──── */
+
+/**
+ * READ the stored visual story with its validity and staleness; DRAFT one from
+ * the record's own evidence. Neither writes: the draft comes back to the person,
+ * who saves it through the review desk's override route, which validates it.
+ * A POST for the draft because it is generated, not stored, and so that no
+ * intermediary caches a proposal as if it were the record.
+ */
+router.get('/api/admin/case-studies/:id/visual-story', requireAdmin, (req: Request, res: Response) => {
+  const params = parse(idParams, req.params, res);
+  if (!params) return;
+  void run(res, () => readVisualStoryState(params.id));
+});
+
+router.post('/api/admin/case-studies/:id/visual-story/generate', requireAdmin, (req: Request, res: Response) => {
+  const params = parse(idParams, req.params, res);
+  if (!params) return;
+  void run(res, () => draftVisualStory(params.id));
 });
 
 export default router;

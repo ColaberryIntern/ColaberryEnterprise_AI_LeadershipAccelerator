@@ -40,7 +40,10 @@ import {
  *
  * NULL IS THE OFF STATE. Absent, disabled, not listed for this surface, or
  * invalid: the page gets `null` and renders exactly as it did before the
- * section existed. There is no partial story.
+ * section existed. There is no partial story: a card or chart whose metric
+ * cannot be projected (an empty label, a series with no figure) drops the
+ * whole story, never just itself, so the page can never show a story that
+ * disagrees with the record by omission.
  */
 
 const DEFAULT_MOTION_NOTE = 'Illustration, not live telemetry. Motion shows the shape of the flow, never event rates or recovery time.';
@@ -173,12 +176,14 @@ export function projectVisualStory(
   const ordered = [...section.outcomeCards].sort((a, b) => Number(b.emphasis === true) - Number(a.emphasis === true));
   for (const card of ordered) {
     const m = projected(content, card.metricKey);
-    if (m) outcomeCards.push(m);
+    if (!m) return null;
+    outcomeCards.push(m);
   }
   const charts: PublicCaseStudyVisualChart[] = [];
   for (const chart of section.charts) {
     const c = projectChart(content, chart);
-    if (c) charts.push(c);
+    if (!c) return null;
+    charts.push(c);
   }
   return {
     schemaVersion: section.schemaVersion,
