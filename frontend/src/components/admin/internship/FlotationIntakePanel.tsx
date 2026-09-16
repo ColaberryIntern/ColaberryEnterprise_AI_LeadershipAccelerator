@@ -57,8 +57,9 @@ export default function FlotationIntakePanel() {
 
   useEffect(() => { void load(); }, [load]);
 
+  const EMPTY: RowState = { busy: false, error: null, started: null };
   const patch = (id: string, p: Partial<RowState>) =>
-    setState((s) => ({ ...s, [id]: { busy: false, error: null, started: null, ...s[id], ...p } }));
+    setState((s) => ({ ...s, [id]: { ...(s[id] ?? EMPTY), ...p } }));
 
   const build = async (row: FlotationUnderstandingRow) => {
     patch(row.id, { busy: true, error: null });
@@ -110,7 +111,7 @@ export default function FlotationIntakePanel() {
             </thead>
             <tbody>
               {rows.map((row) => {
-                const s = state[row.id] || { busy: false, error: null, started: null };
+                const s = state[row.id] ?? EMPTY;
                 const built = row.build || s.started;
                 return (
                   <tr key={row.id}>
