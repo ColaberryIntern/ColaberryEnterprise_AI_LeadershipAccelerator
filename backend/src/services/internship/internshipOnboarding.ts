@@ -92,8 +92,9 @@ export const CHECKLIST: readonly ChecklistStep[] = [
   {
     key: 'orientation',
     order: 50,
-    label: 'Join orientation',
-    detail: 'Your first meeting with the team. We will send the invitation.',
+    label: 'Join orientation and the Monday standup',
+    detail: 'Meet the team in the AI Internship room. That interns-only room is also '
+      + 'your standup every Monday at 9:00 AM CT - open it from Rooms and be there each week.',
     actor: 'student',
     blocking_activation: false,
   },
