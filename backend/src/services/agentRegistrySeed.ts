@@ -67,6 +67,17 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'Explorer Growth OS journey intelligence. Recomputes E/I/F scores, affinities, contactability and journey state for every Explorer, writing explorer_journey_profiles plus one explorer_score_snapshots row per learner per day. SCORES AND CLASSIFIES ONLY - decides nothing and sends nothing; the Journey Governor is a separate agent. Dark unless both EXPLORER_GROWTH_OS_ENABLED and EXPLORER_JOURNEY_INTELLIGENCE_ENABLED are on. Recompute is idempotent: two runs with the same as-of time produce identical scores.',
   },
   {
+    agent_name: 'ProgressionLadderSweep',
+    agent_type: 'scheduled_processor',
+    module: 'milestoneSweep',
+    source_file: 'backend/src/services/progression/milestoneSweep.ts',
+    trigger_type: 'cron',
+    schedule: '40 3 * * *',
+    category: 'behavioral',
+    description:
+      'Build-ladder safety net (docs/POINTS_LADDER_DECISIONS.md). Re-evaluates every scored student against their program milestones (curriculum complete, verified projects, staff-approved certification) so a milestone that became true without an event firing is reflected by morning. With MILESTONE_LADDER_ENABLED off it runs the legacy evidence evaluator instead. Idempotent: milestones latch and ranks never lower, so a second pass changes nothing. One student at a time; a failing row is logged and skipped, never retried inside the pass.',
+  },
+  {
     agent_name: 'ScheduledActionsProcessor',
     agent_type: 'scheduled_processor',
     module: 'schedulerService',

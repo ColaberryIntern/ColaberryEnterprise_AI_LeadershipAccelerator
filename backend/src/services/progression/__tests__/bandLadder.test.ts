@@ -152,3 +152,47 @@ describe('hasBuildPromotion', () => {
     expect(hasBuildPromotion(0, 'unknown_slug')).toBe(false);
   });
 });
+
+
+// The milestone ladder (docs/POINTS_LADDER_DECISIONS.md) writes its own slugs
+// to student_level. computeBand must render them with the same public names,
+// walk "next" within that ladder only, and read AI Architect as the top.
+describe('computeBand — milestone-ladder slugs', () => {
+  it.each([
+    ['builder_i', 1, 'builder', 'AI Builder I'],
+    ['builder_ii', 2, 'builder', 'AI Builder II'],
+    ['builder_iii', 3, 'builder', 'AI Builder III'],
+    ['builder_iv', 4, 'builder', 'AI Builder IV'],
+    ['ai_architect', 5, 'architect', 'AI Architect'],
+    ['senior_ai_architect', 6, 'architect', 'Senior AI Architect'],
+  ])('%s → %s / %s', (slug, rank, band, rung) => {
+    const r = computeBand({ pointsTotal: 0, builderLevelSlug: slug, builderRank: rank });
+    expect(r.bandSlug).toBe(band);
+    expect(r.rungName).toBe(rung);
+    expect(r.isBuildBand).toBe(true);
+    expect(r.cappedByPointsOnly).toBe(false);
+  });
+
+  it('"next" stays on the milestone ladder and speaks milestone language', () => {
+    const r = computeBand({ pointsTotal: 0, builderLevelSlug: 'builder_ii', builderRank: 2 });
+    expect(r.nextRequirement).toBe('Complete the next program milestone to reach AI Builder III.');
+    const iv = computeBand({ pointsTotal: 0, builderLevelSlug: 'builder_iv', builderRank: 4 });
+    expect(iv.nextRequirement).toContain('AI Architect');
+    expect(iv.nextBand).toBe('AI Architect');
+  });
+
+  it('AI Architect on the milestone ladder reads as the top (Senior is manual)', () => {
+    const r = computeBand({ pointsTotal: 0, builderLevelSlug: 'ai_architect', builderRank: 5 });
+    expect(r.nextRequirement).toContain('Top of the individual ladder');
+  });
+
+  it('legacy slugs are untouched: the two ladders never cross in "next"', () => {
+    const r = computeBand({ pointsTotal: 0, builderLevelSlug: 'senior_developer', builderRank: 4 });
+    expect(r.nextRequirement).toBe('Clear the next build-competency gate to reach AI Builder V.');
+  });
+
+  it('points are still ignored once promoted on the milestone ladder', () => {
+    const r = computeBand({ pointsTotal: 999999, builderLevelSlug: 'builder_i', builderRank: 1 });
+    expect(r.rungName).toBe('AI Builder I');
+  });
+});

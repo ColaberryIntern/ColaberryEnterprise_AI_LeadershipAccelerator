@@ -70,6 +70,7 @@ import { ensureCertPrepSchema } from './db/ensureCertPrepSchema';
 import { ensureProjectArchiveSchema } from './db/ensureProjectArchiveSchema';
 import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
 import { ensureInternshipSchema } from './db/ensureInternshipSchema';
+import { ensureMilestoneLadderSchema } from './db/ensureMilestoneLadderSchema';
 import { ensureOauthTokenVaultSchema } from './db/ensureOauthTokenVaultSchema';
 import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
 import { ensureAgentAttachmentSchema } from './db/ensureAgentAttachmentSchema';
@@ -2698,6 +2699,11 @@ async function start(): Promise<void> {
   // enrollments.cohort_id (docs/AI_INTERNSHIP_DISCOVERY.md §3.2). Ensured after
   // enrollments/cohorts exist, since every table here hangs off one of them.
   await ensureInternshipSchema();
+  // Milestone ladder: `student_milestones` (latched curriculum / project /
+  // certification milestones the promotion engine counts) and
+  // `student_certifications` (student-uploaded, staff-approved). Additive;
+  // the engine reads them only when MILESTONE_LADDER_ENABLED is on.
+  await ensureMilestoneLadderSchema();
   // Durable store for provider-rotated OAuth refresh tokens (MS Graph/Hotmail).
   // Without it every rotation is discarded and the deployment drifts toward a
   // dead credential that only an interactive re-consent can recover.

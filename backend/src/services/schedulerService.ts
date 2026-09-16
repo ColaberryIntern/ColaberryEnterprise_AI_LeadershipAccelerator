@@ -46,6 +46,7 @@ import { attachClassNotesForSession } from './sessionClassNotesService';
 import { extractZoomMeetingId, findRecordingInstancesByMeetingId } from './zoomService';
 import { instrumentCronJob } from './cronInstrumentation';
 import { runScheduledRecompute } from './explorerGrowth/explorerProfileService';
+import { recomputeAllMilestonePromotions } from './progression/milestoneSweep';
 import { runScheduledGovernor } from './explorerGrowth/governor/runGovernor';
 import { runContentSync } from './explorerGrowth/content/runContentSync';
 import {
@@ -1802,6 +1803,19 @@ export function startScheduler(): void {
       await runContentSync();
     }).catch((err) => {
       console.error('[Scheduler] ExplorerContentSync failed:', err);
+    });
+  });
+
+  // Build-ladder sweep (progression/milestoneSweep.ts): re-evaluates every
+  // scored student so a milestone that became true without a trigger firing
+  // (a back-published week, a push whose evaluator call failed, an approval
+  // whose promotion hiccuped) is reflected by morning. Idempotent; one student
+  // at a time; per-student failures are logged and never stop the pass.
+  cron.schedule('40 3 * * *', () => {
+    instrumentCronJob('ProgressionLadderSweep', async () => {
+      await recomputeAllMilestonePromotions({ triggeredBy: 'scheduler' });
+    }).catch((err) => {
+      console.error('[Scheduler] ProgressionLadderSweep failed:', err);
     });
   });
 

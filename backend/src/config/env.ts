@@ -351,6 +351,15 @@ export const env = {
   // a rebuild. Default OFF: flag-off keeps the legacy "Level N · Apprentice/…/Principal"
   // HUD byte-identical.
   fiveBandUiEnabled: process.env.FIVE_BAND_UI_ENABLED === 'true',
+  // Milestone ladder (docs/POINTS_LADDER_DECISIONS.md, Ali 2026-09-16): AI Builder
+  // I–IV are earned by program milestones (curriculum complete + three verified
+  // projects, any order) and AI Architect by a staff-approved certification,
+  // replacing the nine-rank evidence-count gates nobody could pass. When ON,
+  // promotionService evaluates milestones (recompute to the highest cleared rung,
+  // latched, never lowered) and the read path reports milestone gaps. Default
+  // OFF: the legacy evidence ladder runs byte-identically. Flip only after the
+  // Phase 4 dry-run backfill has been reviewed.
+  milestoneLadderEnabled: process.env.MILESTONE_LADDER_ENABLED === 'true',
   // Role-aware "People" right-rail panel. Staff/admin see cross-cohort presence
   // (online now) + a classes list + a sponsors/businesses list; students see their
   // class first, then recently-active people OUTSIDE their cohort. Default OFF:
