@@ -210,7 +210,8 @@ const createHandoffAction = (flags: Flags): ActionHandler => async (action, ctx)
       subject_ref: ref, lead_id: Number(ctx.lead.id), enrollment_id: null,
       path: typeof action.offer_family === 'string' && action.offer_family ? action.offer_family : null,
     },
-    trigger: { source: 'manual', owner_queue, reason: typeof action.reason === 'string' && action.reason ? action.reason : requestedBy(ctx), urgent_hint: action.urgent === true },
+    // Keyed on this FIRING (the raw payload id): the same rule on a later lead event is a new handoff once the first is closed.
+    trigger: { source: 'manual', owner_queue, reason: typeof action.reason === 'string' && action.reason ? action.reason : requestedBy(ctx), urgent_hint: action.urgent === true, event_ref: requestedBy(ctx) },
     decision: null,
     asOf,
   });

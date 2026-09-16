@@ -44,6 +44,8 @@ export interface HandoffTrigger {
   owner_queue: GrowthJourneyOwnerQueue;
   reason: string;
   urgent_hint?: boolean;
+  /** What made this trigger THIS time (a provider message id, a rule firing) - the idempotency key for a trigger with no decision behind it. */
+  event_ref?: string;
 }
 
 /** Ids of the subject's world, never addresses. */

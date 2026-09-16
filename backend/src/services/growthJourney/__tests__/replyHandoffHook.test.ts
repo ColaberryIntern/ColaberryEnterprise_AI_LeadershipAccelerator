@@ -39,20 +39,20 @@ describe('the class → queue map', () => {
 
 describe('recordReplyHandoff', () => {
   it('a NEEDS_ALI reply yields one ali handoff with source reply_route under Explorer\'s own brand and programme', async () => {
-    const r = await recordReplyHandoff({ leadId: 42, replyClass: 'NEEDS_ALI' }, ON, AS_OF);
+    const r = await recordReplyHandoff({ leadId: 42, replyClass: 'NEEDS_ALI', providerMessageId: '<msg-1@mail>' }, ON, AS_OF);
     expect(r).toEqual({ status: 'recorded', handoff_id: 'h-1', replayed: false, owner_queue: 'ali', assignment: 'queued' });
     expect(m.resolveBrand).toHaveBeenCalledWith('colaberry', 'colaberry-training');
     expect(m.programFindOne).toHaveBeenCalledWith({ where: { brand_id: 'b-train', slug: 'learner' } });
     expect(m.createHandoff).toHaveBeenCalledWith({
       refs: { tenant_id: 't-col', brand_id: 'b-train', brand_slug: 'colaberry-training', program: { id: 'p-train', slug: 'learner', kind: 'learner' }, subject_ref: 'lead:42', lead_id: 42, enrollment_id: null, path: null },
-      trigger: { source: 'reply_route', owner_queue: 'ali', reason: 'reply_class:NEEDS_ALI', urgent_hint: false },
+      trigger: { source: 'reply_route', owner_queue: 'ali', reason: 'reply_class:NEEDS_ALI', urgent_hint: false, event_ref: 'provider_message:<msg-1@mail>' },
       decision: null,
       asOf: AS_OF,
     });
     expect(m.assignHandoff).toHaveBeenCalledWith({ id: 'h-1' }, ON, AS_OF);
   });
 
-  it('READY_TO_ENROLL is an explicit request: admissions, with the urgent hint', async () => {
+  it('READY_TO_ENROLL is an explicit request: admissions, with the urgent hint; without a message id there is no event ref', async () => {
     await recordReplyHandoff({ leadId: 42, replyClass: 'READY_TO_ENROLL' }, ON, AS_OF);
     expect(m.createHandoff.mock.calls[0][0].trigger).toEqual({ source: 'reply_route', owner_queue: 'admissions', reason: 'reply_class:READY_TO_ENROLL', urgent_hint: true });
   });
@@ -107,7 +107,7 @@ describe('the wiring', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'controllers', 'mandrillWebhookController.ts'), 'utf8');
     expect(src.match(/recordReplyHandoff\(/g)).toHaveLength(1);
     const logAt = src.indexOf("event: 'explorer_reply_routed'");
-    const callAt = src.indexOf('void recordReplyHandoff({ leadId: lead.id, replyClass: routing.classification?.class ?? null })');
+    const callAt = src.indexOf("void recordReplyHandoff({ leadId: lead.id, replyClass: routing.classification?.class ?? null, providerMessageId: msg.headers?.['Message-Id'] ?? null })");
     expect(logAt).toBeGreaterThan(-1);
     expect(callAt).toBeGreaterThan(logAt);
     // Inside `if (routing.handled) { ... }`: the call precedes the block's close and the catch.

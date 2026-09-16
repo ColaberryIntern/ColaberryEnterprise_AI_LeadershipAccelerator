@@ -284,14 +284,14 @@ describe('T404 — create_handoff', () => {
     expect(handoff.createHandoff).toHaveBeenCalledTimes(1);
     const args = handoff.createHandoff.mock.calls[0][0];
     expect(args.refs).toEqual({ tenant_id: 't-af', brand_id: 'b-af', brand_slug: 'ai-flotation', subject_ref: 'lead:501', lead_id: 501, enrollment_id: null, path: 'ai_consulting', program: null });
-    expect(args.trigger).toEqual({ source: 'manual', owner_queue: 'sales', reason: 'rule: enterprise inbound', urgent_hint: false });
+    expect(args.trigger).toEqual({ source: 'manual', owner_queue: 'sales', reason: 'rule: enterprise inbound', urgent_hint: false, event_ref: 'routing_rule:raw-9' });
     expect(args.decision).toBeNull();
     expect(handoff.assignHandoff).toHaveBeenCalledWith({ id: 'h-1' }, HANDOFFS_ON, args.asOf);
   });
 
   it('an unknown queue falls back to human_review; no reason falls back to the rule id; urgent is honoured', async () => {
     await actions(HANDOFFS_ON).create_handoff({ type: 'create_handoff', owner_queue: 'not_a_queue', urgent: true }, ctx());
-    expect(handoff.createHandoff.mock.calls[0][0].trigger).toEqual({ source: 'manual', owner_queue: 'human_review', reason: 'routing_rule:raw-9', urgent_hint: true });
+    expect(handoff.createHandoff.mock.calls[0][0].trigger).toEqual({ source: 'manual', owner_queue: 'human_review', reason: 'routing_rule:raw-9', urgent_hint: true, event_ref: 'routing_rule:raw-9' });
   });
 
   it('under no handoffs flag it stays exactly the deferral it was, touching nothing', async () => {

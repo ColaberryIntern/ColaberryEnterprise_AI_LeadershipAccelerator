@@ -35,6 +35,8 @@ export const QUEUE_BY_REPLY_CLASS: Readonly<Record<string, GrowthJourneyOwnerQue
 export interface ReplyHandoffArgs {
   leadId: number;
   replyClass: string | null;
+  /** The provider's message id: the event this handoff is keyed on, so a later reply is a new row once the first is closed. */
+  providerMessageId?: string | null;
 }
 
 export type ReplyHandoffResult =
@@ -77,7 +79,10 @@ export async function recordReplyHandoff(args: ReplyHandoffArgs, flags: GrowthJo
         program: program ? { id: program.id, slug: program.slug, kind: program.kind } : null,
         subject_ref: `lead:${args.leadId}`, lead_id: args.leadId, enrollment_id: null, path: null,
       },
-      trigger: { source: 'reply_route', owner_queue, reason: `reply_class:${args.replyClass}`, urgent_hint: args.replyClass === 'READY_TO_ENROLL' },
+      trigger: {
+        source: 'reply_route', owner_queue, reason: `reply_class:${args.replyClass}`, urgent_hint: args.replyClass === 'READY_TO_ENROLL',
+        ...(args.providerMessageId ? { event_ref: `provider_message:${args.providerMessageId}` } : {}),
+      },
       decision: null,
       asOf,
     });

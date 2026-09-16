@@ -7,15 +7,10 @@ import {
   type GrowthJourneyOwnerQueue,
 } from '../../../models/GrowthJourneyHandoff';
 import { isGrowthJourneyCapabilityEnabled, type GrowthJourneyFlags } from '../../../config/growthJourneyFlags';
-import { classifyError } from '../../../utils/errorClassifier';
-import { redactForLogs } from '../../../utils/piiRedaction';
 import { isUniqueViolation } from '../../../utils/uniqueViolation';
-import { getTicketCreatorAdminUserId } from '../../agentBlueprint/ticketCreatorIdentitySeed';
 import { computeIdempotencyKey } from '../../inboxCase/textNormalization';
-import { isKillSwitchActive } from '../../launchSafety';
 import { logEvent } from '../../ledgerService';
-import { createTicket, type CreateTicketData } from '../../ticketService';
-import { resolveQueueCapacity } from '../capacityService';
+import { assignHandoff, type AssignResult } from './assignment';
 import { assertPacketCarriesNoAddress, buildEvidencePacket } from './evidencePacket';
 import { computeExpectedValue, priorityFor, rankHandoffs } from './expectedValue';
 import { loadStoredSignals } from './handoffSignals';
@@ -36,7 +31,7 @@ import type { DecisionRowView, HandoffTrigger, SubjectRefs } from './types';
  * same row shape from their own triggers. One open handoff per subject per
  * brand: T401's partial unique makes a replay land on the existing row.
  *
- * ─── ASSIGNMENT IS THE ONLY WRITE OUTSIDE THIS RUN'S TABLES ─────────────────
+ * ─── ASSIGNMENT IS THE ONLY WRITE OUTSIDE THIS RUN'S TABLES (`./assignment`) ───
  *
  * A `tickets` row through `ticketService.createTicket` — the existing task
  * system, never a second one — and only when every gate holds, in order: the
@@ -56,12 +51,10 @@ import type { DecisionRowView, HandoffTrigger, SubjectRefs } from './types';
 
 const ACTOR = 'growth_journey';
 const ENTITY = 'growth_journey_handoff';
-export const CREATOR_AGENT_NAME = 'GrowthJourneyHandoffs';
-export const TICKET_TYPE = 'growth_journey_handoff' as const;
 
-function log(event: string, fields: Record<string, unknown>): void {
-  console.warn(redactForLogs(JSON.stringify({ service: 'growth-journey', level: 'warn', outcome: 'failure', event, ...fields })));
-}
+/** The gated tickets write lives in `./assignment`; re-exported here because the agent registry names it as this module's. */
+export { assignHandoff };
+export type { AssignResult };
 
 /* ── triggers ──────────────────────────────────────────────────────────────── */
 
@@ -133,7 +126,12 @@ export async function createHandoff(args: CreateHandoffArgs): Promise<CreateHand
     sla_due_at,
     status: 'queued',
     source: trigger.source,
-    idempotency_key: computeIdempotencyKey([refs.subject_ref, refs.brand_id, trigger.source, decision?.id ?? trigger.reason]),
+    // Keyed on the DECISION for a deferral, and on the EVENT (a provider message id, a
+    // rule firing) for a decision-less trigger: the idempotency index is full, not
+    // partial, so a constant key would land a second NEEDS_ALI reply after the first
+    // handoff was dispositioned on the closed row and nobody would see it. The
+    // one-open-per-subject-per-brand index still holds while a row is open.
+    idempotency_key: computeIdempotencyKey([refs.subject_ref, refs.brand_id, trigger.source, decision?.id ?? trigger.event_ref ?? trigger.reason]),
   };
 
   try {
@@ -175,73 +173,6 @@ export async function rankQueue(args: RankQueueArgs): Promise<GrowthJourneyHando
     limit: args.limit ?? 500,
   });
   return rankHandoffs(rows);
-}
-
-/* ── assignment ────────────────────────────────────────────────────────────── */
-
-export type AssignResult =
-  | { status: 'assigned'; ticket_id: string; assigned_to_type: string; assigned_to_id: string; replayed_ticket: boolean }
-  | { status: 'queued'; reason: string }
-  | { status: 'not_queued'; current: string };
-
-async function block(row: GrowthJourneyHandoff, reason: string): Promise<AssignResult> {
-  if (row.assignment_blocked_reason !== reason) await row.update({ assignment_blocked_reason: reason });
-  return { status: 'queued', reason };
-}
-
-export async function assignHandoff(row: GrowthJourneyHandoff, flags: GrowthJourneyFlags, asOf: Date = new Date()): Promise<AssignResult> {
-  if (row.status !== 'queued') return { status: 'not_queued', current: row.status };
-  if (!isGrowthJourneyCapabilityEnabled('journeyHandoffs', flags)) return block(row, 'flag_off');
-  if (await isKillSwitchActive()) return block(row, 'kill_switch_active');
-
-  const assignee = await GrowthJourneyPolicy.findOne({
-    where: { brand_id: row.brand_id, policy_type: 'queue_assignee', owner_queue: row.owner_queue, status: 'active' },
-  });
-  if (!assignee?.assigned_to_type || !assignee.assigned_to_id) return block(row, 'no_assignee_policy');
-
-  const capacity = await resolveQueueCapacity({ brandId: row.brand_id, ownerQueue: row.owner_queue, asOf });
-  if (capacity.status === 'full') return block(row, 'capacity_full');
-  if (capacity.status === 'unknown') return block(row, `capacity_unknown:${capacity.reason}`);
-
-  const creatorId = await getTicketCreatorAdminUserId(CREATOR_AGENT_NAME);
-  if (!creatorId) return block(row, 'creator_unregistered');
-
-  const brandSlug = (row.evidence as { brand_program_path?: { brand_slug?: string } })?.brand_program_path?.brand_slug ?? row.brand_id;
-  const data: CreateTicketData = {
-    title: `Growth Journey handoff · ${row.owner_queue} · ${brandSlug} · ${row.subject_ref}`,
-    type: TICKET_TYPE,
-    entity_type: ENTITY,
-    entity_id: row.id,
-    created_by_type: 'ai_staff',
-    created_by_id: creatorId,
-    assigned_to_type: assignee.assigned_to_type as CreateTicketData['assigned_to_type'],
-    assigned_to_id: assignee.assigned_to_id,
-    priority: row.priority,
-    due_date: row.sla_due_at ?? null,
-    source: 'growth_journey',
-    metadata: { handoff_id: row.id, decision_id: row.decision_id, brand_id: row.brand_id },
-  };
-  let ticket: { id: string };
-  try {
-    ticket = await createTicket(data);
-  } catch (err: unknown) {
-    const error_class = classifyError(err);
-    log('growth_journey.handoff.ticket_create_failed', { error_class, handoff_id: row.id, brand_id: row.brand_id, owner_queue: row.owner_queue });
-    return block(row, `ticket_create_failed:${error_class}`);
-  }
-
-  await row.update({
-    status: 'assigned',
-    assigned_to_type: assignee.assigned_to_type,
-    assigned_to_id: assignee.assigned_to_id,
-    ticket_id: ticket.id,
-    assignment_blocked_reason: null,
-  });
-  await logEvent('growth_journey.handoff.assigned', ACTOR, ENTITY, row.id, {
-    handoff_id: row.id, ticket_id: ticket.id, owner_queue: row.owner_queue,
-    assigned_to_type: assignee.assigned_to_type, assigned_to_id: assignee.assigned_to_id, capacity: capacity.reason,
-  }, { tenant_id: row.tenant_id, brand_id: row.brand_id });
-  return { status: 'assigned', ticket_id: ticket.id, assigned_to_type: assignee.assigned_to_type, assigned_to_id: assignee.assigned_to_id, replayed_ticket: false };
 }
 
 /**

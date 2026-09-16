@@ -86,8 +86,8 @@ import type { GrowthJourneyFlags } from '../../../../config/growthJourneyFlags';
 import { TICKET_CREATOR_IDENTITIES } from '../../../agentBlueprint/ticketCreatorIdentitySeed';
 import { PACKET_FIELDS } from '../evidencePacket';
 import { findAddressLikeValue } from '../../noAddress';
+import { CREATOR_AGENT_NAME } from '../assignment';
 import {
-  CREATOR_AGENT_NAME,
   assignHandoff,
   assignRankedQueue,
   createHandoff,
@@ -191,6 +191,30 @@ describe('the exit fixture: a DISCOVERY_READY Business subject', () => {
     expect(m.logEvent).not.toHaveBeenCalled();
   });
 
+  it('a decision-less trigger is keyed on its EVENT: a second NEEDS_ALI reply after the first handoff was dispositioned is a NEW row; the same message id replays', async () => {
+    const reply = (event_ref: string) => ({ source: 'reply_route' as const, owner_queue: 'ali' as const, reason: 'reply_class:NEEDS_ALI', event_ref });
+    const first = await createHandoff({ refs: refs(), trigger: reply('provider_message:m-1'), decision: null, asOf: CLOCK });
+    expect(first.replayed).toBe(false);
+    // The same message again while the row is open: a replay.
+    expect((await createHandoff({ refs: refs(), trigger: reply('provider_message:m-1'), decision: null, asOf: CLOCK })).replayed).toBe(true);
+    // A different message while the row is open: still one open per subject per brand.
+    expect((await createHandoff({ refs: refs(), trigger: reply('provider_message:m-2'), decision: null, asOf: CLOCK })).replayed).toBe(true);
+    expect(store).toHaveLength(1);
+    // The human dispositions it; the next reply is a new handoff a human will see.
+    await store[0].update({ status: 'dispositioned' });
+    const later = await createHandoff({ refs: refs(), trigger: reply('provider_message:m-3'), decision: null, asOf: CLOCK });
+    expect(later.replayed).toBe(false);
+    expect(store).toHaveLength(2);
+    expect(store[1]).toMatchObject({ status: 'queued', source: 'reply_route' });
+    // A routing rule firing again on a later event behaves the same way.
+    await store[1].update({ status: 'dispositioned' });
+    const rule = (event_ref: string) => ({ source: 'manual' as const, owner_queue: 'human_review' as const, reason: 'rule', event_ref });
+    expect((await createHandoff({ refs: refs(), trigger: rule('routing_rule:raw-1'), decision: null, asOf: CLOCK })).replayed).toBe(false);
+    await store[2].update({ status: 'dispositioned' });
+    expect((await createHandoff({ refs: refs(), trigger: rule('routing_rule:raw-2'), decision: null, asOf: CLOCK })).replayed).toBe(false);
+    expect(store).toHaveLength(4);
+  });
+
   it('with the flag off the writer returns disabled and creates nothing', async () => {
     const r = await materializeHandoffs({ decision: decision(), refs: refs(), flags: OFF, asOf: CLOCK });
     expect(r).toEqual({ status: 'disabled' });
@@ -260,7 +284,7 @@ describe('assignment — every gate, in order, and the ticket', () => {
   it('with every gate open: a tickets row via createTicket with the exact argument object, the row assigned, the ledger row', async () => {
     arrangeOpen();
     const r = await materializeHandoffs({ decision: decision(), refs: refs(), flags: ON, asOf: CLOCK });
-    expect(r.status === 'materialized' && r.handoffs[0].assignment).toEqual({ status: 'assigned', ticket_id: 't-h-1', assigned_to_type: 'org_member', assigned_to_id: 'om-sales-1', replayed_ticket: false });
+    expect(r.status === 'materialized' && r.handoffs[0].assignment).toEqual({ status: 'assigned', ticket_id: 't-h-1', assigned_to_type: 'org_member', assigned_to_id: 'om-sales-1' });
     expect(m.createTicket).toHaveBeenCalledTimes(1);
     expect(m.createTicket.mock.calls[0][0]).toEqual({
       title: 'Growth Journey handoff · sales · colaberry-enterprise · lead:501',
@@ -365,7 +389,8 @@ describe('the creator identity is registered and reports through AI Leadership',
     const tools = [...(block.match(/tools_granted: \[([^\]]*)\]/)?.[1] ?? '').matchAll(/'([A-Za-z]+)'/g)].map((x) => x[1]);
     expect(tools.length).toBeGreaterThan(0);
     const src = fs.readFileSync(path.join(__dirname, '..', 'handoffService.ts'), 'utf8');
-    for (const t of tools) expect(src).toMatch(new RegExp(`export (async )?function ${t}\\(`));
+    // Each tool is an export of the writer: declared there, or re-exported from the sibling that holds the gates.
+    for (const t of tools) expect(src).toMatch(new RegExp(`export (async )?function ${t}\\(|export \\{ ${t} \\}`));
   });
 
   it('the identity entry is ai_staff at growth-journey@colaberry.com, reporting through workforce_intelligence_engine', () => {
@@ -387,8 +412,11 @@ describe('what the writer is, and is not', () => {
   });
 
   it('creates the human task through ticketService.createTicket and nothing else — no notification, no second task system', () => {
-    expect(src).toMatch(/createTicket\(/);
-    expect(src).not.toMatch(/sendNewLeadAlert|requestInstantCallback|basecamp|nodemailer|sendEmail|notify/i);
-    expect(src).not.toMatch(/owner_type\b|owner_id\b/);
+    const gates = fs.readFileSync(path.join(__dirname, '..', 'assignment.ts'), 'utf8');
+    expect(gates).toMatch(/createTicket\(/);
+    for (const s of [src, gates]) {
+      expect(s).not.toMatch(/sendNewLeadAlert|requestInstantCallback|basecamp|nodemailer|sendEmail|notify/i);
+      expect(s).not.toMatch(/owner_type\b|owner_id\b/);
+    }
   });
 });
