@@ -71,7 +71,7 @@ const MemberProfileDrawer: React.FC<{
               <Avatar name={profile.display_name} src={profile.avatar_url} size="lg" />
               <div className="cm-drawer-name">{profile.display_name}</div>
               <div className="cm-drawer-badges">
-                <LevelBadge level={profile.level} />
+                <LevelBadge level={profile.level} rungName={profile.rung_name ?? undefined} />
                 {profile.role !== 'student' && (
                   <span className={`cm-role-chip ${profile.role}`}>
                     {MEMBER_ROLE_META[profile.role].emoji} {MEMBER_ROLE_META[profile.role].label}

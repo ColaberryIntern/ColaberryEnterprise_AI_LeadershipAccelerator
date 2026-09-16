@@ -194,6 +194,33 @@ export async function getBandForEnrollment(enrollmentId: string, pointsTotal: nu
   });
 }
 
+/**
+ * Rung names for many enrollments at once, read-only — for surfaces that list
+ * people (community posts, the people directory) and must not run one
+ * StudentLevel round-trip per row. Takes the points totals the caller already
+ * batched. An enrollment with no StudentLevel row derives from points alone,
+ * exactly as computeBand's entry state would.
+ */
+export async function getRungNamesForEnrollments(
+  enrollmentIds: string[],
+  totals: Map<string, number>,
+): Promise<Map<string, string>> {
+  const ids = [...new Set(enrollmentIds.filter(Boolean))];
+  const out = new Map<string, string>();
+  if (ids.length === 0) return out;
+  const rows = await StudentLevel.findAll({ where: { enrollment_id: ids }, attributes: ['enrollment_id', 'level_slug', 'rank'] });
+  const byId = new Map(rows.map((r) => [r.enrollment_id, r]));
+  for (const id of ids) {
+    const lvl = byId.get(id);
+    out.set(id, computeBand({
+      pointsTotal: totals.get(id) ?? 0,
+      builderLevelSlug: lvl?.level_slug ?? 'builder',
+      builderRank: lvl?.rank ?? 0,
+    }).rungName);
+  }
+  return out;
+}
+
 export async function getProgressionSummary(enrollmentId: string): Promise<ProgressionSummary> {
   const events = await XpEvent.findAll({ where: { enrollment_id: enrollmentId } });
   const xp = aggregateXp(events.map((e) => ({ stream: e.stream, amount: e.amount })));

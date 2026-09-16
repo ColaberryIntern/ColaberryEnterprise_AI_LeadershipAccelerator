@@ -158,7 +158,7 @@ export interface PostFeedItem {
   min_level: number;
   locked: boolean;
   created_at: Date;
-  member: { id: string; display_name: string; avatar_url: string | null; level: number };
+  member: { id: string; display_name: string; avatar_url: string | null; level: number; rung_name?: string | null };
   // Up to 3 most-recent distinct commenters (avatar stack on the card).
   recent_commenters: { id: string; display_name: string; avatar_url: string | null }[];
   /** Points this post actually earned, AFTER the daily community clamp. Present
@@ -365,7 +365,9 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
   // The author is creating their own post — never locked to them, so this
   // is a plain projection rather than a toFeedItem() lock check. Author badge
   // uses the canonical level (one ladder).
-  const authorLevel = levelForPoints((await getPointsSummary(enrollmentId)).total).level;
+  const authorTotal = (await getPointsSummary(enrollmentId)).total;
+  const authorLevel = levelForPoints(authorTotal).level;
+  const authorRung = (await rungNamesFor([enrollmentId], new Map([[enrollmentId, authorTotal]]))).get(enrollmentId) ?? null;
   return {
     id: post.id,
     body: post.body,
@@ -379,7 +381,7 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
     min_level: post.min_level,
     locked: false,
     created_at: post.created_at,
-    member: { id: member.id, display_name: member.display_name, avatar_url: member.avatar_url, level: authorLevel },
+    member: { id: member.id, display_name: member.display_name, avatar_url: member.avatar_url, level: authorLevel, rung_name: authorRung },
     recent_commenters: [],
     points_awarded: pointsAwarded,
   };
@@ -426,18 +428,34 @@ async function recentCommentersByPost(
 }
 
 // The post-author level badge must show the ONE canonical level (same ladder as
-// the profile/leaderboard/HUD), not the legacy CommunityMember.level. Batched:
-// one query resolves every distinct author's canonical total → level.
+// the profile/leaderboard/HUD), not the legacy CommunityMember.level, and, since
+// 2026-09-16, the canonical RUNG NAME too ("AI Builder II"), which a promoted
+// learner's points-derived level could never express. Batched: one query for
+// totals, one for StudentLevel rows, across every distinct author.
 async function canonicalLevelByMemberId(
   members: Array<{ id: string; enrollment_id?: string | null; level: number }>,
-): Promise<Map<string, number>> {
+): Promise<Map<string, { level: number; rung_name: string | null }>> {
   const enrollmentIds = members.map((m) => m.enrollment_id).filter(Boolean) as string[];
   const totals = await getTotalsForEnrollments(enrollmentIds);
-  const out = new Map<string, number>();
+  const rungs = await rungNamesFor(enrollmentIds, totals);
+  const out = new Map<string, { level: number; rung_name: string | null }>();
   for (const m of members) {
-    out.set(m.id, m.enrollment_id ? levelForPoints(totals.get(m.enrollment_id) ?? 0).level : m.level);
+    out.set(m.id, m.enrollment_id
+      ? { level: levelForPoints(totals.get(m.enrollment_id) ?? 0).level, rung_name: rungs.get(m.enrollment_id) ?? null }
+      : { level: m.level, rung_name: null });
   }
   return out;
+}
+
+/** Rung names via the progression module; a lookup failure leaves badges on the points rung rather than failing the feed. */
+async function rungNamesFor(enrollmentIds: string[], totals: Map<string, number>): Promise<Map<string, string>> {
+  try {
+    const { getRungNamesForEnrollments } = await import('./progression/progressionService');
+    return await getRungNamesForEnrollments(enrollmentIds, totals);
+  } catch (err: any) {
+    log('warn', 'rung_name_lookup_failed', { error_class: err?.name || 'Error', message: err?.message, outcome: 'partial' });
+    return new Map();
+  }
 }
 
 export async function listPosts(
@@ -492,7 +510,10 @@ export async function listPosts(
 
   // Author badges show the canonical level (one ladder everywhere).
   const authorLevels = await canonicalLevelByMemberId(pageRows.map((p: any) => p.member).filter(Boolean));
-  for (const p of posts) p.member.level = authorLevels.get(p.member.id) ?? p.member.level;
+  for (const p of posts) {
+    const a = authorLevels.get(p.member.id);
+    if (a) { p.member.level = a.level; p.member.rung_name = a.rung_name; }
+  }
 
   const last = pageRows[pageRows.length - 1] as any;
   const next_cursor = hasMore && last ? encodePostCursor(last) : null;
@@ -517,7 +538,10 @@ export async function getPostById(enrollmentId: string, postId: string): Promise
   const likedIds = await viewerLikedPostIds([post.id], viewer.id);
   const item = toFeedItem(withMember as any, viewer.id, viewer.level, likedIds.has(post.id));
   const author = (withMember as any)?.member;
-  if (author) item.member.level = (await canonicalLevelByMemberId([author])).get(author.id) ?? item.member.level;
+  if (author) {
+    const a = (await canonicalLevelByMemberId([author])).get(author.id);
+    if (a) { item.member.level = a.level; item.member.rung_name = a.rung_name; }
+  }
   return item;
 }
 
@@ -561,7 +585,9 @@ export async function togglePin(
   const postAny = post as any;
   // Author-only route — the author IS the caller, so the canonical badge level
   // is the caller's own canonical level (one ladder).
-  const authorLevel = levelForPoints((await getPointsSummary(enrollmentId)).total).level;
+  const authorTotal = (await getPointsSummary(enrollmentId)).total;
+  const authorLevel = levelForPoints(authorTotal).level;
+  const authorRung = (await rungNamesFor([enrollmentId], new Map([[enrollmentId, authorTotal]]))).get(enrollmentId) ?? null;
   return {
     id: post.id,
     body: post.body,
@@ -580,6 +606,7 @@ export async function togglePin(
       display_name: postAny.member.display_name,
       avatar_url: postAny.member.avatar_url,
       level: authorLevel,
+      rung_name: authorRung,
     },
     recent_commenters: [],
   };
@@ -1003,6 +1030,8 @@ export interface MemberProfile {
   avatar_url: string | null;
   bio: string | null;
   level: number;
+  /** Canonical rung ("AI Builder II"); null when the lookup degraded. Badges prefer it over `level`. */
+  rung_name: string | null;
   points: number;
   role: CommunityMemberRole;
   badges: MemberBadge[];
@@ -1040,7 +1069,7 @@ async function badgesByEnrollment(enrollmentIds: string[]): Promise<Map<string, 
 // points/level come from the ONE canonical ledger (StudentPointsEvent + the
 // LEVELS ladder), NOT the legacy CommunityMember.points column — so a member's
 // score/level here matches the top-right HUD everywhere.
-function toMemberProfile(member: CommunityMember, canonicalPoints: number, badges: MemberBadge[] = []): MemberProfile {
+function toMemberProfile(member: CommunityMember, canonicalPoints: number, badges: MemberBadge[] = [], rungName: string | null = null): MemberProfile {
   return {
     id: member.id,
     enrollment_id: member.enrollment_id,
@@ -1048,6 +1077,7 @@ function toMemberProfile(member: CommunityMember, canonicalPoints: number, badge
     avatar_url: member.avatar_url,
     bio: member.bio,
     level: levelForPoints(canonicalPoints).level,
+    rung_name: rungName,
     points: canonicalPoints,
     role: member.role ?? 'student',
     badges,
@@ -1060,7 +1090,8 @@ function toMemberProfile(member: CommunityMember, canonicalPoints: number, badge
 export async function getMyProfile(enrollmentId: string): Promise<MemberProfile> {
   const [member, summary] = await Promise.all([getOrCreateMember(enrollmentId), getPointsSummary(enrollmentId)]);
   const badges = (await badgesByEnrollment([member.enrollment_id])).get(member.enrollment_id) ?? [];
-  return toMemberProfile(member, summary.total, badges);
+  const rung = (await rungNamesFor([member.enrollment_id], new Map([[member.enrollment_id, summary.total]]))).get(member.enrollment_id) ?? null;
+  return toMemberProfile(member, summary.total, badges, rung);
 }
 
 // Cross-member lookups return NotFoundError uniformly whether the member
@@ -1079,7 +1110,8 @@ export async function getMemberProfileById(enrollmentId: string, targetMemberId:
   }
   const total = (await getPointsSummary(target.enrollment_id)).total;
   const badges = (await badgesByEnrollment([target.enrollment_id])).get(target.enrollment_id) ?? [];
-  return toMemberProfile(target, total, badges);
+  const rung = (await rungNamesFor([target.enrollment_id], new Map([[target.enrollment_id, total]]))).get(target.enrollment_id) ?? null;
+  return toMemberProfile(target, total, badges, rung);
 }
 
 export async function updateMyProfile(enrollmentId: string, input: UpdateProfileInput): Promise<MemberProfile> {
@@ -1094,7 +1126,8 @@ export async function updateMyProfile(enrollmentId: string, input: UpdateProfile
   log('info', 'profile_updated', { member_id: member.id, fields: Object.keys(updates), outcome: 'success' });
   const total = (await getPointsSummary(enrollmentId)).total;
   const badges = (await badgesByEnrollment([member.enrollment_id])).get(member.enrollment_id) ?? [];
-  return toMemberProfile(member, total, badges);
+  const rung = (await rungNamesFor([member.enrollment_id], new Map([[member.enrollment_id, total]]))).get(member.enrollment_id) ?? null;
+  return toMemberProfile(member, total, badges, rung);
 }
 
 // Directory search/filter/pagination (People directory). search = name substring
@@ -1145,11 +1178,12 @@ export async function listMembers(enrollmentId: string, query: DirectoryQuery = 
     getTotalsForEnrollments(enrollmentIds),
     badgesByEnrollment(enrollmentIds),
   ]);
+  const rungs = await rungNamesFor(enrollmentIds, totals);
 
   let ranked = members
     .map((m: any) => {
       const pts = totals.get(m.enrollment_id) ?? 0;
-      return { profile: toMemberProfile(m, pts, badges.get(m.enrollment_id) ?? []), pts };
+      return { profile: toMemberProfile(m, pts, badges.get(m.enrollment_id) ?? [], rungs.get(m.enrollment_id) ?? null), pts };
     })
     .sort((a, b) => b.pts - a.pts || a.profile.display_name.localeCompare(b.profile.display_name));
 
@@ -1341,5 +1375,6 @@ export async function setMemberRole(targetMemberId: string, role: CommunityMembe
   await syncStaffToAutoOrgs(member.enrollment_id, role === 'staff');
   const total = (await getPointsSummary(member.enrollment_id)).total;
   const badges = (await badgesByEnrollment([member.enrollment_id])).get(member.enrollment_id) ?? [];
-  return toMemberProfile(member, total, badges);
+  const rung = (await rungNamesFor([member.enrollment_id], new Map([[member.enrollment_id, total]]))).get(member.enrollment_id) ?? null;
+  return toMemberProfile(member, total, badges, rung);
 }

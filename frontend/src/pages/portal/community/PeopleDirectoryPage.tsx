@@ -110,7 +110,7 @@ const PeopleDirectoryPage: React.FC = () => {
                   {MEMBER_ROLE_META[m.role].emoji} {MEMBER_ROLE_META[m.role].label}
                 </span>
               )}
-              <LevelBadge level={m.level} size="sm" />
+              <LevelBadge level={m.level} rungName={m.rung_name ?? undefined} size="sm" />
               {m.badges.length > 0 && (
                 <div className="cm-person-badges">
                   {m.badges.slice(0, 3).map((b) => (
