@@ -27,7 +27,9 @@ export type GrowthJourneyTransitionType =
   | 'program_assigned'
   | 'path_assigned'
   | 'path_changed'
-  | 'brand_referral_requested';
+  | 'brand_referral_requested'
+  /** A lifecycle state moved (Phase 3 T301). The column is VARCHAR(32) with no CHECK, so this is a type-only addition. */
+  | 'state_changed';
 
 export type GrowthJourneyTransitionStatus = 'applied' | 'requested';
 

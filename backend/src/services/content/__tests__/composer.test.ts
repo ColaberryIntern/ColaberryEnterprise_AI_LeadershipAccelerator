@@ -179,7 +179,7 @@ describe('a variant violating provider limits blocks submission with a specific 
     expect(r.ok).toBe(true);
     const p = r.problems.find((x) => x.field === 'registry')!;
     expect(p.severity).toBe('warn');
-    expect(p.message).toMatch(/last verified on 2026-09-11/);
+    expect(p.message).toMatch(/last verified on 2026-09-15/);
   });
 
   it('links in an Instagram caption warn with the workaround, since they will not be clickable', () => {

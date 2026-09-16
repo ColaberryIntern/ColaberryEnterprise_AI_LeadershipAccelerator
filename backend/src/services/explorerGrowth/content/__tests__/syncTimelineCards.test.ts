@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 const queryMock = jest.fn();
 jest.mock('../../../../config/database', () => ({
   sequelize: { query: (...a: unknown[]) => queryMock(...a) },
@@ -251,5 +253,99 @@ describe('bucket decides priority, because nothing else can', () => {
     const welcome = priorityForBucket('pre_class');
     const evaluation = priorityForBucket('learn');
     expect(welcome).toBeGreaterThan(evaluation);
+  });
+});
+
+describe('NOTHING STAMPS A BRAND (T305)', () => {
+  // The regression that made stamping a hard stop for this phase: this module's
+  // upsert is `ON CONFLICT (source_system, source_id) DO UPDATE` and it runs on a
+  // live nightly cron. Writing `brand_id` here would have converted every live
+  // row the night after deploy, and Explorer's Governor - which resolves with
+  // `{brand_id: null, allow_unscoped: true}`, i.e. unscoped rows ONLY - would
+  // have found zero content for all 220 Training profiles.
+  //
+  // Asserted as a property of the write list rather than as a file hash: a hash
+  // fails on every future edit including the legitimate ones, while this stays
+  // true through refactors and false the moment someone stamps.
+  const SRC = fs.readFileSync(path.join(__dirname, '..', 'syncTimelineCards.ts'), 'utf8');
+  const BRAND_DIMENSION = [
+    'brand_id',
+    'tenant_id',
+    'offer_family',
+    'eligible_programs',
+    'eligible_paths',
+    'approval_status',
+    'approved_by',
+    'approved_at',
+  ];
+
+  it('the projection selects no brand-dimension column', () => {
+    const projection = SRC.slice(SRC.indexOf('const PROJECTION_SQL'), SRC.indexOf('const UPSERT_SQL'));
+    expect(projection.length).toBeGreaterThan(200);
+    for (const column of BRAND_DIMENSION) {
+      expect({ column, present: projection.includes(column) }).toEqual({ column, present: false });
+    }
+  });
+
+  it('the upsert writes no brand-dimension column, on insert OR on conflict', () => {
+    const upsert = SRC.slice(SRC.indexOf('const UPSERT_SQL'));
+    expect(upsert).toMatch(/ON CONFLICT/i);
+    expect(upsert).toMatch(/DO UPDATE/i);
+    for (const column of BRAND_DIMENSION) {
+      expect({ column, present: upsert.includes(column) }).toEqual({ column, present: false });
+    }
+  });
+
+  it('NO FILE in this directory writes a brand column to that table', () => {
+    // T305's verifier moved the stamping write into a sibling file that the sync
+    // imports (`content/brandStamp.ts`) and 1,439 tests stayed green. One file is
+    // the wrong unit: the cron imports this whole directory's worth of helpers.
+    //
+    // What this still cannot see, named rather than implied: a table name
+    // assembled from a variable or from string fragments at runtime
+    // (`UPDATE ${TBL} SET brand_id`). No literal scan closes that, and the
+    // binding proofs for it are `syncTimelineCards.ts`'s md5 identity and T315's
+    // live `brand_id IS NOT NULL = 0` after a post-deploy sync.
+    const dir = path.join(__dirname, '..');
+    const files = fs
+      .readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith('.ts'))
+      .map((e) => path.join(dir, e.name));
+    expect(files.length).toBeGreaterThanOrEqual(4);
+
+    const offenders: string[] = [];
+    for (const file of files) {
+      const src = fs.readFileSync(file, 'utf8');
+      for (const write of src.matchAll(/(INSERT\s+INTO|UPDATE)\s+explorer_content_assets[\s\S]{0,600}/gi)) {
+        for (const column of BRAND_DIMENSION) {
+          if (write[0].includes(column)) offenders.push(`${path.basename(file)}:${column}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('NO write statement anywhere in this file touches a brand column', () => {
+    // The hole T305's verifier found: the two slices above start at
+    // `const PROJECTION_SQL`, so a stamping UPDATE declared ABOVE it escaped both
+    // and 1,437 tests stayed green. This reads the whole file instead, and the
+    // slices stay as the precise per-statement checks.
+    const writes = [...SRC.matchAll(/(INSERT\s+INTO|UPDATE)\s+explorer_content_assets[\s\S]{0,600}/gi)]
+      .map((mm) => mm[0]);
+    expect(writes.length).toBeGreaterThanOrEqual(2); // the upsert and the retire UPDATE
+    for (const statement of writes) {
+      for (const column of BRAND_DIMENSION) {
+        expect({ column, inWrite: statement.includes(column) }).toEqual({ column, inWrite: false });
+      }
+    }
+  });
+
+  it('the scan is not vacuous: it finds the columns this module DOES write', () => {
+    // Without this, a mis-sliced source string would make every assertion above
+    // pass by reading an empty string.
+    const upsert = SRC.slice(SRC.indexOf('const UPSERT_SQL'));
+    for (const column of ['asset_type', 'source_system', 'source_id', 'title', 'audience_tags']) {
+      expect(upsert).toContain(column);
+    }
   });
 });

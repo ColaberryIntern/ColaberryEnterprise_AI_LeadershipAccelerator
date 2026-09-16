@@ -5,6 +5,7 @@ import { transition } from '../content/contentWorkflow';
 import { isProviderKey, makeAdapterFactory, transportFromEnv, type AdapterFactory } from './adapterRegistry';
 import { dueJobsWhere, nextRetryDelayMs, shouldDeadLetter, type PublishingJobState } from './publishingQueueQuery';
 import { ProviderPublishError, type PublishPayload, type PublishReceipt, type SocialProviderAdapter } from './socialProviderAdapter';
+import { pollFromMetadata } from '../content/pollSpec';
 
 /**
  * publishingWorker — takes due jobs off the queue, hands each to an adapter, records what
@@ -113,6 +114,7 @@ async function buildPayload(job: PublishingJob, item: ContentItem, variant: Cont
     text: variant?.body ?? item.canonical_body ?? '',
     mediaRefs: media.map((m) => m.ref),
     media,
+    poll: item.content_type === 'poll' ? pollFromMetadata(item.metadata) : null,
     linkUrl: variant?.link_url ?? null,
     disclosureText: variant?.disclosure_text ?? null,
     scheduledFor: new Date(job.publish_at).toISOString(),

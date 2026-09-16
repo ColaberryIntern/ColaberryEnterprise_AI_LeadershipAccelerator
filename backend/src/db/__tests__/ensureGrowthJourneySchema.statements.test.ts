@@ -139,7 +139,11 @@ describe('the schema is additive, and provably so', () => {
     const RUN_OWNED = [
       'brand_offer_policies',
       'growth_journey_classifications',
+      'growth_journey_content_rules',
+      'growth_journey_decisions',
       'growth_journey_enrollments',
+      'growth_journey_profiles',
+      'growth_journey_score_snapshots',
       'growth_journey_transitions',
       'journey_paths',
       'journey_programs',
@@ -218,16 +222,21 @@ describe('the schema is additive, and provably so', () => {
     expect(SQL).not.toMatch(/explorer_/i);
   });
 
-  it('creates exactly the seven tables the run owns so far (five from Phase 1, two from Phase 2)', () => {
+  it('creates exactly the ten tables the run owns so far (five from Phase 1, two from Phase 2, three from Phase 3)', () => {
     // An explicit list rather than a count. The assertion exists to catch a
     // table nobody meant to add, and a count would not distinguish the two.
-    // Phase 2 (T222) added classifications and transitions; decisions is
-    // Phase 3's and handoffs Phase 4's, so their absence here is deliberate.
+    // Phase 2 (T222) added classifications and transitions; Phase 3 (T301) added
+    // decisions, profiles and score_snapshots. `handoffs` is Phase 4's, so its
+    // absence here is still deliberate.
     const tables = [...SQL.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/gi)].map((m) => m[1]);
     expect(tables.sort()).toEqual([
       'brand_offer_policies',
       'growth_journey_classifications',
+      'growth_journey_content_rules',
+      'growth_journey_decisions',
       'growth_journey_enrollments',
+      'growth_journey_profiles',
+      'growth_journey_score_snapshots',
       'growth_journey_transitions',
       'journey_paths',
       'journey_programs',

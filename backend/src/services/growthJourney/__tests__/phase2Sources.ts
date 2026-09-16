@@ -10,7 +10,12 @@ import * as path from 'path';
  */
 
 const ROOT = path.join(__dirname, '..', '..', '..'); // backend/src
-const SCAN_DIRS = [
+/**
+ * This run's source tree. EXPORTED because two guards walk it - the no-send
+ * scanner and the one-arbitration-point read-ban - and a second directory list
+ * would be one new folder away from letting something through.
+ */
+export const SCAN_DIRS = [
   path.join(ROOT, 'services', 'growthJourney'),
   path.join(ROOT, 'services', 'routing'),
 ];

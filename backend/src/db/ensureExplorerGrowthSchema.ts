@@ -123,6 +123,23 @@ export async function ensureExplorerGrowthSchema(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_explorer_assignments_unique ON explorer_experiment_assignments (experiment_key, enrollment_id)`,
 
     // --- T5: content registry INDEX over authoritative sources.
+    //
+    // T305 added the last eight columns - the brand dimension. All eight are
+    // NULLABLE WITH NO DEFAULT, so NULL has one meaning across all of them: not
+    // declared, i.e. an Explorer-era row, which resolves for Colaberry Training
+    // (Explorer's own brand) and for no other brand. A default would have
+    // invented a declaration for 646 live rows no human has reviewed.
+    //
+    // No foreign keys on tenant_id/brand_id: this table is an INDEX over other
+    // tables (models/index.ts - "intentionally has NO association"), this DDL
+    // runs on every boot before the multi-tenant ensure modules are guaranteed
+    // to have run, and a dangling id simply never matches the resolver
+    // predicate. The FK-bearing declaration lives in
+    // growth_journey_content_rules, which is this run's own table.
+    //
+    // approval_status is READ by growthJourney/contentEligibility. approved_by
+    // and approved_at have NO reader in Phase 3 and are recorded as such: they
+    // are the audit half of a Phase 4 approval flow, not a live gate.
     `CREATE TABLE IF NOT EXISTS explorer_content_assets (
        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
        asset_type VARCHAR(32) NOT NULL,
@@ -145,13 +162,37 @@ export async function ensureExplorerGrowthSchema(): Promise<void> {
        active BOOLEAN NOT NULL DEFAULT TRUE,
        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
        synced_at TIMESTAMPTZ,
+       tenant_id UUID,
+       brand_id UUID,
+       offer_family VARCHAR(48),
+       eligible_programs JSONB,
+       eligible_paths JSONB,
+       approval_status VARCHAR(16),
+       approved_by VARCHAR(128),
+       approved_at TIMESTAMPTZ,
        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
      )`,
     // Partial unique: projected rows upsert on (source_system, source_id);
     // human-seeded rows have a null source_id and are exempt.
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_explorer_assets_source ON explorer_content_assets (source_system, source_id) WHERE source_id IS NOT NULL`,
+    // T305. The CREATE above only reaches a database that does not have this
+    // table yet. Production does, so these ALTERs are the half that gets there -
+    // and a test asserts every one of the eight appears in BOTH halves, because
+    // one without the other means two different schemas depending on the age of
+    // the database.
+    `ALTER TABLE explorer_content_assets ADD COLUMN IF NOT EXISTS tenant_id UUID`,
+    `ALTER TABLE explorer_content_assets ADD COLUMN IF NOT EXISTS brand_id UUID`,
+    `ALTER TABLE explorer_content_assets ADD COLUMN IF NOT EXISTS offer_family VARCHAR(48)`,
+    `ALTER TABLE explorer_content_assets ADD COLUMN IF NOT EXISTS eligible_programs JSONB`,
+    `ALTER TABLE explorer_content_assets ADD COLUMN IF NOT EXISTS eligible_paths JSONB`,
+    `ALTER TABLE explorer_content_assets ADD COLUMN IF NOT EXISTS approval_status VARCHAR(16)`,
+    `ALTER TABLE explorer_content_assets ADD COLUMN IF NOT EXISTS approved_by VARCHAR(128)`,
+    `ALTER TABLE explorer_content_assets ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`,
     `CREATE INDEX IF NOT EXISTS idx_explorer_assets_type_active ON explorer_content_assets (asset_type, active)`,
+    // Partial: the overwhelming majority of rows are unscoped Explorer-era ones,
+    // and those are found by the IS NULL branch of the predicate rather than here.
+    `CREATE INDEX IF NOT EXISTS idx_explorer_assets_brand ON explorer_content_assets (brand_id, asset_type) WHERE brand_id IS NOT NULL`,
     `CREATE INDEX IF NOT EXISTS idx_explorer_assets_affinity ON explorer_content_assets USING GIN (affinity_tags)`,
     `CREATE INDEX IF NOT EXISTS idx_explorer_assets_stage ON explorer_content_assets USING GIN (journey_stage_tags)`,
   ];

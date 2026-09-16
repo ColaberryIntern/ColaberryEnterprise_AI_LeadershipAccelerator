@@ -296,6 +296,105 @@ export const GROWTH_JOURNEY_STATEMENTS: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS idx_gj_transitions_brand_type_status
      ON growth_journey_transitions (brand_id, transition_type, status)`,
 
+  // ── T301 (Phase 3) ────────────────────────────────────────────────────────
+  // The decision, profile and snapshot tables. Placed HERE, before the brands
+  // ALTER, because that ALTER is asserted to be the last statement in this
+  // module (statements test) — and because every table below references
+  // journey_programs, which is created at the top.
+  //
+  // `growth_journey_decisions` is APPEND-ONLY (no updated_at): a re-decision is
+  // a new row. `growth_journey_profiles` is the one MUTABLE table the run owns —
+  // it is a projection of the current state, not a ledger, and every state
+  // change it records also writes an append-only transitions row.
+  `CREATE TABLE IF NOT EXISTS growth_journey_decisions (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+     brand_id UUID NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+     program_id UUID REFERENCES journey_programs(id) ON DELETE SET NULL,
+     subject_ref VARCHAR(128) NOT NULL,
+     lead_id INTEGER,
+     enrollment_id UUID,
+     classification_id UUID,
+     trigger VARCHAR(32) NOT NULL,
+     decision_date DATE NOT NULL,
+     mode VARCHAR(16) NOT NULL,
+     selected_action VARCHAR(48),
+     selected_path VARCHAR(64),
+     selected_channel VARCHAR(16),
+     selected_content JSONB,
+     candidates JSONB NOT NULL DEFAULT '[]'::jsonb,
+     suppressed JSONB NOT NULL DEFAULT '[]'::jsonb,
+     deferred_actions JSONB NOT NULL DEFAULT '[]'::jsonb,
+     eligibility JSONB,
+     scores JSONB,
+     score_gaps JSONB NOT NULL DEFAULT '[]'::jsonb,
+     state_at_decision VARCHAR(48),
+     overlays_at_decision JSONB NOT NULL DEFAULT '[]'::jsonb,
+     contact_evidence JSONB,
+     human_conversation VARCHAR(8) NOT NULL DEFAULT 'unknown',
+     sales_capacity VARCHAR(12) NOT NULL DEFAULT 'unknown',
+     content_gaps JSONB NOT NULL DEFAULT '[]'::jsonb,
+     reason TEXT NOT NULL,
+     requires_human_review BOOLEAN NOT NULL DEFAULT FALSE,
+     ai_involved BOOLEAN NOT NULL DEFAULT FALSE,
+     model_version VARCHAR(64),
+     ruleset_version VARCHAR(32) NOT NULL,
+     executed BOOLEAN NOT NULL DEFAULT FALSE,
+     execution_receipt JSONB,
+     decided_by TEXT NOT NULL,
+     idempotency_key TEXT NOT NULL,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS growth_journey_decisions_idempotency_unique
+     ON growth_journey_decisions (idempotency_key)`,
+  `CREATE INDEX IF NOT EXISTS idx_gj_decisions_subject
+     ON growth_journey_decisions (subject_ref, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_gj_decisions_brand_date
+     ON growth_journey_decisions (brand_id, decision_date DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_gj_decisions_review
+     ON growth_journey_decisions (brand_id, created_at DESC)
+     WHERE requires_human_review`,
+
+  `CREATE TABLE IF NOT EXISTS growth_journey_profiles (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+     brand_id UUID NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+     program_id UUID REFERENCES journey_programs(id) ON DELETE SET NULL,
+     subject_ref VARCHAR(128) NOT NULL,
+     lead_id INTEGER,
+     enrollment_id UUID,
+     state VARCHAR(48) NOT NULL,
+     state_entered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     overlays JSONB NOT NULL DEFAULT '[]'::jsonb,
+     scores JSONB,
+     score_gaps JSONB NOT NULL DEFAULT '[]'::jsonb,
+     scores_computed_at TIMESTAMPTZ,
+     signals_summary JSONB,
+     last_decision_at TIMESTAMPTZ,
+     source VARCHAR(32) NOT NULL,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS growth_journey_profiles_brand_subject_unique
+     ON growth_journey_profiles (brand_id, subject_ref)`,
+  `CREATE INDEX IF NOT EXISTS idx_gj_profiles_state
+     ON growth_journey_profiles (brand_id, state)`,
+
+  `CREATE TABLE IF NOT EXISTS growth_journey_score_snapshots (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+     brand_id UUID NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+     subject_ref VARCHAR(128) NOT NULL,
+     as_of_date DATE NOT NULL,
+     state VARCHAR(48),
+     overlays JSONB NOT NULL DEFAULT '[]'::jsonb,
+     scores JSONB,
+     score_gaps JSONB NOT NULL DEFAULT '[]'::jsonb,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS growth_journey_snapshots_subject_date_unique
+     ON growth_journey_score_snapshots (brand_id, subject_ref, as_of_date)`,
+
   // ── T203 ──────────────────────────────────────────────────────────────────
   // THE ONE STATEMENT IN THIS MODULE THAT REACHES INTO SOMEONE ELSE'S TABLE.
   //
@@ -317,6 +416,61 @@ export const GROWTH_JOURNEY_STATEMENTS: readonly string[] = [
   // programme took its brand — and every lead, domain and policy hanging off it
   // — with it.
   //
+  // --- T305: the section 10 content declaration.
+  //
+  // One row per asset (or per named collection) per brand, carrying everything a
+  // grounded message needs to be defensible: which programmes, paths, lifecycle
+  // states, overlays and personas it may serve, which claims are approved and
+  // what evidence backs them, which URLs and CTAs may be cited, when it is
+  // effective, whether it is free or restricted, who sends it, who owns it, and
+  // what its approval state is.
+  //
+  // It is the WRITER that `brand_offer_policies.approved_landing_pages` and
+  // `content_collections` never had - both of those are JSONB lists defaulting to
+  // `[]` that nothing in the repo writes, which is why `approved_content_ready`
+  // has been false for every row in production since it was added.
+  //
+  // NO ROWS SHIP IN THIS PHASE. Declaring the existing assets is a human review
+  // job (Phase 4), and inventing rows here would be a fabricated approval record.
+  // An empty table is why `contentEligibility` treats "no rule" as "fall back to
+  // the asset's own columns" rather than as a denial: a denial would take every
+  // Explorer learner's content away the moment this shipped.
+  `CREATE TABLE IF NOT EXISTS growth_journey_content_rules (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     tenant_id UUID NOT NULL REFERENCES tenants(id),
+     brand_id UUID NOT NULL REFERENCES brands(id),
+     asset_id UUID,
+     collection_key VARCHAR(64),
+     eligible_programs JSONB NOT NULL DEFAULT '[]'::jsonb,
+     eligible_paths JSONB NOT NULL DEFAULT '[]'::jsonb,
+     audience_personas JSONB NOT NULL DEFAULT '[]'::jsonb,
+     lifecycle_states JSONB NOT NULL DEFAULT '[]'::jsonb,
+     overlays JSONB NOT NULL DEFAULT '[]'::jsonb,
+     offer_family VARCHAR(48),
+     channels JSONB NOT NULL DEFAULT '[]'::jsonb,
+     content_purpose VARCHAR(32),
+     approved_claims JSONB NOT NULL DEFAULT '[]'::jsonb,
+     source_evidence JSONB NOT NULL DEFAULT '[]'::jsonb,
+     approved_urls JSONB NOT NULL DEFAULT '[]'::jsonb,
+     approved_ctas JSONB NOT NULL DEFAULT '[]'::jsonb,
+     effective_from TIMESTAMPTZ,
+     expires_at TIMESTAMPTZ,
+     access_tier VARCHAR(16),
+     sender_profile_id UUID,
+     version INTEGER NOT NULL DEFAULT 1,
+     owner VARCHAR(128),
+     approval_status VARCHAR(16) NOT NULL DEFAULT 'draft',
+     approved_by VARCHAR(128),
+     approved_at TIMESTAMPTZ,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     CHECK (asset_id IS NOT NULL OR collection_key IS NOT NULL)
+   )`,
+  // One live declaration per asset per brand per version. A second row for the
+  // same asset would make "which rule applies" a question with two answers.
+  `CREATE UNIQUE INDEX IF NOT EXISTS growth_journey_content_rules_asset_unique ON growth_journey_content_rules (brand_id, asset_id, version) WHERE asset_id IS NOT NULL`,
+  `CREATE INDEX IF NOT EXISTS idx_gj_content_rules_brand_status ON growth_journey_content_rules (brand_id, approval_status)`,
+
   // Placed last so `journey_programs` exists before the foreign key names it.
   `ALTER TABLE brands
      ADD COLUMN IF NOT EXISTS default_journey_program_id UUID

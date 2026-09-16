@@ -40,6 +40,7 @@ function approvalTone(label: ConfirmationSummary['approval']['label']): 'success
 
 export default function ComposerConfirmation({ summary, busy, onAction }: ComposerConfirmationProps) {
   const { brand, campaign, accounts, schedule, copy, assets, links, linkGaps, approval, validation, readiness } = summary;
+  const poll = summary.item.poll;
 
   return (
     <div className="composer-confirmation">
@@ -100,6 +101,14 @@ export default function ComposerConfirmation({ summary, busy, onAction }: Compos
           </div>
         ))}
       </Field>
+
+      {poll && (
+        <Field label="Poll" testId="confirm-poll">
+          <div>{poll.question}</div>
+          <ol className="mb-1">{poll.options.map((o, i) => <li key={i}>{o}</li>)}</ol>
+          <span className="text-muted small">Voting open {poll.durationDays} day{poll.durationDays === 1 ? '' : 's'}.</span>
+        </Field>
+      )}
 
       <Field label="Assets" testId="confirm-assets">
         {assets.length === 0 ? <span>No assets attached.</span> : (

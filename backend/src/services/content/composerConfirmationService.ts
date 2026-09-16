@@ -1,4 +1,5 @@
 import { Brand, Campaign, ContentApprovalRequest, ContentItem, ContentItemMedia, ContentVariant, MediaAsset } from '../../models';
+import { pollFromMetadata } from './pollSpec';
 import { PROVIDER_KEYS, type ProviderKey } from '../publishing/providerCapabilities';
 import { buildConfirmation, type ConfirmationInput, type ConfirmationSummary } from './composerConfirmation';
 import { listItemLinks } from './composerLinkService';
@@ -63,6 +64,7 @@ export async function buildItemConfirmation(itemId: string): Promise<Confirmatio
       title: item.title,
       status: item.status,
       content_type: item.content_type,
+      poll: pollFromMetadata(item.metadata),
       scheduled_for: item.scheduled_for ? new Date(item.scheduled_for).toISOString() : null,
       human_approved: Boolean(item.human_approved),
       revision: item.revision ?? 1,

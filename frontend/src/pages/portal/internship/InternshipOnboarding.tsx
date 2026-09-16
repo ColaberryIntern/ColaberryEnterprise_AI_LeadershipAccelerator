@@ -169,9 +169,22 @@ const InternshipOnboarding: React.FC<{ onChanged?: () => void }> = ({ onChanged 
           <dd>Up to {view.max_active_projects} at a time</dd>
           <dt>Required meetings</dt>
           <dd>
-            {view.required_meetings.length
-              ? view.required_meetings.map((m) => `${m.day} ${m.kind}`).join(', ')
-              : 'Your manager will confirm these'}
+            {view.required_meetings.length ? (
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {view.required_meetings.map((m, i) => (
+                  <li key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 600, minWidth: 128 }}>
+                      {m.day}{m.time ? ` · ${m.time}${m.timezone ? ` ${m.timezone}` : ''}` : ''}
+                    </span>
+                    <span>{m.title || m.kind}</span>
+                    {m.audience === 'interns_only' && <span className="ip-tag">interns only</span>}
+                    {m.join_url
+                      ? <a href={m.join_url} target="_blank" rel="noopener noreferrer" className="te-btn ghost sm">Join</a>
+                      : <span className="ip-muted" style={{ fontSize: 12 }}>link coming</span>}
+                  </li>
+                ))}
+              </ul>
+            ) : 'Your manager will confirm these'}
           </dd>
         </dl>
       )}

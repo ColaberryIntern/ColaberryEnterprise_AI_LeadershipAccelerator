@@ -53,8 +53,16 @@ export const MIN_HOURS_BETWEEN_CONTACTS = 48;
  * Ordered cheapest-and-most-decisive first, so the reason recorded is the most
  * informative one rather than whichever check happened to run first.
  */
+/**
+ * T310 widened the parameter from `Candidate` to the ONE field this reads, so a
+ * Growth Journey candidate - whose asset queries may name a purpose Explorer
+ * does not have - can be handed in. Types only: the emitted code is byte-identical
+ * (this comment is the sole difference in the default emit) and every Explorer
+ * caller still passes a full `Candidate`. The same declared,
+ * bounded widening T302 made to the arbiter.
+ */
 export function evaluateContact(
-  candidate: Candidate,
+  candidate: Pick<Candidate, 'channel'>,
   input: ContactPolicyInput,
 ): ContactVerdict {
   // An action needing no channel (a human task) bypasses channel checks — there

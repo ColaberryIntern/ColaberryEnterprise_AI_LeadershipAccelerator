@@ -32,6 +32,7 @@ const SUB_FLAGS = FLAG_KEYS.filter((k) => k !== 'growthJourneyEnabled');
 const CAPABILITIES: GrowthJourneyCapability[] = [
   'journeySignalIngest',
   'journeyClassification',
+  'journeyDecisions',
   'journeyExecution',
 ];
 
@@ -46,10 +47,25 @@ describe('default OFF, per flag', () => {
     for (const key of FLAG_KEYS) expect(flags[key]).toBe(false);
   });
 
-  it('has exactly four flags — a master and three capabilities', () => {
-    expect(FLAG_KEYS).toHaveLength(4);
-    expect(SUB_FLAGS).toHaveLength(3);
-    expect(CAPABILITIES).toHaveLength(3);
+  it('has exactly five flags — a master and four capabilities', () => {
+    // Phase 3 (T303) added `journeyDecisions`. The counts are asserted rather
+    // than derived so that adding a fifth capability is a deliberate edit here
+    // and not a line that slides in: every one of these flags is a thing that
+    // changes what the system does to a person.
+    expect(FLAG_KEYS).toHaveLength(5);
+    expect(SUB_FLAGS).toHaveLength(4);
+    expect(CAPABILITIES).toHaveLength(4);
+  });
+
+  it('journeyDecisions gates deciding, never contacting — and the master still overrides it', () => {
+    const on = { GROWTH_JOURNEY_ENABLED: 'true', GROWTH_JOURNEY_DECISIONS_ENABLED: 'true' };
+    expect(resolveGrowthJourneyFlags(env(on)).journeyDecisions).toBe(true);
+    expect(isGrowthJourneyCapabilityEnabled('journeyDecisions', resolveGrowthJourneyFlags(env(on)))).toBe(true);
+    // Master off with the capability on is still off — the rule every capability follows.
+    const masterOff = { GROWTH_JOURNEY_DECISIONS_ENABLED: 'true' };
+    expect(isGrowthJourneyCapabilityEnabled('journeyDecisions', resolveGrowthJourneyFlags(env(masterOff)))).toBe(false);
+    // And it does not switch on execution, which is the only flag that can contact anyone.
+    expect(resolveGrowthJourneyFlags(env(on)).journeyExecution).toBe(false);
   });
 
   it('journeyExecution — the only flag that can contact a person — is off, on its own line', () => {
@@ -93,7 +109,7 @@ describe('the master governs every capability', () => {
     expect(enabledGrowthJourneyCapabilities(flags)).toEqual(['journeyClassification']);
   });
 
-  it('everything on enables all three', () => {
+  it('everything on enables all four', () => {
     const flags = resolveGrowthJourneyFlags(allOn());
     expect(enabledGrowthJourneyCapabilities(flags).sort()).toEqual([...CAPABILITIES].sort());
   });
@@ -195,7 +211,7 @@ describe('dark-launch guard — no direct Growth Journey sub-flag reads outside 
     expect(offenders).toEqual([]);
   });
 
-  it('the guard would catch a read of each of the three names', () => {
+  it('the guard would catch a read of each sub-flag name', () => {
     // Non-vacuity for the regex itself, against synthetic text.
     for (const prop of SUB_FLAGS) {
       expect(new RegExp(`\\.${prop}\\b`).test(`if (flags.${prop}) {}`)).toBe(true);

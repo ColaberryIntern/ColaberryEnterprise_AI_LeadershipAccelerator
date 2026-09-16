@@ -16,7 +16,7 @@ const POST_URN = 'urn:li:share:7123456789012345678';
 function payload(over: Partial<PublishPayload> = {}): PublishPayload {
   return {
     jobId: 'job-1', provider: 'linkedin_member', contentItemId: 'ci-1', variantId: 'cv-1',
-    accountId: 'acc-1', text: 'Join our free AI class Thursday at 6pm CT.', mediaRefs: [], media: [],
+    accountId: 'acc-1', text: 'Join our free AI class Thursday at 6pm CT.', mediaRefs: [], media: [], poll: null,
     linkUrl: null, disclosureText: null, scheduledFor: '2026-09-14T18:00:00.000Z',
     contentRevision: 3, ...over,
   };

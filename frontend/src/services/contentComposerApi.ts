@@ -17,7 +17,14 @@ export type ProviderKey =
   | 'meta_facebook_page' | 'meta_instagram' | 'linkedin_organization' | 'linkedin_member'
   | 'youtube' | 'tiktok' | 'x';
 
-export type ContentType = 'text' | 'image' | 'video' | 'carousel' | 'thread' | 'link';
+export type ContentType = 'text' | 'image' | 'video' | 'carousel' | 'thread' | 'link' | 'poll';
+
+/** Mirrors backend content/pollSpec.ts. Stored as `metadata.poll` on the item. */
+export interface Poll {
+  question: string;
+  options: string[];
+  durationDays: number;
+}
 
 export type ContentItemStatus =
   | 'idea' | 'draft' | 'ready_for_review' | 'changes_requested' | 'approved' | 'scheduled'
@@ -102,7 +109,7 @@ export type ApprovalLabel =
   | 'Approval invalidated by a later edit' | 'Withdrawn';
 
 export interface ConfirmationSummary {
-  item: { id: string; title: string; status: ContentItemStatus; contentType: string; revision: number };
+  item: { id: string; title: string; status: ContentItemStatus; contentType: string; revision: number; poll: Poll | null };
   brand: { id: string; name: string; timezone: string; timezoneSource: 'brand' | 'default' } | null;
   campaign: { id: string; name: string; slug: string | null } | null;
   accounts: Array<{ provider: ProviderKey; displayName: string; mode: PublishMode; reasons: string[]; account: null }>;
@@ -140,6 +147,7 @@ export interface CreateDraftInput {
   is_paid?: boolean;
   has_offer?: boolean;
   kinds?: string[];
+  poll?: Poll | null;
 }
 
 export async function listProviders(): Promise<ProviderSummary[]> {
@@ -162,7 +170,7 @@ export async function getItem(id: string): Promise<{ item: ContentItem; variants
   return { item: res.data.item, variants: res.data.variants ?? [] };
 }
 
-export async function updateItem(id: string, patch: { title?: string; canonical_body?: string; content_type?: ContentType; scheduled_for?: string | null }): Promise<ContentItem> {
+export async function updateItem(id: string, patch: { title?: string; canonical_body?: string; content_type?: ContentType; scheduled_for?: string | null; poll?: Poll | null }): Promise<ContentItem> {
   const res = await api.patch(`/api/admin/content/${id}`, patch);
   return res.data.item;
 }
@@ -308,6 +316,8 @@ export interface PublishingJob {
 }
 
 export interface HandoffPackage {
+  /** Present for a poll post; the instructions string also spells it out. */
+  poll?: Poll | null;
   provider: ProviderKey;
   displayName: string;
   reasons: string[];

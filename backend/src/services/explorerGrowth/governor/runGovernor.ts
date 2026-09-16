@@ -215,10 +215,21 @@ async function runOne(
   // rather than here. Recorded rather than papered over.
   const tier = (await isFreePreviewTier(enrollmentId)) ? 'free_preview' : 'full_access';
 
+  // T305. Explorer resolves EXACTLY what it resolved before: unscoped rows, which
+  // is every row in production, because nothing stamps `brand_id` in this phase.
+  // Written as an explicit marker rather than defaulted inside the resolver, so
+  // this line is where a reader learns Explorer's scope - and so a brand-scoped
+  // caller cannot get this behaviour by forgetting an argument. This file may not
+  // import from the growth-journey tree under the Governor's own import
+  // whitelist, and does not - the marker is a literal, not a shared constant.
+  // (Written without a glob on purpose: campaignResolution.test.ts strips block
+  // comments from this file's raw source, and a slash-star inside a line comment
+  // opens one, which silently ate six assertions' worth of code.)
   const { assets: resolvedAssets, gaps: assetGaps } = await resolveAllForCandidate(
     decision.required_assets,
     ctx.asOf,
     tier,
+    { brand_id: null, allow_unscoped: true },
   );
 
   // EPIC 6 T005. The winning candidate's campaign_key -> a real campaign id.

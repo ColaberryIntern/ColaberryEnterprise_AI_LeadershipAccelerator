@@ -10,7 +10,9 @@ import { activeCompEnrollmentIds, getSubscription } from '../subscriptionService
 import { transition } from './internshipApplicationService';
 import { stateAfterDocumentsVerified } from './internshipStateMachine';
 import { outstandingRequirements } from './internshipDocumentService';
-import { ensureInternshipCohort, internshipSettings } from './internshipCohortService';
+import { ensureInternshipCohort, internshipSettings, type RequiredMeeting } from './internshipCohortService';
+import { getProjectByEnrollment } from '../projectService';
+import { getStudentWeekBreakdown } from '../curriculumCompletionService';
 import {
   activationBlockers, checklistProgress, nextStudentAction, resolveChecklist,
   type ChecklistEvidence, type ChecklistStepStatus,
@@ -230,7 +232,7 @@ export async function buildChecklist(application: InternshipApplication): Promis
   const { cohort } = await ensureInternshipCohort();
   const settings = internshipSettings(cohort);
 
-  const [docs, requirements, acks, membership, enrollment] = await Promise.all([
+  const [docs, requirements, acks, membership, enrollment, activeProject] = await Promise.all([
     InternshipDocument.findAll({ where: { application_id: application.id } }),
     outstandingRequirements(application.id),
     InternshipRequirementAcknowledgement.findAll({ where: { application_id: application.id } }),
@@ -238,8 +240,30 @@ export async function buildChecklist(application: InternshipApplication): Promis
       enrollmentId: application.enrollment_id,
       requiresSubscription: settings.requires_subscription,
     }),
-    Enrollment.findByPk(application.enrollment_id, { attributes: ['id'] }),
+    Enrollment.findByPk(application.enrollment_id, { attributes: ['id', 'cohort_id'] }),
+    // "Get your first project" completes when a project is actually assigned. This
+    // is the same active-project resolution the student's own portal reads, so the
+    // checklist and their project page can never disagree.
+    getProjectByEnrollment(application.enrollment_id),
   ]);
+
+  // "Complete week 1" is the real first-week signal: week 1 of the curriculum done,
+  // read from the same breakdown the admin Activity view uses (the 30% week-done
+  // threshold the whole platform uses). Measured against the student's CLASS cohort
+  // — the internship is a secondary membership, so the curriculum lives on the
+  // enrollment's own cohort.
+  const cohortId = (enrollment as any)?.cohort_id ?? null;
+  let firstWeekComplete = false;
+  if (cohortId) {
+    try {
+      const breakdown = await getStudentWeekBreakdown(cohortId, application.enrollment_id);
+      firstWeekComplete = !!(breakdown as any)?.rows?.find((r: any) => Number(r.week) === 1)?.weekDone;
+    } catch {
+      // A breakdown read failure must not blank the whole checklist; the step just
+      // stays open until the next load, which is the honest degraded state.
+      firstWeekComplete = false;
+    }
+  }
 
   const ackMap = new Map<RequirementKey, AcknowledgementState>(
     acks.map((a) => [a.requirement_key, a.state]),
@@ -251,17 +275,16 @@ export async function buildChecklist(application: InternshipApplication): Promis
     all_documents_verified: requirements.all_verified,
     membership_ok: membership.ok,
     // Orientation attendance and community membership are read by the tracking
-    // phase, which owns the attendance aggregation. Reporting them as FALSE here
-    // is honest — neither is a blocking step, so an intern is never held up by a
-    // signal this phase cannot yet read.
+    // phase (Zoom-in-Rooms attendance), which owns the attendance aggregation.
+    // Reporting them as FALSE here is honest — neither is a blocking step, so an
+    // intern is never held up by a signal this phase cannot yet read.
     orientation_attended: false,
     acknowledgements: ackMap,
     joined_community: false,
-    active_project_count: 0,
-    first_week_checkin_submitted: false,
+    active_project_count: activeProject ? 1 : 0,
+    first_week_curriculum_complete: firstWeekComplete,
   };
 
-  void enrollment;
   return resolveChecklist(evidence);
 }
 
@@ -326,7 +349,7 @@ export interface ActiveInternView {
   week: number | null;
   minimum_weekly_hours: number;
   max_active_projects: number;
-  required_meetings: readonly { day: string; kind: string }[];
+  required_meetings: readonly RequiredMeeting[];
   checklist: ChecklistStepStatus[];
   progress: { done: number; total: number };
   next_action: ChecklistStepStatus | null;

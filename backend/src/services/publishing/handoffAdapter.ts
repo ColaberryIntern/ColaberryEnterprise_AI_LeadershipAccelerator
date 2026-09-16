@@ -39,6 +39,8 @@ export interface HandoffPackage {
   linkUrl: string | null;
   disclosureText: string | null;
   mediaRefs: string[];
+  /** Present for a poll post: what to set up by hand. */
+  poll: PublishPayload['poll'];
   instructions: string;
 }
 
@@ -71,7 +73,9 @@ export class HandoffAdapter implements SocialProviderAdapter {
     const steps = [
       `1. Open ${caps.displayName} as the brand account.`,
       '2. Paste the text exactly as shown. Do not edit; edits belong in the composer so the record matches the post.',
-      content.mediaRefs.length > 0 ? `3. Attach the ${content.mediaRefs.length} media item(s) listed, in order.` : '3. No media to attach.',
+      content.poll
+        ? `3. Create a poll. Question: "${content.poll.question}". Options, in order: ${content.poll.options.map((o, i) => `${i + 1}) ${o}`).join('  ')}. Runs ${content.poll.durationDays} day${content.poll.durationDays === 1 ? '' : 's'}.`
+        : content.mediaRefs.length > 0 ? `3. Attach the ${content.mediaRefs.length} media item(s) listed, in order.` : '3. No media to attach.',
       content.linkUrl
         ? (caps.linkBehavior === 'no_clickable_links'
           ? `4. Put the link in the bio or a first comment (links are not clickable in ${caps.displayName} captions): ${content.linkUrl}`
@@ -88,6 +92,7 @@ export class HandoffAdapter implements SocialProviderAdapter {
       linkUrl: content.linkUrl,
       disclosureText: content.disclosureText,
       mediaRefs: content.mediaRefs,
+      poll: content.poll,
       instructions: steps.join('\n'),
     };
   }

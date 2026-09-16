@@ -3,6 +3,7 @@ import type { ProviderKey, ContentType } from '../publishing/providerCapabilitie
 import { PROVIDER_KEYS } from '../publishing/providerCapabilities';
 import { applyEdit, fingerprint, generateVariants, revertToGenerated, type Variant } from './composerVariants';
 import { validateSubmission, type MediaFacts, type SubmissionValidation } from './composerValidation';
+import { pollFromMetadata } from './pollSpec';
 import { checkContentForBrand } from './brandGovernanceService';
 import type { GovernanceResult } from './brandGovernance';
 import { assertWritable, WorkflowError, type Actor } from './contentWorkflowService';
@@ -167,6 +168,7 @@ export async function validateItem(itemId: string): Promise<ItemValidation> {
   const canonical = item.canonical_body ?? '';
   const { rows, variants } = await loadVariants(itemId, canonical);
   const media = await loadMediaFacts(itemId);
+  const poll = pollFromMetadata(item.metadata);
 
   const providers = validateSubmission(variants, (provider) => {
     const row = rows.find((r) => r.provider === provider);
@@ -175,6 +177,7 @@ export async function validateItem(itemId: string): Promise<ItemValidation> {
       contentType: item.content_type as ContentType,
       mediaCount: media.length,
       media,
+      poll,
       links: text.match(URL_RE) ?? [],
     };
   });
