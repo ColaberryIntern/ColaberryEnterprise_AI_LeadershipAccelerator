@@ -132,3 +132,43 @@ The revision splits into record edits (live already) and page changes (this PR).
     is already approved, so the Studio's only approve control can no-op; a whole-section
     `identity` override pins the consent flags, so a consent edit in the Studio never
     reaches a snapshot until the override is refreshed.
+
+## Revision 3 (the measured outcome, 2026-09-16)
+
+Ali supplied the recap engine's production host (Hetzner CPX22, 204.168.245.238). Access:
+one root-password reset through the Hetzner console (no reboot, no container touched),
+our SSH key appended beside Kes's in `/root/.ssh/authorized_keys`, Kes told by Basecamp
+ping with the new password and the reason. Deployed code there is `a54d163` (2026-09-15),
+four months past the record's pinned commit.
+
+- [x] Six read-only measurements on the production audit table, on the record as verified metrics
+  - Date: 2026-09-16
+  - Session: CC-20260915-a1x7
+  - What changed: evidence row `8936f96c…` (`internal_measurement`, method in the
+    description); snapshots v20-v26 by override. Hero: `missing_events_resolved`, ratio
+    586 of 604 (97%), baseline 245 of 533 (46%) repaired by script during the incident.
+    Supporting: `missing_event_rate` 604 of 14,510 (4.2%) from 533 of 1,644 (32%);
+    `recovery_automatic_share` 334 of 347 (96%); `time_to_recovery` median 34 min, p90
+    47 min (n=295); `replay_safety` 0 duplicate call records in 339 recovered calls, 4
+    duplicate CRM tasks all from operator replays on 2026-04-30/05-01, 0 of 334 automatic;
+    `lead_continuation` 304 of 334 (91%). Measurement narrative now opens "Evidence
+    maturity: measured outcome"; situation tail carries the incident count; roadmap:
+    stuck-call recovery marked shipped 2026-09-10 (after the pinned commit; 289 of the 301
+    recoveries came through it), recovery counts marked shipped via the audit table.
+    Walkthrough rebuilt: slides 8 and 9 now carry 97% / 34 min / 0 and the before-after;
+    94.34 s by ffprobe, md5 `64edcd90c3aca2f56c4339c722332158`, 10 cues.
+  - Verification: queries in `cora_measure.sql` (scratch), run in a `default_transaction_read_only`
+    session; the denominators mirror `webhook_recovery_jobs.py`'s detection query. Gate:
+    first pass refused with `unverified_claim` ("4.2%" in prose with no metric carrying it),
+    which is why `missing_event_rate` exists; second pass allowed on all three surfaces,
+    readiness 100/100, publications re-pinned to v26, live API and page checked (one hero
+    card, no errors, no overflow).
+  - Notes:
+    1. Overrides go live on a published record only when the gate passes; the refused pass
+       left the publications on v19. Corrects the note in revision 2.
+    2. Two anomalies found and kept out of the figures: recovery rows attach to contacts,
+       so a contact launched twice can pair a later recovery with an earlier launch
+       (max time-to-recovery of 134 days is that artefact; medians reported); and the
+       operator replayed one call seven times in the first two days (13 rows, 5 calls).
+    3. Not measured: what a recovered lead did next commercially; duplicates in systems
+       outside this database (the CRM itself, outbound messages).
