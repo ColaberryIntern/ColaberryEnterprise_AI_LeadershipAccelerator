@@ -3,7 +3,8 @@ import { PageHeader, SectionCard, StatusBadge } from '../../components/admin/she
 import {
   ApplicationDetail, QueueBucket, QueueResponse, ReviewerDecision,
   ApplicantAssessment, AssessmentRecommendation, RequirementStatus,
-  assessInternshipApplication,
+  InternActivity,
+  assessInternshipApplication, fetchInternshipActivity,
   decideInternshipApplication, fetchInternshipApplication, fetchInternshipQueue,
 } from '../../services/adminInternshipApi';
 import { InternshipKpi, fetchInternshipKpis } from '../../services/adminInternshipApi';
@@ -79,6 +80,9 @@ const AdminInternshipPage: React.FC = () => {
   const [assessing, setAssessing] = useState(false);
   const [assessError, setAssessError] = useState<string | null>(null);
 
+  const [activity, setActivity] = useState<InternActivity | null>(null);
+  const [activityError, setActivityError] = useState<string | null>(null);
+
   const [decision, setDecision] = useState<ReviewerDecision>('approve');
   const [reasonCode, setReasonCode] = useState('');
   const [studentMessage, setStudentMessage] = useState('');
@@ -129,6 +133,12 @@ const AdminInternshipPage: React.FC = () => {
       // one whenever a different application is opened.
       setAssessment(null);
       setAssessError(null);
+      // Activity is read-only and cheap, so load it eagerly for the opened intern.
+      setActivity(null);
+      setActivityError(null);
+      fetchInternshipActivity(id)
+        .then(setActivity)
+        .catch(() => setActivityError('Could not load the intern activity.'));
     } catch {
       setDetail(null);
       setDetailError('Could not load this application.');
@@ -468,6 +478,111 @@ const AdminInternshipPage: React.FC = () => {
                     </ul>
                   </div>
                 )}
+              </div>
+            )}
+          </SectionCard>
+
+          {/* ACTIVITY — what the intern is doing: training (weeks 1-3 gate),
+              project, cert prep, case studies. Read-only, loaded on open. */}
+          <SectionCard
+            title="Activity"
+            icon="pulse-line"
+            subtitle="Training, project, cert prep and case studies"
+          >
+            {activityError && <div className="alert alert-warning py-2 mb-2" role="alert">{activityError}</div>}
+            {!activity && !activityError && <p className="text-muted mb-0">Loading activity…</p>}
+            {activity && (
+              <div className="d-flex flex-column gap-3">
+                {/* Training — the first-3-weeks gate front and centre */}
+                <div>
+                  <div className="d-flex align-items-center gap-2 mb-2">
+                    <span className="text-uppercase text-muted" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.05em' }}>
+                      Training (weeks 1-3)
+                    </span>
+                    {activity.training ? (
+                      <span
+                        className="badge"
+                        style={{
+                          background: activity.training.first_three_weeks.ready ? '#2e7d5b' : '#a8690f',
+                          color: '#fff', fontSize: 11, fontWeight: 600,
+                        }}
+                      >
+                        {activity.training.first_three_weeks.ready
+                          ? 'Ready for a project'
+                          : `${activity.training.first_three_weeks.done} of ${activity.training.first_three_weeks.total} weeks done`}
+                      </span>
+                    ) : (
+                      <span className="text-muted" style={{ fontSize: 12 }}>no training data yet</span>
+                    )}
+                  </div>
+                  {activity.training && (
+                    <div className="d-flex flex-column gap-1">
+                      {activity.training.weeks
+                        .filter((w) => w.week >= 1 && w.week <= 3)
+                        .map((w) => (
+                          <div key={w.week} className="d-flex align-items-center gap-2" style={{ fontSize: 13.5 }}>
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                flex: 'none', width: 10, height: 10, borderRadius: '50%',
+                                background: w.done ? '#2e7d5b' : '#cbd5e0',
+                              }}
+                            />
+                            <span style={{ minWidth: 60 }}>Week {w.week}</span>
+                            <span className="text-muted">{w.completed}/{w.published} items ({w.completed_pct}%)</span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Project */}
+                <div>
+                  <div className="text-uppercase text-muted mb-1" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.05em' }}>
+                    Project
+                  </div>
+                  {activity.project ? (
+                    <div style={{ fontSize: 13.5 }}>
+                      <strong>{activity.project.name}</strong>
+                      <span className="text-muted"> · {activity.project.stage ?? 'no stage'}</span>
+                      <div className="text-muted">
+                        {activity.project.verified_stories}/{activity.project.total_stories} stories verified
+                        {activity.project.requirements_pct != null && ` · ${activity.project.requirements_pct}% requirements`}
+                        {activity.project.repo_connected ? ' · repo connected' : ' · no repo yet'}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-muted" style={{ fontSize: 13.5 }}>No project assigned yet.</span>
+                  )}
+                </div>
+
+                {/* Cert prep + case studies, side by side on wide screens */}
+                <div className="d-flex flex-wrap gap-4">
+                  <div>
+                    <div className="text-uppercase text-muted mb-1" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.05em' }}>
+                      Cert prep
+                    </div>
+                    <span style={{ fontSize: 13.5 }}>
+                      {activity.cert_prep
+                        ? `${activity.cert_prep.state.replace(/_/g, ' ')}${activity.cert_prep.overall_scaled != null ? ` · ${activity.cert_prep.overall_scaled}` : ''}`
+                        : <span className="text-muted">Not measured yet.</span>}
+                    </span>
+                  </div>
+                  <div>
+                    <div className="text-uppercase text-muted mb-1" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.05em' }}>
+                      Case studies
+                    </div>
+                    {activity.case_studies.length === 0
+                      ? <span className="text-muted" style={{ fontSize: 13.5 }}>None yet.</span>
+                      : (
+                        <ul className="mb-0" style={{ fontSize: 13.5 }}>
+                          {activity.case_studies.map((c) => (
+                            <li key={c.id}>{c.title} <span className="text-muted">({c.status})</span></li>
+                          ))}
+                        </ul>
+                      )}
+                  </div>
+                </div>
               </div>
             )}
           </SectionCard>
