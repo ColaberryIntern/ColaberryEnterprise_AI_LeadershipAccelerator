@@ -126,6 +126,58 @@ describe('getAgentDetail', () => {
     expect(result!.agent.autonomy_level_set_at).toEqual(setAt);
   });
 
+  // Fleet-wide autonomy-level auto-classification, Phase 2 (2026-09-14) —
+  // real autonomy_level_source values pass through verbatim, and an agent
+  // nobody has ever classified reads as an honest null, never a fabricated
+  // 'manual'.
+  it('agent.autonomy_level_source passes through the real value, or null when never classified', async () => {
+    mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, autonomy_level_source: 'auto' });
+    const result = await getAgentDetail('agent-1');
+    expect(result!.agent.autonomy_level_source).toBe('auto');
+
+    mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, autonomy_level_source: undefined });
+    const result2 = await getAgentDetail('agent-1');
+    expect(result2!.agent.autonomy_level_source).toBeNull();
+  });
+
+  // UI follow-up to fleet-wide autonomy classification (2026-09-15) — Ali:
+  // "why give the user the ability to change it... we might as well set the
+  // default and color coordinate it and have a popup that explains why it
+  // has been given this autonomy level." autonomy_explanation is computed
+  // LIVE against the agent's CURRENT tools_granted on every call (the same
+  // pure classifyAgentAutonomyLevel() the fleet backfill script and the
+  // ongoing-sync service both call) — never a stored, staleness-prone value.
+  it('autonomy_explanation reflects the real, LIVE classification of this agent\'s CURRENT tools_granted — reeseAgent\'s real respond_to_dm classifies as communicate', async () => {
+    const result = await getAgentDetail('agent-1'); // reeseAgent fixture: tools_granted: ['respond_to_dm']
+
+    expect(result!.autonomy_explanation.level).toBe('communicate');
+    expect(result!.autonomy_explanation.matched_tool).toBe('respond_to_dm');
+    expect(result!.autonomy_explanation.reason).toContain('respond_to_dm');
+  });
+
+  it('autonomy_explanation is computed fresh from CURRENT tools_granted, independent of the stored autonomy_level — proves it self-corrects rather than echoing the stale stored value', async () => {
+    // Stored level says 'observe' (e.g. set by a human before this agent's
+    // tools_granted grew to include respond_to_dm) — the live explanation
+    // must reflect what the tools ACTUALLY earn today, not the stale stored
+    // value, so the frontend can detect and disclose exactly this drift.
+    mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, autonomy_level: 'observe', autonomy_level_set_at: new Date('2026-01-01') });
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.agent.autonomy_level).toBe('observe');
+    expect(result!.autonomy_explanation.level).toBe('communicate');
+  });
+
+  it('autonomy_explanation honestly defaults to observe with no matched_tool when the agent has no tools_granted at all', async () => {
+    mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, tools_granted: null });
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.autonomy_explanation.level).toBe('observe');
+    expect(result!.autonomy_explanation.matched_tool).toBeNull();
+    expect(result!.autonomy_explanation.reason).toMatch(/no tools_granted/i);
+  });
+
   // Trust & Control slice 2 (2026-09-03) — an unclassified agent (the
   // common case for most of the fleet, per AiAgent.ts's own comment) must
   // read as an honest null, never a fabricated department.

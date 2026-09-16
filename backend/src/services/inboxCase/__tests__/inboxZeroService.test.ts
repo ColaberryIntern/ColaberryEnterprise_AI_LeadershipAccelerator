@@ -269,7 +269,9 @@ describe('zoom-out queue', () => {
     const dest = await getQueue('destination', NOW);
     expect(Object.fromEntries(dest.groups.map((g) => [g.key, g.count]))).toEqual({ EMAIL: 2, BASECAMP: 1, NONE: 1, UNKNOWN: 3 });
     const mailbox = await getQueue('mailbox', NOW);
-    expect(Object.fromEntries(mailbox.groups.map((g) => [g.key, g.count]))).toEqual({ gmail_colaberry: 1, hotmail: 1, basecamp: 1, none: 4 });
+    // T20: every visible case has an email item, so every case lands in a real
+    // mailbox group; "basecamp" is no longer a mailbox and "none" cannot happen.
+    expect(Object.fromEntries(mailbox.groups.map((g) => [g.key, g.count]))).toEqual({ gmail_colaberry: 5, hotmail: 2 });
     const owner = await getQueue('owner', NOW);
     expect(Object.fromEntries(owner.groups.map((g) => [g.key, g.count]))).toEqual({ Ali: 5, 'waiting on sender': 2 });
     const due = await getQueue('due', NOW);

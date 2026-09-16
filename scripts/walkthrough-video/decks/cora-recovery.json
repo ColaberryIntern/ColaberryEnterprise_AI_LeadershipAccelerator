@@ -1,0 +1,94 @@
+{
+  "slug": "recovering-the-calls-the-workflow-lost",
+  "output": "cora-recovery-walkthrough.mp4",
+  "slides": [
+    {
+      "kind": "title",
+      "seconds": 6,
+      "title": "Recovering the Calls the Workflow Lost",
+      "subtitle": "Cora Recap Engine  ·  an operational AI system",
+      "caption": "A voice call could finish while the event saying so never arrived. The pipeline did not know."
+    },
+    {
+      "kind": "title",
+      "seconds": 8,
+      "title": "The failure was silence.",
+      "subtitle": "A completed launch, no completion event, no result on the lead.",
+      "caption": "In late April a burst of calls overwhelmed event delivery. The calls happened. The pipeline lost track of what they produced."
+    },
+    {
+      "kind": "title",
+      "seconds": 7,
+      "title": "The first repair was a script.",
+      "subtitle": "An engineer replayed affected contacts from a CSV, two days running.",
+      "caption": "It worked, it did not scale, and it left nothing an operator could see the next morning."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 9,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-01-wt/frontend/public/site-v2/shot-cora-recovery-panel.png",
+      "caption": "A completed launch with no completion event is a failure. The panel lists each one with four ways to resolve it."
+    },
+    {
+      "kind": "diagram",
+      "seconds": 9,
+      "path": "C:/Users/ali_m/AppData/Local/Temp/claude/c--Users-ali-m-OneDrive-Business-Colaberry-Novedea-AI-Projects-Colaberry-Enterprise-AI-Leadership-Accelerator-docs/06248086-6cad-4632-a0d4-9bf2eb506699/scratchpad/diagram-cora-recovery.png",
+      "phases": [
+        "Detect the gap",
+        "Fetch the source call",
+        "Normalise it",
+        "Replay the pipeline",
+        "Deduplicate",
+        "Record the recovery"
+      ],
+      "caption": "A recovered result is fetched from the source, normalised with the worker's own logic, and replayed through the same pipeline as a live event."
+    },
+    {
+      "kind": "title",
+      "seconds": 8,
+      "title": "Replay cannot do the work twice.",
+      "subtitle": "A unique key on call events, and an audit row every path reads.",
+      "caption": "A replay of an event that did arrive reuses the existing record, and a resolved case is not recovered or alerted again."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 7,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-01-wt/frontend/public/site-v2/shot-cora-operations-cards.png",
+      "caption": "The dashboard card carries the delivery percentage, so a quiet system and a lost event no longer look the same."
+    },
+    {
+      "kind": "cards",
+      "seconds": 8,
+      "rows": [
+        [
+          "5",
+          "recovery paths, from none in the product"
+        ],
+        [
+          "19",
+          "test cases exercise the recovery behaviour, in 4 files"
+        ],
+        [
+          "53",
+          "commits over 5 days"
+        ]
+      ],
+      "accent_index": 0,
+      "caption": "Five ways to recover a lost event where there had been a script, built in five days, with the automatic path under test."
+    },
+    {
+      "kind": "title",
+      "seconds": 8,
+      "title": "What the repository does not prove.",
+      "subtitle": "No count of events lost or recovered is persisted.",
+      "caption": "This record measures the mechanism, not the outcome. The audit table could answer that with one query; nobody has run it yet."
+    },
+    {
+      "kind": "title",
+      "seconds": 6,
+      "title": "Colaberry  ·  Case Study",
+      "subtitle": "Built with an AI coding assistant. Verified from commits.",
+      "caption": "Every claim on this page is pinned to a commit. Every figure spoken here is on the page underneath."
+    }
+  ]
+}

@@ -233,6 +233,30 @@ up as outcomes.
 **`baseline: "n/a"` is the tell.** When you write it you have just built a scale metric.
 That is fine once; if it is true of every card, the set is wrong.
 
+**THIS IS NOW A GATE RULE, NOT ADVICE.** It was advice for months and the library drifted
+anyway: on 2026-09-12 all fourteen published figures across the three live records were
+scale metrics, and three of them were deficiencies standing in the slot a reader reads as
+the result — 0.7% test coverage, 16% test files, and a commit cadence under four a week.
+The hero row was cleared on all three, and two blockers now stop it recurring:
+
+| code | fires when |
+|---|---|
+| `headline_metric_is_a_bare_count` | a headline figure has no `ratio`/`share`/`series` shape, no two-ended `span`, and no stated `measurement.baseline` |
+| `headline_metric_missing_plain_answers` | a headline figure is comparative but does not carry all three of §5b |
+
+A scale metric is still perfectly publishable **in the measurement section**, which is
+where "we built eight agents" is an honest thing to say. The rule only governs the hero.
+
+**An empty hero row is allowed and is often the right answer.** The public strip renders
+without it, falling back to the facts and indicators, and a record that opens with no
+figure reads better than one that opens with an inventory. If the work has no comparison
+to show, show none and say why in the measurement narrative.
+
+The second rule is the one that catches a bad figure the first cannot. A machine cannot
+tell pride from embarrassment, so it does not try; it asks the author to write "what this
+does not tell you" beside the number. Writing that line about one file in a hundred and
+forty-two is usually enough to stop the card.
+
 ### 5b. Plain language: the three answers every figure owes a reader
 
 A shaped metric renders three short blocks under its picture, and they are written by a
@@ -533,6 +557,72 @@ alone does not put it on the page — **and set `identity.heroImageUrl` to the c
 
 ---
 
+### 8a. What the builder already made beats anything you can produce
+
+The rule above is about pictures. It generalises, and it is the more important half:
+**search the repository for what the builder actually produced before you create,
+generate, or commission anything.** A case study about someone's work that illustrates
+itself with our own output is a case study about us.
+
+**Look in `artifacts/` first.** It is one of only four paths the platform lets a build
+write to (`CLAUDE.md`, `docs/`, `.colaberry/`, `artifacts/` — see `PATH_ALLOWLIST` in
+`renderDocs.ts`), and it is the one reserved for what the build produced rather than what
+the platform wrote. It is also the folder this skill never mentioned until 2026-09-14,
+which is why builders' own output was being walked past.
+
+```bash
+ls -R <repo>/artifacts 2>/dev/null | head -40
+find <repo> -maxdepth 3 \( -name "*.pdf" -o -name "*.pptx" -o -name "*.csv" -o -name "*.ipynb" \) \
+  -not -path "*/node_modules/*" | head -20
+find <repo> -maxdepth 2 -iname "*report*" -o -maxdepth 2 -iname "*eval*" -o -maxdepth 2 -iname "*demo*" | head -20
+```
+
+Anything found maps to a real `artifact_type`, and the set is wider than screenshots:
+`screenshot, architecture, photo, demo, deck, roadmap, report, evaluation, code,
+document, other`. A learner's evaluation notebook is an `evaluation`. Their slide deck is
+a `deck`. Their exported results are a `report`. Each is stronger on the record than
+anything generated, because the builder made it while doing the work.
+
+Set `source_type: 'repo'` and `source_commit_sha` on anything taken this way, so the
+record states which commit it came from and a reader can go and look.
+
+### Does it make sense? Three questions, all of which must pass
+
+Finding an artifact is not a reason to publish it. Ask, in this order:
+
+1. **Does it show the work, or does it show the tooling?** A screenshot of the running
+   system, an evaluation of its outputs, a deck presenting it: these show the work. A
+   `package.json`, a CI badge, a folder listing: these show that software exists.
+2. **Would it mean anything to someone who did not build it?** An architecture diagram
+   usually survives this. A raw log file usually does not. The test is the same one the
+   metrics learned on 2026-09-13: a thing that only the builder can read is inventory,
+   whatever format it is in.
+3. **Is it honest at the moment it is shown?** An empty state, a half-seeded dashboard, a
+   demo pointing at a dead endpoint — all real, all in the repo, all misleading on a
+   record. Nine CoreOps tabs were captured and four were honest empty states; the useful
+   one had six times the text of the tab captured first.
+
+A found artifact that fails any of the three is left where it is. **Nothing is better than
+something that does not make sense** — the same standing rule the hero row learned.
+
+### Two things that will bite
+
+**Promotion is a button, and a candidate is invisible until you press it.** Approve an
+artifact on the Studio's **Visuals** tab ("Approve + publish"), which calls
+`PATCH /api/admin/case-studies/:id/artifacts/:artifactId` and sets `status: 'approved'`,
+`visibility: 'public'` in one idempotent write. Nothing else moves an artifact off
+`candidate`, and `projectArtifacts` silently drops anything that is not approved, so a
+record can carry sixty candidates and render none. (This section said on 2026-09-14 that
+the promotion path had no caller. It did; the file's header describes the gap it was
+written to close, not the present. Read headers here as dates, not status.)
+
+**A private repo is a publish blocker, not a warning.** An artifact whose `public_url`
+points into a private repository trips `private_repo_exposed` at the gate. Check the
+repository's visibility before promoting anything that links into it, rather than at
+publish time when the refusal costs a round trip.
+
+---
+
 ## 8b. Open the page and look at it
 
 A record can pass every gate in this file and still be wrong on screen. Ali's ruling
@@ -797,6 +887,132 @@ that is not in your draft — approving the current snapshot clears them.
 Blockers naming `case_study_not_approved` and `snapshot_not_approved` are the **intended
 resting state** for an unpublished draft.
 
+### A record about a student project carries that project's maturity
+
+Two blockers were added on 2026-09-11. They fire when the record is **about a student
+project**, which the gate establishes two ways: `case_studies.project_id` is set, or the
+record has no `project_id` and one of its cited repositories belongs to a student project
+(a stored `project_id` on the repository row, or an owner/name match in
+`github_connections`). The second route was added on 2026-09-14 because until then
+`from-repositories` skipped the rule entirely, and one live record cited a student's
+connected repository that way. A record whose repositories belong to no student project
+(the enterprise repo, a stranger's repo) never sees them, which is why the library of
+records about our own work was unaffected. When several projects resolve, the least
+mature and the most unsettled decide.
+
+| code | what it means |
+|---|---|
+| `maturity_below_operational_result` | Nothing has been measured in real use, so this is a build record or a demonstration, not a case study. |
+| `project_truth_has_open_questions` | A story found something that disagrees with what the student confirmed, and nobody settled it. The project's truth disagrees with itself. |
+
+**The ladder is computed on every read and is never stored**, so no column edit can
+promote a record:
+
+```
+story_hypothesis          an interview happened; nothing built
+build_record              a story verified from the repo, or a story that reported what it built
+capability_demonstration  a verified story AND something it points at as "watch it work"
+operational_result        NOT REACHABLE from a build. Needs an outcome measured in use.
+impact_case_study         NOT REACHABLE from a build. Needs that, confirmed by the client.
+```
+
+`computeMaturity` cannot return the bottom two rungs of that list. That is deliberate: the
+line between "we finished building it" and "it worked for someone" is drawn in code
+rather than left to an author's judgement, and the publish gate refuses everything below
+`operational_result`.
+
+**So a passing build is not a case study.** If the linked project has no measured outcome,
+do not try to write around the blocker. Either the outcome exists and belongs on the
+record as a verified metric, or the record is a build story and stays unpublished.
+
+### Read the foundation before you author a linked record
+
+```
+GET /api/portal/sbp/intake/:projectId/case-study-foundation
+```
+
+Read-only, participant-scoped, and it answers `publishable: false` on the wire because
+nothing on the student side can publish. It returns four sections that must **stay apart**
+in whatever you write:
+
+| section | what it holds | where it comes from |
+|---|---|---|
+| `hypothesis` | what the student SAID they would build | the project's truth revision |
+| `buildEvidence` | what the stories SHOWED | `repo_evidence` facts, plus a per-story ledger |
+| `demonstrationEvidence` | what a story POINTED AT | a test, a file, a URL |
+| `outcomeEvidence` | what was MEASURED in use | **empty by construction** until an approved measurement definition exists |
+
+It also carries `maturityReason` and `nextRungNeeds` in plain words, which is the fastest
+honest answer to "why can I not publish this yet".
+
+**Blurring those four is how "the tests pass" becomes "the client saved 40%".** A repo can
+prove what was built; it cannot prove what the business wanted, what hurt before, or what
+success meant. The truth contract refuses `repo_evidence` outright on `success_definition`,
+`desired_outcome` and `pain_points` for exactly that reason, so a fact filed under those
+dimensions came from a person, never from a commit.
+
+---
+
+## Hardening — what is prevented, and what is only remembered
+
+Audited 2026-09-13 against the source, not from memory. **19 blocker codes** run on
+every publish, and every path to a live page goes through them: `publishCaseStudy` is
+called from exactly two places, `caseStudyAdminRoutes` and `caseStudyAdminReview`, and
+nothing writes `case_study_publications` directly. The gate runs on a repeat publish of
+an already-live record too, so consent withdrawn between two clicks is caught.
+
+### Prevented in code
+
+| Failure | The guard |
+|---|---|
+| A record goes live on a surface it was never meant for | `surface_not_publishable`, checked before anything else |
+| A draft or an unapproved snapshot reaches a reader | `case_study_not_approved`, `snapshot_not_approved` — the intended resting state of a draft |
+| An organisation or a builder is named without consent | `organization_consent`, `builder_consent`, checked against the record row AND the snapshot, which must agree |
+| A private repository is exposed | `private_repo_exposed` on the structured path, and again on identifiers typed into prose |
+| A figure claims "verified" on the strength of a self-report | `self_attested_verification` |
+| A "verified" figure has no evidence behind it | `proof_metadata_missing`, which also demands a baseline, sample or methodology |
+| A metric nobody has verified is on the page | `metric_pending`, applied only to figures a human promoted with `publishable` |
+| A model's words are published as a quotation | `ai_generated_quote` |
+| An outcome or ROI claim appears in prose with no metric behind it | `unverified_claim` |
+| A shaped figure disagrees with itself | `metric_shape_payload_mismatch`, `metric_ratio_missing_denominator`, `metric_members_count_mismatch` |
+| A figure is computed at a commit the record is not pinned to | `metric_collected_sha_mismatch` |
+| A build record is published as a case study | `maturity_below_operational_result` — on a record linked to a student project, or one whose cited repository belongs to one |
+| A record is published while the project's truth contradicts itself | `project_truth_has_open_questions` |
+| An inventory count stands in the headline | `headline_metric_is_a_bare_count` |
+| A headline figure never says what it does not tell you | `headline_metric_missing_plain_answers` |
+| A new blocker ships with nothing that triggers it | The coverage sweep in `caseStudyPublicationService.test.ts` asserts every declared code is emitted by some fixture, and fails CI otherwise |
+| A blocker an admin cannot act on | Every blocker must carry a field, a remedy, and a message that is not the code restated. Also a test |
+| A high readiness score authorising a publish | Readiness is advisory and reported beside the decision, never consulted by it. There is a test named for it |
+
+### Prevented only by someone remembering — the useful half
+
+> §5a lived here for months. "At least one metric must COMPARE, not just COUNT" was
+> true, written down, and enforced by nothing, so the readiness score went up while the
+> card row stayed wrong. It moved into the table above on 2026-09-13, after all fourteen
+> published figures on the three live records turned out to be inventory. That is what
+> this list is for: everything below can drift the same way.
+
+1. **Whether the record is worth publishing at all.** The gate can prove a figure
+   contradicts itself. It cannot tell you the story is dull, the narrative is padded, or
+   that the record answers a question nobody asked. On 2026-09-13 a set of figures
+   measuring the platform's own task-auditing passed every rule here and was still
+   wrong, because nothing in code asks "would a reader care".
+2. **The cover image, and every other image.** §8 says start them on day one. The gate
+   contains zero references to images; a record with none publishes cleanly.
+3. **The walkthrough video.** §8c says every record gets one. Nothing enforces it, and
+   nothing checks that what the narration counts still exists on the page — the caption
+   promised "the verified metrics recorded below" on three records that had none until
+   the string was made conditional on 2026-09-13.
+4. **Looking at the rendered page.** §8b exists because six layout failures shipped past
+   green tests. No rule can replace opening it.
+5. **Diagrams with no angle brackets** (§7), **whole-section authoring** (§3), and
+   **working the entire candidate list** (§5). All three are prose.
+6. **That a record with no figures says why.** Removing a bad card is enforced; writing
+   the sentence that explains the silence is not.
+
+**When you add a rule here, decide which half it belongs in before you write it.** A rule
+in the second half is a rule with a half-life.
+
 ---
 
 ## 11. Verify, then report with denominators
@@ -814,6 +1030,10 @@ resting state** for an unpublished draft.
   block matters.
 - **Every collected metric has exactly one evidence row**, written by the sync. Two rows
   for one figure can disagree.
+- **If the record is linked to a project**, run the gate and read the two maturity
+  blockers as answers rather than obstacles: below `operational_result` means no outcome
+  has been measured, and an open question means the project's truth contradicts itself.
+  Neither is cleared by editing the case study.
 - Regression: other records unchanged, public index count, `/case-studies` and
   `/demo-day` redirects.
 

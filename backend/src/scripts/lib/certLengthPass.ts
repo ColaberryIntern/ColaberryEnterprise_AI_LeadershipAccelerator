@@ -1,7 +1,7 @@
 import { lengthPlan, stripOptionLabels, LengthPlan } from '../../services/certPrep/certOptionLength';
 import { lengthenDistractor } from '../../services/certPrep/certDistractorLengthener';
 import { ImproverItem } from '../../services/certPrep/certQuestionImprover';
-import { triageQuestion } from '../../services/certPrep/certQuestionTriage';
+import { reviewQuestion } from '../../services/certPrep/certQuestionTriage';
 import { TriageResult } from '../../services/certPrep/triageTypes';
 
 /**
@@ -40,14 +40,15 @@ export async function passItem(input: ImproverItem): Promise<PassOutcome> {
   if (out.status !== 'lengthened') {
     const why = out.status === 'failed' ? `${out.error_class}: ${out.message}`
       : out.status === 'out_of_bounds' ? `got ${out.got}, wanted ${out.min}-${out.max}`
-        : out.status === 'invariant_violated' ? out.reason
-          : `rubric ${out.before} -> ${out.after}`;
+        : out.status === 'not_an_extension' ? out.reason
+          : out.status === 'invariant_violated' ? out.reason
+            : `rubric ${out.before} -> ${out.after}`;
     return { status: 'refused', plan, why: `${out.status}: ${why}` };
   }
 
   // The lengthener cannot tell whether the added detail made the distractor
   // arguable. The triage can, and a high-severity concern is a discard.
-  const triage = await triageQuestion({
+  const triage = await reviewQuestion({
     question_key: out.item.question_key,
     stem: out.item.stem,
     options: out.item.options,

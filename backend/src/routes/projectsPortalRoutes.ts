@@ -181,6 +181,28 @@ router.patch('/api/portal/projects/tasks/by-story/:storyId', requireParticipant,
   } catch (e) { fail(res, e, next); }
 });
 
+// Submit the evidence a demo-prep task asks for (PREP-1…5). This is NOT a way
+// around the completion guard above: the submission IS the evidence — stored on
+// the row, openable by a reviewer — and the service refuses stories (verified
+// from the repo) and Demo Day (marked by staff). 422 says what was wrong with
+// the evidence, so the student can fix it rather than guess.
+const demoEvidenceSchema = z.object({
+  kind: z.enum(['link', 'text']),
+  value: z.string().trim().min(1).max(5000),
+});
+router.post('/api/portal/projects/:projectId/tasks/:taskKey/demo-evidence', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const input = demoEvidenceSchema.parse(req.body || {});
+    // Dynamic, like the other service imports in this file: the evidence service
+    // pulls in the points model, and this router must stay importable without it.
+    const { submitDemoEvidence } = await import('../services/projects/demoEvidenceService');
+    const r = await submitDemoEvidence(eid(req), String(req.params.projectId), String(req.params.taskKey), input);
+    if (!r) return res.status(404).json({ error: 'Task not found' });
+    res.json(r);
+  } catch (e) { fail(res, e, next); }
+});
+
 // One-time migration: import the client (localStorage) project into the backend.
 router.post('/api/portal/projects/import', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
   try {

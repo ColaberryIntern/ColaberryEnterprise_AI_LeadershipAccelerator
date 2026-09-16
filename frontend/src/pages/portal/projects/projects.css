@@ -643,3 +643,20 @@
 .pjs-hint{font-size:12px;color:var(--text-muted);line-height:1.45}
 .pjs-refusal{margin-top:12px}
 .pjs-violations{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.5;color:var(--text-strong)}
+
+/* ── Repo write access (RepoWriteAccessBanner) ───────────────────────────── */
+/* Amber, not red: nothing the student did is wrong and nothing is lost. The
+   platform simply cannot write, and the fix is three clicks on GitHub. */
+.pjw-banner{margin:0 0 16px;padding:16px 18px 14px;border:1px solid #E8920C;border-left-width:4px;
+  border-radius:var(--r-16);background:var(--surface-page);box-shadow:var(--shadow-sm)}
+.pjw-head{display:flex;gap:12px;align-items:flex-start}
+.pjw-icon{flex:none;width:22px;height:22px;color:#B8700A;margin-top:2px}
+.pjw-icon svg{width:22px;height:22px}
+.pjw-head h3{margin:0 0 6px;font-size:15px;color:var(--text-strong)}
+.pjw-head p{margin:0;font-size:13.5px;line-height:1.5;color:var(--text-muted)}
+.pjw-steps{margin:12px 0 0;padding-left:22px;font-size:13.5px;line-height:1.6;color:var(--text-strong)}
+.pjw-steps li{margin:4px 0}
+.pjw-steps a{color:var(--berry);font-weight:600}
+.pjw-steps code{font-family:var(--mono);font-size:12.5px;background:var(--surface-sunken,#F3F4F6);padding:1px 6px;border-radius:6px}
+.pjw-note{margin:10px 0 0;font-size:12.5px;line-height:1.45;color:var(--text-muted)}
+.pjw-actions{margin-top:12px}

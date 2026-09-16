@@ -3,6 +3,7 @@
 // and which a bank-level audit has no business needing.
 import { scoreItem, RubricItem, achievableScore } from './certQuestionRubric';
 import { hasOptionLabel } from './certOptionLength';
+
 import { MOCK_DEMAND } from '../../data/certBlueprints/items';
 import { CCAR_FOUNDATIONS_BLUEPRINT } from '../../data/certBlueprints/ccarFoundations';
 
@@ -199,6 +200,24 @@ export function auditBank(items: BankItem[]): BankAudit {
     pass: labelled.length === 0, measured: labelled.length, threshold: 0,
     note: labelled.length === 0 ? 'No option begins with a letter label.'
       : `${labelled.length} item(s) have an option beginning with a letter label (${labelled.slice(0, 5).map((i) => i.question_key).join(', ')}). Run balanceCertOptionLengths.`,
+  });
+
+  // ── punctuation inside an item ───────────────────────────────────────────
+  // The two halves of the bank end their options differently - the authored
+  // items have no full stop, the generated ones do - and that is a house style,
+  // not a defect. What IS a defect is an item where some options end one way
+  // and some the other: the odd one out is the one an editor touched, which
+  // points at it exactly the way a letter label does. The authored length pass
+  // would have added a full stop to 15 options whose three siblings had none.
+  const mixedPunct = items.filter((i) => {
+    const ends = (i.options ?? []).map((o) => /[.]$/.test((o.text ?? '').trim()));
+    return ends.length > 1 && ends.some(Boolean) && !ends.every(Boolean);
+  });
+  checks.push({
+    id: 'option_punctuation', label: 'Options within an item end alike', severity: 'hard',
+    pass: mixedPunct.length === 0, measured: mixedPunct.length, threshold: 0,
+    note: mixedPunct.length === 0 ? 'Every item is internally consistent.'
+      : `${mixedPunct.length} item(s) mix options that end with a full stop and options that do not (${mixedPunct.slice(0, 5).map((i) => i.question_key).join(', ')}).`,
   });
 
   // ── length cue ───────────────────────────────────────────────────────────

@@ -36,12 +36,43 @@ export interface SubmissionValidation {
   blockers: VariantProblem[];
 }
 
+/** What is known about one attachment without opening it: what the upload step recorded. */
+export interface MediaFacts {
+  mimeType: string;
+  byteSize: number | null;
+  /** Display size, rotation applied. */
+  width: number | null;
+  height: number | null;
+  durationMs: number | null;
+  /** h264, h265, av1, vp9 ... for video; null for images. */
+  codecFamily: string | null;
+}
+
 export interface VariantContext {
   contentType: ContentType;
   mediaCount: number;
+  /** One entry per attachment, in order. `mediaCount` must equal its length when present. */
+  media?: readonly MediaFacts[];
   /** Absolute URLs referenced by the variant text. */
   links: readonly string[];
 }
+
+/**
+ * Aspect ratios in providerCapabilities are written as "9:16", "1.91:1". A clip is accepted
+ * when it is within 2% of any of them, because encoders round (1080x1920 is 9:16 exactly,
+ * 1080x1350 is 4:5, but 1080x1349 also exists and no one meant it).
+ */
+export function matchesAspect(width: number, height: number, allowed: readonly string[]): boolean {
+  const ratio = width / height;
+  return allowed.some((spec) => {
+    const [w, h] = spec.split(':').map(Number);
+    if (!w || !h) return false;
+    return Math.abs(ratio - w / h) / (w / h) <= 0.02;
+  });
+}
+
+function mb(bytes: number): string { return `${(bytes / 1024 / 1024).toFixed(1)} MB`; }
+function secs(ms: number): string { return ms >= 60_000 ? `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s` : `${Math.round(ms / 1000)}s`; }
 
 function countHashtags(text: string): number {
   return (text.match(/(^|\s)#[\p{L}\p{N}_]+/gu) ?? []).length;
@@ -103,6 +134,38 @@ export function validateVariant(variant: Variant, ctx: VariantContext, now: numb
     }
   } else if ((ctx.contentType === 'image' || ctx.contentType === 'video' || ctx.contentType === 'carousel')) {
     problems.push({ provider: variant.provider, field: 'media', severity: 'block', message: `${name}: a ${ctx.contentType} post needs at least one media item.` });
+  }
+
+  // ── Each attachment against the network's rules ───────────────────────────────────────────
+  // Only what the upload recorded; nothing is opened here. A null fact is skipped, not failed:
+  // an older row with no duration is a gap in evidence, not a rule broken.
+  for (const m of ctx.media ?? []) {
+    const isVideo = m.mimeType.startsWith('video/');
+    const rule = isVideo ? caps.video : caps.image;
+    if (!rule) {
+      problems.push({ provider: variant.provider, field: 'media', severity: 'block', message: `${name} does not accept ${isVideo ? 'video' : 'images'}.` });
+      continue;
+    }
+    if (m.byteSize !== null && m.byteSize > rule.maxSizeMb * 1024 * 1024) {
+      problems.push({ provider: variant.provider, field: 'media', severity: 'block', message: `${name}: ${isVideo ? 'video' : 'image'} is ${mb(m.byteSize)}, limit ${rule.maxSizeMb} MB.` });
+    }
+    if (isVideo && caps.video) {
+      if (m.durationMs !== null && m.durationMs > caps.video.maxDurationSec * 1000) {
+        problems.push({ provider: variant.provider, field: 'media', severity: 'block', message: `${name}: video is ${secs(m.durationMs)}, limit ${secs(caps.video.maxDurationSec * 1000)}.` });
+      }
+      if (m.codecFamily !== null && !caps.video.codecs.includes(m.codecFamily)) {
+        problems.push({ provider: variant.provider, field: 'media', severity: 'block', message: `${name}: video is ${m.codecFamily.toUpperCase()}; accepted: ${caps.video.codecs.map((c) => c.toUpperCase()).join(', ')}. Re-export as H.264 MP4.` });
+      }
+      if (m.width && m.height && !matchesAspect(m.width, m.height, caps.video.aspectRatios)) {
+        // A warning: networks letterbox or crop rather than refuse, but the operator should
+        // know the clip will not show the way it was cut.
+        problems.push({ provider: variant.provider, field: 'media', severity: 'warn', message: `${name}: video is ${m.width}x${m.height}; expected ${caps.video.aspectRatios.join(' or ')}. It may be cropped or letterboxed.` });
+      }
+    } else if (!isVideo && caps.image) {
+      if (m.width !== null && m.width < caps.image.minWidthPx) {
+        problems.push({ provider: variant.provider, field: 'media', severity: 'block', message: `${name}: image is ${m.width}px wide, minimum ${caps.image.minWidthPx}px.` });
+      }
+    }
   }
 
   // ── Links where they cannot be clicked ────────────────────────────────────────────────────

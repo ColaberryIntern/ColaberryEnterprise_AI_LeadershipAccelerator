@@ -177,6 +177,7 @@ describe('findRecordingForSession', () => {
       name: 'Week 1 Build Day.mp4',
       mimeType: 'video/mp4',
       sizeBytes: 900,
+      recordingType: null, // fixture files carry no recording_type, so none is recorded
     });
   });
 
@@ -206,6 +207,64 @@ describe('findRecordingForSession', () => {
   });
 });
 
+describe('pickBestMp4 (the one selector shared by the webhook and the polling backfill)', () => {
+  // Shapes taken from a real Zoom listing on 2026-09-11 ("Project Discuss"),
+  // where the account recorded compositions separately. The point of the
+  // fixture: the talking-head file is NOT always the smallest, so size alone
+  // is not a safe proxy for "the real recording".
+  const activeSpeaker = { file_type: 'MP4', file_size: 11_270_275, recording_type: 'active_speaker', download_url: 'u/speaker' };
+  const sharedScreen = { file_type: 'MP4', file_size: 14_724_726, recording_type: 'shared_screen', download_url: 'u/screen' };
+  const screenPlusSpeaker = { file_type: 'MP4', file_size: 14_776_734, recording_type: 'shared_screen_with_speaker_view', download_url: 'u/both' };
+  const chat = { file_type: 'CHAT', file_size: 5, download_url: 'u/chat' };
+
+  it('prefers a composition that contains the screen over a larger talking-head file', () => {
+    const { pickBestMp4 } = loadZoomService();
+    // Make the webcam file the biggest on purpose: the old size-only rule would have chosen it.
+    const bigWebcam = { ...activeSpeaker, file_size: 99_000_000 };
+    expect(pickBestMp4([bigWebcam, sharedScreen])?.recording_type).toBe('shared_screen');
+  });
+
+  it('prefers screen-plus-presenter over screen-only when both exist', () => {
+    const { pickBestMp4 } = loadZoomService();
+    expect(pickBestMp4([activeSpeaker, sharedScreen, screenPlusSpeaker, chat])?.recording_type)
+      .toBe('shared_screen_with_speaker_view');
+  });
+
+  it('within the same composition, still takes the largest part (pause/resume)', () => {
+    const { pickBestMp4 } = loadZoomService();
+    const part1 = { ...screenPlusSpeaker, file_size: 100, download_url: 'u/part1' };
+    const part2 = { ...screenPlusSpeaker, file_size: 900, download_url: 'u/part2' };
+    expect(pickBestMp4([part1, part2])?.download_url).toBe('u/part2');
+  });
+
+  it('falls back to largest-MP4 when Zoom sends no recording_type at all (older payloads)', () => {
+    const { pickBestMp4 } = loadZoomService();
+    const a = { file_type: 'MP4', file_size: 100, download_url: 'u/a' };
+    const b = { file_type: 'MP4', file_size: 900, download_url: 'u/b' };
+    expect(pickBestMp4([a, b])?.download_url).toBe('u/b');
+  });
+
+  it('ignores non-MP4 files and returns null when there is nothing to pick', () => {
+    const { pickBestMp4 } = loadZoomService();
+    expect(pickBestMp4([chat])).toBeNull();
+    expect(pickBestMp4([])).toBeNull();
+    expect(pickBestMp4(undefined)).toBeNull();
+  });
+
+  it('surfaces the chosen composition on the match so it can be persisted', async () => {
+    const { findRecordingByMeetingId } = loadZoomService();
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'tok-1', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({
+        meetings: [{ id: 777, topic: 'Week 7', recording_files: [activeSpeaker, screenPlusSpeaker] }],
+      })) as any;
+
+    const match = await findRecordingByMeetingId('777', '2026-09-10');
+    expect(match?.recordingType).toBe('shared_screen_with_speaker_view');
+    expect(match?.downloadUrl).toBe('u/both');
+  });
+});
+
 describe('findRecordingByMeetingId (the generic entry point behind findRecordingForSession, and used directly by ingestRecordingForBooking for general Room bookings)', () => {
   it('matches by meeting ID + a date hint with no LiveSession involved at all', async () => {
     const { findRecordingByMeetingId } = loadZoomService();
@@ -222,6 +281,7 @@ describe('findRecordingByMeetingId (the generic entry point behind findRecording
       name: 'Study Group.mp4', // Zoom's own topic wins over the fallback when present
       mimeType: 'video/mp4',
       sizeBytes: 300,
+      recordingType: null,
     });
   });
 

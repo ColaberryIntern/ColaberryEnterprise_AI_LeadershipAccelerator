@@ -87,6 +87,35 @@ describe('assignCampaignSlug', () => {
     await expect(assignCampaignSlug('camp-1')).rejects.toMatchObject({ status: 409, errorClass: 'BrandRequired' });
   });
 
+
+  it('attaches the brand the operator chose when the campaign has none, instead of dead-ending', async () => {
+    // Found on the first real run: the composer told the operator to "give the campaign a brand
+    // first" on a screen with no field for it. 8 of the 44 production campaigns are in this state.
+    const c = campaign({ brand_id: null });
+    mockCampaignFindByPk.mockResolvedValue(c);
+    mockBrandFindByPk.mockImplementation(async (id: string) => (id === 'brand-chosen' ? { id: 'brand-chosen', slug: 'colaberry-training' } : null));
+
+    const r = await assignCampaignSlug('camp-1', { brandId: 'brand-chosen' });
+
+    expect(c.update).toHaveBeenCalledWith({ brand_id: 'brand-chosen' });
+    expect(r.slug).toBe('colaberry-training-awareness-free-ai-class-all-2026q3');
+  });
+
+  it('does NOT let a supplied brand override one the campaign already has', async () => {
+    // Reassigning a campaign's brand would rewrite the attribution of everything already
+    // recorded against it. Filling a gap and overwriting a fact are different operations.
+    const c = campaign({ brand_id: 'brand-1' });
+    mockCampaignFindByPk.mockResolvedValue(c);
+    const r = await assignCampaignSlug('camp-1', { brandId: 'brand-chosen' });
+    expect(r.slug).toMatch(/^colaberry-/);
+    expect(c.update).not.toHaveBeenCalledWith(expect.objectContaining({ brand_id: 'brand-chosen' }));
+  });
+
+  it('still refuses, with an actionable message, when no brand is available at all', async () => {
+    mockCampaignFindByPk.mockResolvedValue(campaign({ brand_id: null }));
+    mockBrandFindByPk.mockResolvedValue(null);
+    await expect(assignCampaignSlug('camp-1')).rejects.toThrow(/Choose a brand in Setup/);
+  });
   it('404s an unknown campaign', async () => {
     mockCampaignFindByPk.mockResolvedValue(null);
     await expect(assignCampaignSlug('nope')).rejects.toMatchObject({ status: 404, errorClass: 'NotFound' });

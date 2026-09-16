@@ -1,5 +1,5 @@
 import { buildCaseStudyFoundation, computeMaturity, summarise } from '../caseStudyFoundation';
-import { CASE_STUDY_MATURITIES } from '../caseStudyHypothesis';
+import { CASE_STUDY_MATURITIES, HYPOTHESIS_ONLY_LIMITATION } from '../caseStudyHypothesis';
 import type { StoryEnrichmentRow } from '../storyEnrichmentLedger';
 import type { UnderstandingItem } from '../../delivery/projectUnderstanding';
 
@@ -137,6 +137,25 @@ describe('maturity is computed, and the top two rungs are unreachable', () => {
     expect(f.maturity).toBe('capability_demonstration');
     expect(f.publishable).toBe(false);
     expect(f.publicationPreference).toBe('undecided');
+  });
+
+  it('does not say "nothing here has been built" one line above a rung that says something was', () => {
+    // The first real record to reach capability_demonstration (2026-09-14)
+    // opened its limitations with the hypothesis sentence. The hypothesis
+    // SECTION keeps it, because within that section it stays true; the record
+    // does not, because the rung one line up contradicts it.
+    const built = buildCaseStudyFoundation({ items: [item()], enrichments: [withDemo()], verifiedStories: 1 });
+    expect(built.maturity).toBe('capability_demonstration');
+    expect(built.limitations.join(' ')).not.toMatch(/Nothing here has been built/);
+    expect(built.hypothesis.limitations[0]).toBe(HYPOTHESIS_ONLY_LIMITATION);
+
+    const record = buildCaseStudyFoundation({ items: [item()], enrichments: [], verifiedStories: 1 });
+    expect(record.maturity).toBe('build_record');
+    expect(record.limitations.join(' ')).not.toMatch(/Nothing here has been built/);
+
+    const nothing = buildCaseStudyFoundation({ items: [item()], enrichments: [], verifiedStories: 0 });
+    expect(nothing.maturity).toBe('story_hypothesis');
+    expect(nothing.limitations[0]).toBe(HYPOTHESIS_ONLY_LIMITATION);
   });
 });
 

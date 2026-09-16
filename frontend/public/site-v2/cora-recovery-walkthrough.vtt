@@ -1,0 +1,41 @@
+WEBVTT
+
+1
+00:00:00.500 --> 00:00:06.560
+A voice call could finish while the event saying so never arrived. The pipeline did not know.
+
+2
+00:00:07.700 --> 00:00:16.040
+In late April a burst of calls overwhelmed event delivery. The calls happened. The pipeline lost track of what they produced.
+
+3
+00:00:17.100 --> 00:00:22.610
+It worked, it did not scale, and it left nothing an operator could see the next morning.
+
+4
+00:00:24.100 --> 00:00:32.080
+A completed launch with no completion event is a failure. The panel lists each one with four ways to resolve it.
+
+5
+00:00:33.200 --> 00:00:42.340
+A recovered result is fetched from the source, normalised with the worker's own logic, and replayed through the same pipeline as a live event.
+
+6
+00:00:43.400 --> 00:00:52.030
+A replay of an event that did arrive reuses the existing record, and a resolved case is not recovered or alerted again.
+
+7
+00:00:53.100 --> 00:01:00.560
+The dashboard card carries the delivery percentage, so a quiet system and a lost event no longer look the same.
+
+8
+00:01:01.700 --> 00:01:09.760
+Five ways to recover a lost event where there had been a script, built in five days, with the automatic path under test.
+
+9
+00:01:10.900 --> 00:01:19.200
+This record measures the mechanism, not the outcome. The audit table could answer that with one query; nobody has run it yet.
+
+10
+00:01:20.300 --> 00:01:27.110
+Every claim on this page is pinned to a commit. Every figure spoken here is on the page underneath.

@@ -31,6 +31,7 @@ import alumniReferralRoutes from './routes/alumniReferralRoutes';
 import qrRedirectRoutes from './routes/qrRedirectRoutes';
 import trackedLinkRedirectRoutes from './routes/trackedLinkRedirectRoutes';
 import openclawShortLinkRoutes from './routes/openclawShortLinkRoutes';
+import mediaFetchRoutes from './routes/mediaFetchRoutes';
 import v1Routes from './routes/v1Routes';
 import advisorRoutes from './routes/advisorRoutes';
 import showcaseArtifactRoutes from './routes/showcaseArtifactRoutes';
@@ -78,6 +79,7 @@ import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureAiAgentReportsToSchema } from './db/ensureAiAgentReportsToSchema';
 import { ensureAiAgentHierarchySchema } from './db/ensureAiAgentHierarchySchema';
 import { ensureAiAgentAutonomyLevelSchema } from './db/ensureAiAgentAutonomyLevelSchema';
+import { ensureAiAgentAutonomySourceSchema } from './db/ensureAiAgentAutonomySourceSchema';
 import { ensureAgentPersonaVersionHistorySchema } from './db/ensureAgentPersonaVersionHistorySchema';
 import { ensureAgentRoleCharterSchema } from './db/ensureAgentRoleCharterSchema';
 import { ensureManagerDirectiveSchema } from './db/ensureManagerDirectiveSchema';
@@ -120,6 +122,7 @@ import { ensureContentOsSchema } from './db/ensureContentOsSchema';
 import { ensurePublishingSchema } from './db/ensurePublishingSchema';
 import { ensureMarketingAttributionSchema } from './db/ensureMarketingAttributionSchema';
 import { ensureBrandGovernanceSchema } from './db/ensureBrandGovernanceSchema';
+import { ensureChannelAccountSchema } from './db/ensureChannelAccountSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapstoneSchema } from './db/ensureCapstoneSchema';
 import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
@@ -210,6 +213,9 @@ app.use(trackedLinkRedirectRoutes);
 // OpenClaw outreach short link (/i/:tag) - public, same reason and same rule as /r/ above.
 // It sat BELOW adminRoutes from 2026-08-27 to 2026-09-11 and 401'd every visitor.
 app.use(openclawShortLinkRoutes);
+// Signed media fetch (/m/...) - public, a provider fetches it at publish time with no session.
+// Same rule as /r/ and /i/: above adminRoutes or the guard 401s it. Pinned by its own test.
+app.use(mediaFetchRoutes);
 app.use(v1Routes);
 
 // PUBLIC API routes — MUST stay mounted BEFORE adminRoutes. adminRoutes is mounted
@@ -2601,6 +2607,9 @@ async function start(): Promise<void> {
   // Versioned per-brand governance rules (T022). Rows, not a column, so an approval given
   // under version N can still be read against what N said after N+1 is published.
   await ensureBrandGovernanceSchema();
+  // After brand governance: the FK it adds to content_variants needs the accounts table, and
+  // the accounts table references brands.
+  await ensureChannelAccountSchema();
   // CAPE (Colaberry Adaptive Path Engine) Phase 0-1 — skill ontology, evidence-band
   // weights, append-only skill-evidence ledger, derived skill state (idempotent DDL,
   // additive only, parallel to the existing XP/promotion tables).
@@ -2774,6 +2783,10 @@ async function start(): Promise<void> {
   // AI Workforce Reset, Phase C — autonomy_level (docs/ai-governance/abac-design.md's
   // 4-level ladder), required at agent reactivation time. Additive, idempotent, no flag.
   await ensureAiAgentAutonomyLevelSchema();
+  // Fleet-wide autonomy-level auto-classification, Phase 2 — autonomy_level_source
+  // ('auto'|'manual'|null), distinguishing a classifier-set level from a real human
+  // decision. Additive, idempotent, no flag.
+  await ensureAiAgentAutonomySourceSchema();
   // Trust Contract Phase 1 — real history behind AiAgent.persona_version,
   // written by seedAgentRegistry() (below) whenever a registry entry's
   // version genuinely changes. Additive, idempotent, no flag. Must run

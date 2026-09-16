@@ -179,6 +179,11 @@ export interface AgentDetail {
     max_writes_per_execution: number | null;
     max_proposals_per_run: number | null;
     autonomy_level_set_at: string | null;
+    /** Fleet-wide autonomy-level auto-classification, Phase 2 — 'auto'
+     * (agentCapabilityClassifier.ts set this from real granted tools) vs
+     * 'manual' (a human set it via the reactivation flow) vs null (neither
+     * has ever touched this agent). */
+    autonomy_level_source: 'auto' | 'manual' | null;
   };
   identity: AgentDetailIdentity | null;
   live_status: 'online' | 'away' | 'offline' | 'unknown';
@@ -195,6 +200,15 @@ export interface AgentDetail {
   cost_summary: AgentDetailCostSummary | null;
   authorization_summary: AgentDetailAuthorizationSummary;
   capabilities: AgentDetailCapabilities;
+  /** UI follow-up to the fleet-wide autonomy-classification work (2026-09-15)
+   * — Ali: "why give the user the ability to change it... we might as well
+   * set the default and color coordinate it and have a popup that explains
+   * why it has been given this autonomy level." Computed fresh server-side
+   * against this agent's CURRENT tools_granted on every load — never a
+   * stored/stale value. When `level` here differs from `agent.autonomy_level`,
+   * a human's manual choice no longer matches what the agent's real granted
+   * tools would earn today. */
+  autonomy_explanation: { level: 'observe' | 'suggest' | 'act_audited' | 'communicate'; reason: string; matched_tool: string | null };
   reports_to: AgentDetailReportsTo | null;
   trust_contract: AgentDetailTrustContract;
   goals: AgentGoalsDimension[];

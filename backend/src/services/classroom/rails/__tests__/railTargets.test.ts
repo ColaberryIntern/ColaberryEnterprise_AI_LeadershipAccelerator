@@ -45,6 +45,54 @@ describe('Open workstation opens the workstation', () => {
     expect(rail?.tiles[0].action?.href).toBe('/portal/projects/workspace/p1/t1');
   });
 
+  /**
+   * Ali, 2026-09-13: "For projects, instead of Open Workstation, show the
+   * points instead and allow the user to click." The button says what the
+   * story PAYS; clicking still opens the workstation, and the figure is the
+   * task's own `points` — the same number the Today tile and the Projects page
+   * show, all three priced by storyPoints.
+   */
+  it('says what the story pays, and still opens the workstation', async () => {
+    mTree.mockResolvedValue({
+      id: 'p1', name: 'P',
+      lists: [{ title: 'R0', tasks: [{ id: 't1', story_id: 'STORY-001', title: 'T', status: 'not_started', points: 50 }] }],
+    });
+    const rail = await resolveProjectRail(ctx);
+    expect(rail?.tiles[0].action?.label).toBe('Build · +50 pts');
+    expect(rail?.tiles[0].action?.href).toBe('/portal/projects/workspace/p1/STORY-001');
+  });
+
+  it('keeps the old label for an unpriced story rather than advertising "+0 pts"', async () => {
+    mTree.mockResolvedValue({
+      id: 'p1', name: 'P',
+      lists: [{ title: 'prep', tasks: [
+        { id: 't1', story_id: 'PREP-1', title: 'Rehearse', status: 'not_started', points: null },
+        { id: 't2', story_id: 'PREP-2', title: 'Again', status: 'not_started', points: 0 },
+        { id: 't3', story_id: 'PREP-3', title: 'Older server', status: 'not_started' },
+      ] }],
+    });
+    const rail = await resolveProjectRail(ctx);
+    for (const tile of rail!.tiles) expect(tile.action?.label).toBe('Open workstation');
+  });
+
+  /**
+   * cab84953 priced demo-prep tasks and gave the Projects page its own verbs;
+   * this rail kept saying "Build" over a rehearsal. Same verbs, same ids.
+   */
+  it('says "Submit" for a demo-prep task and "Demo Day" for the staff-marked one', async () => {
+    mTree.mockResolvedValue({
+      id: 'p1', name: 'P',
+      lists: [{ title: 'prep', tasks: [
+        { id: 't1', story_id: 'PREP-2', title: 'Record a run-through', status: 'not_started', points: 40 },
+        { id: 't2', story_id: 'PREP-6', title: 'Present at Demo Day', status: 'not_started', points: 60 },
+        { id: 't3', story_id: 'STORY-003', title: 'A story', status: 'not_started', points: 50 },
+      ] }],
+    });
+    const rail = await resolveProjectRail(ctx);
+    expect(rail?.tiles.map((t) => t.action?.label)).toEqual(['Submit · +40 pts', 'Demo Day · +60 pts', 'Build · +50 pts']);
+    expect(rail?.tiles[0].action?.href).toBe('/portal/projects/workspace/p1/PREP-2');
+  });
+
   it('gives every project tile a picture', async () => {
     mTree.mockResolvedValue({
       id: 'p1', name: 'P',

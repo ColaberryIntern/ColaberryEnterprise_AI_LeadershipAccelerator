@@ -43,7 +43,7 @@ describe('authorizeTicketDispatch — happy path (R1, would_allow)', () => {
 });
 
 describe('authorizeTicketDispatch — boundary (R3, would_require_approval)', () => {
-  it('returns would_require_approval and creates exactly one approval_requests row', async () => {
+  it('returns would_require_approval and creates exactly one REAL, actionable approval_requests row (not the inert shadow_logged status)', async () => {
     mockAuthorize.mockResolvedValue({
       allowed: true, // shadow mode never actually denies
       enforced: false,
@@ -70,7 +70,7 @@ describe('authorizeTicketDispatch — boundary (R3, would_require_approval)', ()
         ticket_id: baseInput.ticketId,
         risk_tier: 'R3',
         verdict: 'would_require_approval',
-        status: 'shadow_logged',
+        status: 'pending',
       }),
     });
   });

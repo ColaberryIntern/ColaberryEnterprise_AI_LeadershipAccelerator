@@ -30,8 +30,20 @@ import { emitInternshipEvent } from './internshipAnalytics';
  * follow-up flagged by the AI is re-asked rather than quietly accepted.
  */
 
-/** Answer states that count as done. Everything else gets asked again. */
-const RESOLVED_STATES = new Set(['answered', 'confirmed']);
+/**
+ * Answer states that count as done. Everything else gets asked again.
+ *
+ * `needs_followup` — a phone call's captured answers — COUNTS as done here, on
+ * purpose. The call is meant to answer the questions; whatever it captured should
+ * not be re-asked in the interview walk, and a second call or the form should only
+ * chase the genuine gaps (remainingQuestions keys off this set, so both do). The
+ * applicant still SEES and confirms every captured answer — but at the summary, in
+ * one review pass, not one question at a time: `canSubmit` there requires
+ * needs_confirmation to be empty, so nothing reaches a reviewer unconfirmed.
+ * (Ali, 2026-09-13: "the interview should answer all questions; if it doesn't, they
+ * should be completable with another phone call or filling out the form.")
+ */
+const RESOLVED_STATES = new Set(['answered', 'confirmed', 'needs_followup']);
 
 export interface AnswerInput {
   question_key: string;
@@ -47,6 +59,15 @@ export interface InterviewProgress {
   resolved: number;
   remaining: number;
   complete: boolean;
+  /**
+   * Answers captured from a phone call and awaiting the applicant's confirmation
+   * (`needs_followup`). They are NOT resolved — the transcript is imperfect and
+   * the person has to see their own words before they count — but they are also
+   * not nothing, and a UI that reported "Question 1 of 21" after a full call would
+   * be lying about what happened. This is what lets the interview say "17 from
+   * your call, confirm each below" instead.
+   */
+  captured_pending: number;
 }
 
 /** Every answer on an application, keyed for lookup. */
@@ -71,13 +92,27 @@ export async function remainingQuestions(applicationId: string): Promise<Intervi
 
 export async function progress(applicationId: string): Promise<InterviewProgress> {
   const all = orderedQuestions();
-  const remaining = await remainingQuestions(applicationId);
+  const answers = await answerMap(applicationId);
+  const remaining = all.filter((q) => {
+    const a = answers.get(q.question_key);
+    return !a || !RESOLVED_STATES.has(a.state);
+  });
+  // Captured answers still awaiting confirmation AND not yet counted as done.
+  // Now that needs_followup counts as resolved (the walk shows only the gaps and
+  // review happens at the summary), this is 0 — the interview no longer surfaces a
+  // separate "confirm N from your call" count. Kept as a derived value so it stays
+  // correct if that policy ever changes.
+  const capturedPending = all.filter((q) => {
+    const a = answers.get(q.question_key);
+    return a?.state === 'needs_followup' && !RESOLVED_STATES.has(a.state);
+  }).length;
   return {
     version: ACTIVE_QUESTION_SET_VERSION,
     total: all.length,
     resolved: all.length - remaining.length,
     remaining: remaining.length,
     complete: remaining.length === 0,
+    captured_pending: capturedPending,
   };
 }
 

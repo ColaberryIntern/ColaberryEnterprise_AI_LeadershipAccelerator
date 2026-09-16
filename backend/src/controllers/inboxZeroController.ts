@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Request, Response } from 'express';
 import { Op } from 'sequelize';
 import InboxCase from '../models/InboxCase';
@@ -104,12 +105,10 @@ export async function handleZeroNext(req: Request, res: Response) {
 export async function handleZeroReconcile(req: Request, res: Response) {
   const parsed = inboxZeroReconcileSchema.safeParse(req.body ?? {});
   if (!parsed.success) return bad(res, parsed.error.issues);
-  const result = await reconcileLiveness({
-    limit: parsed.data.limit,
-    staleMinutes: parsed.data.stale_minutes,
-    correlationId: `inbox_zero_reconcile:${actor(req)}:${Date.now()}`,
-  });
-  res.json({ reconcile: result });
+  // inbox_case_events.correlation_id is a UUID column; the actor is logged by the service.
+  const correlationId = randomUUID();
+  const result = await reconcileLiveness({ limit: parsed.data.limit, staleMinutes: parsed.data.stale_minutes, correlationId });
+  res.json({ reconcile: result, correlation_id: correlationId, requested_by: actor(req) });
 }
 
 export async function handleZeroFocusCase(req: Request, res: Response) {

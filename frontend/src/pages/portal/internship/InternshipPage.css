@@ -225,6 +225,7 @@
 .ip-progress { margin: 0 0 20px; }
 
 .ip-progress__bar {
+  position: relative;
   height: 6px;
   border-radius: 999px;
   background: rgba(124, 58, 237, 0.12);
@@ -232,7 +233,23 @@
   margin-bottom: 8px;
 }
 
+/* The lighter band: answers in hand (confirmed + captured on the call). It sits
+   under the solid confirmed band, so the gap between them is what is still to
+   confirm from the call. */
+.ip-progress__captured {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: rgba(124, 58, 237, 0.32);
+  border-radius: 999px;
+  transition: width 220ms ease;
+}
+
 .ip-progress__fill {
+  position: absolute;
+  left: 0;
+  top: 0;
   height: 100%;
   background: #7c3aed;
   border-radius: 999px;
@@ -242,7 +259,8 @@
 /* The bar is decoration; the count beside it is the real signal. Removing the
    animation for reduced-motion users costs nothing because of that. */
 @media (prefers-reduced-motion: reduce) {
-  .ip-progress__fill { transition: none; }
+  .ip-progress__fill,
+  .ip-progress__captured { transition: none; }
 }
 
 .ip-q__section {
@@ -664,4 +682,26 @@
 
 @media (prefers-reduced-motion: reduce) {
   .ip-callpulse span { animation: none; opacity: 0.9; }
+}
+
+/* After a phone call: the "N answers from your call" banner, and the per-question
+   "from your call" cue on each pre-filled question. */
+.ip-captured-banner {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(46, 125, 91, 0.08);
+  border: 1px solid rgba(46, 125, 91, 0.24);
+  color: var(--strong, #14532d);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.ip-captured-banner strong { color: var(--good, #2e7d5b); }
+
+.ip-q__fromcall {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--good, #2e7d5b);
 }

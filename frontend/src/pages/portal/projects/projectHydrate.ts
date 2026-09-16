@@ -274,6 +274,13 @@ export function overlayCompletions(p: StudentProject, tree: BackendProjectTree):
   const adopted = withServerTasks !== p;
 
   const done = new Set<string>();
+  // The server's verification stamp per story. This overlay is the path taken
+  // by the device that DID the work, and until 2026-09-15 it copied `done` and
+  // `points` across but never `verifiedAt`, so `projectPoints.earned` stayed 0
+  // on exactly that device while the ledger had paid 1,489 points. A fresh
+  // device, hydrating from scratch, showed the right number. Same shape of
+  // bug as `commandCenterUrl` below.
+  const verified = new Map<string, string>();
   // The server's price tag per story. Tasks this device stored before stories
   // carried points (or before the plan was published) have none; the overlay
   // is how they get one without a reinstall. Same-reference when nothing moved.
@@ -281,6 +288,7 @@ export function overlayCompletions(p: StudentProject, tree: BackendProjectTree):
   for (const l of tree.lists) for (const t of l.tasks) {
     if (t.status === 'complete' && t.story_id) done.add(t.story_id);
     if (typeof t.points === 'number' && t.points > 0) price.set(t.story_id || t.id, t.points);
+    if (t.verified_at) verified.set(t.story_id || t.id, t.verified_at);
   }
   let changed = false;
   const lists = withServerTasks.lists.map((l) => {
@@ -294,6 +302,14 @@ export function overlayCompletions(p: StudentProject, tree: BackendProjectTree):
       if (pts !== undefined && t.points !== pts) {
         changed = true;
         next = { ...next, points: pts };
+      }
+      // Set from the server, never cleared by it: a stamp this device saw on a
+      // live verify that the server has not yet echoed is not evidence of
+      // anything having been revoked.
+      const vAt = verified.get(taskKey(t));
+      if (vAt && t.verifiedAt !== vAt) {
+        changed = true;
+        next = { ...next, verifiedAt: vAt };
       }
       return next;
     });
@@ -326,9 +342,16 @@ export function overlayCompletions(p: StudentProject, tree: BackendProjectTree):
   // business.
   const statusStale = p.status === 'creating';
 
-  const base: StudentProject = (!changed && !urlChanged && !adopted && !statusStale) ? p : {
+  // Requirement chips read from the stories that fulfil them. Recomputed on the
+  // merged lists so a story the server just verified moves its requirement in
+  // the same pull.
+  const reqs = deriveReqStates(withServerTasks.reqs, changed ? lists : withServerTasks.lists);
+  const reqsChanged = reqs !== withServerTasks.reqs;
+
+  const base: StudentProject = (!changed && !urlChanged && !adopted && !statusStale && !reqsChanged) ? p : {
     ...withServerTasks,
     ...(changed ? { lists } : {}),
+    ...(reqsChanged ? { reqs } : {}),
     ...(urlChanged ? { commandCenterUrl: nextUrl } : {}),
     ...(statusStale ? { status: 'ready' as StudentProject['status'] } : {}),
   };
@@ -336,6 +359,38 @@ export function overlayCompletions(p: StudentProject, tree: BackendProjectTree):
   // in the same pull both land, and the same-reference fast path survives when
   // neither did.
   return adoptServerIdentity(base, tree);
+}
+
+/**
+ * What a requirement's chip should say, read off the stories that cite it.
+ *
+ *   verified  every story citing it carries the server's `verifiedAt`
+ *   built     at least one citing story is done (the student's word)
+ *   planned   nothing yet
+ *
+ * A requirement no story cites keeps whatever state it had: this function has
+ * no evidence about it and says nothing. Returns the SAME array when no chip
+ * would change, so overlay callers keep their same-reference fast path.
+ */
+export function deriveReqStates(reqs: ProjectReq[], lists: ProjectList[]): ProjectReq[] {
+  const citing = new Map<string, ProjectTask[]>();
+  for (const l of lists) for (const t of l.tasks) {
+    if (!t.req) continue;
+    const arr = citing.get(t.req);
+    if (arr) arr.push(t); else citing.set(t.req, [t]);
+  }
+  let changed = false;
+  const next = reqs.map((r) => {
+    const tasks = citing.get(r.id);
+    if (!tasks || tasks.length === 0) return r;
+    const state: ProjectReq['state'] = tasks.every((t) => !!t.verifiedAt)
+      ? 'verified'
+      : tasks.some((t) => t.state === 'done') ? 'built' : 'planned';
+    if (state === r.state) return r;
+    changed = true;
+    return { ...r, state };
+  });
+  return changed ? next : reqs;
 }
 
 // ── reconstruction of a project not present on this device ────────────────────
@@ -462,7 +517,15 @@ export function backendTreeToProject(tree: BackendProjectTree): StudentProject {
   for (const l of lists) for (const t of l.tasks) {
     if (t.req && !reqIds.includes(t.req)) reqIds.push(t.req);
   }
-  const reqs: ProjectReq[] = reqIds.map((id): ProjectReq => ({ id, name: id, kind: 'FUNC', state: 'planned' }));
+  // State is DERIVED from the stories, never hardcoded. This line used to read
+  // `state: 'planned'` for every requirement, which made the card's
+  // "N/M verified" a constant zero for every server-built project: a student
+  // with 14 of 15 stories verified was shown "0/14 verified" and wrote in
+  // asking whether her work was being recorded.
+  const reqs: ProjectReq[] = deriveReqStates(
+    reqIds.map((id): ProjectReq => ({ id, name: id, kind: 'FUNC', state: 'planned' })),
+    lists,
+  );
 
   const owners = Array.from(new Set(
     lists.flatMap((l) => l.tasks.map((t) => t.owner).filter((o): o is string => !!o)),

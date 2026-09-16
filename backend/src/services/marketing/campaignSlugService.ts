@@ -26,6 +26,19 @@ export interface SlugInputs {
   offer?: string | null;
   /** Who it is for; defaults to 'all'. */
   audience?: string | null;
+  /**
+   * Attach this brand when the campaign has none.
+   *
+   * WHY THIS EXISTS. The composer asks the operator to choose a brand and a campaign, and 8 of
+   * the 44 production campaigns have no `brand_id`. Without this the operator was told "give
+   * the campaign a brand first" by a screen that offered no way to do it - a dead end found on
+   * the first real run. The brand they already chose in the composer is the answer, so it
+   * travels with the request.
+   *
+   * It only ever FILLS A GAP. A campaign that already has a brand keeps it; silently
+   * reassigning one would rewrite the attribution of everything already recorded against it.
+   */
+  brandId?: string | null;
 }
 
 export interface SlugAssignment {
@@ -51,9 +64,29 @@ export async function assignCampaignSlug(campaignId: string, inputs: SlugInputs 
   const campaign = await Campaign.findByPk(campaignId);
   if (!campaign) throw new WorkflowError('Campaign not found', 404, 'NotFound');
 
-  const brand = campaign.brand_id ? await Brand.findByPk(campaign.brand_id) : null;
+  let brand = campaign.brand_id ? await Brand.findByPk(campaign.brand_id) : null;
+
+  // The campaign has no brand and the caller supplied one: fill the gap and say so. Never an
+  // overwrite - the branch above already returned the campaign's own brand when it had one.
+  if (!brand && inputs.brandId) {
+    const chosen = await Brand.findByPk(inputs.brandId);
+    if (chosen) {
+      await campaign.update({ brand_id: chosen.id });
+      brand = chosen;
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'info', service: 'marketing',
+        event: 'campaign_brand_backfilled', outcome: 'success',
+        context: { campaignId: campaign.id, brandId: chosen.id, reason: 'supplied while assigning the UTM slug' },
+      }));
+    }
+  }
+
   if (!brand) {
-    throw new WorkflowError('Give the campaign a brand first; the slug starts with the brand.', 409, 'BrandRequired');
+    throw new WorkflowError(
+      'This campaign has no brand, and none was supplied. Choose a brand in Setup and press Assign UTM slug again.',
+      409,
+      'BrandRequired',
+    );
   }
 
   let base: string;

@@ -65,6 +65,7 @@ const DETAIL: AgentDetail = {
     department: null, module: null, source_file: null,
     max_runs_per_hour: 60, max_writes_per_execution: 100, max_proposals_per_run: 50,
     autonomy_level_set_at: null,
+    autonomy_level_source: null,
   },
   identity: null,
   live_status: 'unknown',
@@ -79,6 +80,7 @@ const DETAIL: AgentDetail = {
   cost_summary: { cost_usd: 0.42, runs: 38 },
   authorization_summary: { window_days: 30, total: 38, allow: 34, approval: 3, block: 1, enforced_count: 0 },
   capabilities: { reads: [], produces: [], undocumented_tools: [], produced_ticket_types: [], by_tool: [] },
+  autonomy_explanation: { level: 'observe', reason: 'No tools_granted recorded for this agent — the safe, honest default, not a guess.', matched_tool: null },
   reports_to: null,
   trust_contract: {
     trigger_type: 'on_demand', schedule: null, status: 'idle', last_run_at: null, run_count: 0,

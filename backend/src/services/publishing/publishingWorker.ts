@@ -90,11 +90,19 @@ async function recordEvent(job: PublishingJob, direction: 'request' | 'response'
 }
 
 async function buildPayload(job: PublishingJob, item: ContentItem, variant: ContentVariant | null): Promise<PublishPayload> {
-  const media = await ContentItemMedia.findAll({ where: { content_item_id: item.id }, order: [['position', 'ASC']] });
-  const refs: string[] = [];
-  for (const m of media) {
+  const links = await ContentItemMedia.findAll({ where: { content_item_id: item.id }, order: [['position', 'ASC']] });
+  const media: PublishPayload['media'] = [];
+  for (const m of links) {
     const asset = await MediaAsset.findByPk(m.media_asset_id);
-    refs.push(asset?.storage_key ?? m.media_asset_id);
+    // An attachment whose asset row is gone still gets a ref, so the adapter fails on it loudly
+    // ("cannot read media/…") instead of the post quietly publishing without its image.
+    media.push({
+      ref: asset?.storage_key ?? m.media_asset_id,
+      mimeType: asset?.mime_type ?? 'application/octet-stream',
+      altText: asset?.alt_text ?? null,
+      // BIGINT comes back from Postgres as a string; the contract says number.
+      byteSize: asset?.byte_size == null ? null : Number(asset.byte_size),
+    });
   }
   return {
     jobId: job.id,
@@ -103,7 +111,8 @@ async function buildPayload(job: PublishingJob, item: ContentItem, variant: Cont
     variantId: variant?.id ?? null,
     accountId: job.channel_account_id ?? null,
     text: variant?.body ?? item.canonical_body ?? '',
-    mediaRefs: refs,
+    mediaRefs: media.map((m) => m.ref),
+    media,
     linkUrl: variant?.link_url ?? null,
     disclosureText: variant?.disclosure_text ?? null,
     scheduledFor: new Date(job.publish_at).toISOString(),

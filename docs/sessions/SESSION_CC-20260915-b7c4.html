@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260915-b7c4 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Tuesday, September 15, 2026 at 2:50 PM</div>
+    <div><span class="sid">CC-20260915-b7c4</span><span class="count">5 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Audit: arrival-screen notes vs the slide on the projector, Session 16</h2>
+          <span class="badge">2026-09-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Nothing in content. All 47 rendered slides of Session 16 were pulled from the production database (`buildKitSpec` on the live `kit_config_json`) and each slide&#39;s arrival text was read against the slide it is keyed to: 21 teach slides, 5 story beats, 11 polls, cover, rules, hook, four segment openers, break, trailer. Every note describes its own slide. Two content nits found and left as-is (not the reported symptom): the break note says &quot;Fifteen minutes&quot; while the slide says &quot;Back in 5&quot;, and the deconstruct opener mentions an &quot;anti-pattern block&quot; that only exists on Thursday.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`scratchpad/s16-arrival-audit.txt` — the full side-by-side. Content keyed correctly ⇒ the mismatch was in *which slide the phone thought the deck was on*, not in what the notes say.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The read screen being right while the arrival screen was wrong is the fingerprint of the lookup path, because clicking the diagram re-broadcasts the deck&#39;s position.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Root cause: broadcast writes were last-write-wins, so a late POST left the phone one slide behind</h2>
+          <span class="badge">2026-09-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`kitDeckScript.ts` POSTs the deck&#39;s position on every `show()` and on every diagram toggle, fire-and-forget (`.catch(function(){})`). `setBroadcast` upserted unconditionally. Two quick advances (skipping a slide, a double key-press) put two POSTs in flight; when the earlier one landed last, `session_broadcast` held slide N-1 while the projector showed N. `getPresenterNotes` then derived the arrival notes for N-1 — correctly, from the wrong index — and nothing corrected it until the next broadcast, which is exactly the diagram click. A second, phone-side variant: `tick()` fired every 2.5 s with no in-flight guard, so a slow response (every 30 s the spec cache rebuilds on the request path) could land after a faster, newer one and repaint the older slide&#39;s notes until the next poll. Fix, four parts: (1) `BroadcastState` gains `deck_id` (minted once per Present tab) and `seq` (rising per broadcast); `setBroadcast`&#39;s `ON CONFLICT` now carries `WHERE deck_id differs OR stored seq &lt; incoming seq`, atomic in the upsert (`broadcastConflictClause`), unconditional for a deck that sends neither. (2) The deck stamps both, aborts the superseded request via `AbortController`, and re-sends the current view every 5 s while the tab is visible, so a POST that never arrived heals without a click. (3) The phone allows one request in flight and drops any response whose `updated_at` is older than the last one painted. (4) `handleSetBroadcast` now copies `presenter_preface` through — the deck always sent it, the controller always dropped it, so the phone&#39;s documented fallback for the arrival screen could never fire.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`sessionLiveStateService.test.ts` +3 (stamp recognition, unstamped stays last-write-wins with no `WHERE`, stamped clause and payload); `kitDeckScript.test.ts` +4 in the vm sandbox (one `deck_id` per tab and seq 1,2,3 across three slides; superseded requests 1 and 2 aborted when 3 fires; heartbeat re-sends slide 1 with seq+1 and the same `deck_id`; no heartbeat when live is off). `tsc --noEmit` clean with TS 5.9.3. `jest -c jest.ci.config.ts` over every class-kit and live-session suite: 14 suites, 591 tests, all passing.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The nginx access log for the class window is not retained (access.log → stdout, container log empty for that range), so the two overlapping POSTs from tonight could not be shown; the diagnosis is from the code path, which has no other way to produce &quot;arrival wrong, read-after-click right&quot; with correctly keyed content. Residual: the phone still polls every 2.5 s, so the arrival notes always land 0–3 s after the slide does. Not deployed yet — needs a backend rebuild; no class today, Thursday is Session 17.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>Deployed #2561 to production and verified the guard against real Postgres</h2>
+          <span class="badge">2026-09-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Prod host pulled `origin/main` to `e01e463c` (#2561 merge) and rebuilt `backend` only (`docker compose -f docker-compose.production.yml up -d --build backend`) at 09:56 CDT. Pre-checks: tracked tree clean (untracked scratch only), no other deploy running, prod was at the #2560 merge.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`/health` 200, 0 restarts. All four changes present in the running image (`broadcastConflictClause`, the deck&#39;s `deck_id/seq` stamp, `presenter_preface` pass-through, the phone&#39;s `lastSeenAt` guard). Ordering proved on Session 16&#39;s finished row with the real upsert: same tab seq 5 then late seq 4 → row stays on slide 20 (refused); seq 6 → applied; a new tab at seq 1 → applied; an unstamped deck → last-write-wins kept. `getPresenterNotes` on a stamped broadcast for the Architecture Story returns arrival categories SITUATION,ROOM,MOOD,OPEN,DO,NOTE and the 1,667-char read screen. Row reset to the cover afterwards.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`/api/health` is auth-gated (401) — the liveness path is `/health`. Production-verified for the server side; the deck-side stamp and heartbeat get their first real exercise on Thursday&#39;s Session 17 (any Present tab opened from now on carries them).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>Session 17 (Week 8 Build Day, 9/17) brought to the Session 16 standard, applied to production</h2>
+          <span class="badge">2026-09-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`session-decks/session17-week8-thursday.js` and `session17-generated-notes.js`. (1) All 16 authored Thursday teach scripts re-authored as tagged SITUATION/ROOM/MOOD/OPEN/DO/SAY/NOTE lines. (2) Five code blocks become Claude Code prompts: the three `review` read-alongs (audit /ship + /review, audit the guard with two simulated exit codes, the 2 AM anti-pattern reproduced safely on a throwaway branch with the guard restored afterwards), and the two hand-pasted YAML workflows, which hardcoded `npm ci` / `npm test` and would have been wrong for every non-Node project in the room — Claude Code now writes them against the project&#39;s real commands, with the key as a repository secret. (3) Checkpoint numbering aligned: the non-overridable rail reads CP0 Ready · CP1 commands + hook · CP2 headless · CP3 CI review, while the authored eyebrows counted CP1 verbs · CP2 guard · CP3 headless · CP4 CI; the eyebrows and the roadmap slide&#39;s checkpoint list now follow the rail. (4) 19 generated slides tagged — the 15 untagged ones plus four generator slides (rules, build map, before/after, assignment) that had SAY/DO/NOTE but no arrival category; their SAY lines are kept verbatim because none has a body.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Local compose against the transpiled pack: 16/16 tagged with all arrival categories, screens disjoint, body/bullets unchanged except the roadmap slide (deliberate), 15 code blocks all `paste`. Applied to `kit_config_json` for `d0c174bd-15c5-44b7-b1f5-3b6fa764945d` and read back: `teach=16 untagged=0 screensShareText=0 codeBlocks=15 nonPrompt=0`; `applyWeekNotes.js`: `43 slides, 19 notes applied, boilerplate=0 noCommentary=0`; `auditClassDecks.js`: **0 failures, 0 untagged** (was 4 untagged warnings + 16 untagged teach scripts before the run). Rail and eyebrows read back from the DB-built spec and agree.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Eight poll slides have an empty read screen by design (question and options are on the projected deck; Session 16 shipped the same way). `/app/audit.js` had been wiped by the morning&#39;s container recreate and was re-copied — the scripts in `/app` are ephemeral, the data in `kit_config_json` is not. `week8.ts` at source still ships untagged prose and the YAML blocks for future cohorts; the overrides carry both Week 8 sessions.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>`build-class-deck` skill carries this week&#39;s four lessons</h2>
+          <span class="badge">2026-09-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`.claude/skills/build-class-deck/SKILL.md`. §6 now retires `kind: &#39;review&#39;` outright, quoting Ali (2026-09-14): every code block is a `paste` prompt with stop + rescue, including hand-pasted config files and the &quot;break it on purpose&quot; anti-pattern (reproduced safely). §4&#39;s overrun rule no longer recommends review blocks as the cut. Hard traps gain: the rail&#39;s checkpoint numbering wins over the eyebrows; the Architecture Story (no body) needs SAY lines or the read screen is empty; arrival notes one slide behind = broadcast ordering (#2561), not content; `/app/*.js` copies die on every recreate. Reference table and Definition of Done updated to match.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Diff read; 45 insertions / 9 deletions, no section removed. Governance: `.claude/skills/` is DRI-owned (Ali) — lands via PR review, not a self-merge.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Supersedes the guidance in `reference_architecture_day_overruns_are_structural` that said &quot;convert the rest to `code.kind: &#39;review&#39;`&quot;; that memory is updated in the same session.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20260915-b7c4.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

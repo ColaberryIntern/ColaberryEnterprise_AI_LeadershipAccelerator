@@ -2,6 +2,15 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader, SectionCard } from '../../../components/admin/shell';
 import { TrustSignal } from '../../../components/admin/shell/trust';
 import BrandReadinessPanel from './BrandReadinessPanel';
+import ChannelAccountsPanel from './ChannelAccountsPanel';
+import {
+  getVaultStatus,
+  listChannelAccounts,
+  revokeChannelAccount,
+  errorMessageOf,
+  type ChannelAccount,
+  type VaultStatus,
+} from '../../../services/channelAccountApi';
 import {
   listBrands,
   getBrandSendReadiness,
@@ -31,6 +40,47 @@ function AdminBrandsPage() {
   const [readiness, setReadiness] = useState<BrandSendReadiness | null>(null);
   const [readinessLoading, setReadinessLoading] = useState(false);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
+  const [vault, setVault] = useState<VaultStatus | null>(null);
+  const [accounts, setAccounts] = useState<ChannelAccount[]>([]);
+  const [accountsLoading, setAccountsLoading] = useState(true);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
+  const [accountsBusy, setAccountsBusy] = useState(false);
+
+  /**
+   * Accounts and vault status are fetched together because the panel cannot tell an honest
+   * story with only one of them: an empty list means something different depending on whether
+   * connecting is possible at all.
+   */
+  const fetchAccounts = useCallback(async () => {
+    setAccountsLoading(true);
+    setAccountsError(null);
+    try {
+      const [status, rows] = await Promise.all([
+        getVaultStatus(),
+        listChannelAccounts(selectedBrandId ? { brand_id: selectedBrandId } : {}),
+      ]);
+      setVault(status);
+      setAccounts(rows);
+    } catch (err) {
+      setAccountsError(errorMessageOf(err, 'Connected accounts could not be loaded.'));
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, [selectedBrandId]);
+
+  useEffect(() => { void fetchAccounts(); }, [fetchAccounts]);
+
+  const handleRevoke = useCallback(async (accountId: string) => {
+    setAccountsBusy(true);
+    try {
+      await revokeChannelAccount(accountId);
+      await fetchAccounts();
+    } catch (err) {
+      setAccountsError(errorMessageOf(err, 'The account could not be disconnected.'));
+    } finally {
+      setAccountsBusy(false);
+    }
+  }, [fetchAccounts]);
 
   const fetchBrands = useCallback(async () => {
     setLoading(true);
@@ -111,6 +161,24 @@ function AdminBrandsPage() {
           readinessLoading={readinessLoading}
           onSelectBrand={setSelectedBrandId}
           onRetry={fetchBrands}
+        />
+      </SectionCard>
+      <SectionCard title="Connected accounts" icon="links-line" padded={false}>
+        <ChannelAccountsPanel
+          loading={accountsLoading}
+          error={accountsError}
+          vault={vault}
+          accounts={accounts}
+          brandId={selectedBrandId}
+          // Stated rather than hidden: the storage half shipped (T003) and the sign-in half has
+          // not. A paste-a-token form would have "worked" and put a live credential into a
+          // browser field, a screenshot and a support thread - the exact thing the spec's
+          // credential rules forbid.
+          connectDisabledReason={'Connecting needs the provider sign-in flow, which is not built yet. Networks stay in handoff mode until it is.'}
+          busy={accountsBusy}
+          onConnect={() => {}}
+          onRevoke={handleRevoke}
+          onRetry={fetchAccounts}
         />
       </SectionCard>
     </>

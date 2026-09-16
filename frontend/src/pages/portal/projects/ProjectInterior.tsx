@@ -10,6 +10,7 @@ import ProjectsNextStepHero from './ProjectsNextStepHero';
 import CaseStudyReadinessCard from './CaseStudyReadinessCard';
 import TimelineCard, { type TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import TimelineFeed from '../../../components/timeline/TimelineFeed';
+import { isPrepStory, DEMO_DAY_STORY_ID } from './DemoEvidencePanel';
 // Every rule for the Classroom card is scoped `.tl-de …` in timeline.css, and
 // /portal/projects is its own route chunk: import it here so a cold load of
 // the Projects tab styles the cards (ProjectsNextStepHero does the same).
@@ -35,7 +36,13 @@ const DUE_LABEL: Record<string, string> = { overdue: 'Overdue', today: 'Due toda
 // A BLOCKED task (release gate) becomes a LOCKED card: visible, not clickable,
 // with "Complete STORY-XXX to unlock" in the card's own lock note — the same
 // treatment a week-gated curriculum card gets.
-function taskToFeedCard(project: StudentProject, task: ProjectTask, listName: string): TimelineFeedCard {
+// Exported because the projects LANDING page shows the same stories in "Up next
+// across your builds" and was building its own, thinner card from a different
+// component — no points, no release chip, and a blocked story rendered as an
+// ordinary openable row (Ali, 2026-09-13: "The details on the title screen
+// should match what we see in the details like the story's being locked").
+// One mapper, so the two screens cannot describe the same story differently.
+export function taskToFeedCard(project: StudentProject, task: ProjectTask, listName: string): TimelineFeedCard {
   const done = task.state === 'done';
   const { blocked, waitingOn } = isTaskBlocked(project, task);
   return {
@@ -63,6 +70,9 @@ function taskToFeedCard(project: StudentProject, task: ProjectTask, listName: st
     meta: done ? null : DUE_LABEL[task.due],
     project_id: project.id,
     project_task_id: task.id,
+    // A demo-prep task is handed in, not built; Demo Day is marked by staff.
+    // The button must not say "Build" over a recording or a rehearsal.
+    cta_verb: task.storyId === DEMO_DAY_STORY_ID ? 'Demo Day' : isPrepStory(task.storyId) ? 'Submit' : null,
   };
 }
 

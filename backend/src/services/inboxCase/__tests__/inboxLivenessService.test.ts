@@ -27,9 +27,20 @@ const fakeInboxVip = makeFakeModel();
 jest.mock('../../../models/InboxCase', () => ({ __esModule: true, default: fakeInboxCase }));
 jest.mock('../../../models/InboxCaseItem', () => ({ __esModule: true, default: fakeInboxCaseItem }));
 jest.mock('../../../models/InboxCaseAction', () => ({ __esModule: true, default: fakeInboxCaseAction }));
+// The real column is `correlation_id UUID NOT NULL`; Postgres rejects a
+// label like "liveness_cron:123" and logCaseEvent swallows the failure. The
+// fake enforces the same rule so a missing audit row fails HERE, not in prod
+// (it did, once: 65 dispositions, 0 item_removed_at_source rows).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 jest.mock('../../../models/InboxCaseEvent', () => ({
   __esModule: true,
-  default: { ...fakeInboxCaseEvent, create: (attrs: any) => fakeInboxCaseEvent.create({ created_at: new Date(), ...attrs }) },
+  default: {
+    ...fakeInboxCaseEvent,
+    create: (attrs: any) => {
+      if (!UUID_RE.test(String(attrs.correlation_id))) throw Object.assign(new Error(`invalid input syntax for type uuid: "${attrs.correlation_id}"`), { name: 'SequelizeDatabaseError' });
+      return fakeInboxCaseEvent.create({ created_at: new Date(), ...attrs });
+    },
+  },
 }));
 jest.mock('../../../models/InboxCaseQuestion', () => ({ __esModule: true, default: fakeInboxCaseQuestion }));
 jest.mock('../../../models/OpsBcTodo', () => ({ __esModule: true, default: fakeOpsBcTodo }));
@@ -68,12 +79,12 @@ import {
   verifyCaseLivenessNow,
   DEFAULT_RECONCILE_LIMIT,
 } from '../inboxLivenessService';
-import { getNext, getOverview } from '../inboxZeroService';
+import { getDelta, getNext, getOverview } from '../inboxZeroService';
 import { loadVisibleCases } from '../inboxZeroVisibility';
 import { getQueue } from '../inboxZeroQueueService';
 
 const NOW = new Date('2026-09-11T20:30:00.000Z');
-const CORR = 'test-corr';
+const CORR = '3f7d2c1a-5b6e-4d8f-9a0b-1c2d3e4f5a6b';
 
 function g404(): any { const e: any = new Error('Requested entity was not found.'); e.code = 404; return e; }
 
@@ -81,7 +92,9 @@ async function seedCase(over: Partial<any> = {}) {
   return fakeInboxCase.create({
     id: randomUUID(), title: 'Case', mode: 'TOPIC', state: 'AWAITING_APPROVAL', objective: null, summary: null,
     recommendation: null, confidence: 80, reopen_count: 0, assessment: null, priority_band: null, priority_reason: null,
-    sla_due_at: null, snoozed_until: null, snooze_reason: null, waiting_since: null, correlation_id: 'c',
+    // Real column is UUID NOT NULL — the closure path logs under the CASE's own
+    // correlation id, so a placeholder here would fail the same way prod did.
+    sla_due_at: null, snoozed_until: null, snooze_reason: null, waiting_since: null, correlation_id: randomUUID(),
     opened_at: new Date('2026-08-01T00:00:00Z'), created_at: new Date('2026-08-01T00:00:00Z'), updated_at: new Date('2026-08-02T00:00:00Z'),
     closed_at: null, ...over,
   });
@@ -192,6 +205,20 @@ describe('reconcileLiveness — the bounded sweep', () => {
     expect(removed.actor_id).toBe('inbox_liveness');
     const rejected: any = Array.from(fakeInboxCaseEvent.rows.values()).find((e: any) => e.event_type === 'action_rejected');
     expect(rejected.details.reason).toMatch(/^source_gone/);
+  });
+
+  it('a human-readable run label still produces every audit row, under a UUID correlation id (the prod defect of 2026-09-12)', async () => {
+    const c = await seedCase();
+    await seedItem(c.id);
+    gmailGet.mockResolvedValue({ data: { labelIds: ['Label_1'] } });
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const r = await reconcileLiveness({ correlationId: 'liveness_cron:1757600000000', now: NOW });
+    expect(r.gone).toBe(1);
+    const removed: any = Array.from(fakeInboxCaseEvent.rows.values()).find((e: any) => e.event_type === 'item_removed_at_source');
+    expect(removed).toBeTruthy();
+    expect(removed.correlation_id).toMatch(UUID_RE);
+    expect(errorSpy).not.toHaveBeenCalledWith(expect.stringContaining('Failed to write case event'), expect.anything());
+    errorSpy.mockRestore();
   });
 
   it('a live item is stamped live and left open; nothing else changes', async () => {
@@ -317,6 +344,58 @@ describe('settleCaseIfNoLiveItems', () => {
   });
 });
 
+describe('T20 — the console is about the inbox, and only the inbox', () => {
+  // Ali, 2026-09-12: "It should be emails only, but if you get a basecamp
+  // email, it needs to be handled in basecamp. Then what's every handled
+  // should be removed from the inbox, but make no mistake, it is all about
+  // the inbox. That is it!"
+  it('hides a Basecamp-only case and counts it as not-inbox, never as inbox work', async () => {
+    const board = await seedCase({ title: 'board to-do' });
+    await seedItem(board.id, { source_type: 'basecamp_todo', provider: 'basecamp', source_id: 't1' });
+    const mail = await seedCase({ title: 'real mail' });
+    await seedItem(mail.id);
+
+    const visible = await loadVisibleCases();
+
+    expect(visible.cases.map((c) => c.title)).toEqual(['real mail']);
+    expect(visible.liveness.non_email_cases).toBe(1);
+    expect(visible.liveness.gone_hidden_cases).toBe(0); // not "hidden mail" — not mail at all
+  });
+
+  it('KEEPS a Basecamp notification email, with its attached to-dos, because it landed in the inbox', async () => {
+    const c = await seedCase({ title: 'Basecamp: new comment on Logo Creation' });
+    await seedItem(c.id, { source_id: 'bc-notification', snapshot: { from_address: 'notifications@basecamp.com' } });
+    await seedItem(c.id, { source_type: 'basecamp_todo', provider: 'basecamp', source_id: 't9' });
+
+    const visible = await loadVisibleCases();
+
+    expect(visible.cases.map((c2) => c2.title)).toEqual(['Basecamp: new comment on Logo Creation']);
+    expect(visible.liveness.non_email_cases).toBe(0);
+    expect(visible.itemsByCase.get(c.id)).toHaveLength(2); // the to-do travels with the email so the response goes to Basecamp
+  });
+
+  it('a Basecamp-only case never reaches next, the queue, the overview counts, or the delta', async () => {
+    const board = await seedCase({ title: 'board only' });
+    await seedItem(board.id, { source_type: 'basecamp_todo', provider: 'basecamp', source_id: 't2' });
+    gmailGet.mockResolvedValue({ data: { labelIds: ['INBOX'] } });
+
+    expect(await getNext(null, NOW, CORR)).toBeNull();
+    expect((await getQueue('urgency', NOW)).groups.flatMap((g) => g.cases)).toHaveLength(0);
+    const ov = await getOverview(null, NOW);
+    expect(ov.counts.needs_decision + ov.counts.unassessed + ov.counts.due_now + ov.counts.waiting + ov.counts.review).toBe(0);
+    expect(ov.liveness.non_email_cases).toBe(1);
+    const dlt = await getDelta('2026-01-01T00:00:00.000Z', NOW);
+    expect(dlt.cases).toHaveLength(0);
+    expect(dlt.hidden_gone).toBe(1); // counted as not-shown, and never as new
+  });
+
+  it('sent mail alone is not inbox work either', async () => {
+    const c = await seedCase({ title: 'my own outbound' });
+    await seedItem(c.id, { source_type: 'sent_email' });
+    expect((await loadVisibleCases()).cases).toHaveLength(0);
+  });
+});
+
 describe('the console honours liveness', () => {
   it('overview/queue hide an all-gone case, show an unchecked one, and count what is unverified', async () => {
     const goneCase = await seedCase({ title: 'gone' });
@@ -329,7 +408,7 @@ describe('the console honours liveness', () => {
 
     const ov = await getOverview(null, NOW);
     expect(ov.counts.needs_decision).toBe(2);
-    expect(ov.liveness).toEqual({ unchecked_items: 1, gone_hidden_cases: 1, last_checked_at: NOW.toISOString() });
+    expect(ov.liveness).toEqual({ unchecked_items: 1, gone_hidden_cases: 1, non_email_cases: 0, last_checked_at: NOW.toISOString() });
     expect(ov.bottom_line).toMatch(/1 item\(s\) have not yet been checked against your inbox/);
 
     const q = await getQueue('urgency', NOW);

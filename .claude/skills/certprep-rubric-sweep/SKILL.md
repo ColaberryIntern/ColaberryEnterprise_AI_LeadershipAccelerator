@@ -1,6 +1,6 @@
 ---
 name: certprep-rubric-sweep
-description: Bring every CCAR-F practice question to 6/6 on the item rubric, one at a time, and approve the result under a named human reviewer. Run it as a standing quality check on the question bank.
+description: Keep the CCAR-F question bank at the highest standard - every item at its rubric ceiling, the BANK passing every whole-bank check, every item triaged by a blind read, and approval always under a named human. Covers the sweep, generation, position and length balancing, export, the bank audit and the triage. Run it as a standing quality check.
 ---
 
 # certprep-rubric-sweep
@@ -32,6 +32,41 @@ real person, and why this skill never approves as a side effect of improving.
 
 This bank was once approved wholesale by a fixture account. Those 93 revisions
 were retired for precisely this reason. Do not recreate that.
+
+**Two other things the item rubric cannot see, and what covers them:**
+
+- **Properties of the bank, not of any item.** 150 generated items once went
+  live with the key at A in 144 of them; every per-item gate passed. The
+  whole-bank rubric (`certBankRubric.ts`) measures answer-position share, the
+  one-letter mock score, per-domain skew, the length cue, letter labels, mixed
+  punctuation, ceiling rate, duplicate stems, scenario spread, objective floor,
+  mocks supported and approval. It runs in CI, in the admin Question Bank
+  scorecard, and automatically at the end of every script that changes the bank.
+- **Whether the key is right.** The triage (`reviewQuestion`) answers each
+  question BLIND first - stem and options only, no key - and a reader who picks
+  a different option is the finding. Only when the blind read agrees does the
+  argue-against step run, and an argument the blind read did not share is
+  recorded at low. The report to the reviewer leads with the disputes.
+
+## The toolset
+
+Every script defaults to a dry run, mints NEW revisions rather than editing in
+place, refuses `--approve-as` without `--write`, and (where it changes the bank)
+runs the whole-bank audit on the live database when it finishes. All run inside
+the backend container as `node dist/scripts/<name>.js`.
+
+| Script | Job |
+|---|---|
+| `sweepCertQuestionRubric` | Score every item; improve the ones below their ceiling; approve at ceiling. |
+| `growCertQuestionBank` | Write new items by objective and scenario to a target size (`--to 300 --count 25`), allocated by mock demand; rubric ceiling, blind-read triage, answer placement and the length step all at birth. |
+| `rebalanceCertAnswerPositions` | Move each key to the position the item factory's hash gives it. |
+| `balanceCertOptionLengths` | Generated items only: extend the longest wrong option where the key is longest, one item in three excepted by hash. |
+| `planAuthoredOptionLengths` + `applyCertOptionPatches` | The same pass for authored items: patches by option text, applied to the per-domain files, then a re-seed with `--revise --approve-as`. |
+| `exportGeneratedCertItems` | Write the generated half back to `data/certBlueprints/items/generated.ts` so the repo is the source of truth for all 300. |
+| `auditCertBank` | The whole-bank rubric, standalone, exit 1 on a hard failure. |
+| `verifyCertBankDrift` | The database holds what this build authored, and every item is servable. |
+| `triageCertQuestions` | Blind read, then argue-against, one stored verdict per item; `--report-only --send --to <email>` mails the reading list. |
+| `seedCertPrepContent` | Authored items from the repo into the database; `--revise` mints where the text changed; `--approve-as` approves ONLY what the run minted. |
 
 ## How it runs
 
@@ -98,8 +133,17 @@ is right.
 1. State the before and after distribution, not just the headline.
 2. Name every stalled question and why it stalled.
 3. Say plainly how many were approved and by whom.
-4. Update `PROGRESS.md` per CLAUDE.md's hard gate.
+4. Quote the whole-bank audit the script printed. If it did not print one, run
+   `auditCertBank` and quote that. A run that leaves the bank failing a hard
+   check is not finished.
 5. If anything was written to production, run the drift verifier and quote it.
+6. **Read the output, not the summary.** Every defect in the hardening log below
+   was found by reading what a clean count had already blessed. Sample the
+   actual text that was written, compare it with what was there before, and
+   measure the property you asked for on the output itself.
+7. Log the run where the tree you are in keeps its session log (`docs/sessions/`
+   on a tree tracking main; check `scripts/generateSessionChangelog.js` before
+   writing to `PROGRESS.md`).
 
 ## Hardening log
 
@@ -279,6 +323,20 @@ Weaknesses found by running it, and what was done. Add to this every time.
   versions were re-triaged side by side: the same concern on the same
   untouched option, before and after. **Compare against the baseline before
   believing a rate.**
+- *(2026-09-14)* **The triage flagged 53 of the first 100 items, every one
+  medium, every one hedged.** Asked to argue against the key and then judge
+  whether the argument wins, gpt-4o-mini reported "could be seen as" and "a
+  valid alternative" - the form the prompt says loses - on half the bank. A
+  reviewer judging its own argument is not independent of it, and a reading
+  list that is half the bank is no reading order. v3 starts with a different
+  kind of evidence: the reviewer answers the question BLIND, seeing only what
+  a candidate sees. A different answer is the finding (high,
+  `answer_disputed`); an argument the blind read did not share drops to low.
+  Over all 300: **25 blind disputes, 137 lows, 137 clean** - against 53
+  mediums per 100 before. The report then had to change too: it had listed
+  every flagged row in key order under "163 of 300 need your judgement", the
+  highs not even first. **Independent evidence beats self-judged evidence, and
+  a report is only as good as what it puts first.**
 - *(2026-09-11)* **`seedCertPrepContent --approve-as` approved every draft in
   the table, not the ones it had just minted.** Found while planning the
   authored-half length pass, which ends with a re-seed: production holds 149
@@ -309,6 +367,38 @@ Weaknesses found by running it, and what was done. Add to this every time.
   the applier reads the stream and collapses exact repeats from a resumed run.
   Same lesson as the deploy race in memory, from the other side: you cannot
   stop another session recreating the container, so assume it will.
+- *(2026-09-12)* **Asked to lengthen one wrong option, the model rewrote it.**
+  The authored run produced 45 patches that passed the bounds check, the
+  invariants, the rubric and the adversarial triage - and kept a median of
+  **40% of the author's content words**. 11 of 45 changed the opening word,
+  which is grammar rather than style: the four options answer the stem as a
+  set, so "That redacted values are replaced" became "Ensure redacted values
+  are replaced" and stopped completing the question it answers. 15 of 45
+  added a full stop their three siblings did not have - the letter-label
+  defect again, in punctuation, marking the option an editor touched. Caught
+  by reading the diff, not by any gate. **Every gate measured a property of
+  the result; none measured whether the result was still the author's
+  sentence.** `extensionProblem` now requires the opening word, the trailing
+  punctuation and 70% of the content words to survive, the prompt asks for an
+  extension in those words, and the bank audit gains a hard
+  `option_punctuation` check. The 45 patches were thrown away unapplied.
+  The same measurement over production's 70 balancer edits: median 50%
+  retention, 44 of 70 with a changed opening word - left alone deliberately,
+  because those options were model-written to begin with, every one was
+  re-triaged, and no author's voice was at stake.
+- *(2026-09-14)* **The extension contract worked, and the re-run still had to
+  be read.** Under it the 47 authored patches kept 100% of the author's words,
+  the opening word and the punctuation - measured, not assumed. Reading them
+  anyway found three additions that disparaged their own option: "even if it
+  risks errors", "even if the plans add little value", "regardless of its
+  current state or quality". The prompt already forbade exactly that wording.
+  **A rule the prompt states and nothing measures is a preference, not a
+  rule** - the third time this session that a stated instruction was ignored
+  and no gate noticed. `selfDefeatingPhrase` now rejects concessive
+  constructions the original did not already use. Deliberately concessive
+  constructions only, never negative words: half the bank's distractors
+  diagnose a failure, so "causing delays" is the option's content and "even if
+  it causes delays" is a hint to skip it.
 - *(2026-09-10)* **Do not write source containing backslashes through a shell
   heredoc.** Building the schema parser that way put a literal CR and a real
   newline where `` and `

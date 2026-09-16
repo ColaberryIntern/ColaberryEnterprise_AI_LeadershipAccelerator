@@ -90,6 +90,21 @@ export async function authorizeTicketDispatch(
       ? 'would_require_approval'
       : 'would_block';
 
+    // Real-enforcement scoping (Ali: "scope it as a plan, not code that ships
+    // yet" → this row-level fix is the safe, zero-risk first slice of that
+    // plan). Every row created here was ALWAYS the subset that would_deny —
+    // a clean would_allow verdict never reaches this line at all (see the
+    // early return above). Every one of these rows is therefore a genuine
+    // candidate for human review, not a passive log entry — so it's written
+    // as a real, actionable 'pending' row rather than the inert
+    // 'shadow_logged' this milestone originally shipped with (see this
+    // model's own header comment: "future enforcement-flip milestone" —
+    // this IS that milestone's first slice). This is deliberately safe to
+    // ship BEFORE anything gates a real action on the outcome: nothing
+    // downstream reads `status` yet (see agentActionAuthorizationBridge.ts's
+    // own SHADOW MODE INVARIANT above — still true, unchanged by this
+    // commit), so a real approve/reject queue can be built and exercised
+    // against real decisions now, safely, ahead of any real gating.
     const [row] = await ApprovalRequest.findOrCreate({
       where: { event_id: input.eventId },
       defaults: {
@@ -103,7 +118,7 @@ export async function authorizeTicketDispatch(
         autonomy_level: result.level,
         verdict,
         reason_code: result.reason,
-        status: 'shadow_logged',
+        status: 'pending',
       } as any,
     });
 

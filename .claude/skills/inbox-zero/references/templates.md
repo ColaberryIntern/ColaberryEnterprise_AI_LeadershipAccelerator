@@ -28,6 +28,7 @@ at render time; never print a bare ISO string or a UTC clock to Ali.
 - 💤 Snoozed (hidden): <counts.snoozed>
 
 <if liveness.unchecked_items > 0:> ⏳ <liveness.unchecked_items> item(s) not yet checked against your inbox (last check <liveness.last_checked_at_ct>); <liveness.gone_hidden_cases> case(s) hidden because their mail has left your inbox.
+<if liveness.non_email_cases > 0:> 📋 <liveness.non_email_cases> open case(s) are Basecamp board work, not inbox mail — not shown here.
 
 **Recommended next:** <recommended.title> — <recommended.why>
 
@@ -70,6 +71,7 @@ Basecamp probe error) . When ZERO, replace Recommended next with the closeout's 
 <case.recommendation, then the concrete action>
 
 ## Proposed response/action
+<the draft as it will actually leave: dashes already replaced, signature already appended, no sign-off. If `payload.style.soft` is non-empty: "Style notes: <rules> (kit: <url>)" on one line — suggestions, never a block>
 <the PROPOSED action's preview, verbatim; if several, list them with ids>
 <if none proposed yet: "Not planned yet — I will run assess + plan (read-only) on A.">
 

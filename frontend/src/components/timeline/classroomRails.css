@@ -122,6 +122,44 @@
          font-variant-numeric:tabular-nums}
 .cr-spacer{flex:1;min-height:8px}
 
+/* ── Community: the tile is somebody's WORDS ──────────────────────────────────
+   Ali, 2026-09-13: "I don't like the pictures/images." Every member avatar in
+   production is null (268 of 268), so the picture area could only ever render a
+   grey glyph. It is no longer rendered at all, and the height it was using goes
+   to the post: a ritual pill, the student's own sentence, then who said it. */
+.cr-quotetile .cr-in{padding:14px 15px 13px}
+/* The whole tile opens the post's thread, so it has to look like it does. */
+.cr-tile.cr-clickable{cursor:pointer;transition:border-color .16s ease,box-shadow .16s ease}
+.cr-tile.cr-clickable:hover{border-color:var(--cr,#367895)}
+.cr-tile.cr-clickable:focus-visible{outline:2px solid var(--cr,#367895);outline-offset:2px}
+.cr-eyebrow{
+  align-self:flex-start;font-size:.66rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--cr,#367895);background:var(--cr-soft,rgba(54,120,149,.10));
+  border-radius:999px;padding:4px 9px;margin-bottom:9px;max-width:100%;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.cr-pin{
+  align-self:flex-start;font-size:.62rem;font-weight:800;letter-spacing:.06em;
+  color:var(--te-faint,#9AA0AA);margin:-4px 0 8px;
+}
+/* The quote itself — the tile's reason to exist, so it gets the room. */
+.cr-quote{
+  font-size:.92rem;color:var(--te-strong,#1A1A1A);margin:0;line-height:1.5;
+  display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;
+}
+.cr-person{display:flex;align-items:center;gap:8px;margin-top:11px;min-width:0}
+.cr-pav{
+  flex:none;width:26px;height:26px;border-radius:50%;color:#fff;font-size:.62rem;font-weight:800;
+  display:flex;align-items:center;justify-content:center;object-fit:cover;
+}
+.cr-pname{font-size:.78rem;font-weight:700;color:var(--te-strong,#1A1A1A);
+          overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cr-plvl{flex:none;font-size:.64rem;font-weight:700;color:var(--te-muted,#6B7280);
+         background:var(--te-sunken,#F1F1F0);border-radius:999px;padding:2px 7px}
+@media (prefers-color-scheme:dark){
+  .cr-plvl{background:rgba(255,255,255,.08)}
+}
+
 .cr-act{
   display:block;text-align:center;text-decoration:none;
   background:var(--cr);color:#fff;font-size:.8rem;font-weight:700;

@@ -4,8 +4,9 @@ import PortalShell from '../today/PortalShell';
 import ProjectWizard from './ProjectWizard';
 import { useIsExplorer } from '../useIsExplorer';
 import ProjectPreview from './ProjectPreview';
-import ProjectInterior from './ProjectInterior';
+import ProjectInterior, { taskToFeedCard } from './ProjectInterior';
 import AddStoryPanel from './AddStoryPanel';
+import RepoWriteAccessBanner from './RepoWriteAccessBanner';
 import NextSessionStrip from './NextSessionStrip';
 import {
   resolveBackendProjectId, startBuild as startServerBuild, pollBuild,
@@ -14,9 +15,9 @@ import {
 import { describeCallOutcome, type CallNotice } from './describeCallOutcome';
 import { PipelineBanner, CallBanner, type PipelineState, type HandoffCounts } from './ProjectBanners';
 import ProjectsNextStepHero from './ProjectsNextStepHero';
-import FeedCard, { FeedItem } from '../feed/FeedCard';
+import TimelineCard, { type TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import {
-  useProjectsList, createProjectFromAnswers, claimBackendProject, projectProgress, reqVerified, nextTask,
+  useProjectsList, createProjectFromAnswers, claimBackendProject, projectProgress, projectPoints, reqVerified, nextTask, isTaskBlocked,
   removeProjectLocally,
   StudentProject, ProjectTask, ProjectList, NewBuildAnswers,
 } from './projectsStore';
@@ -31,6 +32,16 @@ import { deriveLegacyScope } from './deriveLegacyScope';
 import portalApi from '../../../utils/portalApi';
 import './projects.css';
 import '../today/TodayShell.css';
+// "Up next across your builds" renders .te-feed / .te-feed-head, defined ONLY
+// in feed.css. This page used to get that file transitively through FeedCard;
+// #2525 replaced FeedCard with TimelineCard and dropped the import, and a cold
+// load of /portal/projects then had none of those rules — the heading's list
+// icon fell back to the UA default and rendered as three 462px black pills
+// (Ali, 2026-09-14: "why are these black lines here"). The Today page hit the
+// identical failure on 2026-08-24 (see TodayShell.tsx). A page that renders a
+// class owns the import for it. feed.css is scoped to .te-feed*, so this
+// cannot leak.
+import '../feed/feed.css';
 
 // Projects tab, in the Today-page shape: a hero "your next step" (your build's
 // next action, or "create a project" if you have none), the next live session,
@@ -48,9 +59,6 @@ type View =
   | { kind: 'preview'; id: string }
   | { kind: 'interior'; id: string; taskId?: string | null };
 
-const PROJ_ICON = (
-  <svg viewBox="0 0 24 24" fill="none"><path d="M3 7l9-4 9 4-9 4-9-4z" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /><path d="M3 12l9 4 9-4M3 17l9 4 9-4" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg>
-);
 const DUE_RANK: Record<string, number> = { overdue: 0, today: 1, up: 2, done: 9 };
 
 /**
@@ -141,6 +149,7 @@ export function BuildCard({ p, onOpen, onRemove, repoSync }: {
   repoSync?: string;
 }) {
   const prog = projectProgress(p);
+  const pts = projectPoints(p);
   const rv = reqVerified(p);
   const creating = p.status === 'creating';
   const stageLabel = creating ? 'Creating…' : (prog.pct === 100 ? 'Complete' : p.stage.split(' · ')[0]);
@@ -161,6 +170,19 @@ export function BuildCard({ p, onOpen, onRemove, repoSync }: {
             </span>
             <span className={`pj-st ${progState}`}>{prog.done}/{prog.total} tasks</span>
             {rv.total > 0 && <span className={`pj-due ${rv.v === rv.total ? 'done' : 'up'}`}>{rv.v}/{rv.total} verified</span>}
+            {/* What the build pays. The list card carried task and verified
+                counts but no points, so the one screen a student lands on was
+                the only project surface that never said what the work is worth
+                (Ali, 2026-09-13: "You are not showing the points in the project
+                section"). Absent — not "0 pts" — when nothing here is priced. */}
+            {pts.priced > 0 && (
+              <span
+                className={`pj-due ${pts.earned >= pts.available ? 'done' : 'up'}`}
+                title={`Verified work on this build pays ${pts.available} pts in total. ${pts.earned} earned so far — the platform pays each story when your repo verifies it.`}
+              >
+                {pts.earned}/{pts.available} pts
+              </span>
+            )}
             <OriginChip p={p} />
             <RepoSyncChip state={repoSync} />
           </div>
@@ -201,6 +223,11 @@ const ProjectsPage: React.FC = () => {
   // seeded training example alongside them, so anything that counts, totals, or
   // says "you have N" must read this list and not `projects`.
   const ownBuilds = useMemo(() => projects.filter((p) => !p.sample), [projects]);
+  /** Points across the student's own builds, for the dashboard stat. */
+  const buildPoints = useMemo(() => ownBuilds.reduce(
+    (a, p) => { const q = projectPoints(p); return { earned: a.earned + q.earned, available: a.available + q.available }; },
+    { earned: 0, available: 0 },
+  ), [ownBuilds]);
   // Backend-source flip: pull the student's persisted build (completions from
   // other devices, or a build this browser has never seen) then mirror back up.
   // Once per page session, flag-gated + best-effort (see projectSync).
@@ -229,6 +256,7 @@ const ProjectsPage: React.FC = () => {
    * empty map, which renders no badges at all.
    */
   const [repoSync, setRepoSync] = useState<Record<string, string>>({});
+  const [repoUrl, setRepoUrl] = useState<Record<string, string>>({});
 
   const loadArchived = useCallback(async () => {
     const r = await fetchArchivedProjects();
@@ -250,10 +278,13 @@ const ProjectsPage: React.FC = () => {
         const rows = res?.data?.projects;
         if (!Array.isArray(rows)) return;
         const next: Record<string, string> = {};
+        const urls: Record<string, string> = {};
         for (const r of rows) {
           if (r?.id && typeof r.repo_sync === 'string') next[String(r.id)] = r.repo_sync;
+          if (r?.id && typeof r.repo_url === 'string') urls[String(r.id)] = r.repo_url;
         }
         setRepoSync(next);
+        setRepoUrl(urls);
       })
       .catch(() => { /* no badge is the correct degraded state */ });
     return () => { alive = false; };
@@ -519,19 +550,36 @@ const ProjectsPage: React.FC = () => {
   const copyPrompt = () => { if (navigator.clipboard && primaryNext?.task.prompt) navigator.clipboard.writeText(primaryNext.task.prompt); };
   const startBuild = () => setView({ kind: 'wizard' });
 
-  // landing timeline: the next open tasks across all builds
-  const feed: FeedItem[] = [];
+  // Landing timeline: the next open stories across all builds, rendered as the
+  // SAME card the build interior renders — through the interior's own mapper.
+  //
+  // It used to build a thinner `FeedItem` of its own: title, list name, one
+  // line of description, "Open build". So the first screen a student sees
+  // described a story differently from the screen behind it — no points, no
+  // release chip, and a story LOCKED behind its release gate shown as an
+  // ordinary openable row. Two mappings of one thing is how they drifted.
+  //
+  // Unblocked work leads. A locked story still appears, locked, with the gate
+  // named — that is the detail Ali asked to match — but it never displaces
+  // something the student can actually start.
+  const feedCards: { card: TimelineFeedCard; projectId: string; task: ProjectTask }[] = [];
   projects.forEach((p) => {
     const opens: { t: ProjectTask; l: ProjectList }[] = [];
     p.lists.forEach((l) => l.tasks.forEach((t) => { if (t.state === 'todo') opens.push({ t, l }); }));
-    opens.sort((a, b) => DUE_RANK[a.t.due] - DUE_RANK[b.t.due]);
-    opens.slice(0, 4).forEach(({ t, l }) => feed.push({
-      id: `t-${t.id}`, source: 'projects', sourceLabel: p.name, color: p.accent, icon: PROJ_ICON,
-      title: t.title, meta: l.name, desc: t.what,
-      cta: { label: 'Open build', onClick: () => openTaskWorkspace(p.id, t), variant: 'berry' },
+    opens.sort((a, b) => {
+      const ab = isTaskBlocked(p, a.t).blocked ? 1 : 0;
+      const bb = isTaskBlocked(p, b.t).blocked ? 1 : 0;
+      return ab !== bb ? ab - bb : DUE_RANK[a.t.due] - DUE_RANK[b.t.due];
+    });
+    opens.slice(0, 4).forEach(({ t, l }) => feedCards.push({
+      // The list label carries the BUILD name too: inside a project the project
+      // is obvious, here it is not, and the old row said which build it was.
+      card: taskToFeedCard(p, t, `${p.name} · ${l.name}`),
+      projectId: p.id,
+      task: t,
     }));
   });
-  const feedTop = feed.slice(0, 6);
+  const feedTop = feedCards.slice(0, 6);
 
   // ── interior + wizard + preview take over the whole page ──
   if (view.kind === 'interior' && active) {
@@ -568,6 +616,14 @@ const ProjectsPage: React.FC = () => {
                 0 of 3. Farhat read exactly that on a project she was not
                 building in, and had no way to find out. */}
             <ProjectDriftBanner onSwitched={() => { void refreshProjectsFromBackend(); }} />
+            {/* Read works, write does not: the Command Center and the pushed
+                documents freeze. Rendered here, not as a tooltip, because this
+                is the screen a student is on when they notice. */}
+            <RepoWriteAccessBanner
+              state={repoSync[active.id]}
+              repoUrl={repoUrl[active.id]}
+              onOpenWorkspace={() => openTaskWorkspace(active.id, activeNext?.task ?? null)}
+            />
             <ProjectInterior
               project={active}
               condensed={condensed}
@@ -716,7 +772,18 @@ const ProjectsPage: React.FC = () => {
           {feedTop.length > 0 && (
             <div className="te-feed" style={{ marginTop: 24 }}>
               <div className="te-feed-head"><span className="h"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Up next across your builds</span></div>
-              {feedTop.map((it) => <FeedCard key={it.id} item={it} />)}
+              {/* `.tl-de` because every rule for these cards is scoped under it —
+                  the same wrapper the interior and the hero use. */}
+              <div className="tl-de">
+                {feedTop.map(({ card, projectId, task }) => (
+                  <TimelineCard
+                    key={card.id}
+                    card={card}
+                    onOpen={() => openTaskWorkspace(projectId, task)}
+                    onWorkspace={() => openTaskWorkspace(projectId, task)}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -735,6 +802,16 @@ const ProjectsPage: React.FC = () => {
               fixture being counted as a build the student owns.
             */}
             <div className="te-stat"><span className="lab">Active builds</span><span className="num">{ownBuilds.length}</span></div>
+            {/* The same figure the cards carry, totalled across the student's
+                OWN builds — `ownBuilds`, so the seeded training example never
+                inflates what they think their work is worth. Hidden entirely
+                when nothing is priced yet. */}
+            {buildPoints.available > 0 && (
+              <div className="te-stat" title="Across your builds. The platform pays each story when your repo verifies it.">
+                <span className="lab">Build points</span>
+                <span className="num">{buildPoints.earned}/{buildPoints.available}</span>
+              </div>
+            )}
             {projects.map((p) => {
               const prog = projectProgress(p);
               return (

@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader, SectionCard, StatusBadge } from '../../components/admin/shell';
 import {
   ApplicationDetail, QueueBucket, QueueResponse, ReviewerDecision,
+  ApplicantAssessment, AssessmentRecommendation, RequirementStatus,
+  InternActivity, ProjectReview, ProjectStanding,
+  assessInternshipApplication, fetchInternshipActivity, reviewInternshipProject,
   decideInternshipApplication, fetchInternshipApplication, fetchInternshipQueue,
 } from '../../services/adminInternshipApi';
 import { InternshipKpi, fetchInternshipKpis } from '../../services/adminInternshipApi';
@@ -73,6 +76,17 @@ const AdminInternshipPage: React.FC = () => {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
+  const [assessment, setAssessment] = useState<ApplicantAssessment | null>(null);
+  const [assessing, setAssessing] = useState(false);
+  const [assessError, setAssessError] = useState<string | null>(null);
+
+  const [activity, setActivity] = useState<InternActivity | null>(null);
+  const [activityError, setActivityError] = useState<string | null>(null);
+
+  const [review, setReview] = useState<ProjectReview | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewQuestion, setReviewQuestion] = useState('');
+
   const [decision, setDecision] = useState<ReviewerDecision>('approve');
   const [reasonCode, setReasonCode] = useState('');
   const [studentMessage, setStudentMessage] = useState('');
@@ -119,6 +133,18 @@ const AdminInternshipPage: React.FC = () => {
       setStudentMessage('');
       setReviewerNotes('');
       setConditions('');
+      // The assessment is per-applicant and generated on demand, so drop the last
+      // one whenever a different application is opened.
+      setAssessment(null);
+      setAssessError(null);
+      // Activity is read-only and cheap, so load it eagerly for the opened intern.
+      setActivity(null);
+      setActivityError(null);
+      setReview(null);
+      setReviewQuestion('');
+      fetchInternshipActivity(id)
+        .then(setActivity)
+        .catch(() => setActivityError('Could not load the intern activity.'));
     } catch {
       setDetail(null);
       setDetailError('Could not load this application.');
@@ -128,6 +154,34 @@ const AdminInternshipPage: React.FC = () => {
   }, []);
 
   useEffect(() => { if (selected) void loadDetail(selected); }, [selected, loadDetail]);
+
+  const runAssessment = useCallback(async () => {
+    if (!selected) return;
+    setAssessing(true);
+    setAssessError(null);
+    try {
+      setAssessment(await assessInternshipApplication(selected));
+    } catch {
+      setAssessError('Could not generate the assessment. Try again.');
+    } finally {
+      setAssessing(false);
+    }
+  }, [selected]);
+
+  const runProjectReview = useCallback(async () => {
+    if (!selected) return;
+    setReviewing(true);
+    try {
+      setReview(await reviewInternshipProject(selected, reviewQuestion.trim() || undefined));
+    } catch {
+      setReview({
+        has_project: false, project_name: null, standing: 'unknown',
+        summary: 'Could not review the project. Try again.', answer: '', facts: null, model_generated: false,
+      });
+    } finally {
+      setReviewing(false);
+    }
+  }, [selected, reviewQuestion]);
 
   /** Reasons legal for the currently chosen decision. */
   const reasonOptions = useMemo(() => {
@@ -139,7 +193,10 @@ const AdminInternshipPage: React.FC = () => {
 
   const chosenReason = reasonOptions.find((r) => r.code === reasonCode) ?? null;
   const needsMessage = reasonCode === 'other_see_message';
-  const canSubmit = !!reasonCode && (!needsMessage || studentMessage.trim().length > 0);
+  // A reason is required only for the scoped (negative) decisions. Approving needs
+  // none — the offer letter and message are the substance.
+  const reasonRequired = NEEDS_SCOPED_REASON[decision] !== null;
+  const canSubmit = (!reasonRequired || !!reasonCode) && (!needsMessage || studentMessage.trim().length > 0);
 
   const submit = useCallback(async () => {
     if (!selected || !canSubmit) return;
@@ -361,6 +418,241 @@ const AdminInternshipPage: React.FC = () => {
             )}
           </SectionCard>
 
+          {/* AI ASSESSMENT — a summary and a recommendation the reviewer reads, never
+              a decision. Requirement green/red is deterministic; the summary and
+              posture are the model's, generated on demand. */}
+          <SectionCard
+            title="AI assessment"
+            icon="robot-2-line"
+            subtitle="A recommendation, not a decision. You decide below."
+          >
+            {assessError && <div className="alert alert-danger py-2" role="alert">{assessError}</div>}
+
+            {!assessment && (
+              <div className="d-flex align-items-center gap-3">
+                <button type="button" className="btn btn-sm btn-dark" onClick={runAssessment} disabled={assessing}>
+                  {assessing ? 'Reading the application…' : 'Generate AI assessment'}
+                </button>
+                <span className="text-muted" style={{ fontSize: 13 }}>
+                  Summarises the applicant, checks each requirement, and suggests a posture.
+                </span>
+              </div>
+            )}
+
+            {assessment && (
+              <div className="d-flex flex-column gap-3">
+                <div className="d-flex align-items-center gap-2 flex-wrap">
+                  <RecommendationBadge value={assessment.recommendation} />
+                  {!assessment.model_generated && (
+                    <span className="badge bg-secondary" title="The language model was unavailable; showing the requirement check only.">
+                      requirement check only
+                    </span>
+                  )}
+                  <button type="button" className="btn btn-sm btn-outline-secondary ms-auto" onClick={runAssessment} disabled={assessing}>
+                    {assessing ? 'Refreshing…' : 'Refresh'}
+                  </button>
+                </div>
+
+                <p className="mb-0" style={{ fontSize: 14, lineHeight: 1.55 }}>{assessment.summary}</p>
+
+                {assessment.rationale && (
+                  <p className="text-muted mb-0" style={{ fontSize: 13.5, lineHeight: 1.55 }}>
+                    <strong>Why:</strong> {assessment.rationale}
+                  </p>
+                )}
+
+                <div>
+                  <div className="text-uppercase text-muted mb-2" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.05em' }}>
+                    Requirements
+                  </div>
+                  <div className="d-flex flex-column gap-1">
+                    {assessment.requirements.map((r) => (
+                      <div key={r.key} className="d-flex align-items-start gap-2" style={{ fontSize: 13.5 }}>
+                        <RequirementDot status={r.status} />
+                        <span>
+                          {r.label}
+                          {r.evidence && <span className="text-muted"> — {r.evidence}</span>}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {assessment.conditions.length > 0 && (
+                  <div>
+                    <div className="text-uppercase text-muted mb-1" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.05em' }}>
+                      Suggested conditions
+                    </div>
+                    <ul className="mb-0" style={{ fontSize: 13.5 }}>
+                      {assessment.conditions.map((c, i) => <li key={i}>{c}</li>)}
+                    </ul>
+                  </div>
+                )}
+
+                {assessment.follow_up_questions.length > 0 && (
+                  <div>
+                    <div className="text-uppercase text-muted mb-1" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.05em' }}>
+                      Questions to get answered
+                    </div>
+                    <ul className="mb-0" style={{ fontSize: 13.5 }}>
+                      {assessment.follow_up_questions.map((q, i) => <li key={i}>{q}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </SectionCard>
+
+          {/* ACTIVITY — what the intern is doing: training (weeks 1-3 gate),
+              project, cert prep, case studies. Read-only, loaded on open. */}
+          <SectionCard
+            title="Activity"
+            icon="pulse-line"
+            subtitle="Training, project, cert prep and case studies"
+          >
+            {activityError && <div className="alert alert-warning py-2 mb-2" role="alert">{activityError}</div>}
+            {!activity && !activityError && <p className="text-muted mb-0">Loading activity…</p>}
+            {activity && (
+              <div className="d-flex flex-column gap-3">
+                {/* Training — the first-3-weeks gate front and centre */}
+                <div>
+                  <div className="d-flex align-items-center gap-2 mb-2">
+                    <span className="text-uppercase text-muted" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.05em' }}>
+                      Training (weeks 1-3)
+                    </span>
+                    {activity.training ? (
+                      <span
+                        className="badge"
+                        style={{
+                          background: activity.training.first_three_weeks.ready ? '#2e7d5b' : '#a8690f',
+                          color: '#fff', fontSize: 11, fontWeight: 600,
+                        }}
+                      >
+                        {activity.training.first_three_weeks.ready
+                          ? 'Ready for a project'
+                          : `${activity.training.first_three_weeks.done} of ${activity.training.first_three_weeks.total} weeks done`}
+                      </span>
+                    ) : (
+                      <span className="text-muted" style={{ fontSize: 12 }}>no training data yet</span>
+                    )}
+                  </div>
+                  {activity.training && (
+                    <div className="d-flex flex-column gap-1">
+                      {activity.training.weeks
+                        .filter((w) => w.week >= 1 && w.week <= 3)
+                        .map((w) => (
+                          <div key={w.week} className="d-flex align-items-center gap-2" style={{ fontSize: 13.5 }}>
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                flex: 'none', width: 10, height: 10, borderRadius: '50%',
+                                background: w.done ? '#2e7d5b' : '#cbd5e0',
+                              }}
+                            />
+                            <span style={{ minWidth: 60 }}>Week {w.week}</span>
+                            <span className="text-muted">{w.completed}/{w.published} items ({w.completed_pct}%)</span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Project */}
+                <div>
+                  <div className="text-uppercase text-muted mb-1" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.05em' }}>
+                    Project
+                  </div>
+                  {activity.project ? (
+                    <div style={{ fontSize: 13.5 }}>
+                      <strong>{activity.project.name}</strong>
+                      <span className="text-muted"> · {activity.project.stage ?? 'no stage'}</span>
+                      <div className="text-muted">
+                        {activity.project.verified_stories}/{activity.project.total_stories} stories verified
+                        {activity.project.requirements_pct != null && ` · ${activity.project.requirements_pct}% requirements`}
+                        {activity.project.repo_connected ? ' · repo connected' : ' · no repo yet'}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-muted" style={{ fontSize: 13.5 }}>No project assigned yet.</span>
+                  )}
+
+                  {/* AI "dig into their project" review — a management read of the
+                      build, generated on demand. Deterministic facts anchor it; the
+                      model writes the standing/summary and answers a manager's
+                      question. Only offered once a project exists. */}
+                  {activity.project && (
+                    <div className="mt-2 pt-2" style={{ borderTop: '1px solid #f1f3f5' }}>
+                      <div className="d-flex align-items-center gap-2 flex-wrap mb-2">
+                        <button type="button" className="btn btn-sm btn-dark" onClick={runProjectReview} disabled={reviewing}>
+                          {reviewing ? 'Reading the build…' : review ? 'Re-run review' : 'Review with AI'}
+                        </button>
+                        <span className="text-muted" style={{ fontSize: 12.5 }}>
+                          A management read of where the build stands — or ask a question below.
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm mb-2"
+                        style={{ maxWidth: 480 }}
+                        placeholder="Ask about the project (optional), e.g. is the data pipeline actually built?"
+                        value={reviewQuestion}
+                        onChange={(e) => setReviewQuestion(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runProjectReview(); } }}
+                        disabled={reviewing}
+                      />
+                      {review && review.has_project && (
+                        <div className="d-flex flex-column gap-2">
+                          <div className="d-flex align-items-center gap-2 flex-wrap">
+                            <StandingBadge value={review.standing} />
+                            {!review.model_generated && (
+                              <span className="badge bg-secondary" title="The language model was unavailable; showing the deterministic facts only.">
+                                facts only
+                              </span>
+                            )}
+                          </div>
+                          <p className="mb-0" style={{ fontSize: 14, lineHeight: 1.55 }}>{review.summary}</p>
+                          {review.answer && (
+                            <p className="mb-0" style={{ fontSize: 13.5, lineHeight: 1.55 }}>
+                              <strong>Answer:</strong> {review.answer}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Cert prep + case studies, side by side on wide screens */}
+                <div className="d-flex flex-wrap gap-4">
+                  <div>
+                    <div className="text-uppercase text-muted mb-1" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.05em' }}>
+                      Cert prep
+                    </div>
+                    <span style={{ fontSize: 13.5 }}>
+                      {activity.cert_prep
+                        ? `${activity.cert_prep.state.replace(/_/g, ' ')}${activity.cert_prep.overall_scaled != null ? ` · ${activity.cert_prep.overall_scaled}` : ''}`
+                        : <span className="text-muted">Not measured yet.</span>}
+                    </span>
+                  </div>
+                  <div>
+                    <div className="text-uppercase text-muted mb-1" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.05em' }}>
+                      Case studies
+                    </div>
+                    {activity.case_studies.length === 0
+                      ? <span className="text-muted" style={{ fontSize: 13.5 }}>None yet.</span>
+                      : (
+                        <ul className="mb-0" style={{ fontSize: 13.5 }}>
+                          {activity.case_studies.map((c) => (
+                            <li key={c.id}>{c.title} <span className="text-muted">({c.status})</span></li>
+                          ))}
+                        </ul>
+                      )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </SectionCard>
+
           {/* THE APPLICANT'S OWN WORDS, FIRST. */}
           <SectionCard title="Their answers" icon="chat-quote-line" subtitle="In their own words, exactly as given">
             {detail.summary.length === 0
@@ -500,7 +792,7 @@ const AdminInternshipPage: React.FC = () => {
 
             <div className="mb-3">
               <label className="form-label" htmlFor="ai-reason" style={{ fontSize: 13, fontWeight: 600 }}>
-                Reason (required)
+                Reason {reasonRequired ? '(required)' : '(optional)'}
               </label>
               <select
                 id="ai-reason"
@@ -577,7 +869,7 @@ const AdminInternshipPage: React.FC = () => {
             </button>
             {!canSubmit && (
               <span className="text-muted ms-2" style={{ fontSize: 12 }}>
-                {!reasonCode ? 'Pick a reason first.' : 'This reason needs a message.'}
+                {reasonRequired && !reasonCode ? 'Pick a reason first.' : 'This reason needs a message.'}
               </span>
             )}
           </SectionCard>
@@ -618,6 +910,62 @@ const AdminInternshipPage: React.FC = () => {
 
       <InternshipConversionPanel onChanged={() => { void loadQueue(bucket); }} />
     </div>
+  );
+};
+
+/** The AI's suggested posture, as a coloured badge. Advice, not a decision. */
+const RecommendationBadge: React.FC<{ value: AssessmentRecommendation }> = ({ value }) => {
+  const map: Record<AssessmentRecommendation, { label: string; bg: string }> = {
+    approve: { label: 'Suggests: Approve', bg: '#2e7d5b' },
+    approve_with_conditions: { label: 'Suggests: Approve with conditions', bg: '#1f7a8c' },
+    concerns: { label: 'Suggests: Concerns', bg: '#b23a3a' },
+    follow_up: { label: 'Suggests: Follow up', bg: '#a8690f' },
+    not_ready: { label: 'Suggests: Not ready', bg: '#6b7280' },
+  };
+  const m = map[value];
+  return (
+    <span
+      className="badge"
+      style={{ background: m.bg, color: '#fff', fontSize: 12, fontWeight: 600, padding: '6px 10px' }}
+    >
+      {m.label}
+    </span>
+  );
+};
+
+/** Standing pill for the AI project review — how the build is tracking. */
+const StandingBadge: React.FC<{ value: ProjectStanding }> = ({ value }) => {
+  const map: Record<ProjectStanding, { label: string; bg: string }> = {
+    on_track: { label: 'On track', bg: '#2e7d5b' },
+    needs_attention: { label: 'Needs attention', bg: '#a8690f' },
+    stalled: { label: 'Stalled', bg: '#b23a3a' },
+    not_started: { label: 'Not started', bg: '#6b7280' },
+    unknown: { label: 'Unknown', bg: '#6b7280' },
+  };
+  const m = map[value];
+  return (
+    <span
+      className="badge"
+      style={{ background: m.bg, color: '#fff', fontSize: 12, fontWeight: 600, padding: '6px 10px' }}
+    >
+      {m.label}
+    </span>
+  );
+};
+
+/** Green / red / amber for a requirement's status. */
+const RequirementDot: React.FC<{ status: RequirementStatus }> = ({ status }) => {
+  const color = status === 'met' ? '#2e7d5b' : status === 'not_met' ? '#b23a3a' : '#a8690f';
+  const label = status === 'met' ? 'Met' : status === 'not_met' ? 'Not met' : 'Unclear';
+  return (
+    <span
+      aria-label={label}
+      title={label}
+      style={{
+        flex: 'none', width: 11, height: 11, borderRadius: '50%', background: color,
+        marginTop: 4, display: 'inline-block',
+      }}
+    />
   );
 };
 

@@ -293,6 +293,13 @@ export function seedPublishableMetric(db: IntegrationDb, caseStudyId: string, ov
     sample: '18 changeovers',
     methodology: 'Line telemetry, compared against the prior quarter.',
     limitations: ['single line'],
+    // The three answers a headline owes a reader, required in the hero since
+    // 2026-09-12. Seeded here so the canonical publishable record models it.
+    plain: {
+      counts: 'minutes from the last good part of one run to the first of the next',
+      from: 'line telemetry, the same clock the operators read',
+      cannotShow: 'whether the shift got easier, or what the saved time was spent on',
+    },
     ...over,
   });
 }

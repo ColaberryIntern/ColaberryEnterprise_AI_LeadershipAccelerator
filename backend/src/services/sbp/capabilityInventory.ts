@@ -74,6 +74,23 @@ export interface CapabilityDef {
   minimum?: number;
   /** Services only: where the proof-of-running is committed. */
   runEvidence?: string;
+  /**
+   * Paths that COUNT as this capability when a student produces them without
+   * being told to. Matched case-insensitively; an entry ending in "/" is a
+   * directory, anything else is a filename prefix.
+   *
+   * Deliberately separate from `evidence`. `evidence` is the CONTRACT: the
+   * week's lab must teach every path in it, and `buildLabContract` audits that
+   * it does. These are the opposite - things students do on their own that the
+   * lab never asked for - so the audit must NOT demand the lab mention them.
+   *
+   * Why it exists: a learner filed eleven ADRs across `adr/` and `docs/ADR-*`,
+   * asked why none of it showed on his portfolio, and the honest answer was
+   * that Architecture Package only ever looked in `architecture/`. An ADR is an
+   * architecture artifact by any definition; refusing to see it because of the
+   * folder name made the portfolio less true, not more rigorous.
+   */
+  alsoAccepts?: string[];
 }
 
 /**
@@ -114,8 +131,13 @@ export const CAPABILITIES: readonly CapabilityDef[] = [
     evidence: ['reliability/'] },
   { id: 'GOVERNANCE', label: 'Governance Engine', weeks: [10], shape: 'module', producer: 'curriculum',
     evidence: ['governance/'] },
+  // ADRs are architecture. Students keep them in adr/, docs/adr/ or as
+  // docs/ADR-nnn-*.md; none of those is the folder the lab names, all of them
+  // are the thing this capability is about. `evidence` stays exactly what the
+  // lab teaches; `alsoAccepts` is what we recognise.
   { id: 'ARCHITECTURE', label: 'Architecture Package', weeks: [11], shape: 'package', producer: 'curriculum',
-    evidence: ['architecture/'] },
+    evidence: ['architecture/'],
+    alsoAccepts: ['adr/', 'docs/adr/', 'docs/ADR-', 'ADR-'] },
   { id: 'CAPSTONE', label: 'Capstone', weeks: [12], shape: 'composite', producer: 'either', evidence: [] },
 ];
 

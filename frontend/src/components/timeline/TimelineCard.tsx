@@ -7,6 +7,7 @@ import portalApi from '../../utils/portalApi';
 import { getPodcastMuted, setPodcastMuted } from '../../utils/podcastMutePreference';
 import { runtimeApi } from '../../pages/portal/runtime/runtimeApi';
 import { ambientMediaOf } from './ambientMedia';
+import RitualBody from './RitualBody';
 import { useMediaBeats, type WatchBeatPayload } from './useMediaBeats';
 
 // Server-derived watch state for a card (the video watch gate). watched_pct is
@@ -17,6 +18,13 @@ interface WatchState { watched_pct: number; required_pct: number | null; met: bo
  *  REPLY_POINTS in CommunityThreadPanel — what a reply earns, advertised on the
  *  tile so the student knows before opening. The award itself is server-side. */
 const REPLY_POINTS = 2;
+
+/** A community post shows this many lines on the tile before "Show more".
+ *  Ali, 2026-09-12: "I would rather have 3 lines max with the ability for the
+ *  user to expand the text." Expressed in `em` against the body's own
+ *  line-height in timeline.css, so it stays three LINES if the type scale
+ *  changes. */
+const POST_CLAMP_LINES = 3;
 
 // Community byline helpers — a card carrying `author` renders as a post (avatar +
 // name + level badge) instead of the generic curriculum header.
@@ -79,6 +87,11 @@ export interface TimelineFeedCard {
   // ("Due today", "Overdue"). The Projects page sets it; curriculum cards leave
   // it unset and keep showing their difficulty.
   meta?: string | null;
+  // The verb on a project task's CTA. Default "Build" — a story is built and
+  // verified from the repo. A demo-prep task is handed in ("Submit"), and Demo
+  // Day is marked by staff ("Demo Day"), so the button must not promise a
+  // build where there is nothing to build. Set by the projects mapper.
+  cta_verb?: string | null;
 }
 
 export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone' | 'setuplab' | 'timemachine';
@@ -305,6 +318,24 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   // so every card-scoped affordance on this tile has to route to the post's own
   // endpoints instead — see community_post_id on TimelineFeedCard.
   const isCommunityPost = !!card.community_post_id;
+  // Long enough that rendering it in full would push every other card off the
+  // screen. Measured on the STRING, not on layout: deterministic, testable, and
+  // it cannot change under a re-render. A "Steal This Prompt" post runs ~2,000
+  // characters; a Skill Drop answer runs ~200 and is never clamped.
+  // A community post is clamped to POST_CLAMP_LINES until the student expands
+  // it, in place, on the tile. Whether it NEEDS expanding is a question about
+  // layout, so it is measured (scrollHeight vs clientHeight) rather than
+  // guessed from the character count — a three-word post must not be handed a
+  // "Show more" that reveals nothing.
+  const [postExpanded, setPostExpanded] = useState(false);
+  const [postOverflows, setPostOverflows] = useState(false);
+  const postBodyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = postBodyRef.current;
+    if (!el) { setPostOverflows(false); return; }
+    // Measured while clamped; 2px absorbs sub-pixel line rounding.
+    setPostOverflows(el.scrollHeight > el.clientHeight + 2);
+  }, [card.description, isCommunityPost]);
 
   // A project task's destination is the project workspace, not the drawer. The
   // routing decision deliberately does NOT live here: this tile is rendered by
@@ -522,7 +553,35 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
           when a compact card has no description to show. */}
       {(!compact || card.description) && (
       <div className="fc-body">
-        {card.description && <p>{card.description}</p>}
+        {/* A community post keeps the shape the student typed — labelled
+            sections, line breaks, bullet lists — because that is what the
+            drawer shows when they click it (Ali, 2026-09-11). One renderer for
+            both, so the two cannot drift; `<p>` collapsed every newline into a
+            wall of prose. A very long post is clamped with a fade and reads in
+            full in the drawer: the feed is a scroll of many cards, not one. */}
+        {card.description && (isCommunityPost
+          ? (
+            <>
+              <div
+                ref={postBodyRef}
+                className={`fc-rbwrap${postExpanded ? '' : ' clamped'}`}
+                style={postExpanded ? undefined : { maxHeight: `${POST_CLAMP_LINES * 1.55}em` }}
+              >
+                <RitualBody body={card.description} classes={{ sec: 'fc-rb', label: 'fc-rb-lab', value: 'fc-rb-val' }} />
+              </div>
+              {postOverflows && (
+                <button
+                  type="button"
+                  className="fc-rbmore"
+                  aria-expanded={postExpanded}
+                  onClick={() => setPostExpanded((v) => !v)}
+                >
+                  {postExpanded ? 'Show less' : 'Show more'}
+                </button>
+              )}
+            </>
+          )
+          : <p>{card.description}</p>)}
         {/* Locked: a big lock over the tile, dimmed, and an overlay that swallows
             every pointer/keyboard interaction so nothing opens or plays. */}
         {!compact && (
@@ -604,7 +663,9 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
                 className={`fc-cta ${pts > 0 || v.kind === 'lab' || isCommunityPost ? 'cherry' : 'berry'}`}
                 onClick={() => { setPlayingInline(false); onOpen?.(card); }}
                 title={isProjectTask
-                  ? (pts > 0 ? `Build this story in your workspace — verified work pays +${pts} pts` : 'Open this task in your project workspace')
+                  ? (pts > 0
+                    ? (card.cta_verb ? `Open this task — verified work pays +${pts} pts` : `Build this story in your workspace — verified work pays +${pts} pts`)
+                    : 'Open this task in your project workspace')
                   : isCommunityPost ? `Reply to earn +${REPLY_POINTS} pts`
                     : pts > 0 ? `Open to collect +${pts} pts` : undefined}
               >
@@ -612,7 +673,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
                   // Not "Collect": nothing here is collected by clicking. The
                   // platform pays the story when the repo verifies it, and the
                   // button says what that is worth on the way in.
-                  ? <><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {pts > 0 ? <>Build · +{pts} pts</> : 'Start'}</>
+                  ? <><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {pts > 0 ? <>{card.cta_verb || 'Build'} · +{pts} pts</> : 'Start'}</>
                   : pts > 0
                   ? <><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Collect +{pts} pts</>
                   : isCommunityPost

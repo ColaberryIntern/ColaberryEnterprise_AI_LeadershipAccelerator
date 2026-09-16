@@ -3,7 +3,7 @@ import { SectionCard, StatusBadge } from '../shell';
 import {
   AdminDocumentsView,
   fetchInternshipDocumentsAdmin,
-  internshipDocumentFileUrl,
+  openInternshipDocumentBlob,
   verifyInternshipDocument,
 } from '../../../services/adminInternshipApi';
 
@@ -81,10 +81,20 @@ const InternshipDocumentPanel: React.FC<{
     }
   }, [reasons, load, onChanged]);
 
-  const open = (documentId: string) => {
-    setOpened((prev) => new Set(prev).add(documentId));
-    window.open(internshipDocumentFileUrl(documentId), '_blank', 'noopener,noreferrer');
-  };
+  const open = useCallback(async (documentId: string) => {
+    setError(null);
+    try {
+      // Fetch with auth, then open the blob — a raw window.open(url) carries no
+      // token and the guarded route rejects it. Mark "opened" only on success, so
+      // the Accept gate does not unlock on a file the reviewer never actually saw.
+      const url = await openInternshipDocumentBlob(documentId);
+      setOpened((prev) => new Set(prev).add(documentId));
+      window.open(url, '_blank', 'noopener,noreferrer');
+      setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } catch (err: any) {
+      setError(err?.response?.data?.error ?? 'Could not open the file. Try again.');
+    }
+  }, []);
 
   if (loading) {
     return <SectionCard title="Documents" icon="file-text-line"><p className="text-muted mb-0">Loading…</p></SectionCard>;

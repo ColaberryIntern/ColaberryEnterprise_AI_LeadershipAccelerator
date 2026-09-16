@@ -15,6 +15,7 @@ import { getPersonaVersionHistory, type PersonaVersionHistoryRow } from '../agen
 import { agentCostRows } from '../trustMetricsService';
 import { getAgentAuthorizationSummary, type AgentAuthorizationSummary } from '../agentAuthorizationService';
 import { computeAgentGoalsDimensions, type AgentGoalsDimension } from '../agentGoalsDimensionsService';
+import { classifyAgentAutonomyLevel } from '../agentCapabilityClassifier';
 
 // Agent Detail — the transparency page Ali asked for: real identity, real
 // system prompt, real tools, live status, real linked ticket activity. Written
@@ -74,6 +75,7 @@ export interface AgentDetailResult {
     max_writes_per_execution: number | null;
     max_proposals_per_run: number | null;
     autonomy_level_set_at: Date | null;
+    autonomy_level_source: 'auto' | 'manual' | null;
   };
   identity: {
     admin_user_id: string;
@@ -179,6 +181,23 @@ export interface AgentDetailResult {
      * order — lets AgentDetailPage show which tool a given fact came from
      * instead of only the flattened union above (2026-08-23 drill-down ask). */
     by_tool: Array<{ tool: string; reads: string[]; produces: string[]; documented: boolean }>;
+  };
+  /** Fleet-wide autonomy-level auto-classification, UI follow-up (2026-09-15)
+   * — Ali, on Reese's page: "why give the user the ability to change it...
+   * we might as well set the default and color coordinate it and have a
+   * popup that explains why it has been given this autonomy level." This is
+   * that explanation: `classifyAgentAutonomyLevel()` (the same pure,
+   * dependency-free function the fleet backfill script and the ongoing-sync
+   * service both call) run fresh against this agent's CURRENT
+   * `tools_granted`, every request. Never stored — recomputing live means it
+   * self-corrects the instant `tools_granted` changes, and doubles as
+   * staleness detection for a manually-set level: if `level` here disagrees
+   * with `agent.autonomy_level`, the frontend can show that a human's choice
+   * no longer matches what the agent's real granted tools would earn. */
+  autonomy_explanation: {
+    level: 'observe' | 'suggest' | 'act_audited' | 'communicate';
+    reason: string;
+    matched_tool: string | null;
   };
   /** This agent's own real reports_to chain (org-chart hierarchy build,
    * 2026-08-19) — the "Reports to" section on AgentDetailPage. `null` only
@@ -352,6 +371,7 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
   })();
 
   const capabilities = deriveAgentCapabilities(agent.tools_granted);
+  const autonomyClassification = classifyAgentAutonomyLevel(agent.tools_granted);
 
   // Ticket Count Sync fix (2026-08-21) — the TRUE open count, via the same
   // shared per-agent query the org chart's badges and the Live Agents grid
@@ -425,6 +445,7 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
       max_writes_per_execution: agent.max_writes_per_execution ?? null,
       max_proposals_per_run: agent.max_proposals_per_run ?? null,
       autonomy_level_set_at: agent.autonomy_level_set_at ?? null,
+      autonomy_level_source: agent.autonomy_level_source ?? null,
     },
     identity: adminUser
       ? {
@@ -469,6 +490,11 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
       undocumented_tools: capabilities.undocumentedTools,
       produced_ticket_types: Array.from(new Set((allTicketTypeRows as any[]).map((t) => t.type))),
       by_tool: capabilities.byTool.map((t) => ({ tool: t.tool, reads: t.reads, produces: t.produces, documented: t.documented })),
+    },
+    autonomy_explanation: {
+      level: autonomyClassification.level,
+      reason: autonomyClassification.reason,
+      matched_tool: autonomyClassification.matchedTool,
     },
     reports_to: reportsTo,
     trust_contract: {

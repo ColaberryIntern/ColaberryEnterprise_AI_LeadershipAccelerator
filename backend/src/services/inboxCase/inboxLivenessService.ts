@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Op } from 'sequelize';
 import InboxCase from '../../models/InboxCase';
 import InboxCaseAction from '../../models/InboxCaseAction';
@@ -36,6 +37,20 @@ import { logCaseEvent } from './caseEventLog';
 // unbounded burst; a second pass over the same rows is a no-op.
 
 export const LIVENESS_ACTOR = 'inbox_liveness';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * inbox_case_events.correlation_id is `UUID NOT NULL` (ensureInboxCaseSchema).
+ * A human-readable run label ("liveness_cron:…") is fine for logs but would
+ * make every item audit event fail its INSERT — and logCaseEvent swallows
+ * that by design. Found live on 2026-09-12: 65 items dispositioned, 0
+ * `item_removed_at_source` rows. So the audit id is always a UUID; the
+ * label travels in the structured log instead.
+ */
+export function auditCorrelationId(given: string | undefined): string {
+  return given && UUID_RE.test(given) ? given : randomUUID();
+}
 export const DEFAULT_RECONCILE_LIMIT = 150;
 export const DEFAULT_STALE_MINUTES = 30;
 const CHECK_TIMEOUT_MS = DEFAULT_PROVIDER_TIMEOUT_MS;
@@ -216,6 +231,8 @@ export async function settleCaseIfNoLiveItems(caseId: string, correlationId: str
  */
 export async function reconcileLiveness(opts: { limit?: number; staleMinutes?: number; correlationId: string; now?: Date }): Promise<ReconcileResult> {
   const now = opts.now ?? new Date();
+  const runLabel = opts.correlationId;
+  const correlationId = auditCorrelationId(opts.correlationId);
   const limit = Math.max(1, Math.min(opts.limit ?? DEFAULT_RECONCILE_LIMIT, 1000));
   const staleBefore = new Date(now.getTime() - (opts.staleMinutes ?? DEFAULT_STALE_MINUTES) * 60_000);
 
@@ -247,20 +264,20 @@ export async function reconcileLiveness(opts: { limit?: number; staleMinutes?: n
     else if (outcome.kind === 'gone') result.gone++;
     else result.unverifiable++;
     try {
-      const caseId = await applyLiveness(item, outcome, now, opts.correlationId);
+      const caseId = await applyLiveness(item, outcome, now, correlationId);
       if (caseId) affected.add(caseId);
     } catch (err: any) {
       console.error(JSON.stringify({
         timestamp: now.toISOString(), level: 'error', service: 'inboxLivenessService', event: 'liveness_apply_failed',
         outcome: 'failure', error_class: err?.error_class || classifyError(err),
-        correlation_id: opts.correlationId, context: { item_id: item.id, kind: outcome.kind, message: String(err?.message ?? err).slice(0, 200) },
+        correlation_id: correlationId, context: { run_label: runLabel, item_id: item.id, kind: outcome.kind, message: String(err?.message ?? err).slice(0, 200) },
       }));
     }
   }
 
   for (const caseId of affected) {
     try {
-      const settled = await settleCaseIfNoLiveItems(caseId, opts.correlationId);
+      const settled = await settleCaseIfNoLiveItems(caseId, correlationId);
       if (settled === 'closed') result.cases_closed.push(caseId);
       else if (settled === 'blocked') result.close_blocked.push(caseId);
     } catch (err: any) {
@@ -268,15 +285,15 @@ export async function reconcileLiveness(opts: { limit?: number; staleMinutes?: n
       console.error(JSON.stringify({
         timestamp: now.toISOString(), level: 'error', service: 'inboxLivenessService', event: 'liveness_settle_failed',
         outcome: 'failure', error_class: err?.error_class || classifyError(err),
-        correlation_id: opts.correlationId, context: { case_id: caseId, message: String(err?.message ?? err).slice(0, 200) },
+        correlation_id: correlationId, context: { run_label: runLabel, case_id: caseId, message: String(err?.message ?? err).slice(0, 200) },
       }));
     }
   }
 
   console.log(JSON.stringify({
     timestamp: now.toISOString(), level: 'info', service: 'inboxLivenessService', event: 'liveness_reconcile',
-    outcome: 'success', correlation_id: opts.correlationId,
-    context: { ...result, cases_closed: result.cases_closed.length, close_blocked: result.close_blocked.length, limit },
+    outcome: 'success', correlation_id: correlationId,
+    context: { run_label: runLabel, ...result, cases_closed: result.cases_closed.length, close_blocked: result.close_blocked.length, limit },
   }));
   return result;
 }
@@ -289,10 +306,11 @@ export async function reconcileLiveness(opts: { limit?: number; staleMinutes?: n
  */
 export async function verifyCaseLivenessNow(
   caseId: string,
-  correlationId: string,
+  givenCorrelationId: string,
   now: Date = new Date(),
   maxItems = 5,
 ): Promise<{ all_gone: boolean; live: number; gone: Array<{ item_id: string; reason: SourceGoneReason }>; unverified: Array<{ item_id: string; error_class: string }>; unchecked: number }> {
+  const correlationId = auditCorrelationId(givenCorrelationId);
   const items = await InboxCaseItem.findAll({
     where: { case_id: caseId, disposition: null, inclusion_status: { [Op.ne]: 'EXCLUDED' } } as any, // `as any`: Op-keyed where
     order: [['occurred_at', 'DESC']],

@@ -155,3 +155,40 @@ export async function ingestStoryEnrichments(
   });
   return summary;
 }
+
+/**
+ * The same ingest, for a caller that has only a project id.
+ *
+ * Verification has two entry points and this file was wired to one. The push
+ * webhook already holds the connection and calls `ingestStoryEnrichments`
+ * directly; the portal's manual sync (`POST /api/portal/workspace/repo/sync`)
+ * ran verification and document refresh and never read enrichment files at
+ * all. On 2026-09-14 that had no victims (23 of 27 connected projects had a
+ * webhook, the 4 without had no verified work), which is exactly when to close
+ * it: the next student who skips webhook setup would verify stories through
+ * sync while every enrichment file they wrote was ignored, and nothing would
+ * say so.
+ *
+ * Resolves the repository the way `verifyBuildFromRepo` does, so the two reads
+ * cannot disagree about which repo a project is. Never throws: no repository
+ * is a classified summary, not an error.
+ */
+export async function ingestStoryEnrichmentsForProject(
+  projectId: string,
+  opts: { correlationId?: string; fetchImpl?: typeof fetch } = {},
+): Promise<EnrichmentIngestSummary> {
+  const { default: GitHubConnection } = await import('../../models/GitHubConnection');
+  const { storedConnect } = await import('./repoConnect/connectionAccess');
+  const connection = await GitHubConnection.findOne({ where: { project_id: projectId } });
+  if (!connection?.repo_owner || !connection?.repo_name) {
+    log('sbp_enrichment_ingest_skipped', 'partial', {
+      project_id: projectId, correlation_id: opts.correlationId ?? null, error_class: 'NoRepository',
+    });
+    return { files_seen: 0, applied: [], skipped: [], error_class: 'NoRepository' };
+  }
+  return ingestStoryEnrichments(projectId, {
+    owner: connection.repo_owner,
+    repo: connection.repo_name,
+    branch: storedConnect(connection).default_branch ?? null,
+  }, opts);
+}

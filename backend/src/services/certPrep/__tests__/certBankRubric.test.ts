@@ -128,6 +128,29 @@ describe('the length cue', () => {
   });
 });
 
+describe('punctuation inside an item', () => {
+  it('fails an item whose options do not all end the same way, and names it', () => {
+    // The authored length pass would have added a full stop to one option of
+    // fifteen items whose three siblings had none.
+    const bank = authored.map((i, idx) => (idx !== 5 ? i : {
+      ...i,
+      options: i.options.map((o, j) => (j === 2 ? { ...o, text: `${o.text}.` } : o)),
+    }));
+    const a = auditBank(bank);
+    const c = a.checks.find((x) => x.id === 'option_punctuation')!;
+    expect(c.severity).toBe('hard');
+    expect(c.pass).toBe(false);
+    expect(c.note).toContain(authored[5].question_key);
+    expect(a.pass).toBe(false);
+  });
+
+  it('allows a bank whose items each end their options alike, either way', () => {
+    const withStops = authored.map((i) => ({ ...i, options: i.options.map((o) => ({ ...o, text: `${o.text}.` })) }));
+    expect(auditBank(withStops).checks.find((x) => x.id === 'option_punctuation')!.pass).toBe(true);
+    expect(auditBank(authored).checks.find((x) => x.id === 'option_punctuation')!.pass).toBe(true);
+  });
+});
+
 describe('option labels', () => {
   it('is a hard failure that names the items and the script', () => {
     const bank = authored.map((i, idx) => (idx !== 3 ? i : {

@@ -2491,7 +2491,7 @@ export function startScheduler(): void {
   cron.schedule('2-57/5 * * * *', () => {
     instrumentCronJob('InboxLivenessReconcile', async () => {
       const { reconcileLiveness } = require('./inboxCase/inboxLivenessService');
-      const r = await reconcileLiveness({ correlationId: `liveness_cron:${Date.now()}` });
+      const r = await reconcileLiveness({ correlationId: require('crypto').randomUUID() }); // UUID: inbox_case_events.correlation_id
       console.log(
         `[Scheduler] Inbox liveness: ${r.checked} checked, ${r.live} live, ${r.gone} gone, ${r.unverifiable} unverifiable, ${r.skipped_backoff} skipped (backoff), ${r.cases_closed.length} case(s) closed, ${r.close_blocked.length} blocked`
       );
@@ -2614,6 +2614,7 @@ export function startScheduler(): void {
             sessionNumber: session.session_number,
             sessionDate: session.session_date,
             startTime: session.start_time,
+            sessionId: String(session.id),
             meetingLink: session.meeting_link || null,
             materialsJson: session.materials_json || null,
             isOneHour: false,
@@ -2645,6 +2646,7 @@ export function startScheduler(): void {
             sessionNumber: session.session_number,
             sessionDate: session.session_date,
             startTime: session.start_time,
+            sessionId: String(session.id),
             meetingLink: session.meeting_link || null,
             materialsJson: session.materials_json || null,
             isOneHour: true,

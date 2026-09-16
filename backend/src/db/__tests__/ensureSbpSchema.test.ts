@@ -33,6 +33,8 @@ const FULL_CATALOG = {
   indexes: ['build_intake_unique_project', 'build_plans_unique_project_version'],
   columns: [
     { table_name: 'build_intake', column_name: 'answers' },
+    // Missing ⇒ savePlanDraft's INSERT throws and no plan is ever saved.
+    { table_name: 'build_plans', column_name: 'truth_revision' },
     { table_name: 'student_tasks', column_name: 'due_on' },
     { table_name: 'student_tasks', column_name: 'due_baseline_on' },
     { table_name: 'student_tasks', column_name: 'verified_at' },
@@ -235,5 +237,43 @@ describe('assertSbpSchema — the post-condition, because a swallowed ALTER is s
     mockQuery.mockRejectedValue(new Error('connection terminated'));
 
     await expect(assertSbpSchema()).resolves.toEqual({ ok: false, missing: ['post-check-failed'] });
+  });
+});
+
+/* ══════ every column the pipeline INSERTs is a column boot demands ══════ */
+
+describe('the columns savePlanDraft writes are the columns boot asserts', () => {
+  it('build_plans.truth_revision is declared, required, and INSERTed — all three', () => {
+    // The three places that must agree. They did not on 2026-09-11: planStore
+    // INSERTed a column the DDL never added and boot never demanded, so every
+    // plan save threw on production and no student could finish a build. One
+    // test, so the next column added to that INSERT cannot repeat it.
+    const fs = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+    const ddl = fs.readFileSync(path.join(__dirname, '..', 'ensureSbpSchema.ts'), 'utf8');
+    const store = fs.readFileSync(path.join(__dirname, '..', '..', 'services', 'sbp', 'planStore.ts'), 'utf8');
+
+    expect(ddl).toMatch(/ALTER TABLE build_plans ADD COLUMN IF NOT EXISTS truth_revision/);
+    expect(REQUIRED_COLUMNS).toContain('build_plans.truth_revision');
+    expect(store).toMatch(/truth_revision/);
+  });
+
+  it('every column named in savePlanDraft INSERT is one the DDL creates or adds', () => {
+    const fs = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+    const store = fs.readFileSync(path.join(__dirname, '..', '..', 'services', 'sbp', 'planStore.ts'), 'utf8');
+    const ddl = fs.readFileSync(path.join(__dirname, '..', 'ensureSbpSchema.ts'), 'utf8');
+
+    const insert = /INSERT INTO build_plans\s*\(([^)]+)\)/.exec(store);
+    expect(insert).toBeTruthy();
+    const columns = insert![1].split(',').map((c) => c.trim()).filter(Boolean);
+    expect(columns.length).toBeGreaterThan(5);   // anti-vacuity
+
+    const create = /CREATE TABLE IF NOT EXISTS build_plans \(([\s\S]*?)\s*\)`/.exec(ddl);
+    const created = new Set((create ? create[1] : '').split(String.fromCharCode(10)).map((l) => l.trim().split(/\s+/)[0].replace(/,$/, '')));
+    const altered = new Set([...ddl.matchAll(/ALTER TABLE build_plans ADD COLUMN IF NOT EXISTS (\w+)/g)].map((m) => m[1]));
+
+    const missing = columns.filter((c) => !created.has(c) && !altered.has(c));
+    expect(missing).toEqual([]);
   });
 });

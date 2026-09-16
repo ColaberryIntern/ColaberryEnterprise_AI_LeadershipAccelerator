@@ -7726,7 +7726,8 @@ router.put('/api/portal/project/business-processes/:id/autonomy', requirePartici
     const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
     if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
     const { applyAutonomyChange, assessAutonomy } = await import('../intelligence/autonomyProgressionEngine');
-    await applyAutonomyChange(req.params.id as string, req.body.level, req.body.reason || 'User adjustment');
+    // The student is changing their own process; the history says so.
+    await applyAutonomyChange(req.params.id as string, req.body.level, req.body.reason || 'User adjustment', req.participant!.sub);
     res.json(await assessAutonomy(req.params.id as string));
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });

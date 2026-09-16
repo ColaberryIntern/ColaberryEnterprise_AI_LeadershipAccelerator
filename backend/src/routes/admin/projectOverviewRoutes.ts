@@ -305,6 +305,27 @@ router.post('/api/admin/projects/:id/import', requireAdmin, async (req: Request,
 });
 
 /**
+ * POST /api/admin/projects/tasks/:taskId/demo-day-presented
+ * Staff mark "Present at Demo Day" (PREP-6) as done. The only prep task a
+ * student cannot evidence themselves — someone in the room vouches, and the
+ * admin's identity is the ref on the row. 409 for any other task.
+ */
+router.post('/api/admin/projects/tasks/:taskId/demo-day-presented', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const note = typeof req.body?.note === 'string' ? req.body.note : null;
+    const who = String(req.admin?.email || req.admin?.sub || 'admin');
+    const { markDemoDayPresented } = await import('../../services/projects/demoEvidenceService');
+    const r = await markDemoDayPresented(who, String(req.params.taskId), note);
+    if (!r) { res.status(404).json({ error: 'Task not found' }); return; }
+    res.json(r);
+  } catch (err: any) {
+    if (typeof err?.status === 'number') { res.status(err.status).json({ error: err.message }); return; }
+    console.error('[AdminProjectOverview] POST /demo-day-presented error:', err.message);
+    res.status(500).json({ error: 'Could not mark Demo Day.' });
+  }
+});
+
+/**
  * GET /api/admin/projects/delivery[?cohort_id=]
  * Every project with its build numbers, ranked by case-study readiness.
  * The cohort filter is OPTIONAL by design: the Accelerator page scopes this to

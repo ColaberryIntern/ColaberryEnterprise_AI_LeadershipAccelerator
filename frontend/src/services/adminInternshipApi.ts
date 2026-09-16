@@ -131,6 +131,101 @@ export async function decideInternshipApplication(id: string, body: {
   return data;
 }
 
+// ── AI assessment ─────────────────────────────────────────────────────────────
+
+export type RequirementStatus = 'met' | 'not_met' | 'unclear';
+
+export interface RequirementCheck {
+  key: string;
+  label: string;
+  status: RequirementStatus;
+  evidence: string | null;
+}
+
+export type AssessmentRecommendation =
+  | 'approve' | 'approve_with_conditions' | 'concerns' | 'follow_up' | 'not_ready';
+
+export interface ApplicantAssessment {
+  summary: string;
+  recommendation: AssessmentRecommendation;
+  rationale: string;
+  conditions: string[];
+  follow_up_questions: string[];
+  requirements: RequirementCheck[];
+  generated_at: string;
+  model_generated: boolean;
+}
+
+export async function assessInternshipApplication(id: string): Promise<ApplicantAssessment> {
+  const { data } = await api.post<ApplicantAssessment>(`/api/admin/internship/applications/${id}/assess`);
+  return data;
+}
+
+// ── Intern activity (what they're doing) ──────────────────────────────────────
+
+export interface InternWeekProgress {
+  week: number;
+  published: number;
+  completed: number;
+  completed_pct: number;
+  done: boolean;
+}
+
+export interface InternActivity {
+  training: {
+    weeks: InternWeekProgress[];
+    first_three_weeks: { done: number; total: number; ready: boolean };
+  } | null;
+  project: {
+    name: string;
+    stage: string | null;
+    requirements_pct: number | null;
+    repo_connected: boolean;
+    total_stories: number;
+    verified_stories: number;
+  } | null;
+  cert_prep: {
+    state: string;
+    overall_scaled: number | null;
+    evidence_coverage_pct: number | null;
+    computed_at: string | null;
+  } | null;
+  case_studies: Array<{ id: string; title: string; status: string; slug: string }>;
+}
+
+export async function fetchInternshipActivity(applicationId: string): Promise<InternActivity> {
+  const { data } = await api.get<InternActivity>(`/api/admin/internship/applications/${applicationId}/activity`);
+  return data;
+}
+
+// ── AI "dig into their project" review ────────────────────────────────────────
+
+export type ProjectStanding = 'on_track' | 'needs_attention' | 'stalled' | 'not_started' | 'unknown';
+
+export interface ProjectReview {
+  has_project: boolean;
+  project_name: string | null;
+  standing: ProjectStanding;
+  summary: string;
+  answer: string;
+  facts: {
+    stage: string | null;
+    requirements_pct: number | null;
+    total_stories: number;
+    verified_stories: number;
+    by_status: Record<string, number>;
+  } | null;
+  model_generated: boolean;
+}
+
+export async function reviewInternshipProject(applicationId: string, question?: string): Promise<ProjectReview> {
+  const { data } = await api.post<ProjectReview>(
+    `/api/admin/internship/applications/${applicationId}/project-review`,
+    question ? { question } : {},
+  );
+  return data;
+}
+
 // ── Documents ───────────────────────────────────────────────────────────────
 
 export interface AdminDocumentRow {
@@ -170,10 +265,16 @@ export async function fetchInternshipDocumentsAdmin(applicationId: string): Prom
   return data;
 }
 
-/** The reviewer has to actually look at the page before accepting it. */
-export function internshipDocumentFileUrl(documentId: string): string {
-  const base = process.env.REACT_APP_API_URL || '';
-  return `${base}/api/admin/internship/documents/${documentId}/file`;
+/**
+ * Fetch a signed document AS AN AUTHENTICATED BLOB and hand back an object URL to
+ * open. The file route is `requireSection('internship')`-guarded, so a plain
+ * `window.open(url)` (a browser navigation that carries no bearer token) is
+ * rejected — which is why "Open the file" did nothing. Going through the api
+ * client attaches the token; the caller opens the blob URL and revokes it later.
+ */
+export async function openInternshipDocumentBlob(documentId: string): Promise<string> {
+  const res = await api.get(`/api/admin/internship/documents/${documentId}/file`, { responseType: 'blob' });
+  return window.URL.createObjectURL(res.data as Blob);
 }
 
 export async function verifyInternshipDocument(documentId: string, body: {

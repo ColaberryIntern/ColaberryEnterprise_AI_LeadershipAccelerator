@@ -12,6 +12,8 @@ import organizationRoutes from './admin/organizationRoutes';
 import brandRoutes from './admin/brandRoutes';
 import contentComposerRoutes from './admin/contentComposerRoutes';
 import publishingRoutes from './admin/publishingRoutes';
+import channelAccountRoutes from './admin/channelAccountRoutes';
+import contentMediaRoutes from './admin/contentMediaRoutes';
 import caseStudyAdminRoutes from './admin/caseStudyAdminRoutes';
 import caseStudyStudioRoutes from './admin/caseStudyStudioRoutes';
 import caseStudyMetricRoutes from './admin/caseStudyMetricRoutes';
@@ -92,6 +94,7 @@ import agentDetailRoutes from './admin/agentDetailRoutes';
 import agentRoleCharterRoutes from './admin/agentRoleCharterRoutes';
 import managerDirectiveRoutes from './admin/managerDirectiveRoutes';
 import managerInboxRoutes from './admin/managerInboxRoutes';
+import approvalRequestRoutes from './admin/approvalRequestRoutes';
 import agentManagerConversationRoutes from './admin/agentManagerConversationRoutes';
 import agentGoalRoutes from './admin/agentGoalRoutes';
 import agentOneOnOneRoutes from './admin/agentOneOnOneRoutes';
@@ -131,6 +134,8 @@ router.use(organizationRoutes);
 router.use(brandRoutes);
 router.use(contentComposerRoutes);
 router.use(publishingRoutes);
+router.use(channelAccountRoutes);
+router.use(contentMediaRoutes);
 // Case Study OS admin surface. Every path is fully qualified
 // (/api/admin/case-studies/...) and carries requireAdmin per route, so its
 // position among the sibling sub-routers is not load-bearing — but it MUST stay
@@ -265,6 +270,7 @@ router.use(agentDetailRoutes);
 router.use(agentRoleCharterRoutes);
 router.use(managerDirectiveRoutes);
 router.use(managerInboxRoutes);
+router.use(approvalRequestRoutes);
 router.use(agentManagerConversationRoutes);
 router.use(agentGoalRoutes);
 router.use(agentOneOnOneRoutes);

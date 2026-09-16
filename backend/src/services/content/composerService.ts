@@ -1,8 +1,8 @@
-import { ContentItem, ContentVariant, ContentItemMedia } from '../../models';
+import { ContentItem, ContentVariant, ContentItemMedia, MediaAsset } from '../../models';
 import type { ProviderKey, ContentType } from '../publishing/providerCapabilities';
 import { PROVIDER_KEYS } from '../publishing/providerCapabilities';
 import { applyEdit, fingerprint, generateVariants, revertToGenerated, type Variant } from './composerVariants';
-import { validateSubmission, type SubmissionValidation } from './composerValidation';
+import { validateSubmission, type MediaFacts, type SubmissionValidation } from './composerValidation';
 import { checkContentForBrand } from './brandGovernanceService';
 import type { GovernanceResult } from './brandGovernance';
 import { assertWritable, WorkflowError, type Actor } from './contentWorkflowService';
@@ -139,6 +139,24 @@ export interface ItemValidation {
   ok: boolean;
 }
 
+/** The facts the upload step recorded, in attachment order, for the per-network media rules. */
+async function loadMediaFacts(itemId: string): Promise<MediaFacts[]> {
+  const links = await ContentItemMedia.findAll({ where: { content_item_id: itemId }, order: [['position', 'ASC']] });
+  const facts: MediaFacts[] = [];
+  for (const l of links) {
+    const a = await MediaAsset.findByPk(l.media_asset_id);
+    if (!a) continue;
+    const video = (a.metadata as { video?: { codec_family?: string } } | null)?.video;
+    facts.push({
+      mimeType: a.mime_type,
+      byteSize: a.byte_size == null ? null : Number(a.byte_size),
+      width: a.width, height: a.height, durationMs: a.duration_ms,
+      codecFamily: typeof video?.codec_family === 'string' ? video.codec_family : null,
+    });
+  }
+  return facts;
+}
+
 /**
  * Validate every variant against its platform AND the content against its brand's rules.
  * Both are reported in full; `ok` is the conjunction. Results are persisted on each variant row
@@ -148,14 +166,15 @@ export async function validateItem(itemId: string): Promise<ItemValidation> {
   const item = await loadItem(itemId, false);
   const canonical = item.canonical_body ?? '';
   const { rows, variants } = await loadVariants(itemId, canonical);
-  const mediaCount = await ContentItemMedia.count({ where: { content_item_id: itemId } });
+  const media = await loadMediaFacts(itemId);
 
   const providers = validateSubmission(variants, (provider) => {
     const row = rows.find((r) => r.provider === provider);
     const text = row?.body ?? '';
     return {
       contentType: item.content_type as ContentType,
-      mediaCount,
+      mediaCount: media.length,
+      media,
       links: text.match(URL_RE) ?? [],
     };
   });
