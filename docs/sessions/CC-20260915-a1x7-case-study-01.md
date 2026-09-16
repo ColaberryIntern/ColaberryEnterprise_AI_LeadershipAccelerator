@@ -79,7 +79,7 @@ The consolidation-program half of this session ID is logged separately in
 
 ## Revision 2 (Ali's review of the live page, 2026-09-15 evening)
 
-Ali published the record on all three surfaces (02:13Z, snapshot v15) and reviewed it:
+Ali published the record on all three surfaces (9:13 PM CDT on 2026-09-15, snapshot v15) and reviewed it:
 "an evidence-backed capability demonstration, not yet a true operational case study".
 The revision splits into record edits (live already) and page changes (this PR).
 
@@ -172,3 +172,10 @@ four months past the record's pinned commit.
        operator replayed one call seven times in the first two days (13 rows, 5 calls).
     3. Not measured: what a recovered lead did next commercially; duplicates in systems
        outside this database (the CRM itself, outbound messages).
+
+## Times in Central (2026-09-16, 1:30 AM CDT)
+
+Ali's rule: never UTC, always Central with the zone written out. The hero metric's sample
+window and the measurement evidence description carried UTC; both now read in CDT
+(snapshots v27-v28, live on all three surfaces). The rule itself is in CLAUDE.md via
+PR #2612. Times elsewhere in this log were already Central or are dates only.
