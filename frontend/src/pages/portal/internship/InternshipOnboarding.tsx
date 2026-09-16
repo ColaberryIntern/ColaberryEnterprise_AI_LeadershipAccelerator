@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   OnboardingView,
   fetchInternshipOnboarding,
@@ -178,9 +179,12 @@ const InternshipOnboarding: React.FC<{ onChanged?: () => void }> = ({ onChanged 
                     </span>
                     <span>{m.title || m.kind}</span>
                     {m.audience === 'interns_only' && <span className="ip-tag">interns only</span>}
-                    {m.join_url
-                      ? <a href={m.join_url} target="_blank" rel="noopener noreferrer" className="te-btn ghost sm">Join</a>
-                      : <span className="ip-muted" style={{ fontSize: 12 }}>link coming</span>}
+                    {/* Interns join through Rooms (never a raw Zoom link — that
+                        lives only on the public Eventbrite listing), so joining is
+                        one place and can be attendance-tracked. */}
+                    {m.room_slug
+                      ? <Link to="/portal/rooms" className="te-btn ghost sm">Open in Rooms</Link>
+                      : <span className="ip-muted" style={{ fontSize: 12 }}>room coming</span>}
                   </li>
                 ))}
               </ul>
