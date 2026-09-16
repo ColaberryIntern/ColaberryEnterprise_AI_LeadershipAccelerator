@@ -1261,6 +1261,20 @@
       "disposition": "deterministic",
       "rule": "snapshot-composite"
     },
+    "CaseStudySnapshotContent.visualStory": {
+      "authoring": "admin, or the deterministic generator accepted by an admin; the before/after workflow illustration, outcome cards and charts",
+      "sourcePriority": "human override > evidence generator; sync never overwrites a human-edited story, it marks it stale",
+      "aiMayInfer": false,
+      "approvalRequired": true,
+      "indexHome": "—",
+      "detailHome": "below the hero and context strip, above the situation band, on the surfaces it names",
+      "publicBehaviour": "projected only when enabled for the surface; validated; chart values resolved from verified metrics; evidence ids and provenance hash dropped",
+      "emptyBehaviour": "absent, disabled or off-surface: the record renders exactly as it did before the section existed",
+      "privacy": "public",
+      "test": "caseStudyVisualStoryValidate.test.ts",
+      "disposition": "human_approved",
+      "rule": "authored"
+    },
     "CaseStudySnapshotContent.walkthroughVideo": {
       "authoring": "admin; a narrated walkthrough produced for this record",
       "sourcePriority": "human override > repo sync",
@@ -2130,6 +2144,20 @@
       "rule": "public-projection-mirror"
     },
     "PublicCaseStudyDetail.verificationMethod": {
+      "authoring": "not authored — computed by caseStudyPublicProjection.ts",
+      "sourcePriority": "projection of the approved snapshot",
+      "aiMayInfer": false,
+      "approvalRequired": false,
+      "indexHome": "—",
+      "detailHome": "detail page",
+      "publicBehaviour": "always present",
+      "emptyBehaviour": "empty array or empty string",
+      "privacy": "public",
+      "test": "caseStudyPublicProjection.test.ts",
+      "disposition": "deterministic",
+      "rule": "public-projection-mirror"
+    },
+    "PublicCaseStudyDetail.visualStory": {
       "authoring": "not authored — computed by caseStudyPublicProjection.ts",
       "sourcePriority": "projection of the approved snapshot",
       "aiMayInfer": false,

@@ -118,6 +118,7 @@ const detail = (over: Partial<PublicCaseStudyDetail> = {}): PublicCaseStudyDetai
   productionStatus: 'shipped',
   heroMetrics: [metric()],
   walkthroughVideo: null,
+  visualStory: null,
   situation: {
     heading: 'The situation',
     body: ['Planners rebuilt the same route by hand every morning.'],

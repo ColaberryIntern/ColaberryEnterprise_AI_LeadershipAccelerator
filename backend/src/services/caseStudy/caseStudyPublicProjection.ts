@@ -246,6 +246,9 @@ export function projectPublicDetail(input: PublicProjectionInput): PublicCaseStu
     productionStatus: production && pairOf(production.verification) ? production.status : null,
     heroMetrics: projectMetrics(content?.heroMetrics ?? []),
     walkthroughVideo: projectWalkthroughVideo(content),
+    // Resolved by `projectVisualStory` once it lands (plan T06); null keeps every
+    // record byte-identical to today's payload plus one key until then.
+    visualStory: null,
     situation: projectSituation(content),
     timeline: projectTimeline(content?.buildTimeline ?? []),
     architecture: projectArchitecture(content),
