@@ -14,8 +14,8 @@ let container: HTMLDivElement;
 let root: Root;
 
 const ATTACHED: ItemMedia[] = [
-  { mediaAssetId: 'a1a1a1a1-0000-4000-8000-000000000001', mimeType: 'image/png', byteSize: 2_400_000, width: 1200, height: 628, altText: 'Two people at a whiteboard', position: 0, originalFilename: 'class.png' },
-  { mediaAssetId: 'a1a1a1a1-0000-4000-8000-000000000002', mimeType: 'video/mp4', byteSize: 41_000_000, width: null, height: null, altText: 'A short clip', position: 1, originalFilename: null },
+  { mediaAssetId: 'a1a1a1a1-0000-4000-8000-000000000001', mimeType: 'image/png', byteSize: 2_400_000, width: 1200, height: 628, altText: 'Two people at a whiteboard', position: 0, originalFilename: 'class.png', durationMs: null },
+  { mediaAssetId: 'a1a1a1a1-0000-4000-8000-000000000002', mimeType: 'video/mp4', byteSize: 41_000_000, width: 1080, height: 1920, altText: 'A short clip', position: 1, originalFilename: null, durationMs: 45_000 },
 ];
 
 function render(props: Partial<React.ComponentProps<typeof ComposerMedia>> = {}) {
@@ -86,6 +86,30 @@ describe('ComposerMedia attach rule', () => {
   });
 });
 
+describe('ComposerMedia upload progress', () => {
+  it('shows nothing when no upload is in flight', () => {
+    render();
+    expect(container.querySelector('[data-testid="media-upload"]')).toBeNull();
+  });
+
+  it('while bytes are on the wire: percentage, sent of total, and the file name', () => {
+    render({ upload: { name: 'class-recap.mp4', sent: 41 * 1024 * 1024, total: 82 * 1024 * 1024 } });
+    const label = container.querySelector('[data-testid="media-upload-label"]')!.textContent;
+    expect(label).toBe('50% · 41.0 MB of 82.0 MB');
+    expect(container.textContent).toMatch(/Uploading class-recap\.mp4/);
+    expect(container.querySelector('[role="progressbar"]')!.getAttribute('aria-valuenow')).toBe('50');
+  });
+
+  it('once every byte is sent, says Processing rather than sitting at 100%', () => {
+    // The server still hashes, sniffs and strips EXIF after the last byte; a bar stuck at 100%
+    // reads as hung. The word is the difference.
+    render({ upload: { name: 'hero.png', sent: 9_000_000, total: 9_000_000 } });
+    expect(container.textContent).toMatch(/Processing hero\.png/);
+    expect(container.querySelector('[data-testid="media-upload-label"]')!.textContent).toBe('checking the file');
+    expect(container.querySelector('.progress-bar-animated')).not.toBeNull();
+  });
+});
+
 describe('ComposerMedia attached list', () => {
   it('lists each attachment with its description and removes by asset id', () => {
     const onDetach = jest.fn();
@@ -95,6 +119,9 @@ describe('ComposerMedia attached list', () => {
     expect(container.textContent).toMatch(/2\.3 MB/);
     expect(container.textContent).toMatch(/Two people at a whiteboard/);
     expect(container.textContent).toMatch(/A short clip/);
+    // The video's length, read from the file, shown before validation has to say it is too long.
+    expect(container.querySelector('[data-testid="media-duration"]')!.textContent).toBe('0:45');
+    expect(container.querySelectorAll('[data-testid="media-duration"]')).toHaveLength(1); // images have none
 
     act(() => { container.querySelector<HTMLButtonElement>(`[data-testid="detach-${ATTACHED[1].mediaAssetId}"]`)!.click(); });
     expect(onDetach).toHaveBeenCalledWith(ATTACHED[1].mediaAssetId);

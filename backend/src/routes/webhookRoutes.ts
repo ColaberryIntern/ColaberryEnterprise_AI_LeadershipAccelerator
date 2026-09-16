@@ -63,7 +63,7 @@ router.post('/api/webhook/github', express.raw({ type: 'application/json' }), as
   const signature = req.headers['x-hub-signature-256'] as string | undefined;
   if (!signature) { res.status(401).json({ error: 'Missing X-Hub-Signature-256' }); return; }
 
-  const { validateWebhookSignature, findEnrollmentByRepo, syncStudentActivity } = await import('../services/githubIntegrationService');
+  const { validateWebhookSignature, findRepoBinding, resolveProjectForPush, syncStudentActivity } = await import('../services/githubIntegrationService');
 
   // PARSE BEFORE VERIFY — deliberately, and safely.
   //
@@ -101,16 +101,19 @@ router.post('/api/webhook/github', express.raw({ type: 'application/json' }), as
   }
 
   if (owner && repo) {
-    const enrollmentId = await findEnrollmentByRepo(owner, repo);
-    if (enrollmentId) {
+    const binding = await findRepoBinding(owner, repo);
+    const enrollmentId = binding?.enrollmentId ?? null;
+    if (binding && enrollmentId) {
       // 1. Sync activity stats (commits/PRs/contribution graph)
       syncStudentActivity(enrollmentId).catch((err: Error) => {
         console.error(JSON.stringify({ level: 'error', service: 'backend', event: 'github_webhook_sync_failed', outcome: 'failure', error_class: err.constructor.name, context: { message: err.message, owner, repo } }));
       });
 
-      // 2. Keyword+AI match for students with Capability-based requirements
-      const { getProjectByEnrollment } = await import('../services/projectService');
-      const project = await getProjectByEnrollment(enrollmentId);
+      // 2. Keyword+AI match for students with Capability-based requirements.
+      // Credited to the project this REPO is bound to, never to whichever of the
+      // student's projects is active: with two projects and two repos those are
+      // different things half the time. See resolveProjectForPush.
+      const project = await resolveProjectForPush(binding);
       if (project) {
         const { matchRecentCommitsToBPs } = await import('../services/commitDrivenMatcher');
         matchRecentCommitsToBPs(enrollmentId, project.id).catch((err: Error) => {

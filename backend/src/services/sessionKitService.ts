@@ -10,6 +10,7 @@
 // ============================================================================
 import QRCode from 'qrcode';
 import { env } from '../config/env';
+import { sessionCheckinUrl } from './email/sessionReminderEmail';
 import { Cohort, CommunityRoom, Enrollment, LiveSession } from '../models';
 
 /**
@@ -51,7 +52,7 @@ export async function buildSessionKit(sessionId: string): Promise<SessionKit | n
     Enrollment.count({ where: { cohort_id: session.cohort_id } }),
   ]);
 
-  const checkin_url = `${appBaseUrl()}/portal/class-checkin/${session.id}`;
+  const checkin_url = sessionCheckinUrl(String(session.id), appBaseUrl());
   const qr_svg = await QRCode.toString(checkin_url, { type: 'svg', margin: 1, width: 280 });
 
   return {

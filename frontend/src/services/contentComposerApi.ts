@@ -242,6 +242,8 @@ export interface ItemMedia {
   altText: string | null;
   position: number;
   originalFilename: string | null;
+  /** Videos only; what the container's own header says. */
+  durationMs: number | null;
 }
 
 export async function listItemMedia(id: string): Promise<ItemMedia[]> {
@@ -258,11 +260,20 @@ export async function listItemMedia(id: string): Promise<ItemMedia[]> {
  * upload. Naming `multipart/form-data` makes axios drop the header and let the browser set the
  * boundary. Same trick `AdminImportPage.tsx` uses.
  */
-export async function attachMedia(id: string, file: File, altText: string): Promise<ItemMedia[]> {
+/** Bytes sent so far and the total, from the browser's own upload events. */
+export type UploadProgress = (sent: number, total: number) => void;
+
+export async function attachMedia(id: string, file: File, altText: string, onProgress?: UploadProgress): Promise<ItemMedia[]> {
   const form = new FormData();
   form.append('alt_text', altText);
   form.append('file', file, file.name);
-  await api.post(`/api/admin/content/${id}/media`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  await api.post(`/api/admin/content/${id}/media`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    // The browser reports bytes on the wire, which is what a person waiting on a 200 MB video
+    // wants to see. `total` is the multipart body (a little over the file); the file size is the
+    // fallback when the browser does not know the total.
+    onUploadProgress: (e) => onProgress?.(e.loaded, e.total ?? file.size),
+  });
   return listItemMedia(id);
 }
 

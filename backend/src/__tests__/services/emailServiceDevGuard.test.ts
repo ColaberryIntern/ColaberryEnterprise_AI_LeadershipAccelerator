@@ -49,6 +49,7 @@ const reminder = {
   sessionNumber: 7,
   sessionDate: '2026-08-13',
   startTime: '18:30:00',
+  sessionId: '00000000-0000-4000-8000-000000000000',
   meetingLink: null,
   materialsJson: null,
   isOneHour: false,

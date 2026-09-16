@@ -161,6 +161,71 @@ export async function assessInternshipApplication(id: string): Promise<Applicant
   return data;
 }
 
+// ── Intern activity (what they're doing) ──────────────────────────────────────
+
+export interface InternWeekProgress {
+  week: number;
+  published: number;
+  completed: number;
+  completed_pct: number;
+  done: boolean;
+}
+
+export interface InternActivity {
+  training: {
+    weeks: InternWeekProgress[];
+    first_three_weeks: { done: number; total: number; ready: boolean };
+  } | null;
+  project: {
+    name: string;
+    stage: string | null;
+    requirements_pct: number | null;
+    repo_connected: boolean;
+    total_stories: number;
+    verified_stories: number;
+  } | null;
+  cert_prep: {
+    state: string;
+    overall_scaled: number | null;
+    evidence_coverage_pct: number | null;
+    computed_at: string | null;
+  } | null;
+  case_studies: Array<{ id: string; title: string; status: string; slug: string }>;
+}
+
+export async function fetchInternshipActivity(applicationId: string): Promise<InternActivity> {
+  const { data } = await api.get<InternActivity>(`/api/admin/internship/applications/${applicationId}/activity`);
+  return data;
+}
+
+// ── AI "dig into their project" review ────────────────────────────────────────
+
+export type ProjectStanding = 'on_track' | 'needs_attention' | 'stalled' | 'not_started' | 'unknown';
+
+export interface ProjectReview {
+  has_project: boolean;
+  project_name: string | null;
+  standing: ProjectStanding;
+  summary: string;
+  answer: string;
+  facts: {
+    stage: string | null;
+    requirements_pct: number | null;
+    total_stories: number;
+    verified_stories: number;
+    by_status: Record<string, number>;
+  } | null;
+  model_generated: boolean;
+}
+
+export async function reviewInternshipProject(applicationId: string, question?: string): Promise<ProjectReview> {
+  const { data } = await api.post<ProjectReview>(
+    `/api/admin/internship/applications/${applicationId}/project-review`,
+    question ? { question } : {},
+  );
+  return data;
+}
+
 // ── Documents ───────────────────────────────────────────────────────────────
 
 export interface AdminDocumentRow {

@@ -13,23 +13,61 @@ import type { ItemMedia } from '../../../../services/contentComposerApi';
  * at the end of a form; the accepted types are named so an SVG logo is not tried three times.
  */
 
+export interface UploadState {
+  /** The file being sent, for the label. */
+  name: string;
+  sent: number;
+  total: number;
+}
+
 export interface ComposerMediaProps {
   media: ItemMedia[];
   busy: boolean;
   /** False until the draft exists - there is nothing to attach to. */
   enabled: boolean;
+  /** Non-null while an upload is in flight; drives the progress bar. */
+  upload?: UploadState | null;
   onAttach: (file: File, altText: string) => void;
   onDetach: (mediaAssetId: string) => void;
 }
 
 const ACCEPT = 'image/png,image/jpeg,image/gif,video/mp4';
 
+function durationLabel(ms: number): string {
+  const s = Math.round(ms / 1000);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
 function sizeLabel(bytes: number | null): string {
   if (bytes === null) return '';
   return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.round(bytes / 1024)} KB`;
 }
 
-export default function ComposerMedia({ media, busy, enabled, onAttach, onDetach }: ComposerMediaProps) {
+/**
+ * The bar has two phases and says which. Bytes on the wire is what the browser can report;
+ * once they are all sent the server still hashes, sniffs and (for images) strips EXIF, which
+ * for a 10 MB PNG is a visible second or two. A bar stuck at 100% reads as "hung"; the word
+ * "Processing" reads as "working".
+ */
+function UploadBar({ upload }: { upload: UploadState }) {
+  const pct = upload.total > 0 ? Math.min(100, Math.round((upload.sent / upload.total) * 100)) : 0;
+  const processing = upload.total > 0 && upload.sent >= upload.total;
+  return (
+    <div className="mb-2" data-testid="media-upload" aria-live="polite">
+      <div className="d-flex justify-content-between small mb-1">
+        <span className="text-truncate" style={{ maxWidth: '24rem' }}>{processing ? 'Processing' : 'Uploading'} {upload.name}</span>
+        <span className="text-muted" data-testid="media-upload-label">
+          {processing ? 'checking the file' : `${pct}% · ${sizeLabel(upload.sent)} of ${sizeLabel(upload.total)}`}
+        </span>
+      </div>
+      <div className="progress" style={{ height: '0.5rem' }} role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`Upload ${pct}%`}>
+        <div className={`progress-bar${processing ? ' progress-bar-striped progress-bar-animated' : ''}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+export default function ComposerMedia({ media, busy, enabled, upload = null, onAttach, onDetach }: ComposerMediaProps) {
   const [altText, setAltText] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -54,6 +92,7 @@ export default function ComposerMedia({ media, busy, enabled, onAttach, onDetach
               <span className="badge text-bg-light border">{m.mimeType.replace(/^(image|video)\//, '')}</span>
               <span className="text-truncate" style={{ maxWidth: '18rem' }}>{m.originalFilename ?? m.mediaAssetId}</span>
               {m.width && m.height && <span className="text-muted">{m.width}×{m.height}</span>}
+              {m.durationMs !== null && <span className="text-muted" data-testid="media-duration">{durationLabel(m.durationMs)}</span>}
               <span className="text-muted">{sizeLabel(m.byteSize)}</span>
               <span className="text-muted fst-italic text-truncate" style={{ maxWidth: '20rem' }}>“{m.altText}”</span>
               <button type="button" className="btn btn-sm btn-link text-danger py-0" disabled={busy} onClick={() => onDetach(m.mediaAssetId)} data-testid={`detach-${m.mediaAssetId}`}>
@@ -63,6 +102,8 @@ export default function ComposerMedia({ media, busy, enabled, onAttach, onDetach
           ))}
         </ul>
       )}
+
+      {upload && <UploadBar upload={upload} />}
 
       <div className="d-flex flex-wrap align-items-end gap-2">
         <div>
