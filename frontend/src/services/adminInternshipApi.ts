@@ -172,6 +172,7 @@ export interface InternWeekProgress {
 }
 
 export interface InternActivity {
+  enrollment_id: string;
   training: {
     weeks: InternWeekProgress[];
     first_three_weeks: { done: number; total: number; ready: boolean };
