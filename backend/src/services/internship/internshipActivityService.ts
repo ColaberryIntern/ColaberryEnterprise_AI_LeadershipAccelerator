@@ -4,6 +4,7 @@ import { getStudentWeekBreakdown } from '../curriculumCompletionService';
 import { getProjectProgressField } from '../studentSuccessSnapshot/projectProgressSource';
 import { getCertReadinessField } from '../studentSuccessSnapshot/certReadinessSource';
 import { listProjectsForEnrollment } from '../projectService';
+import { meetingAttendanceSummary } from './internshipAttendanceService';
 
 /**
  * Everything an intern is DOING, for the reviewer's admin view — keyed by the
@@ -54,17 +55,20 @@ export interface InternActivity {
     computed_at: string | null;
   } | null;
   case_studies: Array<{ id: string; title: string; status: string; slug: string }>;
+  /** Session attendance across the required meetings. */
+  attendance: { total: number; by_meeting: Record<string, number>; last_attended_at: string | null };
 }
 
 export async function internActivity(enrollmentId: string): Promise<InternActivity> {
   const enrollment = await Enrollment.findByPk(enrollmentId, { attributes: ['id', 'cohort_id'] });
   const cohortId = (enrollment as any)?.cohort_id ?? null;
 
-  const [breakdown, projectField, certField, projects] = await Promise.all([
+  const [breakdown, projectField, certField, projects, attendance] = await Promise.all([
     cohortId ? getStudentWeekBreakdown(cohortId, enrollmentId) : Promise.resolve(null),
     getProjectProgressField(enrollmentId),
     getCertReadinessField(enrollmentId),
     listProjectsForEnrollment(enrollmentId),
+    meetingAttendanceSummary(enrollmentId),
   ]);
 
   // ── Training: per-week completion + the first-3-weeks gate ────────────────
@@ -136,5 +140,5 @@ export async function internActivity(enrollmentId: string): Promise<InternActivi
     }));
   }
 
-  return { enrollment_id: enrollmentId, training, project, cert_prep, case_studies };
+  return { enrollment_id: enrollmentId, training, project, cert_prep, case_studies, attendance };
 }

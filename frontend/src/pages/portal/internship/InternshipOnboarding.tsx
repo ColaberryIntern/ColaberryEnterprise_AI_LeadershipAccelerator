@@ -4,6 +4,7 @@ import {
   OnboardingView,
   fetchInternshipOnboarding,
   recordInternshipAcknowledgement,
+  recordInternshipMeetingJoin,
 } from '../../../services/internshipApi';
 
 /**
@@ -183,7 +184,7 @@ const InternshipOnboarding: React.FC<{ onChanged?: () => void }> = ({ onChanged 
                         lives only on the public Eventbrite listing), so joining is
                         one place and can be attendance-tracked. */}
                     {m.room_slug
-                      ? <Link to="/portal/rooms" className="te-btn ghost sm">Open in Rooms</Link>
+                      ? <Link to="/portal/rooms" className="te-btn ghost sm" onClick={() => { void recordInternshipMeetingJoin(m.day).catch(() => { /* attendance is best-effort */ }); }}>Open in Rooms</Link>
                       : <span className="ip-muted" style={{ fontSize: 12 }}>room coming</span>}
                   </li>
                 ))}

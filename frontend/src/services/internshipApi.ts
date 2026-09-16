@@ -317,6 +317,15 @@ export async function fetchInternshipOnboarding(): Promise<OnboardingView> {
 }
 
 /**
+ * Record that the intern joined a required meeting today (fire-and-forget on the
+ * "Open in Rooms" click). Idempotent per day on the server, so a second click
+ * changes nothing. `meetingKey` is the meeting's day.
+ */
+export async function recordInternshipMeetingJoin(meetingKey: string): Promise<void> {
+  await portalApi.post('/api/portal/internship/meetings/join', { meeting_key: meetingKey });
+}
+
+/**
  * Record a tool-readiness acknowledgement.
  *
  * Note there is NO key parameter and no field for one. `verification_method` says

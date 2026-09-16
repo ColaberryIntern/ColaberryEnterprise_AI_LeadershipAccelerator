@@ -192,6 +192,7 @@ export interface InternActivity {
     computed_at: string | null;
   } | null;
   case_studies: Array<{ id: string; title: string; status: string; slug: string }>;
+  attendance: { total: number; by_meeting: Record<string, number>; last_attended_at: string | null };
 }
 
 export async function fetchInternshipActivity(applicationId: string): Promise<InternActivity> {
