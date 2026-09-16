@@ -100,6 +100,19 @@ DEPLOY_MODE="${DEPLOY_MODE:-build}"
 REGISTRY_DEPLOY_LOG="${REGISTRY_DEPLOY_LOG:-/var/log/colaberry-registry-deploys.log}"
 # Where CI publishes. Public packages, so no registry credential is needed here.
 REGISTRY_PREFIX="${REGISTRY_PREFIX:-ghcr.io/colaberryintern/accelerator-}"
+# How long to wait for the backend to answer on 3001 after it comes up. The boot
+# window has measured 60-90s; a 502 inside it is timing, past it is a failure.
+HEALTH_WAIT="${HEALTH_WAIT:-150}"
+# Prove the change is IN the container, not just that a container is up.
+#   EXPECT_MARKER=resolveProjectForPush EXPECT_IN=backend:dist/routes/webhookRoutes.js
+#   EXPECT_MARKER=pjw-banner           EXPECT_IN=nginx:/usr/share/nginx/html/static
+# A relative path is searched under the backend image's /app. Every deploy this
+# week was verified this way by hand; a deploy that cannot name what it shipped
+# has only proved that something restarted.
+EXPECT_MARKER="${EXPECT_MARKER:-}"
+EXPECT_IN="${EXPECT_IN:-}"
+# Print the plan after every guard has passed, then stop before touching Docker.
+DRY_RUN="${DRY_RUN:-0}"
 
 SERVICES=("$@")
 if [ ${#SERVICES[@]} -eq 0 ]; then
@@ -132,6 +145,18 @@ printf 'pid=%s user=%s started=%s services=%s\n' \
 
 log "lock acquired; deploying: ${SERVICES[*]}"
 
+# The lock only binds deploys that go through this script. A session running
+# `docker compose ... up` by hand holds nothing, and three of this week's deploys
+# met exactly that. So also wait for any raw compose up to finish before
+# starting, bounded by the same LOCK_WAIT. This process's own command line does
+# not contain "docker compose", so pgrep cannot match itself here.
+RAW_WAITED=0
+while pgrep -f "docker compose .* up" >/dev/null 2>&1; do
+  [ "$RAW_WAITED" -lt "$LOCK_WAIT" ] || fail "a compose up started outside this script has been running for over ${LOCK_WAIT}s. Not racing it."
+  [ "$RAW_WAITED" -eq 0 ] && log "a compose up is running outside this script; waiting for it"
+  sleep 10; RAW_WAITED=$((RAW_WAITED + 10))
+done
+
 # ---------------------------------------------------------------------------
 # Preflight. A dirty tree silently rebuilds stale code.
 # ---------------------------------------------------------------------------
@@ -156,6 +181,11 @@ HEAD_SHA="$(git rev-parse HEAD)"
 MAIN_SHA="$(git rev-parse origin/main)"
 if [ "$HEAD_SHA" != "$MAIN_SHA" ] && [ "$ALLOW_DETACHED_HEAD" != "1" ]; then
   fail "HEAD ($HEAD_SHA) is not origin/main ($MAIN_SHA). Refusing to build."
+fi
+
+if [ "$DRY_RUN" = "1" ]; then
+  log "DRY RUN: would deploy ${SERVICES[*]} at ${HEAD_SHA:0:8} in $DEPLOY_MODE mode; guards passed; stopping here."
+  exit 0
 fi
 BUILD_LOG="$(mktemp /tmp/deploy-XXXXXX.log)"
 
@@ -246,6 +276,39 @@ done
 
 log "all requested services are running"
 
+# ---------------------------------------------------------------------------
+# Running is not answering. The backend binds 3001 some 60-90s after its
+# container starts; a deploy that returns before that hands the caller a box
+# that looks done and 502s. Any HTTP status counts (the health path is behind
+# auth on some builds); what is being proved is that the process is serving.
+# ---------------------------------------------------------------------------
+for svc in "${SERVICES[@]}"; do
+  [ "$svc" = "backend" ] || continue
+  CID="$(docker compose $COMPOSE_ARGS ps -q backend)"
+  WAITED=0
+  until docker exec "$CID" node -e 'fetch("http://127.0.0.1:3001/api/health").then(()=>process.exit(0)).catch(()=>process.exit(1))' >/dev/null 2>&1; do
+    [ "$WAITED" -lt "$HEALTH_WAIT" ] || fail "backend has not answered on 3001 after ${HEALTH_WAIT}s"
+    sleep 5; WAITED=$((WAITED + 5))
+  done
+  log "backend answering after ${WAITED}s"
+done
+
+# ---------------------------------------------------------------------------
+# The change is in the container, or the deploy did not do what it was for.
+# ---------------------------------------------------------------------------
+if [ -n "$EXPECT_MARKER" ]; then
+  [ -n "$EXPECT_IN" ] || fail "EXPECT_MARKER set without EXPECT_IN (svc:path)"
+  M_SVC="${EXPECT_IN%%:*}"; M_PATH="${EXPECT_IN#*:}"
+  M_CID="$(docker compose $COMPOSE_ARGS ps -q "$M_SVC" || true)"
+  [ -n "$M_CID" ] || fail "no container for $M_SVC to check the marker in"
+  case "$M_PATH" in /*) ;; *) M_PATH="/app/$M_PATH" ;; esac
+  if docker exec "$M_CID" grep -rqF -- "$EXPECT_MARKER" "$M_PATH" 2>/dev/null; then
+    log "marker '$EXPECT_MARKER' present in $M_SVC:$M_PATH"
+  else
+    fail "marker '$EXPECT_MARKER' NOT found in $M_SVC:$M_PATH. The running container does not carry the change this deploy was for."
+  fi
+fi
+
 # Recorded only here, AFTER the running-state check, so the count cannot include
 # a deploy that pulled cleanly and then failed to come up. Never allowed to fail
 # the deploy: an unwritable log is a bookkeeping problem, not a production one.
@@ -255,6 +318,6 @@ if [ "$DEPLOY_MODE" = "registry" ]; then
   RUNS="$(wc -l <"$REGISTRY_DEPLOY_LOG" 2>/dev/null || echo '?')"
   log "registry-mode deploys recorded: $RUNS (default flips at 5 spanning 14 days)"
 fi
-log "NOTE: this proves the containers are up, not that the app is healthy."
+log "NOTE: containers up, backend answering, marker checked if given. Not proved: the surface itself."
 log "Verify the surface through the real hostname — localhost does not match"
 log "server_name and falls through to a default block that 404s /api."
