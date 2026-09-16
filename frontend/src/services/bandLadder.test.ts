@@ -1,4 +1,4 @@
-import { bandRungForPoints, bandRungForLevel, bandHudNext, buildRungForSlug, showJoinToBuildCard, CEILING_NEXT_ENTITLED, CEILING_NEXT_FREE, Band } from './bandLadder';
+import { bandRungForPoints, bandRungForLevel, bandHudNext, buildRungForSlug, showJoinToBuildCard, rungTone, CEILING_NEXT_ENTITLED, CEILING_NEXT_FREE, Band } from './bandLadder';
 
 // Pure-function coverage for the frontend 5-band mirror. Runs under CRA's jest in
 // CI (react-scripts test). Deterministic — no network, no wall clock.
@@ -121,5 +121,27 @@ describe('buildRungForSlug', () => {
     expect(buildRungForSlug('some_future_rank')).toBe('Some Future Rank');
     expect(buildRungForSlug(null)).toBe('');
     expect(buildRungForSlug('')).toBe('');
+  });
+});
+
+
+// Ali, 2026-09-16, looking at the community leaderboard: "can the different
+// ranks have different colors". One tone per rung; bands share a hue.
+describe('rungTone', () => {
+  it('gives every rung on the ladder its own tone', () => {
+    const rungs = ['AI Aware I', 'AI Aware II', 'AI Enabled I', 'AI Enabled II', 'AI Builder I', 'AI Builder II', 'AI Builder III', 'AI Builder IV', 'AI Architect', 'Senior AI Architect'];
+    const tones = rungs.map(rungTone);
+    expect(new Set(tones).size).toBe(rungs.length);
+    expect(tones).toEqual(['aware-1', 'aware-2', 'enabled-1', 'enabled-2', 'builder-1', 'builder-2', 'builder-3', 'builder-4', 'architect', 'senior']);
+  });
+  it('keeps the Program Graduate label and the legacy V/VI rungs on the gold Builder IV tone', () => {
+    expect(rungTone('AI Builder IV · Program Graduate')).toBe('builder-4');
+    expect(rungTone('AI Builder V')).toBe('builder-4');
+    expect(rungTone('AI Builder VI')).toBe('builder-4');
+  });
+  it('falls back to the entry tone for nothing or an unknown name, never throws', () => {
+    expect(rungTone(null)).toBe('aware-1');
+    expect(rungTone('')).toBe('aware-1');
+    expect(rungTone('Principal')).toBe('aware-1');
   });
 });

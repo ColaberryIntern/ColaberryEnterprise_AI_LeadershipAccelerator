@@ -10,6 +10,14 @@ export interface LeaderboardEntry {
   display_name: string;
   points: number;
   rank: number;
+  /**
+   * The member's canonical rung ("AI Builder III"), resolved server-side for
+   * EVERY row so the badge does not depend on which members the page happened
+   * to load. From all-time points + StudentLevel, never from the window's
+   * points: a 7-day window does not change who someone is. Null only when the
+   * lookup degraded.
+   */
+  rung_name: string | null;
 }
 
 const WINDOW_MS: Record<'7d' | '30d', number> = {
@@ -38,7 +46,7 @@ export function rankMembers(members: RawPoints[]): LeaderboardEntry[] {
       rank = idx + 1;
       lastPoints = entry.points;
     }
-    return { member_id: entry.member_id, display_name: entry.display_name, points: entry.points, rank };
+    return { member_id: entry.member_id, display_name: entry.display_name, points: entry.points, rank, rung_name: null };
   });
 }
 
@@ -63,7 +71,37 @@ async function pointsForWindow(cohortId: string, period: CommunityLeaderboardPer
     sums.set(event.enrollment_id, (sums.get(event.enrollment_id) ?? 0) + (event.points || 0));
   }
 
-  return members.map((m: any) => ({ member_id: m.id, display_name: m.display_name, points: sums.get(m.enrollment_id) ?? 0 }));
+  return members.map((m: any) => ({ member_id: m.id, display_name: m.display_name, points: sums.get(m.enrollment_id) ?? 0, enrollment_id: m.enrollment_id }));
+}
+
+/**
+ * Rung per member, from all-time points and StudentLevel. Non-fatal: a failure
+ * here leaves `rung_name` null on every row and the board still renders — the
+ * ranking is the product, the badge is the decoration.
+ */
+async function rungByMemberId(members: Array<{ member_id: string; enrollment_id?: string }>): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const ids = members.map((m) => m.enrollment_id).filter((id): id is string => !!id);
+  if (ids.length === 0) return out;
+  try {
+    const [{ getTotalsForEnrollments }, { getRungNamesForEnrollments }] = await Promise.all([
+      import('./pointsService'),
+      import('./progression/progressionService'),
+    ]);
+    const totals = await getTotalsForEnrollments(ids);
+    const rungs = await getRungNamesForEnrollments(ids, totals);
+    for (const m of members) {
+      const rung = m.enrollment_id ? rungs.get(m.enrollment_id) : undefined;
+      if (rung) out.set(m.member_id, rung);
+    }
+  } catch (err: any) {
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'leaderboard_rung_lookup_failed', outcome: 'partial',
+      error_class: err?.name || 'Error', context: { message: err?.message },
+    }));
+  }
+  return out;
 }
 
 // Idempotent recompute-and-upsert: re-running for the same (member, period)
@@ -77,7 +115,8 @@ export async function getLeaderboard(
 ): Promise<LeaderboardEntry[]> {
   const cohortId = await resolveCohortId(enrollmentId);
   const raw = await pointsForWindow(cohortId, period);
-  const ranked = rankMembers(raw);
+  const rungs = await rungByMemberId(raw);
+  const ranked = rankMembers(raw).map((e) => ({ ...e, rung_name: rungs.get(e.member_id) ?? null }));
 
   await Promise.all(
     ranked.map((entry) =>

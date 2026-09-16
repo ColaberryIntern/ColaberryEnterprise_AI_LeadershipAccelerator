@@ -10,6 +10,7 @@ import PostCard from './PostCard';
 import Composer, { ComposerSubmit } from './Composer';
 import EventStrip from './EventStrip';
 import MemberProfileDrawer from './MemberProfileDrawer';
+import { bandRungForLevel } from '../../../services/onboardingApi';
 import {
   fetchPosts, createPost, fetchMyProfile, fetchMembers, pingPresence,
   fetchLeaderboard, fetchCalendar, levelProgress,
@@ -215,7 +216,7 @@ const CommunityPage: React.FC = () => {
                 })()}
                 <div className="cm-profile-stats">
                   <div className="cm-profile-stat"><b>{myProfile.points}</b><span>Points</span></div>
-                  <div className="cm-profile-stat"><b>{myProfile.level}</b><span>Level</span></div>
+                  <div className="cm-profile-stat"><b className="cm-profile-rung">{myProfile.rung_name ?? bandRungForLevel(myProfile.level)}</b><span>Rung</span></div>
                 </div>
               </div>
             )}
@@ -246,7 +247,9 @@ const CommunityPage: React.FC = () => {
                       {mem && <span className={`cm-dot ${mem.presence}`} title={mem.presence} />}
                     </span>
                     <span className="cm-leader-name">{m.display_name}</span>
-                    {mem && <LevelBadge level={mem.level} rungName={mem.rung_name ?? undefined} size="sm" />}
+                    {/* Every row wears a badge: the rung rides the leaderboard payload, so
+                        it no longer depends on whether this member is in the loaded roster. */}
+                    <LevelBadge level={mem?.level ?? 1} rungName={m.rung_name ?? mem?.rung_name ?? undefined} size="sm" />
                     <span className="cm-leader-pts">{m.points} pts</span>
                   </div>
                 );

@@ -5,7 +5,7 @@ import type { Band } from './bandLadder';
 // Re-export the pure 5-band mirror so callers have one import surface for the
 // ladder. The pure module (bandLadder.ts) stays network-free for its unit test.
 export type { Band } from './bandLadder';
-export { BAND_RUNGS, bandRungForPoints, bandRungForLevel, bandHudNext, buildRungForSlug, showJoinToBuildCard } from './bandLadder';
+export { BAND_RUNGS, bandRungForPoints, bandRungForLevel, bandHudNext, buildRungForSlug, showJoinToBuildCard, rungTone } from './bandLadder';
 
 // ── Shapes returned by the Phase-1 onboarding endpoints (S1–S5) ──────────────
 
