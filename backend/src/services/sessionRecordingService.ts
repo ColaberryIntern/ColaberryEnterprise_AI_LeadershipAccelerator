@@ -11,7 +11,6 @@ import RoomResource from '../models/RoomResource';
 import CommunityRoom from '../models/CommunityRoom';
 import { ROOM_RECORDING_DIR, MAX_ROOM_RECORDING_SIZE } from '../config/upload';
 import { judgeClassRecording } from './recordingCompositionCheck';
-import { emitAlert } from './alertService';
 import { ensureRoomForSession } from './communityRooms/roomService';
 import { emitRoomEvent } from './communityRooms/roomOutboxService';
 import { ROOM_EVENTS } from './communityRooms/roomEvents';
@@ -384,6 +383,9 @@ async function ingestZoomRecordingsForSession(
         parts: instances.length,
       });
       if (finding) {
+        // Lazy: alertService pulls the Alert model in, and suites that import
+        // this service stub the database.
+        const { emitAlert } = await import('./alertService');
         await emitAlert({
           type: 'warning', severity: 3, urgency: 'high', sourceType: 'system', impactArea: 'live_sessions',
           entityType: 'live_session', entityId: session.id,
