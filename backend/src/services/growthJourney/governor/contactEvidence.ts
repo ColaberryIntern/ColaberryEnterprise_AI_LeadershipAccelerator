@@ -6,6 +6,7 @@ import type { ConsentChannel } from '../../../models/ConsentRecord';
 import { isSuppressedForChannel, type SuppressionEvent } from '../../channelSuppression';
 import { classifyError } from '../../../utils/errorClassifier';
 import { redactForLogs } from '../../../utils/piiRedaction';
+import { resolveHumanConversation } from '../conversationOwnershipService';
 import type { HardStopFlags } from '../../explorerGrowth/governor/types';
 import type { ChannelEvidence, ContactEvidence, JourneyChannel } from './types';
 
@@ -50,14 +51,17 @@ import type { ChannelEvidence, ContactEvidence, JourneyChannel } from './types';
  * `runGovernor.contactHistory`, for the same reason: an unknown contact history
  * is not permission. No exception escapes; the class is logged, redacted.
  *
- * ─── TWO ANSWERS THIS CODEBASE CANNOT GIVE ──────────────────────────────────
+ * ─── THE TWO ANSWERS THIS CODEBASE COULD NOT GIVE, AND WHERE ONE NOW COMES FROM
  *
- * Nothing records whether a human is already in conversation with a subject —
- * `inbox_emails` has no `lead_id`, inbox cases key on a normalised query rather
- * than a person, and no ticket is written with `entity_type='lead'`. And there
- * is no sales-capacity table at all; the only capacity algorithm in the repo is
- * delivery-side. Both are therefore `'unknown'` with a reason naming the
- * absence. `'unknown'` unlocks nothing, and that is ENFORCED rather than
+ * Until Phase 4 nothing recorded whether a human was already in conversation
+ * with a subject — `inbox_emails` has no `lead_id`, inbox cases key on a
+ * normalised query rather than a person, and no ticket is written with
+ * `entity_type='lead'` — and there was no sales-capacity table at all. T402
+ * gives the first its source: `growth_journey_conversation_ownership`, read
+ * through `resolveHumanConversation` once the lead is readable — 'yes' when a
+ * human owns the thread, 'no' when none does and we could see, 'unknown' only
+ * when that lookup failed. The second stays `'unknown'` with a reason naming
+ * the absence until T403. `'unknown'` unlocks nothing, and that is ENFORCED rather than
  * asserted here: `decideForSubject` suppresses every human-in-the-loop
  * candidate - `CREATE_HUMAN_TASK` and `SEND_ALI_OUTREACH`, sec 8's Layer 3 and
  * Layer 4 actions in the existing vocabulary - while either input is unknown,
@@ -239,13 +243,18 @@ export async function resolveContactEvidence(args: ResolveContactEvidenceArgs): 
 
     const lastOverall = [...lastByChannel.values()].sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
 
+    // T402: the source `human_conversation` never had. Asked only once the lead
+    // was readable, so its 'no' means "none, and we could see"; it never throws
+    // (a failed lookup is 'unknown' with the class), so it cannot fail-close
+    // the channels on its own.
+    const human = await resolveHumanConversation({ leadId: subject.lead_id, brandId, tenantId, asOf });
+
     return {
       channels,
       recent_contact_count: recentCount,
       hours_since_last_contact: lastOverall ? (asOf.getTime() - lastOverall.getTime()) / 3_600_000 : null,
-      human_conversation: 'unknown',
-      human_conversation_reason:
-        'no source in this codebase: inbox_emails has no lead_id, inbox cases key on a query not a person, and no ticket is written for a lead',
+      human_conversation: human.value,
+      human_conversation_reason: human.reason,
       sales_capacity: 'unknown',
       sales_capacity_reason: 'no source in this codebase: there is no sales capacity or assignment table',
       failed_closed: false,

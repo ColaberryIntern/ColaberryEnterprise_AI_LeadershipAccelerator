@@ -166,4 +166,47 @@ export const GROWTH_JOURNEY_PHASE4_STATEMENTS: readonly string[] = [
   // treats two NULLs as distinct and would let a brand carry two cooldowns.
   `CREATE UNIQUE INDEX IF NOT EXISTS growth_journey_policies_brand_type_queue_unique
      ON growth_journey_policies (brand_id, policy_type, COALESCE(owner_queue, ''))`,
+
+  // ── T402: who is talking to this person right now ─────────────────────────
+  //
+  // THE SOURCE `human_conversation` NEVER HAD. Since T304 every decision has
+  // recorded `human_conversation: 'unknown'` with the reason "no source in
+  // this codebase" - `inbox_emails` has no `lead_id`, inbox cases key on a
+  // query rather than a person, and no ticket is written for a lead. This row
+  // is that source: lead-keyed, brand-scoped, opened when a human accepts a
+  // handoff, when a human's own activity on the lead is seen, or when Ali's
+  // personal outreach went out; cleared when the human releases or
+  // dispositions. One OPEN row per lead per brand (the partial unique), so
+  // "who has this person" has one answer, and a cleared row stays as history.
+  //
+  // `owner_type` is `human` or `ai`; `owner_id` is an admin user id or `ali`;
+  // `source` says how the row came to exist. Mutable: clearing is an update.
+  //
+  // NOT A FOURTH DETECTOR OF ANYTHING. The reader derives an open conversation
+  // from two records that already exist (`activities` with a human author,
+  // `communication_logs` outbound with the personal-outreach trigger) and
+  // records what it saw here, idempotently. It never reads a suppression row
+  // and it never decides whether a person may be contacted - that stays with
+  // the evaluators `contactEvidence.ts` composes.
+  `CREATE TABLE IF NOT EXISTS growth_journey_conversation_ownership (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+     brand_id UUID NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+     lead_id INTEGER NOT NULL,
+     owner_type VARCHAR(8) NOT NULL,
+     owner_id VARCHAR(255),
+     channel VARCHAR(16),
+     source VARCHAR(32) NOT NULL,
+     since_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     cleared_at TIMESTAMPTZ,
+     cleared_by VARCHAR(128),
+     cleared_reason VARCHAR(64),
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS growth_journey_conversation_ownership_open_unique
+     ON growth_journey_conversation_ownership (lead_id, brand_id)
+     WHERE cleared_at IS NULL`,
+  `CREATE INDEX IF NOT EXISTS idx_gj_conversation_ownership_lead
+     ON growth_journey_conversation_ownership (lead_id, brand_id, since_at DESC)`,
 ];

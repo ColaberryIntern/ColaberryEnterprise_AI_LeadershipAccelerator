@@ -220,6 +220,19 @@ export function classificationNurture(ctx: JourneySubjectContext): JourneyCandid
   };
 }
 
+/**
+ * T402: the pause. While a human owns the thread, the AI's outreach to the
+ * learner is withheld - the email and the lesson recommendation, the two
+ * candidates that would put a second voice in the conversation. Recorded as
+ * not emitted with this reason, which is a different fact from ran-and-found-
+ * nothing. 'no' and 'unknown' change nothing here; 'unknown' is step 4b's.
+ */
+const HUMAN_IN_CONVERSATION = 'human_in_conversation';
+const PAUSED_ACTIONS: ReadonlySet<string> = new Set(['SEND_EMAIL', 'RECOMMEND_LESSON']);
+function pausedForHuman(ctx: JourneySubjectContext, c: JourneyCandidate | Candidate): boolean {
+  return ctx.contact.human_conversation === 'yes' && PAUSED_ACTIONS.has(c.action_type);
+}
+
 /** Why no candidate could be grounded, for the refusal to name. */
 function classificationGap(ctx: JourneySubjectContext): string {
   const family = ctx.classification?.primary_path ?? null;
@@ -263,14 +276,18 @@ export function generateLearnerCandidates(ctx: JourneySubjectContext): LearnerGe
     const not_emitted: NotEmitted[] = [];
     for (const g of EXPLORER_GENERATORS) {
       const c = g.run(governorCtx);
-      if (c) candidates.push(withholdForeignCampaign(c, ctx.brand_slug));
-      else not_emitted.push({ generator: g.name, reason: 'predicate_false' });
+      if (!c) not_emitted.push({ generator: g.name, reason: 'predicate_false' });
+      else if (pausedForHuman(ctx, c)) not_emitted.push({ generator: g.name, reason: HUMAN_IN_CONVERSATION });
+      else candidates.push(withholdForeignCampaign(c, ctx.brand_slug));
     }
     return { basis: 'explorer_profile', candidates, not_emitted };
   }
 
   const not_emitted = EXPLORER_GENERATORS.map((g) => ({ generator: g.name, reason: NO_LEARNER_PROFILE }));
   const grounded = classificationNurture(ctx);
+  if (grounded && pausedForHuman(ctx, grounded)) {
+    return { basis: 'none', candidates: [], not_emitted: [...not_emitted, { generator: 'classificationNurture', reason: HUMAN_IN_CONVERSATION }] };
+  }
   if (grounded) return { basis: 'classification_only', candidates: [grounded], not_emitted };
   return {
     basis: 'none',
@@ -305,14 +322,18 @@ export const learnerStrategy: LearnerStrategy = Object.freeze({
  * generation record so it is testable without re-running the generators.
  *
  *   * Explorer ran and every predicate was false: nothing to add — the bare
- *     `no_candidate` is Explorer's own "no candidate applies".
+ *     `no_candidate` is Explorer's own "no candidate applies". Unless what
+ *     silenced it was the T402 pause, which is named: a human owns the thread.
  *   * No profile: `no_learner_profile:<why the classification could not
  *     ground one either>` — the eight identical entries first, then the one
  *     specific gap, which is the reason worth reading.
  *   * Wrong programme kind or brand: that reason, verbatim.
  */
 export function learnerEmptyReason(g: LearnerGeneration): string | null {
-  if (g.candidates.length > 0 || g.basis === 'explorer_profile') return null;
+  if (g.candidates.length > 0) return null;
+  if (g.basis === 'explorer_profile') {
+    return g.not_emitted.some((n) => n.reason === HUMAN_IN_CONVERSATION) ? HUMAN_IN_CONVERSATION : null;
+  }
   const first = g.not_emitted[0];
   const last = g.not_emitted[g.not_emitted.length - 1];
   if (!first || !last) return null;

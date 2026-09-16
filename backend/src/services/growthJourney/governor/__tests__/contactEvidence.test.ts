@@ -9,6 +9,7 @@ const m = {
   unsubFindAll: jest.fn(),
   prefFindAll: jest.fn(),
   evaluateConsent: jest.fn(),
+  resolveHumanConversation: jest.fn(),
 };
 
 jest.mock('../../../../models', () => ({
@@ -27,6 +28,11 @@ jest.mock('../../../../models', () => ({
 // cutoff logic is the point of this task, so the tests drive it with real rows.
 jest.mock('../../../consentService', () => ({
   evaluateConsent: (...a: unknown[]) => m.evaluateConsent(...a),
+}));
+// T402: the conversation-ownership source is mocked at ITS boundary too - its
+// own suite owns the derivation; this one owns how the evidence composes it.
+jest.mock('../../conversationOwnershipService', () => ({
+  resolveHumanConversation: (...a: unknown[]) => m.resolveHumanConversation(...a),
 }));
 
 import { resolveContactEvidence, tierZeroStopsFromContact } from '../contactEvidence';
@@ -64,6 +70,7 @@ function arrange(over: Partial<Record<keyof typeof m, unknown>> = {}) {
   m.unsubFindAll.mockResolvedValue([]);
   m.prefFindAll.mockResolvedValue([]);
   m.evaluateConsent.mockResolvedValue({ verdict: 'allow', basis: 'opt_in_form', reason: 'granted', jurisdiction: 'US', hasRecord: true });
+  m.resolveHumanConversation.mockResolvedValue({ value: 'no', reason: 'no open human conversation', ownership_id: null, source: null, since_at: null });
   for (const [k, v] of Object.entries(over)) {
     const fn = m[k as keyof typeof m];
     if (typeof v === 'function') fn.mockImplementation(v as never);
@@ -314,15 +321,45 @@ describe('it fails closed, on every lookup', () => {
   });
 });
 
-describe('the two answers this codebase cannot give', () => {
-  it('reports human conversation and sales capacity as unknown, each with the reason why', async () => {
+describe('the two answers this codebase could not give - one now has a source (T402)', () => {
+  it('human_conversation is whatever the ownership source answers, reason included - here no', async () => {
     arrange();
     const e = await resolveContactEvidence(args());
-    expect(e.human_conversation).toBe('unknown');
-    expect(e.human_conversation_reason).toMatch(/no source in this codebase/);
-    expect(e.human_conversation_reason).toMatch(/inbox_emails has no lead_id/);
+    expect(e.human_conversation).toBe('no');
+    expect(e.human_conversation_reason).toBe('no open human conversation');
+    // Asked once, after the lead was readable, with the subject's anchor and scope.
+    expect(m.resolveHumanConversation).toHaveBeenCalledTimes(1);
+    expect(m.resolveHumanConversation.mock.calls[0][0]).toEqual({ leadId: 501, brandId: 'b-ent', tenantId: 't-col', asOf: ASOF });
+    // Sales capacity still has no source until T403.
     expect(e.sales_capacity).toBe('unknown');
     expect(e.sales_capacity_reason).toMatch(/no sales capacity or assignment table/);
+  });
+
+  it('a human in the thread comes through as yes, with the source-bearing reason, and closes no channel by itself', async () => {
+    arrange({ resolveHumanConversation: { value: 'yes', reason: 'open_human_conversation:handoff_accepted', ownership_id: 'own-1', source: 'handoff_accepted', since_at: ASOF } });
+    const e = await resolveContactEvidence(args());
+    expect(e.human_conversation).toBe('yes');
+    expect(e.human_conversation_reason).toBe('open_human_conversation:handoff_accepted');
+    // The pause is the generators' business; the evidence reports, it does not refuse.
+    expect(e.channels.email.eligible).toBe(true);
+    expect(e.failed_closed).toBe(false);
+  });
+
+  it('a failed ownership lookup is unknown with its class - and does NOT fail the whole evidence closed', async () => {
+    arrange({ resolveHumanConversation: { value: 'unknown', reason: 'lookup_failed:UpstreamUnavailable', ownership_id: null, source: null, since_at: null } });
+    const e = await resolveContactEvidence(args());
+    expect(e.human_conversation).toBe('unknown');
+    expect(e.human_conversation_reason).toBe('lookup_failed:UpstreamUnavailable');
+    expect(e.failed_closed).toBe(false);
+    expect(e.channels.email.eligible).toBe(true);
+  });
+
+  it('is never asked for a lead that could not be read: a missing lead fails closed before the question', async () => {
+    arrange({ leadFindByPk: null });
+    const e = await resolveContactEvidence(args());
+    expect(e.failed_closed).toBe(true);
+    expect(e.human_conversation).toBe('unknown');
+    expect(m.resolveHumanConversation).not.toHaveBeenCalled();
   });
 
   it('never invents a value for either, on any path', async () => {

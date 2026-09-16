@@ -153,6 +153,11 @@ function emailBlock(ctx: JourneySubjectContext): string | null {
   // not show nurture being considered for them.
   if (has(ctx, 'DECLINED')) return 'declined_overlay';
   if (has(ctx, 'HUMAN_REVIEW')) return 'human_review_overlay';
+  // T402: a human owns the thread. The AI's commercial outreach PAUSES - not
+  // outranked, never generated - until the human releases or dispositions.
+  // 'no' and 'unknown' change nothing here: 'unknown' is step 4b's business,
+  // and it never unlocks anything.
+  if (ctx.contact.human_conversation === 'yes') return 'human_in_conversation';
   // NO_RESPONSE is deliberately NOT here: see the header.
   if (ctx.contact.channels.email.eligible !== true) return `email_ineligible:${ctx.contact.channels.email.reason}`;
   return null;

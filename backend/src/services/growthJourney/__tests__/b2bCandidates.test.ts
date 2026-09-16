@@ -318,3 +318,62 @@ describe('T303\'s read-ban, re-asserted here against real generators', () => {
     }
   });
 });
+
+/* ── T402: the pause ───────────────────────────────────────────────────────── */
+
+describe('T402 — a human owns the thread: the AI\'s commercial outreach pauses at generation', () => {
+  const inConversation = (over: Partial<JourneySubjectContext['contact']> = {}): JourneySubjectContext['contact'] => ({
+    ...contact(),
+    human_conversation: 'yes',
+    human_conversation_reason: 'open_human_conversation:handoff_accepted',
+    ...over,
+  });
+
+  describe.each(PROGRAMMES)('%s', (_name, p, ctx) => {
+    it('every email generator declines human_in_conversation, in every Layer-1 state, with email otherwise open', () => {
+      const emailGenerators = B2B_GENERATORS.map((g) => g.name).filter((n) => n !== 'declinedSuppress' && n !== 'inAppNudge');
+      expect(emailGenerators.length).toBeGreaterThanOrEqual(4); // non-vacuity
+      for (const state of [...p.states.fresh, ...p.states.problemKnown, ...p.states.exploring]) {
+        const g = generateB2b(p, ctx({ state, contact: inConversation() }));
+        expect(g.candidates.filter((c) => c.channel === 'email')).toEqual([]);
+        for (const name of emailGenerators) {
+          const n = g.not_emitted.find((x) => x.generator === name);
+          // A generator whose predicate is false for this state says so; every
+          // one whose predicate holds says the human owns the thread.
+          expect(['predicate_false', 'stalled_overlay_takes_precedence', 'human_in_conversation', 'already_reached_out:case_study_takes_over', 'not_yet_reached_out:education_first']).toContain(n?.reason);
+        }
+        expect(g.not_emitted.some((x) => x.reason === 'human_in_conversation')).toBe(true);
+      }
+    });
+
+    it('the pause is the reason, not a closed channel: the same context with the human gone generates the email', () => {
+      const state = p.states.exploring[0];
+      const paused = generateB2b(p, ctx({ state, contact: inConversation() }));
+      const free = generateB2b(p, ctx({ state, contact: contact() }));
+      expect(paused.candidates.filter((c) => c.channel === 'email')).toEqual([]);
+      expect(free.candidates.filter((c) => c.channel === 'email').length).toBeGreaterThan(0);
+    });
+
+    it("'no' and 'unknown' change nothing here — 'unknown' is step 4b's business", () => {
+      const state = p.states.exploring[0];
+      const base = generateB2b(p, ctx({ state, contact: contact() }));
+      for (const value of ['no', 'unknown'] as const) {
+        const g = generateB2b(p, ctx({ state, contact: { ...contact(), human_conversation: value } }));
+        expect(g.candidates).toEqual(base.candidates);
+        expect(g.not_emitted.some((x) => x.reason === 'human_in_conversation')).toBe(false);
+      }
+    });
+
+    it('the in-app nudge is not commercial outreach and is not paused; the suppression is not either', () => {
+      const g = generateB2b(p, ctx({ state: p.states.fresh[0], enrollment_id: 'enr-9', contact: inConversation() }));
+      expect(g.candidates.map((c) => c.action_type)).toEqual(['SHOW_IN_APP_NUDGE']);
+      const s = generateB2b(p, ctx({ state: p.states.fresh[0], overlays: ['DECLINED'], contact: inConversation() }));
+      expect(s.candidates.map((c) => c.action_type)).toEqual(['SUPPRESS_CONTACT']);
+    });
+
+    it('when the pause silenced everything, the refusal names it', () => {
+      const c = ctx({ state: p.states.exploring[0], contact: inConversation() });
+      expect(b2bEmptyReason(p, c, generateB2b(p, c))).toBe('human_in_conversation');
+    });
+  });
+});

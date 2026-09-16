@@ -5,6 +5,7 @@ import { GROWTH_JOURNEY_PHASE4_STATEMENTS } from '../growthJourneyPhase4Statemen
 import GrowthJourneyHandoff, { OPEN_HANDOFF_STATUSES } from '../../models/GrowthJourneyHandoff';
 import GrowthJourneyOutcome from '../../models/GrowthJourneyOutcome';
 import GrowthJourneyPolicy from '../../models/GrowthJourneyPolicy';
+import GrowthJourneyConversationOwnership from '../../models/GrowthJourneyConversationOwnership';
 import { SQL, columnsDeclaredIn, statementCreating, tablesCreated } from './helpers/growthJourneyDdl';
 
 /**
@@ -86,6 +87,23 @@ const EXPECTED_POLICY_COLUMNS = [
   'cooldown_days',
   'settings',
   'status',
+  'created_at',
+  'updated_at',
+];
+
+const EXPECTED_CONVERSATION_OWNERSHIP_COLUMNS = [
+  'id',
+  'tenant_id',
+  'brand_id',
+  'lead_id',
+  'owner_type',
+  'owner_id',
+  'channel',
+  'source',
+  'since_at',
+  'cleared_at',
+  'cleared_by',
+  'cleared_reason',
   'created_at',
   'updated_at',
 ];
@@ -285,18 +303,57 @@ describe('growth_journey_policies', () => {
   });
 });
 
-describe('where the three sit, and what they never do', () => {
-  it('the run now owns fourteen tables, the Phase 4 three last among the CREATEs and before the brands ALTER', () => {
-    // The three come from the sibling module, spread into the one list: the
-    // sibling's own export is exactly the twelve Phase 4 statements, in order.
-    expect(GROWTH_JOURNEY_PHASE4_STATEMENTS).toHaveLength(12);
+describe('growth_journey_conversation_ownership (T402)', () => {
+  it('SQL declares exactly the expected columns, in order', () => {
+    expect(columnsDeclaredIn('growth_journey_conversation_ownership')).toEqual(EXPECTED_CONVERSATION_OWNERSHIP_COLUMNS);
+  });
+
+  it('GrowthJourneyConversationOwnership maps exactly the same columns, in the same order', () => {
+    expect(modelColumns(GrowthJourneyConversationOwnership)).toEqual(EXPECTED_CONVERSATION_OWNERSHIP_COLUMNS);
+  });
+
+  it('ONE OPEN CONVERSATION PER LEAD PER BRAND: a partial unique on (lead_id, brand_id) WHERE cleared_at IS NULL', () => {
+    const idx = GROWTH_JOURNEY_STATEMENTS.find((s) => /growth_journey_conversation_ownership_open_unique/.test(s));
+    expect(idx).toBeDefined();
+    expect(ws(idx!)).toMatch(
+      /^CREATE UNIQUE INDEX IF NOT EXISTS growth_journey_conversation_ownership_open_unique ON growth_journey_conversation_ownership \(lead_id, brand_id\) WHERE cleared_at IS NULL$/,
+    );
+    expect(indexStatementsOn('growth_journey_conversation_ownership')).toHaveLength(2);
+  });
+
+  it('is lead-keyed (NOT NULL), mutable (clearing is an update), and its clearing columns are nullable', () => {
+    const stmt = statementCreating('growth_journey_conversation_ownership')!;
+    expect(stmt).toMatch(/lead_id INTEGER NOT NULL,/);
+    expect(stmt).toMatch(/owner_type VARCHAR\(8\) NOT NULL,/);
+    expect(stmt).toMatch(/source VARCHAR\(32\) NOT NULL,/);
+    expect(stmt).toMatch(/since_at TIMESTAMPTZ NOT NULL DEFAULT NOW\(\),/);
+    expect(stmt).toMatch(/cleared_at TIMESTAMPTZ,/);
+    expect(stmt).toMatch(/cleared_by VARCHAR\(128\),/);
+    expect(stmt).toMatch(/cleared_reason VARCHAR\(64\),/);
+    const options = (GrowthJourneyConversationOwnership as unknown as { options: { timestamps?: boolean; updatedAt?: string } }).options;
+    expect(options.timestamps).toBe(true);
+    expect(options.updatedAt).toBe('updated_at');
+  });
+
+  it('references nothing but the tenancy tables - never a suppression, activity or communication row', () => {
+    const stmt = statementCreating('growth_journey_conversation_ownership')!;
+    expect([...stmt.matchAll(/REFERENCES\s+(\w+)/g)].map((m) => m[1]).sort()).toEqual(['brands', 'tenants']);
+  });
+});
+
+describe('where the four sit, and what they never do', () => {
+  it('the run now owns fifteen tables, the Phase 4 four last among the CREATEs and before the brands ALTER', () => {
+    // The four come from the sibling module, spread into the one list: the
+    // sibling's own export is exactly the fifteen Phase 4 statements, in order
+    // (T401's twelve, T402's three).
+    expect(GROWTH_JOURNEY_PHASE4_STATEMENTS).toHaveLength(15);
     expect(GROWTH_JOURNEY_PHASE4_STATEMENTS.every((s) => GROWTH_JOURNEY_STATEMENTS.includes(s))).toBe(true);
     const tables = tablesCreated();
-    expect(tables).toHaveLength(14);
-    expect(tables.slice(-3)).toEqual(['growth_journey_handoffs', 'growth_journey_outcomes', 'growth_journey_policies']);
+    expect(tables).toHaveLength(15);
+    expect(tables.slice(-4)).toEqual(['growth_journey_handoffs', 'growth_journey_outcomes', 'growth_journey_policies', 'growth_journey_conversation_ownership']);
     const alterAt = GROWTH_JOURNEY_STATEMENTS.findIndex((s) => /ALTER\s+TABLE\s+brands/i.test(s));
     expect(alterAt).toBe(GROWTH_JOURNEY_STATEMENTS.length - 1);
-    for (const table of ['growth_journey_handoffs', 'growth_journey_outcomes', 'growth_journey_policies']) {
+    for (const table of ['growth_journey_handoffs', 'growth_journey_outcomes', 'growth_journey_policies', 'growth_journey_conversation_ownership']) {
       const at = GROWTH_JOURNEY_STATEMENTS.findIndex((s) => new RegExp(`CREATE TABLE IF NOT EXISTS ${table}\\b`, 'i').test(s));
       expect(at).toBeGreaterThan(-1);
       expect(at).toBeLessThan(alterAt);
@@ -304,9 +361,9 @@ describe('where the three sit, and what they never do', () => {
   });
 
   it('every Phase 4 statement is IF NOT EXISTS and none is destructive', () => {
-    const mine = GROWTH_JOURNEY_STATEMENTS.filter((s) => /growth_journey_(handoffs|outcomes|policies)\b/i.test(s));
-    // 3 tables + 5 + 3 + 1 indexes.
-    expect(mine).toHaveLength(12);
+    const mine = GROWTH_JOURNEY_STATEMENTS.filter((s) => /growth_journey_(handoffs|outcomes|policies|conversation_ownership)\b/i.test(s));
+    // 4 tables + 5 + 3 + 1 + 2 indexes.
+    expect(mine).toHaveLength(15);
     for (const s of mine) {
       expect(s).toMatch(/IF NOT EXISTS/i);
       expect(s).not.toMatch(/\bDROP\b|\bTRUNCATE\b|DELETE FROM|ALTER COLUMN|\bRENAME\b/i);
@@ -314,7 +371,7 @@ describe('where the three sit, and what they never do', () => {
   });
 
   it('all three are tenant- and brand-scoped with cascading tenancy keys, like every table this run owns', () => {
-    for (const table of ['growth_journey_handoffs', 'growth_journey_outcomes', 'growth_journey_policies']) {
+    for (const table of ['growth_journey_handoffs', 'growth_journey_outcomes', 'growth_journey_policies', 'growth_journey_conversation_ownership']) {
       const stmt = statementCreating(table)!;
       expect(stmt).toMatch(/tenant_id UUID NOT NULL REFERENCES tenants\(id\) ON DELETE CASCADE,/);
       expect(stmt).toMatch(/brand_id UUID NOT NULL REFERENCES brands\(id\) ON DELETE CASCADE,/);
@@ -324,17 +381,18 @@ describe('where the three sit, and what they never do', () => {
   it('touches no explorer_ table and no tickets/organizations/leads row', () => {
     // A handoff points at a ticket and an organisation by id; it never reshapes
     // either table, and it never touches Explorer's.
-    const mine = GROWTH_JOURNEY_STATEMENTS.filter((s) => /growth_journey_(handoffs|outcomes|policies)\b/i.test(s));
+    const mine = GROWTH_JOURNEY_STATEMENTS.filter((s) => /growth_journey_(handoffs|outcomes|policies|conversation_ownership)\b/i.test(s));
     for (const s of mine) {
       expect(s).not.toMatch(/explorer_/i);
       expect(s).not.toMatch(/REFERENCES\s+(tickets|organizations|leads)\b/i);
     }
   });
 
-  it('this file, the Phase 4 statements module and the three models carry no literal control byte (heredoc tripwire)', () => {
+  it('this file, the Phase 4 statements module and the four models carry no literal control byte (heredoc tripwire)', () => {
     for (const file of [
       __filename,
       path.join(__dirname, '..', 'growthJourneyPhase4Statements.ts'),
+      path.join(__dirname, '..', '..', 'models', 'GrowthJourneyConversationOwnership.ts'),
       path.join(__dirname, '..', '..', 'models', 'GrowthJourneyHandoff.ts'),
       path.join(__dirname, '..', '..', 'models', 'GrowthJourneyOutcome.ts'),
       path.join(__dirname, '..', '..', 'models', 'GrowthJourneyPolicy.ts'),

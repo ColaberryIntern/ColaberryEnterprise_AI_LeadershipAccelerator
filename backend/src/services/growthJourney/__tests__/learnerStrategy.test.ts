@@ -269,3 +269,61 @@ describe('what the refusal says when nothing was generated', () => {
     expect(learnerStrategy.emptyReason?.(ctx())).toBeNull();
   });
 });
+
+/* ── T402: the pause ───────────────────────────────────────────────────────── */
+
+describe('T402 — a human owns the thread: the learner\'s email and lesson candidates are withheld', () => {
+  const explorer = [frictionRecovery, inConversation, highIntent, activationRescue, personalisedLearning, community, generalNurture, referral];
+  const runExplorer = (g: GovernorContext): Candidate[] => explorer.map((f) => f(g)).filter((c): c is Candidate => c !== null);
+  const PAUSED = new Set(['SEND_EMAIL', 'RECOMMEND_LESSON']);
+  const owned = (over: Partial<JourneySubjectContext['contact']> = {}): JourneySubjectContext['contact'] => ({
+    ...contact(),
+    human_conversation: 'yes',
+    human_conversation_reason: 'open_human_conversation:handoff_accepted',
+    ...over,
+  });
+
+  it('with a profile: exactly the SEND_EMAIL / RECOMMEND_LESSON candidates Explorer produced are withheld, named human_in_conversation', () => {
+    const c = ctx({ learner: facts({ primary_state: 'ENGAGED_LEARNER', affinities: [{ tag: 'sql', confidence: 0.8 }] }), contact: owned() });
+    const theirs = runExplorer(toGovernorContext(c, c.learner as LearnerFacts));
+    expect(theirs.some((x) => PAUSED.has(x.action_type))).toBe(true); // non-vacuity
+    const mine = generateLearnerCandidates(c);
+    expect(mine.basis).toBe('explorer_profile');
+    expect(mine.candidates).toEqual(theirs.filter((x) => !PAUSED.has(x.action_type)));
+    const withheld = mine.not_emitted.filter((n) => n.reason === 'human_in_conversation');
+    expect(withheld).toHaveLength(theirs.filter((x) => PAUSED.has(x.action_type)).length);
+    expect(mine.candidates.length + mine.not_emitted.length).toBe(explorer.length);
+  });
+
+  it("'no' and 'unknown' withhold nothing — the profile case is Explorer's set exactly", () => {
+    for (const value of ['no', 'unknown'] as const) {
+      const c = ctx({ learner: facts({ primary_state: 'ENGAGED_LEARNER' }), contact: { ...contact(), human_conversation: value } });
+      const mine = generateLearnerCandidates(c);
+      expect(mine.candidates).toEqual(runExplorer(toGovernorContext(c, c.learner as LearnerFacts)));
+      expect(mine.not_emitted.some((n) => n.reason === 'human_in_conversation')).toBe(false);
+    }
+  });
+
+  it('with no profile: the classification-grounded email is withheld too, and the refusal says so', () => {
+    const c = cpn({ contact: owned() });
+    const g = generateLearnerCandidates(c);
+    expect(g.basis).toBe('none');
+    expect(g.candidates).toEqual([]);
+    expect(g.not_emitted.find((n) => n.generator === 'classificationNurture')?.reason).toBe('human_in_conversation');
+    expect(learnerEmptyReason(g)).toBe(`${NO_LEARNER_PROFILE}:human_in_conversation`);
+    // The same subject with the human gone gets the grounded email — the pause is the only difference.
+    expect(generateLearnerCandidates(cpn()).candidates.map((x) => x.action_type)).toEqual(['SEND_EMAIL']);
+  });
+
+  it('when the pause silenced every profiled candidate, the refusal names it rather than the bare class', () => {
+    const c = ctx({ learner: facts({ primary_state: 'ENGAGED_LEARNER' }), contact: owned({ channels: { ...contact().channels, in_app: channel(false, 'no_app_account', 'none') } }) });
+    const g = generateLearnerCandidates(c);
+    if (g.candidates.length === 0) {
+      expect(learnerEmptyReason(g)).toBe('human_in_conversation');
+    } else {
+      // Something non-commercial survived (a WAIT or a suppression): then there is no refusal to name.
+      expect(g.candidates.every((x) => !PAUSED.has(x.action_type))).toBe(true);
+      expect(learnerEmptyReason(g)).toBeNull();
+    }
+  });
+});
