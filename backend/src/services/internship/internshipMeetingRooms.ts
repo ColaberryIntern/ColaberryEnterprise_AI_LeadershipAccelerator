@@ -121,6 +121,27 @@ async function ensureRoomLink(room: CommunityRoom): Promise<string | null> {
   }
 }
 
+/**
+ * Give one intern access to the interns-only standup room. Called on activation so
+ * an intern who joins after the rooms were provisioned still gets in. Idempotent
+ * (unique on room_id+enrollment_id); a no-op when the room does not exist yet,
+ * because the provisioning run seeds every current intern anyway.
+ */
+export async function ensureInternInStandupRoom(enrollmentId: string): Promise<void> {
+  const room = await CommunityRoom.findOne({ where: { slug: INTERNS_ROOM_SLUG } });
+  if (!room) return;
+  await RoomMembership.findOrCreate({
+    where: { room_id: room.id, enrollment_id: enrollmentId },
+    defaults: {
+      room_id: room.id,
+      enrollment_id: enrollmentId,
+      role: 'member',
+      access_state: 'active',
+      joined_at: new Date(),
+    },
+  });
+}
+
 export async function ensureInternshipMeetingRooms(): Promise<MeetingRoomsResult> {
   const { cohort } = await ensureInternshipCohort();
 
