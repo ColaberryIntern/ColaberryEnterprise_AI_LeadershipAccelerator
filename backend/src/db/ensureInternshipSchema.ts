@@ -369,6 +369,25 @@ export async function ensureInternshipSchema(): Promise<void> {
      )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS uq_internship_card_dismissal_enrollment
        ON internship_card_dismissals (enrollment_id)`,
+
+    // Session attendance for the required intern meetings. One row per intern per
+    // meeting per occurrence date; the join click is the deterministic capture
+    // point (the same proxy the room-booking attendee uses), recorded when the
+    // intern opens the meeting's room from their internship view.
+    `CREATE TABLE IF NOT EXISTS internship_meeting_attendance (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       meeting_key TEXT NOT NULL,
+       session_date DATE NOT NULL,
+       joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       source TEXT NOT NULL DEFAULT 'join_click',
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS uq_internship_meeting_attendance
+       ON internship_meeting_attendance (enrollment_id, meeting_key, session_date)`,
+    `CREATE INDEX IF NOT EXISTS idx_internship_meeting_attendance_enrollment
+       ON internship_meeting_attendance (enrollment_id)`,
   ];
 
   for (const sql of statements) {
@@ -423,6 +442,7 @@ export const REQUIRED_TABLES = [
   'internship_document_templates',
   'internship_documents',
   'internship_card_dismissals',
+  'internship_meeting_attendance',
 ] as const;
 
 export async function assertInternshipSchema(): Promise<void> {
