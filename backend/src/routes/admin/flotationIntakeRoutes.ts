@@ -22,6 +22,7 @@ import { requireAdmin } from '../../middlewares/authMiddleware';
 import ProjectUnderstandingRecord from '../../models/ProjectUnderstandingRecord';
 import { Enrollment, Lead } from '../../models';
 import { startBuildFromUnderstanding } from '../../services/delivery/buildFromUnderstanding';
+import { runIntakeTurn } from '../../services/delivery/projectIntake';
 
 const router = Router();
 
@@ -113,6 +114,78 @@ router.post('/api/admin/flotation/understandings/:id/build', requireAdmin, async
     return res.status(result.reused ? 200 : 202).json(result);
   } catch (err: any) {
     if (err instanceof ZodError) return res.status(400).json({ error: 'Validation failed', details: err.issues });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * The interview itself, from the management side.
+ *
+ *     "I want that same exact intake on the Mgmt side so I can build projects for students."
+ *
+ * The admin plays the customer and names the student the project is for. Everything else -
+ * the interviewer, the bound on the transcript, the extraction, the automatic build - is
+ * `runIntakeTurn`, the same function the public /start page calls. There is no admin
+ * version of the interview to drift; there is one interview and this is its second door.
+ *
+ * Stateless, like the public door: the client carries the transcript and posts the whole
+ * thing each turn. The session id is minted client-side and becomes the extraction's
+ * idempotency key, so a repeated final turn cannot produce a second understanding.
+ */
+const turnSchema = z.object({
+  enrollment_id: z.string().uuid(),
+  session_id: z.string().uuid(),
+  turns: z
+    .array(z.object({ role: z.enum(['user', 'assistant']), text: z.string().min(1).max(4000) }))
+    .min(1)
+    .max(30),
+});
+
+router.post('/api/admin/flotation/intake/turn', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const body = turnSchema.parse(req.body || {});
+
+    const enrollment: any = await Enrollment.findByPk(body.enrollment_id);
+    if (!enrollment) return res.status(404).json({ error: 'enrolment not found' });
+
+    const result = await runIntakeTurn({
+      turns: body.turns,
+      // The student is the person the project is for, so the interviewer addresses them.
+      facts: { name: enrollment.full_name || null, company: enrollment.company || null, role: null },
+      sourceRef: `admin:${body.session_id}`,
+      leadId: null,
+      buildFor: { kind: 'enrollment', enrollmentId: enrollment.id },
+    });
+
+    return res.status(200).json(result);
+  } catch (err: any) {
+    if (err instanceof ZodError) return res.status(400).json({ error: 'Validation failed', details: err.issues });
+    console.error('[AdminIntake] error:', err?.message);
+    return res.status(500).json({ error: 'We could not continue the conversation right now.' });
+  }
+});
+
+/** Students an admin can build for, by name or email. */
+router.get('/api/admin/flotation/intake/enrollments', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const q = String(req.query.q || '').trim().toLowerCase();
+    if (q.length < 2) return res.json({ enrollments: [] });
+
+    const rows: any[] = await Enrollment.findAll({
+      where: {
+        [Op.or]: [
+          { email: { [Op.iLike]: `%${q}%` } },
+          { full_name: { [Op.iLike]: `%${q}%` } },
+        ],
+      },
+      limit: 12,
+      order: [['created_at', 'DESC']],
+    });
+
+    return res.json({
+      enrollments: rows.map((e) => ({ id: e.id, full_name: e.full_name, email: e.email, tier: e.tier, cohort_id: e.cohort_id })),
+    });
+  } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
 });

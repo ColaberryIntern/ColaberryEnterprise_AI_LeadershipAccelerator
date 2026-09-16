@@ -12,6 +12,7 @@ import InternshipDocumentPanel from '../../components/admin/internship/Internshi
 import InternshipConversionPanel from '../../components/admin/internship/InternshipConversionPanel';
 import InternshipProjectAuthor from './components/InternshipProjectAuthor';
 import FlotationIntakePanel from '../../components/admin/internship/FlotationIntakePanel';
+import StartProjectForStudent from '../../components/admin/internship/StartProjectForStudent';
 
 /**
  * AdminInternshipPage — the AI Internship review queue and decision surface.
@@ -270,6 +271,8 @@ const AdminInternshipPage: React.FC = () => {
           </div>
         </SectionCard>
       )}
+
+      <StartProjectForStudent />
 
       <FlotationIntakePanel />
 
