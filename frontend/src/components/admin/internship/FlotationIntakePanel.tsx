@@ -47,7 +47,10 @@ export default function FlotationIntakePanel() {
     setLoading(true);
     setLoadError(null);
     try {
-      setRows(await listFlotationUnderstandings());
+      // No lead means no person and nowhere to build into - every such row on production
+      // is a leftover from testing the extractor. Buildable rows first, then the rest.
+      const all = (await listFlotationUnderstandings()).filter((r) => r.lead);
+      setRows([...all.filter((r) => r.enrollment), ...all.filter((r) => !r.enrollment)]);
     } catch (err) {
       setLoadError(describeBuildError(err));
     } finally {
@@ -83,7 +86,7 @@ export default function FlotationIntakePanel() {
     <SectionCard
       title="Build a project from an enquiry"
       icon="hammer-line"
-      subtitle="The same intake a student runs in the portal, started from here"
+      subtitle="Pick a conversation, build it, then open their portal to see exactly what they would see"
       actions={
         <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => void load()} disabled={loading}>
           <i className="ri-refresh-line me-1" />Refresh
@@ -146,8 +149,10 @@ export default function FlotationIntakePanel() {
                         </div>
                       ) : s.error ? (
                         <span className="text-danger small">{s.error}</span>
+                      ) : !row.enrollment ? (
+                        <span className="text-muted small">No account to build into. Newer enquiries get one automatically; this one predates that.</span>
                       ) : (
-                        <span className="text-muted small">—</span>
+                        <span className="text-muted small">Not built yet</span>
                       )}
                     </td>
                     <td className="text-end text-nowrap">
@@ -176,8 +181,9 @@ export default function FlotationIntakePanel() {
         </div>
       )}
       <p className="small text-muted mb-0 mt-3">
-        Runs the portal&rsquo;s own intake &rarr; decompose &rarr; gate &rarr; repair &rarr; publish. Generation takes a minute or two;
-        the project then appears on their portal exactly as a student-created one would.
+        <strong>Build</strong> runs the portal&rsquo;s own intake &rarr; decompose &rarr; gate &rarr; repair &rarr; publish, which takes a minute
+        or two. <strong>See it as they would</strong> then opens their portal in a new tab, signed in as them, with the project
+        exactly as a student-created one would appear.
       </p>
     </SectionCard>
   );
