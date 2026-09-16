@@ -552,6 +552,17 @@ const AdminInternshipPage: React.FC = () => {
                   </div>
                   <div style={{ flex: '1 1 150px' }}>
                     <StatCard
+                      label="Sessions attended"
+                      value={activity.attendance.total}
+                      icon="calendar-check-line"
+                      tone={activity.attendance.total > 0 ? 'success' : 'neutral'}
+                      hint={activity.attendance.last_attended_at
+                        ? `last ${new Date(activity.attendance.last_attended_at).toLocaleDateString()}`
+                        : 'none yet'}
+                    />
+                  </div>
+                  <div style={{ flex: '1 1 150px' }}>
+                    <StatCard
                       label="Full profile"
                       value="Success 360"
                       icon="dashboard-line"
