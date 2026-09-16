@@ -892,6 +892,13 @@ the panel is a flow with too many steps.
 - **Not a new section key.** It carries no `data-section`; the surface profiles, the
   section vocabulary and `sectionOrder` are untouched. Presence of the section is the
   flag; `enabled` plus the `surfaces` list inside it decides which sites show it.
+  **`surfaces` lists every surface the record is published on.** Ali, 2026-09-16: "They
+  need to be done for all the published sites." Every site draws the same band:
+  Enterprise in React, aiflotation.com and training.colaberry.com through the
+  framework-free port in `packages/case-study-shell` (`case-study-visual-*.js`, kept
+  equal to the React geometry by `storyVisualShellParity.test.ts`; the training site
+  vendors those files verbatim under `src/vendor/case-study-shell`). A story on one
+  surface only is the exception, and needs a reason in the record.
 - **Not a place for a number.** Every card is a **metric key**; every chart anchors on a
   metric key; a chart part is a metric key or a literal that carries its own denominator
   **and** an `evidenceId` the record already holds. The projection resolves each figure
@@ -975,7 +982,8 @@ the count-up shows the true wording, never "0%".
 - [ ] The before panel, if any, cites evidence in its own words
 - [ ] `readVisualStoryState` reports `validation.ok: true` and `stale: false`
 - [ ] The gate passes with no `visual_story_invalid`
-- [ ] `enabled: true` on exactly the surfaces approved, and no other
+- [ ] `enabled: true` with `surfaces` equal to the record's published surfaces (every
+      site draws the band); fewer only with a reason recorded
 - [ ] The rendered band checked at 1440, 768, 390 and under reduced motion
 - [ ] The hero and the walkthrough video are unchanged
 

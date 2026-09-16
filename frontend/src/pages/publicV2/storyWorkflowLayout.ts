@@ -50,7 +50,7 @@ export interface WorkflowLayout {
 const LANE_ORDER: readonly CaseStudyWorkflowLane[] = ['primary', 'recovery', 'manual'];
 
 /** Box and gap sizes, in viewBox units (one unit is one CSS pixel when the SVG spans its `maxWidth`). */
-const H = { boxW: 172, boxWMin: 118, boxWMax: 200, gapX: 64, gapXMin: 28, gapY: 18, laneGap: 30, laneLabel: 26, pad: 16 } as const;
+const H = { boxW: 172, boxWMin: 100, boxWMax: 200, gapX: 64, gapXMin: 24, gapY: 18, laneGap: 30, laneLabel: 26, pad: 16 } as const;
 const V = { boxW: 296, boxWMax: 520, gapY: 44, indent: 20, pad: 16, maxWidth: 360 } as const;
 /** Label metrics: ~6.4 px per character at 13 px, 24 px of box padding, 15 px per line; four lines hold a 40-character label in a laptop-width column of nine. */
 const LABEL = { charPx: 6.4, padPx: 24, linePx: 15, maxLines: 4, headPx: 30 } as const;
