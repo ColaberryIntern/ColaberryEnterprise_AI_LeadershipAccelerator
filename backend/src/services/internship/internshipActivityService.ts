@@ -33,6 +33,8 @@ export interface WeekProgress {
 }
 
 export interface InternActivity {
+  /** So the admin view can deep-link to this intern's full Student Success 360. */
+  enrollment_id: string;
   training: {
     weeks: WeekProgress[];
     first_three_weeks: { done: number; total: number; ready: boolean };
@@ -134,5 +136,5 @@ export async function internActivity(enrollmentId: string): Promise<InternActivi
     }));
   }
 
-  return { training, project, cert_prep, case_studies };
+  return { enrollment_id: enrollmentId, training, project, cert_prep, case_studies };
 }
