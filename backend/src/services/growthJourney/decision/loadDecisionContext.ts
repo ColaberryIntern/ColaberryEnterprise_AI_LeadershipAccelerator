@@ -230,6 +230,7 @@ export async function loadDecisionContext(args: LoadDecisionContextArgs): Promis
     brandId,
     tenantId: brand.tenant_id,
     asOf,
+    programKind: program.kind,
   });
 
   const isCustomer = subject.enrollment_id !== null;

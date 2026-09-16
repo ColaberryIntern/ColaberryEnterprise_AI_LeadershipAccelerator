@@ -7,6 +7,8 @@ import { isSuppressedForChannel, type SuppressionEvent } from '../../channelSupp
 import { classifyError } from '../../../utils/errorClassifier';
 import { redactForLogs } from '../../../utils/piiRedaction';
 import { resolveHumanConversation } from '../conversationOwnershipService';
+import { resolveSalesCapacityFor } from '../capacityService';
+import type { JourneyProgramKind } from '../../../models/JourneyProgram';
 import type { HardStopFlags } from '../../explorerGrowth/governor/types';
 import type { ChannelEvidence, ContactEvidence, JourneyChannel } from './types';
 
@@ -79,6 +81,13 @@ export interface ResolveContactEvidenceArgs {
   brandId: string;
   tenantId: string;
   asOf: Date;
+  /**
+   * T403: which queue the subject's programme hands to is a function of the
+   * programme's kind. Without it, `sales_capacity` stays `unknown` with the
+   * reason saying so - a caller that cannot name the programme cannot be
+   * answered about its queue.
+   */
+  programKind?: JourneyProgramKind;
 }
 
 const CHANNELS: JourneyChannel[] = ['email', 'sms', 'voice', 'in_app', 'none'];
@@ -115,7 +124,7 @@ function log(event: string, fields: Record<string, unknown>): void {
 }
 
 export async function resolveContactEvidence(args: ResolveContactEvidenceArgs): Promise<ContactEvidence> {
-  const { subject, brandId, tenantId, asOf } = args;
+  const { subject, brandId, tenantId, asOf, programKind } = args;
   if (subject.lead_id === null) {
     return failClosed('no_lead_anchor');
   }
@@ -248,6 +257,12 @@ export async function resolveContactEvidence(args: ResolveContactEvidenceArgs): 
     // (a failed lookup is 'unknown' with the class), so it cannot fail-close
     // the channels on its own.
     const human = await resolveHumanConversation({ leadId: subject.lead_id, brandId, tenantId, asOf });
+    // T403: the source `sales_capacity` never had - the queue the programme
+    // hands to, per brand, from the operator's policy row; 'unknown' until a
+    // number is set, and never throws (a failed lookup is 'unknown' with the class).
+    const capacity = programKind
+      ? await resolveSalesCapacityFor({ brandId, programKind, asOf })
+      : { value: 'unknown' as const, reason: 'program_kind_not_supplied' };
 
     return {
       channels,
@@ -255,8 +270,8 @@ export async function resolveContactEvidence(args: ResolveContactEvidenceArgs): 
       hours_since_last_contact: lastOverall ? (asOf.getTime() - lastOverall.getTime()) / 3_600_000 : null,
       human_conversation: human.value,
       human_conversation_reason: human.reason,
-      sales_capacity: 'unknown',
-      sales_capacity_reason: 'no source in this codebase: there is no sales capacity or assignment table',
+      sales_capacity: capacity.value,
+      sales_capacity_reason: capacity.reason,
       failed_closed: false,
     };
   } catch (err: unknown) {

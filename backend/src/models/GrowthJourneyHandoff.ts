@@ -63,6 +63,9 @@ export type GrowthJourneyHandoffPriority = 'critical' | 'high' | 'medium' | 'low
 
 export type GrowthJourneyHandoffSource = 'decision_deferral' | 'human_review' | 'reply_route' | 'manual';
 
+/** The six queues, as the policy rows and the strategies name them. */
+export const OWNER_QUEUES: readonly GrowthJourneyOwnerQueue[] = ['admissions', 'sales', 'solution_architect', 'support', 'ali', 'human_review'];
+
 /** Statuses under which a subject is considered owned — the partial unique index's predicate. */
 export const OPEN_HANDOFF_STATUSES: readonly GrowthJourneyHandoffStatus[] = ['queued', 'assigned', 'accepted'];
 

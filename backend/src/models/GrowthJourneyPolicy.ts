@@ -5,21 +5,23 @@ import { sequelize } from '../config/database';
  * GrowthJourneyPolicy — an operator's setting for one brand × owner queue
  * (§6.1 `growth_journey_policies`; §11 capacity and assignment; Phase 4 T401).
  *
- * ─── FOUR POLICY TYPES, ONE TABLE ───────────────────────────────────────────
+ * ─── THREE POLICY TYPES, ONE TABLE ──────────────────────────────────────────
  *
- *   queue_capacity  how many handoffs a day the queue can take (`daily_capacity`)
+ *   queue_capacity  the queue's operating numbers, one row per brand × queue:
+ *                   how many handoffs a day it can take (`daily_capacity`) and
+ *                   how long one may sit before it is breached (`sla_hours`)
  *   queue_assignee  who the queue's handoffs are assigned to, in the `tickets`
  *                   vocabulary (`assigned_to_type` / `assigned_to_id`)
- *   cooldown        how long a `not_ready` / `nurture` return-to-AI keeps the
- *                   AI's commercial outreach off (`cooldown_days`)
- *   sla             how long a handoff may sit before it is breached (`sla_hours`)
+ *   cooldown        brand-wide (`owner_queue` NULL): how long a `not_ready` /
+ *                   `nurture` return-to-AI keeps the AI's outreach off
+ *                   (`cooldown_days`); T402's derivation window reads it too
  *
- * Every value is nullable and the boot seed writes rows with every value NULL
- * (the `INERT_ON_CREATE` discipline `brand_offer_policies` established): a
- * policy row changes nothing until a human fills it in. In particular a NULL
- * `daily_capacity` is reported by the capacity reader as `unknown` — never
- * as zero (which would refuse every handoff) and never as unlimited (which
- * would drown the queue).
+ * The boot seed (T403) writes the 24 `queue_capacity` rows once — `daily_capacity`
+ * NULL, a default `sla_hours` per queue — and never touches them again (the
+ * `INERT_ON_CREATE` discipline `brand_offer_policies` established): from then
+ * on every number is the operator's. A NULL `daily_capacity` is reported by the
+ * capacity reader as `unknown` — never as zero (which would refuse every
+ * handoff) and never as unlimited (which would drown the queue).
  *
  * ─── WHY NOT A ROLE ─────────────────────────────────────────────────────────
  *
@@ -32,7 +34,7 @@ import { sequelize } from '../config/database';
  * maintained and the model is outside the append-only guard's pattern.
  */
 
-export type GrowthJourneyPolicyType = 'queue_capacity' | 'queue_assignee' | 'cooldown' | 'sla';
+export type GrowthJourneyPolicyType = 'queue_capacity' | 'queue_assignee' | 'cooldown';
 
 export interface GrowthJourneyPolicyAttributes {
   id?: string;

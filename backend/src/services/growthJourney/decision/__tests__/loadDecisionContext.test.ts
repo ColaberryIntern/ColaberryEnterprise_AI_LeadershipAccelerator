@@ -132,10 +132,10 @@ describe('a business subject', () => {
     expect(r.ctx.enrollment_id).toBe('enr-9');
   });
 
-  it('hands the contact resolver the tenant from the brand and the subject\'s own address', async () => {
+  it('hands the contact resolver the tenant from the brand, the subject\'s own address, and (T403) the programme kind its queue follows from', async () => {
     arrange();
     await load();
-    expect(m.resolveContactEvidence).toHaveBeenCalledWith({ subject: { lead_id: 501, email: 'x@example.com', phone: null }, brandId: 'b-ent', tenantId: 't-col', asOf: AS_OF });
+    expect(m.resolveContactEvidence).toHaveBeenCalledWith({ subject: { lead_id: 501, email: 'x@example.com', phone: null }, brandId: 'b-ent', tenantId: 't-col', asOf: AS_OF, programKind: 'business' });
   });
 });
 

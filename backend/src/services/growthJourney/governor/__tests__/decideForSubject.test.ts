@@ -455,6 +455,30 @@ describe('an unknown input never unlocks a human action', () => {
     expect(d.selected_action).toBe('CREATE_HUMAN_TASK');
   });
 
+  it('T403: a FULL queue suppresses CREATE_HUMAN_TASK naming sales_capacity_full, with both inputs otherwise known', async () => {
+    const d = await decided(
+      withContact({ human_conversation: 'no', sales_capacity: 'full' }),
+      strategy([humanTask, candidate()]),
+      deps(),
+      flags(),
+    );
+    expect(d.suppressed).toEqual(
+      expect.arrayContaining([{ action_type: 'CREATE_HUMAN_TASK', campaign_key: null, reason: 'sales_capacity_full' }]),
+    );
+    expect(d.selected_action).toBe('SEND_EMAIL');
+  });
+
+  it("T403: a full queue does NOT suppress SEND_ALI_OUTREACH - Ali's caps live in evaluateAliOutreachEligibility, not here", async () => {
+    const d = await decided(
+      withContact({ human_conversation: 'no', sales_capacity: 'full' }),
+      strategy([aliOutreach]),
+      deps(),
+      flags(),
+    );
+    expect(d.suppressed).toEqual([]);
+    expect(d.selected_action).toBe('SEND_ALI_OUTREACH');
+  });
+
   it('says nothing about a non-human action while both are unknown', async () => {
     const d = await decided(ctx(), strategy([candidate()]), deps(), flags());
     expect(d.suppressed).toEqual([]);

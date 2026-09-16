@@ -377,6 +377,20 @@ describe('boot ordering — the criterion that would fail silently', () => {
     expect(programs).toBeGreaterThan(policy);
   });
 
+  it('seeds the queue policies AFTER the programmes (T403), and after the tables they need', () => {
+    // The rows are per programme brand; the order is not a database dependency
+    // (the brands exist either way) but it is asserted so the boot reads as
+    // the queues following the programmes. The table dependency IS hard:
+    // `growth_journey_policies` must exist, and the seed's per-row catch would
+    // otherwise turn its absence into 24 warnings and an empty table.
+    const ensure = activeBootCall('await ensureGrowthJourneySchema()');
+    const programs = activeBootCall('await seedJourneyPrograms()');
+    const policies = activeBootCall('await seedGrowthJourneyPolicies()');
+    expect(policies).toBeGreaterThan(-1);
+    expect(policies).toBeGreaterThan(programs);
+    expect(policies).toBeGreaterThan(ensure);
+  });
+
   it('registers it after the Explorer ensure step too, not beside it', () => {
     // ensureExplorerGrowthSchema runs well before the tenancy tables exist.
     // Landing next to it is the specific mistake this asserts against.

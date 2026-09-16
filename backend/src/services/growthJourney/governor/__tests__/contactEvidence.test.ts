@@ -10,6 +10,7 @@ const m = {
   prefFindAll: jest.fn(),
   evaluateConsent: jest.fn(),
   resolveHumanConversation: jest.fn(),
+  resolveSalesCapacityFor: jest.fn(),
 };
 
 jest.mock('../../../../models', () => ({
@@ -33,6 +34,10 @@ jest.mock('../../../consentService', () => ({
 // own suite owns the derivation; this one owns how the evidence composes it.
 jest.mock('../../conversationOwnershipService', () => ({
   resolveHumanConversation: (...a: unknown[]) => m.resolveHumanConversation(...a),
+}));
+// T403: the capacity source likewise - its own suite owns the counting.
+jest.mock('../../capacityService', () => ({
+  resolveSalesCapacityFor: (...a: unknown[]) => m.resolveSalesCapacityFor(...a),
 }));
 
 import { resolveContactEvidence, tierZeroStopsFromContact } from '../contactEvidence';
@@ -58,6 +63,7 @@ const args = (over: Record<string, unknown> = {}) => ({
   brandId: 'b-ent',
   tenantId: 't-col',
   asOf: ASOF,
+  programKind: 'business' as const,
   ...over,
 });
 
@@ -71,6 +77,7 @@ function arrange(over: Partial<Record<keyof typeof m, unknown>> = {}) {
   m.prefFindAll.mockResolvedValue([]);
   m.evaluateConsent.mockResolvedValue({ verdict: 'allow', basis: 'opt_in_form', reason: 'granted', jurisdiction: 'US', hasRecord: true });
   m.resolveHumanConversation.mockResolvedValue({ value: 'no', reason: 'no open human conversation', ownership_id: null, source: null, since_at: null });
+  m.resolveSalesCapacityFor.mockResolvedValue({ value: 'unknown', reason: 'sales:capacity_not_set_by_operator', queue: 'sales' });
   for (const [k, v] of Object.entries(over)) {
     const fn = m[k as keyof typeof m];
     if (typeof v === 'function') fn.mockImplementation(v as never);
@@ -330,9 +337,31 @@ describe('the two answers this codebase could not give - one now has a source (T
     // Asked once, after the lead was readable, with the subject's anchor and scope.
     expect(m.resolveHumanConversation).toHaveBeenCalledTimes(1);
     expect(m.resolveHumanConversation.mock.calls[0][0]).toEqual({ leadId: 501, brandId: 'b-ent', tenantId: 't-col', asOf: ASOF });
-    // Sales capacity still has no source until T403.
+    // Sales capacity is the capacity source's answer too - here the seeded state, no number set.
     expect(e.sales_capacity).toBe('unknown');
-    expect(e.sales_capacity_reason).toMatch(/no sales capacity or assignment table/);
+    expect(e.sales_capacity_reason).toBe('sales:capacity_not_set_by_operator');
+    expect(m.resolveSalesCapacityFor).toHaveBeenCalledTimes(1);
+    expect(m.resolveSalesCapacityFor.mock.calls[0][0]).toEqual({ brandId: 'b-ent', programKind: 'business', asOf: ASOF });
+  });
+
+  it("T403: sales_capacity passes through as available / full with the queue-bearing reason", async () => {
+    arrange({ resolveSalesCapacityFor: { value: 'available', reason: 'sales:capacity_available:2/3', queue: 'sales' } });
+    let e = await resolveContactEvidence(args());
+    expect(e.sales_capacity).toBe('available');
+    expect(e.sales_capacity_reason).toBe('sales:capacity_available:2/3');
+    arrange({ resolveSalesCapacityFor: { value: 'full', reason: 'sales:capacity_full:3/3', queue: 'sales' } });
+    e = await resolveContactEvidence(args());
+    expect(e.sales_capacity).toBe('full');
+    // A full queue closes no channel: it governs the task, not the contact.
+    expect(e.channels.email.eligible).toBe(true);
+  });
+
+  it('T403: without a programme kind the queue cannot be named, so capacity stays unknown and the source is not asked', async () => {
+    arrange();
+    const e = await resolveContactEvidence(args({ programKind: undefined }));
+    expect(e.sales_capacity).toBe('unknown');
+    expect(e.sales_capacity_reason).toBe('program_kind_not_supplied');
+    expect(m.resolveSalesCapacityFor).not.toHaveBeenCalled();
   });
 
   it('a human in the thread comes through as yes, with the source-bearing reason, and closes no channel by itself', async () => {
@@ -359,7 +388,9 @@ describe('the two answers this codebase could not give - one now has a source (T
     const e = await resolveContactEvidence(args());
     expect(e.failed_closed).toBe(true);
     expect(e.human_conversation).toBe('unknown');
+    expect(e.sales_capacity).toBe('unknown');
     expect(m.resolveHumanConversation).not.toHaveBeenCalled();
+    expect(m.resolveSalesCapacityFor).not.toHaveBeenCalled();
   });
 
   it('never invents a value for either, on any path', async () => {
