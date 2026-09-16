@@ -88,6 +88,78 @@ const NOT_ENTITLED_BODY = {
   upgrade: { reason: 'build_gated', cta: 'join_to_build' },
 } as const;
 
+/**
+ * Resolved entitlement for one enrollment, with the reason a caller can log.
+ *
+ *   confirmed_entitled     the pure rule said yes
+ *   confirmed_not_entitled the pure rule said no (a genuine free Explorer)
+ *   enrollment_missing     no row — a data anomaly, treated as entitled (fail open)
+ *   lookup_failed          infra/DB error — treated as entitled (fail open)
+ *
+ * `entitled` is what a display or a gate should act on; `reason` is what it should
+ * say in its log line. Only `confirmed_not_entitled` may ever produce a 402 or a
+ * "join the program" prompt.
+ */
+export interface BuildEntitlementResolution {
+  entitled: boolean;
+  reason: 'confirmed_entitled' | 'confirmed_not_entitled' | 'enrollment_missing' | 'lookup_failed';
+}
+
+/**
+ * Look up everything `isBuildEntitled` needs for one enrollment and apply the
+ * rule. Shared by the route gate below and by any surface that has to decide
+ * whether to invite someone to JOIN the program (the Points page's "Become an AI
+ * Builder" card, the HUD's "Build to unlock" line). Before 2026-09-16 those
+ * surfaces had no entitlement input at all and showed the join prompt to paying
+ * cohort students at the AI Enabled ceiling.
+ *
+ * Failure-first, same policy as the gate: a missing row or a lookup error FAILS
+ * OPEN to `entitled: true`. Telling a free Explorer to "ship a build" is a small
+ * lie they will meet again at the 402; telling a paying student to "join" is the
+ * bug this exists to remove.
+ */
+export async function resolveBuildEntitlement(enrollmentId: string): Promise<BuildEntitlementResolution> {
+  try {
+    const enrollment = await Enrollment.findByPk(enrollmentId, {
+      attributes: ['id', 'payment_status', 'cohort_id'],
+    });
+    if (!enrollment) {
+      logGate('build_entitlement_enrollment_missing', enrollmentId);
+      return { entitled: true, reason: 'enrollment_missing' };
+    }
+
+    const cohort = enrollment.cohort_id
+      ? await Cohort.findByPk(enrollment.cohort_id, { attributes: ['id', 'cohort_type'] })
+      : null;
+
+    // isStaffEnrollment fails SAFE to false internally (never throws); a comp
+    // lookup DB error rejects and is caught below → fail open.
+    const [isStaff, compIds] = await Promise.all([
+      isStaffEnrollment(enrollmentId),
+      activeCompEnrollmentIds([enrollmentId]),
+    ]);
+
+    const entitled = isBuildEntitled(enrollment, cohort, {
+      isStaff,
+      hasActiveComp: compIds.has(enrollmentId),
+    });
+    return { entitled, reason: entitled ? 'confirmed_entitled' : 'confirmed_not_entitled' };
+  } catch (err: any) {
+    // Failure-first: an infra/DB error must NEVER block a possibly-paying user.
+    // Structured log with a stable error_class, then fail OPEN.
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      service: 'backend',
+      event: 'build_entitlement_check_failed',
+      error_class: 'EntitlementLookupError',
+      outcome: 'fail_open',
+      context: { enrollment_id: enrollmentId, message: err?.message },
+    }));
+    return { entitled: true, reason: 'lookup_failed' };
+  }
+}
+
 export async function requireBuildEntitlement(
   req: Request,
   res: Response,
@@ -107,56 +179,14 @@ export async function requireBuildEntitlement(
     return;
   }
 
-  try {
-    const enrollment = await Enrollment.findByPk(enrollmentId, {
-      attributes: ['id', 'payment_status', 'cohort_id'],
-    });
-
-    // Row genuinely missing → a data anomaly, not a confirmed free Explorer.
-    // Fail OPEN (never block a possibly-paying user over a data gap).
-    if (!enrollment) {
-      logGate('build_entitlement_enrollment_missing', enrollmentId);
-      next();
-      return;
-    }
-
-    const cohort = enrollment.cohort_id
-      ? await Cohort.findByPk(enrollment.cohort_id, { attributes: ['id', 'cohort_type'] })
-      : null;
-
-    // isStaffEnrollment fails SAFE to false internally (never throws); a comp
-    // lookup DB error rejects and is caught below → fail open.
-    const [isStaff, compIds] = await Promise.all([
-      isStaffEnrollment(enrollmentId),
-      activeCompEnrollmentIds([enrollmentId]),
-    ]);
-
-    const entitled = isBuildEntitled(enrollment, cohort, {
-      isStaff,
-      hasActiveComp: compIds.has(enrollmentId),
-    });
-
-    if (entitled) {
-      next();
-      return;
-    }
-
-    // CONFIRMED non-entitled (genuine free Explorer) → 402 with upgrade payload.
-    res.status(402).json(NOT_ENTITLED_BODY);
-  } catch (err: any) {
-    // Failure-first: an infra/DB error must NEVER block a possibly-paying user.
-    // Structured log with a stable error_class, then fail OPEN.
-    console.error(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      service: 'backend',
-      event: 'build_entitlement_check_failed',
-      error_class: 'EntitlementLookupError',
-      outcome: 'fail_open',
-      context: { enrollment_id: enrollmentId, message: err?.message },
-    }));
+  const { entitled } = await resolveBuildEntitlement(enrollmentId);
+  if (entitled) {
     next();
+    return;
   }
+
+  // CONFIRMED non-entitled (genuine free Explorer) → 402 with upgrade payload.
+  res.status(402).json(NOT_ENTITLED_BODY);
 }
 
 // Structured warn for the "enrollment row absent" fail-open branch. enrollment_id

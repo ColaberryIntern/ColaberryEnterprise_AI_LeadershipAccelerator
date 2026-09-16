@@ -53,17 +53,60 @@ export function bandRungForLevel(level: number): string {
 }
 
 /**
- * The short HUD "next" line for a band. A free / points-capped learner still
- * climbing points gets a pts-to-next-rung nudge; at the AI Enabled ceiling they
- * get the build gate. A promoted (build-band) learner gets their next band, or a
- * top-of-ladder note. `total` shares thresholds with BAND_RUNGS.
+ * Build rungs by competency slug — the ONE frontend copy of the backend's
+ * RANK_TO_BAND (bandLadder.ts). Rank-0 "builder" is the entry default, not a
+ * promotion, so it has no rung name and resolves to ''. Used wherever a server
+ * payload still carries a raw slug (the readiness lens, the company drill-down).
  */
-export function bandHudNext(band: Band, total: number): string {
+export const BUILD_RUNG_BY_SLUG: Record<string, string> = {
+  junior_builder: 'AI Builder I',
+  practitioner: 'AI Builder II',
+  developer: 'AI Builder III',
+  senior_developer: 'AI Builder IV',
+  engineer: 'AI Builder V',
+  senior_engineer: 'AI Builder VI',
+  architect_candidate: 'AI Architect',
+  architect: 'Senior AI Architect',
+};
+
+/** "junior_builder" → "AI Builder I"; an unknown slug is humanised, never shown raw. */
+export function buildRungForSlug(slug: string | null | undefined): string {
+  if (!slug) return '';
+  return BUILD_RUNG_BY_SLUG[slug] || slug.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Copy for a points-capped learner at the AI Enabled ceiling, by entitlement. */
+export const CEILING_NEXT_ENTITLED = 'Ship your first build to reach AI Builder I';
+export const CEILING_NEXT_FREE = 'Join the program to unlock AI Builder';
+
+/**
+ * The short HUD "next" line for a band. A free / points-capped learner still
+ * climbing points gets a pts-to-next-rung nudge. At the AI Enabled ceiling the
+ * line depends on whether they are already in the program: someone entitled to
+ * build is told to ship; only a confirmed free Explorer is told to join. A
+ * promoted (build-band) learner gets their next band, or a top-of-ladder note.
+ * `total` shares thresholds with BAND_RUNGS. `buildEntitled` defaults to true
+ * (fail open) so an older backend that omits it never shows a paying student
+ * the join prompt.
+ */
+export function bandHudNext(band: Band, total: number, buildEntitled: boolean = true): string {
   const pts = Number.isFinite(total) ? total : 0;
   if (band.cappedByPointsOnly) {
     const next = BAND_RUNGS.find((r) => r.min > pts) || null;
     if (next) return `${(next.min - pts).toLocaleString()} pts to ${next.name}`;
-    return 'Build to unlock AI Builder';
+    return buildEntitled ? CEILING_NEXT_ENTITLED : CEILING_NEXT_FREE;
   }
   return band.nextBand ? `Next: ${band.nextBand}` : 'Top of the ladder';
+}
+
+/**
+ * Should the "Become an AI Builder — join the program" card show? Only for a
+ * confirmed free account sitting at the points ceiling (AI Enabled II) with no
+ * build promotion. Never for anyone entitled to build: they are already in.
+ */
+export function showJoinToBuildCard(band: Band | null | undefined, total: number, buildEntitled: boolean | undefined): boolean {
+  if (!band || buildEntitled !== false) return false;
+  const pts = Number.isFinite(total) ? total : 0;
+  const ceiling = BAND_RUNGS[BAND_RUNGS.length - 1].min;
+  return band.cappedByPointsOnly && band.bandSlug === 'enabled' && pts >= ceiling;
 }

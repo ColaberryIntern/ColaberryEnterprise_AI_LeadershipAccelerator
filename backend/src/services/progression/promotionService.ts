@@ -66,7 +66,12 @@ export async function getPromotionStatus(enrollmentId: string): Promise<Promotio
     evaluation_count: bySource('instructor_review') + bySource('peer_review'),
     implementation_count: bySource('implementation') + bySource('deliverable'),
     attendance_count: attendance,
-    ai_approved: !domainCfg.requires_ai_approval, // assume the AI gate is the last unmet step; don't call the approver on a read
+    // The read path must describe what the WRITE path would do. The write path
+    // asks `defaultAiApprover`, which approves everyone (the real approver was
+    // never wired), so a read that reports "AI review — pending" describes a
+    // gate that does not exist. When a real approver ships, thread it through
+    // both paths together; until then the two agree.
+    ai_approved: domainCfg.requires_ai_approval ? await defaultAiApprover(enrollmentId, domainCfg.slug) : true,
   };
   const gate: LevelGate = {
     slug: domainCfg.slug,

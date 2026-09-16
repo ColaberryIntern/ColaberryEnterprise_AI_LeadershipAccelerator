@@ -54,6 +54,7 @@ export interface OrgRosterMember {
   team: string | null;
   level: string;                      // level_slug, e.g. "builder"
   rank: number;                       // 0..8
+  band_rung?: string;                 // canonical rung the student sees ("AI Builder I"); absent on an older backend
   readiness: number;                  // 0..100
   builder_xp_week: number;
   streak: number;
@@ -122,6 +123,7 @@ export interface OrgMemberDetail {
   skill_xp: OrgSkillXp | null;
   readiness: OrgReadiness | null;
   promotion: OrgPromotion | null;
+  band_rung?: string | null;          // canonical rung name; absent on an older backend
   skill_genome: OrgSkillGenome | null;
   section_progress: OrgSectionProgress | null;
   evidence_by_source: OrgEvidenceBySource[];

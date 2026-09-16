@@ -1,5 +1,6 @@
 import React from 'react';
 import { BAND_RUNGS } from '../../../services/onboardingApi';
+import { journeyIndexFor } from './levelJourneyIndex';
 
 /**
  * LevelJourney — the whole level ladder at a glance: the four free, points-reachable
@@ -30,13 +31,10 @@ const LockIcon = () => <svg viewBox="0 0 24 24" fill="none"><rect x="5" y="11" w
 const StarIcon = () => <svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.8 6.6 7.2.6-5.5 4.7 1.7 7L12 17.8 5.8 21.5l1.7-7L2 9.8l7.2-.6z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>;
 
 const LevelJourney: React.FC<{ points: number; currentName?: string | null }> = ({ points, currentName }) => {
-  // Current rung: prefer the server-provided name (accounts for build promotions);
-  // otherwise fall back to the highest free rung the points total has reached.
-  let currentIdx = JOURNEY.findIndex((r) => r.name === currentName);
-  if (currentIdx < 0) {
-    currentIdx = 0;
-    JOURNEY.forEach((r, i) => { if (r.min != null && points >= r.min) currentIdx = i; });
-  }
+  // Current node: the server-provided rung name places a promoted learner on
+  // their build band ("AI Builder III" → AI Builder); otherwise the highest free
+  // rung the points total has reached. See levelJourneyIndex for the matching.
+  const currentIdx = journeyIndexFor(JOURNEY, points, currentName);
 
   return (
     <div className="pts-journey">

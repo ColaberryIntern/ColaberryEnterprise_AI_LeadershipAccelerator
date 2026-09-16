@@ -1,6 +1,7 @@
 import React from 'react';
 import type { OrgMemberDetail, OrgRosterMember } from '../../../services/orgApi';
 import { card, h2, muted, sub, initials, lvlTone, prettyLevel, prettySlug, Bar, Spark } from './companyUi';
+import { buildRungForSlug } from '../../../services/bandLadder';
 
 /**
  * Per-student drilldown for the manager — the same layout as the `/try` preview,
@@ -51,7 +52,7 @@ export default function CompanyMemberDrilldown({
         <div>
           <h1 style={{ ...h2, fontSize: 'var(--fs-h2)', fontWeight: 900, margin: 0 }}>{detail.name}</h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 'var(--fs-caption)', color: '#fff', background: tone, padding: '2px 10px', borderRadius: 'var(--radius-pill)', fontWeight: 700 }}>{prettyLevel(level)} · rank {rank}/8</span>
+            <span style={{ fontSize: 'var(--fs-caption)', color: '#fff', background: tone, padding: '2px 10px', borderRadius: 'var(--radius-pill)', fontWeight: 700 }}>{detail.band_rung ?? roster?.band_rung ?? prettyLevel(level)}</span>
             <span style={muted}>{team || 'Unassigned'} · {readinessPct}% readiness · {streak}-day streak · <span style={{ color: '#5BA63C', fontWeight: 700 }}>+{bxp} builder XP/wk</span></span>
           </div>
         </div>
@@ -84,7 +85,7 @@ export default function CompanyMemberDrilldown({
 
         {/* readiness + what's left */}
         <div style={{ ...card, borderTop: '4px solid #7A5AF0' }}>
-          <div style={sub}>Architect readiness · {readinessPct}%{nextLevel ? ` → ${prettyLevel(nextLevel)}` : ''}</div>
+          <div style={sub}>Architect readiness · {readinessPct}%{nextLevel ? ` → ${buildRungForSlug(nextLevel)}` : ''}</div>
           <div style={{ height: 10, borderRadius: 'var(--radius-pill)', background: 'var(--surface-sunken)', overflow: 'hidden', marginBottom: 'var(--space-4)' }}><div style={{ width: `${Math.max(2, Math.min(100, readinessPct))}%`, height: '100%', background: '#7A5AF0', borderRadius: 'var(--radius-pill)' }} /></div>
           <div style={{ fontSize: 'var(--fs-caption)', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 'var(--space-2)' }}>What&rsquo;s left to promote</div>
           {gaps.length ? gaps.map((g) => (<div key={g} style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-body)', padding: '4px 8px', background: 'var(--surface-subtle)', borderRadius: 'var(--radius-sm)', marginBottom: 4 }}>{g}</div>)) : <div style={{ fontSize: 'var(--fs-caption)', color: '#5BA63C', fontWeight: 700 }}>All gates cleared — top of the ladder.</div>}

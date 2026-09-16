@@ -152,7 +152,7 @@ function TeamSection({ onToast }: Props): React.ReactElement {
                   <strong>{m.name}</strong>
                   {m.team ? <span className="set-sub"> · {m.team}</span> : null}
                 </span>
-                <span className="set-sub">{prettyLevel(m.level)}</span>
+                <span className="set-sub">{m.band_rung ?? prettyLevel(m.level)}</span>
               </li>
             ))}
           </ul>

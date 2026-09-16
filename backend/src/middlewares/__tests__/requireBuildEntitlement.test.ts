@@ -8,7 +8,7 @@ jest.mock('../../models', () => ({
 jest.mock('../../services/access/staffAccess', () => ({ isStaffEnrollment: jest.fn() }));
 jest.mock('../../services/subscriptionService', () => ({ activeCompEnrollmentIds: jest.fn() }));
 
-import { isBuildEntitled, requireBuildEntitlement } from '../requireBuildEntitlement';
+import { isBuildEntitled, requireBuildEntitlement, resolveBuildEntitlement } from '../requireBuildEntitlement';
 import { env } from '../../config/env';
 import { Enrollment, Cohort } from '../../models';
 import { isStaffEnrollment } from '../../services/access/staffAccess';
@@ -208,10 +208,67 @@ describe('requireBuildEntitlement (middleware)', () => {
 
   it('flag ON but no resolved participant → fail OPEN (next), never queries', async () => {
     (env as any).buildPaidGateEnabled = true;
-    const { req, res, next } = mockCtx(undefined);
+    // null, not undefined: undefined would trigger mockCtx's default participant
+    // and hand the middleware 'e1', which is the opposite of what this tests.
+    const { req, res, next } = mockCtx(null);
     await requireBuildEntitlement(req, res, next);
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(findEnrollment).not.toHaveBeenCalled();
+  });
+});
+
+
+// The resolver is what a DISPLAY consults (GET /api/portal/points → buildEntitled)
+// to decide between "ship your first build" and "join the program". It runs
+// regardless of the paid-gate flag: the flag decides whether free Explorers are
+// BLOCKED from building, not whether a paying student is told they are in.
+describe('resolveBuildEntitlement (shared lookup)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (env as any).buildPaidGateEnabled = false;
+  });
+
+  it('runs the lookup even with the paid gate OFF', async () => {
+    primeNotEntitled();
+    findEnrollment.mockResolvedValue({ id: 'e1', payment_status: 'pending', cohort_id: 'c1' });
+    findCohort.mockResolvedValue({ id: 'c1', cohort_type: 'accelerator' });
+    const r = await resolveBuildEntitlement('e1');
+    expect(r).toEqual({ entitled: true, reason: 'confirmed_entitled' });
+    expect(findEnrollment).toHaveBeenCalledTimes(1);
+  });
+
+  it('a paying-program (accelerator, billing pending) student is confirmed entitled', async () => {
+    primeNotEntitled();
+    findEnrollment.mockResolvedValue({ id: 'e1', payment_status: 'pending', cohort_id: 'c1' });
+    findCohort.mockResolvedValue({ id: 'c1', cohort_type: 'accelerator' });
+    expect((await resolveBuildEntitlement('e1')).entitled).toBe(true);
+  });
+
+  it('a genuine free Explorer is the ONLY confirmed_not_entitled outcome', async () => {
+    primeNotEntitled();
+    expect(await resolveBuildEntitlement('e1')).toEqual({ entitled: false, reason: 'confirmed_not_entitled' });
+  });
+
+  it('a missing enrollment row fails OPEN to entitled', async () => {
+    findEnrollment.mockResolvedValue(null);
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(await resolveBuildEntitlement('e1')).toEqual({ entitled: true, reason: 'enrollment_missing' });
+    warnSpy.mockRestore();
+  });
+
+  it('a lookup error fails OPEN to entitled and logs the stable error_class', async () => {
+    findEnrollment.mockRejectedValue(new Error('db down'));
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await resolveBuildEntitlement('e1')).toEqual({ entitled: true, reason: 'lookup_failed' });
+    expect(String(errSpy.mock.calls[0]?.[0] ?? '')).toContain('EntitlementLookupError');
+    errSpy.mockRestore();
+  });
+
+  it('is idempotent: the same inputs resolve the same way twice', async () => {
+    primeNotEntitled();
+    const a = await resolveBuildEntitlement('e1');
+    const b = await resolveBuildEntitlement('e1');
+    expect(a).toEqual(b);
   });
 });

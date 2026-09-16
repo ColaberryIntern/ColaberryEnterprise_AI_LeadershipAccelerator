@@ -365,7 +365,7 @@ const TodayShell: React.FC = () => {
                 )}
                 <div className="te-ringwrap">
                   <div className="te-ring" style={{ '--p': Math.max(2, readiness), '--c': 'var(--cherry)' } as React.CSSProperties}><div className="v"><b>{readiness}</b><span>/100</span></div></div>
-                  <div className="cap">Readiness</div>
+                  <div className="cap">Skill proficiency</div>
                 </div>
               </>
             ) : (
@@ -554,7 +554,7 @@ const TodayShell: React.FC = () => {
             <div className="te-muted" style={{ margin: '-4px 0 12px' }}>{lvl.next ? `${lvl.next.min - total} pts to ${lvl.next.name}` : 'Max level reached'}</div>
             <div className="te-stat"><span className="lab">Setup progress</span><span className="num">{setupDone}/{steps.length}</span></div>
             <div className="te-ribbon"><i style={{ width: `${setupPct}%`, background: 'var(--berry)' }} /></div>
-            <div className="te-stat"><span className="lab">Architect Readiness</span><span className="num">{readiness}/100</span></div>
+            <div className="te-stat"><span className="lab">Skill proficiency</span><span className="num">{readiness}/100</span></div>
             <div className="te-ribbon" style={{ marginBottom: 4 }}><i style={{ width: `${Math.max(2, readiness)}%`, background: 'var(--cherry)' }} /></div>
             <div className="te-muted" style={{ fontSize: 12 }}>Grows as you build once the program starts.</div>
             <Link className="te-btn ghost sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} to="/portal/points">Break down my points</Link>

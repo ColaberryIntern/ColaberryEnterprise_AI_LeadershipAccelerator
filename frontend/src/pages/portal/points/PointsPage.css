@@ -131,13 +131,13 @@
 
 /* Readiness */
 .points-root .pts-readi { display: flex; align-items: center; gap: 16px; margin: 6px 0 12px; }
-.points-root .pts-readi-meta .lvl { font-size: 16px; font-weight: 800; color: var(--pr-ink); text-transform: capitalize; }
+.points-root .pts-readi-meta .lvl { font-size: 16px; font-weight: 800; color: var(--pr-ink); }
 .points-root .pts-gaps { border-top: 1px solid var(--pr-line); padding-top: 12px; margin-top: auto; }
 .points-root .pts-gaps-h { display: block; font-size: 12px; font-weight: 800; color: var(--pr-ink); margin-bottom: 8px; }
 .points-root .pts-gaps ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
 .points-root .pts-gaps li {
   font-size: 12.5px; color: #3C7A26; background: rgba(91,166,60,.1);
-  border-radius: 8px; padding: 6px 10px; text-transform: capitalize;
+  border-radius: 8px; padding: 6px 10px;
 }
 
 /* Recent activity */
