@@ -4,6 +4,7 @@ import { PROVIDER_KEYS } from '../publishing/providerCapabilities';
 import { applyEdit, fingerprint, generateVariants, revertToGenerated, type Variant } from './composerVariants';
 import { validateSubmission, type MediaFacts, type SubmissionValidation } from './composerValidation';
 import { pollFromMetadata } from './pollSpec';
+import { pagesOf } from '../media/mediaAssetService';
 import { checkContentForBrand } from './brandGovernanceService';
 import type { GovernanceResult } from './brandGovernance';
 import { assertWritable, WorkflowError, type Actor } from './contentWorkflowService';
@@ -153,6 +154,7 @@ async function loadMediaFacts(itemId: string): Promise<MediaFacts[]> {
       byteSize: a.byte_size == null ? null : Number(a.byte_size),
       width: a.width, height: a.height, durationMs: a.duration_ms,
       codecFamily: typeof video?.codec_family === 'string' ? video.codec_family : null,
+      pages: pagesOf(a.metadata),
     });
   }
   return facts;

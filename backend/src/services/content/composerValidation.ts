@@ -47,6 +47,8 @@ export interface MediaFacts {
   durationMs: number | null;
   /** h264, h265, av1, vp9 ... for video; null for images. */
   codecFamily: string | null;
+  /** Documents only, when the file states it plainly. */
+  pages?: number | null;
 }
 
 export interface VariantContext {
@@ -126,23 +128,53 @@ export function validateVariant(variant: Variant, ctx: VariantContext, now: numb
   }
 
   // ── Media count ───────────────────────────────────────────────────────────────────────────
+  const hasDocument = (ctx.media ?? []).some((m) => m.mimeType === 'application/pdf');
   if (ctx.mediaCount > 0) {
-    if (caps.image === null && caps.video === null) {
+    if (caps.image === null && caps.video === null && caps.document === null) {
       problems.push({ provider: variant.provider, field: 'media', severity: 'block', message: `${name} does not accept media.` });
-    } else if (caps.image && ctx.mediaCount > caps.image.maxPerPost) {
+    } else if (!hasDocument && caps.image && ctx.mediaCount > caps.image.maxPerPost) {
+      // A document post's count is judged by the document rule below, with its own words.
       problems.push({
         provider: variant.provider, field: 'media', severity: 'block',
         message: `${name}: ${ctx.mediaCount} media items, limit ${caps.image.maxPerPost} per post.`,
       });
     }
-  } else if ((ctx.contentType === 'image' || ctx.contentType === 'video' || ctx.contentType === 'carousel')) {
-    problems.push({ provider: variant.provider, field: 'media', severity: 'block', message: `${name}: a ${ctx.contentType} post needs at least one media item.` });
+  } else if ((ctx.contentType === 'image' || ctx.contentType === 'video' || ctx.contentType === 'carousel' || ctx.contentType === 'document')) {
+    problems.push({ provider: variant.provider, field: 'media', severity: 'block', message: `${name}: a ${ctx.contentType} post needs ${ctx.contentType === 'document' ? 'a PDF attached' : 'at least one media item'}.` });
   }
 
   // ── Each attachment against the network's rules ───────────────────────────────────────────
   // Only what the upload recorded; nothing is opened here. A null fact is skipped, not failed:
   // an older row with no duration is a gap in evidence, not a rule broken.
+  const documents = (ctx.media ?? []).filter((m) => m.mimeType === 'application/pdf');
+  if (documents.length > 0) {
+    if (!caps.document) {
+      problems.push({ provider: variant.provider, field: 'media', severity: 'block', message: `${name} does not accept documents (PDF).` });
+    } else {
+      if (ctx.contentType !== 'document') {
+        problems.push({ provider: variant.provider, field: 'media', severity: 'block', message: `${name}: a PDF needs the document content type; this post is ${ctx.contentType}.` });
+      }
+      if (documents.length > 1) {
+        problems.push({ provider: variant.provider, field: 'media', severity: 'block', message: `${name}: one document per post; this one has ${documents.length}.` });
+      }
+      if (documents.length !== (ctx.media ?? []).length) {
+        problems.push({ provider: variant.provider, field: 'media', severity: 'block', message: `${name}: a document post cannot also carry images or video.` });
+      }
+      for (const d of documents) {
+        if (d.byteSize !== null && d.byteSize > caps.document.maxSizeMb * 1024 * 1024) {
+          problems.push({ provider: variant.provider, field: 'media', severity: 'block', message: `${name}: document is ${mb(d.byteSize)}, limit ${caps.document.maxSizeMb} MB.` });
+        }
+        if (typeof d.pages === 'number' && d.pages > caps.document.maxPages) {
+          problems.push({ provider: variant.provider, field: 'media', severity: 'block', message: `${name}: document has ${d.pages} pages, limit ${caps.document.maxPages}.` });
+        }
+      }
+    }
+  } else if (ctx.contentType === 'document' && ctx.mediaCount > 0) {
+    problems.push({ provider: variant.provider, field: 'media', severity: 'block', message: `${name}: a document post needs a PDF, not ${ctx.media?.[0]?.mimeType ?? 'this file'}.` });
+  }
+
   for (const m of ctx.media ?? []) {
+    if (m.mimeType === 'application/pdf') continue; // judged above
     const isVideo = m.mimeType.startsWith('video/');
     const rule = isVideo ? caps.video : caps.image;
     if (!rule) {

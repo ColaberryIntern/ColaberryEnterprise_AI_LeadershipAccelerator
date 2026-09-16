@@ -41,15 +41,23 @@ import path from 'path';
 export const MEDIA_ROOT = process.env.MEDIA_ROOT || '/app/uploads/media';
 
 /** The only types we accept. SVG is excluded on purpose: LinkedIn rejects it and it can carry scripts. */
-export const ALLOWED_MEDIA: Readonly<Record<string, { ext: string; kind: 'image' | 'video' }>> = {
+export type MediaKind = 'image' | 'video' | 'document';
+
+export const ALLOWED_MEDIA: Readonly<Record<string, { ext: string; kind: MediaKind }>> = {
   'image/png': { ext: 'png', kind: 'image' },
   'image/jpeg': { ext: 'jpg', kind: 'image' },
   'image/gif': { ext: 'gif', kind: 'image' },
   'video/mp4': { ext: 'mp4', kind: 'video' },
+  // LinkedIn's document post (the swipeable carousel). PDF only: PPTX/DOCX would be converted
+  // on LinkedIn's side into something the operator never previewed.
+  'application/pdf': { ext: 'pdf', kind: 'document' },
 };
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
+/** LinkedIn's own document limit. */
+export const MAX_DOCUMENT_BYTES = 100 * 1024 * 1024;
+const MAX_BYTES: Record<MediaKind, number> = { image: MAX_IMAGE_BYTES, video: MAX_VIDEO_BYTES, document: MAX_DOCUMENT_BYTES };
 export const SIGNED_URL_TTL_MS = 15 * 60 * 1000;
 
 export class MediaStoreError extends Error {
@@ -69,7 +77,7 @@ export interface StoredMedia {
   alreadyExisted: boolean;
 }
 
-const KEY_PATTERN = /^media\/[0-9a-f-]{36}\/[0-9a-f]{64}\.(png|jpg|gif|mp4)$/;
+const KEY_PATTERN = /^media\/[0-9a-f-]{36}\/[0-9a-f]{64}\.(png|jpg|gif|mp4|pdf)$/;
 
 export function isValidKey(key: string): boolean {
   return KEY_PATTERN.test(key);
@@ -90,16 +98,16 @@ export function sha256Of(bytes: Buffer): string {
 }
 
 /** Validate size and type BEFORE touching the disk. Returns the entry so the caller need not look it up again. */
-export function assertAcceptable(mimeType: string, byteSize: number): { ext: string; kind: 'image' | 'video' } {
+export function assertAcceptable(mimeType: string, byteSize: number): { ext: string; kind: MediaKind } {
   const entry = ALLOWED_MEDIA[mimeType];
   if (!entry) {
     throw new MediaStoreError(
-      `${mimeType || 'that file type'} is not accepted. Use PNG, JPEG, GIF or MP4.`,
+      `${mimeType || 'that file type'} is not accepted. Use PNG, JPEG, GIF, MP4 or PDF.`,
       'UnsupportedMediaType',
       415,
     );
   }
-  const cap = entry.kind === 'image' ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES;
+  const cap = MAX_BYTES[entry.kind];
   if (byteSize > cap) {
     throw new MediaStoreError(
       `That ${entry.kind} is ${(byteSize / 1024 / 1024).toFixed(1)} MB; the limit is ${cap / 1024 / 1024} MB.`,

@@ -22,6 +22,7 @@ jest.mock('../../../models', () => {
 import * as mockedModels from '../../../models';
 import { type FakeModelSet, resetAll } from '../../publishing/__tests__/fakeModels';
 import { attachMedia, listItemMedia, detachMedia } from '../mediaAssetService';
+import { minimalPdf } from './pdfFixtures';
 
 const models = mockedModels as unknown as FakeModelSet;
 const BRAND = '22222222-2222-4222-8222-222222222222';
@@ -121,6 +122,25 @@ describe('attach', () => {
     const fragmented = await fs.readFile(path.join(__dirname, 'fixtures', 'fragmented.mp4'));
     await expect(attachMedia({ contentItemId: itemId, bytes: fragmented, claimedMimeType: 'video/mp4', originalFilename: 'frag.mp4', altText: 'A short clip', uploadedBy: null }))
       .rejects.toMatchObject({ errorClass: 'UnreadableVideo', message: expect.stringMatching(/Re-export/) });
+    expect(models.MediaAsset.rows).toHaveLength(0);
+  });
+});
+
+describe('documents', () => {
+  it('stores a PDF as-is, records its page count, and lists it with pages', async () => {
+    const pdf = minimalPdf(7);
+    const out = await attachMedia({ contentItemId: itemId, bytes: pdf, claimedMimeType: 'application/pdf', originalFilename: 'deck.pdf', altText: 'Five AI habits for managers', uploadedBy: null });
+    expect(out).toMatchObject({ mimeType: 'application/pdf', pages: 7, width: null, height: null, durationMs: null });
+    expect(out.storageKey).toMatch(/\.pdf$/);
+    expect(models.MediaAsset.rows[0].metadata.document).toEqual({ pages: 7, pdf_version: '1.4' });
+    const stored = await fs.readFile(path.join(tmpRoot, out.storageKey.slice('media/'.length)));
+    expect(stored.equals(pdf)).toBe(true);
+    expect((await listItemMedia(itemId))[0].pages).toBe(7);
+  });
+
+  it('refuses a "PDF" that is not one, at upload, with the fix in the message', async () => {
+    await expect(attachMedia({ contentItemId: itemId, bytes: Buffer.from('<html>not a pdf</html>'), claimedMimeType: 'application/pdf', originalFilename: 'x.pdf', altText: 'A deck', uploadedBy: null }))
+      .rejects.toMatchObject({ errorClass: 'UnreadableDocument', status: 415, message: expect.stringMatching(/Export it as PDF/) });
     expect(models.MediaAsset.rows).toHaveLength(0);
   });
 });
