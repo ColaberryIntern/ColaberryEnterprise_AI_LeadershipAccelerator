@@ -26,6 +26,7 @@ const CONTENT_TYPES: Record<string, string> = {
   jpg: 'image/jpeg',
   gif: 'image/gif',
   mp4: 'video/mp4',
+  pdf: 'application/pdf',
 };
 
 router.get('/m/:brand/:file', async (req: Request, res: Response) => {

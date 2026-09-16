@@ -15,7 +15,7 @@ process.env.MEDIA_ROOT = tmpRoot;
 
 import {
   put, read, exists, isValidKey, assertAcceptable, signedUrl, verifySignedRequest,
-  MediaStoreError, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, SIGNED_URL_TTL_MS,
+  MediaStoreError, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_DOCUMENT_BYTES, SIGNED_URL_TTL_MS,
 } from '../mediaStore';
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
@@ -26,12 +26,22 @@ const ENV = { JWT_SECRET: ['test', 'secret'].join('-') } as NodeJS.ProcessEnv;
 beforeAll(async () => { await fs.mkdir(tmpRoot, { recursive: true }); });
 afterAll(async () => { await fs.rm(tmpRoot, { recursive: true, force: true }); });
 
+describe('PDF is a third kind', () => {
+  it('is accepted with its own 100 MB cap and a .pdf key', () => {
+    expect(assertAcceptable('application/pdf', 1000)).toEqual({ ext: 'pdf', kind: 'document' });
+    expect(MAX_DOCUMENT_BYTES).toBe(100 * 1024 * 1024);
+    expect(() => assertAcceptable('application/pdf', MAX_DOCUMENT_BYTES + 1)).toThrow(/limit is 100 MB/);
+    expect(isValidKey(`media/22222222-2222-4222-8222-222222222222/${'a'.repeat(64)}.pdf`)).toBe(true);
+    expect(isValidKey(`media/22222222-2222-4222-8222-222222222222/${'a'.repeat(64)}.docx`)).toBe(false);
+  });
+});
+
 describe('acceptance', () => {
-  it('accepts the four allowed types and refuses everything else with a readable reason', () => {
+  it('accepts the five allowed types and refuses everything else with a readable reason', () => {
     expect(assertAcceptable('image/png', 10).kind).toBe('image');
     expect(assertAcceptable('video/mp4', 10).kind).toBe('video');
     expect(() => assertAcceptable('image/svg+xml', 10)).toThrow(/not accepted/);
-    expect(() => assertAcceptable('application/pdf', 10)).toThrow(/not accepted/);
+    expect(() => assertAcceptable('application/vnd.openxmlformats-officedocument.presentationml.presentation', 10)).toThrow(/not accepted/);
     try { assertAcceptable('image/svg+xml', 10); } catch (e) { expect((e as MediaStoreError).status).toBe(415); }
   });
 

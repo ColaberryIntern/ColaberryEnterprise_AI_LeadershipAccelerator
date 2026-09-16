@@ -2,7 +2,7 @@ import { getProviderCapabilities, type ProviderCapabilities, type ProviderKey } 
 import { commentaryExceedsLimit, escapeLittleText, COMMENTARY_MAX_CHARS } from './linkedInText';
 import { headerValue, isPermanentStatus, messageOf, providerCodeOf } from './linkedInErrors';
 import type { LinkedInHttp } from './linkedInHttp';
-import { LINKEDIN_IMAGE_MIME_TYPES, uploadImages, type UploadedImage } from './linkedInImages';
+import { LINKEDIN_DOCUMENT_MIME_TYPES, LINKEDIN_IMAGE_MIME_TYPES, uploadDocument, uploadImages, type UploadedImage } from './linkedInImages';
 import { pollProblems } from '../content/pollSpec';
 import {
   AdapterUnsupportedError,
@@ -47,6 +47,9 @@ import {
  *      one is a 422.
  *   5. A poll is `content.poll` with the duration as a NAMED value (`THREE_DAYS`), not a number,
  *      and `content` is one-of: a poll post cannot also carry media. Both refused at validate.
+ *   6. A document (PDF) goes through the Documents API - same three steps as an image - and the
+ *      post references it as `content.media { id, title }`: a TITLE, shown on the post, where an
+ *      image carries alt text. One document per post, and nothing else alongside it.
  *
  * NO TOKEN IS STORED, CACHED OR LOGGED HERE. The adapter is constructed with a function that
  * fetches the account's access token on demand (`channelAccountService.getAccessToken`, which
@@ -155,16 +158,29 @@ export class LinkedInAdapter implements SocialProviderAdapter {
       // successful and be wrong.
       reasons.push('LinkedIn video posting is not implemented in this adapter yet; publish the video by handoff.');
     }
-    const unsupported = content.media.filter((m) => !m.mimeType.startsWith('video/') && !LINKEDIN_IMAGE_MIME_TYPES.has(m.mimeType));
+    const unsupported = content.media.filter((m) => !m.mimeType.startsWith('video/') && !LINKEDIN_IMAGE_MIME_TYPES.has(m.mimeType) && !LINKEDIN_DOCUMENT_MIME_TYPES.has(m.mimeType));
     if (unsupported.length > 0) {
-      reasons.push(`LinkedIn does not accept ${unsupported.map((m) => m.mimeType).join(', ')}. Use PNG, JPEG or GIF.`);
+      reasons.push(`LinkedIn does not accept ${unsupported.map((m) => m.mimeType).join(', ')}. Use PNG, JPEG, GIF or PDF.`);
     }
-    if (caps.image && content.media.length > caps.image.maxPerPost) {
+    const documents = content.media.filter((m) => LINKEDIN_DOCUMENT_MIME_TYPES.has(m.mimeType));
+    if (documents.length > 1) reasons.push(`LinkedIn takes one document per post; this post has ${documents.length}.`);
+    if (documents.length > 0 && documents.length !== content.media.length) reasons.push('A LinkedIn document post cannot also carry images or video; attach the PDF on its own.');
+    if (documents.length > 0 && !documents[0].altText?.trim()) reasons.push('The document needs a title (the description typed at upload); LinkedIn shows it on the post.');
+    if (documents.length > 0 && caps.document) {
+      for (const d of documents) {
+        if (d.byteSize !== null && d.byteSize > caps.document.maxSizeMb * 1024 * 1024) {
+          reasons.push(`${d.ref} is ${(d.byteSize / 1024 / 1024).toFixed(1)} MB; LinkedIn's document limit is ${caps.document.maxSizeMb} MB.`);
+        }
+      }
+    }
+    if (documents.length === 0 && caps.image && content.media.length > caps.image.maxPerPost) {
       reasons.push(`LinkedIn allows ${caps.image.maxPerPost} image${caps.image.maxPerPost === 1 ? '' : 's'} on this kind of post; this one has ${content.media.length}.`);
     }
     if (caps.image) {
       const limit = caps.image.maxSizeMb * 1024 * 1024;
-      for (const m of content.media) {
+      // The image cap is for images. Applying it to the PDF (the first version did) let the
+      // composer approve a 50 MB carousel that the worker then failed permanently at 8 MB.
+      for (const m of content.media.filter((x) => !LINKEDIN_DOCUMENT_MIME_TYPES.has(x.mimeType))) {
         if (m.byteSize !== null && m.byteSize > limit) {
           reasons.push(`${m.ref} is ${(m.byteSize / 1024 / 1024).toFixed(1)} MB; LinkedIn's limit is ${caps.image.maxSizeMb} MB.`);
         }
@@ -188,12 +204,13 @@ export class LinkedInAdapter implements SocialProviderAdapter {
       content.disclosureText ? `${content.text}\n\n${content.disclosureText}` : content.text,
     );
 
-    // Images go first, and all of them, before the post exists. A failure here leaves no post
-    // behind to reconcile; a failure after would.
-    const images: UploadedImage[] = content.media.length === 0 ? [] : await uploadImages({
-      http: this.opts.http, token, owner: author, apiVersion: LINKEDIN_API_VERSION,
-      media: content.media, readMedia: this.opts.readMedia, sleep: this.sleep,
-    });
+    // Media goes first, and all of it, before the post exists. A failure here leaves no post
+    // behind to reconcile; a failure after would. One PDF is a document post; anything else
+    // is images (validate has already refused a mix).
+    const uploadInput = { http: this.opts.http, token, owner: author, apiVersion: LINKEDIN_API_VERSION, media: content.media, readMedia: this.opts.readMedia, sleep: this.sleep };
+    const isDocument = content.media.length === 1 && LINKEDIN_DOCUMENT_MIME_TYPES.has(content.media[0].mimeType);
+    const document: UploadedImage | null = isDocument ? await uploadDocument(uploadInput, content.media[0]) : null;
+    const images: UploadedImage[] = content.media.length === 0 || isDocument ? [] : await uploadImages(uploadInput);
 
     const response = await this.opts.http({
       method: 'POST',
@@ -216,7 +233,7 @@ export class LinkedInAdapter implements SocialProviderAdapter {
         distribution: { feedDistribution: 'MAIN_FEED', targetEntities: [], thirdPartyDistributionChannels: [] },
         lifecycleState: 'PUBLISHED',
         isReshareDisabledByAuthor: false,
-        ...postContent(images, content.poll),
+        ...postContent(images, content.poll, document),
       },
     });
 
@@ -264,6 +281,7 @@ export class LinkedInAdapter implements SocialProviderAdapter {
         had_disclosure: content.disclosureText !== null,
         media_count: content.media.length,
         image_urns: images.map((i) => i.urn),
+        document_urn: document?.urn ?? null,
         poll_options: content.poll?.options.length ?? 0,
       },
     };
@@ -298,7 +316,12 @@ const POLL_DURATION: Record<number, string> = { 1: 'ONE_DAY', 3: 'THREE_DAYS', 7
  * one-element `multiImage` is a 422. A poll is a third shape. Empty means a text post: no
  * `content` key at all.
  */
-function postContent(images: UploadedImage[], poll: PublishPayload['poll']): Record<string, unknown> {
+function postContent(images: UploadedImage[], poll: PublishPayload['poll'], document: UploadedImage | null): Record<string, unknown> {
+  if (document) {
+    // The title is what the operator typed as the description at upload; LinkedIn shows it
+    // above the carousel. validate() refused a document without one.
+    return { content: { media: { id: document.urn, title: document.altText ?? 'Document' } } };
+  }
   if (poll) {
     const duration = POLL_DURATION[poll.durationDays];
     // Unreachable through the worker (validate runs first), but a direct caller must not get a

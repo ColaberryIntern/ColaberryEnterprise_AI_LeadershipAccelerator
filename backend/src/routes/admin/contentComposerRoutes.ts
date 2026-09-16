@@ -35,7 +35,7 @@ import { APPROVAL_DECISIONS, decideApproval, type ApprovalDecision } from '../..
 const router = Router();
 const UUID = z.string().uuid();
 const providerSchema = z.enum(PROVIDER_KEYS as unknown as [string, ...string[]]);
-const contentTypeSchema = z.enum(['text', 'image', 'video', 'carousel', 'thread', 'link', 'poll']);
+const contentTypeSchema = z.enum(['text', 'image', 'video', 'carousel', 'thread', 'link', 'poll', 'document']);
 
 const CreateDraftSchema = z.object({
   brand_id: UUID,
