@@ -1,3 +1,4 @@
+import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 
 /**
@@ -86,19 +87,41 @@ export async function ensureMilestoneLadderSchema(): Promise<void> {
   await assertMilestoneLadderSchema();
 }
 
+export const MILESTONE_LADDER_TABLES = ['student_milestones', 'student_certifications'] as const;
+
+/**
+ * Which of the ladder's tables are absent. Exported so a deploy gate can ask
+ * the same question boot asks.
+ *
+ * `QueryTypes.SELECT`, as ensureCertPrepSchema.missingCertTables does and for
+ * the reason it documents: without it `sequelize.query` returns a
+ * [results, metadata] tuple whose first element is NOT the row array for a
+ * SELECT, and destructuring it silently yields the wrong thing. The first
+ * production boot on 2026-09-16 logged both tables "missing" for exactly that
+ * reason while the dry-run script read them fine seconds later.
+ */
+export async function missingMilestoneLadderTables(): Promise<string[]> {
+  try {
+    const rows = await sequelize.query<{ table_name: string }>(
+      `SELECT table_name::text AS table_name FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name IN (:names)`,
+      { replacements: { names: [...MILESTONE_LADDER_TABLES] }, type: QueryTypes.SELECT },
+    );
+    const present = new Set(rows.map((r) => r.table_name));
+    return MILESTONE_LADDER_TABLES.filter((t) => !present.has(t));
+  } catch (err: any) {
+    console.warn('[DB] Milestone ladder table check failed:', err?.message);
+    return [...MILESTONE_LADDER_TABLES];
+  }
+}
+
 /**
  * Post-check that names what is missing rather than letting the per-statement
  * try/catch report "ensured" over a half-built schema.
  */
 async function assertMilestoneLadderSchema(): Promise<void> {
   try {
-    const [rows] = await sequelize.query(
-      `SELECT table_name FROM information_schema.tables
-        WHERE table_schema = current_schema()
-          AND table_name IN ('student_milestones', 'student_certifications')`,
-    ) as [Array<{ table_name: string }>, unknown];
-    const present = new Set(rows.map((r) => r.table_name));
-    const missing = ['student_milestones', 'student_certifications'].filter((t) => !present.has(t));
+    const missing = await missingMilestoneLadderTables();
     console.log(JSON.stringify({
       timestamp: new Date().toISOString(),
       level: missing.length ? 'error' : 'info',
