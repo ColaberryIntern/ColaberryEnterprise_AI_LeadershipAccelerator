@@ -97,19 +97,11 @@ const REPORTS = [
     sendHourUTC: 20,  // 3 PM CT
     description: 'Client project. Per-list cards with DRAFTED BY CB pattern.',
   },
-  {
-    name: 'Anthropic Partner Network',
-    scriptPath: 'backend/src/scripts/dailyAnthropicPartnerCountdown.js',
-    args: [],
-    projectId: 47477101,
-    needsOpenai: false,
-    recipients: STANDARD_RECIPIENTS,
-    cbRunnerState: null,
-    skipFlag: '--skip-anthropic',
-    cadence: 'daily',
-    sendHourUTC: 16,  // 11 AM CT
-    description: 'Daily countdown + per-employee progress on the 4 Anthropic courses.',
-  },
+  // ---- Anthropic Partner Network daily countdown: RETIRED 2026-09-16 ----
+  // Ali: "let's remove this auto email and archive the project - it is no
+  // longer relevant." The entry that fired dailyAnthropicPartnerCountdown.js at
+  // 16 UTC daily is gone from here; both dispatcher crontab lines on prod carry
+  // --skip-anthropic until this merges; Basecamp project 47477101 is archived.
   // ---- Personal decisions report ----
   {
     name: 'Ali Personal Decisions',
