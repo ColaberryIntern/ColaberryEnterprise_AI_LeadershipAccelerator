@@ -198,7 +198,7 @@ const CommunityPage: React.FC = () => {
                   <Avatar name={myProfile.display_name} src={myProfile.avatar_url} size="lg" />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div className="cm-profile-name">{myProfile.display_name}</div>
-                    <LevelBadge level={myProfile.level} size="sm" />
+                    <LevelBadge level={myProfile.level} rungName={myProfile.rung_name ?? undefined} size="sm" />
                   </div>
                 </div>
                 {(() => {
@@ -246,7 +246,7 @@ const CommunityPage: React.FC = () => {
                       {mem && <span className={`cm-dot ${mem.presence}`} title={mem.presence} />}
                     </span>
                     <span className="cm-leader-name">{m.display_name}</span>
-                    {mem && <LevelBadge level={mem.level} size="sm" />}
+                    {mem && <LevelBadge level={mem.level} rungName={mem.rung_name ?? undefined} size="sm" />}
                     <span className="cm-leader-pts">{m.points} pts</span>
                   </div>
                 );
