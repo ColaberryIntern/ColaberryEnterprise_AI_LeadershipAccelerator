@@ -30,10 +30,10 @@ const mockGetDaraAgentId = getDaraAgentId as unknown as jest.Mock;
 function makeModule(overrides: Record<string, any> = {}) {
   return {
     id: 'module-1',
-    name: 'Intro to AI Systems',
+    title: 'Intro to AI Systems',
     lessons: [
-      { id: 'lesson-1', title: 'Lesson One', order_index: 1, miniSections: [{ id: 'ms-1' }], artifactDefinitions: [] },
-      { id: 'lesson-2', title: 'Lesson Two', order_index: 2, miniSections: [], artifactDefinitions: [{ id: 'art-1' }] },
+      { id: 'lesson-1', title: 'Lesson One', sort_order: 1, miniSections: [{ id: 'ms-1' }], artifactDefinitions: [] },
+      { id: 'lesson-2', title: 'Lesson Two', sort_order: 2, miniSections: [], artifactDefinitions: [{ id: 'art-1' }] },
     ],
     ...overrides,
   };
@@ -66,7 +66,7 @@ describe('scanCurriculumIntegrity', () => {
   it('happy path: a lesson missing a title and a lesson with no content both produce warn findings', async () => {
     mockFindAll.mockResolvedValue([makeModule({
       lessons: [
-        { id: 'lesson-1', title: '', order_index: 1, miniSections: [], artifactDefinitions: [] },
+        { id: 'lesson-1', title: '', sort_order: 1, miniSections: [], artifactDefinitions: [] },
       ],
     })]);
 
@@ -82,8 +82,8 @@ describe('scanCurriculumIntegrity', () => {
   it('boundary: out-of-order lesson index produces an info (not warn) finding', async () => {
     mockFindAll.mockResolvedValue([makeModule({
       lessons: [
-        { id: 'lesson-1', title: 'One', order_index: 2, miniSections: [{ id: 'ms-1' }], artifactDefinitions: [] },
-        { id: 'lesson-2', title: 'Two', order_index: 1, miniSections: [{ id: 'ms-2' }], artifactDefinitions: [] },
+        { id: 'lesson-1', title: 'One', sort_order: 2, miniSections: [{ id: 'ms-1' }], artifactDefinitions: [] },
+        { id: 'lesson-2', title: 'Two', sort_order: 1, miniSections: [{ id: 'ms-2' }], artifactDefinitions: [] },
       ],
     })]);
 
@@ -100,6 +100,25 @@ describe('scanCurriculumIntegrity', () => {
     await scanCurriculumIntegrity('module-specific-id');
 
     expect(mockFindAll).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'module-specific-id' } }));
+  });
+
+  // A real dev-instance run (2026-09-16) threw "column CurriculumModule.order_index
+  // does not exist" — the mock above used the same wrong field name as the bug, so
+  // this went unnoticed through 13/13 passing tests. This test pins the REAL model
+  // field names (CurriculumModule.module_number, CurriculumLesson.sort_order) so a
+  // future regression back to the wrong names fails here, not against a live DB.
+  it('regression: the order clause sorts by the real model columns, not a field that does not exist on either table', async () => {
+    mockFindAll.mockResolvedValue([]);
+
+    await scanCurriculumIntegrity();
+
+    const orderArg = mockFindAll.mock.calls[0][0].order;
+    expect(orderArg).toEqual(
+      expect.arrayContaining([
+        ['module_number', 'ASC'],
+        expect.arrayContaining(['sort_order', 'ASC']),
+      ]),
+    );
   });
 
   it('failure path: a DB error surfaces to the caller, not swallowed', async () => {

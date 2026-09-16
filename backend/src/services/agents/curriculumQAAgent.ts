@@ -58,7 +58,10 @@ export async function scanCurriculumIntegrity(moduleId?: string): Promise<{ find
         { model: MiniSection, as: 'miniSections' },
       ],
     }],
-    order: [['order_index', 'ASC']],
+    order: [
+      ['module_number', 'ASC'],
+      [{ model: CurriculumLesson, as: 'lessons' }, 'sort_order', 'ASC'],
+    ],
   });
 
   for (const mod of modules) {
@@ -69,8 +72,8 @@ export async function scanCurriculumIntegrity(moduleId?: string): Promise<{ find
       findings.push({
         severity: 'warn',
         location: `curriculum_module:${moduleData.id}`,
-        description: `Module "${moduleData.name}" has no lessons`,
-        evidence: { module_id: moduleData.id, module_name: moduleData.name },
+        description: `Module "${moduleData.title}" has no lessons`,
+        evidence: { module_id: moduleData.id, module_name: moduleData.title },
       });
       continue;
     }
@@ -82,7 +85,7 @@ export async function scanCurriculumIntegrity(moduleId?: string): Promise<{ find
         findings.push({
           severity: 'warn',
           location: `curriculum_lesson:${lesson.id}`,
-          description: `Lesson in module "${moduleData.name}" is missing a title`,
+          description: `Lesson in module "${moduleData.title}" is missing a title`,
           evidence: { module_id: moduleData.id, lesson_id: lesson.id },
         });
       }
@@ -99,12 +102,12 @@ export async function scanCurriculumIntegrity(moduleId?: string): Promise<{ find
         });
       }
 
-      if (i > 0 && lesson.order_index <= lessons[i - 1].order_index) {
+      if (i > 0 && lesson.sort_order <= lessons[i - 1].sort_order) {
         findings.push({
           severity: 'info',
           location: `curriculum_lesson:${lesson.id}`,
-          description: `Lesson "${lesson.title}" has out-of-order index (${lesson.order_index})`,
-          evidence: { module_id: moduleData.id, lesson_id: lesson.id, order_index: lesson.order_index },
+          description: `Lesson "${lesson.title}" has out-of-order index (${lesson.sort_order})`,
+          evidence: { module_id: moduleData.id, lesson_id: lesson.id, sort_order: lesson.sort_order },
         });
       }
     }
