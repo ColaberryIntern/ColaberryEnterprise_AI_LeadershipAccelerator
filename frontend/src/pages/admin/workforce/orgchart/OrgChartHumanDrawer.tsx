@@ -61,7 +61,7 @@ function generateIdempotencyKey(): string {
 function OrgChartHumanDrawer({ human, leadership, staff, onClose, onTeamChanged }: OrgChartHumanDrawerProps): React.ReactElement {
   const directLeadership = leadership.filter((l) => human.leadership_agent_ids.includes(l.id));
   const directLeadershipIds = new Set(directLeadership.map((l) => l.id));
-  const teamStaff = staff.filter((s) => directLeadershipIds.has(s.reports_to_agent_id));
+  const teamStaff = staff.filter((s) => !!s.reports_to_agent_id && directLeadershipIds.has(s.reports_to_agent_id));
 
   const [teamBusy, setTeamBusy] = useState(false);
   const [teamError, setTeamError] = useState('');

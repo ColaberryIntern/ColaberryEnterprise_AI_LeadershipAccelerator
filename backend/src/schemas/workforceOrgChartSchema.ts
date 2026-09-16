@@ -46,7 +46,9 @@ const orgChartStaffAgentSchema = z.object({
   id: z.string(),
   agent_name: z.string(),
   display_name: z.string(),
-  reports_to_agent_id: z.string(),
+  // Org Chart v5 (2026-09-16) — null for an individual contributor reporting
+  // directly to a human (no leadership agent to link back to).
+  reports_to_agent_id: z.string().nullable(),
   reports_to_summary: z.string().min(1),
   open_ticket_count: z.number().int().nonnegative(),
   hierarchy_color: z.string().nullable(),
