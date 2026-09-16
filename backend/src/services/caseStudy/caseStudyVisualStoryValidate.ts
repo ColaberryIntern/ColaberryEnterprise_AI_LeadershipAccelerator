@@ -87,7 +87,7 @@ const nodeSchema = z.object({
   status: z.enum(CASE_STUDY_WORKFLOW_STATUSES).optional(),
   lane: z.enum(CASE_STUDY_WORKFLOW_LANES).optional(),
   evidence: text(L.nodeEvidence).optional(),
-  evidenceId: z.string().uuid().optional(),
+  evidenceId: z.string().min(1).max(80).optional(),
   metricKey: z.string().min(1).max(80).optional(),
 }).strict();
 
@@ -129,7 +129,7 @@ const partSchema = z.object({
   metricKey: z.string().min(1).max(80).optional(),
   value: z.number().finite().nonnegative().optional(),
   denominator: z.number().finite().positive().optional(),
-  evidenceId: z.string().uuid().optional(),
+  evidenceId: z.string().min(1).max(80).optional(),
   status: z.enum(CASE_STUDY_WORKFLOW_STATUSES).optional(),
   caveat: text(L.caveat).optional(),
 }).strict();
@@ -162,7 +162,7 @@ const sectionSchema = z.object({
   provenance: z.object({
     generator: z.enum(CASE_STUDY_VISUAL_GENERATORS),
     generatedAt: z.string().datetime(),
-    sourceSnapshotId: z.string().uuid().optional(),
+    sourceSnapshotId: z.string().min(1).max(80).optional(),
     sourceContentHash: z.string().regex(HASH_RE, 'sha256 hex'),
     state: z.enum(CASE_STUDY_VISUAL_STATES),
     humanEdited: z.boolean(),
