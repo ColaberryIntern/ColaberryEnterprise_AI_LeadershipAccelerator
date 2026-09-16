@@ -442,6 +442,7 @@ export const REQUIRED_TABLES = [
   'internship_document_templates',
   'internship_documents',
   'internship_card_dismissals',
+  'internship_meeting_attendance',
 ] as const;
 
 export async function assertInternshipSchema(): Promise<void> {
