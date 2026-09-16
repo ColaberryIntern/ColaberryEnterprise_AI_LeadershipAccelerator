@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { StoryWorkflowPanel } from './StoryWorkflowPanel';
 import { layoutWorkflowToFit } from './storyWorkflowLayout';
+import { LABEL_LIFT } from './storyWorkflowEdges';
 import { STATUS_WORD, panelSelectionOrder } from './storyVisualModel';
 import type { CaseStudyWorkflowRole, PublicCaseStudyWorkflow, PublicCaseStudyWorkflowPanel } from './storyVisualModel';
 import { useWorkflowMotion } from './useWorkflowMotion';
@@ -175,7 +176,7 @@ export function StoryWorkflowGraph({ workflow, motion }: StoryWorkflowGraphProps
                   data-status={edge.status}
                 />
                 {edge.label && edge.labelFits ? (
-                  <text x={edge.labelX} y={edge.labelY - 6} className="cbv2-story-visual__edge-label" textAnchor="middle">{edge.label}</text>
+                  <text x={edge.labelX} y={edge.labelY - LABEL_LIFT} className="cbv2-story-visual__edge-label" textAnchor="middle">{edge.label}</text>
                 ) : null}
               </g>
             ))}

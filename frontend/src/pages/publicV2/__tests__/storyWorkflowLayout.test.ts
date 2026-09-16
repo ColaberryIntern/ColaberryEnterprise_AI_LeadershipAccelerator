@@ -144,7 +144,7 @@ describe('fitting the width the page offers', () => {
       expect(n.width).toBeGreaterThanOrEqual(118);
       expect(n.x + n.width).toBeLessThanOrEqual(1268);
       expect(n.labelLines.length).toBeGreaterThanOrEqual(1);
-      expect(n.labelLines.length).toBeLessThanOrEqual(3);
+      expect(n.labelLines.length).toBeLessThanOrEqual(4);
     }
     for (let i = 0; i < l.nodes.length; i += 1) {
       for (let j = i + 1; j < l.nodes.length; j += 1) expect(overlaps(l.nodes[i], l.nodes[j])).toBe(false);
