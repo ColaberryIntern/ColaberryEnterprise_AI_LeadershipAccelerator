@@ -1,5 +1,6 @@
 import { Brand, Campaign, ContentApprovalRequest, ContentItem, ContentItemMedia, ContentVariant, MediaAsset } from '../../models';
 import { pollFromMetadata } from './pollSpec';
+import { listAccounts } from '../marketing/channelAccountService';
 import { PROVIDER_KEYS, type ProviderKey } from '../publishing/providerCapabilities';
 import { buildConfirmation, type ConfirmationInput, type ConfirmationSummary } from './composerConfirmation';
 import { listItemLinks } from './composerLinkService';
@@ -58,6 +59,15 @@ export async function buildItemConfirmation(itemId: string): Promise<Confirmatio
     : [];
   const validation: ConfirmationInput['validation'] = ran ? { ok: blockers.length === 0, blockers } : null;
 
+  // The brand's connected accounts, newest first - the same order the scheduler resolves
+  // them in (channelAccountResolver), so the account named here is the one that would post.
+  const connectedAccounts = item.brand_id
+    ? (await listAccounts({ tenantIds: [item.tenant_id], brandId: item.brand_id }))
+      .filter((a) => a.status === 'connected')
+      .sort((a, b) => new Date(b.connected_at).getTime() - new Date(a.connected_at).getTime())
+      .map((a) => ({ id: a.id, provider: a.provider, displayName: a.display_name, handle: a.handle, status: a.status }))
+    : [];
+
   return buildConfirmation({
     item: {
       id: item.id,
@@ -83,5 +93,6 @@ export async function buildItemConfirmation(itemId: string): Promise<Confirmatio
       decision_note: approval.decision_note,
     } : null,
     validation,
+    connectedAccounts,
   });
 }

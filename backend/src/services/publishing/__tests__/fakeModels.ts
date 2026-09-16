@@ -5,7 +5,7 @@ import { Op } from 'sequelize';
  *
  * NOT a Sequelize emulator. It implements exactly the surface the services under test call
  * (findByPk, findOne, findAll, findOrCreate, count, create, static update, instance update,
- * set) and exactly the where-operators those calls use (equality, IN via array, Op.lte,
+ * set) and exactly the where-operators those calls use (equality, IN via array or Op.in, Op.lte,
  * Op.ne, Op.is, Op.or). Anything else throws, so a service that starts using an operator the
  * fake does not model fails loudly here rather than passing on a silently-ignored clause.
  *
@@ -39,6 +39,7 @@ function matches(row: Row, where: Row | undefined): boolean {
         if (opKey === Op.lte) { if (!(toMs(value) <= toMs(bound))) return false; }
         else if (opKey === Op.ne) { if (value === bound) return false; }
         else if (opKey === Op.is) { if (bound === null && value !== null && value !== undefined) return false; }
+        else if (opKey === Op.in) { if (!(bound as unknown[]).includes(value)) return false; }
         else throw new Error(`fakeModels: unsupported operator ${String(opKey)} on ${String(key)}`);
       }
       continue;
@@ -147,6 +148,8 @@ export function makeFakeModelSet() {
     PublishingJob: fakeModel('PublishingJob', 'pjob', { state: 'pending', attempts: 0, max_attempts: 3, next_retry_at: null, dead_lettered_at: null, dead_letter_reason: null, claimed_by: null, claimed_at: null, last_error: null, last_error_class: null, policy_snapshot: {} }),
     ExternalPublication: fakeModel('ExternalPublication', 'extpub', { metadata: {}, permalink: null, removed_at: null }),
     PlatformDeliveryEvent: fakeModel('PlatformDeliveryEvent', 'devent'),
+    ChannelAccount: fakeModel('ChannelAccount', 'chacct', { status: 'connected', revoked_at: null, handle: null, avatar_url: null, granted_scopes: [], missing_scopes: [], connected_at: new Date('2026-09-10T12:00:00Z'), last_health_check_at: null, last_health_ok: null, last_health_error_class: null, connected_by: null }),
+    ConnectorCredential: fakeModel('ConnectorCredential', 'cred'),
   };
   return set;
 }

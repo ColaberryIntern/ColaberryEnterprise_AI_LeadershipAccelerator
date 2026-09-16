@@ -19,10 +19,12 @@ import { ProviderPublishError, type SocialProviderAdapter } from './socialProvid
  *
  * WHERE A REAL ADAPTER PLUGS IN. `LIVE_ADAPTERS` below maps a provider to its implementation.
  * A provider reaches it only when `decidePublishMode` says `direct`, which requires it to be in
- * `LIVE_CONNECTORS` - so today the LinkedIn entry is present and unreachable, and flipping that
- * one constant (once credentials exist) is the entire activation. Anything marked direct with
- * no entry here still raises `NoLiveAdapterError`: loud and permanent, dead-lettered with a
- * reason, rather than publishing nothing silently.
+ * `LIVE_CONNECTORS` - read from the environment variable of the same name at boot, so once the
+ * credentials exist the entire activation is `LIVE_CONNECTORS=linkedin_member` plus a restart.
+ * The env reader only accepts providers listed in `IMPLEMENTED_CONNECTORS`, which a test holds
+ * equal to the keys here. Anything marked direct with no entry here still raises
+ * `NoLiveAdapterError`: loud and permanent, dead-lettered with a reason, rather than publishing
+ * nothing silently.
  *
  * DEPENDENCIES ARE INJECTED, not imported at module load. `channelAccountService` reaches the
  * models and the credential vault, and importing it here directly would both create a cycle
@@ -95,6 +97,9 @@ const LIVE_ADAPTERS: Partial<Record<ProviderKey, (deps: LiveAdapterDeps, clock: 
     http: makeLinkedInHttp(), clock,
   }),
 };
+
+/** The providers a live adapter exists for; held equal to IMPLEMENTED_CONNECTORS by a test. */
+export const LIVE_ADAPTER_KEYS: readonly ProviderKey[] = Object.keys(LIVE_ADAPTERS) as ProviderKey[];
 
 /** A factory with one adapter instance per provider, so dry-run receipts stay idempotent within a run. */
 export function makeAdapterFactory(
