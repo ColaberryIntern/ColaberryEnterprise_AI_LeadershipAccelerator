@@ -12,6 +12,9 @@ a discovery report. The order below is the order that avoids repeating them.
 
 **This skill does not publish.** Publishing is a separate, explicit instruction.
 
+**The visual story (§8d) is authored last and from the record only.** It draws the
+flow and charts the figures the record already verifies; it introduces no number.
+
 **Start section 8 (images) FIRST.** Dispatch an agent to find or produce the cover
 image before anything else begins — it takes longer than the rest and a case study
 without a cover reads as unfinished however good its evidence is.
@@ -367,6 +370,9 @@ Use ` - ` instead of `<br/>`. After saving, **verify the projection returns it**
 p.projection.architecture.diagramSource ? 'renders' : 'SANITISER DROPPED IT'
 ```
 
+The same no-angle-bracket rule binds every label in the visual story (§8d); when the
+story draws the flow, the Mermaid drawing folds under "View technical proof".
+
 ---
 
 ## 8. Images — start this FIRST, in parallel, and do not finish without them
@@ -686,6 +692,8 @@ risk is horizontal overflow.
 - [ ] **The headline metric is the one that answers "did this work?"** (§5c)
 - [ ] `pageScrollW === viewportW` at 1440 **and** 390
 - [ ] Diagrams are in the architecture section, not standing in for a picture
+- [ ] If the record carries a visual story (§8d): the band sits under the context strip,
+      the strip prints no duplicate headline figure, and the band renders at 768 too
 - [ ] `problems[]` is empty
 
 ---
@@ -766,7 +774,9 @@ rather than from your notes.
 3. **Its own architecture diagram**, rendered from `diagramSource`.
 4. **Typographic slides** carrying the record's own sentences.
 
-Nothing is generated, staged or restaged. There is no fifth option.
+Nothing is generated, staged or restaged. There is no fifth option. The visual story's
+workflow illustration (§8d) is NOT slide material: it is an illustration drawn by the
+team, and a film that shows it as if it were the product is exactly the fault §8 forbids.
 
 ### CHECK EVERY FRAME FOR PEOPLE
 
@@ -847,6 +857,108 @@ status code: two different videos both return 200.
       surfaces, not just the same-origin one
 - [ ] The player renders in the masthead and above the fold on all three
 - [ ] The file was verified live by md5, after an nginx rebuild
+
+---
+
+## 8d. The visual story — the flow drawn, the figures charted, from the record only
+
+A record may carry a `visualStory` section on its snapshot: a **workflow illustration**
+(single-state, or Before/After when the before-state is evidenced), up to **three outcome
+cards**, and up to **six charts**. The public page renders it as one band directly under
+the context strip, above the first prose section; when the band shows cards, the strip
+prints no headline figure, and the Mermaid drawing folds under "View technical proof".
+A record without the section renders exactly as before. §8d is the whole rule set; the
+rest of this file still applies to every word and figure in it.
+
+### What it is not
+
+- **Not a new section key.** It carries no `data-section`; the surface profiles, the
+  section vocabulary and `sectionOrder` are untouched. Presence of the section is the
+  flag; `enabled` plus the `surfaces` list inside it decides which sites show it.
+- **Not a place for a number.** Every card is a **metric key**; every chart anchors on a
+  metric key; a chart part is a metric key or a literal that carries its own denominator
+  **and** an `evidenceId` the record already holds. The projection resolves each figure
+  from the verified metric at request time, so the story can never disagree with the
+  metrics beneath it. If a cited metric loses verification, the whole story drops, not
+  one card.
+- **Not telemetry.** The particles are illustrative, fixed cadence, and the band says so
+  in words. The motion note is part of the section and is claim-scanned like prose.
+
+### Where it lives, and the one way to write it
+
+Snapshot content, key `visualStory`, schema version 1 (`backend/src/types/caseStudy.ts`,
+limits in `caseStudyVisual.ts`). Authored as a **whole section** through the override
+path, like everything else in §3: `applyHumanOverride` with `path: 'visualStory'`
+validates it (`caseStudyVisualStoryValidate.ts`) before any write and refuses with
+`{path, code, message}` per field. It survives sync as a human override; a sync that
+changes the sections it was drawn from marks it **stale** (the Studio shows the badge)
+and never regenerates over a person's work.
+
+The Studio's **Visuals tab, Visual Story panel** is the only authoring surface:
+`Generate from evidence` (`POST /api/admin/case-studies/:id/visual-story/generate`,
+reads only) draws a single-state workflow from the architecture diagram, picks the
+headline and comparative metrics as cards, and proposes one chart per ratio or share
+metric by its guardrail. Edit the words in the row editors, `Preview changes`, then
+`Save`. A generated draft is `enabled: false` on no surface: turning it on is your act.
+
+### Chart mapping — the metric's shape decides the chart, never the other way round
+
+| Metric shape on the record | Chart kind | What it needs | What it refuses |
+|---|---|---|---|
+| ratio or share, parts of one whole | `composition` | parts that sum to the denominator (the remainder is named in the table) | a part with no figure |
+| ratio, with a "N of M" baseline in the measurement notes | `comparison` | both windows as parts, a visible `caveat` naming the windows | anything read as a trend; a bar without a denominator |
+| ratio or share | `share` | the anchoring metric | a literal part without evidence |
+| two summary statistics (median and p90, say) | `two_value` | exactly two parts, a `unit`, an `axisMax` | a third part; a value over the axis |
+| a zero over a real denominator | `zero_card` | the anchoring metric at 0 of N | a non-zero anchor; a missing denominator |
+
+No line, no dates on an axis, no kind that reads as a trend: a title containing
+"trend", "over time", "per week" or "growth" is refused unless the kind is comparison.
+
+### Workflow guardrails
+
+- Every node key unique; every edge joins two known nodes; no self-loop; every node
+  reachable from the initial step (`node_unreachable`); at most 16 nodes and 24 edges
+  per panel. Labels 40 characters, sublabels 48, kicker 60, detail 280, evidence 240.
+- A **before panel exists only when the before-state is evidenced.** The generator
+  never invents one; it draws `single_state`. Author a Before/After pair by hand and
+  cite where each before-step's proof lives in its `evidence` text.
+- Roles (`human`, `system`, `external`, `data`), statuses (`processing`, `resolved`,
+  `attention`, `failure`, `unknown`) and lanes (`primary`, `recovery`, `manual`) are
+  closed lists and render as words as well as colour.
+- No `<`, `>`, `@`, URL or control character in any text (§7 applies here too).
+- A node's `metricKey` shows that metric's verified value beside the step as a tally,
+  with the same verification badge as every other figure.
+
+### The gate and the scanner
+
+Blocker `visual_story_invalid` (rule 20) runs the same validator on every publish and
+names up to eight refusals by path. The claim scanner reads the workflow title, caption,
+description, motion note, every panel label and summary, every node label, sublabel,
+kicker, detail and evidence, every edge label and condition, and every chart title,
+caption, caveat, limitation and part label. **A percentage in any of those must be
+carried by a verified metric on the record** (§6): "4.2%" in a caveat forced a
+`missing_event_rate` metric onto the CORA record before the gate would pass.
+
+### Previews
+
+`scripts/previewStoryLayout.js` renders the band with the rest of the page; pass the
+`{surface, caseStudy}` envelope with the projected `visualStory` in it. Check 1440,
+768 and 390 (`pageScrollW === viewportW` at all three; the graph is one 360-wide
+column below 768), and once with `prefers-reduced-motion` on: no `.cbv2-story-visual__particle`,
+and the pause control reads "Reduced motion". Every figure must be visible as text
+before any animation; a screenshot taken before the count-up must already show the
+final wording.
+
+### Done means
+
+- [ ] Every card and chart anchor is a verified, publishable metric on the same record
+- [ ] Every literal chart part carries a denominator and an `evidenceId` the record holds
+- [ ] The before panel, if any, cites evidence in its own words
+- [ ] `readVisualStoryState` reports `validation.ok: true` and `stale: false`
+- [ ] The gate passes with no `visual_story_invalid`
+- [ ] `enabled: true` on exactly the surfaces approved, and no other
+- [ ] The rendered band checked at 1440, 768, 390 and under reduced motion
+- [ ] The hero and the walkthrough video are unchanged
 
 ---
 
@@ -1009,6 +1121,10 @@ an already-live record too, so consent withdrawn between two clicks is caught.
    **working the entire candidate list** (§5). All three are prose.
 6. **That a record with no figures says why.** Removing a bad card is enforced; writing
    the sentence that explains the silence is not.
+7. **That the visual story tells the truth about the flow.** The validator (§8d) proves
+   the graph is connected and every figure is a verified metric; it cannot tell whether
+   the arrows run the way the system does, or whether a "before" ever happened. That is
+   read off the evidence, by a person, before `enabled` is set.
 
 **When you add a rule here, decide which half it belongs in before you write it.** A rule
 in the second half is a rule with a half-life.
@@ -1041,7 +1157,8 @@ in the second half is a rule with a half-life.
 sections authored X of X · candidates investigated X of X · metrics verified X of X ·
 **metrics that compare X of X (§5a)** · metrics computed by a collector X of X ·
 shaped metrics with plain language X of X · artifacts X · images X · timeline entries X ·
-prefixes X · walkthrough video X seconds, cues loading on X of 3 surfaces.
+prefixes X · walkthrough video X seconds, cues loading on X of 3 surfaces ·
+**visual story: cards X, charts X, steps X, enabled on X surfaces, gate rule 20 clean (§8d)**.
 
 **Never say complete, production-ready or published without evidence for each claim.**
 
@@ -1059,6 +1176,7 @@ prefixes X · walkthrough video X seconds, cues loading on X of 3 surfaces.
 | **images** | **3** | **0** ← the live gap |
 | **walkthrough video** | added later | added later |
 | metrics with methodology + limitations | 4 of 4 | 6 of 6 |
+| **visual story (§8d)** | none | none (pilot: CORA, 2026-09-16) |
 
 The tickets record scores higher on rigour and lower on pictures. Both patterns are
 worth copying in one direction only.

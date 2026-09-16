@@ -54,6 +54,13 @@ manifest at **tier 5** of seven:
 So a declared field beats repository inference and AI drafting. It does not beat a human
 override, an approved metric, or platform data.
 
+**A manifest cannot carry a visual story either.** The `visualStory` section (the
+workflow illustration, outcome cards and charts a published page may draw under its
+hero) is snapshot-side only: it is generated in the Studio from the record's own verified
+metrics and evidence, saved as a human override, validated by the publish gate
+(`visual_story_invalid`) and never read from a repository file. A manifest key of that
+name is undeclared to the reader and comes back absent, like any other unknown field.
+
 ---
 
 ## Worked example
