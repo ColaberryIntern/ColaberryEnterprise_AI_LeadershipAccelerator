@@ -5,6 +5,7 @@ import InternshipApplication from '../../models/InternshipApplication';
 import { applicationDetail, queue, queueCounts, type QueueBucket } from '../../services/internship/internshipReviewQueue';
 import { decide } from '../../services/internship/internshipDecisionService';
 import { assessApplicant } from '../../services/internship/internshipApplicantAssessment';
+import { internActivity } from '../../services/internship/internshipActivityService';
 import { InvalidInternshipTransitionError } from '../../services/internship/internshipStateMachine';
 import { REASON_CODES } from '../../services/internship/internshipReasonCodes';
 import fs from 'fs';
@@ -108,6 +109,28 @@ router.get('/api/admin/internship/applications/:id', requireSection('internship'
       context: { message: err?.message },
     }));
     res.status(500).json({ error: 'Could not load the application.' });
+  }
+});
+
+/**
+ * GET /api/admin/internship/applications/:id/activity
+ * What the intern is doing: training (weeks 1-3 gate), project, cert prep, case
+ * studies. Read-only; keyed off the application's enrollment.
+ */
+router.get('/api/admin/internship/applications/:id/activity', requireSection('internship'), async (req: Request, res: Response) => {
+  try {
+    const application = await InternshipApplication.findByPk(String(req.params.id), { attributes: ['id', 'enrollment_id'] });
+    if (!application) { res.status(404).json({ error: 'Application not found.' }); return; }
+    const activity = await internActivity((application as any).enrollment_id);
+    res.json(activity);
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_activity_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not load the intern activity.' });
   }
 });
 
