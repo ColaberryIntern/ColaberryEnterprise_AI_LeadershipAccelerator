@@ -89,10 +89,10 @@ async function openRowFor(leadId: number, brandId: string): Promise<GrowthJourne
   });
 }
 
-function answerFrom(row: GrowthJourneyConversationOwnership, how: 'open' | 'derived'): HumanConversationAnswer {
+function answerFrom(row: GrowthJourneyConversationOwnership): HumanConversationAnswer {
   return {
     value: 'yes',
-    reason: `${how}_human_conversation:${row.source}`,
+    reason: `open_human_conversation:${row.source}`,
     ownership_id: row.id,
     source: row.source,
     since_at: row.since_at,
@@ -214,6 +214,26 @@ async function deriveOpener(
 }
 
 /**
+ * Record a derived opener and answer from the EVIDENCE. The reason names what
+ * was seen; the id, source and since come from the row that holds the lock
+ * (a replay lands on whatever open row exists - a human's from a race, or
+ * the AI's own). If the record itself cannot be written, the answer is still
+ * 'yes' - the human in the thread is a fact the write failing does not
+ * change - with `record_failed:<class>` in the reason and no row id.
+ */
+async function recordDerived(derived: OpenHumanConversationInput, leadId: number): Promise<HumanConversationAnswer> {
+  const reason = `derived_human_conversation:${derived.source}`;
+  try {
+    const { row } = await openHumanConversation(derived);
+    return { ...answerFrom(row), reason };
+  } catch (err: unknown) {
+    const error_class = classifyError(err);
+    log('growth_journey.human_conversation_record_failed', { error_class, brand_id: derived.brandId, lead_id: leadId, source: derived.source });
+    return { value: 'yes', reason: `${reason}:record_failed:${error_class}`, ownership_id: null, source: derived.source, since_at: derived.sinceAt ?? null };
+  }
+}
+
+/**
  * Answer `human_conversation` for one lead in one brand. Never throws: a
  * failed lookup is `'unknown'` with the error class, logged with ids only.
  * Called by `resolveContactEvidence` only after the lead itself was readable,
@@ -226,16 +246,10 @@ export async function resolveHumanConversation(args: ResolveHumanConversationArg
   const leadId = args.leadId;
   try {
     const open = await openRowFor(leadId, args.brandId);
-    if (open) return answerFrom(open, 'open');
+    if (open) return answerFrom(open);
 
     const derived = await deriveOpener({ ...args, leadId });
-    if (derived) {
-      // The evidence is the reason; the row that holds the lock is the record.
-      // (A replay lands on whatever open row exists - a human's from a race,
-      // or the AI's own - and the evidence of a human in the thread stands.)
-      const { row } = await openHumanConversation(derived);
-      return { ...answerFrom(row, 'derived'), reason: `derived_human_conversation:${derived.source}` };
-    }
+    if (derived) return recordDerived(derived, leadId);
 
     return { value: 'no', reason: 'no open human conversation', ownership_id: null, source: null, since_at: null };
   } catch (err: unknown) {

@@ -197,6 +197,22 @@ describe('the derived openers — read-side, no new detector', () => {
     expect(store[0]).toMatchObject({ owner_id: 'ali', channel: 'email', source: 'ali_personal_outreach', since_at: days(1) });
   });
 
+  it("the record failing to write does not un-see the human: still 'yes', the reason says record_failed, no row id, logged with ids only", async () => {
+    m.activityFindOne.mockResolvedValue(activity);
+    const model = (jest.requireMock('../../../models') as { GrowthJourneyConversationOwnership: { create: (...a: unknown[]) => Promise<unknown> } }).GrowthJourneyConversationOwnership;
+    const spy = jest.spyOn(model, 'create').mockRejectedValueOnce(Object.assign(new Error('down buyer@example.com'), { name: 'SequelizeConnectionError' }));
+    const a = await resolveHumanConversation(args());
+    spy.mockRestore();
+    expect(a.value).toBe('yes');
+    expect(a.reason).toMatch(/^derived_human_conversation:human_activity:record_failed:/);
+    expect(a.ownership_id).toBeNull();
+    expect(a.source).toBe('human_activity');
+    expect(store).toHaveLength(0);
+    const lines = (console.warn as jest.Mock).mock.calls.map((c) => String(c[0])).join('\n');
+    expect(lines).toContain('growth_journey.human_conversation_record_failed');
+    expect(lines).not.toContain('buyer@example.com');
+  });
+
   it('a human activity wins over the outreach log when both exist, and only one row is written', async () => {
     m.activityFindOne.mockResolvedValue(activity);
     m.logFindOne.mockResolvedValue({ id: 'log-1', lead_id: 501, channel: 'email', created_at: days(1) });
