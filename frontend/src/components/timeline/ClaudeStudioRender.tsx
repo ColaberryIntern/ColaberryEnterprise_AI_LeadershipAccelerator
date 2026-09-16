@@ -137,6 +137,7 @@ const CSS = `
 .st-block h4{font-size:13.5px;font-weight:750;margin:0 0 8px;color:var(--st-ink)}
 .st-block ul,.st-block ol{margin:0;padding-left:19px;color:#33415c;font-size:13.5px}
 .st-block li{margin:5px 0}
+.st-obj{margin:6px 0 10px;font-size:13.5px;line-height:1.55;color:var(--st-muted,#5b6472)}
 .st-trust{background:#fff8f2;border-color:#f3ddc7}
 .st-trust h4{color:#8a4b16}
 .st-trust li{color:#6d4520}
@@ -182,6 +183,20 @@ const CSS = `
 /* single-scroll, light drawer body when it hosts a Claude Studio */
 .tld-body--claudestudio{padding:0 !important;background:#fff !important;overflow:hidden !important;display:flex !important}
 `;
+
+/**
+ * "What you'll be able to do" as ONE sentence, not a bulleted section.
+ * The bullets restated the four stages that followed them, line for line, in
+ * every week (learner review, 2026-09-16): the objectives are the stages'
+ * outcomes by construction. Kept as a sentence so the promise is still made,
+ * without a second list of the same things.
+ */
+export function objectivesLine(objectives: readonly string[]): string | null {
+  const parts = objectives.map((o) => o.trim().replace(/\.$/, '')).filter(Boolean);
+  if (!parts.length) return null;
+  const lower = parts.map((p, i) => (i === 0 ? p : p.charAt(0).toLowerCase() + p.slice(1)));
+  return `By the end you will ${lower.join('; ')}.`;
+}
 
 const ClaudeStudioRender: React.FC<Props> = ({
   bodyHtml, title, summary, estMin, points, difficulty, variant,
@@ -404,11 +419,8 @@ const ClaudeStudioRender: React.FC<Props> = ({
           </>
         )}
 
-        {studio.objectives.length > 0 && (
-          <>
-            <h3 className="st-h">What you&rsquo;ll be able to do</h3>
-            <ul className="st-list">{studio.objectives.map((o, i) => <li key={i}>{o}</li>)}</ul>
-          </>
+        {objectivesLine(studio.objectives) && (
+          <p className="st-obj">{objectivesLine(studio.objectives)}</p>
         )}
 
         <fieldset className="st-fs">
@@ -552,6 +564,18 @@ const ClaudeStudioRender: React.FC<Props> = ({
           </>
         )}
 
+        {/* Assessment BEFORE submission. This block used to be the last thing on
+            the page, below the submit button, so a student read how the work
+            is judged only after handing it in. Learner review, 2026-09-16. */}
+        {block('rubric') && (
+          <>
+            <h3 className="st-h">How this is assessed</h3>
+            <section className="st-block st-rubric">
+              <div className="st-scroll" dangerouslySetInnerHTML={{ __html: block('rubric').html }} />
+            </section>
+          </>
+        )}
+
         {block('deliverables') && (
           <>
             <h3 className="st-h">What you submit</h3>
@@ -690,14 +714,6 @@ const ClaudeStudioRender: React.FC<Props> = ({
           </div>
         )}
 
-        {block('rubric') && (
-          <>
-            <h3 className="st-h">How this is assessed</h3>
-            <section className="st-block st-rubric">
-              <div className="st-scroll" dangerouslySetInnerHTML={{ __html: block('rubric').html }} />
-            </section>
-          </>
-        )}
       </div>
     </div>
   );

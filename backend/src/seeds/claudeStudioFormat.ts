@@ -52,6 +52,35 @@ export function escAttr(s: unknown): string {
 const li = (items: string[]) => items.map((x) => `<li>${esc(x)}</li>`).join('');
 
 /**
+ * The "does not count as finishing" list, minus anything a trust checkpoint
+ * already says.
+ *
+ * A learner reviewing Weeks 1 and 2 found the two lists carrying nearly the
+ * same line (invented numbers in Week 1, citing an unread source in Week 2)
+ * under two headings, in every week, because the template prints both lists
+ * whatever their overlap. The overlap test is word-set: a shortcut whose
+ * content words are at least half covered by one checkpoint is that
+ * checkpoint restated, and is dropped. Pure; exported for the test.
+ */
+export function foldShortcuts(checkpoints: readonly string[], shortcuts: readonly string[]): string[] {
+  const STOP = new Set(['a', 'an', 'and', 'the', 'of', 'to', 'in', 'is', 'it', 'or', 'by', 'you', 'your', 'that', 'this', 'for', 'not', 'do', 'be', 'as', 'on', 'with', 'than', 'have', 'has', 'are', 'was']);
+  // Crude stemming, enough for the pairs that actually recur here: citing /
+  // citation, sources / source, invented / inventing.
+  const stem = (w: string) => w.replace(/(ation|ing|ies|ied|es|ed|s)$/, '');
+  const words = (t: string) => new Set(t.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)).map(stem));
+  const cps = checkpoints.map(words);
+  return shortcuts.filter((sc) => {
+    const sw = words(sc);
+    if (sw.size === 0) return true;
+    return !cps.some((cw) => {
+      let hit = 0;
+      sw.forEach((w) => { if (cw.has(w)) hit += 1; });
+      return hit / sw.size >= 0.5;
+    });
+  });
+}
+
+/**
  * The pinned stylesheet. The generation prompt tells the model to copy this
  * VERBATIM, which is why it is exported rather than inlined — a model can
  * reliably reproduce a fixed block, and the seed and the prompt then agree by
@@ -210,7 +239,15 @@ export function renderClaudeStudio(
   <section class="cs-block cs-trust" data-block="trust">
     <h4>Judgment you do not delegate</h4>
     <ul>${li(s.trust_checkpoints)}</ul>
-    <div class="cs-warn"><b>These do not count as finishing:</b><ul>${li(s.prohibited_shortcuts)}</ul></div>
+    ${(() => { const rest = foldShortcuts(s.trust_checkpoints, s.prohibited_shortcuts); return rest.length ? `<p class="cs-warn"><b>Does not count as finishing:</b> ${rest.map(esc).join('; ')}.</p>` : ''; })()}
+  </section>
+
+  <!-- Assessment BEFORE the submission section: nobody should submit before
+       reading how the work is judged. It used to be the last block on the
+       page, below the submit button; a learner reported it on 2026-09-16. -->
+  <div class="cs-h">How this is assessed</div>
+  <section class="cs-block" data-block="rubric">
+    ${renderRubric(s.rubric)}
   </section>
 
   <div class="cs-h">What you submit</div>
@@ -225,10 +262,6 @@ export function renderClaudeStudio(
     <p class="cs-free" data-free-response="1">${esc(s.reflection.free_response)}</p>
   </section>
 
-  <div class="cs-h">How this is assessed</div>
-  <section class="cs-block" data-block="rubric">
-    ${renderRubric(s.rubric)}
-  </section>
 
 </div>`;
 }
