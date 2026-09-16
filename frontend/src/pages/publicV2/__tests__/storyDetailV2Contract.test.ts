@@ -100,8 +100,9 @@ const MEDIA_SOURCES = [
   path.join(PAGE_DIR, 'StoryRelated.tsx'),
   /* The visual story band: the workflow illustration, its step panel and motion
      hook, the outcome cards, the charts and their primitives, the band that
-     composes them, and the two pure models beneath (view models and graph
-     geometry). Nine files, listed for the reason every entry above is. The
+     composes them, and the three pure models beneath (view models, graph
+     geometry, edge routing). Ten files, listed for the reason every entry
+     above is. The
      hook assigns its particle class through `setAttribute`, which the
      className rule below cannot see; the graph test asserts the namespace on
      the rendered DOM instead. */
@@ -113,6 +114,7 @@ const MEDIA_SOURCES = [
   path.join(PAGE_DIR, 'StoryChartPrimitives.tsx'),
   path.join(PAGE_DIR, 'storyVisualModel.ts'),
   path.join(PAGE_DIR, 'storyWorkflowLayout.ts'),
+  path.join(PAGE_DIR, 'storyWorkflowEdges.ts'),
   path.join(PAGE_DIR, 'useWorkflowMotion.ts'),
   /* The measurement band: the section's prose, with its metric cards folded
      when the visual story already shows the figures. Split out of the sections

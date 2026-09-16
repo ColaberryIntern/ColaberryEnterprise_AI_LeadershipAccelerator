@@ -1,9 +1,9 @@
-import type {
-  CaseStudyWorkflowLane,
-  CaseStudyWorkflowStatus,
-  PublicCaseStudyWorkflowPanel,
-} from '../../services/caseStudyPublicTypes';
+import type { CaseStudyWorkflowLane, PublicCaseStudyWorkflowPanel } from '../../services/caseStudyPublicTypes';
 import { wrapLabel } from './storyVisualModel';
+import { bez, cubic, routeHorizontalEdges } from './storyWorkflowEdges';
+import type { WorkflowEdgePath, WorkflowNodeBox } from './storyWorkflowEdges';
+
+export type { WorkflowEdgePath, WorkflowNodeBox } from './storyWorkflowEdges';
 
 /**
  * storyWorkflowLayout - where each box and arrow of a workflow panel goes.
@@ -24,31 +24,11 @@ import { wrapLabel } from './storyVisualModel';
  *
  * NO EDGE IS EVER DROPPED. A retry or loop is drawn as a return curve below
  * the row; a graph the reader cannot follow is worse than one with a loop.
+ * Where each horizontal arrow runs, and which labels the drawing has room
+ * for, is `storyWorkflowEdges`; the box and edge types live there too.
  */
 
 export type WorkflowOrientation = 'horizontal' | 'vertical';
-
-export interface WorkflowNodeBox {
-  readonly key: string; readonly lane: CaseStudyWorkflowLane; readonly step: number;
-  readonly x: number; readonly y: number; readonly width: number; readonly height: number;
-  /** The label, wrapped to the box's width. */
-  readonly labelLines: readonly string[];
-}
-
-export interface WorkflowEdgePath {
-  readonly from: string; readonly to: string;
-  /** SVG path data, absolute coordinates in the layout's viewBox. */
-  readonly d: string;
-  /** Where the label sits: the curve's midpoint. */
-  readonly labelX: number; readonly labelY: number;
-  readonly label: string | null;
-  readonly status: CaseStudyWorkflowStatus;
-  readonly motion: boolean;
-  /** True when the edge runs back to an earlier or equal step. */
-  readonly returns: boolean;
-  /** False when the label has no room on the drawing (a short hop in a tight column); the panel still says it. */
-  readonly labelFits: boolean;
-}
 
 export interface WorkflowLaneBand {
   readonly lane: CaseStudyWorkflowLane; readonly label: string;
@@ -72,8 +52,8 @@ const LANE_ORDER: readonly CaseStudyWorkflowLane[] = ['primary', 'recovery', 'ma
 /** Box and gap sizes, in viewBox units (one unit is one CSS pixel when the SVG spans its `maxWidth`). */
 const H = { boxW: 172, boxWMin: 118, boxWMax: 200, gapX: 64, gapXMin: 28, gapY: 18, laneGap: 30, laneLabel: 26, pad: 16 } as const;
 const V = { boxW: 296, boxWMax: 520, gapY: 44, indent: 20, pad: 16, maxWidth: 360 } as const;
-/** Label metrics: ~6.4 px per character at 13 px, 24 px of box padding, 15 px per line. */
-const LABEL = { charPx: 6.4, padPx: 24, linePx: 15, maxLines: 3, headPx: 30 } as const;
+/** Label metrics: ~6.4 px per character at 13 px, 24 px of box padding, 15 px per line; four lines hold a 40-character label in a laptop-width column of nine. */
+const LABEL = { charPx: 6.4, padPx: 24, linePx: 15, maxLines: 4, headPx: 30 } as const;
 
 const charsPerLine = (boxW: number): number => Math.max(10, Math.floor((boxW - LABEL.padPx) / LABEL.charPx));
 
@@ -137,13 +117,6 @@ function lanesUsed(panel: PublicCaseStudyWorkflowPanel): readonly CaseStudyWorkf
   return LANE_ORDER.filter((lane) => present.has(lane));
 }
 
-const cubic = (x1: number, y1: number, cx1: number, cy1: number, cx2: number, cy2: number, x2: number, y2: number): string =>
-  `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
-
-/** A point on a cubic at t; labels sit at t = 0.5 on a run and nearer the source (0.3) on a diagonal, so crossing labels spread out. */
-const bez = (t: number, a: number, c1: number, c2: number, b: number): number =>
-  (1 - t) ** 3 * a + 3 * (1 - t) ** 2 * t * c1 + 3 * (1 - t) * t ** 2 * c2 + t ** 3 * b;
-
 function horizontal(panel: PublicCaseStudyWorkflowPanel, steps: ReadonlyMap<string, number>, maxWidth?: number): WorkflowLayout {
   const lanes = lanesUsed(panel);
   const boxes = new Map<string, WorkflowNodeBox>();
@@ -189,33 +162,7 @@ function horizontal(panel: PublicCaseStudyWorkflowPanel, steps: ReadonlyMap<stri
     y += height + H.laneGap;
   }
   const height = y - H.laneGap + H.pad;
-  const edges = panel.edges.map((e) => {
-    const a = boxes.get(e.from)!;
-    const b = boxes.get(e.to)!;
-    const returns = b.step <= a.step;
-    let d: string;
-    let labelX: number;
-    let labelY: number;
-    let labelFits = true;
-    if (!returns) {
-      const x1 = a.x + a.width; const y1 = a.y + a.height / 2;
-      const x2 = b.x; const y2 = b.y + b.height / 2;
-      const dx = Math.max(24, (x2 - x1) / 2);
-      d = cubic(x1, y1, x1 + dx, y1, x2 - dx, y2, x2, y2);
-      const diagonal = Math.abs(y2 - y1) >= boxH;
-      const t = diagonal ? 0.3 : 0.5;
-      labelX = bez(t, x1, x1 + dx, x2 - dx, x2); labelY = bez(t, y1, y1, y2, y2);
-      // A label needs a run to sit on: a long gap or a diagonal. A short hop has neither.
-      labelFits = (x2 - x1) >= 56 || diagonal;
-    } else {
-      const x1 = a.x + a.width / 2; const y1 = a.y + a.height;
-      const x2 = b.x + b.width / 2; const y2 = b.y + b.height;
-      const drop = H.gapY + 20;
-      d = cubic(x1, y1, x1, y1 + drop, x2, y2 + drop, x2, y2);
-      labelX = bez(0.5, x1, x1, x2, x2); labelY = bez(0.5, y1, y1 + drop, y2 + drop, y2);
-    }
-    return { from: e.from, to: e.to, d, labelX, labelY, label: e.label, status: e.status, motion: e.motion, returns, labelFits };
-  });
+  const edges = routeHorizontalEdges(panel, boxes, gapX, H.gapY);
   return { orientation: 'horizontal', fits, width, height, viewBox: `0 0 ${width} ${height}`, nodes: [...boxes.values()], edges, lanes: bands };
 }
 
