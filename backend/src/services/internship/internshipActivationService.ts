@@ -10,7 +10,7 @@ import { activeCompEnrollmentIds, getSubscription } from '../subscriptionService
 import { transition } from './internshipApplicationService';
 import { stateAfterDocumentsVerified } from './internshipStateMachine';
 import { outstandingRequirements } from './internshipDocumentService';
-import { ensureInternshipCohort, internshipSettings } from './internshipCohortService';
+import { ensureInternshipCohort, internshipSettings, type RequiredMeeting } from './internshipCohortService';
 import { getProjectByEnrollment } from '../projectService';
 import { getStudentWeekBreakdown } from '../curriculumCompletionService';
 import {
@@ -349,7 +349,7 @@ export interface ActiveInternView {
   week: number | null;
   minimum_weekly_hours: number;
   max_active_projects: number;
-  required_meetings: readonly { day: string; kind: string }[];
+  required_meetings: readonly RequiredMeeting[];
   checklist: ChecklistStepStatus[];
   progress: { done: number; total: number };
   next_action: ChecklistStepStatus | null;

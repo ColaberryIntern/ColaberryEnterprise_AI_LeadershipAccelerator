@@ -278,6 +278,18 @@ export interface MembershipCheck {
   ok: boolean;
 }
 
+export interface RequiredMeeting {
+  day: string;
+  kind: string;
+  time?: string;
+  timezone?: string;
+  audience?: 'interns_only' | 'public';
+  title?: string;
+  join_url?: string | null;
+  room_slug?: string | null;
+  registration_url?: string | null;
+}
+
 export interface OnboardingView {
   state: string;
   is_active: boolean;
@@ -286,7 +298,7 @@ export interface OnboardingView {
   week: number | null;
   minimum_weekly_hours: number;
   max_active_projects: number;
-  required_meetings: Array<{ day: string; kind: string }>;
+  required_meetings: RequiredMeeting[];
   checklist: ChecklistStep[];
   progress: { done: number; total: number };
   next_action: ChecklistStep | null;
