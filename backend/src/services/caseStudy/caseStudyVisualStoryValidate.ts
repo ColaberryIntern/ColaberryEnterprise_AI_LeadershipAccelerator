@@ -396,11 +396,16 @@ export function validateVisualStory(input: unknown, ctx: VisualStoryValidationCo
 /* ------------------------------------------------------------ gate rule --- */
 
 /**
- * The evidence ids a PURE check can know about: every `evidenceId` a verified
- * metric or the production status cites on this snapshot. The write path
+ * The evidence ids a PURE check can know about: every `evidenceId` the
+ * snapshot itself cites as VERIFIED, on a metric, the identity stamps, the
+ * situation, a timeline entry or a roadmap item. The write path
  * (`applyHumanOverride`) validates against the evidence table itself; the gate
  * has no database and settles for "cited by something already verified here",
- * which is the stricter reading and never admits an id from another record.
+ * which is the stricter reading and never admits an id from another record. A
+ * story node that cites the repository row behind a timeline entry (the
+ * detection query, the recovery job) is a citation the gate accepted once
+ * already; a row the snapshot never mentions is refused at publish even
+ * though the Studio's save, which reads the table, accepted it.
  */
 export function evidenceIdsCitedByContent(content: CaseStudySnapshotContent): string[] {
   const out = new Set<string>();
@@ -410,6 +415,9 @@ export function evidenceIdsCitedByContent(content: CaseStudySnapshotContent): st
   for (const m of [...(content.heroMetrics ?? []), ...(content.measurement?.metrics ?? [])]) take(m.verification);
   take(content.identity?.productionStatus?.verification);
   take(content.identity?.engagementWindow?.verification);
+  take(content.situation?.verification);
+  for (const t of content.buildTimeline ?? []) take(t.verification);
+  for (const r of content.roadmap ?? []) take(r.verification);
   return [...out];
 }
 

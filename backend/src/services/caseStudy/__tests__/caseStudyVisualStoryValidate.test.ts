@@ -1,4 +1,5 @@
 import {
+  evidenceIdsCitedByContent,
   validateVisualStory,
   visualStoryContextFromContent,
   type VisualStoryValidationContext,
@@ -264,5 +265,26 @@ describe('visualStoryContextFromContent', () => {
     const c = visualStoryContextFromContent(content, [EV]);
     expect(c.metrics.map((m) => [m.key, m.publishable, m.verified])).toEqual([['a', true, true], ['b', false, false]]);
     expect(c.evidenceIds).toEqual([EV]);
+  });
+});
+
+describe('evidenceIdsCitedByContent', () => {
+  it('collects every VERIFIED citation on the snapshot and no pending one, each id once', () => {
+    const v = (id: string, cls = 'verified') => ({ class: cls, method: 'repo', evidenceId: id, verifiedAt: 'x' });
+    const content = {
+      identity: { productionStatus: { verification: v('id-status') }, engagementWindow: { verification: v('id-window') } },
+      heroMetrics: [{ key: 'a', verification: v('id-metric') }],
+      measurement: { metrics: [{ key: 'b', verification: v('id-metric') }, { key: 'c', verification: v('id-pending', 'pending') }] },
+      situation: { narrative: ['x'], verification: v('id-situation') },
+      buildTimeline: [{ date: '2026-01-01', label: 'x', source: 'commit', verification: v('id-timeline') }],
+      roadmap: [{ label: 'x', status: 'done', verification: v('id-roadmap') }, { label: 'y', status: 'planned', verification: v('id-roadmap-pending', 'pending') }],
+    } as unknown as CaseStudySnapshotContent;
+    expect(evidenceIdsCitedByContent(content).sort()).toEqual([
+      'id-metric', 'id-roadmap', 'id-situation', 'id-status', 'id-timeline', 'id-window',
+    ]);
+  });
+
+  it('is empty for a snapshot with no verified citation at all', () => {
+    expect(evidenceIdsCitedByContent({ identity: {}, heroMetrics: [], taxonomy: {} } as unknown as CaseStudySnapshotContent)).toEqual([]);
   });
 });
