@@ -61,6 +61,27 @@ export const TOOL_CAPABILITIES: Record<string, ToolCapability> = {
     produces: ['A fresh StudentAssessment row, only when the existing one is missing or past its own reassessment_date'],
   },
 
+  // --- Dara (ai_employee, Curriculum/Learning/Certification), AI Employee
+  // Consolidation Program, Employee #1, Phase 4 — TOOL_CAPABILITY_DESIGN_v1.md
+  // B3.2, independently plan-audited 20/20 PASS. Zero LLM calls, zero
+  // outbound communication in this release (ROLE_CHARTER_v1.md Boundaries).
+  flag_curriculum_content_gaps: {
+    reads: ['Active enrollments and student_levels', 'curriculum_blueprints.quality_score per course area'],
+    produces: ['One workforce_tasks row when a course area has zero blueprints or average quality below 65 (ops/directors.ts)'],
+  },
+  flag_certification_readiness: {
+    reads: ['Active enrollments and per-student certification pass-probability (runtime/certificationReadiness.ts)'],
+    produces: ['One workforce_tasks row when average pass probability for active learners drops below 55 (ops/directors.ts)'],
+  },
+  scan_curriculum_integrity: {
+    reads: ['curriculum_modules, curriculum_lessons, artifact_definitions, and mini_sections, walked module by module'],
+    produces: ['A structured findings list (severity/location/description) — read-only, creates no ticket (services/agents/curriculumQAAgent.ts scanCurriculumIntegrity())'],
+  },
+  monitor_curriculum_video_health: {
+    reads: ['Curriculum video links, checked live against the YouTube Data API (curriculumHealth/videoLinkHealthService.ts)'],
+    produces: ['An alert row via alertService.ts when a video is broken — never edits a curriculum card directly'],
+  },
+
   // --- cory-engine (autonomousEngine.ts's runAutonomousCycle(), 8-step pipeline —
   // grounded in agentRegistrySeed.ts's own re-verified comment) ---
   detect_problems: {
