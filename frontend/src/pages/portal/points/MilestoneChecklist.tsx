@@ -2,6 +2,8 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import type { MilestoneLens } from '../../../services/onboardingApi';
 import { milestoneRows, milestonesHeld, PROJECT_SLOTS } from './milestoneRows';
+import { rungTone } from '../../../services/onboardingApi';
+import '../../../styles/rungTones.css';
 
 /**
  * MilestoneChecklist — lens 2 on the Points tab once the milestone ladder is
@@ -33,7 +35,7 @@ const MilestoneChecklist: React.FC<{ milestones: MilestoneLens }> = ({ milestone
     <>
       <div className="pts-big">{held}<span> of {PROJECT_SLOTS + 1} milestones</span></div>
       <div className="pts-levelrow">
-        <span className="pts-chip">{rung}</span>
+        <span className={`pts-chip${milestones.rung_name ? ` rung-pill rung-${rungTone(milestones.rung_name)}` : ''}`}>{rung}</span>
         {headline && <span className="pts-mut">{headline}</span>}
       </div>
       <ol className="pts-ms-list" aria-label="Program milestones">

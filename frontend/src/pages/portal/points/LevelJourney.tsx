@@ -1,6 +1,7 @@
 import React from 'react';
-import { BAND_RUNGS } from '../../../services/onboardingApi';
+import { BAND_RUNGS, rungTone } from '../../../services/onboardingApi';
 import { journeyIndexFor } from './levelJourneyIndex';
+import '../../../styles/rungTones.css';
 
 /**
  * LevelJourney — the whole level ladder at a glance: the four free, points-reachable
@@ -54,14 +55,14 @@ const LevelJourney: React.FC<{ points: number; currentName?: string | null; mile
       <div className="pts-journey-h">
         <h3>Your level journey</h3>
         <span className="pts-mut">{milestoneLadder
-          ? 'Free rungs are earned with points; the build rungs are earned by finishing the curriculum, three verified builds, and a certification.'
+          ? 'Free rungs are earned with points; the build rungs are earned by finishing the curriculum, three verified builds, and a certification. Each rung has its own colour — the same one you will see next to names in Community.'
           : 'Free rungs are earned with points; the build bands are earned by shipping in the program.'}</span>
       </div>
       <ol className="pts-jtrack" aria-label="Level journey from AI Aware I to AI Architect">
         {journey.map((r, i) => {
           const state = i < currentIdx ? 'done' : i === currentIdx ? 'current' : 'todo';
           return (
-            <li key={r.name} className={`pts-jnode ${state} ${r.kind}`}>
+            <li key={r.name} className={`pts-jnode ${state} ${r.kind} rung-${rungTone(r.name)}`}>
               <span className="pts-jdot" aria-hidden="true">
                 {state === 'done' ? <CheckIcon /> : state === 'current' ? <StarIcon /> : r.kind === 'build' ? <LockIcon /> : <span className="pts-jnum">{i + 1}</span>}
               </span>
