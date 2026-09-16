@@ -1,7 +1,9 @@
 import CommunityRoom from '../../models/CommunityRoom';
 import RoomMembership from '../../models/RoomMembership';
 import CohortMembership from '../../models/CohortMembership';
-import { ensureInternshipCohort, internshipSettings, type RequiredMeeting } from './internshipCohortService';
+import {
+  DEFAULT_INTERNSHIP_SETTINGS, ensureInternshipCohort, internshipSettings, type RequiredMeeting,
+} from './internshipCohortService';
 import { createMeeting, isZoomConfigured } from '../zoomService';
 
 /**
@@ -157,9 +159,14 @@ export async function ensureInternshipMeetingRooms(): Promise<MeetingRoomsResult
     });
   }
 
-  // Write the real links + room slugs into the cohort's meeting schedule.
+  // Write the real links + room slugs into the cohort's meeting schedule. Base the
+  // schedule on the canonical DEFAULT (the four real meetings with their audiences),
+  // NOT internshipSettings(cohort).required_meetings — a cohort provisioned before
+  // this feature still carries the stale 2-entry list in settings_json, and
+  // internshipSettings merges that OVER the defaults, so using it would re-link the
+  // wrong meetings. Every other settings key is preserved.
   const settings = internshipSettings(cohort);
-  const meetings = applyRoomLinks(settings.required_meetings, {
+  const meetings = applyRoomLinks(DEFAULT_INTERNSHIP_SETTINGS.required_meetings, {
     internsSlug: internsRoom.slug, internsLink,
     publicSlug: publicRoom.slug, publicLink,
   });
