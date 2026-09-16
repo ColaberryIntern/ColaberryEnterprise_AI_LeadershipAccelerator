@@ -327,3 +327,17 @@ describe('draft carries the answers', () => {
     expect(loadDraft('c1').inputs).toEqual({});
   });
 });
+
+// ─── objectives as one sentence (learner review, 2026-09-16) ─────────────────
+import { objectivesLine } from '../ClaudeStudioRender';
+
+describe('objectivesLine', () => {
+  it('joins the objectives into one sentence and drops trailing periods', () => {
+    expect(objectivesLine(['Write a problem brief.', 'Separate symptoms from causes', 'Name the evidence that would kill a cause.']))
+      .toBe('By the end you will Write a problem brief; separate symptoms from causes; name the evidence that would kill a cause.');
+  });
+  it('is null when there is nothing to promise', () => {
+    expect(objectivesLine([])).toBeNull();
+    expect(objectivesLine(['  '])).toBeNull();
+  });
+});

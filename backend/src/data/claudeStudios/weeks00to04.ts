@@ -465,6 +465,19 @@ Make the assumptions register prominent, not a footnote. A reader should be able
     prompts: [
       {
         kind: 'starter',
+        label: 'Confirm the Project is loaded before you research',
+        why: 'Every later prompt assumes the sources are in the Project and readable. Week 1 opened with a prompt that fit its first stage; this one fits Stage 1 here. Ten seconds now prevents an hour of citations to a file Claude never saw.',
+        text: `I have just created this Project for Week 2, Research and Evidence, and added these sources: [list each by name].
+
+Before we start:
+1. List every source you can actually see in this Project, by name, with one line on what each covers. If one I named is missing or unreadable, say so now rather than working around it.
+2. Tell me which of them look likely to disagree with each other, and on what.
+3. Confirm the rules for this Project: answer only from these sources, name the source for every claim, say "not in the sources" when they do not cover something, and label anything you infer as an inference.
+
+Do not summarize the sources yet. I only want to know what you can see and how you will work.`,
+      },
+      {
+        kind: 'starter',
         label: 'Interrogate the sources against each other',
         why: 'Comparison across sources is where research stops being summarization. This makes disagreement the output rather than a side effect.',
         text: `I have loaded this Project with sources on [topic]. I am about to encode standards from them into reusable Agent Skills, so being wrong here is expensive.
