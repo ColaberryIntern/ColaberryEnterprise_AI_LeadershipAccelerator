@@ -17,9 +17,11 @@ import { AS_OF, brandRow, contactFor, policyRowFor, programRow, type GjBrandSlug
  *
  * FROM THE FIXTURE, at the module boundary each already owns a suite for:
  * the subject resolver (T211), the contact-evidence resolver (T304), the
- * lifecycle-source counter and the learner-facts loader (T311/T309), and the
- * profile upsert (T307, the one write the run owns — asserted, never made).
- * The models the loader and the gates read answer as rows.
+ * lifecycle-source counter and the learner-facts loader (T311/T309), the
+ * latest-classification read (T229's `latestClassification`, routed to the
+ * classification row the fixture states), and the profile upsert (T307, the
+ * one write the run owns — asserted, never made). The models the loader and
+ * the gates read answer as rows.
  *
  * A test file declares the `jest.mock` lines itself (they are hoisted per
  * file) with factories that `require` this module, so both suites drive the
