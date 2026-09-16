@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import './InternshipOpportunityCard.css';
 import { OnboardingView, fetchInternshipOnboarding } from '../../../services/internshipApi';
+import { findLiveMeeting } from '../internship/meetingLive';
 
 /**
  * The active-intern command card, which replaces the recruiting card once someone
@@ -31,6 +32,9 @@ import { OnboardingView, fetchInternshipOnboarding } from '../../../services/int
 const InternshipCommandCard: React.FC = () => {
   const [view, setView] = useState<OnboardingView | null>(null);
   const [failed, setFailed] = useState(false);
+  // A minute tick so the "live now" banner appears and clears on its own, without
+  // the intern reloading Today while a session starts.
+  const [now, setNow] = useState<Date>(() => new Date());
 
   useEffect(() => {
     let alive = true;
@@ -40,16 +44,40 @@ const InternshipCommandCard: React.FC = () => {
     return () => { alive = false; };
   }, []);
 
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   // No card rather than a broken one: the rail simply has one fewer entry, which
   // is the correct degraded state for a status surface.
   if (failed || !view) return null;
 
   const next = view.next_action;
   const blockers = view.checklist.filter((s) => s.blocking_activation && !s.complete);
+  const live = findLiveMeeting(view.required_meetings, now);
 
   return (
     <section className="te-card te-scard te-intern accent-berry" aria-labelledby="te-intern-cmd">
       <span className="te-intern__badge">AI Internship</span>
+
+      {/* Live session alert — when a required meeting is happening now, this is the
+          loudest thing on the card, sending them into Rooms (never a raw Zoom link). */}
+      {live && (
+        <div
+          role="status"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+            margin: '8px 0', padding: '8px 12px', borderRadius: 8,
+            background: 'rgba(178,58,58,.08)', border: '1px solid rgba(178,58,58,.35)',
+          }}
+        >
+          <span aria-hidden="true" style={{ width: 9, height: 9, borderRadius: '50%', background: '#b23a3a', flex: 'none' }} />
+          <strong style={{ fontSize: 13.5 }}>{live.title} is live now.</strong>
+          <Link className="te-btn berry sm" to="/portal/rooms" style={{ marginLeft: 'auto' }}>Join in Rooms</Link>
+        </div>
+      )}
+
       <h3 id="te-intern-cmd">
         {view.is_active
           ? `Week ${view.week ?? 1}`
