@@ -48,6 +48,8 @@ interface BuildStateResponse {
   } | null;
   /** True once the plan is materialized into the portal's tasks. */
   delivered: boolean;
+  /** Present when status is 'failed': why, so the student is not left on a template with no explanation. */
+  error?: { error_class: string; message: string };
   plan: {
     version: number;
     sha256: string;
@@ -273,6 +275,7 @@ router.get('/api/portal/sbp/builds/:projectId', requireParticipant, async (req: 
       // Whether the plan actually reached the portal. `drafted` looks like
       // success on the wire and is not: it means generated-but-not-promoted.
       delivered: DELIVERED_STATUSES.has(state.status),
+      ...(state.error ? { error: state.error } : {}),
       plan: plan ? {
         version: plan.version,
         sha256: plan.plan_sha256,
@@ -312,6 +315,17 @@ router.post('/api/portal/sbp/builds/:projectId/publish', requireParticipant, asy
       repo: await repoFor(projectId),
     });
     res.json(result);
+  } catch (e) { fail(res, e, next); }
+});
+
+// ── retry a failed generation from the stored intake ───────────────────────────
+router.post('/api/portal/sbp/builds/:projectId/retry', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const projectId = z.string().uuid().parse(req.params.projectId);
+    await requireOwnedProject(req, projectId);
+    const { retryBuild } = await import('../services/sbp/sbpOrchestrator');
+    res.status(202).json(await retryBuild(projectId, eid(req)));
   } catch (e) { fail(res, e, next); }
 });
 

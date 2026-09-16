@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { fetchPointsDrilldown, fetchPoints, DrilldownView, Band, levelFor, bandHudNext, buildRungForSlug, showJoinToBuildCard } from '../../../services/onboardingApi';
 import { fmtCentralDate } from '../today/shellUtils';
 import LevelJourney from './LevelJourney';
+import MilestoneChecklist from './MilestoneChecklist';
 import './PointsPage.css';
 
 // The competency promotion ranks map onto the canonical BUILD bands (AI Builder I…
@@ -124,6 +125,10 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
   const xp = data?.skill_xp ?? null;
   const xpMax = xp ? Math.max(xp.learning, xp.builder, xp.community, 1) : 1;
   const readiness = data?.readiness ?? null;
+  // The milestone ladder (docs/POINTS_LADDER_DECISIONS.md). When the server sends
+  // the checklist, it takes lens 2 and Skill XP moves below it (D7); when it does
+  // not (flag off), the page is byte-identical to before.
+  const milestones = data?.milestones ?? null;
 
   if (loading) return <div className="points-root"><div className="pts-empty">Loading your progress…</div></div>;
 
@@ -160,7 +165,7 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
       </div>
 
       {/* The whole level ladder, visual — AI Aware I → AI Architect */}
-      <LevelJourney points={total} currentName={useBand ? band!.rungName : lvl.name} />
+      <LevelJourney points={total} currentName={useBand ? band!.rungName : lvl.name} milestoneLadder={!!milestones} />
 
       <div className="pts-lenses">
         {/* Lens 1 — Engagement */}
@@ -179,7 +184,13 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
           </div>
         </div>
 
-        {/* Lens 2 — Skill XP */}
+        {/* Lens 2 — Program milestones when the ladder is on; Skill XP otherwise */}
+        {milestones ? (
+          <div className="pts-lens accent-blue">
+            <div className="pts-lens-h"><span className="tag">2 · Milestones</span><h3>Your path to Program Graduate</h3></div>
+            <MilestoneChecklist milestones={milestones} />
+          </div>
+        ) : (
         <div className="pts-lens accent-blue">
           <div className="pts-lens-h"><span className="tag">2 · Skill XP</span><h3>Skill you're building</h3></div>
           {xp ? (
@@ -200,6 +211,7 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
             </div>
           )}
         </div>
+        )}
 
         {/* Lens 3 — Architect Readiness. This is the BUILD track (a different axis
             from points): you earn the AI Builder → AI Architect bands by shipping
@@ -236,6 +248,19 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
             <div className="pts-mut">Readiness is the build track — you earn AI Builder → AI Architect by shipping evidence in the program. It fills in as you complete graded build work.</div>
           )}
         </div>
+
+        {/* Skill XP, demoted below the checklist once the milestone ladder is on (D7). */}
+        {milestones && xp && (
+          <div className="pts-xp-demoted">
+            <div className="pts-xp-inline">
+              <span>Skill XP <b>{xp.total.toLocaleString()}</b></span>
+              <span>Learning <b>{xp.learning.toLocaleString()}</b></span>
+              <span>Builder <b>{xp.builder.toLocaleString()}</b></span>
+              <span>Community <b>{xp.community.toLocaleString()}</b></span>
+              <span className="pts-mut">Earned by finishing lessons, shipping builds, and helping peers. XP does not decide your rung; milestones do.</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Recent activity */}

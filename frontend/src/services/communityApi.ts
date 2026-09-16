@@ -7,6 +7,8 @@ export interface CommunityPostMember {
   display_name: string;
   avatar_url: string | null;
   level: number;
+  /** Canonical rung ("AI Builder II"); the badge prefers it over the points level. Absent on an older backend. */
+  rung_name?: string | null;
 }
 
 export interface CommunityCommenter {
@@ -69,6 +71,8 @@ export interface CommunityMemberProfile {
   avatar_url: string | null;
   bio: string | null;
   level: number;
+  /** Canonical rung ("AI Builder II"); the badge prefers it over the points level. Absent on an older backend. */
+  rung_name?: string | null;
   points: number;
   role: CommunityMemberRole;
   badges: MemberBadge[];

@@ -157,6 +157,20 @@ export interface DrilldownView {
     at_max: boolean;
     gaps: string[];
   } | null;
+  /** The program checklist behind the build ladder; present only when the milestone ladder is on. */
+  milestones?: MilestoneLens | null;
+}
+
+export interface MilestoneLens {
+  rung_name: string;
+  rank: number;
+  next_rung_name: string | null;
+  at_max: boolean;
+  curriculum: { complete: boolean; done: number; total: number; incomplete_weeks: number[] };
+  projects: Array<{ id: string; name: string; verified: number; total: number; complete: boolean }>;
+  projects_complete: number;
+  certification: { status: 'none' | 'pending' | 'approved' | 'rejected'; reviewed_by: string | null };
+  gaps: string[];
 }
 export async function fetchPointsDrilldown(): Promise<DrilldownView> {
   const { data } = await portalApi.get<DrilldownView>('/api/portal/points/drilldown');

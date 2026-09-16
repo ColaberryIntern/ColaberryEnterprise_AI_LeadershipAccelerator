@@ -52,3 +52,32 @@ describe('journeyIndexFor', () => {
     expect(journeyIndexFor(JOURNEY, NaN, null)).toBe(0);
   });
 });
+
+
+// The milestone ladder renders one node per build rung, matched by exact name.
+const MILESTONE_JOURNEY: JourneyNode[] = [
+  ...JOURNEY.slice(0, 4),
+  { name: 'AI Builder I', min: null, kind: 'build' },
+  { name: 'AI Builder II', min: null, kind: 'build' },
+  { name: 'AI Builder III', min: null, kind: 'build' },
+  { name: 'AI Builder IV', min: null, kind: 'build' },
+  { name: 'AI Architect', min: null, kind: 'build' },
+];
+
+describe('journeyIndexFor on the milestone ladder', () => {
+  it('lands each rung on its own node', () => {
+    expect(journeyIndexFor(MILESTONE_JOURNEY, 948, 'AI Builder I')).toBe(4);
+    expect(journeyIndexFor(MILESTONE_JOURNEY, 948, 'AI Builder II')).toBe(5);
+    expect(journeyIndexFor(MILESTONE_JOURNEY, 0, 'AI Builder IV')).toBe(7);
+    expect(journeyIndexFor(MILESTONE_JOURNEY, 0, 'AI Architect')).toBe(8);
+  });
+  it('"AI Builder I" never matches the "AI Builder II" node by prefix', () => {
+    expect(journeyIndexFor(MILESTONE_JOURNEY, 0, 'AI Builder II')).not.toBe(4);
+  });
+  it('Senior AI Architect sits on the AI Architect node', () => {
+    expect(journeyIndexFor(MILESTONE_JOURNEY, 0, 'Senior AI Architect')).toBe(8);
+  });
+  it('a legacy rung the milestone journey lacks (AI Builder VI) falls back to points', () => {
+    expect(journeyIndexFor(MILESTONE_JOURNEY, 948, 'AI Builder VI')).toBe(3);
+  });
+});

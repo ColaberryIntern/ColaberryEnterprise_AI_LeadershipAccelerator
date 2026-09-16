@@ -11,10 +11,13 @@
  * (enrollment, type, source_ref) refuses a second row under concurrency.
  *
  * Definitions (docs/POINTS_LADDER_DECISIONS.md):
- *   curriculum_complete   every published graded card in each of the 12 weeks
- *                         of the shared curriculum is completed, and every week
- *                         has at least one graded card (no vacuous truth: an
- *                         unauthored week is not a finished one)
+ *   curriculum_complete   every published graded card REQUIRED OF THE STUDENT'S
+ *                         COHORT in each of the 12 weeks is completed, and every
+ *                         week has at least one such card (no vacuous truth: an
+ *                         unauthored week is not a finished one). D8: a graded
+ *                         type added late (`curriculum_required_from` in the
+ *                         registry) is required only of cohorts that started
+ *                         on or after that date.
  *   project_complete      a project with a published plan whose every story,
  *                         STORY-000 included, carries a `verified_at` latch
  *   certification_approved written by the certification service on approval
@@ -27,7 +30,7 @@ import StudentTask from '../../models/StudentTask';
 import { getPublishedPlan } from '../sbp/planStore';
 import { planStorySpecs } from '../sbp/verification/storyPoints';
 import { CANONICAL_PROGRAM_ID } from '../timeline/curriculumScope';
-import { isGradedCardType } from '../timeline/typeRegistry';
+import { isCurriculumRequired } from '../timeline/typeRegistry';
 import { CURRICULUM_WEEKS, MilestoneState, PROJECT_MILESTONE_TARGET } from './milestoneLadder';
 
 export interface WeekGradedProgress {
@@ -41,6 +44,23 @@ export interface CurriculumCompletion {
   weeks: WeekGradedProgress[];
   /** Weeks 1..12 that are not yet done, for the gap line and the dry-run. */
   incompleteWeeks: number[];
+  /** The cohort start the D8 rule was applied against (null = held to everything). */
+  cohortStart: string | null;
+}
+
+/**
+ * The start date of the student's cohort, or null when they have none (an
+ * Explorer, a guest) — in which case every graded type is required, since
+ * "unknown" must never read as "exempt".
+ */
+async function cohortStartFor(enrollmentId: string): Promise<string | null> {
+  const rows = await sequelize.query<{ start_date: string | null }>(
+    `SELECT c.start_date::text AS start_date
+       FROM enrollments e LEFT JOIN cohorts c ON c.id = e.cohort_id
+      WHERE e.id = :enrollmentId`,
+    { replacements: { enrollmentId }, type: QueryTypes.SELECT },
+  );
+  return rows[0]?.start_date ?? null;
 }
 
 /**
@@ -53,6 +73,7 @@ export interface CurriculumCompletion {
  * "graded" has exactly one home.
  */
 export async function getCurriculumCompletion(enrollmentId: string): Promise<CurriculumCompletion> {
+  const cohortStart = await cohortStartFor(enrollmentId);
   const rows = await sequelize.query<{ week: number; type: string; done: boolean }>(
     `SELECT c.week::int AS week, c.type,
             (p.id IS NOT NULL AND p.status = 'completed') AS done
@@ -70,7 +91,7 @@ export async function getCurriculumCompletion(enrollmentId: string): Promise<Cur
   const byWeek = new Map<number, WeekGradedProgress>();
   for (let w = 1; w <= CURRICULUM_WEEKS; w += 1) byWeek.set(w, { week: w, graded: 0, completed: 0 });
   for (const r of rows) {
-    if (!isGradedCardType(r.type)) continue;
+    if (!isCurriculumRequired(r.type, cohortStart)) continue;
     const wk = byWeek.get(Number(r.week));
     if (!wk) continue;
     wk.graded += 1;
@@ -79,7 +100,7 @@ export async function getCurriculumCompletion(enrollmentId: string): Promise<Cur
 
   const weeks = [...byWeek.values()];
   const incompleteWeeks = weeks.filter((w) => w.graded === 0 || w.completed < w.graded).map((w) => w.week);
-  return { complete: incompleteWeeks.length === 0, weeks, incompleteWeeks };
+  return { complete: incompleteWeeks.length === 0, weeks, incompleteWeeks, cohortStart };
 }
 
 export interface ProjectCompletion {
@@ -160,7 +181,7 @@ export async function syncMilestones(enrollmentId: string): Promise<MilestoneSyn
         milestone_type: 'curriculum_complete',
         source_ref: 'curriculum',
         achieved_at: new Date(),
-        evidence: { weeks: curriculum.weeks },
+        evidence: { weeks: curriculum.weeks, cohort_start: curriculum.cohortStart },
       },
     });
     if (created) newlyLatched.push({ type: 'curriculum_complete', source_ref: 'curriculum' });

@@ -265,3 +265,31 @@
 .cp-root .cp-rail-dbar > span { display: block; height: 100%; border-radius: 999px; background: var(--cp-good); }
 .cp-root .cp-rail-dpct { font-size: 12px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums;
   color: var(--cp-ink); }
+
+/* ── Your certificate (certification claims, ladder decision D4) ─────────── */
+.cp-root .cp-claims { display: flex; flex-direction: column; gap: 12px; }
+.cp-root .cp-claims-h { font-size: 17px; font-weight: 800; margin: 0; }
+.cp-root .cp-claim { border: 1px solid var(--cp-line); border-left-width: 4px; border-radius: 10px;
+  padding: 12px 14px; background: var(--cp-card); display: flex; flex-direction: column; gap: 6px; }
+.cp-root .cp-claim--good { border-left-color: var(--cp-good); }
+.cp-root .cp-claim--warn { border-left-color: var(--cp-warn); }
+.cp-root .cp-claim--low { border-left-color: var(--cp-low); }
+.cp-root .cp-claim-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.cp-root .cp-claim-status { font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.cp-root .cp-claim--good .cp-claim-status { color: var(--cp-good); }
+.cp-root .cp-claim--warn .cp-claim-status { color: var(--cp-warn); }
+.cp-root .cp-claim--low .cp-claim-status { color: var(--cp-low); }
+.cp-root .cp-claim-meta { font-size: 12px; color: var(--cp-faint); }
+.cp-root .cp-claim-body { font-size: 14px; color: var(--cp-ink); }
+.cp-root .cp-claim-note { font-size: 13px; color: var(--cp-mut); margin: 0; line-height: 1.5; }
+.cp-root .cp-claim-open { align-self: flex-start; }
+.cp-root .cp-claim-error { color: var(--cp-low); font-size: 13px; margin: 0; }
+.cp-root .cp-claim-form { display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--cp-line);
+  border-radius: 10px; padding: 14px; background: var(--cp-sunken); }
+.cp-root .cp-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700; color: var(--cp-ink); }
+.cp-root .cp-field small { font-weight: 500; color: var(--cp-faint); margin-left: 6px; }
+.cp-root .cp-field input, .cp-root .cp-field textarea { font: inherit; font-weight: 400; padding: 8px 10px;
+  border: 1px solid var(--cp-line); border-radius: 8px; background: #fff; color: var(--cp-ink); }
+.cp-root .cp-field input:focus-visible, .cp-root .cp-field textarea:focus-visible { outline: 2px solid var(--cp-accent); outline-offset: 1px; }
+.cp-root .cp-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 560px) { .cp-root .cp-field-row { grid-template-columns: 1fr; } }
