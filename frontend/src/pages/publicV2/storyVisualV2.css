@@ -121,16 +121,9 @@
   background: var(--surface-card);
   border: var(--border-1) solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  overflow-x: auto;
 }
 
-.cbv2-story-visual__svg { display: block; font-family: var(--font-body); }
-
-/* Horizontal: natural size (the SVG carries its own width and height), so a
-   wide flow scrolls inside the canvas at legible type. Vertical: one column
-   that scales to the phone. */
-.cbv2-story-visual__workflow[data-orientation="horizontal"] .cbv2-story-visual__svg { max-width: none; }
-.cbv2-story-visual__workflow[data-orientation="vertical"] .cbv2-story-visual__svg { width: 100%; height: auto; max-width: 360px; margin-inline: auto; }
+.cbv2-story-visual__svg { display: block; width: 100%; height: auto; font-family: var(--font-body); }
 
 /* Lanes: a faint band and a small label, tinted per lane so the eye can group. */
 .cbv2-story-visual__lane-band { fill: var(--surface-subtle); }
@@ -254,11 +247,13 @@
 
 .cbv2-story-visual__panel-sub,
 .cbv2-story-visual__panel-detail,
+.cbv2-story-visual__panel-incoming,
 .cbv2-story-visual__panel-evidence { margin: 0; line-height: var(--lh-relaxed); overflow-wrap: anywhere; }
 
 .cbv2-story-visual__panel-sub { color: var(--text-muted); }
 
-.cbv2-story-visual__panel-evidence { display: grid; gap: var(--space-1); font-size: var(--fs-body-sm); }
+.cbv2-story-visual__panel-evidence,
+.cbv2-story-visual__panel-incoming { display: grid; gap: var(--space-1); font-size: var(--fs-body-sm); }
 
 .cbv2-story-visual__panel-term,
 .cbv2-story-visual__card-term {

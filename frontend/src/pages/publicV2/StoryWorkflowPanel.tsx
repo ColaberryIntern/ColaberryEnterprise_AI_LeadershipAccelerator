@@ -16,8 +16,16 @@ import type { PublicCaseStudyWorkflowNode } from './storyVisualModel';
  * out here without stealing focus from the node that was pressed.
  */
 
+export interface IncomingConnection {
+  readonly from: string;
+  readonly label: string | null;
+  readonly condition: string | null;
+}
+
 export interface StoryWorkflowPanelProps {
   node: PublicCaseStudyWorkflowNode;
+  /** The connections that lead here, so every edge label is said in words even when the drawing had no room for it. */
+  incoming?: readonly IncomingConnection[];
   /** 1-based position in the selection order, and the count. */
   position: number;
   count: number;
@@ -27,7 +35,7 @@ export interface StoryWorkflowPanelProps {
 }
 
 export function StoryWorkflowPanel({
-  node, position, count, panelLabel, onPrevious, onNext,
+  node, incoming = [], position, count, panelLabel, onPrevious, onNext,
 }: StoryWorkflowPanelProps): React.ReactElement {
   const statusWord = STATUS_WORD[node.status];
   return (
@@ -40,6 +48,12 @@ export function StoryWorkflowPanel({
         <h4 className="cbv2-story-visual__panel-title">{node.label}</h4>
         {node.sublabel ? <p className="cbv2-story-visual__panel-sub">{node.sublabel}</p> : null}
         {node.detail ? <p className="cbv2-story-visual__panel-detail">{node.detail}</p> : null}
+        {incoming.length > 0 ? (
+          <p className="cbv2-story-visual__panel-incoming">
+            <span className="cbv2-story-visual__panel-term">Reached from</span>
+            {incoming.map((c) => `${c.from}${c.label ? ` (${c.label})` : ''}${c.condition ? `, ${c.condition}` : ''}`).join('; ')}
+          </p>
+        ) : null}
         {node.evidence ? (
           <p className="cbv2-story-visual__panel-evidence">
             <span className="cbv2-story-visual__panel-term">Where the proof lives</span>

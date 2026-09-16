@@ -114,6 +114,10 @@ const MEDIA_SOURCES = [
   path.join(PAGE_DIR, 'storyVisualModel.ts'),
   path.join(PAGE_DIR, 'storyWorkflowLayout.ts'),
   path.join(PAGE_DIR, 'useWorkflowMotion.ts'),
+  /* The measurement band: the section's prose, with its metric cards folded
+     when the visual story already shows the figures. Split out of the sections
+     module when that file crossed the 300-line budget below. */
+  path.join(PAGE_DIR, 'StoryMeasurementBand.tsx'),
 ];
 
 /** The page-local file the article moved into. Read wherever PAGE is read. */
@@ -245,7 +249,9 @@ describe('the case-study component directory is untouched', () => {
     const source = stripComments(read(PAGE))
       + stripComments(read(ARTICLE))
       + stripComments(read(SECTIONS))
-      + stripComments(read(path.join(PAGE_DIR, 'StoryArchitectureBand.tsx')));
+      + stripComments(read(path.join(PAGE_DIR, 'StoryArchitectureBand.tsx')))
+      // ...and the measurement band, for the same reason.
+      + stripComments(read(path.join(PAGE_DIR, 'StoryMeasurementBand.tsx')));
     for (const component of ['CaseStudyTimeline', 'CaseStudyArchitecture',
       'CaseStudyMeasurement', 'CaseStudyRoadmap', 'CaseStudyArtifacts', 'CaseStudyCTA',
       'CaseStudyVerificationBadge']) {

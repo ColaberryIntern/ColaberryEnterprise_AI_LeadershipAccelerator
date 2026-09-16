@@ -2,7 +2,7 @@ import React from 'react';
 import { Metric } from '../../components/publicV2/Claim';
 import StoryArchitectureBand from './StoryArchitectureBand';
 import CaseStudyArtifacts from '../../components/caseStudy/CaseStudyArtifacts';
-import CaseStudyMeasurement from '../../components/caseStudy/CaseStudyMeasurement';
+import StoryMeasurementBand from './StoryMeasurementBand';
 import CaseStudyRoadmap from '../../components/caseStudy/CaseStudyRoadmap';
 import CaseStudyTimeline from '../../components/caseStudy/CaseStudyTimeline';
 import CaseStudyVerificationBadge from '../../components/caseStudy/CaseStudyVerificationBadge';
@@ -253,9 +253,9 @@ export function StorySectionBody({
         />
       );
     case 'measurement':
-      return record.measurement ? (
-        <CaseStudyMeasurement measurement={record.measurement} />
-      ) : null;
+      // Prose, then the metric cards, folded when the visual story band already
+      // shows the figures; the reasoning lives with the markup in `StoryMeasurementBand`.
+      return <StoryMeasurementBand measurement={record.measurement} visualStory={record.visualStory} />;
     case 'roadmap':
       return <CaseStudyRoadmap items={record.roadmap} />;
     case 'contributors':
