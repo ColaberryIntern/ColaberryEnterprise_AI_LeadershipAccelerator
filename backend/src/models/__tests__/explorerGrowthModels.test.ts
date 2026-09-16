@@ -117,6 +117,17 @@ const ASSET_ATTRS = [
   'active',
   'metadata',
   'synced_at',
+  // T305 - the brand dimension. All eight nullable with no default, so NULL has
+  // one meaning across them: not declared, i.e. an Explorer-era row, which
+  // resolves for Colaberry Training and for no other brand.
+  'tenant_id',
+  'brand_id',
+  'offer_family',
+  'eligible_programs',
+  'eligible_paths',
+  'approval_status',
+  'approved_by',
+  'approved_at',
   'created_at',
   'updated_at',
 ];

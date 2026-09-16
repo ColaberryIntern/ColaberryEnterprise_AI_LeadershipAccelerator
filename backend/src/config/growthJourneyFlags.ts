@@ -47,6 +47,7 @@
 export type GrowthJourneyCapability =
   | 'journeySignalIngest'
   | 'journeyClassification'
+  | 'journeyDecisions'
   | 'journeyExecution';
 
 export interface GrowthJourneyFlags {
@@ -56,6 +57,14 @@ export interface GrowthJourneyFlags {
   readonly journeySignalIngest: boolean;
   /** Run source/brand/intent/path classification (§7). Reads and records; acts on nothing. */
   readonly journeyClassification: boolean;
+  /**
+   * Produce a governed SHADOW decision (§7.3, §8 layer 0): score the subject,
+   * generate candidates, arbitrate, and record one `growth_journey_decisions`
+   * row with every suppressed candidate and its reason. Decides and records;
+   * contacts nobody. Turning a decision into an action needs `journeyExecution`,
+   * which is a separate flag on purpose.
+   */
+  readonly journeyDecisions: boolean;
   /**
    * Execute a decided action — enrol, schedule, hand off. THE ONLY FLAG THAT
    * CAN CAUSE A PERSON TO BE CONTACTED. Off until specifically approved.
@@ -68,12 +77,14 @@ export const GROWTH_JOURNEY_ENV_KEYS = {
   growthJourneyEnabled: 'GROWTH_JOURNEY_ENABLED',
   journeySignalIngest: 'GROWTH_JOURNEY_SIGNAL_INGEST_ENABLED',
   journeyClassification: 'GROWTH_JOURNEY_CLASSIFICATION_ENABLED',
+  journeyDecisions: 'GROWTH_JOURNEY_DECISIONS_ENABLED',
   journeyExecution: 'GROWTH_JOURNEY_EXECUTION_ENABLED',
 } as const satisfies Record<keyof GrowthJourneyFlags, string>;
 
 const CAPABILITY_FLAG: Record<GrowthJourneyCapability, keyof GrowthJourneyFlags> = {
   journeySignalIngest: 'journeySignalIngest',
   journeyClassification: 'journeyClassification',
+  journeyDecisions: 'journeyDecisions',
   journeyExecution: 'journeyExecution',
 };
 
@@ -95,6 +106,7 @@ export function resolveGrowthJourneyFlags(
     growthJourneyEnabled: isOn(source[GROWTH_JOURNEY_ENV_KEYS.growthJourneyEnabled]),
     journeySignalIngest: isOn(source[GROWTH_JOURNEY_ENV_KEYS.journeySignalIngest]),
     journeyClassification: isOn(source[GROWTH_JOURNEY_ENV_KEYS.journeyClassification]),
+    journeyDecisions: isOn(source[GROWTH_JOURNEY_ENV_KEYS.journeyDecisions]),
     journeyExecution: isOn(source[GROWTH_JOURNEY_ENV_KEYS.journeyExecution]),
   });
 }

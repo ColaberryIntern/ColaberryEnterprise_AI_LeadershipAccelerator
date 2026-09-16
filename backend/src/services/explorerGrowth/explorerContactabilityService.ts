@@ -33,8 +33,17 @@ import type { ExplorerContactability } from '../../types/explorerGrowth';
  * the moment someone unsubscribes. Never send on the strength of a cached value.
  */
 
-/** Lead statuses that stop all outbound, whatever the consent record says. */
-const SUPPRESSED_LEAD_STATUSES = ['unsubscribed', 'dnd', 'bounced', 'complained'];
+/**
+ * Lead statuses that stop all outbound, whatever the consent record says.
+ *
+ * EXPORTED for the growth-journey contact-evidence resolver (T304), which needs
+ * exactly this list and must not keep a second copy of it. This is the
+ * canonical one because it is the strictest in the repo: the send boundary in
+ * `communicationSafetyService` refuses three of these, this refuses those three
+ * plus `complained`, so a decision taken against this list can never consider a
+ * channel the sender itself would reject.
+ */
+export const SUPPRESSED_LEAD_STATUSES = ['unsubscribed', 'dnd', 'bounced', 'complained'];
 
 type ChannelVerdict = { eligible: boolean; reason?: string };
 

@@ -233,10 +233,10 @@ describe('the models match the SQL, in both directions', () => {
       (m) => m[1],
     );
 
-    // Non-vacuity: there are five today, and a parse that found none would
-    // satisfy both loops below.
-    expect(declaredUnique.length).toBeGreaterThanOrEqual(5);
-    expect(namedUnique.length).toBeGreaterThanOrEqual(5);
+    // Non-vacuity: six today (T305 added the content-rules declaration key), and
+    // a parse that found none would satisfy both loops below.
+    expect(declaredUnique.length).toBeGreaterThanOrEqual(6);
+    expect(namedUnique.length).toBeGreaterThanOrEqual(6);
 
     for (const name of namedUnique) expect(declaredUnique).toContain(name);
     for (const name of declaredUnique) expect(name).toMatch(/_unique$/);

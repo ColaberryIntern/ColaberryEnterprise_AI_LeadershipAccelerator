@@ -48,6 +48,24 @@ interface ExplorerContentAssetAttributes {
   active?: boolean;
   metadata?: Record<string, any>;
   synced_at?: Date | null;
+  /**
+   * T305 — the brand dimension. NULL means NOT DECLARED on every one of these,
+   * which is the Explorer era: such a row resolves for Colaberry Training
+   * (Explorer's own brand) and for no other brand.
+   *
+   * `approved_by` and `approved_at` have no reader in Phase 3. They are the
+   * audit half of a Phase 4 approval flow and are recorded here rather than
+   * pretended into a gate - `approval_status` is the field the content gate
+   * actually consults.
+   */
+  tenant_id?: string | null;
+  brand_id?: string | null;
+  offer_family?: string | null;
+  eligible_programs?: string[] | null;
+  eligible_paths?: string[] | null;
+  approval_status?: string | null;
+  approved_by?: string | null;
+  approved_at?: Date | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -77,6 +95,14 @@ class ExplorerContentAsset
   declare active: boolean;
   declare metadata: Record<string, any>;
   declare synced_at: Date | null;
+  declare tenant_id: string | null;
+  declare brand_id: string | null;
+  declare offer_family: string | null;
+  declare eligible_programs: string[] | null;
+  declare eligible_paths: string[] | null;
+  declare approval_status: string | null;
+  declare approved_by: string | null;
+  declare approved_at: Date | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -124,6 +150,26 @@ ExplorerContentAsset.init(
     active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     metadata: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
     synced_at: { type: DataTypes.DATE, allowNull: true },
+    tenant_id: { type: DataTypes.UUID, allowNull: true },
+    brand_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      comment: 'NULL = not declared: an Explorer-era row, visible to Colaberry Training only.',
+    },
+    offer_family: { type: DataTypes.STRING(48), allowNull: true },
+    eligible_programs: { type: DataTypes.JSONB, allowNull: true },
+    eligible_paths: { type: DataTypes.JSONB, allowNull: true },
+    approval_status: {
+      type: DataTypes.STRING(16),
+      allowNull: true,
+      comment: 'Read by growthJourney/contentEligibility. NULL = never reviewed.',
+    },
+    approved_by: {
+      type: DataTypes.STRING(128),
+      allowNull: true,
+      comment: 'No reader in Phase 3 — the audit half of a Phase 4 approval flow.',
+    },
+    approved_at: { type: DataTypes.DATE, allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   },

@@ -61,3 +61,26 @@ export const classificationOverrideBodySchema = z
 export type ClassificationParams = z.infer<typeof classificationParamsSchema>;
 export type ClassificationsQuery = z.infer<typeof classificationsQuerySchema>;
 export type ClassificationOverrideBody = z.infer<typeof classificationOverrideBodySchema>;
+
+/**
+ * The shadow decision queue and its Why (Phase 3, T312). Two reads, no body.
+ * `mode` defaults to the shadow queue; `all` lists live rows too (none exist in
+ * Phase 3). `subject_ref` narrows to one subject, exactly as stored.
+ */
+export const DECISION_MODES = ['shadow', 'live'] as const;
+
+export const decisionParamsSchema = z.object({
+  id: z.string().uuid(),
+});
+
+export const decisionsQuerySchema = z.object({
+  tenant_id: z.string().uuid().optional(),
+  brand_id: z.string().uuid().optional(),
+  mode: z.enum([...DECISION_MODES, 'all']).default('shadow'),
+  subject_ref: z.string().min(1).max(128).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export type DecisionParams = z.infer<typeof decisionParamsSchema>;
+export type DecisionsQuery = z.infer<typeof decisionsQuerySchema>;

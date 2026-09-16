@@ -1,4 +1,4 @@
-import type { Candidate, GovernorContext, SuppressedCandidate } from './types';
+import type { ArbitrableCandidate, Candidate, SuppressedCandidate } from './types';
 
 /**
  * Explorer Growth OS — priority arbiter. Plan §9.1, §9.4; EPIC 4 T003.
@@ -23,12 +23,12 @@ import type { Candidate, GovernorContext, SuppressedCandidate } from './types';
  * the whitelist guard in `__tests__/noSendPaths.test.ts` fails if one appears.
  */
 
-export interface ArbitrationResult {
-  winner: Candidate | null;
-  suppressed: SuppressedCandidate[];
+export interface ArbitrationResult<C extends ArbitrableCandidate = Candidate> {
+  winner: C | null;
+  suppressed: SuppressedCandidate<C>[];
 }
 
-function suppress(c: Candidate, reason: string): SuppressedCandidate {
+function suppress<C extends ArbitrableCandidate>(c: C, reason: string): SuppressedCandidate<C> {
   return { action_type: c.action_type, campaign_key: c.campaign_key, reason };
 }
 
@@ -41,7 +41,7 @@ function suppress(c: Candidate, reason: string): SuppressedCandidate {
  * one learner's candidates against each other, which is exactly this function's
  * scope.
  */
-function compare(a: Candidate, b: Candidate, ctx: GovernorContext): number {
+function compare<C extends ArbitrableCandidate>(a: C, b: C, ctx?: unknown): number {
   if (a.priority_tier !== b.priority_tier) return a.priority_tier - b.priority_tier;
   if (a.intra_tier_score !== b.intra_tier_score) return b.intra_tier_score - a.intra_tier_score;
   // Both remaining keys are constant per learner, so they cannot separate two
@@ -59,11 +59,11 @@ function compare(a: Candidate, b: Candidate, ctx: GovernorContext): number {
  * Governor has nothing to say to this learner today, and T004 records that as
  * `WAIT` rather than writing nothing.
  */
-export function arbitrate(
-  candidates: Array<Candidate | null>,
-  ctx: GovernorContext,
-): ArbitrationResult {
-  const real = candidates.filter((c): c is Candidate => c !== null);
+export function arbitrate<C extends ArbitrableCandidate = Candidate>(
+  candidates: Array<C | null>,
+  ctx?: unknown,
+): ArbitrationResult<C> {
+  const real = candidates.filter((c): c is C => c !== null);
   if (real.length === 0) return { winner: null, suppressed: [] };
 
   const ordered = [...real].sort((a, b) => compare(a, b, ctx));

@@ -30,6 +30,13 @@ import type { ContentAssetQuery } from '../../governor/types';
  */
 
 const AS_OF = new Date('2026-09-01T12:00:00Z');
+
+/**
+ * T305. Explorer's own scope, written once: unscoped rows, which is every row in
+ * production. Every assertion in this file is UNCHANGED by the brand dimension -
+ * that is the point of passing it explicitly rather than defaulting it.
+ */
+const UNSCOPED = { brand_id: null, allow_unscoped: true };
 const q = (over: Partial<ContentAssetQuery> = {}): ContentAssetQuery =>
   ({ asset_type: 'lesson_recommendation', ...over }) as ContentAssetQuery;
 
@@ -68,31 +75,31 @@ describe('the sync tags who can open each card', () => {
 
 describe('the resolver filters on tier — at the point of selection', () => {
   it('binds the tier into the query for a free-preview learner', async () => {
-    await resolveContentAssets(q(), AS_OF, 'free_preview');
+    await resolveContentAssets(q(), AS_OF, 'free_preview', UNSCOPED);
     expect(queryMock.mock.calls[0][1].replacements.tier).toBe('free_preview');
   });
 
   it('binds the tier for a full-access learner', async () => {
-    await resolveContentAssets(q(), AS_OF, 'full_access');
+    await resolveContentAssets(q(), AS_OF, 'full_access', UNSCOPED);
     expect(queryMock.mock.calls[0][1].replacements.tier).toBe('full_access');
   });
 
   it('filters in SQL rather than after the fact', async () => {
     // Post-filtering would let the LIMIT be consumed by locked rows and return
     // an empty list that reads as "no content" rather than "none you can open".
-    await resolveContentAssets(q(), AS_OF, 'free_preview');
+    await resolveContentAssets(q(), AS_OF, 'free_preview', UNSCOPED);
     expect(String(queryMock.mock.calls[0][0])).toContain(':tier = ANY(audience_tags)');
   });
 
   it('applies the gate BEFORE the row limit', async () => {
     const sql = String(queryMock.mock.calls.length ? queryMock.mock.calls[0][0] : '');
-    await resolveContentAssets(q(), AS_OF, 'free_preview');
+    await resolveContentAssets(q(), AS_OF, 'free_preview', UNSCOPED);
     const text = sql || String(queryMock.mock.calls[0][0]);
     expect(text.indexOf('audience_tags')).toBeLessThan(text.indexOf('LIMIT'));
   });
 
   it('passes the tier through resolveAllForCandidate to every query', async () => {
-    await resolveAllForCandidate([q(), q({ asset_type: 'weekly_digest' })], AS_OF, 'free_preview');
+    await resolveAllForCandidate([q(), q({ asset_type: 'weekly_digest' })], AS_OF, 'free_preview', UNSCOPED);
     for (const call of queryMock.mock.calls) {
       expect(call[1].replacements.tier).toBe('free_preview');
     }
