@@ -70,7 +70,11 @@ export type CaseStudyPublishBlockerCode =
   // rule). Written stories are validated on save, so this catches a story that
   // was valid then and is not now: a metric it cites lost its verification, or
   // a snapshot was assembled by a path that skipped the write-time check.
-  | 'visual_story_invalid';
+  | 'visual_story_invalid'
+  // 21 — the snapshot carries no visual story, or one that draws no workflow.
+  // Every published record carries one since the CORA pilot was approved
+  // (Ali, 2026-09-16); presence and a workflow are required, figures are not.
+  | 'visual_story_missing';
 
 export const CASE_STUDY_PUBLISH_BLOCKER_CODES = [
   'surface_not_publishable',
@@ -93,6 +97,7 @@ export const CASE_STUDY_PUBLISH_BLOCKER_CODES = [
   'headline_metric_is_a_bare_count',
   'headline_metric_missing_plain_answers',
   'visual_story_invalid',
+  'visual_story_missing',
 ] as const;
 
 /** One reason a publish was refused. `message` names the FIELD and its VALUE. */

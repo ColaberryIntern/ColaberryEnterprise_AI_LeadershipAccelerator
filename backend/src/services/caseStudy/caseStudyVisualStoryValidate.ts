@@ -421,14 +421,34 @@ export function evidenceIdsCitedByContent(content: CaseStudySnapshotContent): st
   return [...out];
 }
 
-/** Publish-gate rule 20: a visual story on the snapshot must validate against the snapshot. */
+const STORY_REMEDY = 'open the Visuals tab in the Studio, press "Generate from evidence" on the Visual story panel, edit the steps and save; every published record carries a visual story since 2026-09-16';
+
+/**
+ * Publish-gate rules 20 and 21: a visual story on the snapshot must validate
+ * against the snapshot, and every snapshot must carry one that draws a flow.
+ *
+ * WHY 21 IS A HARD RULE. Ali, 2026-09-16, on approving the CORA pilot: "harden
+ * the skill so every case study moving forward follows this format". A skill
+ * document is remembered; a gate rule is enforced. The rule asks for presence
+ * and a workflow, not for figures: a record with no verified outcome still
+ * draws how its system works, and a record whose story is switched off for a
+ * surface is still a record with a story. Turning the story on per surface
+ * stays the author's decision.
+ */
 export function ruleVisualStory(
   content: CaseStudySnapshotContent,
-  b: { add: (code: 'visual_story_invalid', field: string, message: string, remedy: string) => void },
+  b: { add: (code: 'visual_story_invalid' | 'visual_story_missing', field: string, message: string, remedy: string) => void },
 ): void {
   const vs = (content as { visualStory?: unknown }).visualStory;
-  if (vs === undefined || vs === null) return;
+  if (vs === undefined || vs === null) {
+    b.add('visual_story_missing', 'visualStory', 'the snapshot carries no visual story', STORY_REMEDY);
+    return;
+  }
   const result = validateVisualStory(vs, visualStoryContextFromContent(content, evidenceIdsCitedByContent(content)));
+  if (result.ok && !result.section.workflow) {
+    b.add('visual_story_missing', 'visualStory.workflow', 'the visual story draws no workflow', STORY_REMEDY);
+    return;
+  }
   if (result.ok) return;
   for (const e of result.errors.slice(0, 8)) {
     b.add('visual_story_invalid', `visualStory.${e.path}`,

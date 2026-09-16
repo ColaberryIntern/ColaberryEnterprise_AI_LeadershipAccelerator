@@ -160,7 +160,7 @@ export type CaseStudyPublishBlockerCode =
   | 'surface_not_publishable' | 'case_study_not_approved' | 'snapshot_not_approved'
   | 'metric_pending' | 'organization_consent' | 'builder_consent' | 'private_repo_exposed'
   | 'proof_metadata_missing' | 'self_attested_verification' | 'ai_generated_quote'
-  | 'unverified_claim' | 'visual_story_invalid';
+  | 'unverified_claim' | 'visual_story_invalid' | 'visual_story_missing';
 
 /**
  * One named reason a publish was refused. Every field is rendered verbatim: an

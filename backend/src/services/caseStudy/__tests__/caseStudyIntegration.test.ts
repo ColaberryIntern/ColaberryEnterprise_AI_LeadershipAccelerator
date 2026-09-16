@@ -70,7 +70,7 @@ jest.mock('../../../models/PortfolioArtifact', () => ({ __esModule: true, defaul
 
 import { attachRepository } from '../caseStudyRepoCollection';
 import { createCaseStudyFromProject, createCaseStudyFromRepoCollection } from '../caseStudyAdminService';
-import { approveSnapshot } from '../caseStudyAdminReview';
+import { applyHumanOverride, approveSnapshot } from '../caseStudyAdminReview';
 import { syncCaseStudy } from '../caseStudySyncService';
 import { isCaseStudyPublicationError, publishCaseStudy } from '../caseStudyPublicationService';
 import publicCaseStudyRoutes from '../../../routes/publicCaseStudyRoutes';
@@ -158,7 +158,27 @@ async function approvedRecord(
   const run = await sync(study.id, scripts);
   expect(run.snapshotId).toBeTruthy();
   await approveSnapshot({ caseStudyId: study.id, snapshotId: run.snapshotId as string, actor: ACTOR });
-  return { caseStudyId: study.id, snapshotId: run.snapshotId as string };
+  // Every published record carries a visual story (gate rule 21, 2026-09-16).
+  // Saved the way an operator saves it, as a human override, so it is carried
+  // forward by every later sync in these flows exactly as in production. This
+  // makes version 2 the first publishable snapshot of every approved record.
+  const story = await applyHumanOverride({
+    caseStudyId: study.id, path: 'visualStory', value: minimalVisualStory(), actor: ACTOR, note: 'integration story',
+  });
+  return { caseStudyId: study.id, snapshotId: (story as { snapshotId?: string }).snapshotId ?? (run.snapshotId as string) };
+}
+
+/** A single-state story with no figures: the least a record may carry and still publish. */
+function minimalVisualStory(): Record<string, unknown> {
+  return {
+    schemaVersion: 1, presentationVersion: 'v2', enabled: false, surfaces: [], motion: 'auto',
+    workflow: {
+      key: 'flow', type: 'single_state', title: 'How the copilot works', description: 'Two steps.',
+      panels: [{ key: 'single', label: 'As built', nodes: [{ key: 'in', label: 'Line signal', role: 'system' }, { key: 'out', label: 'Changeover plan', role: 'system' }], edges: [{ from: 'in', to: 'out' }] }],
+    },
+    outcomeCards: [], charts: [],
+    provenance: { generator: 'human', generatedAt: '2026-09-16T00:00:00.000Z', sourceContentHash: 'a'.repeat(64), state: 'draft', humanEdited: true },
+  };
 }
 
 const detailUrl = (slug = 'bottling-line-copilot') => `${LIST}/${slug}`;
@@ -273,11 +293,12 @@ describe('§40 — frontend + backend + eval repo = one Case Study, and a repeat
 /* ═════════════════════════════ 4 ═══ repo changes after publish ═══════════ */
 
 describe('§40 — a repo change after publish creates a draft; the published snapshot stays pinned', () => {
-  it('keeps the live page on version 1 until somebody republishes', async () => {
+  it('keeps the live page on the published version until somebody republishes', async () => {
     const { caseStudyId } = await approvedRecord();
     const published = await publishCaseStudy({ caseStudyId, surfaceKey: 'enterprise', actor: ACTOR });
     expect(published.outcome).toBe('published');
-    expect(published.snapshotVersion).toBe(1);
+    // v1 is the sync, v2 the story override that every published record carries.
+    expect(published.snapshotVersion).toBe(2);
 
     const before = await request(app).get(detailUrl());
     expect(before.status).toBe(200);
@@ -291,12 +312,14 @@ describe('§40 — a repo change after publish creates a draft; the published sn
     const resync = await sync(caseStudyId, moved, 'integration-resync');
 
     expect(resync.snapshotOutcome).toBe('created');
-    expect(resync.snapshotVersion).toBe(2);
-    expect(db.snapshots.rows).toHaveLength(2);
-    const v1 = db.snapshots.rows.find((r) => r.version === 1) as Row;
-    const v2 = db.snapshots.rows.find((r) => r.version === 2) as Row;
+    expect(resync.snapshotVersion).toBe(3);
+    expect(db.snapshots.rows).toHaveLength(3);
+    const v1 = db.snapshots.rows.find((r) => r.version === 2) as Row;
+    const v2 = db.snapshots.rows.find((r) => r.version === 3) as Row;
     expect(v2.status).toBe('draft');
     expect(v2.content.architecture.stack).toContain('Fastify');
+    // The story override survived the resync, as an override must.
+    expect(v2.content.visualStory).toEqual(v1.content.visualStory);
     // The two versions genuinely stand at different commits.
     expect(v1.content.repositories[0].lastSeenSha).toBe(APP_SHA);
     expect(v2.content.repositories[0].lastSeenSha).toBe(APP_SHA_V2);

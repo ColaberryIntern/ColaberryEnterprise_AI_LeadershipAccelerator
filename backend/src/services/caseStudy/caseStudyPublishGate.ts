@@ -197,8 +197,9 @@ export function evaluateCaseStudyPublishGate(
     // 16 and 17 - what may stand in the hero. A bare count is refused from the
     // headline row and stays publishable in the measurement section.
     ruleHeroMetrics(metrics, b);
-    // 20 - the visual story, when the snapshot carries one. Validated on write
-    // as well; this is the check that survives a metric losing its verification
+    // 20 and 21 - the visual story: every snapshot carries one that draws a
+    // workflow, and it validates against the snapshot. Validated on write as
+    // well; this is the check that survives a metric losing its verification
     // after the story cited it.
     ruleVisualStory(content, b);
   } else if (input.snapshot) {

@@ -366,7 +366,19 @@ function publishableContent(): CaseStudySnapshotContent {
       stack: ['typescript', 'node', 'postgresql'],
       deliverables: ['pipeline'], projectStatus: 'shipped',
     },
-  };
+    // Every published record carries a visual story that draws a workflow (rule
+    // 21, since the CORA pilot was approved on 2026-09-16). The least one may
+    // carry: a single-state flow, no figures, switched off for every surface.
+    visualStory: {
+      schemaVersion: 1, presentationVersion: 'v2', enabled: false, surfaces: [], motion: 'auto',
+      workflow: {
+        key: 'flow', type: 'single_state', title: 'How the job runs', description: 'A change feed, a batch, an audit row.',
+        panels: [{ key: 'single', label: 'As built', nodes: [{ key: 'feed', label: 'Change feed', role: 'data' }, { key: 'batch', label: 'Reconcile in batches', role: 'system' }], edges: [{ from: 'feed', to: 'batch' }] }],
+      },
+      outcomeCards: [], charts: [],
+      provenance: { generator: 'human', generatedAt: '2026-09-16T00:00:00.000Z', sourceContentHash: 'a'.repeat(64), state: 'draft', humanEdited: true },
+    },
+  } as CaseStudySnapshotContent;
 }
 
 const publishableRecord = (): CaseStudyPublishRecord => ({
@@ -1160,6 +1172,10 @@ describe('the refusal is actionable and complete', () => {
           };
         }),
       },
+      // visual_story_missing — a snapshot with no story at all, and one whose
+      // story draws nothing.
+      { content: bend((c) => { delete (c as any).visualStory; }) },
+      { content: bend((c) => { delete (c as any).visualStory.workflow; }) },
       // maturity_below_operational_result — a linked student project that has
       // built and demonstrated, and measured nothing in use.
       { foundation: { maturity: 'capability_demonstration', openQuestions: 0 } },
