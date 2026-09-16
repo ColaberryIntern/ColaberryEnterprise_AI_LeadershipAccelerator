@@ -171,7 +171,7 @@ const CommunityPage: React.FC = () => {
           <aside className="cm-side">
             <div className="te-card cm-identity">
               <div className="cm-identity-name">Colaberry · AI Systems Architect Accelerator</div>
-              <p className="cm-identity-about">Where your cohort builds AI that ships — share work, get unblocked, and climb from Apprentice to Principal Architect.</p>
+              <p className="cm-identity-about">Where your cohort builds AI that ships — share work, get unblocked, and climb from AI Aware to AI Architect.</p>
               <div className="cm-identity-links">
                 <a href="/portal/path">Start here · Week guide</a>
                 <a href="/portal/rooms">Live build rooms</a>
@@ -206,7 +206,7 @@ const CommunityPage: React.FC = () => {
                   return (
                     <div className="cm-lvl-progress">
                       <div className="cm-lvl-progress-row">
-                        <span>{next ? `${next.min - myProfile.points} pts to Level ${next.level} · ${next.name}` : 'Max level reached'}</span>
+                        <span>{next ? `${next.min - myProfile.points} pts to ${next.name}` : 'Top of the free rungs — build to go further'}</span>
                         <b>{myProfile.points}{next ? ` / ${next.min}` : ''}</b>
                       </div>
                       <div className="cm-lvl-track"><i style={{ width: `${pctToNext}%` }} /></div>

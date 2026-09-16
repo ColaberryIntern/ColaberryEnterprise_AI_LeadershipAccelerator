@@ -75,7 +75,7 @@ export function hudView(points: PointsSummary | null, displayTotal: number): Hud
     levelName,
     totalText: `${displayTotal.toLocaleString()} pts`,
     nextLine: band
-      ? bandHudNext(band, total)
+      ? bandHudNext(band, total, points.buildEntitled ?? true)
       : (lvl.next ? `${lvl.next.min - total} pts to ${lvl.next.name}` : 'Max level'),
     pct: lvl.pct,
     ariaLabel: `${total} points, level ${levelName} — ${SUFFIX}`,

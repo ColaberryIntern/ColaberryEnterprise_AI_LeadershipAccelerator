@@ -100,14 +100,30 @@ describe('once the server has answered', () => {
     expect(v.levelName).toBe('AI Enabled I');
   });
 
-  it('ignores the band when the flag is off, keeping the legacy identity', () => {
+  it('ignores the band when the flag is off, deriving the rung from points alone', () => {
+    // A promoted rung the points total could never produce, so the assertion is
+    // about the band being ignored rather than the two paths coinciding.
     const withBand = hudView(summary({
       fiveBandUiEnabled: false,
-      band: { rungName: 'AI Enabled I' } as PointsSummary['band'],
+      band: { rungName: 'AI Builder III' } as PointsSummary['band'],
     }), 463);
     const withoutBand = hudView(summary(), 463);
     expect(withBand.levelName).toBe(withoutBand.levelName);
-    expect(withBand.levelName).not.toBe('AI Enabled I');
+    expect(withBand.levelName).toBe('AI Enabled I');
+    expect(withBand.levelName).not.toBe('AI Builder III');
+  });
+
+  it('at the ceiling, tells an entitled student to ship and a free account to join', () => {
+    const ceiling = {
+      bandSlug: 'enabled', bandName: 'AI Enabled', rungName: 'AI Enabled II', bandIndex: 1,
+      isBuildBand: false, cappedByPointsOnly: true, nextBand: 'AI Builder', nextRequirement: '',
+    } as PointsSummary['band'];
+    const entitled = hudView(summary({ total: 948, fiveBandUiEnabled: true, band: ceiling, buildEntitled: true }), 948);
+    const free = hudView(summary({ total: 948, fiveBandUiEnabled: true, band: ceiling, buildEntitled: false }), 948);
+    const unknown = hudView(summary({ total: 948, fiveBandUiEnabled: true, band: ceiling }), 948);
+    expect(entitled.nextLine).not.toMatch(/join/i);
+    expect(free.nextLine).toMatch(/join/i);
+    expect(unknown.nextLine).toBe(entitled.nextLine);
   });
 
   it('gives the bar a real fill', () => {

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { bandRungForLevel } from '../../services/bandLadder';
 import { runtimeApi, PublicRitual, RitualTile, RitualField, RitualValues } from '../../pages/portal/runtime/runtimeApi';
 import CommunityThreadPanel from './CommunityThreadPanel';
 import { checkPost, MIN_POST_WORDS } from './contributionQuality';
@@ -28,7 +29,6 @@ interface Props {
   preview?: boolean;         // admin Studio: sample ritual, non-interactive
 }
 
-const LEVEL_NAMES: Record<number, string> = { 1: 'Apprentice', 2: 'Builder', 3: 'Architect', 4: 'Principal' };
 const avColor = (n: string) => { let h = 0; for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0; return `hsl(${h % 360} 46% 42%)`; };
 const timeAgo = (iso: string): string => {
   const d = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -323,7 +323,7 @@ const PeerWinsPanel: React.FC<Props> = ({ cardId, preview }) => {
         {t.id === topWinId && <span className="pw-ribbon">Top</span>}
         <div className="pw-who">
           {t.member.avatar_url ? <img className="pw-av" src={t.member.avatar_url} alt="" /> : <span className="pw-av" style={{ background: avColor(t.member.name) }}>{t.member.initials}</span>}
-          <div><div className="pw-name">{t.is_mine ? 'You' : t.member.name}</div><div className="pw-sub">{LEVEL_NAMES[t.member.level] || 'Builder'} · {timeAgo(t.created_at)} · Wk {ritual.week}</div></div>
+          <div><div className="pw-name">{t.is_mine ? 'You' : t.member.name}</div><div className="pw-sub">{bandRungForLevel(t.member.level)} · {timeAgo(t.created_at)} · Wk {ritual.week}</div></div>
           {t.is_mine && <span className="pw-you">You</span>}
         </div>
 

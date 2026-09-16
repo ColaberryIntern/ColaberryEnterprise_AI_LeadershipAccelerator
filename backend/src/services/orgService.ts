@@ -22,6 +22,7 @@ import {
 import { createFreeAccount } from './freeSignupService';
 import { sendOrgInviteEmail, sendOrgWelcomeEmail } from './emailService';
 import { assertMemberInOrg } from '../middlewares/orgAuth';
+import { computeBand } from './progression/bandLadder';
 
 const INVITE_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const LEVEL_RANKS = 9; // student_level ranks 0..8
@@ -116,6 +117,12 @@ export interface RosterMember {
   team: string | null;
   level: string;
   rank: number;
+  /**
+   * The canonical rung name the student sees in their own HUD ("AI Enabled II",
+   * "AI Builder I"). Managers were reading the raw `level` slug ("junior_builder",
+   * "rank 1/8") until 2026-09-16 — a vocabulary no student surface uses.
+   */
+  band_rung: string;
   readiness: number; // 0..100
   builder_xp_week: number;
   streak: number;
@@ -130,6 +137,8 @@ export interface MemberDetail {
   skill_xp: unknown | null;
   readiness: unknown | null;
   promotion: { level: string; rank: number; next_level: string | null; gaps: string[] } | null;
+  /** Canonical rung name (see RosterMember.band_rung); computed after promotion + engagement load. */
+  band_rung: string | null;
   skill_genome: unknown | null;
   section_progress: unknown | null;
   evidence_by_source: Array<{ source_type: string; count: number }>;
@@ -559,6 +568,7 @@ export async function getRoster(orgId: string): Promise<RosterMember[]> {
       team: m.team,
       level: 'builder',
       rank: 0,
+      band_rung: computeBand({ pointsTotal: 0, builderLevelSlug: 'builder', builderRank: 0 }).rungName,
       readiness: 0,
       builder_xp_week: 0,
       streak: 0,
@@ -600,12 +610,19 @@ export async function getRoster(orgId: string): Promise<RosterMember[]> {
   return members.map((m) => {
     const enr: any = (m as any).enrollment;
     const lvl = m.enrollment_id ? levelMap.get(m.enrollment_id) : undefined;
+    const totalPoints = m.enrollment_id ? (pointsMap.get(m.enrollment_id) ?? 0) : 0;
     return {
       enrollment_id: m.enrollment_id || '',
       name: enr?.full_name || m.email,
       team: m.team,
       level: lvl?.level_slug || 'builder',
       rank: Number(lvl?.rank ?? 0),
+      // Same pure computeBand the student's own HUD runs, over the same inputs.
+      band_rung: computeBand({
+        pointsTotal: totalPoints,
+        builderLevelSlug: lvl?.level_slug ?? 'builder',
+        builderRank: Number(lvl?.rank ?? 0),
+      }).rungName,
       // 0..1 in the column, 0..100 on the screen. Same bug and same fix as
       // `pointsDrilldownService`; this is the roster fallback the drilldown uses
       // when the points drill-down degrades, so fixing only one still leaves a
@@ -613,7 +630,7 @@ export async function getRoster(orgId: string): Promise<RosterMember[]> {
       readiness: Math.round(Number(lvl?.architect_readiness ?? 0) * 100),
       builder_xp_week: m.enrollment_id ? (xpMap.get(m.enrollment_id) ?? 0) : 0,
       streak: m.enrollment_id ? (streakMap.get(m.enrollment_id) ?? 0) : 0,
-      total_points: m.enrollment_id ? (pointsMap.get(m.enrollment_id) ?? 0) : 0,
+      total_points: totalPoints,
     };
   });
 }
@@ -632,6 +649,7 @@ export async function getMemberDetail(orgId: string, enrollmentId: string): Prom
     skill_xp: null,
     readiness: null,
     promotion: null,
+    band_rung: null,
     skill_genome: null,
     section_progress: null,
     evidence_by_source: [],
@@ -654,6 +672,15 @@ export async function getMemberDetail(orgId: string, enrollmentId: string): Prom
     const st = await getPromotionStatus(enrollmentId);
     detail.promotion = { level: st.level, rank: st.rank, next_level: st.next_level, gaps: st.gaps };
   } catch (err: any) { console.warn('[Org] promotion degraded:', err?.message); }
+
+  // The rung the student sees in their own HUD, from the same pure function. If
+  // the promotion read degraded, this falls back to the points-only rung rather
+  // than to nothing, so the header never shows a raw slug.
+  detail.band_rung = computeBand({
+    pointsTotal: Number((detail.engagement as { total?: number } | null)?.total ?? 0),
+    builderLevelSlug: detail.promotion?.level ?? 'builder',
+    builderRank: detail.promotion?.rank ?? 0,
+  }).rungName;
 
   // Skill genome.
   try {

@@ -100,10 +100,10 @@ export interface LeaderboardEntry {
 // onboardingApi.LEVELS). The community profile/leaderboard now report the same
 // canonical points + level as the top-right HUD — a single system everywhere.
 export const LEVEL_TIERS = [
-  { level: 1, min: 0, name: 'Apprentice' },
-  { level: 2, min: 150, name: 'Builder' },
-  { level: 3, min: 400, name: 'Architect' },
-  { level: 4, min: 900, name: 'Principal' },
+  { level: 1, min: 0, name: 'AI Aware I' },
+  { level: 2, min: 150, name: 'AI Aware II' },
+  { level: 3, min: 400, name: 'AI Enabled I' },
+  { level: 4, min: 900, name: 'AI Enabled II' },
 ] as const;
 
 export function levelName(level: number): string {

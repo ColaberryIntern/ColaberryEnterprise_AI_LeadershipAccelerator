@@ -11,9 +11,16 @@ import { formatGap } from '../PointsDrilldown';
 
 describe('a gate key becomes something a student can act on', () => {
   it('names the action, not the column', () => {
-    expect(formatGap('attendance: 0 < 1')).toBe('Live classes attended — 0 of 1');
+    expect(formatGap('evidence: 0 < 3')).toBe('Pieces of verified evidence — 0 of 3');
     expect(formatGap('artifacts: 0 < 2')).toBe('Artifacts published — 0 of 2');
     expect(formatGap('github: 1 < 2')).toBe('GitHub commits or pull requests — 1 of 2');
+  });
+
+  // Attendance stopped gating the ladder on 2026-09-10 and the server no longer
+  // emits it; the label was removed on 2026-09-16 so a stale key can only ever
+  // fall through the generic path rather than promise a class that counts.
+  it('no longer knows attendance as a gate', () => {
+    expect(formatGap('attendance: 0 < 1')).toBe('attendance — 0 of 1');
   });
 
   it('keeps the counts intact, because the distance is the useful part', () => {
