@@ -194,6 +194,24 @@ export function resolve(slug: string): CardTypeDef | undefined {
   return REGISTRY.get(slug);
 }
 
+/**
+ * Is a card of this type GRADED — does completing it produce evidence or an
+ * assessment result, as opposed to being consumed? Labs, build tasks, knowledge
+ * checks, evaluations, demos and presentations are graded; videos, blogs, deep
+ * dives, warm-ups, surveys, live classes and the ambient intel feed are not.
+ *
+ * This is the "graded card" of decision D3 (docs/POINTS_LADDER_DECISIONS.md):
+ * "curriculum complete" means every graded card in all 12 weeks, so the
+ * definition lives here beside the registry that decides it. Weeks carry ~32
+ * published cards on average, most of them consumption; requiring every one
+ * would make the milestone unreachable, and requiring any one would make it
+ * meaningless.
+ */
+export function isGradedCardType(slug: string): boolean {
+  const def = REGISTRY.get(slug);
+  return !!def && (def.evidence_required === true || def.ai_evaluation === true);
+}
+
 /** Fail-loud resolver — unknown types throw rather than silently skip. */
 export function resolveOrThrow(slug: string): CardTypeDef {
   const def = REGISTRY.get(slug);

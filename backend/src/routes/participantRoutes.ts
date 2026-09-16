@@ -95,6 +95,7 @@ import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
 import projectsPortalRoutes from './projectsPortalRoutes';
 import certPrepRoutes from './certPrepRoutes';
+import certificationRoutes from './certificationRoutes';
 import sbpRoutes from './sbpRoutes';
 import workspaceRoutes from './workspaceRoutes';
 
@@ -639,6 +640,10 @@ router.use(sbpRoutes);
 // A paying student in Week 3 passes 1 and 2 and is still refused by 3.
 router.use('/api/portal/cert-prep', requireParticipant, requireContentEntitlement('cert-prep'));
 router.use(certPrepRoutes);
+// Certification claims (upload + review status) — its own prefix, requireParticipant
+// only, independent of CERT_PREP_ENABLED and the Week-7 fence: a certificate
+// already earned must be uploadable by any enrolled student.
+router.use(certificationRoutes);
 
 // Mentor endpoints
 router.post('/api/portal/mentor/chat', requireParticipant, handleSendMentorMessage);

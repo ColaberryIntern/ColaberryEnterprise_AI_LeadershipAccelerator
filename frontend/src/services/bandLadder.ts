@@ -67,6 +67,14 @@ export const BUILD_RUNG_BY_SLUG: Record<string, string> = {
   senior_engineer: 'AI Builder VI',
   architect_candidate: 'AI Architect',
   architect: 'Senior AI Architect',
+  // The milestone ladder (docs/POINTS_LADDER_DECISIONS.md): same public names,
+  // earned by milestones. `builder_iv` carries the "Program Graduate" label.
+  builder_i: 'AI Builder I',
+  builder_ii: 'AI Builder II',
+  builder_iii: 'AI Builder III',
+  builder_iv: 'AI Builder IV · Program Graduate',
+  ai_architect: 'AI Architect',
+  senior_ai_architect: 'Senior AI Architect',
 };
 
 /** "junior_builder" → "AI Builder I"; an unknown slug is humanised, never shown raw. */
