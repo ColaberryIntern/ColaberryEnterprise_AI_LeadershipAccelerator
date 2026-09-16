@@ -8,6 +8,7 @@ import StoryContextStrip from './StoryContextStrip';
 import { StoryHeroFigure } from './StoryHeroFigure';
 import StorySectionList from './StorySectionList';
 import { storyIndicators } from './storyIndicatorModel';
+import { evidenceMaturity } from './storyMaturityModel';
 import { placeStoryFigures } from './storyFigurePlacement';
 import { coverFor } from './storyCover';
 import type {
@@ -87,9 +88,21 @@ export function StoryDetailArticle({
      and again in a track ten centimetres below reads as a rendering fault.
      The COVER is subtracted for the same reason: the masthead has already spent
      it, so it must not also open the body. Null keeps the single-column hero
-     exactly as it was, so a record with no picture is unaffected. */
+     exactly as it was, so a record with no picture is unaffected.
+
+     ONLY WHEN THE MASTHEAD ACTUALLY SHOWED IT. With a walkthrough that has its
+     own poster, `StoryHeroFigure` renders the player and the cover is never
+     drawn; subtracting it anyway sent the record's strongest picture to a small
+     card at the foot of the page while the weaker one opened the body. That
+     was reviewed as "the screenshots arrive too late". The poster fallback
+     case still counts as shown, because then the cover IS the poster. */
   const cover = coverFor(record);
-  const figures = placeStoryFigures(record.artifacts, sections, cover?.src ?? null);
+  const video = record.walkthroughVideo;
+  const coverShownInMasthead = !(video?.url && video.posterUrl);
+  const figures = placeStoryFigures(
+    record.artifacts, sections, cover && coverShownInMasthead ? cover.src : null,
+  );
+  const maturity = evidenceMaturity(record);
 
   return (
     /* The click handler is an observer on a container, the pattern
@@ -175,7 +188,12 @@ export function StoryDetailArticle({
         </div>
       </section>
 
-      <StoryContextStrip indicators={indicators} facts={facts} metrics={metrics} />
+      <StoryContextStrip
+        indicators={indicators}
+        facts={facts}
+        metrics={metrics}
+        maturity={maturity}
+      />
 
       <StorySectionList record={record} sections={sections} figures={figures} />
 

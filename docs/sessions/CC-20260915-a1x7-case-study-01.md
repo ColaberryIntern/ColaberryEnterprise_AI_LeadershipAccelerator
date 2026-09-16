@@ -76,3 +76,59 @@ The consolidation-program half of this session ID is logged separately in
        with `surface` as the profile object, and its header promises an image-origin
        rewrite the code no longer performs. Worked around in a scratch wrapper; the
        script itself was not changed in this PR.
+
+## Revision 2 (Ali's review of the live page, 2026-09-15 evening)
+
+Ali published the record on all three surfaces (02:13Z, snapshot v15) and reviewed it:
+"an evidence-backed capability demonstration, not yet a true operational case study".
+The revision splits into record edits (live already) and page changes (this PR).
+
+- [x] Record: capability count out of the hero, maturity statement, operator stakes, surface lenses
+  - Date: 2026-09-15
+  - Session: CC-20260915-a1x7
+  - What changed: snapshots v16-v19 by override: `heroMetrics` emptied (`recovery_paths`
+    stays in measurement, `isHeadline` false); measurement narrative opens with "Evidence
+    maturity: capability demonstration. Software status: shipped; operational result not
+    measured"; a fifth situation paragraph gives the admissions representative's view of
+    the failure, written from the panel's own status vocabulary (answered, voicemail, no
+    pick-up); summary names the record a capability demonstration. Publication rows for
+    training and ai-flotation carry a `surface_summary_override` (the learning story and
+    the company-project framing); enterprise keeps the standfirst.
+  - Verification: gate allows all three surfaces with no blockers; readiness 89/100
+    (down from 99 because the rubric scores an empty hero as an unlinked headline; the
+    gate does not). Live API on all three surfaces serves v19: the publications were
+    re-pinned to the newly approved snapshot by the override path, so the edits went
+    live without a republish click. Live page: no errors, no overflow, maturity
+    statement present.
+  - Notes: `surface_summary_override` has no service, route or Studio control (only
+    the projection reads it), so the two lenses were written by SQL guarded on NULL.
+    The recap engine's production host (a separate Hetzner CX22, `<server-ip>` in its
+    runbook) is unknown to this repo, so the outcome measurements the review asks for
+    (recovery rate, unresolved rate, detection-to-recovery time, manual vs automatic,
+    replay safety, lead continuation) cannot be run from here; they need that host.
+
+- [x] Page: evidence-maturity label, honest counts, diagram-first architecture, cover placement
+  - Date: 2026-09-15
+  - Session: CC-20260915-a1x7
+  - What changed: `storyMaturityModel.ts` derives "Capability demonstration" for a
+    verified-shipped record with no headline figure; `StoryMaturityNote` prints it in
+    the headline slot and `heroFacts` adds an Evidence entry beside Status. Indicator
+    labels: "visual artifacts" (was "evidence items"), "roadmap decisions" (was "next
+    steps"); `sectionCountNoun` says "contributor roles" unless every contributor is
+    named. `StoryArchitectureBand` renders prose, then the diagram, then the inventory
+    folded under "View technical proof" (open lists when no diagram);
+    `CaseStudyArchitecture` gains `Prose` and `Inventory` exports, default unchanged.
+    `StoryDetailArticle` stops subtracting the cover from inline figures when the
+    masthead shows a walkthrough with its own poster. Styles in `storyMediaV2.css`
+    (the page sheet is two lines under its ceiling; a sheet of its own fails the
+    contract's non-vacuity floors).
+  - Verification: frontend `tsc --noEmit` exit 0; jest over `src/pages/publicV2
+    src/components/caseStudy src/pages/admin`: 76 suites, 1185 tests passed, including
+    12 new in `storyReviewRevision.test.tsx` with recorded mutations. Rendered with the
+    live v19 payload: 1440 and 390 with no overflow, page height 11321 -> 10901 at
+    1440, panel capture now opens the body after the situation.
+  - Notes: two platform defects met on the way and left for their own PR:
+    `approveSnapshot` returns `unchanged` without lifting the record when the snapshot
+    is already approved, so the Studio's only approve control can no-op; a whole-section
+    `identity` override pins the consent flags, so a consent edit in the Studio never
+    reaches a snapshot until the override is refreshed.

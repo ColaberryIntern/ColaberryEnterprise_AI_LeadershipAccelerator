@@ -27,6 +27,14 @@
    IMPORTED BY `StoryDetailV2.tsx`, as a second side-effect import beside the
    page stylesheet -- not by `@import` from it, which the contract test forbids
    and which would cost a second serial round trip in the browser.
+
+   TWO SMALL ADDITIONS FROM THE FIRST REVIEW REVISION, at the end of this file
+   because the page sheet was two lines under its ceiling when they arrived and
+   a sheet of their own could not meet the contract's non-vacuity floors: the
+   technical-proof disclosure that folds the architecture inventory under the
+   diagram (`StoryArchitectureBand`), and the evidence-maturity note the
+   context strip prints where a headline figure would go (`StoryMaturityNote`).
+   The first is about the diagram; the second is about what a figure is not.
    ========================================================================== */
 
 /* -------------------------------------------------------------- carousel --- */
@@ -333,3 +341,39 @@
      masthead names for its own copy, rather than white at an opacity picked by eye. */
   color: var(--text-on-inverse);
 }
+
+/* ------------------------------------------------------- technical proof --- */
+
+/* The architecture inventory, folded under a disclosure once a drawing has
+   already said what the lists say. The summary is styled as the section's
+   own eyebrow so it reads as a heading a reader can open, not a link. */
+.cbv2-story__proof { margin-top: var(--space-6); }
+.cbv2-story__proof-summary {
+  cursor: pointer;
+  font-size: var(--fs-overline);
+  letter-spacing: var(--ls-overline);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.cbv2-story__proof-summary:focus-visible { outline: var(--border-2) solid var(--border-strong); outline-offset: 2px; }
+.cbv2-story__proof-body { display: grid; gap: var(--space-6); margin-top: var(--space-4); }
+
+/* ------------------------------------------------------- evidence maturity --- */
+
+/* The slot a headline figure would take, on a shipped record that has none.
+   Same card as a metric so it reads as the same kind of fact, at the same
+   width; the label carries the weight and the statement stays body-sized, so
+   "Capability demonstration" is what a scanning reader takes away. */
+.cbv2-story__maturity {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  max-width: 44rem;
+  padding: var(--space-6);
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow-wrap: anywhere;
+}
+.cbv2-story__maturity-label { font-size: var(--fs-body-lg); color: var(--text-body); }
+.cbv2-story__maturity-statement { font-size: var(--fs-body-sm); color: var(--text-muted); }

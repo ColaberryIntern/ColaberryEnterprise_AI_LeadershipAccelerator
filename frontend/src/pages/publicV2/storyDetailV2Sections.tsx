@@ -1,13 +1,12 @@
 import React from 'react';
 import { Metric } from '../../components/publicV2/Claim';
-import CaseStudyArchitecture from '../../components/caseStudy/CaseStudyArchitecture';
+import StoryArchitectureBand from './StoryArchitectureBand';
 import CaseStudyArtifacts from '../../components/caseStudy/CaseStudyArtifacts';
 import CaseStudyMeasurement from '../../components/caseStudy/CaseStudyMeasurement';
 import CaseStudyRoadmap from '../../components/caseStudy/CaseStudyRoadmap';
 import CaseStudyTimeline from '../../components/caseStudy/CaseStudyTimeline';
 import CaseStudyVerificationBadge from '../../components/caseStudy/CaseStudyVerificationBadge';
 import { BUILT_BY_LABELS, REPO_ROLE_LABELS } from '../../config/caseStudySurfaces';
-import StoryDiagram from './StoryDiagram';
 import StoryMediaCarousel from './StoryMediaCarousel';
 import StorySituation from './StorySituation';
 import {
@@ -17,7 +16,7 @@ import {
   formatPublishedDate,
   withheldRepositoryNote,
 } from './storyDetailV2Model';
-import { carouselSlides, diagramSourceOf } from './storyMediaModel';
+import { carouselSlides } from './storyMediaModel';
 import type {
   CaseStudySectionKey,
   PublicCaseStudyContributor,
@@ -245,15 +244,9 @@ export function StorySectionBody({
     case 'build':
       return <CaseStudyTimeline entries={record.timeline} />;
     case 'architecture':
-      // The verified lists FIRST, the drawing second. A reader meets what the
-      // repository evidenced before they meet what somebody sketched, and the
-      // drawing is absent entirely on the records that have none.
-      return record.architecture ? (
-        <>
-          <CaseStudyArchitecture architecture={record.architecture} headingLevel={3} />
-          <StoryDiagram source={diagramSourceOf(record.architecture)} />
-        </>
-      ) : null;
+      // Prose, drawing, then the verified inventory folded; the reasoning
+      // lives with the markup in `StoryArchitectureBand`.
+      return <StoryArchitectureBand architecture={record.architecture} />;
     case 'measurement':
       return record.measurement ? (
         <CaseStudyMeasurement measurement={record.measurement} />

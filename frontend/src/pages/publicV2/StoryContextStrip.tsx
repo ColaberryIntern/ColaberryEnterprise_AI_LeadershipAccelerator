@@ -1,8 +1,10 @@
 import React from 'react';
 import { StoryIndicatorRail } from './StoryIndicators';
 import { StoryHeroMetrics } from './storyDetailV2Sections';
+import StoryMaturityNote from './StoryMaturityNote';
 import type { StoryFact } from './storyDetailV2Model';
 import type { StoryIndicator } from './storyIndicatorModel';
+import type { StoryMaturity } from './storyMaturityModel';
 import type { PublicCaseStudyMetric } from '../../services/caseStudyPublicTypes';
 
 /**
@@ -58,14 +60,22 @@ export interface StoryContextStripProps {
   facts: readonly StoryFact[];
   /** From `heroMetricsFor`: every one carries evidence context. */
   metrics: readonly PublicCaseStudyMetric[];
+  /**
+   * From `evidenceMaturity`. Non-null exactly when `metrics` is empty and the
+   * software is verified shipped; it takes the slot a headline figure would.
+   */
+  maturity?: StoryMaturity | null;
 }
 
 export function StoryContextStrip({
   indicators,
   facts,
   metrics,
+  maturity = null,
 }: StoryContextStripProps): React.ReactElement | null {
-  if (indicators.length === 0 && facts.length === 0 && metrics.length === 0) return null;
+  if (indicators.length === 0 && facts.length === 0 && metrics.length === 0 && !maturity) {
+    return null;
+  }
 
   return (
     <section
@@ -91,6 +101,10 @@ export function StoryContextStrip({
         ) : null}
 
         <StoryHeroMetrics metrics={metrics} />
+
+        {/* The slot a headline figure would take, when there is none to take
+            it; see `StoryMaturityNote`. Never beside a figure. */}
+        {maturity && metrics.length === 0 ? <StoryMaturityNote maturity={maturity} /> : null}
       </div>
     </section>
   );
