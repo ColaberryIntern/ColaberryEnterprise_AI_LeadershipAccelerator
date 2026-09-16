@@ -142,6 +142,19 @@ describe('a server older than this bundle does not white-screen the route', () =
     expect(out.caseStudy.architecture?.dataStores).toEqual([]);
   });
 
+  it('turns an absent visualStory into null, and passes a present one through', () => {
+    // A server that predates the visual story omits the key entirely; the
+    // article reads `record.visualStory` and null is the "no band" value.
+    const absent = oldServerBody();
+    delete (absent.caseStudy as unknown as Record<string, unknown>).visualStory;
+    expect(normalizeDetailResponse(absent).caseStudy.visualStory).toBeNull();
+
+    const story = { schemaVersion: 1, presentationVersion: 'v2', motion: 'auto', workflow: null, outcomeCards: [], charts: [] };
+    const present = oldServerBody();
+    (present.caseStudy as unknown as Record<string, unknown>).visualStory = story;
+    expect(normalizeDetailResponse(present).caseStudy.visualStory).toBe(story);
+  });
+
   it('renders the situation band instead of throwing, on that exact payload', () => {
     const raw = oldServerBody().caseStudy.situation as PublicCaseStudySituation;
     // The unguarded path is the defect: prove it throws, so the guard below is
