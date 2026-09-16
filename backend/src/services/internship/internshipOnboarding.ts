@@ -134,8 +134,8 @@ export const CHECKLIST: readonly ChecklistStep[] = [
   {
     key: 'first_week_checkin',
     order: 100,
-    label: 'Complete your first-week check-in',
-    detail: 'A short reflection on how week one went and what you are committing to next.',
+    label: 'Complete week 1 of the curriculum',
+    detail: 'Finish week 1 in the classroom. We track your section completion, so there is nothing to submit here.',
     actor: 'student',
     blocking_activation: false,
   },
@@ -151,7 +151,8 @@ export interface ChecklistEvidence {
   acknowledgements: ReadonlyMap<RequirementKey, AcknowledgementState>;
   joined_community: boolean;
   active_project_count: number;
-  first_week_checkin_submitted: boolean;
+  /** Week 1 of the curriculum finished — the real "first week done" signal. */
+  first_week_curriculum_complete: boolean;
 }
 
 export interface ChecklistStepStatus extends ChecklistStep {
@@ -211,7 +212,7 @@ export function resolveChecklist(evidence: ChecklistEvidence): ChecklistStepStat
         case 'first_project_assigned':
           return { ...step, complete: evidence.active_project_count > 0, waiting_on: evidence.active_project_count > 0 ? null : 'your manager is assigning your first project' };
         case 'first_week_checkin':
-          return { ...step, complete: evidence.first_week_checkin_submitted, waiting_on: evidence.first_week_checkin_submitted ? null : 'due at the end of your first week' };
+          return { ...step, complete: evidence.first_week_curriculum_complete, waiting_on: evidence.first_week_curriculum_complete ? null : 'finish week 1 in the classroom' };
         default:
           return { ...step, complete: false, waiting_on: null };
       }
