@@ -60,6 +60,14 @@ Use the `short` mode from the `brief-me` skill. Full detail lives in `.claude/sk
 
 Only when a reply is a single clarifying question and there is genuinely no state to report. When in doubt, include it.
 
+## Times are Central, never UTC
+
+Every time Claude states, in a reply, a brief, a session log, a commit message, an email, a Basecamp post, or any content that ships to a page, is **Central time (CST/CDT), with the zone written out** (`8:14 PM CDT on 2026-09-15`). Never UTC, never a bare `Z` suffix, never a raw ISO timestamp in prose. Convert before writing; a timestamp read from a log or a database is input, not output.
+
+**Why:** Ali and every reader of this platform's pages work in Central, and a UTC time in a sentence is a small arithmetic problem handed to the reader every time it appears. It also produced a published case-study metric whose window read "2026-04-30 00:00 UTC" for what was the evening of April 29 in Dallas.
+
+The exception is machine-facing fields that the code defines as UTC (ISO-8601 columns, API payloads, cron expressions): those stay as the code requires, and are converted the moment they are written for a person.
+
 ---
 
 # Telemetry Synchronization Contract
