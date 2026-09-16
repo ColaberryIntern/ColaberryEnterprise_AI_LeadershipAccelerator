@@ -1,4 +1,5 @@
 import { getProviderCapabilities, isStale, type ContentType, type ProviderKey } from '../publishing/providerCapabilities';
+import { pollProblems, type PollSpec } from './pollSpec';
 import type { Variant } from './composerVariants';
 
 /**
@@ -17,7 +18,7 @@ import type { Variant } from './composerVariants';
 
 export interface VariantProblem {
   provider: ProviderKey;
-  field: 'text' | 'hashtags' | 'contentType' | 'media' | 'links' | 'registry';
+  field: 'text' | 'hashtags' | 'contentType' | 'media' | 'links' | 'registry' | 'poll';
   severity: 'block' | 'warn';
   message: string;
 }
@@ -53,6 +54,8 @@ export interface VariantContext {
   mediaCount: number;
   /** One entry per attachment, in order. `mediaCount` must equal its length when present. */
   media?: readonly MediaFacts[];
+  /** The poll on the item, when the content type is `poll`. */
+  poll?: PollSpec | null;
   /** Absolute URLs referenced by the variant text. */
   links: readonly string[];
 }
@@ -164,6 +167,23 @@ export function validateVariant(variant: Variant, ctx: VariantContext, now: numb
     } else if (!isVideo && caps.image) {
       if (m.width !== null && m.width < caps.image.minWidthPx) {
         problems.push({ provider: variant.provider, field: 'media', severity: 'block', message: `${name}: image is ${m.width}px wide, minimum ${caps.image.minWidthPx}px.` });
+      }
+    }
+  }
+
+  // ── Poll ──────────────────────────────────────────────────────────────────────────────────
+  // The content-type check above already blocks networks with no poll post. Here: the poll must
+  // exist, fit this network's numbers, and stand alone - a poll and an image are different
+  // content shapes on every network that has polls.
+  if (ctx.contentType === 'poll' && caps.poll) {
+    if (!ctx.poll) {
+      problems.push({ provider: variant.provider, field: 'poll', severity: 'block', message: `${name}: a poll post needs a question and 2 to 4 options.` });
+    } else {
+      for (const message of pollProblems(name, caps.poll, ctx.poll)) {
+        problems.push({ provider: variant.provider, field: 'poll', severity: 'block', message });
+      }
+      if (ctx.mediaCount > 0) {
+        problems.push({ provider: variant.provider, field: 'poll', severity: 'block', message: `${name}: a poll cannot carry media. Remove the attachment or change the content type.` });
       }
     }
   }

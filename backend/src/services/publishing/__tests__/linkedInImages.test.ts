@@ -45,7 +45,7 @@ function scripted(overrides: Partial<Record<'init' | 'put' | 'status' | 'post', 
 function payload(media: PublishMedia[], provider: PublishPayload['provider'] = 'linkedin_member'): PublishPayload {
   return {
     jobId: 'job-1', provider, contentItemId: 'ci-1', variantId: 'cv-1', accountId: 'acc-1',
-    text: 'Free class Thursday.', mediaRefs: media.map((m) => m.ref), media,
+    text: 'Free class Thursday.', mediaRefs: media.map((m) => m.ref), media, poll: null,
     linkUrl: null, disclosureText: null, scheduledFor: '2026-09-15T18:00:00.000Z', contentRevision: 1,
   };
 }

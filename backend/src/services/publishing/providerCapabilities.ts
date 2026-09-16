@@ -35,7 +35,7 @@ export type ProviderKey =
   | 'tiktok'
   | 'x';
 
-export type ContentType = 'text' | 'image' | 'video' | 'carousel' | 'thread' | 'link';
+export type ContentType = 'text' | 'image' | 'video' | 'carousel' | 'thread' | 'link' | 'poll';
 
 export type PublishAction =
   | 'publish'
@@ -60,6 +60,8 @@ export interface ProviderCapabilities {
   text: { maxChars: number; maxHashtags: number | null; maxMentions: number | null };
   image: { maxSizeMb: number; minWidthPx: number; aspectRatios: readonly string[]; maxPerPost: number } | null;
   video: { maxSizeMb: number; maxDurationSec: number; codecs: readonly string[]; aspectRatios: readonly string[] } | null;
+  /** Null when the network has no poll post. Shape shared with content/pollSpec.ts. */
+  poll: { minOptions: number; maxOptions: number; maxOptionChars: number; maxQuestionChars: number; durationsDays: readonly number[] } | null;
   supports: Record<PublishAction, boolean> & { draftHandoff: boolean };
   /** OAuth scopes the action set above requires. Displayed as granted/missing after connect. */
   requiredScopes: readonly string[];
@@ -92,6 +94,7 @@ export const PROVIDER_CAPABILITIES: Record<ProviderKey, ProviderCapabilities> = 
     text: { maxChars: 63206, maxHashtags: null, maxMentions: null },
     image: { maxSizeMb: 4, minWidthPx: 600, aspectRatios: ['1.91:1', '1:1', '4:5'], maxPerPost: 10 },
     video: { maxSizeMb: 1024, maxDurationSec: 14400, codecs: ['h264'], aspectRatios: ['16:9', '1:1', '4:5', '9:16'] },
+    poll: null,
     supports: { ...ALL_FALSE, publish: true, firstComment: true, reply: true, edit: true, delete: true, analytics: true, ads: true, webhooks: true },
     requiredScopes: ['pages_manage_posts', 'pages_read_engagement', 'pages_show_list', 'pages_manage_engagement'],
     accountType: 'Facebook Page administered by the connected user',
@@ -114,6 +117,7 @@ export const PROVIDER_CAPABILITIES: Record<ProviderKey, ProviderCapabilities> = 
     text: { maxChars: 2200, maxHashtags: 30, maxMentions: 20 },
     image: { maxSizeMb: 8, minWidthPx: 320, aspectRatios: ['4:5', '1:1', '1.91:1'], maxPerPost: 10 },
     video: { maxSizeMb: 1024, maxDurationSec: 900, codecs: ['h264'], aspectRatios: ['9:16', '1:1', '4:5'] },
+    poll: null,
     supports: { ...ALL_FALSE, publish: true, firstComment: true, reply: true, delete: true, analytics: true, ads: true, webhooks: true },
     requiredScopes: ['instagram_basic', 'instagram_content_publish', 'instagram_manage_comments', 'instagram_manage_insights', 'pages_show_list'],
     accountType: 'Instagram Business or Creator account linked to a Facebook Page',
@@ -130,12 +134,14 @@ export const PROVIDER_CAPABILITIES: Record<ProviderKey, ProviderCapabilities> = 
   linkedin_organization: {
     provider: 'linkedin_organization',
     displayName: 'LinkedIn Page (organization)',
-    version: '2026.09.1',
-    asOf: '2026-09-11',
-    contentTypes: ['text', 'image', 'video', 'carousel', 'link'],
+    version: '2026.09.2',
+    asOf: '2026-09-15',
+    contentTypes: ['text', 'image', 'video', 'carousel', 'link', 'poll'],
     text: { maxChars: 3000, maxHashtags: null, maxMentions: null },
     image: { maxSizeMb: 8, minWidthPx: 552, aspectRatios: ['1.91:1', '1:1', '4:5'], maxPerPost: 20 },
     video: { maxSizeMb: 200, maxDurationSec: 600, codecs: ['h264'], aspectRatios: ['16:9', '1:1', '9:16'] },
+    // Posts API `content.poll`: 2-4 options of 30 characters, question 140, 1/3/7/14 days.
+    poll: { minOptions: 2, maxOptions: 4, maxOptionChars: 30, maxQuestionChars: 140, durationsDays: [1, 3, 7, 14] },
     supports: { ...ALL_FALSE, publish: true, reply: true, delete: true, analytics: true, ads: true },
     requiredScopes: ['w_organization_social', 'r_organization_social', 'rw_organization_admin', 'r_organization_admin'],
     accountType: 'LinkedIn Page where the connected member is an admin',
@@ -152,12 +158,14 @@ export const PROVIDER_CAPABILITIES: Record<ProviderKey, ProviderCapabilities> = 
   linkedin_member: {
     provider: 'linkedin_member',
     displayName: 'LinkedIn (personal profile)',
-    version: '2026.09.1',
-    asOf: '2026-09-11',
-    contentTypes: ['text', 'image', 'video', 'link'],
+    version: '2026.09.2',
+    asOf: '2026-09-15',
+    contentTypes: ['text', 'image', 'video', 'link', 'poll'],
     text: { maxChars: 3000, maxHashtags: null, maxMentions: null },
     image: { maxSizeMb: 8, minWidthPx: 552, aspectRatios: ['1.91:1', '1:1', '4:5'], maxPerPost: 1 },
     video: { maxSizeMb: 200, maxDurationSec: 600, codecs: ['h264'], aspectRatios: ['16:9', '1:1', '9:16'] },
+    // Posts API `content.poll`: 2-4 options of 30 characters, question 140, 1/3/7/14 days.
+    poll: { minOptions: 2, maxOptions: 4, maxOptionChars: 30, maxQuestionChars: 140, durationsDays: [1, 3, 7, 14] },
     // No edit and no analytics on member posts through the API. Delete is available.
     supports: { ...ALL_FALSE, publish: true, delete: true },
     requiredScopes: ['w_member_social', 'openid', 'profile'],
@@ -181,6 +189,7 @@ export const PROVIDER_CAPABILITIES: Record<ProviderKey, ProviderCapabilities> = 
     text: { maxChars: 5000, maxHashtags: 15, maxMentions: null },
     image: null,
     video: { maxSizeMb: 262144, maxDurationSec: 43200, codecs: ['h264', 'vp9', 'av1'], aspectRatios: ['16:9', '9:16'] },
+    poll: null,
     supports: { ...ALL_FALSE, publish: true, edit: true, delete: true, analytics: true, reply: true },
     requiredScopes: ['https://www.googleapis.com/auth/youtube.upload', 'https://www.googleapis.com/auth/youtube.readonly', 'https://www.googleapis.com/auth/yt-analytics.readonly'],
     accountType: 'YouTube channel owned by the connected Google account',
@@ -203,6 +212,7 @@ export const PROVIDER_CAPABILITIES: Record<ProviderKey, ProviderCapabilities> = 
     text: { maxChars: 2200, maxHashtags: null, maxMentions: null },
     image: { maxSizeMb: 20, minWidthPx: 360, aspectRatios: ['9:16', '1:1'], maxPerPost: 35 },
     video: { maxSizeMb: 4096, maxDurationSec: 600, codecs: ['h264', 'h265'], aspectRatios: ['9:16'] },
+    poll: null,
     // Unaudited apps may only post as PRIVATE. That is not publishing in any useful sense, so
     // publish is false until the audit passes rather than true with a footnote.
     supports: { ...ALL_FALSE, analytics: false },
@@ -221,12 +231,14 @@ export const PROVIDER_CAPABILITIES: Record<ProviderKey, ProviderCapabilities> = 
   x: {
     provider: 'x',
     displayName: 'X',
-    version: '2026.09.1',
-    asOf: '2026-09-11',
-    contentTypes: ['text', 'image', 'video', 'thread', 'link'],
+    version: '2026.09.2',
+    asOf: '2026-09-15',
+    contentTypes: ['text', 'image', 'video', 'thread', 'link', 'poll'],
     text: { maxChars: 280, maxHashtags: null, maxMentions: null },
     image: { maxSizeMb: 5, minWidthPx: 0, aspectRatios: ['16:9', '1:1', '4:5'], maxPerPost: 4 },
     video: { maxSizeMb: 512, maxDurationSec: 140, codecs: ['h264'], aspectRatios: ['16:9', '1:1', '9:16'] },
+    // v2 tweets `poll`: 2-4 options of 25 characters, the tweet text is the question, 5 minutes to 7 days.
+    poll: { minOptions: 2, maxOptions: 4, maxOptionChars: 25, maxQuestionChars: 280, durationsDays: [1, 2, 3, 4, 5, 6, 7] },
     // Discovery first, per spec section 9 item 5. Nothing is supported until access and cost
     // are approved - the paid API tiers are a cost decision, not an engineering one.
     supports: { ...ALL_FALSE },

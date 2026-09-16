@@ -27,7 +27,12 @@ import ComposerPublishing from './ComposerPublishing';
  * confirms is what the server will act on, not a client-side approximation of it.
  */
 
-const EMPTY_SETUP: SetupValues = { brand_id: '', campaign_id: '', title: '', destination_url: '', canonical_body: '', content_type: 'text', is_paid: false, has_offer: false };
+/** Blank options are dropped before the backend sees them, so "two filled, one empty" is a valid two-option poll. */
+function trimPoll(poll: NonNullable<SetupValues['poll']>): NonNullable<SetupValues['poll']> {
+  return { question: poll.question.trim(), options: poll.options.map((o) => o.trim()).filter((o) => o !== ''), durationDays: poll.durationDays };
+}
+
+const EMPTY_SETUP: SetupValues = { brand_id: '', campaign_id: '', title: '', destination_url: '', canonical_body: '', content_type: 'text', is_paid: false, has_offer: false, poll: null };
 
 export default function AdminContentComposerPage() {
   const { id: routeId } = useParams<{ id?: string }>();
@@ -80,6 +85,7 @@ export default function AdminContentComposerPage() {
       content_type: it.content_type,
       is_paid: Boolean(it.metadata?.isPaid),
       has_offer: Boolean(it.metadata?.hasOffer),
+      poll: (it.metadata?.poll as SetupValues['poll']) ?? null,
     }));
     if (it.scheduled_for) setScheduledFor(it.scheduled_for.slice(0, 16));
     const problemMap: Record<string, VariantProblem[]> = {};
@@ -150,11 +156,20 @@ export default function AdminContentComposerPage() {
         const created = await composer.createDraft({
           brand_id: setup.brand_id, campaign_id: setup.campaign_id || null, title: setup.title,
           canonical_body: setup.canonical_body, content_type: setup.content_type, is_paid: setup.is_paid, has_offer: setup.has_offer,
+          ...(setup.content_type === 'poll' && setup.poll ? { poll: trimPoll(setup.poll) } : {}),
         });
         say('success', 'Draft created.');
         navigate(`/admin/marketing/composer/${created.id}`, { replace: true });
       } else {
-        await composer.updateItem(item.id, { title: setup.title, canonical_body: setup.canonical_body, content_type: setup.content_type });
+        await composer.updateItem(item.id, {
+          title: setup.title, canonical_body: setup.canonical_body, content_type: setup.content_type,
+          // A poll post sends its poll. Any other type sends null ONLY when a poll is left over
+          // from a type change - sending null every time would count as a copy change and
+          // invalidate the variants on a title-only save.
+          ...(setup.content_type === 'poll'
+            ? { poll: setup.poll ? trimPoll(setup.poll) : null }
+            : item.metadata?.poll ? { poll: null } : {}),
+        });
         await reload(item.id);
         say('success', 'Draft saved. Regenerate variants if the message changed.');
       }
@@ -289,7 +304,7 @@ export default function AdminContentComposerPage() {
       </SectionCard>
 
       <SectionCard title="3. Preview" subtitle="Desktop and mobile, per network." icon="eye-line">
-        <ComposerPreview variants={variants} providers={providers} links={links} mediaCount={confirmation?.assets.length ?? 0} brandName={brand?.name ?? 'Brand'} />
+        <ComposerPreview variants={variants} providers={providers} links={links} mediaCount={confirmation?.assets.length ?? 0} brandName={brand?.name ?? 'Brand'} poll={setup.content_type === 'poll' ? setup.poll : null} />
       </SectionCard>
 
       <SectionCard title="4. Confirm" subtitle="What will go out, where, and when - in the brand's time and in UTC." icon="checkbox-circle-line">

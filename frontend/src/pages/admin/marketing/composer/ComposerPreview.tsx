@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { ContentVariant, ItemLink, ProviderKey, ProviderSummary } from '../../../../services/contentComposerApi';
+import type { Poll, ContentVariant, ItemLink, ProviderKey, ProviderSummary } from '../../../../services/contentComposerApi';
 
 /**
  * Step 8: how the post will look on each network, at desktop and phone width.
@@ -17,6 +17,8 @@ export interface ComposerPreviewProps {
   links: ItemLink[];
   mediaCount: number;
   brandName: string;
+  /** Drawn under the text as an un-voted poll when present. */
+  poll?: Poll | null;
 }
 
 type Device = 'desktop' | 'mobile';
@@ -29,7 +31,7 @@ const FOLD_CHARS: Partial<Record<ProviderKey, number>> = {
   meta_instagram: 125,
 };
 
-export default function ComposerPreview({ variants, providers, links, mediaCount, brandName }: ComposerPreviewProps) {
+export default function ComposerPreview({ variants, providers, links, mediaCount, brandName, poll = null }: ComposerPreviewProps) {
   const [device, setDevice] = useState<Device>('desktop');
   const [active, setActive] = useState<ProviderKey | null>(variants[0]?.provider ?? null);
 
@@ -77,6 +79,16 @@ export default function ComposerPreview({ variants, providers, links, mediaCount
           {shown}
           {folded && <span className="text-muted"> …more</span>}
         </div>
+
+        {poll && (
+          <div className="mt-2 border rounded p-2" data-testid="preview-poll">
+            <div className="fw-semibold small mb-1">{poll.question}</div>
+            {poll.options.filter((o) => o.trim() !== '').map((o, i) => (
+              <div key={i} className="border rounded px-2 py-1 mb-1 small bg-light">{o}</div>
+            ))}
+            <div className="text-muted" style={{ fontSize: '0.75rem' }}>0 votes · {poll.durationDays} day{poll.durationDays === 1 ? '' : 's'} left</div>
+          </div>
+        )}
 
         {mediaCount > 0 && (
           <div className="mt-2 d-flex gap-1">

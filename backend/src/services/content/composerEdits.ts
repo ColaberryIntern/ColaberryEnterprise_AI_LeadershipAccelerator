@@ -1,4 +1,5 @@
 import { ContentItem, ContentItemMedia, ContentVariant } from '../../models';
+import type { PollSpec } from './pollSpec';
 import type { ApprovalSnapshot, InvalidationResult } from './contentWorkflow';
 import { assertWritable, recordEdit, WorkflowError, type Actor } from './contentWorkflowService';
 
@@ -81,6 +82,8 @@ export interface DraftPatch {
   canonical_body?: string;
   content_type?: string;
   scheduled_for?: string | null;
+  /** Null clears the poll; absent leaves it; a value replaces it. */
+  poll?: PollSpec | null;
 }
 
 /** PATCH /api/admin/content/:id, as a recorded edit. */
@@ -89,14 +92,17 @@ export async function updateItemDraft(itemId: string, patch: DraftPatch, actor: 
   if (!item) throw new WorkflowError('Content item not found', 404, 'NotFound');
   assertWritable(item);
 
-  // A body or type change invalidates every variant's verdict; a title or time change
+  // A body, type or poll change invalidates every variant's verdict; a title or time change
   // invalidates none (the platform checks copy, not titles), so nothing is reset for those.
-  const touchesCopy = patch.canonical_body !== undefined || patch.content_type !== undefined;
+  const touchesCopy = patch.canonical_body !== undefined || patch.content_type !== undefined || patch.poll !== undefined;
   return withEditRecorded(itemId, actor, touchesCopy ? 'all' : [], async () => {
-    const { scheduled_for, ...rest } = patch;
+    const { scheduled_for, poll, ...rest } = patch;
+    const otherMetadata = Object.fromEntries(Object.entries((item.metadata ?? {}) as Record<string, unknown>).filter(([k]) => k !== 'poll'));
     await item.update({
       ...rest,
       ...(scheduled_for !== undefined ? { scheduled_for: scheduled_for ? new Date(scheduled_for) : null } : {}),
+      // Null clears; absent keeps; a value replaces. Other metadata keys are untouched.
+      ...(poll !== undefined ? { metadata: poll === null ? otherMetadata : { ...otherMetadata, poll } } : {}),
     });
     return item;
   });

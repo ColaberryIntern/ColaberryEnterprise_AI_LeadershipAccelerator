@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Brand } from '../../../../services/adminBrandApi';
-import type { ContentType } from '../../../../services/contentComposerApi';
+import type { ContentType, Poll } from '../../../../services/contentComposerApi';
+import ComposerPollEditor, { EMPTY_POLL } from './ComposerPollEditor';
 
 /**
  * Steps 1, 3 and 4: the choices that fix WHAT is being said and FOR WHOM.
@@ -26,6 +27,8 @@ export interface SetupValues {
   content_type: ContentType;
   is_paid: boolean;
   has_offer: boolean;
+  /** Only meaningful when content_type is `poll`. */
+  poll: Poll | null;
 }
 
 export interface ComposerSetupProps {
@@ -45,7 +48,7 @@ export interface ComposerSetupProps {
   draftNotes?: { placeholders: string[]; unverifiedClaims: string[] } | null;
 }
 
-const CONTENT_TYPES: ContentType[] = ['text', 'image', 'video', 'carousel', 'thread', 'link'];
+const CONTENT_TYPES: ContentType[] = ['text', 'image', 'video', 'carousel', 'thread', 'link', 'poll'];
 /** Types the validator refuses without at least one media item; attach one under Channels. */
 const MEDIA_TYPES: ReadonlySet<ContentType> = new Set<ContentType>(['image', 'video', 'carousel']);
 
@@ -144,6 +147,11 @@ export default function ComposerSetup({
             )}
           </div>
           <textarea id="composer-body" className="form-control form-control-sm" rows={5} value={values.canonical_body} disabled={busy} maxLength={20000} onChange={(e) => set('canonical_body', e.target.value)} />
+          {values.content_type === 'poll' && (
+            <div className="mt-2">
+              <ComposerPollEditor value={values.poll ?? EMPTY_POLL} busy={busy} onChange={(poll) => onChange({ ...values, poll })} />
+            </div>
+          )}
           {onDraftMessage && !values.brand_id && (
             <div className="form-text">Choose a brand first, so the draft knows who is speaking.</div>
           )}

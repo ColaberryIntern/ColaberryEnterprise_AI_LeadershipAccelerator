@@ -3,6 +3,7 @@ import { commentaryExceedsLimit, escapeLittleText, COMMENTARY_MAX_CHARS } from '
 import { headerValue, isPermanentStatus, messageOf, providerCodeOf } from './linkedInErrors';
 import type { LinkedInHttp } from './linkedInHttp';
 import { LINKEDIN_IMAGE_MIME_TYPES, uploadImages, type UploadedImage } from './linkedInImages';
+import { pollProblems } from '../content/pollSpec';
 import {
   AdapterUnsupportedError,
   ProviderPublishError,
@@ -44,6 +45,8 @@ import {
  *      Images API (linkedInImages.ts) and the post carries the resulting URN. One image is
  *      `content.media`; two or more is `content.multiImage`. Different shapes, and the wrong
  *      one is a 422.
+ *   5. A poll is `content.poll` with the duration as a NAMED value (`THREE_DAYS`), not a number,
+ *      and `content` is one-of: a poll post cannot also carry media. Both refused at validate.
  *
  * NO TOKEN IS STORED, CACHED OR LOGGED HERE. The adapter is constructed with a function that
  * fetches the account's access token on demand (`channelAccountService.getAccessToken`, which
@@ -138,6 +141,14 @@ export class LinkedInAdapter implements SocialProviderAdapter {
     // Everything about the attachments that can be known without reading them. Each of these
     // would otherwise fail on step one or two of the upload, after the text had been accepted.
     const caps = getProviderCapabilities(this.provider);
+    if (content.poll) {
+      if (!caps.poll) {
+        reasons.push(`${caps.displayName} does not accept polls.`);
+      } else {
+        reasons.push(...pollProblems(caps.displayName, caps.poll, content.poll));
+        if (content.media.length > 0) reasons.push('A LinkedIn poll cannot carry media; remove the attachment or the poll.');
+      }
+    }
     const videos = content.media.filter((m) => m.mimeType.startsWith('video/'));
     if (videos.length > 0) {
       // Stated rather than silently dropped: a post that published without its video would look
@@ -205,7 +216,7 @@ export class LinkedInAdapter implements SocialProviderAdapter {
         distribution: { feedDistribution: 'MAIN_FEED', targetEntities: [], thirdPartyDistributionChannels: [] },
         lifecycleState: 'PUBLISHED',
         isReshareDisabledByAuthor: false,
-        ...postContent(images),
+        ...postContent(images, content.poll),
       },
     });
 
@@ -253,6 +264,7 @@ export class LinkedInAdapter implements SocialProviderAdapter {
         had_disclosure: content.disclosureText !== null,
         media_count: content.media.length,
         image_urns: images.map((i) => i.urn),
+        poll_options: content.poll?.options.length ?? 0,
       },
     };
   }
@@ -278,11 +290,22 @@ export class LinkedInAdapter implements SocialProviderAdapter {
   }
 }
 
+/** LinkedIn names its voting windows; the composer stores days. validate() refuses any other value. */
+const POLL_DURATION: Record<number, string> = { 1: 'ONE_DAY', 3: 'THREE_DAYS', 7: 'SEVEN_DAYS', 14: 'FOURTEEN_DAYS' };
+
 /**
  * One image and several images are different shapes in the Posts API, and sending a
- * one-element `multiImage` is a 422. Empty means a text post: no `content` key at all.
+ * one-element `multiImage` is a 422. A poll is a third shape. Empty means a text post: no
+ * `content` key at all.
  */
-function postContent(images: UploadedImage[]): Record<string, unknown> {
+function postContent(images: UploadedImage[], poll: PublishPayload['poll']): Record<string, unknown> {
+  if (poll) {
+    const duration = POLL_DURATION[poll.durationDays];
+    // Unreachable through the worker (validate runs first), but a direct caller must not get a
+    // silently different poll than the one the operator set.
+    if (!duration) throw new ProviderPublishError(`LinkedIn polls run for 1, 3, 7 or 14 days; ${poll.durationDays} is not offered.`, true, 'PollDurationUnsupported', null);
+    return { content: { poll: { question: poll.question, options: poll.options.map((text) => ({ text })), settings: { duration } } } };
+  }
   if (images.length === 0) return {};
   const toRef = (i: UploadedImage) => (i.altText ? { id: i.urn, altText: i.altText } : { id: i.urn });
   if (images.length === 1) return { content: { media: toRef(images[0]) } };

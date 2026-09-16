@@ -87,7 +87,7 @@ describe('when LIVE_CONNECTORS gains a provider', () => {
     });
     const receipt = await adapter.publish({
       jobId: 'j', provider: 'linkedin_member', contentItemId: 'ci', variantId: 'cv',
-      accountId: 'acc-1', text: 'hello', mediaRefs: [], media: [], linkUrl: null, disclosureText: null,
+      accountId: 'acc-1', text: 'hello', mediaRefs: [], media: [], poll: null, linkUrl: null, disclosureText: null,
       scheduledFor: '2026-09-13T12:00:00.000Z', contentRevision: 1,
     }, 'idem-1');
 

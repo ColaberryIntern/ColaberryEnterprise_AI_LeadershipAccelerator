@@ -56,6 +56,13 @@ export interface PublishMedia {
   byteSize: number | null;
 }
 
+/** Mirrors content/pollSpec.ts PollSpec; declared here so the adapter contract has no import into content/. */
+export interface PublishPoll {
+  question: string;
+  options: string[];
+  durationDays: number;
+}
+
 export interface PublishPayload {
   jobId: string;
   provider: ProviderKey;
@@ -71,6 +78,8 @@ export interface PublishPayload {
   mediaRefs: string[];
   /** The same attachments with the fields an upload step needs. */
   media: PublishMedia[];
+  /** Present when the item is a poll post: the question, 2-4 options, and the voting window. */
+  poll: PublishPoll | null;
   linkUrl: string | null;
   disclosureText: string | null;
   /** The UTC instant the job was due. */
