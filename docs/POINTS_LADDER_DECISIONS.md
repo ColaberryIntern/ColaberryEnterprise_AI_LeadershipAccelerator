@@ -31,6 +31,26 @@ Decided by Ali on 2026-09-16 against `docs/POINTS_LADDER_AUDIT_2026-09-16.md` §
 - **Project complete:** a published Student Build Pipeline plan in which every plan story, including STORY-000, is `verified` under the Build Verification Contract. Latched (first-write-wins) on the project.
 - **Certification approved:** a `student_certifications` row the student created by upload, that a staff member approved. Pending and rejected rows do not count.
 
+## Phase 4 dry run — production, 2026-09-16 14:31 UTC (read-only)
+
+485 students assessed. The curriculum carries **89 graded cards** over 12 weeks (evaluation 12, implementation_task 12, knowledge_check 12, prompt_lab 12, reflection 12, architect_mindset 12, claude_studio 12, setup_lab 5).
+
+| | Before (legacy, mapped) | After (latched) |
+|---|---|---|
+| entry | 456 | 456 |
+| AI Builder I | 29 | 27 |
+| AI Builder II | 0 | 2 (Firas: 2 complete projects; Quincy Nkwain Ninying: 2 complete projects) |
+
+- **Curriculum complete: 0 students.** Among the 10 students who have done ≥30% of graded cards, every graded type is completed by 5–7 of 10 — except **Claude Studio at 1.1 of 10**. Farhat Beig has completed **77 of 89 graded cards, and her 12 missing cards are exactly the 12 Claude Studio cards** (one per week). Quincy is at 87 of 89, short only weeks 11–12.
+- Projects: 7 students hold at least one fully verified build. Farhat: *AI Support Workflow Assistant* 8/8 ✓, *Kashmir Craft AI Order Assistant* 14/15. Swati Raman: *SupplyMind AI* 16/16 ✓.
+- 11 students hold a partially verified build and would move on their next verified story.
+
+### D8 — pending: does Claude Studio count toward "curriculum complete"?
+
+- **(A) No — treat Claude Studio as enrichment for the milestone** (recommended). One registry flag; the other seven graded types stay required. Effect: Farhat → AI Builder II today (curriculum ✓ + 1 project), AI Builder III when Kashmir Craft's last story verifies; Quincy → AI Builder III.
+- **(B) Yes — it counts.** Nobody is Program Graduate until they complete twelve Studios; Farhat stays AI Builder I until then.
+- **(C) It counts from a date** — required for cohorts that started after the Studios were published, enrichment for earlier ones.
+
 ## Invariants kept
 
 Points alone never exceed AI Enabled. Free accounts have no projects and no certification path, so they cannot reach a build band. Every build rung traces to verified commits or a staff approval. Rungs never decrease automatically.
