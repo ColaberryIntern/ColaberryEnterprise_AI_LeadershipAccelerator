@@ -498,12 +498,57 @@ describe('getAgentDetail', () => {
       ]);
     });
 
-    it("honesty boundary: [], and AiAgent.findAll is never called, when this agent has no module set (most agents)", async () => {
+    it("honesty boundary: [] when this agent has no module set (most agents) — the module-based sibling query itself is skipped (AiAgent.findAll is still called once, for the separate owned_behaviors query below, which has no module gate)", async () => {
       // reeseAgent fixture has no `module` field at all.
       const result = await getAgentDetail('agent-1');
 
       expect(result!.related_tasks).toEqual([]);
-      expect(mockAgentFindAll).not.toHaveBeenCalled();
+      expect(mockAgentFindAll).not.toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ module: expect.anything() }) }));
+    });
+  });
+
+  // AI Employee Consolidation Program (2026-09-15/16) — real ownership via
+  // parent_agent_id, distinct from related_tasks' same-module inference above.
+  describe('owned_behaviors', () => {
+    it("happy path: returns real AiAgent rows this agent OWNS via parent_agent_id, ordered by agent_name", async () => {
+      const ownedRow = {
+        id: 'director-id', agent_name: 'WorkforceCurriculumDirector', record_kind: 'behavior',
+        description: 'Flags curriculum gaps daily.', trigger_type: 'cron', schedule: '10 6 * * *',
+        enabled: true, migration_status: 'absorbed',
+      };
+      mockAgentFindAll.mockResolvedValue([ownedRow]);
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(mockAgentFindAll).toHaveBeenCalledWith({
+        where: { parent_agent_id: 'agent-1' },
+        order: [['agent_name', 'ASC']],
+      });
+      expect(result!.owned_behaviors).toEqual([
+        {
+          id: 'director-id', agent_name: 'WorkforceCurriculumDirector', record_kind: 'behavior',
+          description: 'Flags curriculum gaps daily.', trigger_type: 'cron', schedule: '10 6 * * *',
+          enabled: true, migration_status: 'absorbed',
+        },
+      ]);
+    });
+
+    it("honesty boundary: [] when nothing has been absorbed under this agent yet (the entire fleet on day one except Dara) — never gated on module, unlike related_tasks", async () => {
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.owned_behaviors).toEqual([]);
+    });
+
+    it('honesty path: record_kind and migration_status read null honestly for a row the program has not classified, never a fabricated default', async () => {
+      mockAgentFindAll.mockResolvedValue([{
+        id: 'unclassified-id', agent_name: 'SomeUnclassifiedAgent', record_kind: null,
+        description: null, trigger_type: null, schedule: null, enabled: true, migration_status: null,
+      }]);
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.owned_behaviors[0].record_kind).toBeNull();
+      expect(result!.owned_behaviors[0].migration_status).toBeNull();
     });
   });
 

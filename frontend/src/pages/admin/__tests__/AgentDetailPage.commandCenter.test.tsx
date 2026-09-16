@@ -76,6 +76,7 @@ const DETAIL: AgentDetail = {
   ],
   ticket_breakdown: [],
   related_tasks: [],
+  owned_behaviors: [],
   persona_version_history: [],
   cost_summary: { cost_usd: 0.42, runs: 38 },
   authorization_summary: { window_days: 30, total: 38, allow: 34, approval: 3, block: 1, enforced_count: 0 },

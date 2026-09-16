@@ -4,6 +4,9 @@ import { Op } from 'sequelize';
 import { seedReeseIdentity } from './reese/reeseIdentitySeed';
 import { seedTicketCreatorIdentities } from './agentBlueprint/ticketCreatorIdentitySeed';
 import { REESE_PERSONA_BLOCK } from './reese/reeseSystemPrompt';
+import { seedDaraIdentity } from './curriculum/daraIdentitySeed';
+import { DARA_PERSONA_BLOCK } from './curriculum/daraPersona';
+import { repointCurriculumLegacyBehaviors } from './curriculum/repointLegacyBehaviors';
 import { recordPersonaVersionChangeIfNeeded } from './agentPersonaVersionHistoryService';
 import { classifyNewAgentAutonomyLevel, maybeReclassifyAutonomyLevel } from './agentAutonomyReclassificationService';
 
@@ -2450,6 +2453,84 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     tools_granted: ['respond_to_dm', 'read_learner_context', 'read_student_success_snapshot', 'assess_student_health'],
     persona_version: '2026-08-06',
   },
+  // --- AI Employee Consolidation Program, Employee #1: Curriculum, Learning
+  // & Certification (Dara) --- Built to Reese Employee Standard 2.0.
+  // `enabled: false` per the program's governance checklist (mirrors
+  // build-platform-agent/SKILL.md's own rule: "new agents seed with
+  // AiAgent.enabled: false by default") — a human enables this row only
+  // after Phase 5 shadow validation and Phase 6 production verification, not
+  // automatically at seed time. `tools_granted` matches
+  // TOOL_CAPABILITY_DESIGN_v1.md's B3.2 design exactly — running the real
+  // classifier (agentCapabilityClassifier.ts) against this array resolves to
+  // `act_audited` (verified by an independent plan audit before this was
+  // written, not asserted).
+  {
+    agent_name: 'Dara',
+    agent_type: 'ai_employee',
+    module: 'curriculum',
+    source_file: 'backend/src/services/curriculum/',
+    trigger_type: 'event_driven',
+    schedule: '',
+    category: 'curriculum',
+    description:
+      'Dara — the Curriculum, Learning & Certification Lead: owns the integrity, ' +
+      'quality, and certification-readiness of what Colaberry teaches. First release ' +
+      'absorbs 4 real, dormant legacy behaviors (2 daily gap/readiness flags, a ' +
+      'read-only curriculum integrity scan, video-link health monitoring) — zero ' +
+      'outbound communication, zero LLM calls. Reports directly to Swati Raman. See ' +
+      'docs/architecture/ai-workforce-management/employees/curriculum/ for the full ' +
+      'charter, personality profile, and accountability contract (all approved by Ali).',
+    config: {},
+    enabled: false,
+    system_prompt: DARA_PERSONA_BLOCK,
+    tools_granted: ['flag_curriculum_content_gaps', 'flag_certification_readiness', 'scan_curriculum_integrity', 'monitor_curriculum_video_health'],
+    persona_version: '2026-09-16',
+  },
+  // --- DaraPresenceHeartbeat: Dara's own real, tracked always-online cron ---
+  // Same real mechanism as ReesePresenceHeartbeat above (generalized,
+  // agentBlueprint/agentPresenceHeartbeat.ts) — registered from day one
+  // (unlike ReesePresenceHeartbeat, which ran untracked for months before
+  // this program found and closed that exact gap, per REESE_STANDARD_AUDIT.md
+  // gap 10 and build-platform-agent/SKILL.md's own worked example).
+  {
+    agent_name: 'DaraPresenceHeartbeat',
+    agent_type: 'ai_employee',
+    module: 'curriculum',
+    source_file: 'backend/src/services/curriculum/daraPresenceHeartbeat.ts',
+    trigger_type: 'cron',
+    schedule: '*/1 * * * *',
+    category: 'curriculum',
+    description:
+      'Touches only Dara\'s own CommunityMember.last_active_at every minute, the ' +
+      'same generic mechanism Reese\'s own heartbeat uses ' +
+      '(agentBlueprint/agentPresenceHeartbeat.ts), so the People panel reads Dara ' +
+      'as online with no new real-time infrastructure. No LLM call, no message ' +
+      'sent, no ticket.',
+    enabled: true,
+  },
+  // --- CurriculumVideoLinkHealth: absorbed by Dara (behavior, not identity) ---
+  // Was a real, already-running cron (schedulerService.ts, env-gated by
+  // CURRICULUM_VIDEO_HEALTH_ENABLED) with NO AGENT_REGISTRY row at all — no
+  // kill switch, no run_count, invisible to cronHealthAlertService. Same
+  // precedent as ReesePresenceHeartbeat above: register the tracking row,
+  // change zero real behavior. `parent_agent_id` set to Dara's id by
+  // repointCurriculumLegacyBehaviors() (curriculum/repointLegacyBehaviors.ts),
+  // called after this row is created.
+  {
+    agent_name: 'CurriculumVideoLinkHealth',
+    agent_type: 'ai_employee',
+    module: 'curriculum',
+    source_file: 'backend/src/services/curriculumHealth/videoLinkHealthService.ts',
+    trigger_type: 'cron',
+    schedule: '20 6 * * *',
+    category: 'curriculum',
+    description:
+      'Real YouTube Data API check of curriculum videos — flags breakage via ' +
+      'alertService.ts, never edits a curriculum card directly. Env-gated OFF by ' +
+      'default (CURRICULUM_VIDEO_HEALTH_ENABLED); registering this row changes no ' +
+      'behavior, it only gives the existing cron a kill switch and observability.',
+    enabled: true,
+  },
   // --- SBP GitHub: repository-invitation sweep ---
   // Registered rather than left untracked for two reasons. It gives an operator
   // a pause switch from Admin > Agents with no redeploy; and, more importantly,
@@ -3050,6 +3131,24 @@ export async function seedAgentRegistry(): Promise<void> {
     await seedReeseIdentity();
   } catch (err: any) {
     console.warn('[AI Ops] Reese identity seed failed:', err?.message);
+  }
+
+  // AI Employee Consolidation Program, Employee #1 (Dara) — same fail-open
+  // posture: her identity-seed failure must never block boot or any other
+  // agent's identity seed.
+  try {
+    await seedDaraIdentity();
+  } catch (err: any) {
+    console.warn('[AI Ops] Dara identity seed failed:', err?.message);
+  }
+
+  // Same fail-open posture — re-pointing the 4 absorbed legacy rows onto
+  // Dara's identity must never block boot. Runs after seedDaraIdentity() so
+  // her AiAgent id definitely exists.
+  try {
+    await repointCurriculumLegacyBehaviors();
+  } catch (err: any) {
+    console.warn('[AI Ops] repointCurriculumLegacyBehaviors failed:', err?.message);
   }
 
   // Agent Registration Stage 1 — identity-only registrations for the 5

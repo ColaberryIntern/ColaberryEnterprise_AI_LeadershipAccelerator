@@ -114,6 +114,14 @@ import { instrumentCronJob } from './cronInstrumentation';
 const UNINSTRUMENTED_AGENTS = new Set([
   'AutonomousRequirementExpansion',
   'ProposalCleanupService',
+  // AI Employee Consolidation Program, Employee #1 (Curriculum/Dara), Phase 4,
+  // Risk R6 fix — confirmed via BASELINE_2026-09-15.md and a direct read of
+  // workforce/directorActions.ts's runDomainFlag(): neither Director's runner
+  // touches its own AiAgent row (no self-tracking, no other wrapper), so both
+  // ran bare — a silent failure looked identical to "nothing to flag" because
+  // NEITHER recorded anything either way. Absorbed by Dara (agentRegistrySeed.ts).
+  'WorkforceCurriculumDirector',
+  'WorkforceCertificationDirector',
 ]);
 
 // ─── Live Task Registry ─────────────────────────────────────────────────────

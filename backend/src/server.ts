@@ -80,6 +80,7 @@ import { ensureAiAgentReportsToSchema } from './db/ensureAiAgentReportsToSchema'
 import { ensureAiAgentHierarchySchema } from './db/ensureAiAgentHierarchySchema';
 import { ensureAiAgentAutonomyLevelSchema } from './db/ensureAiAgentAutonomyLevelSchema';
 import { ensureAiAgentAutonomySourceSchema } from './db/ensureAiAgentAutonomySourceSchema';
+import { ensureAiAgentConsolidationSchema } from './db/ensureAiAgentConsolidationSchema';
 import { ensureAgentPersonaVersionHistorySchema } from './db/ensureAgentPersonaVersionHistorySchema';
 import { ensureAgentRoleCharterSchema } from './db/ensureAgentRoleCharterSchema';
 import { ensureManagerDirectiveSchema } from './db/ensureManagerDirectiveSchema';
@@ -2787,6 +2788,10 @@ async function start(): Promise<void> {
   // ('auto'|'manual'|null), distinguishing a classifier-set level from a real human
   // decision. Additive, idempotent, no flag.
   await ensureAiAgentAutonomySourceSchema();
+  // AI Employee Consolidation Program, Phase 4 — record_kind/parent_agent_id/
+  // migration_status, the program's legacy-item-to-employee ownership fields.
+  // Additive, idempotent, no flag.
+  await ensureAiAgentConsolidationSchema();
   // Trust Contract Phase 1 — real history behind AiAgent.persona_version,
   // written by seedAgentRegistry() (below) whenever a registry entry's
   // version genuinely changes. Additive, idempotent, no flag. Must run
