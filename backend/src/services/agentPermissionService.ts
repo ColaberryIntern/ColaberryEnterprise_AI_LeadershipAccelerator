@@ -85,9 +85,17 @@ const AGENT_PERMISSIONS: Record<string, AgentPermission> = {
   // act on the resulting row. Marketing is the sole outward-facing director,
   // kept at suggest_only so a human reviews every content idea before it ships.
   WorkforceStudentSuccessDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_student_success'], requiresEvaluateSend: false },
-  WorkforceCurriculumDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_curriculum'], requiresEvaluateSend: false },
   WorkforceCareerDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_career'], requiresEvaluateSend: false },
-  WorkforceCertificationDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_certification'], requiresEvaluateSend: false },
+  // AI Employee Consolidation Program (2026-09-16) — Ali, live: "I want the AI
+  // Agent to own the process. If Dara is down, that means no one is checking
+  // the curriculum." WorkforceCurriculumDirector/WorkforceCertificationDirector's
+  // own entries are removed (not merely superseded) — directorActions.ts now
+  // passes 'Dara' as the gating/authorizing identity for both real writes, so
+  // an entry under the legacy names would be dead code, not a fallback. Combines
+  // both directors' real scope (curriculum content gaps + certification
+  // readiness) under Dara's own identity — the exact set her AGENT_REGISTRY
+  // tools_granted array and TOOL_CAPABILITY_DESIGN_v1.md already describe.
+  Dara: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_curriculum', 'flag_certification'], requiresEvaluateSend: false },
   WorkforceFinanceDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_finance'], requiresEvaluateSend: false },
   WorkforceOperationsDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_operations'], requiresEvaluateSend: false },
   WorkforceCommunityDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_community'], requiresEvaluateSend: false },

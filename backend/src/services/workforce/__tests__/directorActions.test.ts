@@ -27,6 +27,8 @@ import { getInstrumentedOpenAI } from '../../openaiInstrumented';
 import { runDirectorWrite, runDirectorProposal } from '../workforceAgentRuntime';
 import {
   runStudentSuccessDirector,
+  runCurriculumDirector,
+  runCertificationDirector,
   runTechnologyDirector,
   runResearchDirector,
   runMarketingDirector,
@@ -98,6 +100,38 @@ describe('runStudentSuccessDirector (domain-flag directors)', () => {
 
     taskFindOne.mockResolvedValue({ id: 'existing-task-1' });
     await expect(call.alreadyExists()).resolves.toBe('existing-task-1');
+  });
+});
+
+// AI Employee Consolidation Program (2026-09-16) — Ali, live: "I want the AI
+// Agent to own the process. If Dara is down, that means no one is checking
+// the curriculum." Both curriculum-domain directors gate/authorize/log under
+// Dara's own identity now, not the legacy WorkforceCurriculumDirector/
+// WorkforceCertificationDirector names — pinned here so a future refactor
+// can't silently regress back to the old, parallel-identity shape.
+describe('runCurriculumDirector / runCertificationDirector (owned by Dara, not the legacy director identities)', () => {
+  it('runCurriculumDirector passes agentName: "Dara" to the runtime, not "WorkforceCurriculumDirector"', async () => {
+    runDirs.mockReturnValue([{ domain: 'curriculum', recommendations: [rec({ key: 'curriculum.gap', domain: 'curriculum', title: 'Fix a curriculum gap' })] }]);
+
+    await runCurriculumDirector();
+
+    expect(write).toHaveBeenCalledTimes(1);
+    const call = write.mock.calls[0][0];
+    expect(call.agentName).toBe('Dara');
+    expect(call.slug).toBe('curriculum');
+    expect(call.operation).toBe('flag_curriculum');
+  });
+
+  it('runCertificationDirector passes agentName: "Dara" to the runtime, not "WorkforceCertificationDirector"', async () => {
+    runDirs.mockReturnValue([{ domain: 'certification', recommendations: [rec({ key: 'cert.readiness', domain: 'certification', title: 'Certification readiness risk' })] }]);
+
+    await runCertificationDirector();
+
+    expect(write).toHaveBeenCalledTimes(1);
+    const call = write.mock.calls[0][0];
+    expect(call.agentName).toBe('Dara');
+    expect(call.slug).toBe('certification');
+    expect(call.operation).toBe('flag_certification');
   });
 });
 

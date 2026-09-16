@@ -119,9 +119,12 @@ const UNINSTRUMENTED_AGENTS = new Set([
   // workforce/directorActions.ts's runDomainFlag(): neither Director's runner
   // touches its own AiAgent row (no self-tracking, no other wrapper), so both
   // ran bare — a silent failure looked identical to "nothing to flag" because
-  // NEITHER recorded anything either way. Absorbed by Dara (agentRegistrySeed.ts).
-  'WorkforceCurriculumDirector',
-  'WorkforceCertificationDirector',
+  // NEITHER recorded anything either way. 2026-09-16 — both cron entries now
+  // gate/track under 'Dara' directly (not the legacy names), per Ali's "I want
+  // the AI Agent to own the process" — one entry here covers both schedules
+  // (trackTask()'s own per-agent task LIST already supports multiple crons
+  // sharing one agentName; this is not a new pattern).
+  'Dara',
 ]);
 
 // ─── Live Task Registry ─────────────────────────────────────────────────────
@@ -347,9 +350,18 @@ export const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   // workforceAgentRuntime gate until turned on. Marketing is deliberately NOT
   // here — it is manual-trigger only, invoked from the admin dashboard.
   { agentName: 'WorkforceStudentSuccessDirector', hardcodedSchedule: '0 6 * * *', runner: async () => { const { runStudentSuccessDirector } = await import('./workforce/directorActions'); return runStudentSuccessDirector(); }, label: 'AI Workforce: Student Success director' },
-  { agentName: 'WorkforceCurriculumDirector', hardcodedSchedule: '10 6 * * *', runner: async () => { const { runCurriculumDirector } = await import('./workforce/directorActions'); return runCurriculumDirector(); }, label: 'AI Workforce: Curriculum director' },
+  // AI Employee Consolidation Program (2026-09-16) — agentName is 'Dara' for
+  // both entries below, not the legacy WorkforceCurriculumDirector/
+  // WorkforceCertificationDirector names: Ali, live, "I want the AI Agent to
+  // own the process. If Dara is down, that means no one is checking the
+  // curriculum." This is the OUTER cron-tracking layer (run_count/last_run_at
+  // via instrumentCronJob, see UNINSTRUMENTED_AGENTS below) — the INNER
+  // gate()/authorization check inside directorActions.ts's runDomainFlag()
+  // independently also resolves 'Dara', so disabling her AiAgent row blocks
+  // this at both layers, not just one.
+  { agentName: 'Dara', hardcodedSchedule: '10 6 * * *', runner: async () => { const { runCurriculumDirector } = await import('./workforce/directorActions'); return runCurriculumDirector(); }, label: 'AI Workforce: Curriculum director (Dara)' },
   { agentName: 'WorkforceCareerDirector', hardcodedSchedule: '20 6 * * *', runner: async () => { const { runCareerDirector } = await import('./workforce/directorActions'); return runCareerDirector(); }, label: 'AI Workforce: Career director' },
-  { agentName: 'WorkforceCertificationDirector', hardcodedSchedule: '30 6 * * *', runner: async () => { const { runCertificationDirector } = await import('./workforce/directorActions'); return runCertificationDirector(); }, label: 'AI Workforce: Certification director' },
+  { agentName: 'Dara', hardcodedSchedule: '30 6 * * *', runner: async () => { const { runCertificationDirector } = await import('./workforce/directorActions'); return runCertificationDirector(); }, label: 'AI Workforce: Certification director (Dara)' },
   { agentName: 'WorkforceFinanceDirector', hardcodedSchedule: '40 6 * * *', runner: async () => { const { runFinanceDirector } = await import('./workforce/directorActions'); return runFinanceDirector(); }, label: 'AI Workforce: Finance director' },
   { agentName: 'WorkforceOperationsDirector', hardcodedSchedule: '*/15 * * * *', runner: async () => { const { runOperationsDirector } = await import('./workforce/directorActions'); return runOperationsDirector(); }, label: 'AI Workforce: Operations director' },
   { agentName: 'WorkforceCommunityDirector', hardcodedSchedule: '50 6 * * *', runner: async () => { const { runCommunityDirector } = await import('./workforce/directorActions'); return runCommunityDirector(); }, label: 'AI Workforce: Community director' },
