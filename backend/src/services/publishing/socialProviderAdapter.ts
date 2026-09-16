@@ -54,6 +54,8 @@ export interface PublishMedia {
   mimeType: string;
   altText: string | null;
   byteSize: number | null;
+  /** Videos only, as the upload step read it from the file; null when unknown. */
+  durationMs?: number | null;
 }
 
 /** Mirrors content/pollSpec.ts PollSpec; declared here so the adapter contract has no import into content/. */

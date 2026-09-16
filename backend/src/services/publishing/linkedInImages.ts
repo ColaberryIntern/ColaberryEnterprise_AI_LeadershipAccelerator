@@ -24,8 +24,8 @@ import { ProviderPublishError, type PublishMedia } from './socialProviderAdapter
  * table of the two differences, so a fix to the image flow is a fix to the document flow.
  *
  * What is NOT here: video. LinkedIn's Videos API is a different, chunked protocol
- * (initialize with a byte count, upload parts, finalize with ETags). The adapter refuses video
- * at validation so nothing reaches this file expecting it to cope.
+ * (initialize with a byte count, upload parts, finalize with ETags) and lives in
+ * linkedInVideo.ts, which shares `restHeaders` and `refuse` from here.
  */
 
 export type UploadKind = 'image' | 'document';
@@ -61,7 +61,7 @@ export interface UploadImagesInput {
   sleep: (ms: number) => Promise<void>;
 }
 
-function restHeaders(token: string, apiVersion: string): Record<string, string> {
+export function restHeaders(token: string, apiVersion: string): Record<string, string> {
   return {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
@@ -70,10 +70,14 @@ function restHeaders(token: string, apiVersion: string): Record<string, string> 
   };
 }
 
-/** `fallbackCode` is the dead-letter reason when LinkedIn's body carries no code of its own (a gateway page, an empty 502). */
-function refuse(step: string, fallbackCode: string, status: number, body: unknown, ref: string): never {
+/**
+ * `fallbackCode` is the dead-letter reason when LinkedIn's body carries no code of its own (a
+ * gateway page, an empty 502); `noun` names what was being sent, so a video's dead-letter row
+ * does not say "image".
+ */
+export function refuse(step: string, fallbackCode: string, status: number, body: unknown, ref: string, noun: UploadKind | 'video' = 'image'): never {
   throw new ProviderPublishError(
-    messageOf(body, `LinkedIn refused the image ${step} for ${ref} (HTTP ${status}).`),
+    messageOf(body, `LinkedIn refused the ${noun} ${step} for ${ref} (HTTP ${status}).`),
     isPermanentStatus(status),
     providerCodeOf(body) ?? fallbackCode,
     status,
@@ -118,7 +122,7 @@ async function uploadOne(input: UploadImagesInput, item: PublishMedia, kind: Upl
     headers: restHeaders(token, apiVersion),
     body: { initializeUploadRequest: { owner } },
   });
-  if (init.status >= 400) refuse('initialize', `${api.codePrefix}InitializeFailed`, init.status, init.body, item.ref);
+  if (init.status >= 400) refuse('initialize', `${api.codePrefix}InitializeFailed`, init.status, init.body, item.ref, kind);
   const value = (init.body as { value?: Record<string, unknown> } | null)?.value;
   const uploadUrl = typeof value?.uploadUrl === 'string' ? value.uploadUrl : null;
   const urn = typeof value?.[api.urnField] === 'string' ? (value[api.urnField] as string) : null;
@@ -141,13 +145,13 @@ async function uploadOne(input: UploadImagesInput, item: PublishMedia, kind: Upl
     body: bytes,
     timeoutMs: UPLOAD_TIMEOUT_MS,
   });
-  if (put.status >= 400) refuse('upload', `${api.codePrefix}UploadFailed`, put.status, put.body, item.ref);
+  if (put.status >= 400) refuse('upload', `${api.codePrefix}UploadFailed`, put.status, put.body, item.ref, kind);
 
   // Step 3: wait for AVAILABLE, boundedly.
   const statusUrl = `${api.url}/${encodeURIComponent(urn)}`;
   for (let attempt = 1; attempt <= PROCESSING_POLL.attempts; attempt += 1) {
     const check = await http({ method: 'GET', url: statusUrl, headers: restHeaders(token, apiVersion) });
-    if (check.status >= 400) refuse('status check', `${api.codePrefix}StatusCheckFailed`, check.status, check.body, item.ref);
+    if (check.status >= 400) refuse('status check', `${api.codePrefix}StatusCheckFailed`, check.status, check.body, item.ref, kind);
     const status = (check.body as { status?: unknown } | null)?.status;
     if (status === 'AVAILABLE') return { urn, altText: item.altText };
     if (status === 'PROCESSING_FAILED') {
