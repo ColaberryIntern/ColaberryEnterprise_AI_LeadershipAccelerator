@@ -25,7 +25,7 @@ import {
   handleGetInternshipDocuments, handleDownloadInternshipDocument, handleUploadSignedDocument,
 } from '../controllers/internshipDocumentController';
 import {
-  handleGetInternshipOnboarding, handleRecordAcknowledgement,
+  handleGetInternshipOnboarding, handleRecordAcknowledgement, handleRecordMeetingJoin,
 } from '../controllers/internshipActivationController';
 import { requireBuildEntitlement } from '../middlewares/requireBuildEntitlement';
 import { requireContentEntitlement } from '../middlewares/requireContentEntitlement';
@@ -357,6 +357,7 @@ router.get('/api/portal/internship/documents', requireParticipant, handleGetInte
 // in the cohort by calling an endpoint.
 router.get('/api/portal/internship/onboarding', requireParticipant, handleGetInternshipOnboarding);
 router.post('/api/portal/internship/acknowledgements', internshipWriteRateLimiter, requireParticipant, handleRecordAcknowledgement);
+router.post('/api/portal/internship/meetings/join', internshipWriteRateLimiter, requireParticipant, handleRecordMeetingJoin);
 
 router.get('/api/portal/internship/documents/:documentId/download', requireParticipant, handleDownloadInternshipDocument);
 router.post(

@@ -7,6 +7,7 @@ import {
 import { ACKNOWLEDGEMENT_STATES, REQUIREMENT_KEYS } from '../models/InternshipRequirementAcknowledgement';
 import { InvalidInternshipTransitionError } from '../services/internship/internshipStateMachine';
 import { isInternshipEnabled } from '../services/portalFlagsService';
+import { recordMeetingJoin } from '../services/internship/internshipAttendanceService';
 
 /**
  * Participant activation endpoints: the onboarding checklist and the tool
@@ -101,5 +102,29 @@ export async function handleRecordAcknowledgement(req: Request, res: Response): 
     res.json({ state: ctx.application.state, ...view });
   } catch (err) {
     fail(res, err, 'internship_acknowledgement_failed');
+  }
+}
+
+const meetingJoinSchema = z.object({ meeting_key: z.string().min(1).max(60) }).strict();
+
+/**
+ * POST /api/portal/internship/meetings/join
+ *
+ * Record that this intern joined a required meeting today, idempotent per
+ * (enrollment, meeting, occurrence date). Called when they open the meeting's room
+ * from their internship view — the join click is the capture point. Keyed on the
+ * enrollment, not an open application, so an ACTIVE intern's attendance still
+ * records after their application has closed.
+ */
+export async function handleRecordMeetingJoin(req: Request, res: Response): Promise<void> {
+  try {
+    const enrollmentId = callerEnrollmentId(req);
+    if (!enrollmentId) { res.status(401).json({ error: 'Authentication required' }); return; }
+    if (!isInternshipEnabled()) { res.status(404).json({ error: 'Not available' }); return; }
+    const { meeting_key } = meetingJoinSchema.parse(req.body ?? {});
+    const result = await recordMeetingJoin(enrollmentId, meeting_key);
+    res.json({ ok: true, already: result.already });
+  } catch (err) {
+    fail(res, err, 'internship_meeting_join_failed');
   }
 }
