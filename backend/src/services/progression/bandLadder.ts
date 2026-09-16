@@ -90,22 +90,43 @@ export const POINTS_SUBLEVELS: Array<{ min: number; bandSlug: BandSlug; rungName
  * AI Architect" and "Distinguished AI Architect" are RESERVED seniority rungs for
  * any future ladder extension above rank 8 — no current rank maps to them.
  */
-export const RANK_TO_BAND: Record<string, { bandSlug: BandSlug; rungName: string; rank: number }> = {
-  junior_builder:      { bandSlug: 'builder',   rungName: 'AI Builder I',        rank: 1 },
-  practitioner:        { bandSlug: 'builder',   rungName: 'AI Builder II',       rank: 2 },
-  developer:           { bandSlug: 'builder',   rungName: 'AI Builder III',      rank: 3 },
-  senior_developer:    { bandSlug: 'builder',   rungName: 'AI Builder IV',       rank: 4 },
-  engineer:            { bandSlug: 'builder',   rungName: 'AI Builder V',        rank: 5 },
-  senior_engineer:     { bandSlug: 'builder',   rungName: 'AI Builder VI',       rank: 6 },
-  architect_candidate: { bandSlug: 'architect', rungName: 'AI Architect',        rank: 7 },
-  architect:           { bandSlug: 'architect', rungName: 'Senior AI Architect', rank: 8 },
+export type BuildLadder = 'legacy' | 'milestone';
+export interface BuildRung { bandSlug: BandSlug; rungName: string; rank: number; ladder: BuildLadder }
+
+export const RANK_TO_BAND: Record<string, BuildRung> = {
+  junior_builder:      { bandSlug: 'builder',   rungName: 'AI Builder I',        rank: 1, ladder: 'legacy' },
+  practitioner:        { bandSlug: 'builder',   rungName: 'AI Builder II',       rank: 2, ladder: 'legacy' },
+  developer:           { bandSlug: 'builder',   rungName: 'AI Builder III',      rank: 3, ladder: 'legacy' },
+  senior_developer:    { bandSlug: 'builder',   rungName: 'AI Builder IV',       rank: 4, ladder: 'legacy' },
+  engineer:            { bandSlug: 'builder',   rungName: 'AI Builder V',        rank: 5, ladder: 'legacy' },
+  senior_engineer:     { bandSlug: 'builder',   rungName: 'AI Builder VI',       rank: 6, ladder: 'legacy' },
+  architect_candidate: { bandSlug: 'architect', rungName: 'AI Architect',        rank: 7, ladder: 'legacy' },
+  architect:           { bandSlug: 'architect', rungName: 'Senior AI Architect', rank: 8, ladder: 'legacy' },
+
+  // The milestone ladder (docs/POINTS_LADDER_DECISIONS.md, 2026-09-16). Written
+  // by milestonePromotion when MILESTONE_LADDER_ENABLED is on. Same public
+  // vocabulary — AI Builder I–IV, then the two architect rungs — earned by
+  // milestones instead of evidence counts. `senior_architect` is manual only.
+  builder_i:           { bandSlug: 'builder',   rungName: 'AI Builder I',        rank: 1, ladder: 'milestone' },
+  builder_ii:          { bandSlug: 'builder',   rungName: 'AI Builder II',       rank: 2, ladder: 'milestone' },
+  builder_iii:         { bandSlug: 'builder',   rungName: 'AI Builder III',      rank: 3, ladder: 'milestone' },
+  builder_iv:          { bandSlug: 'builder',   rungName: 'AI Builder IV',       rank: 4, ladder: 'milestone' },
+  ai_architect:        { bandSlug: 'architect', rungName: 'AI Architect',        rank: 5, ladder: 'milestone' },
+  senior_ai_architect: { bandSlug: 'architect', rungName: 'Senior AI Architect', rank: 6, ladder: 'milestone' },
 };
 
 // Reserved architect seniority rungs (documented; no current rank maps here).
 export const RESERVED_ARCHITECT_RUNGS = ['Principal AI Architect', 'Distinguished AI Architect'] as const;
 
-// Build rungs ordered by rank — used to find the "next rung" deterministically.
-const BUILD_RUNGS = Object.values(RANK_TO_BAND).sort((a, b) => a.rank - b.rank);
+// Build rungs ordered by rank, PER LADDER — "next rung" must never step from a
+// milestone rung onto a legacy one or back.
+const BUILD_RUNGS_BY_LADDER: Record<BuildLadder, BuildRung[]> = {
+  legacy: Object.values(RANK_TO_BAND).filter((r) => r.ladder === 'legacy').sort((a, b) => a.rank - b.rank),
+  milestone: Object.values(RANK_TO_BAND).filter((r) => r.ladder === 'milestone').sort((a, b) => a.rank - b.rank),
+};
+// The rank-only fallback (slug unknown) walks the legacy list: every legacy rank
+// has a rung there, and a milestone-ladder row always carries a known slug.
+const BUILD_RUNGS = BUILD_RUNGS_BY_LADDER.legacy;
 
 // rank 0 default from StudentLevel (`level_slug: 'builder', rank: 0`) — the
 // entry state every learner starts in; being here is NOT a promotion.
@@ -157,7 +178,7 @@ function pointsSublevelFor(pointsTotal: number): { min: number; bandSlug: BandSl
 function buildRungFor(
   builderLevelSlug?: string | null,
   builderRank?: number | null,
-): { bandSlug: BandSlug; rungName: string; rank: number } {
+): BuildRung {
   if (builderLevelSlug && RANK_TO_BAND[builderLevelSlug]) return RANK_TO_BAND[builderLevelSlug];
   // Slug unknown but rank says promoted: highest mapped rung with rank <= builderRank.
   const r = typeof builderRank === 'number' ? builderRank : 1;
@@ -188,9 +209,16 @@ export function computeBand(input: ComputeBandInput): BandResult {
   if (promoted) {
     const rung = buildRungFor(input.builderLevelSlug, input.builderRank);
     const band = BAND_BY_SLUG[rung.bandSlug];
-    const nextRung = BUILD_RUNGS.find((r) => r.rank === rung.rank + 1) ?? null;
+    const ladderRungs = BUILD_RUNGS_BY_LADDER[rung.ladder];
+    // On the milestone ladder AI Architect (rank 5) is followed by the manual-only
+    // Senior rung; there is nothing to "clear", so it reads as the top.
+    const nextRung = rung.ladder === 'milestone' && rung.rank >= 5
+      ? null
+      : ladderRungs.find((r) => r.rank === rung.rank + 1) ?? null;
     const nextRequirement = nextRung
-      ? `Clear the next build-competency gate to reach ${nextRung.rungName}.`
+      ? (rung.ladder === 'milestone'
+        ? `Complete the next program milestone to reach ${nextRung.rungName}.`
+        : `Clear the next build-competency gate to reach ${nextRung.rungName}.`)
       : 'Top of the individual ladder — AI Organization is an org-level distinction, not an individual band.';
     return {
       bandSlug: band.slug,

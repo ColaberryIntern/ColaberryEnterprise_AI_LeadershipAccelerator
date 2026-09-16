@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { PageHeader, SectionCard, StatusBadge } from '../../components/admin/shell';
+import { PageHeader, SectionCard, StatusBadge, StatCard } from '../../components/admin/shell';
 import {
   ApplicationDetail, QueueBucket, QueueResponse, ReviewerDecision,
   ApplicantAssessment, AssessmentRecommendation, RequirementStatus,
@@ -11,6 +11,7 @@ import { InternshipKpi, fetchInternshipKpis } from '../../services/adminInternsh
 import InternshipDocumentPanel from '../../components/admin/internship/InternshipDocumentPanel';
 import InternshipConversionPanel from '../../components/admin/internship/InternshipConversionPanel';
 import InternshipProjectAuthor from './components/InternshipProjectAuthor';
+import FlotationIntakePanel from '../../components/admin/internship/FlotationIntakePanel';
 
 /**
  * AdminInternshipPage — the AI Internship review queue and decision surface.
@@ -270,6 +271,8 @@ const AdminInternshipPage: React.FC = () => {
         </SectionCard>
       )}
 
+      <FlotationIntakePanel />
+
       <SectionCard title="Queue" icon="inbox-2-line">
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
           {BUCKET_LABELS.map((b) => (
@@ -515,6 +518,50 @@ const AdminInternshipPage: React.FC = () => {
             {!activity && !activityError && <p className="text-muted mb-0">Loading activity…</p>}
             {activity && (
               <div className="d-flex flex-column gap-3">
+                {/* KPI strip — the dashboardy summary, and a door to the full
+                    Student Success 360 (interns are normal enrollments, so the
+                    whole snapshot already applies to them). */}
+                <div className="d-flex flex-wrap gap-2">
+                  <div style={{ flex: '1 1 150px' }}>
+                    <StatCard
+                      label="Training"
+                      value={activity.training ? `${activity.training.first_three_weeks.done}/${activity.training.first_three_weeks.total}` : '—'}
+                      unit="weeks"
+                      icon="graduation-cap-line"
+                      tone={activity.training?.first_three_weeks.ready ? 'success' : 'warning'}
+                      hint="Weeks 1-3"
+                    />
+                  </div>
+                  <div style={{ flex: '1 1 150px' }}>
+                    <StatCard
+                      label="Stories verified"
+                      value={activity.project ? `${activity.project.verified_stories}/${activity.project.total_stories}` : '—'}
+                      icon="check-double-line"
+                      tone="info"
+                      hint={activity.project ? (activity.project.stage ?? 'project') : 'no project'}
+                    />
+                  </div>
+                  <div style={{ flex: '1 1 150px' }}>
+                    <StatCard
+                      label="Cert readiness"
+                      value={activity.cert_prep ? (activity.cert_prep.overall_scaled ?? activity.cert_prep.state.replace(/_/g, ' ')) : '—'}
+                      icon="award-line"
+                      tone="neutral"
+                      hint="Certification"
+                    />
+                  </div>
+                  <div style={{ flex: '1 1 150px' }}>
+                    <StatCard
+                      label="Full profile"
+                      value="Success 360"
+                      icon="dashboard-line"
+                      tone="primary"
+                      to={`/admin/accelerator/enrollments/${activity.enrollment_id}/success-snapshot`}
+                      hint="Open dashboard"
+                    />
+                  </div>
+                </div>
+
                 {/* Training — the first-3-weeks gate front and centre */}
                 <div>
                   <div className="d-flex align-items-center gap-2 mb-2">
@@ -550,8 +597,11 @@ const AdminInternshipPage: React.FC = () => {
                                 background: w.done ? '#2e7d5b' : '#cbd5e0',
                               }}
                             />
-                            <span style={{ minWidth: 60 }}>Week {w.week}</span>
-                            <span className="text-muted">{w.completed}/{w.published} items ({w.completed_pct}%)</span>
+                            <span style={{ minWidth: 56 }}>Week {w.week}</span>
+                            <div style={{ flex: '1 1 auto', maxWidth: 180, height: 6, background: '#eef1f4', borderRadius: 3, overflow: 'hidden' }}>
+                              <div style={{ width: `${Math.min(100, Math.max(0, w.completed_pct))}%`, height: '100%', background: w.done ? '#2e7d5b' : '#a8690f' }} />
+                            </div>
+                            <span className="text-muted" style={{ whiteSpace: 'nowrap' }}>{w.completed}/{w.published} ({w.completed_pct}%)</span>
                           </div>
                         ))}
                     </div>

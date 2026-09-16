@@ -32,6 +32,7 @@ import qrRedirectRoutes from './routes/qrRedirectRoutes';
 import trackedLinkRedirectRoutes from './routes/trackedLinkRedirectRoutes';
 import openclawShortLinkRoutes from './routes/openclawShortLinkRoutes';
 import mediaFetchRoutes from './routes/mediaFetchRoutes';
+import linkedInCallbackRoutes from './routes/linkedInCallbackRoutes';
 import v1Routes from './routes/v1Routes';
 import advisorRoutes from './routes/advisorRoutes';
 import showcaseArtifactRoutes from './routes/showcaseArtifactRoutes';
@@ -70,6 +71,7 @@ import { ensureCertPrepSchema } from './db/ensureCertPrepSchema';
 import { ensureProjectArchiveSchema } from './db/ensureProjectArchiveSchema';
 import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
 import { ensureInternshipSchema } from './db/ensureInternshipSchema';
+import { ensureMilestoneLadderSchema } from './db/ensureMilestoneLadderSchema';
 import { ensureOauthTokenVaultSchema } from './db/ensureOauthTokenVaultSchema';
 import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
 import { ensureAgentAttachmentSchema } from './db/ensureAgentAttachmentSchema';
@@ -80,6 +82,7 @@ import { ensureAiAgentReportsToSchema } from './db/ensureAiAgentReportsToSchema'
 import { ensureAiAgentHierarchySchema } from './db/ensureAiAgentHierarchySchema';
 import { ensureAiAgentAutonomyLevelSchema } from './db/ensureAiAgentAutonomyLevelSchema';
 import { ensureAiAgentAutonomySourceSchema } from './db/ensureAiAgentAutonomySourceSchema';
+import { ensureAiAgentConsolidationSchema } from './db/ensureAiAgentConsolidationSchema';
 import { ensureAgentPersonaVersionHistorySchema } from './db/ensureAgentPersonaVersionHistorySchema';
 import { ensureAgentRoleCharterSchema } from './db/ensureAgentRoleCharterSchema';
 import { ensureManagerDirectiveSchema } from './db/ensureManagerDirectiveSchema';
@@ -216,6 +219,8 @@ app.use(openclawShortLinkRoutes);
 // Signed media fetch (/m/...) - public, a provider fetches it at publish time with no session.
 // Same rule as /r/ and /i/: above adminRoutes or the guard 401s it. Pinned by its own test.
 app.use(mediaFetchRoutes);
+// LinkedIn's browser redirect after consent: no JWT, trusts the signed state. Above adminRoutes, like /r/ /i/ /m/.
+app.use(linkedInCallbackRoutes);
 app.use(v1Routes);
 
 // PUBLIC API routes — MUST stay mounted BEFORE adminRoutes. adminRoutes is mounted
@@ -2698,6 +2703,11 @@ async function start(): Promise<void> {
   // enrollments.cohort_id (docs/AI_INTERNSHIP_DISCOVERY.md §3.2). Ensured after
   // enrollments/cohorts exist, since every table here hangs off one of them.
   await ensureInternshipSchema();
+  // Milestone ladder: `student_milestones` (latched curriculum / project /
+  // certification milestones the promotion engine counts) and
+  // `student_certifications` (student-uploaded, staff-approved). Additive;
+  // the engine reads them only when MILESTONE_LADDER_ENABLED is on.
+  await ensureMilestoneLadderSchema();
   // Durable store for provider-rotated OAuth refresh tokens (MS Graph/Hotmail).
   // Without it every rotation is discarded and the deployment drifts toward a
   // dead credential that only an interactive re-consent can recover.
@@ -2787,6 +2797,10 @@ async function start(): Promise<void> {
   // ('auto'|'manual'|null), distinguishing a classifier-set level from a real human
   // decision. Additive, idempotent, no flag.
   await ensureAiAgentAutonomySourceSchema();
+  // AI Employee Consolidation Program, Phase 4 — record_kind/parent_agent_id/
+  // migration_status, the program's legacy-item-to-employee ownership fields.
+  // Additive, idempotent, no flag.
+  await ensureAiAgentConsolidationSchema();
   // Trust Contract Phase 1 — real history behind AiAgent.persona_version,
   // written by seedAgentRegistry() (below) whenever a registry entry's
   // version genuinely changes. Additive, idempotent, no flag. Must run

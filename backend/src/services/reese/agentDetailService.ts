@@ -144,6 +144,24 @@ export interface AgentDetailResult {
     run_count: number;
     error_count: number;
   }>;
+  /** AI Employee Consolidation Program (2026-09-15/16) — "Capabilities &
+   * Automations": the real legacy behaviors/tools this employee OWNS, via
+   * the program's real `parent_agent_id` ownership column
+   * (ensureAiAgentConsolidationSchema.ts), not `related_tasks`' same-module
+   * inference above. An employee's Agent Detail page is meant to show these
+   * as owned automations, never as peer employees (mission Section 13). `[]`
+   * for any agent nothing has been absorbed under yet — the entire fleet on
+   * day one except Dara. */
+  owned_behaviors: Array<{
+    id: string;
+    agent_name: string;
+    record_kind: 'employee' | 'behavior' | 'tool' | null;
+    description: string | null;
+    trigger_type: string | null;
+    schedule: string | null;
+    enabled: boolean;
+    migration_status: 'legacy' | 'absorbed' | 'archived' | null;
+  }>;
   /** Trust Contract Phase 1 (2026-08-26) — real changes to this agent's
    * `persona_version`, most-recent first. `[]` for an agent whose version has
    * never changed since this table started tracking (2026-08-26) — the
@@ -412,6 +430,15 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
     ? await AiAgent.findAll({ where: { module: agent.module, id: { [Op.ne]: agent.id } }, order: [['agent_name', 'ASC']] })
     : [];
 
+  // AI Employee Consolidation Program (2026-09-15/16) — real ownership via
+  // parent_agent_id, distinct from relatedTaskRows' same-module inference
+  // above (module-sharing is a loose heuristic; parent_agent_id is a real,
+  // deliberate assignment made when a legacy item is actually absorbed).
+  const ownedBehaviorRows = await AiAgent.findAll({
+    where: { parent_agent_id: agent.id },
+    order: [['agent_name', 'ASC']],
+  });
+
   // Trust Contract Phase 1 (2026-08-26) — real version history, real cost,
   // real authorization verdicts. All three key on `agent.id` directly (not
   // `adminUser.id` like the tickets queries above), since ai_events and the
@@ -480,6 +507,16 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
       last_run_at: t.last_run_at ?? null,
       run_count: t.run_count ?? 0,
       error_count: t.error_count ?? 0,
+    })),
+    owned_behaviors: ownedBehaviorRows.map((b: any) => ({
+      id: b.id,
+      agent_name: b.agent_name,
+      record_kind: b.record_kind ?? null,
+      description: b.description ?? null,
+      trigger_type: b.trigger_type ?? null,
+      schedule: b.schedule || null,
+      enabled: b.enabled,
+      migration_status: b.migration_status ?? null,
     })),
     persona_version_history: personaVersionHistory,
     cost_summary: costSummary,

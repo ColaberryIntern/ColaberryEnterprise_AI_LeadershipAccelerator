@@ -14,6 +14,7 @@ import contentComposerRoutes from './admin/contentComposerRoutes';
 import publishingRoutes from './admin/publishingRoutes';
 import channelAccountRoutes from './admin/channelAccountRoutes';
 import contentMediaRoutes from './admin/contentMediaRoutes';
+import linkedInConnectRoutes from './admin/linkedInConnectRoutes';
 import caseStudyAdminRoutes from './admin/caseStudyAdminRoutes';
 import caseStudyStudioRoutes from './admin/caseStudyStudioRoutes';
 import caseStudyMetricRoutes from './admin/caseStudyMetricRoutes';
@@ -117,6 +118,7 @@ import podcastRoutes from './admin/podcastRoutes';
 import studentStoryRoutes from './admin/studentStoryRoutes';
 import internshipAdminRoutes from './admin/internshipRoutes';
 import certPrepAdminRoutes from './admin/certPrepAdminRoutes';
+import certificationAdminRoutes from './admin/certificationAdminRoutes';
 import checklistRoutes from './admin/checklistRoutes';
 
 const router = Router();
@@ -137,6 +139,7 @@ router.use(contentComposerRoutes);
 router.use(publishingRoutes);
 router.use(channelAccountRoutes);
 router.use(contentMediaRoutes);
+router.use(linkedInConnectRoutes);
 // Case Study OS admin surface. Every path is fully qualified
 // (/api/admin/case-studies/...) and carries requireAdmin per route, so its
 // position among the sibling sub-routers is not load-bearing — but it MUST stay
@@ -299,6 +302,10 @@ router.use(internshipAdminRoutes);
 // PATH_SECTION under 'program' - without that row the gate is deny-by-default
 // and every scoped mgmt token 403s here while legacy admin passes.
 router.use(certPrepAdminRoutes);
+// Certification review queue (under /api/admin/cert-prep, already mapped to
+// 'program') and the milestone-ladder recompute (/api/admin/progression, its
+// own gate row). Every route carries requireAdmin.
+router.use(certificationAdminRoutes);
 router.use(checklistRoutes);
 
 export default router;
