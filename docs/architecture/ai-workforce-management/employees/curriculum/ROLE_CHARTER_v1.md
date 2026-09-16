@@ -1,10 +1,10 @@
 # Curriculum, Learning & Certification — Role Charter (Phase 2, draft v1)
 
-**Session:** CC-20260915-q9k4 (continuing CC-20260915-a1x7) · **Date:** 2026-09-15 · **Status:** proposed for Ali's Phase 2 approval. No production identity created. Nothing here is written to `AgentRoleCharter` yet — that write happens in Phase 4, after this content is approved, via `agentRoleCharterService.ts`'s `upsertRoleCharter()`.
+**Session:** CC-20260915-q9k4 (continuing CC-20260915-a1x7) · **Date:** 2026-09-15 · **Status:** **approved by Ali** (choice B, 2026-09-15). No production identity created. Nothing here is written to `AgentRoleCharter` yet — that write happens in Phase 4, via `agentRoleCharterService.ts`'s `upsertRoleCharter()`.
 
 Shape: the real `AgentRoleCharter`/`agentRoleCharterService.ts` fields (`role_title`, `mission`, `responsibilities: string[]`, `kpis: string[]`), plus a **Boundaries** section — a field the model does not have (confirmed: `agentRoleCharterService.ts:9-19`'s `RoleCharterView.charter` has no `boundaries` key). Boundaries are recorded here as the authoritative source; Phase 3/4 decides whether they become a schema field, a fixed prompt block, or both.
 
-Employee name recommendation is in `PERSONALITY_PROFILE_v1.md` (Section 0) — this charter uses **Marin** (the recommended name) throughout; if Ali picks an alternative, only the name string changes, nothing else in this document.
+Employee name: **Dara** (`PERSONALITY_PROFILE_v1.md` Section 0 — Ali chose Dara over the original recommendation, Marin).
 
 ---
 
@@ -60,3 +60,4 @@ This is deliberately a short, mostly-`UNMEASURED` KPI list for a first release. 
 | Version | Date | Change | Author |
 |---|---|---|---|
 | v1 (draft) | 2026-09-15 | Initial draft for Phase 2 approval | Session CC-20260915-q9k4 |
+| v1 (approved) | 2026-09-15 | Ali approved choice B: employee name **Dara** (was drafted as Marin); charter approved as drafted | Session CC-20260915-q9k4 |
