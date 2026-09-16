@@ -16,13 +16,18 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { randomUUID } from 'crypto';
 import { z, ZodError } from 'zod';
 import { Op } from 'sequelize';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import ProjectUnderstandingRecord from '../../models/ProjectUnderstandingRecord';
-import { Enrollment, Lead } from '../../models';
+import { CommunicationLog, Enrollment, Lead } from '../../models';
 import { startBuildFromUnderstanding } from '../../services/delivery/buildFromUnderstanding';
 import { runIntakeTurn } from '../../services/delivery/projectIntake';
+import { requestInstantCallback } from '../../services/callbackRequestService';
+
+/** The brand whose intake this is. The call is scripted and routed by this slug. */
+const FLOTATION_SOURCE = 'ai-flotation';
 
 const router = Router();
 
@@ -184,6 +189,96 @@ router.get('/api/admin/flotation/intake/enrollments', requireAdmin, async (req: 
 
     return res.json({
       enrollments: rows.map((e) => ({ id: e.id, full_name: e.full_name, email: e.email, tier: e.tier, cohort_id: e.cohort_id })),
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * The spoken interview, from the management side.
+ *
+ *     "I want the exact same setup (deterministic) as AI flotation - that includes voice
+ *      intake."  (Ali, 2026-09-16)
+ *
+ * This places the same call a prospect gets from "Call me now" on /start: the same
+ * `requestInstantCallback`, the same AI Flotation script, the same consent, dedup and
+ * safety gates, the same completion webhook - which then runs the same `finishIntake` the
+ * typed interview ends with. The one difference is stamped on the call when it is placed:
+ * which student the project is for.
+ *
+ * The phone is whoever should be on the line. To test the experience, an admin gives
+ * their own number and plays the customer; the project still lands in the student's
+ * portal, because the enrolment - not the phone - says where it goes.
+ */
+const callSchema = z.object({
+  enrollment_id: z.string().uuid(),
+  phone: z.string().min(7).max(50),
+  /** What the project is, in a sentence - the agent opens with it, as it does on /start. */
+  idea: z.string().max(5000).optional(),
+});
+
+router.post('/api/admin/flotation/intake/call', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const body = callSchema.parse(req.body || {});
+
+    const enrollment: any = await Enrollment.findByPk(body.enrollment_id);
+    if (!enrollment) return res.status(404).json({ error: 'enrolment not found' });
+    if (!enrollment.email) return res.status(409).json({ error: 'this enrolment has no email, and the call is keyed on one' });
+
+    const correlationId = randomUUID();
+    const result = await requestInstantCallback(
+      {
+        name: enrollment.full_name || 'there',
+        email: String(enrollment.email).toLowerCase(),
+        phone: body.phone,
+        source: FLOTATION_SOURCE,
+        company: enrollment.company || undefined,
+        message: body.idea || undefined,
+        consent_contact: true,
+      },
+      correlationId,
+      { enrollmentId: enrollment.id, requestedBy: 'admin' },
+    );
+
+    // The honesty contract from the routing action: a call was placed, or here is why not.
+    const status =
+      result.status === 'call_initiated' || result.status === 'deduplicated' ? 200
+      : result.status === 'failed' ? 502
+      : 409;
+    return res.status(status).json({ ...result, correlation_id: correlationId });
+  } catch (err: any) {
+    if (err instanceof ZodError) return res.status(400).json({ error: 'Validation failed', details: err.issues });
+    console.error('[AdminIntake] call error:', err?.message);
+    return res.status(500).json({ error: 'We could not place that call right now.' });
+  }
+});
+
+/**
+ * Where a call has got to: ringing, ended, written up, building. The page polls this after
+ * placing a call, because the vendor talks to the webhook, not to the browser.
+ */
+router.get('/api/admin/flotation/intake/call/:callId', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const callId = String(req.params.callId || '').trim();
+    if (!callId || callId.length > 128) return res.status(400).json({ error: 'call id required' });
+
+    const commLog: any = await CommunicationLog.findOne({ where: { provider: 'synthflow', provider_message_id: callId } });
+    if (!commLog) return res.status(404).json({ error: 'call not found' });
+
+    const record: any = await ProjectUnderstandingRecord.findOne({ where: { source: 'voice_transcript', source_ref: callId } });
+    const build = record?.scope?.build || null;
+
+    return res.json({
+      call: {
+        // 'sent' = placed, 'delivered' = ended and the transcript is in, 'failed' = did not complete.
+        status: commLog.status,
+        duration: commLog.provider_response?.duration ?? null,
+        has_transcript: Boolean(commLog.provider_response?.transcript),
+        end_reason: commLog.provider_response?.end_call_reason ?? null,
+      },
+      understanding: record ? { id: record.id, status: record.status, title: record.title, items: (record.items || []).length } : null,
+      build: build ? { project_id: build.project_id, started_at: build.started_at } : null,
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });

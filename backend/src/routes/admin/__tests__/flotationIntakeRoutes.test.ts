@@ -40,6 +40,7 @@ jest.mock('../../../models', () => ({
     findOne: (...a: any[]) => mockEnrollmentFindOne(...a),
     findByPk: (...a: any[]) => mockEnrollmentFindByPk(...a),
   },
+  CommunicationLog: { findOne: jest.fn() },
 }));
 jest.mock('../../../services/delivery/buildFromUnderstanding', () => ({
   startBuildFromUnderstanding: (...a: any[]) => mockStart(...a),
@@ -47,6 +48,9 @@ jest.mock('../../../services/delivery/buildFromUnderstanding', () => ({
 jest.mock('../../../services/delivery/projectIntake', () => ({
   runIntakeTurn: (...a: any[]) => mockTurn(...a),
 }));
+// The voice door lives in the same file and is tested in flotationIntakeCallRoutes.test.ts;
+// here it only needs to not drag the real database config in through its import.
+jest.mock('../../../services/callbackRequestService', () => ({ requestInstantCallback: jest.fn() }));
 
 import flotationIntakeRoutes from '../flotationIntakeRoutes';
 
