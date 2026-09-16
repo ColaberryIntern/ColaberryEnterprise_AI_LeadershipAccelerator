@@ -923,5 +923,21 @@ describe('the visual story band appears only when the record carries one', () =>
     expect(proof?.getAttribute('data-diagram-folded')).toBe('true');
     expect(proof?.querySelector('[data-testid="story-diagram"]')).not.toBeNull();
     expect(all('[data-testid="story-diagram"]')).toHaveLength(1);
+    // The measurement section keeps its prose and folds its metric cards, so
+    // the figures the band shows are not printed twice.
+    const measurement = q('[data-section="measurement"]');
+    expect(measurement?.querySelector('.cbv2-cs-arch__prose')).not.toBeNull();
+    const notes = q('[data-testid="story-measurement-notes"]');
+    expect(notes?.tagName).toBe('DETAILS');
+    expect(notes?.querySelector('summary')?.textContent).toMatch(/^Full notes on all \d+ metric/);
+    expect(notes?.querySelectorAll('.cbv2-cs-measure__metric').length).toBeGreaterThan(0);
+    expect(measurement?.querySelectorAll('.cbv2-cs-measure__metric').length).toBe(notes?.querySelectorAll('.cbv2-cs-measure__metric').length);
+  });
+
+  it('keeps the measurement cards open on a record with no story', async () => {
+    mount();
+    await settle();
+    expect(q('[data-testid="story-measurement-notes"]')).toBeNull();
+    expect(all('[data-section="measurement"] .cbv2-cs-measure__metric').length).toBeGreaterThan(0);
   });
 });

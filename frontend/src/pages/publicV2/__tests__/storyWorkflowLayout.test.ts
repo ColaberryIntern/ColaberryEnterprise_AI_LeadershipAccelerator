@@ -1,4 +1,4 @@
-import { layoutWorkflow, orientationFor, workflowSteps } from '../storyWorkflowLayout';
+import { layoutWorkflow, layoutWorkflowToFit, orientationFor, workflowSteps } from '../storyWorkflowLayout';
 import type {
   PublicCaseStudyWorkflowEdge,
   PublicCaseStudyWorkflowNode,
@@ -131,5 +131,56 @@ describe('orientation specifics', () => {
     const bad = { ...after, edges: [...after.edges, edge('launch', 'ghost')] };
     const l = layoutWorkflow(bad, 'horizontal');
     expect(l.edges).toHaveLength(after.edges.length);
+  });
+});
+
+describe('fitting the width the page offers', () => {
+  it('horizontal spans exactly the width given, with readable boxes and wrapped labels, and never overlaps', () => {
+    const l = layoutWorkflow(after, 'horizontal', { maxWidth: 1268 });
+    expect(l.fits).toBe(true);
+    expect(l.width).toBe(1268);
+    expect(l.viewBox).toBe(`0 0 1268 ${l.height}`);
+    for (const n of l.nodes) {
+      expect(n.width).toBeGreaterThanOrEqual(118);
+      expect(n.x + n.width).toBeLessThanOrEqual(1268);
+      expect(n.labelLines.length).toBeGreaterThanOrEqual(1);
+      expect(n.labelLines.length).toBeLessThanOrEqual(3);
+    }
+    for (let i = 0; i < l.nodes.length; i += 1) {
+      for (let j = i + 1; j < l.nodes.length; j += 1) expect(overlaps(l.nodes[i], l.nodes[j])).toBe(false);
+    }
+    // Every edge is still drawn; a diagonal between lanes keeps its label.
+    expect(l.edges).toHaveLength(after.edges.length);
+    expect(l.edges.find((e) => e.from === 'completes' && e.to === 'gap')!.labelFits).toBe(true);
+    // A labelled short hop between neighbours in a tight column gives its label up to the panel.
+    const tight = layoutWorkflow({ ...after, edges: after.edges.map((e) => (e.from === 'launch' ? { ...e, label: 'go' } : e)) }, 'horizontal', { maxWidth: 1268 });
+    expect(tight.edges.find((e) => e.from === 'launch')!.labelFits).toBe(false);
+    // ...and keeps it when the columns are far enough apart.
+    const roomy = layoutWorkflow({ ...after, edges: after.edges.map((e) => (e.from === 'launch' ? { ...e, label: 'go' } : e)) }, 'horizontal');
+    expect(roomy.edges.find((e) => e.from === 'launch')!.labelFits).toBe(true);
+  });
+
+  it('says so when the width cannot give every column a readable box', () => {
+    const l = layoutWorkflow(after, 'horizontal', { maxWidth: 688 });
+    expect(l.fits).toBe(false);
+  });
+
+  it('vertical uses the width offered, up to a comfortable line length, and fits a phone', () => {
+    const tablet = layoutWorkflow(after, 'vertical', { maxWidth: 688 });
+    expect(tablet.width).toBe(688);
+    expect(tablet.nodes[0].width).toBeLessThanOrEqual(520);
+    expect(tablet.nodes[0].width).toBeGreaterThan(360);
+    const phone = layoutWorkflow(after, 'vertical', { maxWidth: 342 });
+    expect(phone.width).toBe(342);
+    for (const n of phone.nodes) expect(n.x + n.width).toBeLessThanOrEqual(342);
+  });
+
+  it('layoutWorkflowToFit takes horizontal only when it fits, and the column otherwise', () => {
+    expect(layoutWorkflowToFit(after, 1440, 1268).orientation).toBe('horizontal');
+    expect(layoutWorkflowToFit(after, 768, 688).orientation).toBe('vertical');
+    expect(layoutWorkflowToFit(after, 390, 342).orientation).toBe('vertical');
+    // A six-step panel fits a narrower desk.
+    const before = { ...after, nodes: after.nodes.slice(0, 4), edges: after.edges.slice(0, 3) };
+    expect(layoutWorkflowToFit(before, 1024, 900).orientation).toBe('horizontal');
   });
 });

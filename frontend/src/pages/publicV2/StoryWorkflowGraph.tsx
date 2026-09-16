@@ -1,8 +1,7 @@
-import React, { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { StoryWorkflowPanel } from './StoryWorkflowPanel';
-import { layoutWorkflow, orientationFor } from './storyWorkflowLayout';
-import type { WorkflowOrientation } from './storyWorkflowLayout';
-import { STATUS_WORD, panelSelectionOrder, wrapLabel } from './storyVisualModel';
+import { layoutWorkflowToFit } from './storyWorkflowLayout';
+import { STATUS_WORD, panelSelectionOrder } from './storyVisualModel';
 import type { CaseStudyWorkflowRole, PublicCaseStudyWorkflow, PublicCaseStudyWorkflowPanel } from './storyVisualModel';
 import { useWorkflowMotion } from './useWorkflowMotion';
 
@@ -34,17 +33,35 @@ const ROLE_WORD: Readonly<Record<CaseStudyWorkflowRole, string>> = Object.freeze
   human: 'Person', system: 'System', external: 'External', data: 'Data',
 });
 
-/** Horizontal at 768 and wider; measured on mount and on resize. */
-function useOrientation(): WorkflowOrientation {
-  const [orientation, setOrientation] = useState<WorkflowOrientation>(() =>
-    (typeof window === 'undefined' ? 'horizontal' : orientationFor(window.innerWidth)));
+/**
+ * The width the drawing may use: the canvas's own content width, measured on
+ * mount and whenever it changes, so the layout spans exactly the space the
+ * page gives it and never asks for a horizontal scrollbar. Falls back to the
+ * viewport less the page gutters where nothing can be measured (a test, a
+ * print engine).
+ */
+function useCanvasWidth(): [React.RefObject<HTMLDivElement>, number, number] {
+  const ref = useRef<HTMLDivElement>(null);
+  const viewport = typeof window === 'undefined' ? 1440 : window.innerWidth;
+  const [width, setWidth] = useState<number>(() => Math.max(200, viewport - 48));
+  const [vw, setVw] = useState<number>(viewport);
   useEffect(() => {
-    const onResize = (): void => setOrientation(orientationFor(window.innerWidth));
-    onResize();
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    const el = ref.current;
+    const measure = (): void => {
+      setVw(window.innerWidth);
+      if (el && el.clientWidth > 0) setWidth(Math.max(200, el.clientWidth));
+      else setWidth(Math.max(200, window.innerWidth - 48));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    let ro: ResizeObserver | null = null;
+    if (el && typeof ResizeObserver === 'function') {
+      ro = new ResizeObserver(measure);
+      ro.observe(el);
+    }
+    return () => { window.removeEventListener('resize', measure); if (ro) ro.disconnect(); };
   }, []);
-  return orientation;
+  return [ref, width, vw];
 }
 
 function StepList({ panel }: { panel: PublicCaseStudyWorkflowPanel }): React.ReactElement {
@@ -60,7 +77,7 @@ function StepList({ panel }: { panel: PublicCaseStudyWorkflowPanel }): React.Rea
 
 export function StoryWorkflowGraph({ workflow, motion }: StoryWorkflowGraphProps): React.ReactElement {
   const uid = useId();
-  const orientation = useOrientation();
+  const [canvasRef, canvasWidth, viewportWidth] = useCanvasWidth();
   const [panelKey, setPanelKey] = useState<string>(() =>
     (workflow.panels.find((p) => p.key === 'after') ?? workflow.panels[0]).key);
   const panel = workflow.panels.find((p) => p.key === panelKey) ?? workflow.panels[0];
@@ -69,7 +86,12 @@ export function StoryWorkflowGraph({ workflow, motion }: StoryWorkflowGraphProps
   const selectedKey = selected[panel.key] ?? panel.initialNodeKey;
   const position = Math.max(0, order.indexOf(selectedKey));
   const node = panel.nodes.find((n) => n.key === selectedKey) ?? panel.nodes[0];
-  const layout = useMemo(() => layoutWorkflow(panel, orientation), [panel, orientation]);
+  const layout = useMemo(() => layoutWorkflowToFit(panel, viewportWidth, canvasWidth), [panel, viewportWidth, canvasWidth]);
+  const orientation = layout.orientation;
+  // Connections into the selected step, for the panel: every label is said there, drawn or not.
+  const incoming = useMemo(() => panel.edges.filter((e) => e.to === selectedKey).map((e) => ({
+    from: panel.nodes.find((n) => n.key === e.from)?.label ?? e.from, label: e.label, condition: e.condition,
+  })), [panel, selectedKey]);
   const { svgRef, layerRef, state, togglePause } = useWorkflowMotion(motion === 'auto', panel.key);
 
   const select = useCallback((key: string) => {
@@ -118,16 +140,13 @@ export function StoryWorkflowGraph({ workflow, motion }: StoryWorkflowGraphProps
       {panel.summary ? <p className="cbv2-story-visual__panel-summary">{panel.summary}</p> : null}
 
       <div className="cbv2-story-visual__stage">
-        <div className="cbv2-story-visual__canvas">
+        <div className="cbv2-story-visual__canvas" ref={canvasRef}>
           <svg
             ref={svgRef}
             className="cbv2-story-visual__svg"
+            /* The layout was sized to this canvas's width, so one viewBox unit
+               is one CSS pixel and the drawing spans the canvas exactly. */
             viewBox={layout.viewBox}
-            /* Natural size when horizontal, so a wide flow scrolls inside its
-               canvas at legible type instead of shrinking the whole drawing
-               to fit; the vertical column scales to the phone's width. */
-            width={orientation === 'horizontal' ? layout.width : undefined}
-            height={orientation === 'horizontal' ? layout.height : undefined}
             role="group"
             aria-label={`${panel.label}: ${panel.nodes.length} steps, ${panel.edges.length} connections`}
             data-testid="story-workflow-svg"
@@ -155,7 +174,7 @@ export function StoryWorkflowGraph({ workflow, motion }: StoryWorkflowGraphProps
                   data-motion={edge.motion ? 'true' : 'false'}
                   data-status={edge.status}
                 />
-                {edge.label ? (
+                {edge.label && edge.labelFits ? (
                   <text x={edge.labelX} y={edge.labelY - 6} className="cbv2-story-visual__edge-label" textAnchor="middle">{edge.label}</text>
                 ) : null}
               </g>
@@ -163,7 +182,7 @@ export function StoryWorkflowGraph({ workflow, motion }: StoryWorkflowGraphProps
             <g ref={layerRef} className="cbv2-story-visual__particles" aria-hidden="true" />
             {layout.nodes.map((box) => {
               const n = panel.nodes.find((x) => x.key === box.key)!;
-              const lines = wrapLabel(n.label);
+              const lines = box.labelLines;
               const current = n.key === selectedKey;
               return (
                 <g
@@ -195,6 +214,7 @@ export function StoryWorkflowGraph({ workflow, motion }: StoryWorkflowGraphProps
         </div>
         <StoryWorkflowPanel
           node={node}
+          incoming={incoming}
           position={position + 1}
           count={order.length}
           panelLabel={panel.label}
