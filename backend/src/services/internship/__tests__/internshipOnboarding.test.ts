@@ -26,7 +26,7 @@ const evidence = (over: Partial<ChecklistEvidence> = {}): ChecklistEvidence => (
   acknowledgements: acks(),
   joined_community: false,
   active_project_count: 0,
-  first_week_checkin_submitted: false,
+  first_week_curriculum_complete: false,
   ...over,
 });
 
@@ -91,7 +91,7 @@ describe('nothing completes without evidence', () => {
       ['membership_ok', 'membership_active'],
       ['orientation_attended', 'orientation'],
       ['joined_community', 'join_community'],
-      ['first_week_checkin_submitted', 'first_week_checkin'],
+      ['first_week_curriculum_complete', 'first_week_checkin'],
     ];
     for (const [field, key] of cases) {
       const steps = resolveChecklist(evidence({ [field]: true } as Partial<ChecklistEvidence>));
@@ -211,7 +211,7 @@ describe('the next action', () => {
         own_api_key_with_billing: 'setup_verified_without_secret_collection',
       }),
       joined_community: true,
-      first_week_checkin_submitted: true,
+      first_week_curriculum_complete: true,
     }));
     expect(nextStudentAction(steps)).toBeNull();
   });
