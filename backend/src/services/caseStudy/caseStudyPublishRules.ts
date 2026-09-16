@@ -65,7 +65,12 @@ export type CaseStudyPublishBlockerCode =
   // The hero row. See caseStudyPublishHeroRules for the card row that made the
   // library worse and why the skill alone could not stop it.
   | 'headline_metric_is_a_bare_count'
-  | 'headline_metric_missing_plain_answers';
+  | 'headline_metric_missing_plain_answers'
+  // 20 — the visual story failed `validateVisualStory` (graph, text or figure
+  // rule). Written stories are validated on save, so this catches a story that
+  // was valid then and is not now: a metric it cites lost its verification, or
+  // a snapshot was assembled by a path that skipped the write-time check.
+  | 'visual_story_invalid';
 
 export const CASE_STUDY_PUBLISH_BLOCKER_CODES = [
   'surface_not_publishable',
@@ -87,6 +92,7 @@ export const CASE_STUDY_PUBLISH_BLOCKER_CODES = [
   'project_truth_has_open_questions',
   'headline_metric_is_a_bare_count',
   'headline_metric_missing_plain_answers',
+  'visual_story_invalid',
 ] as const;
 
 /** One reason a publish was refused. `message` names the FIELD and its VALUE. */

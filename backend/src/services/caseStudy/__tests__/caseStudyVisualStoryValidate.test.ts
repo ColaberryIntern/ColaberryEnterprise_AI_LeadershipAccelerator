@@ -6,8 +6,11 @@ import {
 import type { CaseStudySnapshotContent } from '../../../types/caseStudy';
 
 /**
- * Every rule the validator enforces has a fixture that trips it, and one
- * maximal fixture passes. Mutation notes: deleting the named check in
+ * One maximal fixture passes; every rule the plan names has a fixture that
+ * trips it, asserted by error code so the wrong refusal cannot pass for the
+ * right one. Codes with no case here are the ones the Zod shape reaches first
+ * (unreachable through the public function) or structural duplicates of a
+ * tested rule. Mutation notes: deleting the named check in
  * caseStudyVisualStoryValidate.ts turns the matching `it` red.
  */
 
@@ -96,7 +99,7 @@ describe('shape', () => {
     expect(paths(m)).toContain('workflow.panels.0.nodes.0');
   });
   it('rejects markup, URLs, @ and control characters in labels', () => {
-    for (const bad of ['<b>x</b>', 'see https://x', 'a@b', 'ab']) {
+    for (const bad of ['<b>x</b>', 'see https://x', 'a@b', 'a\u0007b']) {
       const m = maximal();
       m.workflow.panels[0].nodes[0].label = bad;
       expect(validateVisualStory(m, ctx).ok).toBe(false);
@@ -180,6 +183,72 @@ describe('figures', () => {
   it('requires an enabled story to name a surface', () => {
     expect(codes({ ...maximal(), surfaces: [] })).toContain('enabled_without_surface');
     expect(validateVisualStory({ ...maximal(), enabled: false, surfaces: [] }, ctx).ok).toBe(true);
+  });
+});
+
+describe('limits and closed vocabularies (reached through the Zod shape)', () => {
+  const shapeFails = (mutate: (m: ReturnType<typeof maximal>) => void) => {
+    const m = maximal(); mutate(m);
+    const r = validateVisualStory(m, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.errors.every((e) => e.code === 'shape')).toBe(true);
+    return r.errors.map((e) => e.path);
+  };
+  it('refuses a label, a detail and a caption one character over their limits', () => {
+    expect(shapeFails((m) => { m.workflow.panels[0].nodes[0].label = 'x'.repeat(41); })).toContain('workflow.panels.0.nodes.0.label');
+    expect(shapeFails((m) => { (m.workflow.panels[0].nodes[0] as Record<string, unknown>).detail = 'x'.repeat(281); })).toContain('workflow.panels.0.nodes.0.detail');
+    expect(shapeFails((m) => { m.workflow.caption = 'x'.repeat(201); })).toContain('workflow.caption');
+    // Non-vacuity: exactly at the limit passes.
+    const ok = maximal(); ok.workflow.panels[0].nodes[0].label = 'x'.repeat(40);
+    expect(validateVisualStory(ok, ctx).ok).toBe(true);
+  });
+  it('refuses a role, status, lane or chart kind outside the closed lists', () => {
+    expect(shapeFails((m) => { (m.workflow.panels[0].nodes[0] as Record<string, unknown>).role = 'robot'; })).toContain('workflow.panels.0.nodes.0.role');
+    expect(shapeFails((m) => { (m.workflow.panels[0].nodes[0] as Record<string, unknown>).status = 'green'; })).toContain('workflow.panels.0.nodes.0.status');
+    expect(shapeFails((m) => { (m.workflow.panels[0].nodes[0] as Record<string, unknown>).lane = 'side'; })).toContain('workflow.panels.0.nodes.0.lane');
+    expect(shapeFails((m) => { (m.charts[0] as Record<string, unknown>).kind = 'pie'; })).toContain('charts.0.kind');
+  });
+  it('refuses more than 16 nodes or 24 edges in a panel, and more than 3 cards', () => {
+    expect(shapeFails((m) => {
+      for (let i = 0; i < 15; i += 1) m.workflow.panels[0].nodes.push(node(`n${i}`));
+    })).toContain('workflow.panels.0.nodes');
+    expect(shapeFails((m) => {
+      for (let i = 0; i < 24; i += 1) m.workflow.panels[0].edges.push({ from: 'launch', to: 'event' });
+    })).toContain('workflow.panels.0.edges');
+    expect(shapeFails((m) => { m.outcomeCards.push({ metricKey: 'dupes' }); })).toContain('outcomeCards');
+  });
+  it('refuses a surface outside the four keys', () => {
+    expect(shapeFails((m) => { (m as Record<string, unknown>).surfaces = ['intranet']; })).toContain('surfaces.0');
+  });
+});
+
+describe('the remaining figure rules', () => {
+  it('refuses a zero card, a share and a composition anchored on a plain count', () => {
+    expect(codes(withChart({ key: 'z', kind: 'zero_card', title: 'x', metricKey: 'recovered' }))).toContain('zero_card_needs_denominator');
+    expect(codes(withChart({ key: 's', kind: 'share', title: 'x', metricKey: 'recovered' }))).toContain('share_needs_ratio');
+    expect(codes(withChart({ key: 'c', kind: 'composition', title: 'x', metricKey: 'recovered', parts: [{ label: 'a', metricKey: 'advanced' }, { label: 'b', metricKey: 'open' }] })))
+      .toContain('composition_needs_denominator');
+  });
+  it('refuses a composition or comparison with fewer than two parts, and a two-value chart without exactly two', () => {
+    expect(codes(withChart({ key: 'c', kind: 'composition', title: 'x', metricKey: 'resolved', parts: [{ label: 'a', metricKey: 'recovered' }] }))).toContain('composition_needs_parts');
+    expect(codes(withChart({ key: 'c', kind: 'comparison', title: 'x', metricKey: 'resolved', caveat: 'c', parts: [{ label: 'a', metricKey: 'resolved' }] }))).toContain('comparison_needs_parts');
+    expect(codes(withChart({ key: 't', kind: 'two_value', title: 'x', metricKey: 'median', unit: 'min', axisMax: 60, parts: [{ label: 'a', metricKey: 'median' }] }))).toContain('two_value_needs_two');
+    expect(codes(withChart({ key: 't', kind: 'two_value', title: 'x', metricKey: 'median', unit: 'min', parts: [{ label: 'a', metricKey: 'median' }, { label: 'b', value: 47, evidenceId: EV }] }))).toContain('two_value_needs_axis');
+  });
+  it('refuses a part with no figure, a bar over its denominator, and a duplicate chart key', () => {
+    expect(codes(withChart({ key: 'c', kind: 'comparison', title: 'x', metricKey: 'resolved', caveat: 'c', parts: [{ label: 'a' }, { label: 'b', metricKey: 'resolved' }] }))).toContain('part_without_figure');
+    expect(codes(withChart({ key: 'c', kind: 'comparison', title: 'x', metricKey: 'resolved', caveat: 'c', parts: [{ label: 'a', value: 9, denominator: 4, evidenceId: EV }, { label: 'b', metricKey: 'resolved' }] }))).toContain('value_exceeds_denominator');
+    const m = maximal(); m.charts.push({ ...m.charts[2], key: 'auto' } as typeof m.charts[number]);
+    expect(codes(m)).toContain('chart_key_duplicate');
+  });
+  it('refuses an initial node that is not in the panel, and a second island of connected nodes', () => {
+    const m = maximal(); (m.workflow.panels[1] as Record<string, unknown>).initialNodeKey = 'ghost';
+    expect(codes(m)).toContain('node_missing');
+    const island = maximal();
+    island.workflow.panels[1].nodes.push(node('x1'), node('x2'));
+    island.workflow.panels[1].edges.push({ from: 'x1', to: 'x2' });
+    expect(codes(island)).toContain('node_unreachable');
+    expect(codes(island)).not.toContain('node_isolated');
   });
 });
 

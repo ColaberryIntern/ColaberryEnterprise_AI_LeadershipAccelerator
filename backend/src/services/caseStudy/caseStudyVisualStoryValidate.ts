@@ -3,7 +3,6 @@ import type {
   CaseStudyMetricEntry,
   CaseStudyMetricPayload,
   CaseStudySnapshotContent,
-  CaseStudySurfaceKey,
 } from '../../types/caseStudy';
 import {
   CASE_STUDY_VISUAL_CHART_KINDS,
@@ -68,7 +67,6 @@ export type VisualStoryValidationResult =
   | { readonly ok: true; readonly section: CaseStudyVisualStorySection; readonly errors: readonly [] }
   | { readonly ok: false; readonly section: null; readonly errors: readonly VisualStoryValidationError[] };
 
-const SURFACE_KEYS: readonly CaseStudySurfaceKey[] = ['enterprise', 'training', 'ai-flotation', 'refactored'];
 const KEY_RE = /^[a-z0-9][a-z0-9_-]{0,39}$/;
 const HASH_RE = /^[a-f0-9]{64}$/;
 const UNSAFE_RE = /[<>]|https?:|@|[\x00-\x1f]/i;
@@ -248,6 +246,26 @@ function checkPanel(path: string, panel: CaseStudyWorkflowPanel, ctx: VisualStor
     panel.nodes.forEach((n, i) => {
       if (!degree.get(n.key)) out.push(err(`${path}.nodes[${i}]`, 'node_isolated', `node "${n.key}" has no edges`));
     });
+    // One picture, one component: a second island would be drawn with no line
+    // to the rest and read as a mistake. Edges are walked both ways because a
+    // branch that only flows OUT of the main path is still part of it.
+    const adjacent = new Map<string, string[]>();
+    for (const e of panel.edges) {
+      adjacent.set(e.from, [...(adjacent.get(e.from) ?? []), e.to]);
+      adjacent.set(e.to, [...(adjacent.get(e.to) ?? []), e.from]);
+    }
+    const reached = new Set<string>([panel.nodes[0].key]);
+    const queue = [panel.nodes[0].key];
+    while (queue.length) {
+      for (const next of adjacent.get(queue.shift() as string) ?? []) {
+        if (!reached.has(next)) { reached.add(next); queue.push(next); }
+      }
+    }
+    panel.nodes.forEach((n, i) => {
+      if (degree.get(n.key) && !reached.has(n.key)) {
+        out.push(err(`${path}.nodes[${i}]`, 'node_unreachable', `node "${n.key}" is not connected to "${panel.nodes[0].key}"`));
+      }
+    });
   }
   if (panel.initialNodeKey && !keys.has(panel.initialNodeKey)) {
     out.push(err(`${path}.initialNodeKey`, 'node_missing', `no node "${panel.initialNodeKey}" in this panel`));
@@ -341,9 +359,6 @@ export function validateVisualStory(input: unknown, ctx: VisualStoryValidationCo
   if (section.enabled && section.surfaces.length === 0) {
     out.push(err('surfaces', 'enabled_without_surface', 'an enabled story names at least one surface'));
   }
-  section.surfaces.forEach((s, i) => {
-    if (!SURFACE_KEYS.includes(s)) out.push(err(`surfaces[${i}]`, 'surface_unknown', `unknown surface "${s}"`));
-  });
 
   const wf = section.workflow;
   if (wf) {
@@ -376,4 +391,40 @@ export function validateVisualStory(input: unknown, ctx: VisualStoryValidationCo
 
   if (out.length > 0) return { ok: false, section: null, errors: out };
   return { ok: true, section, errors: [] };
+}
+
+/* ------------------------------------------------------------ gate rule --- */
+
+/**
+ * The evidence ids a PURE check can know about: every `evidenceId` a verified
+ * metric or the production status cites on this snapshot. The write path
+ * (`applyHumanOverride`) validates against the evidence table itself; the gate
+ * has no database and settles for "cited by something already verified here",
+ * which is the stricter reading and never admits an id from another record.
+ */
+export function evidenceIdsCitedByContent(content: CaseStudySnapshotContent): string[] {
+  const out = new Set<string>();
+  const take = (v: { class?: string; evidenceId?: string } | undefined) => {
+    if (v?.class === 'verified' && typeof v.evidenceId === 'string' && v.evidenceId) out.add(v.evidenceId);
+  };
+  for (const m of [...(content.heroMetrics ?? []), ...(content.measurement?.metrics ?? [])]) take(m.verification);
+  take(content.identity?.productionStatus?.verification);
+  take(content.identity?.engagementWindow?.verification);
+  return [...out];
+}
+
+/** Publish-gate rule 20: a visual story on the snapshot must validate against the snapshot. */
+export function ruleVisualStory(
+  content: CaseStudySnapshotContent,
+  b: { add: (code: 'visual_story_invalid', field: string, message: string, remedy: string) => void },
+): void {
+  const vs = (content as { visualStory?: unknown }).visualStory;
+  if (vs === undefined || vs === null) return;
+  const result = validateVisualStory(vs, visualStoryContextFromContent(content, evidenceIdsCitedByContent(content)));
+  if (result.ok) return;
+  for (const e of result.errors.slice(0, 8)) {
+    b.add('visual_story_invalid', `visualStory.${e.path}`,
+      `the visual story fails validation at ${e.path}: ${e.message}`,
+      'open the Visual Story panel in the Studio, fix the field it names, and save; or disable the story');
+  }
 }

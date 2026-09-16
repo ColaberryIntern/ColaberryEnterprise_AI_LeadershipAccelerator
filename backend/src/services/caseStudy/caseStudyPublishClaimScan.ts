@@ -134,6 +134,52 @@ export function collectNarrative(content: CaseStudySnapshotContent): readonly Te
     `architecture.dataStores[${i}]`, 'a stated data store', s,
   ));
 
+  /* ── added 2026-09-16 with the visual story: every string it draws ──
+   *
+   * The illustration's labels, the detail panel's prose, the chart titles and
+   * their caveats are read at display size beside real figures, which is the
+   * one place a bare "97%" nobody verified would borrow the most credibility.
+   * The figures themselves never appear here: a chart part carries a metricKey
+   * (resolved at projection) or a literal `value` (a number, not text, and only
+   * beside an evidenceId the validator checks). So, like `valueDisplay` above,
+   * the numbers are governed elsewhere and only the words are scanned.
+   */
+  const vs = (content as any)?.visualStory;
+  if (vs && typeof vs === 'object') {
+    const wf = vs.workflow;
+    push('visualStory.workflow.title', 'the workflow title', wf?.title);
+    push('visualStory.workflow.caption', 'the workflow caption', wf?.caption);
+    push('visualStory.workflow.description', 'the workflow description', wf?.description);
+    push('visualStory.workflow.motionNote', 'the workflow motion note', wf?.motionNote);
+    arr(wf?.panels).forEach((p: any, i: number) => {
+      const pp = `visualStory.workflow.panels[${i}]`;
+      push(`${pp}.label`, 'a workflow panel label', p?.label);
+      push(`${pp}.summary`, 'a workflow panel summary', p?.summary);
+      arr(p?.nodes).forEach((n: any, j: number) => {
+        push(`${pp}.nodes[${j}].label`, 'a workflow stage label', n?.label);
+        push(`${pp}.nodes[${j}].sublabel`, 'a workflow stage label', n?.sublabel);
+        push(`${pp}.nodes[${j}].kicker`, 'a workflow stage kicker', n?.kicker);
+        push(`${pp}.nodes[${j}].detail`, 'a workflow stage explanation', n?.detail);
+        push(`${pp}.nodes[${j}].evidence`, 'a workflow stage evidence line', n?.evidence);
+      });
+      arr(p?.edges).forEach((e: any, j: number) => {
+        push(`${pp}.edges[${j}].label`, 'a workflow edge label', e?.label);
+        push(`${pp}.edges[${j}].condition`, 'a workflow branch condition', e?.condition);
+      });
+    });
+    arr(vs.charts).forEach((c: any, i: number) => {
+      const cp = `visualStory.charts[${i}]`;
+      push(`${cp}.title`, 'a chart title', c?.title);
+      push(`${cp}.caption`, 'a chart caption', c?.caption);
+      push(`${cp}.caveat`, 'a chart caveat', c?.caveat);
+      arr(c?.limitations).forEach((l: unknown, j: number) => push(`${cp}.limitations[${j}]`, 'a stated chart limitation', l));
+      arr(c?.parts).forEach((part: any, j: number) => {
+        push(`${cp}.parts[${j}].label`, 'a chart part label', part?.label);
+        push(`${cp}.parts[${j}].caveat`, 'a chart part caveat', part?.caveat);
+      });
+    });
+  }
+
   return out;
 }
 
