@@ -141,6 +141,26 @@ describe('CaseStudyVisualStoryPanel', () => {
     expect(marked[0].closest('[data-testid="cs-vs-node"]')).toBe(all('cs-vs-node')[1]);
   });
 
+  it('marks the row named by a semantic refusal written in bracket notation', async () => {
+    // What the server actually sends for a graph refusal (see caseStudyAdminRoutes.overrideErrors.test.ts).
+    onSave.mockRejectedValue({ response: { status: 400, data: { error_class: 'ValidationError', path: 'visualStory', errors: [
+      { path: 'workflow.panels[0].nodes[1]', code: 'node_unreachable', message: 'no path from the initial step reaches "b"' },
+      { path: 'charts[0].parts[0].denominator', code: 'comparison_bar_needs_denominator', message: 'a literal bar needs its denominator' },
+    ] } } });
+    await render(view());
+    type(all('cs-vs-node-label')[1], 'Detect, edited');
+    await click(byId('cs-vs-save'));
+    expect(byId('cs-vs-errors').textContent).toContain('workflow.panels[0].nodes[1] no path from the initial step reaches "b"');
+    const marked = all('cs-vs-row-error');
+    expect(marked).toHaveLength(2);
+    const onNode = marked.find((m) => m.closest('[data-testid="cs-vs-node"]'))!;
+    expect(onNode.closest('[data-testid="cs-vs-node"]')).toBe(all('cs-vs-node')[1]);
+    expect(onNode.textContent).toContain('no path from the initial step');
+    // The chart refusal lands on the chart row (its part list is empty in the fixture).
+    const onChart = marked.find((m) => m.closest('[data-testid="cs-vs-chart"]'))!;
+    expect(onChart.closest('[data-testid="cs-vs-chart"]')).toBe(all('cs-vs-chart')[0]);
+  });
+
   it('Reset restores the stored form and disables Save', async () => {
     await render(view());
     type(byId('cs-vs-title'), 'Changed');

@@ -44,6 +44,9 @@ export interface CaseStudyVisualStoryPanelProps {
 
 const DEFAULT_LIMITS = { outcomeCards: 3, charts: 6, chartParts: 8 };
 
+/** `a[1].b[2]` and `a.1.b.2` are the same path to a row. */
+export const dotted = (path: string): string => path.replace(/\[(\d+)\]/g, '.$1');
+
 function errorsOf(err: unknown): CaseStudyVisualStoryValidationError[] {
   const data = (err as { response?: { data?: { errors?: unknown; error?: string } } })?.response?.data;
   if (Array.isArray(data?.errors)) {
@@ -88,8 +91,13 @@ export default function CaseStudyVisualStoryPanel({
   };
   const diff = useMemo(() => diffSummary(stored, form), [stored, form]);
   const disabled = busy || working;
+  // The validator writes semantic paths with brackets (`workflow.panels[1].nodes[3]`)
+  // and shape paths with dots (`workflow.panels.1.nodes.3.label`); the editors ask
+  // with dots. Both spellings are normalised to dots before matching, so a row is
+  // marked whichever kind of refusal named it.
   const errorFor = useCallback((prefix: string): string | null => {
-    const hit = errors.find((e) => e.path === prefix || e.path.startsWith(`${prefix}.`));
+    const want = dotted(prefix);
+    const hit = errors.find((e) => { const p = dotted(e.path); return p === want || p.startsWith(`${want}.`); });
     return hit ? `${hit.path}: ${hit.message}` : null;
   }, [errors]);
 
