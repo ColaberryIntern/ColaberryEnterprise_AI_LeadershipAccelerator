@@ -27,10 +27,11 @@
 export const EVENT_TYPE_MAX_LENGTH = 30;
 
 /**
- * The seven Case Study events, per spec section 27.
+ * The eight Case Study events: the seven per spec section 27, and the visual
+ * story band's interaction event added with the visual upgrade.
  *
- * Longest is `case_study_artifact_click` at 25 characters, which leaves five
- * characters of headroom. A future variant suffix (`_v2`, `_bottom`) is
+ * Longest is `case_study_visual_interaction` at 29 characters, which leaves
+ * ONE character of headroom. A future variant suffix (`_v2`, `_bottom`) is
  * therefore NOT automatically safe - add it here and let the length test fail.
  */
 export const CASE_STUDY_EVENT_TYPES = [
@@ -41,6 +42,7 @@ export const CASE_STUDY_EVENT_TYPES = [
   'case_study_artifact_click',
   'case_study_cta_click',
   'case_study_share',
+  'case_study_visual_interaction',
 ] as const;
 
 export type CaseStudyEventType = (typeof CASE_STUDY_EVENT_TYPES)[number];

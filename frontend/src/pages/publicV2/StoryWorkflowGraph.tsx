@@ -163,7 +163,7 @@ export function StoryWorkflowGraph({ workflow, motion }: StoryWorkflowGraphProps
               return (
                 <g
                   key={n.key}
-                  className={`cbv2-story-visual__node cbv2-story-visual__node--${n.role} cbv2-story-visual__node--${n.status}${current ? ' is-current' : ''}`}
+                  className={`cbv2-story-visual__node cbv2-story-visual__node--${n.role} cbv2-story-visual__node--${n.status}`}
                   transform={`translate(${box.x} ${box.y})`}
                   role="button"
                   tabIndex={0}

@@ -5,12 +5,14 @@ import CaseStudyVerificationBadge from '../../components/caseStudy/CaseStudyVeri
 import { heroFacts, heroMetricsFor, visibleSections } from './storyDetailV2Model';
 import StoryHeroActions from './StoryHeroActions';
 import StoryContextStrip from './StoryContextStrip';
+import StoryVisualStory from './StoryVisualStory';
 import { StoryHeroFigure } from './StoryHeroFigure';
 import StorySectionList from './StorySectionList';
 import { storyIndicators } from './storyIndicatorModel';
 import { evidenceMaturity } from './storyMaturityModel';
 import { placeStoryFigures } from './storyFigurePlacement';
 import { coverFor } from './storyCover';
+import { visualStoryFor } from './storyVisualModel';
 import type {
   PublicCaseStudyDetail,
   PublicSurfaceView,
@@ -103,6 +105,14 @@ export function StoryDetailArticle({
     record.artifacts, sections, cover && coverShownInMasthead ? cover.src : null,
   );
   const maturity = evidenceMaturity(record);
+  /* The visual story, when the server sent one for this surface. Its outcome
+     cards are the same headline metrics the strip would print, at display
+     size with baseline and badge; printing them twice within one screen would
+     read as a rendering fault, so the strip gets none when the band has some.
+     `maturity` is untouched: it is non-null only when there are no metrics at
+     all, and a record with cards has metrics. */
+  const visual = visualStoryFor(record);
+  const stripMetrics = visual && visual.outcomeCards.length > 0 ? [] : metrics;
 
   return (
     /* The click handler is an observer on a container, the pattern
@@ -191,9 +201,11 @@ export function StoryDetailArticle({
       <StoryContextStrip
         indicators={indicators}
         facts={facts}
-        metrics={metrics}
+        metrics={stripMetrics}
         maturity={maturity}
       />
+
+      {visual ? <StoryVisualStory story={visual} /> : null}
 
       <StorySectionList record={record} sections={sections} figures={figures} />
 

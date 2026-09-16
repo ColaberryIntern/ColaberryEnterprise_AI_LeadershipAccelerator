@@ -103,7 +103,6 @@ describe('StoryWorkflowGraph', () => {
       gap.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     });
     expect(gap.getAttribute('aria-pressed')).toBe('true');
-    expect(gap.classList.contains('is-current')).toBe(true);
     expect(heading()).toBe('Node gap');
     const panel = q('[data-testid="story-workflow-panel"]');
     expect(panel.textContent).toContain('Detected by query.');
@@ -174,7 +173,7 @@ describe('StoryWorkflowGraph', () => {
     mount(<StoryWorkflowGraph workflow={workflow} motion="auto" />);
     for (const el of all('[class]')) {
       for (const name of Array.from(el.classList)) {
-        expect({ name, ok: name.startsWith('cbv2-') || name === 'is-current' }).toEqual({ name, ok: true });
+        expect({ name, ok: name.startsWith('cbv2-') }).toEqual({ name, ok: true });
       }
     }
     expect(all('[style]')).toHaveLength(0);

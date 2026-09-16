@@ -57,6 +57,7 @@ jest.mock('../../../utils/caseStudyTracking', () => {
     trackCaseStudyArtifactClick: jest.fn(),
     trackCaseStudyCtaClick: jest.fn(),
     trackCaseStudyShare: jest.fn(),
+    trackCaseStudyVisualInteraction: jest.fn(),
   };
 });
 
@@ -175,6 +176,33 @@ const response = (over: Partial<PublicCaseStudyDetail> = {}) => ({
   surface: SURFACE,
   caseStudy: detail(over),
 });
+
+/** A minimal visual story: a two-state workflow, one card, one chart. */
+const visualStory = (): NonNullable<PublicCaseStudyDetail['visualStory']> => {
+  const lanes = { primary: 'Live path', recovery: 'Recovery path', manual: 'Manual repair' } as const;
+  const node = (key: string, lane: 'primary' | 'recovery' = 'primary') => ({
+    key, label: `Step ${key}`, sublabel: null, detail: null, kicker: null, role: 'system' as const,
+    status: 'processing' as const, lane, evidence: null, tally: null,
+  });
+  const edge = (from: string, to: string) => ({ from, to, label: null, status: 'processing' as const, condition: null, motion: true });
+  return {
+    schemaVersion: 1, presentationVersion: 'v2', motion: 'auto',
+    workflow: {
+      key: 'flow', type: 'before_after', title: 'Same order, a different path', caption: null, description: 'What changed.',
+      panels: [
+        { key: 'before', label: 'Before', summary: null, laneLabels: lanes, nodes: [node('a'), node('b')], edges: [edge('a', 'b')], initialNodeKey: 'a' },
+        { key: 'after', label: 'After', summary: null, laneLabels: lanes, nodes: [node('a'), node('c', 'recovery')], edges: [edge('a', 'c')], initialNodeKey: 'a' },
+      ],
+      motionNote: 'Illustration, not live telemetry.',
+    },
+    outcomeCards: [metric()],
+    charts: [{
+      key: 'share', kind: 'share', title: 'Stockouts cut', caption: null, metric: metric(), denominator: 100,
+      parts: [{ label: 'Stockouts per quarter', value: 41, denominator: 100, status: 'processing', caveat: null }],
+      unit: null, axisMax: null, caveat: null, limitations: [],
+    }],
+  };
+};
 
 /* -------------------------------------------------------------- harness --- */
 
@@ -834,5 +862,66 @@ describe('tracking goes through the sanitising surface, once', () => {
     expect(tracking.trackCaseStudyRepoClick).not.toHaveBeenCalled();
     expect(tracking.trackCaseStudyArtifactClick).not.toHaveBeenCalled();
     expect(tracking.trackCaseStudyCtaClick).not.toHaveBeenCalled();
+    expect(tracking.trackCaseStudyVisualInteraction).not.toHaveBeenCalled();
+  });
+
+  it('sends a visual story interaction as the piece and the action, both slugs', async () => {
+    detailMock.mockResolvedValue(response({ visualStory: visualStory() }));
+    mount();
+    await settle();
+    click('[data-visual-action="panel:before"]');
+    expect(tracking.trackCaseStudyVisualInteraction).toHaveBeenCalledTimes(1);
+    expect(tracking.trackCaseStudyVisualInteraction).toHaveBeenCalledWith(expect.objectContaining({
+      slug: 'sample-record',
+      visual: 'workflow',
+      action: 'panel:before',
+    }));
+    // A step selected in the graph is an interaction too; nothing else fired.
+    // An SVG `<g>` has no `.click()` in jsdom, so the event is dispatched.
+    act(() => {
+      q('[data-node-key="b"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(tracking.trackCaseStudyVisualInteraction).toHaveBeenCalledTimes(2);
+    expect(tracking.trackCaseStudyRepoClick).not.toHaveBeenCalled();
+    expect(tracking.trackCaseStudyCtaClick).not.toHaveBeenCalled();
+  });
+});
+
+/* ------------------------------------------------------ the visual story --- */
+
+describe('the visual story band appears only when the record carries one', () => {
+  it('renders no band, and the page it always rendered, for a record with visualStory null', async () => {
+    mount();
+    await settle();
+    expect(q('[data-testid="story-visual"]')).toBeNull();
+    // The context strip still prints the headline figure.
+    expect(q('[data-testid="story-context"] .cbv2-story__metric')).not.toBeNull();
+    expect(html()).not.toContain('cbv2-story-visual');
+  });
+
+  it('renders the band under the strip, moves the headline figure into it, and folds the drawing', async () => {
+    detailMock.mockResolvedValue(response({
+      visualStory: visualStory(),
+      architecture: architecture({ diagramSource: 'flowchart TD\n  a --> b' }),
+    }));
+    mount();
+    await settle();
+    const band = q('[data-testid="story-visual"]');
+    expect(band).not.toBeNull();
+    // Directly after the context strip, before the first section.
+    const order = all('[data-testid="story-context"], [data-testid="story-visual"], [data-section]')
+      .map((el) => el.getAttribute('data-testid') ?? el.getAttribute('data-section'));
+    expect(order.slice(0, 3)).toEqual(['story-context', 'story-visual', 'situation']);
+    // The strip no longer prints the figure the band's card shows.
+    expect(q('[data-testid="story-context"] .cbv2-story__metric')).toBeNull();
+    expect(all('[data-testid="story-outcome-card"]')).toHaveLength(1);
+    expect(band!.textContent).toContain('41% fewer');
+    expect(q('[data-testid="story-workflow"]')).not.toBeNull();
+    expect(q('[data-testid="story-chart"]')).not.toBeNull();
+    // The Mermaid drawing sits inside the proof fold, not above it.
+    const proof = q('[data-testid="story-technical-proof"]');
+    expect(proof?.getAttribute('data-diagram-folded')).toBe('true');
+    expect(proof?.querySelector('[data-testid="story-diagram"]')).not.toBeNull();
+    expect(all('[data-testid="story-diagram"]')).toHaveLength(1);
   });
 });
