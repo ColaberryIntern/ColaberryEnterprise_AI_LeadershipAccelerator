@@ -20,7 +20,12 @@ jest.mock('../../sbp/verification/storyPoints', () => ({
 }));
 jest.mock('../../timeline/curriculumScope', () => ({ CANONICAL_PROGRAM_ID: 'prog-canonical' }));
 jest.mock('../../timeline/typeRegistry', () => ({
-  isGradedCardType: (slug: string) => ['prompt_lab', 'implementation_task', 'knowledge_check', 'evaluation'].includes(slug),
+  // Mirrors the real rule: graded types, with claude_studio required only from 2026-11-01.
+  isCurriculumRequired: (slug: string, cohortStart: string | null) => {
+    if (!['prompt_lab', 'implementation_task', 'knowledge_check', 'evaluation', 'claude_studio'].includes(slug)) return false;
+    if (slug === 'claude_studio') return !cohortStart || cohortStart >= '2026-11-01';
+    return true;
+  },
 }));
 
 import { sequelize } from '../../../config/database';
@@ -50,6 +55,14 @@ function fullCurriculum(over: Partial<Record<number, Array<[string, boolean]>>> 
   return weekRows(spec);
 }
 
+/** The cohort-start lookup runs before the card query; default to the July 2026 cohort. */
+const COHORT_JULY = [{ start_date: '2026-07-23' }];
+const COHORT_NOV = [{ start_date: '2026-11-12' }];
+const NO_COHORT = [{ start_date: null }];
+function primeCurriculum(cards: unknown[], cohort: unknown[] = COHORT_JULY) {
+  query.mockResolvedValueOnce(cohort).mockResolvedValueOnce(cards);
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   msFindOrCreate.mockResolvedValue([{}, true]);
@@ -59,7 +72,7 @@ beforeEach(() => {
 
 describe('getCurriculumCompletion', () => {
   it('is complete when every graded card in all 12 weeks is done, ignoring consumption cards', async () => {
-    query.mockResolvedValueOnce(fullCurriculum());
+    primeCurriculum(fullCurriculum());
     const r = await getCurriculumCompletion('e1');
     expect(r.complete).toBe(true);
     expect(r.incompleteWeeks).toEqual([]);
@@ -67,32 +80,70 @@ describe('getCurriculumCompletion', () => {
   });
 
   it('one unfinished graded card in one week blocks it, and names the week', async () => {
-    query.mockResolvedValueOnce(fullCurriculum({ 7: [['prompt_lab', true], ['evaluation', false]] }));
+    primeCurriculum(fullCurriculum({ 7: [['prompt_lab', true], ['evaluation', false]] }));
     const r = await getCurriculumCompletion('e1');
     expect(r.complete).toBe(false);
     expect(r.incompleteWeeks).toEqual([7]);
   });
 
   it('a week with NO graded cards is not complete — an unauthored week is not a finished one', async () => {
-    query.mockResolvedValueOnce(fullCurriculum({ 12: [['video', true], ['blog', true]] }));
+    primeCurriculum(fullCurriculum({ 12: [['video', true], ['blog', true]] }));
     const r = await getCurriculumCompletion('e1');
     expect(r.complete).toBe(false);
     expect(r.incompleteWeeks).toEqual([12]);
   });
 
   it('a student who has done nothing is incomplete in every week', async () => {
-    query.mockResolvedValueOnce(fullCurriculum(Object.fromEntries(Array.from({ length: 12 }, (_, i) => [i + 1, [['prompt_lab', false]]]))));
+    primeCurriculum(fullCurriculum(Object.fromEntries(Array.from({ length: 12 }, (_, i) => [i + 1, [['prompt_lab', false]]]))));
     const r = await getCurriculumCompletion('e1');
     expect(r.incompleteWeeks).toHaveLength(12);
   });
 
   it('scopes the query to the shared curriculum and weeks 1..12', async () => {
-    query.mockResolvedValueOnce([]);
+    primeCurriculum([]);
     await getCurriculumCompletion('e1');
-    const [sql, opts] = query.mock.calls[0];
+    const [sql, opts] = query.mock.calls[1];
     expect(sql).toMatch(/cohort_id IS NULL/);
     expect(sql).toMatch(/visibility = 'published'/);
     expect(opts.replacements).toMatchObject({ enrollmentId: 'e1', programId: 'prog-canonical', weeks: 12 });
+  });
+
+  // D8 (Ali, 2026-09-16): Claude Studio landed after the July 2026 cohort was
+  // mid-programme, so it is not required of them; from November 2026 it is.
+  // MEASURED: Farhat Beig had 77 of 89 graded cards done and her 12 missing
+  // cards were exactly the 12 Studios.
+  describe('D8 — a late-added graded type counts only from a cohort start date', () => {
+    const withStudios = (studioDone: boolean) => fullCurriculum(Object.fromEntries(
+      Array.from({ length: 12 }, (_, i) => [i + 1, [['prompt_lab', true], ['claude_studio', studioDone]]]),
+    ));
+
+    it('July 2026: undone Studios do not block curriculum complete', async () => {
+      primeCurriculum(withStudios(false), COHORT_JULY);
+      const r = await getCurriculumCompletion('farhat');
+      expect(r.complete).toBe(true);
+      expect(r.cohortStart).toBe('2026-07-23');
+      expect(r.weeks[0].graded).toBe(1);   // the Studio is not counted at all
+    });
+
+    it('November 2026: undone Studios block it in every week', async () => {
+      primeCurriculum(withStudios(false), COHORT_NOV);
+      const r = await getCurriculumCompletion('nov-student');
+      expect(r.complete).toBe(false);
+      expect(r.incompleteWeeks).toHaveLength(12);
+      expect(r.weeks[0].graded).toBe(2);
+    });
+
+    it('November 2026: done Studios complete it', async () => {
+      primeCurriculum(withStudios(true), COHORT_NOV);
+      expect((await getCurriculumCompletion('nov-student')).complete).toBe(true);
+    });
+
+    it('no cohort at all: held to everything (unknown never reads as exempt)', async () => {
+      primeCurriculum(withStudios(false), NO_COHORT);
+      const r = await getCurriculumCompletion('explorer');
+      expect(r.complete).toBe(false);
+      expect(r.cohortStart).toBeNull();
+    });
   });
 });
 
@@ -126,7 +177,7 @@ describe('getProjectCompletions', () => {
 
 describe('syncMilestones', () => {
   it('latches the curriculum and each complete project, and reports what it wrote', async () => {
-    query.mockResolvedValueOnce(fullCurriculum());
+    primeCurriculum(fullCurriculum());
     projectFindAll.mockResolvedValue([{ id: 'p1', name: 'A' }]);
     publishedPlan.mockResolvedValue({ plan: { stories: [{ id: 'STORY-001' }] } });
     taskCount.mockResolvedValue(2);
@@ -146,7 +197,8 @@ describe('syncMilestones', () => {
   });
 
   it('is idempotent: the same truth on a second run writes nothing new', async () => {
-    query.mockResolvedValue(fullCurriculum());
+    primeCurriculum(fullCurriculum());
+    primeCurriculum(fullCurriculum());
     projectFindAll.mockResolvedValue([{ id: 'p1', name: 'A' }]);
     publishedPlan.mockResolvedValue({ plan: { stories: [{ id: 'STORY-001' }] } });
     taskCount.mockResolvedValue(2);
@@ -164,7 +216,7 @@ describe('syncMilestones', () => {
   });
 
   it('never latches an incomplete project or an incomplete curriculum', async () => {
-    query.mockResolvedValueOnce(fullCurriculum({ 3: [['prompt_lab', false]] }));
+    primeCurriculum(fullCurriculum({ 3: [['prompt_lab', false]] }));
     projectFindAll.mockResolvedValue([{ id: 'p1', name: 'A' }]);
     publishedPlan.mockResolvedValue({ plan: { stories: [{ id: 'STORY-001' }, { id: 'STORY-002' }] } });
     taskCount.mockResolvedValue(1);
@@ -174,7 +226,7 @@ describe('syncMilestones', () => {
 
   it('a latched milestone survives the truth changing under it (D5)', async () => {
     // Curriculum no longer reads complete (a week was re-authored), but the row exists.
-    query.mockResolvedValueOnce(fullCurriculum({ 5: [['evaluation', false]] }));
+    primeCurriculum(fullCurriculum({ 5: [['evaluation', false]] }));
     msFindAll.mockResolvedValue([{ milestone_type: 'curriculum_complete', source_ref: 'curriculum' }]);
     const r = await syncMilestones('e1');
     expect(r.curriculum.complete).toBe(false);

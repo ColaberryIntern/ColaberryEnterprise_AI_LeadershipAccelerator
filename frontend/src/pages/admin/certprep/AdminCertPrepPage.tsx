@@ -7,6 +7,7 @@ import CertBankPanel from './CertBankPanel';
 import CertReviewPanel from './CertReviewPanel';
 import CertEvidenceReviewPanel from './CertEvidenceReviewPanel';
 import CertAuditPanel from './CertAuditPanel';
+import CertificationApprovalPanel from './CertificationApprovalPanel';
 
 /**
  * AdminCertPrepPage — running Cert Prep for a cohort, and keeping the question
@@ -31,13 +32,15 @@ import CertAuditPanel from './CertAuditPanel';
  * lives behind requireAdmin and the 'program' management section.
  */
 
-type TabId = 'cohort' | 'bank' | 'review' | 'evidence' | 'audit';
+type TabId = 'cohort' | 'bank' | 'review' | 'evidence' | 'certificates' | 'audit';
 
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: 'cohort', label: 'Cohort', icon: 'group-line' },
   { id: 'bank', label: 'Question bank', icon: 'stack-line' },
   { id: 'review', label: 'Review queue', icon: 'draft-line' },
   { id: 'evidence', label: 'Evidence', icon: 'file-check-line' },
+  // Uploaded certificates awaiting a named admin's approval (ladder D4).
+  { id: 'certificates', label: 'Certificates', icon: 'award-line' },
   { id: 'audit', label: 'Audit', icon: 'history-line' },
 ];
 
@@ -184,6 +187,7 @@ export default function AdminCertPrepPage({ initialCohortId }: CertPrepProps = {
       {tab === 'bank' && <CertBankPanel health={health} />}
       {tab === 'review' && <CertReviewPanel onChanged={load} />}
       {tab === 'evidence' && <CertEvidenceReviewPanel enrollmentIds={enrollmentIds} />}
+      {tab === 'certificates' && <CertificationApprovalPanel />}
       {tab === 'audit' && <CertAuditPanel />}
     </>
   );
