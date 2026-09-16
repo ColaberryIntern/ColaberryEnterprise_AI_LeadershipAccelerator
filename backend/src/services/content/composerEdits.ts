@@ -1,5 +1,5 @@
 import { ContentItem, ContentItemMedia, ContentVariant } from '../../models';
-import type { PollSpec } from './pollSpec';
+import { pollFromMetadata, type PollSpec } from './pollSpec';
 import type { ApprovalSnapshot, InvalidationResult } from './contentWorkflow';
 import { assertWritable, recordEdit, WorkflowError, type Actor } from './contentWorkflowService';
 
@@ -28,8 +28,14 @@ export async function snapshotItem(itemId: string): Promise<ApprovalSnapshot> {
   if (!item) throw new WorkflowError('Content item not found', 404, 'NotFound');
   const variants = await ContentVariant.findAll({ where: { content_item_id: itemId }, order: [['provider', 'ASC']] });
   const media = await ContentItemMedia.findAll({ where: { content_item_id: itemId } });
+  // The content type and the poll are part of what the approver read: "an image post" is a
+  // different post from "a text post" with the same words, and a poll's options ARE its copy.
+  // Found by the task verifier (2026-09-15): without these, an approved poll edited afterwards
+  // kept its approval, defended only by the worker's stale-revision guard.
+  const poll = pollFromMetadata(item.metadata);
+  const shape = `type:${item.content_type}` + (poll ? `\npoll:${JSON.stringify(poll)}` : '');
   return {
-    copy: [item.canonical_body ?? '', ...variants.map((v) => `${v.provider}:${v.body ?? ''}`)].join('\n---\n'),
+    copy: [shape, item.canonical_body ?? '', ...variants.map((v) => `${v.provider}:${v.body ?? ''}`)].join('\n---\n'),
     media: sorted(media.map((m) => m.media_asset_id)),
     destination: sorted(variants.map((v) => `${v.provider}:${v.link_url ?? ''}`)),
     account: sorted(variants.map((v) => v.channel_account_id ?? '')),

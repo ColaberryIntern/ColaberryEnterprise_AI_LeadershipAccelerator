@@ -205,6 +205,28 @@ describe('a poll on the item: stored, judged, carried, cleared', () => {
     expect(v.providers.blockers.map((b) => `${b.provider}: ${b.message}`)).toEqual(['linkedin_member: LinkedIn (personal profile): polls run for 1, 3, 7, 14 days; 5 is not offered.']);
   });
 
+  it('editing an APPROVED poll invalidates the approval, like editing its copy would', async () => {
+    const id = await pollItem();
+    expect((await validateItem(id)).ok).toBe(true);
+    await sendForApproval(id, AUTHOR);
+    await decideApproval(id, 'approved', REVIEWER);
+    expect((await buildItemConfirmation(id)).readiness.canPublishNow).toBe(true);
+
+    const r = await updateItemDraft(id, { poll: { ...POLL, options: ['Prompting', 'Agents', 'Data pipelines'] } }, AUTHOR);
+    expect(r.invalidation.invalidated).toBe(true);
+    expect(r.invalidation.fields).toEqual(['copy']);
+    expect(r.item.human_approved).toBe(false);
+    expect(models.ContentApprovalRequest.rows[0].status).toBe('invalidated');
+    expect((await buildItemConfirmation(id)).readiness.canPublishNow).toBe(false);
+  });
+
+  it('changing the content TYPE of an approved post invalidates the approval too', async () => {
+    const id = await approvedItem(); // a text post
+    const r = await updateItemDraft(id, { content_type: 'image' }, AUTHOR);
+    expect(r.invalidation.invalidated).toBe(true);
+    expect(r.item.human_approved).toBe(false);
+  });
+
   it('null clears ONLY the poll; the post then fails validation as a poll with nothing in it', async () => {
     const id = await pollItem();
     await updateItemDraft(id, { poll: null }, AUTHOR);
