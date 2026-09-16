@@ -4,7 +4,8 @@ import { getTestOverrides, getSetting } from './settingsService';
 import { isKillSwitchActive } from './launchSafety';
 import type { DigestData } from './digestService';
 import { redactForLogs } from '../utils/piiRedaction';
-import { formatCentralClock, sessionDayLabel } from './centralDate';
+import { sessionDayLabel } from './centralDate';
+import { SessionReminderData, buildSessionReminderHtml } from './email/sessionReminderEmail';
 import { isDev } from '../config/featureFlags';
 import { decideDevEmailRouting } from './devEmailGuard';
 import { buildLeadAlert, decideNotify, type AlertLead } from './leadAlertMessage';
@@ -1462,18 +1463,6 @@ function buildDigestHtml(data: DigestData): string {
 }
 // --- Accelerator Session Emails ---
 
-interface SessionReminderData {
-  to: string;
-  fullName: string;
-  sessionTitle: string;
-  sessionNumber: number;
-  sessionDate: string;
-  startTime: string;
-  meetingLink: string | null;
-  materialsJson: any[] | null;
-  isOneHour: boolean;
-}
-
 export async function sendSessionReminder(data: SessionReminderData): Promise<void> {
   if (!transporter) {
     console.warn('[Email] SMTP not configured. Skipping session reminder to:', redactForLogs(data.to));
@@ -1593,55 +1582,7 @@ async function recordSessionReminderLog(
   }
 }
 
-function buildSessionReminderHtml(data: SessionReminderData, urgencyLabel: string): string {
-  const materialsHtml = data.materialsJson?.length
-    ? `<h2>Session Materials</h2><ul>${data.materialsJson.map((m: any) => `<li><a href="${m.url}">${m.title || m.url}</a></li>`).join('')}</ul>`
-    : '';
-
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; }
-    h1 { color: #1a365d; font-size: 24px; }
-    h2 { color: #1a365d; font-size: 18px; margin-top: 24px; }
-    .highlight { background: #f7fafc; border-left: 4px solid #1a365d; padding: 16px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; }
-    .cta { display: inline-block; background: #1a365d; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 16px 0; }
-    .urgency { background: #fff3cd; border: 1px solid #ffc107; padding: 12px 16px; border-radius: 6px; margin: 16px 0; font-weight: 600; }
-    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #718096; }
-  </style>
-</head>
-<body>
-  <h1>Session ${data.sessionNumber}: ${data.sessionTitle}</h1>
-
-  <div class="urgency">${urgencyLabel}</div>
-
-  <p>Dear ${data.fullName},</p>
-
-  <p>This is a reminder for your upcoming Accelerator session.</p>
-
-  <div class="highlight">
-    <strong>Session:</strong> #${data.sessionNumber} - ${data.sessionTitle}<br>
-    <strong>Date:</strong> ${data.sessionDate}<br>
-    <strong>Time:</strong> ${formatCentralClock(data.sessionDate, data.startTime)}
-  </div>
-
-  ${data.meetingLink ? `<p><a href="${data.meetingLink}" class="cta">Join Session</a></p>` : '<p><em>Meeting link will be shared before the session starts.</em></p>'}
-
-  ${materialsHtml}
-
-  <p>Please ensure you have completed any pre-work assignments before the session begins.</p>
-
-  <div class="footer">
-    <p>Colaberry Enterprise AI Division<br>
-    AI Leadership | Architecture | Implementation | Advisory</p>
-  </div>
-</body>
-</html>
-  `.trim();
-}
+// buildSessionReminderHtml and SessionReminderData live in ./email/sessionReminderEmail.ts
 
 interface MissedSessionData {
   to: string;
