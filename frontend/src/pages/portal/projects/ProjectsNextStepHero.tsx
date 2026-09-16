@@ -14,6 +14,34 @@ import { isPrepStory, DEMO_DAY_STORY_ID } from './DemoEvidencePanel';
 // ReflectionReview.tsx already carry; webpack dedupes, so it costs nothing.
 import '../../../components/timeline/timeline.css';
 
+/**
+ * The sentence the hero says when nothing is left to open. It used to be one
+ * fixed line, "Every task on your build is done", which is only true when it is:
+ * a student whose 8 build stories were all verified but whose 6 Demo-prep steps
+ * were skipped saw that line above a card reading "9/15 tasks" and asked which
+ * one to believe. Both were right about different sets. This names the sets.
+ */
+export function completionSummary(p: StudentProject): { title: string; body: string } {
+  const tasks = p.lists.flatMap((l) => l.tasks);
+  const stories = tasks.filter((t) => t.storyId && !isPrepStory(t.storyId));
+  const verified = stories.filter((t) => !!t.verifiedAt).length;
+  const remaining = tasks.filter((t) => t.state !== 'done');
+  const skipped = remaining.filter((t) => t.state === 'skipped').length;
+  const prepLeft = remaining.filter((t) => isPrepStory(t.storyId)).length;
+  const allStoriesVerified = stories.length > 0 && verified === stories.length;
+  if (remaining.length === 0) {
+    return { title: `${p.name} is complete`, body: 'Every task on your build is done. Start another build, or review what you shipped.' };
+  }
+  const what = prepLeft === remaining.length
+    ? `${remaining.length} Demo-prep step${remaining.length === 1 ? '' : 's'}`
+    : `${remaining.length} task${remaining.length === 1 ? '' : 's'}`;
+  const how = skipped === remaining.length ? ' you skipped' : skipped > 0 ? `, ${skipped} skipped` : '';
+  const left = `${what}${how} remain${remaining.length === 1 && !how.startsWith(' you') ? 's' : ''}. Open your build to pick them up, or start another.`;
+  return allStoriesVerified
+    ? { title: `${p.name}: every build story is verified`, body: `All ${stories.length} build stories are verified from your repo. ${left}` }
+    : { title: `${p.name} has nothing open right now`, body: `${verified} of ${stories.length} build stories are verified. ${left}` };
+}
+
 type Props = {
   primary: StudentProject | null;
   primaryNext: { task: ProjectTask; list: ProjectList } | null;
@@ -70,7 +98,7 @@ const ProjectsNextStepHero: React.FC<Props> = ({ primary, primaryNext, demo, var
           icon={SPARKLE}
           tone="leaf"
           label="Your next step"
-          title={`${primary.name} is complete`}
+          title={completionSummary(primary).title}
           action={<button className="te-btn ghost sm" type="button" onClick={onOpenBuild}>Open →</button>}
         />
       );
@@ -144,11 +172,12 @@ const ProjectsNextStepHero: React.FC<Props> = ({ primary, primaryNext, demo, var
     );
   }
   if (primary) {
+    const summary = completionSummary(primary);
     return (
       <div className="te-hero">
         <div className="eyebrow">Your next step</div>
-        <h2>{primary.name} is complete</h2>
-        <p>Every task on your build is done. Start another build, or review what you shipped.</p>
+        <h2>{summary.title}</h2>
+        <p>{summary.body}</p>
         <div className="pjw-actions" style={{ marginTop: 0 }}>
           <button className="te-btn cherry" onClick={onStartBuild}>Start a new build</button>
           <button className="te-btn ghost" onClick={onOpenBuild}>Open your build</button>
