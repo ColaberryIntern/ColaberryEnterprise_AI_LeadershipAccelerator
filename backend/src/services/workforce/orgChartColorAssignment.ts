@@ -83,6 +83,11 @@ export function assignHierarchyColors(
 
   const staffColors = new Map<string, string>();
   for (const s of staff) {
+    // Org Chart v5 (2026-09-16) — an individual contributor reporting
+    // directly to a human has no leadership agent to inherit a color from;
+    // simply absent from staffColors, same "no opinion, caller decides the
+    // fallback" posture this function already takes for colorless humans.
+    if (!s.reports_to_agent_id) continue;
     const color = leadershipColors.get(s.reports_to_agent_id);
     if (color) staffColors.set(s.id, color);
   }

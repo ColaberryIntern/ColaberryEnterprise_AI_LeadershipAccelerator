@@ -384,7 +384,15 @@ describe('getOrgChart — Taiwo rollup with reassigned AI Staff (fixture-based, 
   const FINANCE_ARCHITECT = { id: 'finance-architect-id', agent_name: 'FinanceIntelligenceArchitect', reports_to_type: 'human', reports_to_id: 'taiwo-id' };
   const STUDENT_SUCCESS_ARCHITECT = { id: 'student-success-architect-id', agent_name: 'StudentSuccessArchitect', reports_to_type: 'human', reports_to_id: 'taiwo-id' };
 
-  it("Taiwo's leadership_agent_ids includes every agent whose reports_to_type='human'/reports_to_id resolves to her — proves the rollup logic works for the post-T2 shape without depending on T2's actual deploy having happened", async () => {
+  // Org Chart v5 (2026-09-16, Ali live: "Why is Dara in AI leadership instead
+  // of just AI Staff") — before this fix, ANY agent reporting directly to a
+  // human landed in `leadership`, even with zero subordinates. Finance/
+  // StudentSuccess Architects are exactly that shape (same as Dara), so this
+  // test's own pre-fix assertions were pinning the bug this run fixes. Now
+  // rewritten to prove the FIXED behavior: an individual contributor
+  // reporting straight to a human is real "AI Staff," and only counts toward
+  // a human's `staff_count`, never `leadership_agent_ids`.
+  it("an agent reporting directly to a human with no subordinates of its own lands in `staff`, not `leadership` — Taiwo's rollup reflects that (staff_count, not leadership_agent_ids)", async () => {
     mockMemberFindAll.mockResolvedValue([ALI, KES, TAIWO]);
     mockEnrollmentFindAll.mockResolvedValue([{ id: 'enr-ali', full_name: 'Ali Muwwakkil' }, { id: 'enr-taiwo', full_name: 'Taiwo Oludimimu' }]);
     mockAgentFindAll.mockResolvedValue([CORYBRAIN, FINANCE_ARCHITECT, STUDENT_SUCCESS_ARCHITECT]);
@@ -397,11 +405,34 @@ describe('getOrgChart — Taiwo rollup with reassigned AI Staff (fixture-based, 
     const result = await getOrgChart();
 
     const taiwo = result.humans.find((h) => h.id === 'taiwo-id')!;
-    expect(taiwo.leadership_agent_ids.sort()).toEqual(['finance-architect-id', 'student-success-architect-id'].sort());
+    expect(taiwo.leadership_agent_ids).toEqual([]); // neither architect has subordinates -> not leadership
+    expect(taiwo.staff_count).toBe(2);
     expect(taiwo.department).toBe('Operations');
 
-    const financeEntry = result.leadership.find((l) => l.id === 'finance-architect-id')!;
+    expect(result.leadership.find((l) => l.id === 'finance-architect-id')).toBeUndefined();
+    const financeEntry = result.staff.find((s) => s.id === 'finance-architect-id')!;
     expect(financeEntry.reports_to_summary).toBe('Reports to: Taiwo Oludimimu');
+    expect(financeEntry.reports_to_agent_id).toBeNull(); // no leadership agent to link back to
+  });
+
+  it("an agent reporting directly to a human DOES land in `leadership` once it has at least one real subordinate", async () => {
+    const SUB_AGENT = { id: 'sub-agent-id', agent_name: 'FinanceSubAgent', reports_to_type: 'agent', reports_to_id: 'finance-architect-id' };
+    mockMemberFindAll.mockResolvedValue([ALI, KES, TAIWO]);
+    mockEnrollmentFindAll.mockResolvedValue([{ id: 'enr-ali', full_name: 'Ali Muwwakkil' }, { id: 'enr-taiwo', full_name: 'Taiwo Oludimimu' }]);
+    mockAgentFindAll.mockResolvedValue([CORYBRAIN, FINANCE_ARCHITECT, SUB_AGENT]);
+    mockResolveChain.mockImplementation(async (agent: any) => {
+      if (agent.id === CORYBRAIN.id) return { resolvedHumanId: 'ali-id', trail: ['CoryBrain (agent) -> [human]'] };
+      if (agent.id === FINANCE_ARCHITECT.id) return { resolvedHumanId: 'taiwo-id', trail: ['FinanceIntelligenceArchitect (agent) -> [human]'] };
+      if (agent.id === SUB_AGENT.id) return { resolvedHumanId: 'taiwo-id', trail: ['FinanceSubAgent (agent)', 'FinanceIntelligenceArchitect (agent) -> [human]'] };
+      return { resolvedHumanId: null, trail: [`${agent.agent_name} (agent) -> [dangling]`] };
+    });
+
+    const result = await getOrgChart();
+
+    expect(result.leadership.find((l) => l.id === 'finance-architect-id')).toBeDefined();
+    expect(result.staff.find((s) => s.id === 'finance-architect-id')).toBeUndefined();
+    const subEntry = result.staff.find((s) => s.id === 'sub-agent-id')!;
+    expect(subEntry.reports_to_agent_id).toBe('finance-architect-id');
   });
 });
 
@@ -437,5 +468,14 @@ describe('workforceOrgChartResponseSchema — boundary', () => {
     const { reports_to_summary, ...leadershipWithoutSummary } = VALID_LEADERSHIP;
     const result = workforceOrgChartResponseSchema.safeParse({ ...VALID_RESPONSE, leadership: [leadershipWithoutSummary] });
     expect(result.success).toBe(false);
+  });
+
+  // Org Chart v5 (2026-09-16) — a staff entry with no leadership parent
+  // (an individual contributor reporting directly to a human) must pass with
+  // reports_to_agent_id: null, not merely tolerate a missing/undefined field.
+  it('a staff entry with reports_to_agent_id: null passes safeParse', () => {
+    const VALID_STAFF_NO_LEADER = { id: 's1', agent_name: 'Dara', display_name: 'Dara', reports_to_agent_id: null, reports_to_summary: 'Reports to: Swati Raman', open_ticket_count: 0, hierarchy_color: null, enabled: false };
+    const result = workforceOrgChartResponseSchema.safeParse({ ...VALID_RESPONSE, staff: [VALID_STAFF_NO_LEADER] });
+    expect(result.success).toBe(true);
   });
 });

@@ -63,8 +63,12 @@ export interface OrgChartStaffAgent {
   id: string;
   agent_name: string;
   display_name: string;
-  reports_to_agent_id: string;
-  /** "Reports to: <leadership agent name>" — real, present before any click. */
+  /** The leadership agent this staff agent reports through, or `null` for an
+   * individual contributor reporting directly to a human (Org Chart v5,
+   * 2026-09-16) — there is no leadership card to link back to. */
+  reports_to_agent_id: string | null;
+  /** "Reports to: <leadership agent name>" or "Reports to: <human name>" —
+   * real, present before any click. */
   reports_to_summary: string;
   open_ticket_count: number;
   /** Org Chart v3 (2026-08-19) — same color as the leadership agent this

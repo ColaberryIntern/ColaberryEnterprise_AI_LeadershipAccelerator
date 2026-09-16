@@ -136,8 +136,12 @@ export interface OrgChartStaffAgent {
   id: string;
   agent_name: string;
   display_name: string;
-  reports_to_agent_id: string;
-  /** Real "Reports to: <leadership agent's display name>" string — same
+  /** The leadership agent this staff agent reports through, or `null` for an
+   * individual contributor who reports directly to a human (Org Chart v5,
+   * 2026-09-16) — there is no leadership card to link back to in that case. */
+  reports_to_agent_id: string | null;
+  /** Real "Reports to: <leadership agent's display name>" string, or
+   * "Reports to: <human name>" for the direct-to-human case above — same
    * pre-click visibility requirement as OrgChartLeadershipAgent's. */
   reports_to_summary: string;
   open_ticket_count: number;
@@ -317,6 +321,24 @@ export async function getOrgChart(): Promise<OrgChartResponse> {
     humanRollup.set(humanId, entry);
   };
 
+  // Org Chart v5 (2026-09-16, Ali live: "Why is Dara in AI leadership instead
+  // of just AI Staff") — Leadership means "at least one OTHER agent reports
+  // through it," not merely "reports directly to a human." The two are the
+  // same thing for CoryBrain/workforce_intelligence_engine (this table's
+  // original 2 leadership agents), which is why `reports_to_type==='human'`
+  // alone worked as a proxy for years — but it silently miscategorized every
+  // individually-accountable agent that reports straight to a human with no
+  // one under it (Dara plus 6 pre-existing agents, confirmed live 2026-09-16:
+  // WorkforceCurriculumDirector, WorkforceCertificationDirector,
+  // AdmissionsConversionArchitect, StudentSuccessArchitect,
+  // FinanceIntelligenceArchitect, OperationsOptimizationArchitect). Computed
+  // as a real Set from the agents actually fetched, not merely "any agent
+  // with reports_to_type='agent'" — an agent whose target is unresolved would
+  // otherwise still count as giving its target a subordinate.
+  const agentIdsWithSubordinates = new Set(
+    agents.filter((a) => a.reports_to_type === 'agent').map((a) => a.reports_to_id as string),
+  );
+
   for (const agent of agents) {
     const displayName = agentDisplayNameById.get(agent.id) || agent.agent_name;
     const openTicketCount = openCountByAgentId.get(agent.id) ?? 0;
@@ -330,7 +352,9 @@ export async function getOrgChart(): Promise<OrgChartResponse> {
       continue;
     }
 
-    if (agent.reports_to_type === 'human') {
+    const isLeadership = agent.reports_to_type === 'human' && agentIdsWithSubordinates.has(agent.id);
+
+    if (isLeadership) {
       const reportsToName = humanDisplayNameById.get(resolvedHumanId) ?? resolvedHumanId;
       leadership.push({
         id: agent.id,
@@ -344,6 +368,23 @@ export async function getOrgChart(): Promise<OrgChartResponse> {
         enabled: agent.enabled,
       });
       bumpRollup(resolvedHumanId, true, agent.id);
+    } else if (agent.reports_to_type === 'human') {
+      // An individual contributor reporting directly to a human, with no
+      // subordinates of its own — real "AI Staff" by the fixed definition
+      // above, but with no leadership agent to hang its `reports_to_agent_id`
+      // off of. `reports_to_summary` still names the real accountable human.
+      const reportsToName = humanDisplayNameById.get(resolvedHumanId) ?? resolvedHumanId;
+      staff.push({
+        id: agent.id,
+        agent_name: agent.agent_name,
+        display_name: displayName,
+        reports_to_agent_id: null,
+        reports_to_summary: `Reports to: ${reportsToName}`,
+        open_ticket_count: openTicketCount,
+        hierarchy_color: null, // filled in below, once `humans` exists — see assignHierarchyColors() call
+        enabled: agent.enabled,
+      });
+      bumpRollup(resolvedHumanId, false, agent.id);
     } else {
       const reportsToAgentId = agent.reports_to_id as string;
       const reportsToName = agentDisplayNameById.get(reportsToAgentId) ?? reportsToAgentId;
@@ -363,6 +404,7 @@ export async function getOrgChart(): Promise<OrgChartResponse> {
 
   const leadershipById = new Map(leadership.map((l) => [l.id, l]));
   for (const s of staff) {
+    if (!s.reports_to_agent_id) continue; // reports directly to a human — no leadership card to backfill
     leadershipById.get(s.reports_to_agent_id)?.staff_ids.push(s.id);
   }
 
