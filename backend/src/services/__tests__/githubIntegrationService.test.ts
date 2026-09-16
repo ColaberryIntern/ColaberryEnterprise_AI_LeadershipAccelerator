@@ -1,7 +1,10 @@
 // ─── Stubs ────────────────────────────────────────────────────────────────────
 
+jest.mock('../projectService', () => ({ getProjectByEnrollment: jest.fn() }));
+
 jest.mock('../../models', () => ({
   GitHubConnection: { findOrCreate: jest.fn(), findOne: jest.fn(), findAll: jest.fn() },
+  Project: { findByPk: jest.fn() },
   StudentGithubActivity: { findOne: jest.fn(), create: jest.fn() },
   Enrollment: { findAll: jest.fn() },
 }));
@@ -11,6 +14,8 @@ import {
   buildOAuthUrl,
   validateWebhookSignature,
   findEnrollmentByRepo,
+  findRepoBinding,
+  resolveProjectForPush,
   syncAllActiveStudentGitHubActivity,
 } from '../githubIntegrationService';
 
@@ -134,5 +139,67 @@ describe('syncAllActiveStudentGitHubActivity', () => {
 
     expect(result).toEqual({ synced: 0, skipped: 0, failed: 0 });
     expect(GitHubConnection.findAll).not.toHaveBeenCalled();
+  });
+});
+
+// ─── findRepoBinding / resolveProjectForPush ──────────────────────────────────
+//
+// A student with two projects has two repos and ONE active pointer. The push
+// webhook used to credit every push to the active project, so a push to the
+// other repo matched its commits against the wrong requirements. Found
+// 2026-09-15 on a learner with exactly that layout.
+
+describe('findRepoBinding', () => {
+  it('returns the enrollment AND the project the repo is bound to', async () => {
+    const { GitHubConnection } = require('../../models');
+    GitHubConnection.findOne.mockResolvedValue({ enrollment_id: 'enroll-f', project_id: 'proj-first' });
+    expect(await findRepoBinding('fbeig2020-cloud', 'ai-support-workflow-assistant'))
+      .toEqual({ enrollmentId: 'enroll-f', projectId: 'proj-first' });
+  });
+  it('carries a null project for a legacy, pre-project-scoped connection', async () => {
+    const { GitHubConnection } = require('../../models');
+    GitHubConnection.findOne.mockResolvedValue({ enrollment_id: 'enroll-old', project_id: null });
+    expect(await findRepoBinding('o', 'r')).toEqual({ enrollmentId: 'enroll-old', projectId: null });
+  });
+  it('returns null for an unknown repo', async () => {
+    const { GitHubConnection } = require('../../models');
+    GitHubConnection.findOne.mockResolvedValue(null);
+    expect(await findRepoBinding('nobody', 'nothing')).toBeNull();
+  });
+});
+
+describe('resolveProjectForPush', () => {
+  beforeEach(() => { jest.clearAllMocks(); });
+
+  it('credits the BOUND project even when a different project is active', async () => {
+    const { Project } = require('../../models');
+    const { getProjectByEnrollment } = require('../projectService');
+    Project.findByPk.mockResolvedValue({ id: 'proj-first', archived_at: null });
+    getProjectByEnrollment.mockResolvedValue({ id: 'proj-second-and-active' });
+    expect(await resolveProjectForPush({ enrollmentId: 'enroll-f', projectId: 'proj-first' })).toEqual({ id: 'proj-first' });
+    expect(getProjectByEnrollment).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the active project ONLY for a connection with no binding', async () => {
+    const { Project } = require('../../models');
+    const { getProjectByEnrollment } = require('../projectService');
+    getProjectByEnrollment.mockResolvedValue({ id: 'proj-active' });
+    expect(await resolveProjectForPush({ enrollmentId: 'enroll-old', projectId: null })).toEqual({ id: 'proj-active' });
+    expect(Project.findByPk).not.toHaveBeenCalled();
+  });
+
+  it('credits nothing when the bound project was archived, rather than the active one', async () => {
+    const { Project } = require('../../models');
+    const { getProjectByEnrollment } = require('../projectService');
+    Project.findByPk.mockResolvedValue({ id: 'proj-gone', archived_at: '2026-09-01T00:00:00Z' });
+    getProjectByEnrollment.mockResolvedValue({ id: 'proj-active' });
+    expect(await resolveProjectForPush({ enrollmentId: 'enroll-f', projectId: 'proj-gone' })).toBeNull();
+    expect(getProjectByEnrollment).not.toHaveBeenCalled();
+  });
+
+  it('credits nothing when the bound project row no longer exists', async () => {
+    const { Project } = require('../../models');
+    Project.findByPk.mockResolvedValue(null);
+    expect(await resolveProjectForPush({ enrollmentId: 'enroll-f', projectId: 'proj-missing' })).toBeNull();
   });
 });

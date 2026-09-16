@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { Op } from 'sequelize';
-import { GitHubConnection, StudentGithubActivity, Enrollment } from '../models';
+import { GitHubConnection, StudentGithubActivity, Enrollment, Project } from '../models';
 import { isWritableConnection, writeAccessOf } from './sbp/repoConnect/connectionAccess';
 
 const GITHUB_API = 'https://api.github.com';
@@ -223,6 +223,51 @@ export function validateWebhookSignature(rawBody: Buffer, signature: string, sec
 export async function findEnrollmentByRepo(owner: string, repo: string): Promise<string | null> {
   const connection = await GitHubConnection.findOne({ where: { repo_owner: owner, repo_name: repo } });
   return connection?.enrollment_id ?? null;
+}
+
+/** Who a repo belongs to, and WHICH of their projects it is bound to. */
+export interface RepoBinding {
+  enrollmentId: string;
+  /** Null on a connection made before repos were project-scoped (FR-037). */
+  projectId: string | null;
+}
+
+/**
+ * The connection row for a repo, reduced to the two ids a push handler needs.
+ *
+ * `findEnrollmentByRepo` above answers only the first half, and the webhook
+ * used to complete the second by asking for the enrollment's ACTIVE project.
+ * A student with two projects has two repos and one active pointer, so a push
+ * to the repo of the project they were NOT looking at had its commits matched
+ * against the other project's requirements. Found 2026-09-15 on a learner with
+ * exactly that layout; the story-verification path beside it already resolved
+ * repo -> connection -> project and was never wrong.
+ */
+export async function findRepoBinding(owner: string, repo: string): Promise<RepoBinding | null> {
+  const connection = await GitHubConnection.findOne({ where: { repo_owner: owner, repo_name: repo } });
+  if (!connection?.enrollment_id) return null;
+  return {
+    enrollmentId: String(connection.enrollment_id),
+    projectId: connection.project_id ? String(connection.project_id) : null,
+  };
+}
+
+/**
+ * The project a push should be credited to: the one the repo is BOUND to.
+ * Only a legacy connection with no binding falls back to the enrollment's
+ * active project, which is the pre-FR-037 behaviour and is right for a
+ * student who has only ever had one. An archived bound project yields null:
+ * a repo whose project was removed earns nothing rather than earning it
+ * for whichever project happens to be active.
+ */
+export async function resolveProjectForPush(binding: RepoBinding): Promise<{ id: string } | null> {
+  if (binding.projectId) {
+    const bound = await Project.findByPk(binding.projectId);
+    return bound && (bound as any).archived_at == null ? { id: String(bound.id) } : null;
+  }
+  const { getProjectByEnrollment } = await import('./projectService');
+  const active = await getProjectByEnrollment(binding.enrollmentId);
+  return active ? { id: String(active.id) } : null;
 }
 
 // ─── Push-Driven Requirement Verification (DNA Wizard students) ───────────────
