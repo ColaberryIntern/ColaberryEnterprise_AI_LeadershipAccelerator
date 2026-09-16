@@ -352,13 +352,27 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
       await autoPublish(input.projectId, input.enrollmentId, draft.plan_sha256, correlationId);
     }
   } catch (err: any) {
-    await setStatus(input.projectId, 'failed').catch(() => { /* status write must not mask the real error */ });
+    const error = { error_class: err?.error_class ?? err?.name ?? 'Error', message: String(err?.message ?? err) };
+    await setStatus(input.projectId, 'failed', error).catch(() => { /* status write must not mask the real error */ });
     log('sbp_build_failed', correlationId, 'failure', {
       projectId: input.projectId,
       duration_ms: Date.now() - started,
-      error_class: err?.error_class ?? 'Error',
-      message: err?.message,
+      error_class: error.error_class,
+      message: error.message,
     });
+    // Heard the same minute, not found five days later. The log line above
+    // does not survive a container recreation; this does, and it emails.
+    // Imported here, not at the top: alertService pulls the Alert model in, and
+    // every orchestrator suite stubs the database.
+    const { emitAlert } = await import('../alertService');
+    await emitAlert({
+      type: 'warning', severity: 3, urgency: 'high', sourceType: 'system', impactArea: 'student_builds',
+      entityType: 'project', entityId: input.projectId,
+      title: `Build plan failed to generate: ${input.name || input.projectId}`,
+      description: `Generation for "${input.name || input.projectId}" failed with ${error.error_class}: ${error.message.slice(0, 300)}. `
+        + 'The student has the starter template until this is retried (POST /api/portal/sbp/builds/:projectId/retry, or the Retry button on their build).',
+      metadata: { project_id: input.projectId, enrollment_id: input.enrollmentId, correlation_id: correlationId, error_class: error.error_class },
+    }).catch(() => { /* alerting must not mask the real error either */ });
   }
 }
 
@@ -491,10 +505,43 @@ async function nameProject(
   }
 }
 
-async function setStatus(projectId: string, status: BuildStatus): Promise<void> {
+async function setStatus(
+  projectId: string,
+  status: BuildStatus,
+  error: { error_class: string; message: string } | null = null,
+): Promise<void> {
   const intake = await getIntake(projectId);
   if (!intake) return;
-  await saveIntake({ ...(intake as BuildIntake), project_id: projectId, status });
+  // A failure carries its reason; any other status clears the previous one, so
+  // a build that failed and was then regenerated does not keep telling the
+  // student about the first attempt.
+  const last_error = status === 'failed' && error
+    ? { error_class: error.error_class, message: String(error.message || '').slice(0, 1000), at: new Date().toISOString() }
+    : null;
+  await saveIntake({ ...(intake as BuildIntake), project_id: projectId, status, last_error });
+}
+
+/**
+ * Re-run generation from the intake already on file. What a student needs
+ * when the wizard failed: the same answers, another attempt, no retyping.
+ * Refused while a run is in flight (startBuild already handles that) and
+ * when there is no intake to run from.
+ */
+export async function retryBuild(projectId: string, enrollmentId: string): Promise<{ projectId: string; correlationId: string; status: BuildStatus }> {
+  const intake = await getIntake(projectId);
+  if (!intake) throw Object.assign(new Error('No intake to retry from'), { status: 404, error_class: 'NoIntake' });
+  return startBuild({
+    projectId,
+    enrollmentId,
+    idea: intake.idea,
+    name: intake.name ?? undefined,
+    size: intake.size ?? undefined,
+    users: intake.users ?? undefined,
+    dataSources: intake.data_sources ?? undefined,
+    doneDefinition: intake.done_definition ?? undefined,
+    targetWeeks: intake.target_weeks != null ? Number(intake.target_weeks) : undefined,
+    answers: (intake.answers ?? undefined) as StartBuildInput['answers'],
+  });
 }
 
 /** Current state of a build, for polling. */
@@ -505,6 +552,9 @@ export async function getBuildState(projectId: string): Promise<BuildState | nul
   return {
     projectId,
     status: (intake.status as BuildStatus) ?? 'captured',
+    ...(intake.status === 'failed' && intake.last_error
+      ? { error: { error_class: intake.last_error.error_class, message: intake.last_error.message } }
+      : {}),
     correlationId: intake.correlation_id ?? null,
     plan,
     gate: plan ? { ok: plan.gate_ok, violations: (plan.gate_violations as any) ?? [] } : null,

@@ -25,6 +25,14 @@ export type PipelineState =
    * failure and is worded as one.
    */
   | { state: 'stalled'; projectId: string }
+  /**
+   * Generation itself failed and the server said why. Distinct from `stalled`
+   * (a good plan not promoted) and from `local` (the browser never reached the
+   * server): here the answers are on file and a retry needs no retyping. A
+   * student whose wizard failed on 2026-09-11 was shown nothing at all and
+   * worked the starter template for five days.
+   */
+  | { state: 'failed'; projectId: string; errorClass: string; message: string }
   | { state: 'gate_failed'; projectId: string; reasons: string[] }
   /**
    * Fell back to the browser template. `error` carries WHY, classified: a
@@ -105,10 +113,12 @@ export const CallBanner: React.FC<{ notice: CallNotice | null }> = ({ notice }) 
 
 /** Tells the student which path produced their plan, and why. */
 export const PipelineBanner: React.FC<{
+  /** Re-runs generation from the stored intake. Absent ⇒ no button. */
+  onRetry?: ((projectId: string) => void) | null;
   pipeline: PipelineState;
   handoff?: HandoffCounts | null;
   onOpenStory000?: (() => void) | null;
-}> = ({ pipeline, handoff = null, onOpenStory000 = null }) => {
+}> = ({ pipeline, handoff = null, onOpenStory000 = null, onRetry = null }) => {
   if (pipeline.state === 'idle') return null;
 
   if (pipeline.state === 'generating') {
@@ -125,6 +135,25 @@ export const PipelineBanner: React.FC<{
 
   if (pipeline.state === 'delivered') {
     return <Story000Handoff counts={handoff} onOpen={onOpenStory000} />;
+  }
+
+  if (pipeline.state === 'failed') {
+    return (
+      <div className="card pjw-pane pj-pipe warn" role="alert" aria-live="assertive">
+        <strong>Your tailored plan could not be generated.</strong>
+        <p className="lead">
+          What you are looking at is the starter template, not a plan built from your
+          answers. The build stopped with <code>{pipeline.errorClass}</code>
+          {pipeline.message ? <>: {pipeline.message}</> : null}. Your answers are saved, so a retry needs nothing typed again.
+          We are told about this automatically.
+        </p>
+        {onRetry && (
+          <div className="pjw-actions" style={{ marginTop: 0 }}>
+            <button type="button" className="te-btn cherry" onClick={() => onRetry(pipeline.projectId)}>Retry the build</button>
+          </div>
+        )}
+      </div>
+    );
   }
 
   if (pipeline.state === 'stalled') {

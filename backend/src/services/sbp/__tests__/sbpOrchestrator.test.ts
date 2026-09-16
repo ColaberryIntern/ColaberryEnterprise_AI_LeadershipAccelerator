@@ -20,6 +20,8 @@ const mockMaterialize = jest.fn();
 const mockRepoFor = jest.fn();
 
 jest.mock('../decomposeService', () => ({ decomposeBuild: (...a: any[]) => mockDecompose(...a) }));
+const mockEmitAlert = jest.fn().mockResolvedValue({});
+jest.mock('../../alertService', () => ({ emitAlert: (...a: any[]) => mockEmitAlert(...a) }));
 jest.mock('../planStore', () => ({
   saveIntake: (...a: any[]) => mockSaveIntake(...a),
   getIntake: (...a: any[]) => mockGetIntake(...a),
@@ -196,6 +198,46 @@ describe('startBuild', () => {
     await expect(startBuild(INPUT as any)).resolves.toBeDefined();
     await flush();
     expect(mockSaveIntake.mock.calls.map((c) => c[0].status)).toContain('failed');
+  });
+
+  /**
+   * The reason must SURVIVE. A student's wizard failed on 2026-09-11 and by the
+   * 16th the only record, a log line, had gone with the container. She spent
+   * five days on the starter template with nothing on screen to explain it.
+   */
+  it('persists why the generation failed on the intake row, and alerts the same minute', async () => {
+    mockEmitAlert.mockClear();
+    mockDecompose.mockRejectedValue(Object.assign(new Error('upstream down'), { error_class: 'UpstreamError' }));
+    await startBuild(INPUT as any);
+    await flush();
+    const failed = mockSaveIntake.mock.calls.map((c) => c[0]).filter((i) => i.status === 'failed');
+    expect(failed.length).toBeGreaterThan(0);
+    const last = failed[failed.length - 1];
+    expect(last.last_error).toEqual(expect.objectContaining({ error_class: 'UpstreamError', message: 'upstream down' }));
+    expect(typeof last.last_error.at).toBe('string');
+    expect(mockEmitAlert).toHaveBeenCalledTimes(1);
+    expect(mockEmitAlert.mock.calls[0][0]).toEqual(expect.objectContaining({ type: 'warning', impactArea: 'student_builds', entityId: INPUT.projectId }));
+    expect(mockEmitAlert.mock.calls[0][0].title).toMatch(/failed to generate/);
+  });
+
+  it('clears a previous failure the moment a new run starts', async () => {
+    mockGetIntake.mockResolvedValueOnce({ project_id: INPUT.projectId, status: 'failed', idea: 'x', last_error: { error_class: 'UpstreamError', message: 'old', at: '2026-09-11T15:57:00Z' } });
+    mockDecompose.mockRejectedValue(Object.assign(new Error('again'), { error_class: 'UpstreamError' }));
+    await startBuild(INPUT as any);
+    await flush();
+    const generating = mockSaveIntake.mock.calls.map((c) => c[0]).find((i) => i.status === 'generating');
+    expect(generating).toBeDefined();
+    expect(generating.last_error ?? null).toBeNull();
+  });
+
+  it('exposes the reason on getBuildState only while the status is failed', async () => {
+    const { getBuildState } = await import('../sbpOrchestrator');
+    mockGetIntake.mockResolvedValueOnce({ project_id: INPUT.projectId, status: 'failed', idea: 'x', correlation_id: 'c1', last_error: { error_class: 'UpstreamError', message: 'upstream down', at: 'now' } });
+    const failedState = await getBuildState(INPUT.projectId);
+    expect(failedState?.error).toEqual({ error_class: 'UpstreamError', message: 'upstream down' });
+    mockGetIntake.mockResolvedValueOnce({ project_id: INPUT.projectId, status: 'generating', idea: 'x', correlation_id: 'c2', last_error: { error_class: 'UpstreamError', message: 'stale', at: 'then' } });
+    const running = await getBuildState(INPUT.projectId);
+    expect(running?.error).toBeUndefined();
   });
 });
 
