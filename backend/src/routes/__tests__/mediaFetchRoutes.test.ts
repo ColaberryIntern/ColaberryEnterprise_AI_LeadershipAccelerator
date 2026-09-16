@@ -67,6 +67,17 @@ describe('mount order', () => {
   });
 });
 
+describe('a document', () => {
+  it('is served as application/pdf, the type a provider fetching a carousel expects', async () => {
+    const pdfKey = (await put(BRAND, 'application/pdf', Buffer.from('%PDF-1.4\n1 0 obj << >> endobj\n%%EOF', 'latin1'))).key;
+    expect(pdfKey).toMatch(/\.pdf$/);
+    const { url } = signedUrl(pdfKey, 'https://x');
+    const res = await request(appWithOrder(true)).get(url.replace('https://x', ''));
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('application/pdf');
+  });
+});
+
 describe('what a public file route must refuse', () => {
   it('an unsigned request', async () => {
     const res = await request(appWithOrder(true)).get(`/m/${key.slice('media/'.length)}`);

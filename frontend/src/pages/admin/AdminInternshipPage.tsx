@@ -10,6 +10,7 @@ import {
 import { InternshipKpi, fetchInternshipKpis } from '../../services/adminInternshipApi';
 import InternshipDocumentPanel from '../../components/admin/internship/InternshipDocumentPanel';
 import InternshipConversionPanel from '../../components/admin/internship/InternshipConversionPanel';
+import InternshipProjectAuthor from './components/InternshipProjectAuthor';
 
 /**
  * AdminInternshipPage — the AI Internship review queue and decision surface.
@@ -574,6 +575,17 @@ const AdminInternshipPage: React.FC = () => {
                     </div>
                   ) : (
                     <span className="text-muted" style={{ fontSize: 13.5 }}>No project assigned yet.</span>
+                  )}
+
+                  {/* Author & assign the first project — the manager's delivery
+                      surface, offered while the intern has no project yet. */}
+                  {!activity.project && selected && (
+                    <InternshipProjectAuthor
+                      applicationId={selected}
+                      onAuthored={() => {
+                        fetchInternshipActivity(selected).then(setActivity).catch(() => { /* keep prior view */ });
+                      }}
+                    />
                   )}
 
                   {/* AI "dig into their project" review — a management read of the

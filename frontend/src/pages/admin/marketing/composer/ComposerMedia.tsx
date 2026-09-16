@@ -31,7 +31,7 @@ export interface ComposerMediaProps {
   onDetach: (mediaAssetId: string) => void;
 }
 
-const ACCEPT = 'image/png,image/jpeg,image/gif,video/mp4';
+const ACCEPT = 'image/png,image/jpeg,image/gif,video/mp4,application/pdf';
 
 function durationLabel(ms: number): string {
   const s = Math.round(ms / 1000);
@@ -93,6 +93,7 @@ export default function ComposerMedia({ media, busy, enabled, upload = null, onA
               <span className="text-truncate" style={{ maxWidth: '18rem' }}>{m.originalFilename ?? m.mediaAssetId}</span>
               {m.width && m.height && <span className="text-muted">{m.width}×{m.height}</span>}
               {m.durationMs !== null && <span className="text-muted" data-testid="media-duration">{durationLabel(m.durationMs)}</span>}
+              {m.pages !== null && <span className="text-muted" data-testid="media-pages">{m.pages} page{m.pages === 1 ? '' : 's'}</span>}
               <span className="text-muted">{sizeLabel(m.byteSize)}</span>
               <span className="text-muted fst-italic text-truncate" style={{ maxWidth: '20rem' }}>“{m.altText}”</span>
               <button type="button" className="btn btn-sm btn-link text-danger py-0" disabled={busy} onClick={() => onDetach(m.mediaAssetId)} data-testid={`detach-${m.mediaAssetId}`}>
@@ -122,7 +123,7 @@ export default function ComposerMedia({ media, busy, enabled, upload = null, onA
           <input
             id="composer-media-alt"
             className="form-control form-control-sm"
-            placeholder="Describe it for someone who cannot see it (required)"
+            placeholder={file?.type === 'application/pdf' ? 'Document title, shown above the carousel on LinkedIn (required)' : 'Describe it for someone who cannot see it (required)'}
             value={altText}
             maxLength={300}
             disabled={!enabled || busy}
@@ -136,7 +137,7 @@ export default function ComposerMedia({ media, busy, enabled, upload = null, onA
       </div>
       <div className="form-text">
         {enabled
-          ? 'PNG, JPEG or GIF up to 10 MB; MP4 up to 200 MB. Location and camera data is removed from images automatically.'
+          ? 'PNG, JPEG or GIF up to 10 MB; MP4 up to 200 MB; PDF up to 100 MB (LinkedIn document posts). Location and camera data is removed from images automatically.'
           : 'Create the draft first, then attach media.'}
       </div>
     </div>

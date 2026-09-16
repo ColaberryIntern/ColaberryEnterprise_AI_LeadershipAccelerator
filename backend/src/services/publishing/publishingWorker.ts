@@ -103,6 +103,7 @@ async function buildPayload(job: PublishingJob, item: ContentItem, variant: Cont
       altText: asset?.alt_text ?? null,
       // BIGINT comes back from Postgres as a string; the contract says number.
       byteSize: asset?.byte_size == null ? null : Number(asset.byte_size),
+      durationMs: asset?.duration_ms ?? null,
     });
   }
   return {

@@ -17,7 +17,7 @@ export type ProviderKey =
   | 'meta_facebook_page' | 'meta_instagram' | 'linkedin_organization' | 'linkedin_member'
   | 'youtube' | 'tiktok' | 'x';
 
-export type ContentType = 'text' | 'image' | 'video' | 'carousel' | 'thread' | 'link' | 'poll';
+export type ContentType = 'text' | 'image' | 'video' | 'carousel' | 'thread' | 'link' | 'poll' | 'document';
 
 /** Mirrors backend content/pollSpec.ts. Stored as `metadata.poll` on the item. */
 export interface Poll {
@@ -252,6 +252,8 @@ export interface ItemMedia {
   originalFilename: string | null;
   /** Videos only; what the container's own header says. */
   durationMs: number | null;
+  /** PDFs only, when the file states its page count plainly. */
+  pages: number | null;
 }
 
 export async function listItemMedia(id: string): Promise<ItemMedia[]> {

@@ -14,8 +14,8 @@ let container: HTMLDivElement;
 let root: Root;
 
 const ATTACHED: ItemMedia[] = [
-  { mediaAssetId: 'a1a1a1a1-0000-4000-8000-000000000001', mimeType: 'image/png', byteSize: 2_400_000, width: 1200, height: 628, altText: 'Two people at a whiteboard', position: 0, originalFilename: 'class.png', durationMs: null },
-  { mediaAssetId: 'a1a1a1a1-0000-4000-8000-000000000002', mimeType: 'video/mp4', byteSize: 41_000_000, width: 1080, height: 1920, altText: 'A short clip', position: 1, originalFilename: null, durationMs: 45_000 },
+  { mediaAssetId: 'a1a1a1a1-0000-4000-8000-000000000001', mimeType: 'image/png', byteSize: 2_400_000, width: 1200, height: 628, altText: 'Two people at a whiteboard', position: 0, originalFilename: 'class.png', durationMs: null, pages: null },
+  { mediaAssetId: 'a1a1a1a1-0000-4000-8000-000000000002', mimeType: 'video/mp4', byteSize: 41_000_000, width: 1080, height: 1920, altText: 'A short clip', position: 1, originalFilename: null, durationMs: 45_000, pages: null },
 ];
 
 function render(props: Partial<React.ComponentProps<typeof ComposerMedia>> = {}) {
@@ -82,7 +82,19 @@ describe('ComposerMedia attach rule', () => {
     render();
     expect(container.textContent).toMatch(/10 MB/);
     expect(container.textContent).toMatch(/200 MB/);
-    expect(fileInput().accept).toBe('image/png,image/jpeg,image/gif,video/mp4');
+    expect(fileInput().accept).toBe('image/png,image/jpeg,image/gif,video/mp4,application/pdf');
+  });
+});
+
+describe('ComposerMedia documents', () => {
+  it('accepts PDF, asks for a TITLE rather than a description when a PDF is picked, and lists page counts', () => {
+    render({ media: [{ mediaAssetId: 'a1a1a1a1-0000-4000-8000-000000000003', mimeType: 'application/pdf', byteSize: 4_000_000, width: null, height: null, altText: 'Five AI habits', position: 0, originalFilename: 'deck.pdf', durationMs: null, pages: 12 }] });
+    expect(fileInput().accept).toContain('application/pdf');
+    expect(container.querySelector('[data-testid="media-pages"]')!.textContent).toBe('12 pages');
+    expect(container.textContent).toMatch(/PDF up to 100 MB/);
+    expect(altInput().placeholder).toMatch(/Describe it/);
+    act(() => { pickFile(fileInput(), new File(['%PDF-1.4'], 'deck.pdf', { type: 'application/pdf' })); });
+    expect(altInput().placeholder).toMatch(/Document title, shown above the carousel/);
   });
 });
 

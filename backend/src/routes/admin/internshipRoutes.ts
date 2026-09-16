@@ -7,6 +7,7 @@ import { decide } from '../../services/internship/internshipDecisionService';
 import { assessApplicant } from '../../services/internship/internshipApplicantAssessment';
 import { internActivity } from '../../services/internship/internshipActivityService';
 import { internshipProjectReview } from '../../services/internship/internshipProjectReview';
+import { authorAndAssignInternshipProject } from '../../services/internship/internshipProjectAuthoring';
 import { InvalidInternshipTransitionError } from '../../services/internship/internshipStateMachine';
 import { REASON_CODES } from '../../services/internship/internshipReasonCodes';
 import fs from 'fs';
@@ -155,6 +156,48 @@ router.post('/api/admin/internship/applications/:id/project-review', requireSect
       context: { message: err?.message },
     }));
     res.status(500).json({ error: 'Could not review the project.' });
+  }
+});
+
+/**
+ * POST /api/admin/internship/applications/:id/author-project
+ * Author a project (releases + stories) and assign it to the intern. A fresh,
+ * active project is created on their enrollment and the releases/stories are
+ * materialised onto their profile — the manager's project-delivery surface.
+ */
+const authorStorySchema = z.object({
+  title: z.string().min(1).max(300),
+  narrative: z.string().max(4000).nullish(),
+  acceptance: z.array(z.string().max(600)).max(20).nullish(),
+  build: z.string().max(20000).nullish(),
+  blocked_by: z.array(z.string().max(60)).max(40).optional(),
+});
+const authorProjectSchema = z.object({
+  name: z.string().min(1).max(200),
+  industry: z.string().max(120).nullish(),
+  releases: z.array(z.object({
+    key: z.string().min(1).max(40),
+    name: z.string().max(200),
+    stories: z.array(authorStorySchema).max(100),
+  })).min(1).max(20),
+});
+
+router.post('/api/admin/internship/applications/:id/author-project', requireSection('internship'), async (req: Request, res: Response) => {
+  try {
+    const application = await InternshipApplication.findByPk(String(req.params.id), { attributes: ['id', 'enrollment_id'] });
+    if (!application) { res.status(404).json({ error: 'Application not found.' }); return; }
+    const parsed = authorProjectSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: 'Invalid project.', issues: parsed.error.issues }); return; }
+    const result = await authorAndAssignInternshipProject((application as any).enrollment_id, parsed.data);
+    res.json(result);
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_author_project_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not author the project.' });
   }
 });
 

@@ -29,13 +29,13 @@ A replay of an event that did arrive reuses the existing record, and a resolved 
 The dashboard card carries the delivery percentage, so a quiet system and a lost event no longer look the same.
 
 8
-00:01:01.700 --> 00:01:09.760
-Five ways to recover a lost event where there had been a script, built in five days, with the automatic path under test.
+00:01:01.700 --> 00:01:12.560
+Since the system shipped, 586 of 604 lost completion events ended with a result on the lead, 96 percent of them by the scheduled job.
 
 9
-00:01:10.900 --> 00:01:19.200
-This record measures the mechanism, not the outcome. The audit table could answer that with one query; nobody has run it yet.
+00:01:13.700 --> 00:01:25.840
+During the incident a script repaired 245 of 533 lost events. Now 18 of 604 remain unresolved, read from the production audit table.
 
 10
-00:01:20.300 --> 00:01:27.110
+00:01:26.900 --> 00:01:33.710
 Every claim on this page is pinned to a commit. Every figure spoken here is on the page underneath.
