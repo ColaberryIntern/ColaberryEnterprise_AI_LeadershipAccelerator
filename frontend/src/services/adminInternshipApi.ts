@@ -198,6 +198,34 @@ export async function fetchInternshipActivity(applicationId: string): Promise<In
   return data;
 }
 
+// ── AI "dig into their project" review ────────────────────────────────────────
+
+export type ProjectStanding = 'on_track' | 'needs_attention' | 'stalled' | 'not_started' | 'unknown';
+
+export interface ProjectReview {
+  has_project: boolean;
+  project_name: string | null;
+  standing: ProjectStanding;
+  summary: string;
+  answer: string;
+  facts: {
+    stage: string | null;
+    requirements_pct: number | null;
+    total_stories: number;
+    verified_stories: number;
+    by_status: Record<string, number>;
+  } | null;
+  model_generated: boolean;
+}
+
+export async function reviewInternshipProject(applicationId: string, question?: string): Promise<ProjectReview> {
+  const { data } = await api.post<ProjectReview>(
+    `/api/admin/internship/applications/${applicationId}/project-review`,
+    question ? { question } : {},
+  );
+  return data;
+}
+
 // ── Documents ───────────────────────────────────────────────────────────────
 
 export interface AdminDocumentRow {

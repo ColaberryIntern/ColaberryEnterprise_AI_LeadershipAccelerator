@@ -3,8 +3,8 @@ import { PageHeader, SectionCard, StatusBadge } from '../../components/admin/she
 import {
   ApplicationDetail, QueueBucket, QueueResponse, ReviewerDecision,
   ApplicantAssessment, AssessmentRecommendation, RequirementStatus,
-  InternActivity,
-  assessInternshipApplication, fetchInternshipActivity,
+  InternActivity, ProjectReview, ProjectStanding,
+  assessInternshipApplication, fetchInternshipActivity, reviewInternshipProject,
   decideInternshipApplication, fetchInternshipApplication, fetchInternshipQueue,
 } from '../../services/adminInternshipApi';
 import { InternshipKpi, fetchInternshipKpis } from '../../services/adminInternshipApi';
@@ -83,6 +83,10 @@ const AdminInternshipPage: React.FC = () => {
   const [activity, setActivity] = useState<InternActivity | null>(null);
   const [activityError, setActivityError] = useState<string | null>(null);
 
+  const [review, setReview] = useState<ProjectReview | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewQuestion, setReviewQuestion] = useState('');
+
   const [decision, setDecision] = useState<ReviewerDecision>('approve');
   const [reasonCode, setReasonCode] = useState('');
   const [studentMessage, setStudentMessage] = useState('');
@@ -136,6 +140,8 @@ const AdminInternshipPage: React.FC = () => {
       // Activity is read-only and cheap, so load it eagerly for the opened intern.
       setActivity(null);
       setActivityError(null);
+      setReview(null);
+      setReviewQuestion('');
       fetchInternshipActivity(id)
         .then(setActivity)
         .catch(() => setActivityError('Could not load the intern activity.'));
@@ -161,6 +167,21 @@ const AdminInternshipPage: React.FC = () => {
       setAssessing(false);
     }
   }, [selected]);
+
+  const runProjectReview = useCallback(async () => {
+    if (!selected) return;
+    setReviewing(true);
+    try {
+      setReview(await reviewInternshipProject(selected, reviewQuestion.trim() || undefined));
+    } catch {
+      setReview({
+        has_project: false, project_name: null, standing: 'unknown',
+        summary: 'Could not review the project. Try again.', answer: '', facts: null, model_generated: false,
+      });
+    } finally {
+      setReviewing(false);
+    }
+  }, [selected, reviewQuestion]);
 
   /** Reasons legal for the currently chosen decision. */
   const reasonOptions = useMemo(() => {
@@ -554,6 +575,51 @@ const AdminInternshipPage: React.FC = () => {
                   ) : (
                     <span className="text-muted" style={{ fontSize: 13.5 }}>No project assigned yet.</span>
                   )}
+
+                  {/* AI "dig into their project" review — a management read of the
+                      build, generated on demand. Deterministic facts anchor it; the
+                      model writes the standing/summary and answers a manager's
+                      question. Only offered once a project exists. */}
+                  {activity.project && (
+                    <div className="mt-2 pt-2" style={{ borderTop: '1px solid #f1f3f5' }}>
+                      <div className="d-flex align-items-center gap-2 flex-wrap mb-2">
+                        <button type="button" className="btn btn-sm btn-dark" onClick={runProjectReview} disabled={reviewing}>
+                          {reviewing ? 'Reading the build…' : review ? 'Re-run review' : 'Review with AI'}
+                        </button>
+                        <span className="text-muted" style={{ fontSize: 12.5 }}>
+                          A management read of where the build stands — or ask a question below.
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm mb-2"
+                        style={{ maxWidth: 480 }}
+                        placeholder="Ask about the project (optional), e.g. is the data pipeline actually built?"
+                        value={reviewQuestion}
+                        onChange={(e) => setReviewQuestion(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runProjectReview(); } }}
+                        disabled={reviewing}
+                      />
+                      {review && review.has_project && (
+                        <div className="d-flex flex-column gap-2">
+                          <div className="d-flex align-items-center gap-2 flex-wrap">
+                            <StandingBadge value={review.standing} />
+                            {!review.model_generated && (
+                              <span className="badge bg-secondary" title="The language model was unavailable; showing the deterministic facts only.">
+                                facts only
+                              </span>
+                            )}
+                          </div>
+                          <p className="mb-0" style={{ fontSize: 14, lineHeight: 1.55 }}>{review.summary}</p>
+                          {review.answer && (
+                            <p className="mb-0" style={{ fontSize: 13.5, lineHeight: 1.55 }}>
+                              <strong>Answer:</strong> {review.answer}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Cert prep + case studies, side by side on wide screens */}
@@ -855,6 +921,26 @@ const RecommendationBadge: React.FC<{ value: AssessmentRecommendation }> = ({ va
     concerns: { label: 'Suggests: Concerns', bg: '#b23a3a' },
     follow_up: { label: 'Suggests: Follow up', bg: '#a8690f' },
     not_ready: { label: 'Suggests: Not ready', bg: '#6b7280' },
+  };
+  const m = map[value];
+  return (
+    <span
+      className="badge"
+      style={{ background: m.bg, color: '#fff', fontSize: 12, fontWeight: 600, padding: '6px 10px' }}
+    >
+      {m.label}
+    </span>
+  );
+};
+
+/** Standing pill for the AI project review — how the build is tracking. */
+const StandingBadge: React.FC<{ value: ProjectStanding }> = ({ value }) => {
+  const map: Record<ProjectStanding, { label: string; bg: string }> = {
+    on_track: { label: 'On track', bg: '#2e7d5b' },
+    needs_attention: { label: 'Needs attention', bg: '#a8690f' },
+    stalled: { label: 'Stalled', bg: '#b23a3a' },
+    not_started: { label: 'Not started', bg: '#6b7280' },
+    unknown: { label: 'Unknown', bg: '#6b7280' },
   };
   const m = map[value];
   return (
