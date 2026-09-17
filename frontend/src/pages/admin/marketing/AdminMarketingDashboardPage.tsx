@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo, lazy, Suspense } from
 import {
   FunnelChart, Funnel, Tooltip, ResponsiveContainer, LabelList, Cell,
 } from 'recharts';
+import { Link } from 'react-router-dom';
 import api from '../../../utils/api';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../../components/admin/shell';
 import { TrustSignal } from '../../../components/admin/shell/trust';
@@ -1368,6 +1369,13 @@ function AdminMarketingDashboardPage() {
   const handleComparison = useCallback((next: ScopeComparison | null) => setComparison(next), []);
   const trust: TrustSignal = useMemo(() => deriveMarketingTrust(dataState), [dataState]);
 
+  // The front door to the composer. Until 2026-09-17 the only two "New post" buttons in the
+  // application sat on pages that were themselves unreachable from the sidebar, so the
+  // product's primary verb could only be started by typing a URL.
+  const newPostAction = (
+    <Link className="btn btn-sm btn-primary" to="/admin/marketing/composer">+ New post</Link>
+  );
+
   return (
     <>
       <PageHeader
@@ -1376,6 +1384,7 @@ function AdminMarketingDashboardPage() {
         subtitle="Funnel performance, revenue intelligence, campaign tracking links, and AI outreach."
         breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Marketing' }]}
         trust={trust}
+        actions={newPostAction}
       >
         {/* Tab Navigation */}
         <ul className="nav nav-tabs">

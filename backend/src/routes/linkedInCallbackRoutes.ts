@@ -35,11 +35,12 @@ export interface CallbackDeps {
   returnPath: string;
 }
 
-// Must be a path the frontend router actually renders (frontend/src/routes/adminRoutes.tsx:
-// AdminBrandsPage is at /admin/brands). The first version said /admin/marketing/brands and the
-// operator would have landed on the 404 page with the account silently saved. Pinned by a
-// frontend test that renders the page at this exact path.
-export const DEFAULT_RETURN_PATH = '/admin/brands';
+// Must be a path the frontend router actually renders. An earlier version named a path no
+// route served and the operator would have landed on the 404 page with the account silently
+// saved; a frontend test now renders the page at this exact path. Brands moved under the
+// marketing prefix on 2026-09-17 and `/admin/brands` still redirects here with its query
+// string intact, so an in-flight callback during a deploy lands correctly either way.
+export const DEFAULT_RETURN_PATH = '/admin/marketing/brands';
 
 function defaultDeps(): CallbackDeps {
   return {

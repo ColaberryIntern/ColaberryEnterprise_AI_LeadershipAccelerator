@@ -1,4 +1,9 @@
-import { sectionForPath, ALL_LINKS, UNLISTED_PATH_SECTIONS } from '../components/Layout/adminNav';
+import {
+  sectionForPath,
+  ALL_LINKS,
+  NAV_GROUPS,
+  UNLISTED_PATH_SECTIONS,
+} from '../components/Layout/adminNav';
 
 /**
  * Marketing Operations navigation — every route resolves, and no dead links are advertised.
@@ -85,13 +90,17 @@ describe('the sidebar advertises only what exists', () => {
   const marketingLinks = ALL_LINKS.filter((l) => l.path.startsWith('/admin/marketing'));
 
   it('links no marketing route that this phase has not built', () => {
-    // The nine destinations below are in the spec's target IA and are NOT delivered yet. If a
+    // The destinations below are in the spec's target IA and are NOT delivered yet. If a
     // future change adds a sidebar entry for one, it must add the page in the same diff - this
     // assertion is what forces those two to travel together.
+    //
+    // It is also what kept every DELIVERED page out of the sidebar until 2026-09-17. Content
+    // and Publishing shipped, were routed, and stayed on this list; the suite stayed green
+    // while the pages were reachable only by typing a URL. A list of what is forbidden has to
+    // be pruned as things are built, or it silently becomes a list of what is hidden.
     const notBuiltYet = [
-      '/admin/marketing/content', '/admin/marketing/publishing', '/admin/marketing/ads',
-      '/admin/marketing/audiences', '/admin/marketing/assets', '/admin/marketing/inbox',
-      '/admin/marketing/experiments', '/admin/marketing/attribution',
+      '/admin/marketing/ads', '/admin/marketing/audiences', '/admin/marketing/assets',
+      '/admin/marketing/inbox', '/admin/marketing/experiments', '/admin/marketing/attribution',
       '/admin/marketing/connectors',
     ];
     const advertised = marketingLinks.map((l) => l.path);
@@ -101,6 +110,33 @@ describe('the sidebar advertises only what exists', () => {
   it('still exposes the marketing command center itself', () => {
     // The inverse failure: pruning so enthusiastically that the built page becomes unreachable.
     expect(marketingLinks.map((l) => l.path)).toContain('/admin/marketing');
+  });
+
+  it('lists every marketing page that has actually been built', () => {
+    // The obligation the `notBuiltYet` list above could not express: a page that EXISTS must be
+    // findable. Each of these was routed and orphaned - no sidebar entry, no link from the
+    // Marketing page - until the Marketing nav group landed.
+    const built = [
+      '/admin/marketing',
+      '/admin/marketing/composer',
+      '/admin/marketing/content',
+      '/admin/marketing/calendar',
+      '/admin/marketing/publishing',
+      '/admin/marketing/brands',
+    ];
+    const advertised = marketingLinks.map((l) => l.path);
+    built.forEach((p) => expect(advertised).toContain(p));
+  });
+
+  it('groups those links under a Marketing heading, not inside Campaigns', () => {
+    const marketing = NAV_GROUPS.find((g) => g.label === 'Marketing');
+    expect(marketing).toBeDefined();
+    // Section stays `campaigns`: it is what mgmtSectionGate maps these APIs to, and a link
+    // whose section the API does not recognise renders for someone the API will then 403.
+    expect(marketing!.section).toBe('campaigns');
+    expect(marketing!.links[0].path).toBe('/admin/marketing');
+    const campaigns = NAV_GROUPS.find((g) => g.label === 'Campaigns');
+    expect(campaigns!.links.map((l) => l.path)).not.toContain('/admin/marketing');
   });
 });
 
