@@ -141,8 +141,10 @@ export class LinkedInAdapter implements SocialProviderAdapter {
     if (content.text.trim() === '') {
       reasons.push('LinkedIn will not accept an empty post.');
     }
-    if (commentaryExceedsLimit(content.text)) {
-      reasons.push(`LinkedIn allows ${COMMENTARY_MAX_CHARS} characters; this post is longer.`);
+    // Measured on what will actually be sent - text plus the tracked link plus any disclosure -
+    // so a post that fits without its link cannot be refused by LinkedIn once the link is added.
+    if (commentaryExceedsLimit(assembleCommentary(content))) {
+      reasons.push(`LinkedIn allows ${COMMENTARY_MAX_CHARS} characters including the tracked link and any disclosure; this post is longer.`);
     }
     // Everything about the attachments that can be known without reading them. Each of these
     // would otherwise fail on step one or two of the upload, after the text had been accepted.
@@ -214,9 +216,7 @@ export class LinkedInAdapter implements SocialProviderAdapter {
       this.opts.getAuthorUrn(content.accountId),
     ]);
 
-    const commentary = escapeLittleText(
-      content.disclosureText ? `${content.text}\n\n${content.disclosureText}` : content.text,
-    );
+    const commentary = escapeLittleText(assembleCommentary(content));
 
     // Media goes first, and all of it, before the post exists. A failure here leaves no post
     // behind to reconcile; a failure after would. One PDF is a document post; anything else
@@ -300,6 +300,7 @@ export class LinkedInAdapter implements SocialProviderAdapter {
         author_type: author.startsWith('urn:li:organization:') ? 'organization' : 'person',
         commentary_chars: commentary.length,
         had_disclosure: content.disclosureText !== null,
+        had_link: content.linkUrl !== null,
         media_count: content.media.length,
         image_urns: images.map((i) => i.urn),
         document_urn: document?.urn ?? null,
@@ -328,6 +329,21 @@ export class LinkedInAdapter implements SocialProviderAdapter {
       this.provider,
     );
   }
+}
+
+/**
+ * The post's text as LinkedIn will show it: the copy, then the tracked link on its own line,
+ * then any disclosure. The link is a URL in the commentary - LinkedIn turns the first URL in a
+ * post into a clickable preview, and that is how a click reaches `/r/<code>` and the campaign
+ * graph. Until 2026-09-16 the adapter sent the text alone: the link was minted, stored on the
+ * variant, shown in the preview and named in the handoff package, and never reached the
+ * post. Found on Ali's first tracked-link test, before it fired.
+ */
+export function assembleCommentary(content: Pick<PublishPayload, 'text' | 'linkUrl' | 'disclosureText'>): string {
+  const parts = [content.text];
+  if (content.linkUrl && !content.text.includes(content.linkUrl)) parts.push(content.linkUrl);
+  if (content.disclosureText) parts.push(content.disclosureText);
+  return parts.join('\n\n');
 }
 
 /** LinkedIn names its voting windows; the composer stores days. validate() refuses any other value. */
