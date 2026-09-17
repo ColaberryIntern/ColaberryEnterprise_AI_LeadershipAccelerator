@@ -53,6 +53,8 @@ export interface FlotationCallFacts {
   role?: string | null;
 }
 
+import { interviewMethodLines, writtenBriefLines } from './delivery/interviewMethod';
+
 const say = (v: string | null | undefined): string | null => {
   const t = (v || '').trim();
   return t ? t : null;
@@ -76,10 +78,6 @@ export function buildFlotationCallPrompt(facts: FlotationCallFacts): string {
     role ? `Their role is ${role}.` : null,
   ].filter(Boolean).join(' ');
 
-  const theirWords = message
-    ? `They already described what they want, in their own words:\n"${message}"\nOpen by referring to THIS, not to a generic script. Ask them to walk you through it.`
-    : 'They have not described anything yet, so your first job is to find out what the work is.';
-
   return [
     'You are an AI assistant calling on behalf of AI Flotation, at the request of the person you are calling. They asked to be called now, from the AI Flotation website.',
     '',
@@ -88,21 +86,21 @@ export function buildFlotationCallPrompt(facts: FlotationCallFacts): string {
     'WHO YOU ARE CALLING',
     who,
     '',
-    theirWords,
+    // What they wrote before the call is already answered. The 2026-09-17 call to Ali
+    // opened with "walk me through it, step by step" against a brief that already had.
+    ...writtenBriefLines(message),
     '',
     'WHAT AI FLOTATION DOES',
     'It turns a costly manual workflow into an operating system the business can see: decisions on the record, evidence before anything ships, and a named person holding every gate. AI does the building; authority stays with people.',
     '',
     'YOUR GOAL FOR THIS CALL',
-    'Understand the work. You are not selling and you are not qualifying a budget. Find out:',
-    '1. What the workflow actually is today, step by step, and who touches it.',
-    '2. Where it hurts - what breaks, what gets rebuilt every morning, what nobody can explain.',
-    '3. What systems it already runs on.',
-    '4. Who would decide to go ahead with fixing it.',
-    '5. What "better" would look like to them specifically.',
+    'Understand the work. You are not selling and you are not qualifying a budget. This is the same interview the AI Flotation website runs in writing, conducted by voice:',
+    '',
+    // The method is shared with the typed interview, word for word - see delivery/interviewMethod.ts.
+    ...interviewMethodLines(),
     '',
     'HOW TO TALK',
-    'Short, concrete, unhurried. Ask one question at a time and let them finish. Their answers matter more than your coverage of this list - if they want to talk about one thing in depth, do that. No jargon and no pitch.',
+    'Short, concrete, unhurried. Let them finish. No jargon and no pitch.',
     '',
     'WHAT YOU MUST NOT DO',
     '- Do not quote a price, a discount, or a contract term.',

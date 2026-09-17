@@ -24,7 +24,7 @@ jest.mock('../../sbp/sbpOrchestrator', () => ({
   startBuild: (...a: any[]) => mockStartBuild(...a),
 }));
 
-import { startBuildFromUnderstanding } from '../buildFromUnderstanding';
+import { startBuildFromUnderstanding, MIN_ITEMS_TO_BUILD } from '../buildFromUnderstanding';
 
 const record = (over: any = {}) => ({
   id: 'rec-1',
@@ -34,9 +34,12 @@ const record = (over: any = {}) => ({
   confirmed_at: null,
   scope: null,
   build_handoff: null,
+  // Three, not two: MIN_ITEMS_TO_BUILD is the floor a real conversation clears easily
+  // (live ones run 8-18 items) and a 37-second hang-up does not.
   items: [
     { dimension: 'problem', value: 'Managing tool loans is challenging with a paper sign-out sheet.', classification: 'FACT', provenance: 'source_message' },
     { dimension: 'actors', value: 'Marta runs the desk on Saturdays.', classification: 'FACT', provenance: 'source_message' },
+    { dimension: 'desired_outcome', value: 'See what is out and chase overdue tools automatically.', classification: 'FACT', provenance: 'source_message' },
   ],
   update: jest.fn().mockResolvedValue(undefined),
   ...over,
@@ -192,5 +195,45 @@ describe('the hand-off has exactly one writer', () => {
       const src = fs.readFileSync(path.join(delivery, f), 'utf8');
       expect({ file: f, hit: /scope:\s*\{[^}]*build:/.test(src) }).toEqual({ file: f, hit: false });
     }
+  });
+});
+
+describe('a conversation too thin to build from', () => {
+  // WHAT HAPPENED. A 37-second call - "hello", "I'm an AI", "I just told you that",
+  // hang up - extracted ONE item and published a project with nothing in it. The
+  // write-up is still worth keeping; the project is not. This is a floor, not a gate:
+  // nobody approves anything, it just has to have been a conversation.
+  const thin = (n) => record({ items: Array.from({ length: n }, (_, i) => ({ dimension: 'problem', value: `item ${i}`, classification: 'FACT', provenance: 'source_message' })) });
+
+  it('refuses to build from one understood item, and says so plainly', async () => {
+    mockFindByPk.mockResolvedValue(thin(1));
+
+    const result = await startBuildFromUnderstanding({ recordId: 'rec-1', enrollmentId: 'enr-1' });
+
+    expect(result).toMatchObject({ ok: false, reason: 'too_thin' });
+    expect((result as any).error).toMatch(/only 1 thing could be understood/);
+    expect((result as any).error).toMatch(/write-up is kept/);
+    expect(mockStartBuild).not.toHaveBeenCalled();
+    expect(mockResolveProject).not.toHaveBeenCalled();
+  });
+
+  it('refuses an empty one too, with the plural right', async () => {
+    mockFindByPk.mockResolvedValue(record({ items: [] }));
+    const result = await startBuildFromUnderstanding({ recordId: 'rec-1', enrollmentId: 'enr-1' });
+    expect((result as any).error).toMatch(/only 0 things could be understood/);
+  });
+
+  it('builds at the floor, so the floor is a floor and not a wall', async () => {
+    mockFindByPk.mockResolvedValue(thin(MIN_ITEMS_TO_BUILD));
+    const result = await startBuildFromUnderstanding({ recordId: 'rec-1', enrollmentId: 'enr-1' });
+    expect(result.ok).toBe(true);
+    expect(mockStartBuild).toHaveBeenCalledTimes(1);
+  });
+
+  it('is checked before anything is created, so nothing is left behind', async () => {
+    const rec = thin(1);
+    mockFindByPk.mockResolvedValue(rec);
+    await startBuildFromUnderstanding({ recordId: 'rec-1', enrollmentId: 'enr-1' });
+    expect(rec.update).not.toHaveBeenCalled();
   });
 });

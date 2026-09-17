@@ -12,6 +12,7 @@ import { triggerVoiceCall } from './synthflowService';
 import { buildFlotationCallPrompt } from './voiceCallPrompt';
 import { buildScholarshipCallPrompt } from './cpn/scholarshipCallPrompt';
 import { logCommunication } from './communicationLogService';
+import { WRITTEN_BRIEF_MAX } from './delivery/interviewMethod';
 
 // Two callbacks to the same lead inside this window collapse to one call. This is
 // the idempotency key for the side effect: a double-click, a client retry, or a
@@ -108,10 +109,15 @@ export async function requestInstantCallback(
   options: CallbackOptions = {},
 ): Promise<CallbackResult> {
   // What the completion webhook needs to know about this call that the vendor cannot tell
-  // it. Present on every log row the call produces, whatever its outcome.
+  // it. Present on every log row the call produces, whatever its outcome. `written` is what
+  // they typed before asking to be called: it goes into the agent's prompt AND, at
+  // completion, in front of the transcript - the extractor never sees the prompt, and on
+  // 2026-09-17 a project was built from a 37-second call whose whole brief was there.
+  const written = String(payload.message || '').trim().slice(0, WRITTEN_BRIEF_MAX);
   const forWhom = {
     ...(options.enrollmentId ? { enrollment_id: options.enrollmentId } : {}),
     ...(options.requestedBy ? { requested_by: options.requestedBy } : {}),
+    ...(written ? { written } : {}),
   };
 
   // 1. Resolve the lead idempotently (dedup by strapi_lead_id/email inside the
