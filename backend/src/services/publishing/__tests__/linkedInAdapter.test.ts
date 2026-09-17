@@ -7,7 +7,7 @@
  * and whether a token can escape into a receipt or a log.
  */
 
-import { LinkedInAdapter, LINKEDIN_API_VERSION, type LinkedInHttp } from '../linkedInAdapter';
+import { LinkedInAdapter, LINKEDIN_API_VERSION, assembleCommentary, type LinkedInHttp } from '../linkedInAdapter';
 import { ProviderPublishError, AdapterUnsupportedError, type PublishPayload } from '../socialProviderAdapter';
 
 const TOKEN = ['AQV', 'x1y2z3A4B5C6D7E8F9G0', 'hIjKlMnOpQrStUvWxYz'].join('');
@@ -36,6 +36,42 @@ function adapter(http: LinkedInHttp, author = 'urn:li:person:abc123') {
 
 const ok = (headers: Record<string, string> = { 'x-restli-id': POST_URN }): LinkedInHttp =>
   jest.fn(async () => ({ status: 201, headers, body: {} }));
+
+describe('the tracked link reaches the post', () => {
+  const LINK = 'https://www.refactored.ai/r/7KQ4MZ';
+  const BLANK_LINE = String.fromCharCode(10, 10); // "\n\n", spelled out so no tool rewrites it
+
+  it('is appended on its own line after the text, before any disclosure', async () => {
+    const http = ok();
+    await adapter(http).publish(payload({ text: 'Join the free class.', linkUrl: LINK, disclosureText: 'Paid partnership' }), 'idem-1');
+    const body = (http as jest.Mock).mock.calls[0][0].body;
+    expect(body.commentary).toBe(['Join the free class.', LINK, 'Paid partnership'].join(BLANK_LINE));
+  });
+
+  it('is not added twice when the operator already typed it into the copy', async () => {
+    const http = ok();
+    await adapter(http).publish(payload({ text: `Details: ${LINK}`, linkUrl: LINK }), 'idem-1');
+    expect((http as jest.Mock).mock.calls[0][0].body.commentary).toBe(`Details: ${LINK}`);
+  });
+
+  it('survives little-text escaping: the short-code alphabet has no reserved characters', async () => {
+    const http = ok();
+    await adapter(http).publish(payload({ text: 'Go', linkUrl: LINK }), 'idem-1');
+    expect((http as jest.Mock).mock.calls[0][0].body.commentary).toContain(LINK);
+  });
+
+  it('counts toward the 3,000-character limit at validate time', async () => {
+    const r = await adapter(ok()).validate(payload({ text: 'a'.repeat(2990), linkUrl: LINK }));
+    expect((r as { reasons: string[] }).reasons.join(' ')).toMatch(/3000 characters including the tracked link and any disclosure; this post is longer/);
+    await expect(adapter(ok()).validate(payload({ text: 'a'.repeat(2990) }))).resolves.toEqual({ ok: true });
+  });
+
+  it('assembleCommentary is what both validate and publish measure', () => {
+    expect(assembleCommentary({ text: 'T', linkUrl: null, disclosureText: null })).toBe('T');
+    expect(assembleCommentary({ text: 'T', linkUrl: LINK, disclosureText: null })).toBe(['T', LINK].join(BLANK_LINE));
+    expect(assembleCommentary({ text: 'T', linkUrl: null, disclosureText: 'D' })).toBe(['T', 'D'].join(BLANK_LINE));
+  });
+});
 
 describe('publish', () => {
   it('sends the required version header, the escaped commentary and the author URN', async () => {
