@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import './TodayShell.css';
-import { fetchPoints, fetchSchedule, PointsSummary, OnboardingSchedule } from '../../../services/onboardingApi';
+import { fetchPoints, fetchSchedule, PointsSummary, OnboardingSchedule, rungTone } from '../../../services/onboardingApi';
+import '../../../styles/rungTones.css';
 import { hudView } from './pointsHud';
 import { fetchSettings, readCachedAvatar } from '../../../services/portalSettingsApi';
 import { onPointsEarned } from '../../../services/pointsFx';
@@ -560,7 +561,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
               nothing reflows underneath the student when the real value arrives.
             */}
             <div className="row">
-              <span className="lvl">
+              <span className={`lvl${hud.levelName ? ` rung-${rungTone(hud.levelName)}` : ''}`}>
                 <svg className="star" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.8 6.6 7.2.6-5.5 4.7 1.7 7L12 17.8 5.8 21.5l1.7-7L2 9.8l7.2-.6z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
                 {hud.levelName ?? <i className="te-hud-skel lvl" aria-hidden="true" />}
               </span>

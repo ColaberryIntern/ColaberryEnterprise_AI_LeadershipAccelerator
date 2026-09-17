@@ -47,6 +47,7 @@
 .te-hud:hover,.te-hud.active{background:var(--sunken)}
 .te-hud .row{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .te-hud .lvl{font-size:13px;font-weight:700;color:var(--leaf-text)}
+.te-hud .lvl[class*="rung-"]{color:var(--rung-fg)}
 .te-hud .pts{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--muted)}
 .te-hud .bar{height:7px;border-radius:var(--r-pill);background:var(--sunken);border:1px solid var(--border-sub);overflow:hidden}
 .te-hud .bar > i{display:block;height:100%;border-radius:var(--r-pill);background:linear-gradient(90deg,var(--leaf),var(--berry));transition:width .6s cubic-bezier(.22,1,.36,1)}

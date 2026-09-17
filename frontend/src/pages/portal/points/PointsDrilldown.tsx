@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchPointsDrilldown, fetchPoints, DrilldownView, Band, levelFor, bandHudNext, buildRungForSlug, showJoinToBuildCard } from '../../../services/onboardingApi';
+import { fetchPointsDrilldown, fetchPoints, DrilldownView, Band, levelFor, bandHudNext, buildRungForSlug, showJoinToBuildCard, rungTone } from '../../../services/onboardingApi';
 import { fmtCentralDate } from '../today/shellUtils';
 import LevelJourney from './LevelJourney';
 import MilestoneChecklist from './MilestoneChecklist';
 import './PointsPage.css';
+import '../../../styles/rungTones.css';
 
 // The competency promotion ranks map onto the canonical BUILD bands (AI Builder I…
 // → AI Architect). The map itself lives in services/bandLadder (one frontend copy
@@ -173,7 +174,7 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
           <div className="pts-lens-h"><span className="tag">1 · Engagement</span><h3>Your points</h3></div>
           <div className="pts-big">{total.toLocaleString()}<span> pts</span></div>
           <div className="pts-levelrow">
-            <span className="pts-chip">{idName}</span>
+            <span className={`pts-chip rung-pill rung-${rungTone(idName)}`}>{idName}</span>
             <span className="pts-mut">{headed}</span>
           </div>
           <div className="pts-track"><i style={{ width: `${lvl.pct}%`, background: '#FB2832' }} /></div>

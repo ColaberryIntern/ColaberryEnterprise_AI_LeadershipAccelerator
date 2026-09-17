@@ -1,0 +1,30 @@
+/* Rung tones — THE one palette for the level ladder, used by the community
+   badge, the Points-tab journey and chips, and the HUD (Ali, 2026-09-16:
+   "Can the different ranks have different colors… show the different colors
+   here so people will know"). Bands share a hue and deepen by rung:
+
+     AI Aware I / II      grey
+     AI Enabled I / II    berry
+     AI Builder I → III   leaf, deepening
+     AI Builder IV        gold   (Program Graduate)
+     AI Architect         cherry
+     Senior AI Architect  plum
+
+   Each class only sets four custom properties; components style themselves
+   from the variables, so a tint and its text stay paired wherever they are
+   used. Text colours were chosen to hold AA on white over their tint.
+   Class names come from services/bandLadder.rungTone. */
+
+.rung-aware-1    { --rung-fg: #6B6B6B; --rung-bg: rgba(107,107,107,.10); --rung-line: rgba(107,107,107,.22); --rung-solid: #8C8C8C; }
+.rung-aware-2    { --rung-fg: #4F4F4F; --rung-bg: rgba(107,107,107,.18); --rung-line: rgba(107,107,107,.32); --rung-solid: #6B6B6B; }
+.rung-enabled-1  { --rung-fg: #367895; --rung-bg: rgba(54,120,149,.12);  --rung-line: rgba(54,120,149,.26);  --rung-solid: #4A8DAA; }
+.rung-enabled-2  { --rung-fg: #2A5F78; --rung-bg: rgba(54,120,149,.22);  --rung-line: rgba(54,120,149,.38);  --rung-solid: #367895; }
+.rung-builder-1  { --rung-fg: #468A2E; --rung-bg: rgba(70,138,46,.12);   --rung-line: rgba(70,138,46,.26);   --rung-solid: #6DB552; }
+.rung-builder-2  { --rung-fg: #3B7A25; --rung-bg: rgba(70,138,46,.20);   --rung-line: rgba(70,138,46,.36);   --rung-solid: #5BA63C; }
+.rung-builder-3  { --rung-fg: #2E6A1C; --rung-bg: rgba(70,138,46,.30);   --rung-line: rgba(70,138,46,.48);   --rung-solid: #468A2E; }
+.rung-builder-4  { --rung-fg: #8A5200; --rung-bg: rgba(232,146,12,.18);  --rung-line: rgba(232,146,12,.42);  --rung-solid: #E8920C; }
+.rung-architect  { --rung-fg: #C8102E; --rung-bg: rgba(229,18,29,.12);   --rung-line: rgba(229,18,29,.28);   --rung-solid: #E5121D; }
+.rung-senior     { --rung-fg: #6B2D5C; --rung-bg: rgba(107,45,92,.14);   --rung-line: rgba(107,45,92,.32);   --rung-solid: #6B2D5C; }
+
+/* A pill that wears its rung: any element with .rung-pill + a tone class. */
+.rung-pill { color: var(--rung-fg); background: var(--rung-bg); border: 1px solid var(--rung-line); }

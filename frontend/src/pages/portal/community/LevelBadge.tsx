@@ -1,6 +1,7 @@
 import React from 'react';
 import { levelName } from '../../../services/communityApi';
 import { isFiveBandUiEnabled, bandRungForLevel, rungTone } from '../../../services/onboardingApi';
+import '../../../styles/rungTones.css';
 
 interface Props {
   level: number;
@@ -32,7 +33,7 @@ const LevelBadge: React.FC<Props> = ({ level, size = 'md', rungName }) => {
   // "Level N · Apprentice/…/Principal" with the legacy level colours.
   if (isFiveBandUiEnabled()) {
     const rung = rungName ?? bandRungForLevel(level);
-    return <span className={`cm-lvl-badge tone-${rungTone(rung)}${size === 'sm' ? ' sm' : ''}`}>{rung}</span>;
+    return <span className={`cm-lvl-badge rung-${rungTone(rung)}${size === 'sm' ? ' sm' : ''}`}>{rung}</span>;
   }
   const cls = `cm-lvl-badge ${LEVEL_CLASS[level] || 'cm-lvl-1'}${size === 'sm' ? ' sm' : ''}`;
   return (

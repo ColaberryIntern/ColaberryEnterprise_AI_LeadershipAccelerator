@@ -109,6 +109,8 @@
   font-size: 12px; font-weight: 800; color: #C20E1E; background: rgba(251,40,50,.1);
   border-radius: 999px; padding: 3px 10px;
 }
+/* A chip that names a rung wears that rung's colour (rungTones.css .rung-pill). */
+.points-root .pts-chip.rung-pill { color: var(--rung-fg); background: var(--rung-bg); border: 1px solid var(--rung-line); }
 .points-root .pts-mut { color: var(--pr-mut); font-size: 12px; }
 
 .points-root .pts-track { height: 8px; background: var(--pr-sunken); border-radius: 999px; overflow: hidden; }
@@ -190,8 +192,10 @@
   content: ''; position: absolute; top: 18px; left: -52%; width: 100%; height: 3px;
   background: var(--pr-line); z-index: 0; border-radius: 3px;
 }
+/* The connector into a reached rung wears that rung's own colour, so the track
+   reads as the ladder's palette left to right (rungTones.css). */
 .points-root .pts-jnode.done::before,
-.points-root .pts-jnode.current::before { background: #5BA63C; }
+.points-root .pts-jnode.current::before { background: var(--rung-solid, #5BA63C); }
 
 .points-root .pts-jdot {
   position: relative; z-index: 1;
@@ -201,16 +205,20 @@
   border: 2px solid var(--pr-line); font-weight: 800; font-size: 14px;
 }
 .points-root .pts-jdot svg { width: 18px; height: 18px; }
-.points-root .pts-jnode.done .pts-jdot { background: #5BA63C; border-color: #5BA63C; color: #fff; }
-.points-root .pts-jnode.current .pts-jdot { background: #FB2832; border-color: #FB2832; color: #fff; box-shadow: 0 0 0 4px rgba(251,40,50,.16); }
+/* Every node wears its rung's colour (rungTones.css) — done and current are
+   filled solid, a rung not yet reached shows the same colour as a tinted
+   outline, so the whole ladder's palette is visible before it is earned. */
+.points-root .pts-jnode.done .pts-jdot { background: var(--rung-solid, #5BA63C); border-color: var(--rung-solid, #5BA63C); color: #fff; }
+.points-root .pts-jnode.current .pts-jdot { background: var(--rung-solid, #FB2832); border-color: var(--rung-solid, #FB2832); color: #fff; box-shadow: 0 0 0 4px var(--rung-bg, rgba(251,40,50,.16)); }
+.points-root .pts-jnode.todo .pts-jdot { background: var(--rung-bg, var(--pr-sunken)); border-color: var(--rung-line, var(--pr-line)); color: var(--rung-fg, var(--pr-mut)); }
 .points-root .pts-jnode.build.todo .pts-jdot { border-style: dashed; }
 
-.points-root .pts-jname { margin-top: 9px; font-size: 12.5px; font-weight: 700; color: var(--pr-ink); line-height: 1.2; }
-.points-root .pts-jnode.todo .pts-jname { color: var(--pr-mut); }
+.points-root .pts-jname { margin-top: 9px; font-size: 12.5px; font-weight: 700; color: var(--rung-fg, var(--pr-ink)); line-height: 1.2; }
+.points-root .pts-jnode.todo .pts-jname { color: var(--rung-fg, var(--pr-mut)); opacity: .85; }
 .points-root .pts-jdetail { font-size: 11px; color: var(--pr-mut); margin-top: 3px; }
 .points-root .pts-jhere {
   margin-top: 6px; font-size: 9.5px; font-weight: 800; letter-spacing: .05em;
-  text-transform: uppercase; color: #FB2832;
+  text-transform: uppercase; color: var(--rung-fg, #FB2832);
 }
 
 /* ── sticky rail ─────────────────────────────────────────────────────────────
