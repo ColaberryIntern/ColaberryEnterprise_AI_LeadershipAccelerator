@@ -1,5 +1,5 @@
 import { GrowthJourneyHandoff } from '../../../models';
-import type { GrowthJourneyHandoffDisposition, GrowthJourneyHandoffStatus } from '../../../models/GrowthJourneyHandoff';
+import type { GrowthJourneyHandoffAttributes, GrowthJourneyHandoffDisposition, GrowthJourneyHandoffStatus } from '../../../models/GrowthJourneyHandoff';
 import { logEvent } from '../../ledgerService';
 import { clearHumanConversation, openHumanConversation } from '../conversationOwnershipService';
 import { recordOutcome } from '../outcomes/outcomeRecorder';
@@ -105,17 +105,23 @@ export async function dispositionHandoff(row: GrowthJourneyHandoff, input: Dispo
 
   let cooldown_until: Date | null = null;
   let cooldown_source: DispositionResult['cooldown_source'] = null;
+  let patch: Partial<GrowthJourneyHandoffAttributes> = { ...base, status: 'dispositioned' };
   if (returning) {
     const { days, source } = await cooldownDaysFor(row.brand_id, input.cooldown_days);
     cooldown_until = cooldownUntil(asOf, days);
     cooldown_source = source;
     const program_slug = (row.evidence as { brand_program_path?: { program?: { slug?: string } | null } })?.brand_program_path?.program?.slug ?? 'unknown';
-    await row.update({ ...base, status: 'returned_to_ai', return_to_ai: { program_slug, cooldown_until: cooldown_until.toISOString(), reason: `${input.disposition}:${input.reason}` } });
-  } else {
-    await row.update({ ...base, status: 'dispositioned' });
+    patch = { ...base, status: 'returned_to_ai', return_to_ai: { program_slug, cooldown_until: cooldown_until.toISOString(), reason: `${input.disposition}:${input.reason}` } };
   }
-
+  // Reads first, then the ownership row is cleared BEFORE the row turns terminal: a failure here leaves the
+  // handoff `accepted`, where a retry is legal. The other order left a dispositioned row
+  // with the human-conversation row still open and no route that could ever clear it -
+  // the AI paused for that lead until someone fixed the table by hand (the T405 verifier's observation).
+  // A failure AFTER the update leaves an outcome or ledger row missing, which T409's
+  // normaliser (handoffs are one of its sources) and the ledger adapter can back-fill.
   const ownership_cleared = await clearOwnership(row, actor, `dispositioned:${input.disposition}`, asOf);
+  await row.update(patch);
+
   const outcome = await recordOutcome({
     tenant_id: row.tenant_id, brand_id: row.brand_id, subject_ref: row.subject_ref, lead_id: row.lead_id, handoff_id: row.id, decision_id: row.decision_id,
     outcome_type: 'handoff_dispositioned', source: 'growth_journey_handoffs', source_ref: `${row.id}:${input.disposition}`, occurred_at: asOf,

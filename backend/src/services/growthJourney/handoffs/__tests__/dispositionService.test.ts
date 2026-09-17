@@ -201,6 +201,31 @@ describe('disposition', () => {
     expect(r.status).toBe('dispositioned');
   });
 
+  it('the ownership row is cleared BEFORE the row turns terminal: a failing clear leaves the handoff accepted (a retry is legal), never dispositioned with the lead still paused', async () => {
+    m.clearHumanConversation.mockRejectedValue(new Error('connection reset'));
+    const r = row('accepted');
+    await expect(dispositionHandoff(asModel(r), { disposition: 'not_ready', reason: 'revisit in Q1' }, ACTOR, AS_OF)).rejects.toThrow('connection reset');
+    expect(r.update).not.toHaveBeenCalled();
+    expect(r.status).toBe('accepted');
+    expect(m.recordOutcome).not.toHaveBeenCalled();
+    expect(m.logEvent).not.toHaveBeenCalled();
+    // The reads come first: a failing policy read also leaves everything untouched, the ownership row included.
+    m.clearHumanConversation.mockResolvedValue({ cleared: 1 });
+    m.cooldownDaysFor.mockRejectedValue(new Error('policy read failed'));
+    await expect(dispositionHandoff(asModel(r), { disposition: 'nurture', reason: 'newsletter only' }, ACTOR, AS_OF)).rejects.toThrow('policy read failed');
+    expect(m.clearHumanConversation).toHaveBeenCalledTimes(1);
+    expect(r.update).not.toHaveBeenCalled();
+    // And on the success path the order is clear, then update, then the outcome, then the ledger.
+    m.cooldownDaysFor.mockResolvedValue({ days: 14, source: 'default' });
+    const order: string[] = [];
+    m.clearHumanConversation.mockImplementation(async () => { order.push('clear'); return { cleared: 1 }; });
+    r.update.mockImplementation(async (patch: Record<string, unknown>) => { order.push('update'); return Object.assign(r, patch); });
+    m.recordOutcome.mockImplementation(async () => { order.push('outcome'); return { row: { id: 'out-1' }, replayed: false }; });
+    m.logEvent.mockImplementation(async () => { order.push('ledger'); });
+    await dispositionHandoff(asModel(r), { disposition: 'qualified', reason: 'budget confirmed' }, ACTOR, AS_OF);
+    expect(order).toEqual(['clear', 'update', 'outcome', 'ledger']);
+  });
+
   it('the integration writers are not called from here: no organisation, pipeline stage, conversion or ticket touched (T406)', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'dispositionService.ts'), 'utf8');
     const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
