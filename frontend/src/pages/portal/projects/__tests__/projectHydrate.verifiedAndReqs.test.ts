@@ -14,7 +14,7 @@
  * Pure functions; no I/O.
  */
 import {
-  overlayCompletions, backendTreeToProject, deriveReqStates,
+  overlayCompletions, backendTreeToProject, deriveReqStates, reconcileReqCatalog, isPlanStoryTask,
   type BackendProjectTree, type BackendTaskNode,
 } from '../projectHydrate';
 import { projectPoints, reqVerified, type StudentProject, type ProjectTask, type ProjectReq } from '../projectsStore';
@@ -120,5 +120,64 @@ describe('deriveReqStates', () => {
   it('says nothing about a requirement no story cites, and returns the same array when nothing moves', () => {
     const out = deriveReqStates(reqs, lists([localTask('STORY-009', { req: 'FUNC-001' })]));
     expect(out).toBe(reqs);   // FUNC-001 stays planned; NFR-001 keeps its built
+  });
+});
+
+// --- the browser's starter template must not count as requirements once a plan exists ---
+//
+// A learner with 8 of 8 plan stories verified read "8 of 9": the template task
+// `p1786580195079-t2` ("Map the safety guardrail") cited a requirement of its
+// own, R4, that nothing could ever verify. Five projects carried 28 such tasks.
+
+describe('isPlanStoryTask', () => {
+  it('recognises plan stories and nothing else', () => {
+    expect(isPlanStoryTask({ storyId: 'STORY-007' })).toBe(true);
+    expect(isPlanStoryTask({ storyId: 'story-007' })).toBe(true);
+    expect(isPlanStoryTask({ storyId: 'PREP-1' })).toBe(false);
+    expect(isPlanStoryTask({ storyId: 'p1786580195079-t2' })).toBe(false);
+    expect(isPlanStoryTask({ storyId: undefined })).toBe(false);
+  });
+});
+
+describe('reconcileReqCatalog + deriveReqStates with a template task in the tree', () => {
+  const FARHAT = tree([
+    bTask('STORY-001', 0, { status: 'complete', verified_at: 'v', requirement_key: 'REQ-001' }),
+    bTask('STORY-002', 1, { status: 'complete', verified_at: 'v', requirement_key: 'REQ-005' }),
+    bTask('p1786580195079-t2', 2, { status: 'complete', verified_at: null, requirement_key: 'R4', title: 'Map the safety guardrail (currently UNMAPPED)' }),
+    bTask('PREP-1', 3, { status: 'not_started' }),
+  ]);
+
+  it('a fresh hydrate reads 2 of 2 verified, not 2 of 3', () => {
+    const p = backendTreeToProject(FARHAT);
+    expect(p.reqs.map((r) => `${r.id}:${r.state}`)).toEqual(['REQ-001:verified', 'REQ-005:verified']);
+    expect(reqVerified(p)).toEqual({ v: 2, total: 2 });
+  });
+
+  it('the device that still holds R4 from the template drops it on the next pull', () => {
+    const before = local([
+      localTask('STORY-001', { state: 'done', due: 'done', req: 'REQ-001' }),
+      localTask('STORY-002', { state: 'done', due: 'done', req: 'REQ-005' }),
+      localTask('p1786580195079-t2', { state: 'done', due: 'done', req: 'R4' }),
+    ], [
+      { id: 'REQ-001', name: 'REQ-001', kind: 'FUNC', state: 'planned' },
+      { id: 'REQ-005', name: 'REQ-005', kind: 'FUNC', state: 'planned' },
+      { id: 'R4', name: 'Safety guardrail', kind: 'NFR', state: 'built' },
+    ]);
+    const after = overlayCompletions(before, FARHAT);
+    expect(after.reqs.map((r) => r.id)).toEqual(['REQ-001', 'REQ-005']);
+    expect(reqVerified(after)).toEqual({ v: 2, total: 2 });
+  });
+
+  it('leaves a starter-only build alone: with no plan stories the template IS the build', () => {
+    const reqs: ProjectReq[] = [{ id: 'R4', name: 'R4', kind: 'NFR', state: 'built' }];
+    const lists = [{ id: 'l', step: 2, name: 'R0', sub: '', tasks: [localTask('p1786580195079-t2', { state: 'done', due: 'done', req: 'R4' })] }];
+    expect(reconcileReqCatalog(reqs, lists)).toBe(reqs);
+    expect(deriveReqStates(reqs, lists).map((r) => r.state)).toEqual(['built']);
+  });
+
+  it('adds a requirement a plan story cites that the device never knew about', () => {
+    const reqs: ProjectReq[] = [{ id: 'REQ-001', name: 'REQ-001', kind: 'FUNC', state: 'planned' }];
+    const lists = [{ id: 'l', step: 2, name: 'R0', sub: '', tasks: [localTask('STORY-001', { req: 'REQ-001' }), localTask('STORY-009', { req: 'REQ-009' })] }];
+    expect(reconcileReqCatalog(reqs, lists).map((r) => r.id)).toEqual(['REQ-001', 'REQ-009']);
   });
 });

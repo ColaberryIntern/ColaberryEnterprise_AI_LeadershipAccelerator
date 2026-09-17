@@ -1894,6 +1894,25 @@ export function startScheduler(): void {
   // invitation — a PATCH on an expired invite returns a lying 204 and destroys
   // the evidence the student ever invited us — and never trusts a status code,
   // re-reading `permissions.push` to settle whether access was actually gained.
+  // Ask GitHub, once a day, what access we actually hold on every connected
+  // repo, and record it. `platform_can_push` is otherwise written only at
+  // connect time and by the invitation sweep (as of 2026-09-17); a grant made
+  // through any other path (a student adding us by hand and never pressing
+  // Reconnect, a revocation, a repo rename) is invisible until something asks.
+  // The script has existed since 2026-08-23 and was only ever run by hand;
+  // three stale rows were found on 2026-09-17. ~25 GitHub reads a day.
+  cron.schedule('23 6 * * *', () => {
+    instrumentCronJob('GithubWriteAccessReconcile', async () => {
+      const { reconcile } = await import('../scripts/reconcileRepoWriteAccess');
+      const rows = await reconcile(true);
+      const flipped = rows.filter((r) => r.now !== null && r.was !== 'unrecorded' && String(r.was) !== String(r.now));
+      if (flipped.length) console.log('[Scheduler] GitHub write-access reconcile flipped:', flipped.map((r) => `${r.owner}/${r.repo} ${r.was}->${r.now}`));
+      else console.log('[Scheduler] GitHub write-access reconcile: no changes across', rows.length, 'connections');
+    }).catch((err) => {
+      console.error('[Scheduler] GitHub write-access reconcile error:', err);
+    });
+  });
+
   cron.schedule('7 * * * *', () => {
     instrumentCronJob('GithubInvitationSweep', async () => {
       const { sweepPendingInvitations } = await import('./sbp/repoConnect/repoInvitations');
