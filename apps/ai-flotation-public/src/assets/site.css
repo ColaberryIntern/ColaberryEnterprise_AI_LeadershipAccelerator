@@ -143,9 +143,8 @@ a:hover { color: var(--accent-hover); }
    of brand on every page was the one piece still wearing the old identity - and no token
    change could reach it. The float takes the accent, the waterline and what sits under it
    take the ink. Both follow dark mode for free. */
+.logo .mark-hull { fill: var(--fg); }
 .logo .mark-float { fill: var(--accent); }
-.logo .mark-line { stroke: var(--fg); }
-.logo .mark-sunk { fill: var(--fg); }
 .nav { display: flex; align-items: center; gap: var(--space-6); flex-wrap: wrap; }
 /* :not(.btn) is load-bearing, not decoration. `.nav a` (0,1,1) outranks `.btn-primary`
    (0,1,0), so without it the nav's muted colour won and both masthead buttons were
