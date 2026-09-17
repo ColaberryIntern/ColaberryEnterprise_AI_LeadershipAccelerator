@@ -2486,16 +2486,26 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     description:
       'Dara — the Curriculum, Learning & Certification Lead: owns the integrity, ' +
       'quality, and certification-readiness of what Colaberry teaches. First release ' +
-      'absorbs 4 real, dormant legacy behaviors (2 daily gap/readiness flags, a ' +
-      'read-only curriculum integrity scan, video-link health monitoring) — zero ' +
-      'outbound communication, zero LLM calls. Reports directly to Swati Raman. See ' +
+      'absorbed 4 real, dormant legacy behaviors (2 daily gap/readiness flags, a ' +
+      'read-only curriculum integrity scan, video-link health monitoring), all ' +
+      'deterministic, no LLM call. Dara v2 (2026-09-17) added a real student-facing ' +
+      'DM surface for curriculum/certification questions, LLM-backed and cost-' +
+      'attributed to her own agent_id, with mandatory ticket-backed handoff to a ' +
+      'human for anything outside her scope — never off-ledger, never a guessed ' +
+      'answer. Reports directly to Swati Raman. See ' +
       'docs/architecture/ai-workforce-management/employees/curriculum/ for the full ' +
       'charter, personality profile, and accountability contract (all approved by Ali).',
     config: {},
     enabled: false,
     system_prompt: DARA_PERSONA_BLOCK,
-    tools_granted: ['flag_curriculum_content_gaps', 'flag_certification_readiness', 'scan_curriculum_integrity', 'monitor_curriculum_video_health'],
-    persona_version: '2026-09-16',
+    tools_granted: [
+      'flag_curriculum_content_gaps', 'flag_certification_readiness', 'scan_curriculum_integrity', 'monitor_curriculum_video_health',
+      // Dara v2 Phase 3/4 (2026-09-17) — real, LLM-backed student DM capability
+      // and its mandatory human-handoff mechanism (daraReplyService.ts,
+      // daraTools.ts, daraHandoffService.ts).
+      'respond_to_curriculum_dm', 'escalate_to_human',
+    ],
+    persona_version: '2026-09-17',
   },
   // --- DaraPresenceHeartbeat: Dara's own real, tracked always-online cron ---
   // Same real mechanism as ReesePresenceHeartbeat above (generalized,

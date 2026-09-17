@@ -1,30 +1,31 @@
 import OpenAI from 'openai';
 import { addTicketComment } from '../ticketService';
-import { Ticket } from '../../models';
+import { createDaraHandoff } from './daraHandoffService';
 
 /**
- * Dara v2 Phase 3 — Dara's first (and, for this phase, only) real LLM-invoked
- * tool. Mirrors reeseTools.ts's shape (a typed OpenAI tool array + one
- * execute-by-name function), but this tool has a real side effect: flagging
- * the current conversation's ticket for the human Dara reports to, rather
- * than a read-only lookup.
+ * Dara v2 Phase 3/4 — Dara's first real LLM-invoked tool. Mirrors
+ * reeseTools.ts's shape (a typed OpenAI tool array + one execute-by-name
+ * function), but this tool has a real side effect.
  *
  * Phase 2 decision (Ali, "proceed with your suggestions"): a question outside
- * Dara's real curriculum/certification scope routes to a human via the
- * conversation's own ProofDesk ticket — never a fabricated answer, and never
- * a fabricated match to some other AI employee's capability. This tool is
- * that mechanism: it adds a clearly-labeled comment and raises the ticket's
- * priority so it doesn't sit invisibly at the default. It deliberately does
- * NOT attempt a ticket status transition (`updateTicketStatus`) — the
- * ticket's status machine (`ticketService.ts`'s VALID_TRANSITIONS) has no
- * direct backlog -> in_review edge, and forcing one here would be exactly the
- * kind of state-machine workaround this repo's own incident history warns
- * against. Visibility (comment + priority), not a fabricated status jump.
+ * Dara's real curriculum/certification scope routes to a human, never a
+ * fabricated answer or a fabricated match to some other AI employee's
+ * capability. Phase 4 ("mandatory inter-agent ticket handoff, never
+ * off-ledger") made this real: every escalation now creates its OWN
+ * standalone `agent_handoff` ticket (`daraHandoffService.ts`), not just a
+ * comment — see that module's header for the dedup-key/no-resolver reasoning.
+ * The comment on the conversation's own ticket stays too, as a cross-
+ * reference, once the real handoff ticket exists.
+ *
+ * "Never off-ledger" also means never CLAIMING an escalation that didn't
+ * really happen: if the handoff ticket can't actually be created (missing
+ * identity, missing triggering-message id), this returns `escalated: false`
+ * with an honest reason — the model sees that and must not tell the student
+ * it escalated something it didn't.
  *
  * SECURITY: like Reese's own tools, this never accepts a student/ticket id
  * from the model — the caller (daraReplyService.ts) always supplies the
- * real, server-bound ticketId/actorId for the conversation already in
- * progress.
+ * real, server-bound context for the conversation already in progress.
  */
 export const DARA_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
   {
@@ -56,36 +57,54 @@ export function isDaraTool(name: string): boolean {
   return TOOL_NAMES.has(name);
 }
 
-async function escalateToHumanTool(ticketId: string, daraAdminUserId: string | null, reason: string): Promise<unknown> {
+async function escalateToHumanTool(
+  conversationTicketId: string | null,
+  daraAdminUserId: string | null,
+  studentEnrollmentId: string,
+  triggeringMessageId: string | null,
+  reason: string,
+): Promise<unknown> {
   const cleanReason = (reason || 'Outside Dara\'s curriculum/certification scope.').trim();
-  if (daraAdminUserId) {
-    await addTicketComment(ticketId, `🚩 Escalated to a human: ${cleanReason}`, 'ai_staff', daraAdminUserId);
+
+  if (!daraAdminUserId || !triggeringMessageId) {
+    // Can't create a real, attributable, dedup-safe handoff ticket without
+    // both — "never off-ledger" means an honest non-escalation here, never a
+    // claimed escalation with nothing real behind it.
+    return { escalated: false, reason: 'Could not record this right now — try asking again in a moment.' };
   }
-  await Ticket.update({ priority: 'high' } as any, { where: { id: ticketId } });
-  return { escalated: true, reason: cleanReason };
+
+  const handoff = await createDaraHandoff(daraAdminUserId, studentEnrollmentId, cleanReason, conversationTicketId, triggeringMessageId);
+
+  if (conversationTicketId) {
+    await addTicketComment(
+      conversationTicketId,
+      `🚩 Escalated to a human — see handoff ticket ${handoff.id}: ${cleanReason}`,
+      'ai_staff',
+      daraAdminUserId,
+    );
+  }
+
+  return { escalated: true, reason: cleanReason, handoffTicketId: handoff.id };
 }
 
 /**
  * Executes one real tool call by name. Never throws — a real failure degrades
  * to an honest error payload the model can see, matching reeseTools.ts's own
- * fail-safe posture. `ticketId`/`daraAdminUserId` are always the caller's own
- * bound values for the conversation already in progress (see the module
- * header's security note) — this function has no path that accepts either
- * from the model.
+ * fail-safe posture. Every field in `context` is always the caller's own
+ * bound value for the conversation already in progress (see the module
+ * header's security note) — this function has no path that accepts any of
+ * them from the model.
  */
 export async function executeDaraTool(
   toolName: string,
   args: { reason?: string },
-  context: { ticketId: string | null; daraAdminUserId: string | null },
+  context: { ticketId: string | null; daraAdminUserId: string | null; studentEnrollmentId: string; triggeringMessageId: string | null },
 ): Promise<string> {
   try {
     if (toolName === 'escalate_to_human') {
-      if (!context.ticketId) {
-        // No ticket to flag (ensureDaraTicketForRoom failed earlier this turn)
-        // — still an honest, non-throwing result the model can act on.
-        return JSON.stringify({ escalated: false, reason: 'No ticket available to flag this turn.' });
-      }
-      return JSON.stringify(await escalateToHumanTool(context.ticketId, context.daraAdminUserId, args?.reason || ''));
+      return JSON.stringify(await escalateToHumanTool(
+        context.ticketId, context.daraAdminUserId, context.studentEnrollmentId, context.triggeringMessageId, args?.reason || '',
+      ));
     }
     return JSON.stringify({ error: `Unknown tool: ${toolName}` });
   } catch (e: any) {

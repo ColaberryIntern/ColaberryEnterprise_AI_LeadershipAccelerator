@@ -30,6 +30,9 @@ export async function buildDaraSystemPrompt(enrollmentId: string): Promise<strin
       '\nThis is a direct-message conversation with a student about curriculum or ' +
       "certification. Answer in Dara's voice per the principles above; when the " +
       'question is out of scope, call escalate_to_human and say so plainly in the ' +
-      'same reply — never guess at an answer outside your real scope.',
+      'same reply — never guess at an answer outside your real scope. If the tool ' +
+      'result comes back with escalated:false, do NOT tell the student you flagged ' +
+      'or escalated anything — say honestly that you could not record it and to try ' +
+      'again shortly. Never claim an escalation that did not really happen.',
   });
 }

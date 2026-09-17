@@ -1,20 +1,24 @@
 jest.mock('../../ticketService', () => ({ addTicketComment: jest.fn() }));
-jest.mock('../../../models', () => ({ Ticket: { update: jest.fn() } }));
+jest.mock('../daraHandoffService', () => ({ createDaraHandoff: jest.fn() }));
 
 import { addTicketComment } from '../../ticketService';
-import { Ticket } from '../../../models';
+import { createDaraHandoff } from '../daraHandoffService';
 import { DARA_TOOLS, isDaraTool, executeDaraTool } from '../daraTools';
 
 const mockAddComment = addTicketComment as unknown as jest.Mock;
-const mockTicketUpdate = Ticket.update as unknown as jest.Mock;
+const mockCreateHandoff = createDaraHandoff as unknown as jest.Mock;
 
 const TICKET_ID = 'ticket-1';
 const DARA_ADMIN_ID = 'dara-admin-1';
+const STUDENT_ID = 'student-enrollment-1';
+const MESSAGE_ID = 'msg-1';
+
+const baseContext = { ticketId: TICKET_ID, daraAdminUserId: DARA_ADMIN_ID, studentEnrollmentId: STUDENT_ID, triggeringMessageId: MESSAGE_ID };
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockAddComment.mockResolvedValue({ id: 'activity-1' });
-  mockTicketUpdate.mockResolvedValue([1]);
+  mockCreateHandoff.mockResolvedValue({ id: 'handoff-1' });
 });
 
 describe('DARA_TOOLS / isDaraTool', () => {
@@ -30,58 +34,59 @@ describe('DARA_TOOLS / isDaraTool', () => {
   });
 });
 
-describe('executeDaraTool — escalate_to_human', () => {
-  it('happy path: adds a labeled comment under Dara\'s own admin id and raises priority, returns an honest confirmation', async () => {
+describe('executeDaraTool — escalate_to_human (Dara v2 Phase 4: real, standalone agent_handoff ticket)', () => {
+  it('happy path: creates a real handoff ticket, comments on the conversation ticket cross-referencing it, returns an honest confirmation', async () => {
     const result = JSON.parse(await executeDaraTool(
-      'escalate_to_human',
-      { reason: 'This is a homework question.' },
-      { ticketId: TICKET_ID, daraAdminUserId: DARA_ADMIN_ID },
+      'escalate_to_human', { reason: 'This is a homework question.' }, baseContext,
     ));
 
-    expect(mockAddComment).toHaveBeenCalledWith(TICKET_ID, expect.stringContaining('This is a homework question.'), 'ai_staff', DARA_ADMIN_ID);
-    expect(mockTicketUpdate).toHaveBeenCalledWith({ priority: 'high' }, { where: { id: TICKET_ID } });
-    expect(result).toEqual({ escalated: true, reason: 'This is a homework question.' });
+    expect(mockCreateHandoff).toHaveBeenCalledWith(DARA_ADMIN_ID, STUDENT_ID, 'This is a homework question.', TICKET_ID, MESSAGE_ID);
+    expect(mockAddComment).toHaveBeenCalledWith(
+      TICKET_ID, expect.stringContaining('handoff-1'), 'ai_staff', DARA_ADMIN_ID,
+    );
+    expect(result).toEqual({ escalated: true, reason: 'This is a homework question.', handoffTicketId: 'handoff-1' });
   });
 
-  it('boundary: no ticket available this turn returns an honest non-escalation, never throws or writes', async () => {
+  it('boundary: no conversation ticket yet still creates the real handoff ticket, just skips the cross-reference comment', async () => {
     const result = JSON.parse(await executeDaraTool(
-      'escalate_to_human',
-      { reason: 'whatever' },
-      { ticketId: null, daraAdminUserId: DARA_ADMIN_ID },
+      'escalate_to_human', { reason: 'x' }, { ...baseContext, ticketId: null },
     ));
 
-    expect(result.escalated).toBe(false);
+    expect(mockCreateHandoff).toHaveBeenCalledWith(DARA_ADMIN_ID, STUDENT_ID, 'x', null, MESSAGE_ID);
     expect(mockAddComment).not.toHaveBeenCalled();
-    expect(mockTicketUpdate).not.toHaveBeenCalled();
-  });
-
-  it('boundary: no admin id yet still raises priority (best-effort) but skips the comment write', async () => {
-    const result = JSON.parse(await executeDaraTool(
-      'escalate_to_human',
-      { reason: 'whatever' },
-      { ticketId: TICKET_ID, daraAdminUserId: null },
-    ));
-
-    expect(mockAddComment).not.toHaveBeenCalled();
-    expect(mockTicketUpdate).toHaveBeenCalledWith({ priority: 'high' }, { where: { id: TICKET_ID } });
     expect(result.escalated).toBe(true);
   });
 
-  it('boundary: a missing/empty reason still escalates with an honest default reason, never a blank comment', async () => {
+  it('"never off-ledger" boundary: no admin id yet -> an HONEST non-escalation, never a fabricated ticket', async () => {
     const result = JSON.parse(await executeDaraTool(
-      'escalate_to_human', {}, { ticketId: TICKET_ID, daraAdminUserId: DARA_ADMIN_ID },
+      'escalate_to_human', { reason: 'x' }, { ...baseContext, daraAdminUserId: null },
     ));
 
-    expect(result.reason).toContain('curriculum/certification scope');
-    expect(mockAddComment).toHaveBeenCalledWith(TICKET_ID, expect.any(String), 'ai_staff', DARA_ADMIN_ID);
+    expect(mockCreateHandoff).not.toHaveBeenCalled();
+    expect(mockAddComment).not.toHaveBeenCalled();
+    expect(result.escalated).toBe(false);
   });
 
-  it('failure path: a comment-write rejection degrades to an honest error payload, never throws into the reply pipeline', async () => {
-    mockAddComment.mockRejectedValue(new Error('DB write failed'));
-
+  it('"never off-ledger" boundary: no triggering-message id (no stable dedup key) -> an HONEST non-escalation, never a fabricated ticket', async () => {
     const result = JSON.parse(await executeDaraTool(
-      'escalate_to_human', { reason: 'x' }, { ticketId: TICKET_ID, daraAdminUserId: DARA_ADMIN_ID },
+      'escalate_to_human', { reason: 'x' }, { ...baseContext, triggeringMessageId: null },
     ));
+
+    expect(mockCreateHandoff).not.toHaveBeenCalled();
+    expect(result.escalated).toBe(false);
+  });
+
+  it('boundary: a missing/empty reason still escalates with an honest default reason, never a blank one', async () => {
+    const result = JSON.parse(await executeDaraTool('escalate_to_human', {}, baseContext));
+
+    expect(result.reason).toContain('curriculum/certification scope');
+    expect(mockCreateHandoff).toHaveBeenCalledWith(DARA_ADMIN_ID, STUDENT_ID, expect.stringContaining('curriculum/certification scope'), TICKET_ID, MESSAGE_ID);
+  });
+
+  it('failure path: a handoff-creation rejection degrades to an honest error payload, never throws into the reply pipeline', async () => {
+    mockCreateHandoff.mockRejectedValue(new Error('DB write failed'));
+
+    const result = JSON.parse(await executeDaraTool('escalate_to_human', { reason: 'x' }, baseContext));
 
     expect(result.error).toBe('Tool execution failed');
     expect(result.message).toContain('DB write failed');
@@ -90,9 +95,9 @@ describe('executeDaraTool — escalate_to_human', () => {
 
 describe('executeDaraTool — unknown tool name', () => {
   it('an unrecognized tool name returns an honest error, never silently no-ops or throws', async () => {
-    const result = JSON.parse(await executeDaraTool('delete_everything', {}, { ticketId: TICKET_ID, daraAdminUserId: DARA_ADMIN_ID }));
+    const result = JSON.parse(await executeDaraTool('delete_everything', {}, baseContext));
 
     expect(result.error).toContain('Unknown tool');
-    expect(mockAddComment).not.toHaveBeenCalled();
+    expect(mockCreateHandoff).not.toHaveBeenCalled();
   });
 });

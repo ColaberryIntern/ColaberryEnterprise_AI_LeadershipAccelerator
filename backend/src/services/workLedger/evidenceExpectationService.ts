@@ -152,6 +152,12 @@ const TYPE_DEFAULTS: Record<TicketType, TicketEvidenceExpectations> = {
   // 'student_support' exactly: no decision-recording, work-graph, or
   // screenshot pipeline connected today.
   curriculum_support: { visualProof: NOT_APPLICABLE, workGraph: NOT_APPLICABLE, decisions: NOT_APPLICABLE },
+
+  // Dara v2 Phase 4 — a real handoff ticket, human-resolved only (no
+  // automated terminal-state signal to record a decision against; the human
+  // reply itself is the resolution, not a separate recorded decision). No
+  // visual or multi-step-workflow dimension.
+  agent_handoff: { visualProof: NOT_APPLICABLE, workGraph: NOT_APPLICABLE, decisions: NOT_APPLICABLE },
 };
 
 /**
