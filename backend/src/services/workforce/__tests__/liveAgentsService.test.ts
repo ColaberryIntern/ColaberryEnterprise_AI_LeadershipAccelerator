@@ -22,7 +22,7 @@ import Enrollment from '../../../models/Enrollment';
 import CommunityMember from '../../../models/CommunityMember';
 import { Ticket } from '../../../models';
 import { derivePresence } from '../../communityService';
-import { listLiveAgents, listLiveAgentActivity, countOpenTicketsForAgent, getLastTicketActivityForAgent } from '../liveAgentsService';
+import { listLiveAgents, listLiveAgentActivity, countOpenTicketsForAgent, getLastTicketActivityForAgent, getOldestOpenTicketAge } from '../liveAgentsService';
 
 const mockAdminUserFindAll = AdminUser.findAll as unknown as jest.Mock;
 const mockAiAgentFindAll = AiAgent.findAll as unknown as jest.Mock;
@@ -367,6 +367,52 @@ describe('getLastTicketActivityForAgent — real "most recently touched a ticket
     mockTicketFindOne.mockResolvedValue(null);
 
     const result = await getLastTicketActivityForAgent('admin-reese', reeseAgent as any);
+
+    expect(result).toBeNull();
+  });
+});
+
+// Dara v2 Phase 5 ("open-ticket accountability") — read-only, informational
+// age of the oldest still-open ticket. Same match-list/open-status shape as
+// countOpenTicketsForAgent(), ASC by created_at instead of a COUNT.
+describe('getOldestOpenTicketAge — real, read-only age of the oldest still-open ticket (Dara v2 Phase 5)', () => {
+  it('returns the real oldest open ticket\'s created_at and a correctly computed age in days', async () => {
+    const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+    mockTicketFindOne.mockResolvedValue({ created_at: tenDaysAgo });
+
+    const result = await getOldestOpenTicketAge('admin-reese', reeseAgent as any);
+
+    expect(result).not.toBeNull();
+    expect(result!.oldestOpenCreatedAt).toBe(tenDaysAgo);
+    expect(result!.ageDays).toBe(10);
+  });
+
+  it('filters to OPEN tickets only, ordered ASC by created_at (the oldest, not the newest)', async () => {
+    mockTicketFindOne.mockResolvedValue({ created_at: new Date() });
+
+    await getOldestOpenTicketAge('admin-reese', reeseAgent as any);
+
+    const findOneArgs = mockTicketFindOne.mock.calls[0][0];
+    expect(findOneArgs.order).toEqual([['created_at', 'ASC']]);
+    const statusClause = findOneArgs.where[Op.and].find((c: any) => 'status' in c);
+    expect(statusClause.status[Op.notIn]).toEqual(['done', 'cancelled']);
+  });
+
+  it('matches EITHER the real AdminUser id OR a legacy alias, same as countOpenTicketsForAgent', async () => {
+    mockTicketFindOne.mockResolvedValue({ created_at: new Date() });
+
+    await getOldestOpenTicketAge('admin-process-1', processAgent as any);
+
+    const findOneArgs = mockTicketFindOne.mock.calls[0][0];
+    const orClauses = findOneArgs.where[Op.and].find((c: any) => Op.or in c)[Op.or];
+    const createdClause = orClauses.find((c: any) => 'created_by_id' in c);
+    expect(createdClause.created_by_id[Op.in]).toEqual(expect.arrayContaining(['admin-process-1', 'cory-engine']));
+  });
+
+  it('boundary: an agent with zero open tickets returns null, never a fabricated age', async () => {
+    mockTicketFindOne.mockResolvedValue(null);
+
+    const result = await getOldestOpenTicketAge('admin-reese', reeseAgent as any);
 
     expect(result).toBeNull();
   });
