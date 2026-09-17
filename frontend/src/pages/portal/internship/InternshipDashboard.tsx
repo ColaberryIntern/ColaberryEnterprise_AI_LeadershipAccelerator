@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { InternDashboard, fetchInternshipDashboard } from '../../../services/internshipApi';
+import InternshipProjects from './InternshipProjects';
 
 /**
  * The student "My Internship" dashboard (Phase 2 shell): the single next action,
@@ -121,6 +122,9 @@ const InternshipDashboard: React.FC = () => {
             ))}
         </section>
       </div>
+
+      {/* The project portfolio — owned projects, verified vs self-reported, readiness. */}
+      <InternshipProjects />
 
       {/* Training direction + meetings. */}
       <section style={{ ...cardStyle }}>

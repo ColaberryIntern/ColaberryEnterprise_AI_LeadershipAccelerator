@@ -88,6 +88,10 @@ export interface ProjectRow {
   starts_on: string | null;
   ends_on: string | null;
   already_case_study: boolean;
+  /** Soft-delete timestamp. Present on a project the student archived — such a row
+   *  is history, not active workload, and a student view must not count it as due
+   *  work. Null on a live project. */
+  archived_at: string | null;
   /** True when the student themselves has this set as their active project.
    *  Distinguishes a real build from a spare row they have moved off. */
   is_active_project: boolean;
@@ -193,7 +197,9 @@ export function computeReadiness(input: {
  * classic fan-out, and here it would silently overstate exactly the two numbers
  * the readiness score is built from.
  */
-export async function getProjectDelivery(opts: { cohortId?: string } = {}): Promise<ProjectRow[]> {
+export async function getProjectDelivery(
+  opts: { cohortId?: string; enrollmentId?: string } = {},
+): Promise<ProjectRow[]> {
   const rows = await sequelize.query<any>(
     `SELECT p.id                AS project_id,
             p.name,
@@ -233,6 +239,7 @@ export async function getProjectDelivery(opts: { cohortId?: string } = {}): Prom
               ELSE 'none'
             END                 AS repo_source,
             p.project_variables->>'command_center_url' AS command_center_url,
+            p.archived_at,
             (p.executive_summary IS NOT NULL AND p.executive_summary <> '') AS has_exec_summary
        FROM projects p
        LEFT JOIN enrollments e ON e.id = p.enrollment_id
@@ -249,11 +256,13 @@ export async function getProjectDelivery(opts: { cohortId?: string } = {}): Prom
       --   * unnamed projects: scratch/system rows, not somebody's build.
       WHERE p.name IS NOT NULL AND p.name <> ''
         AND (e.status IS NULL OR e.status NOT IN (:departed))
-        ${opts.cohortId ? 'AND e.cohort_id = :cohortId' : ''}`,
+        ${opts.cohortId ? 'AND e.cohort_id = :cohortId' : ''}
+        ${opts.enrollmentId ? 'AND p.enrollment_id = :enrollmentId' : ''}`,
     {
       replacements: {
         departed: [...DEPARTED_ENROLLMENT_STATUSES],
         ...(opts.cohortId ? { cohortId: opts.cohortId } : {}),
+        ...(opts.enrollmentId ? { enrollmentId: opts.enrollmentId } : {}),
       },
       type: QueryTypes.SELECT,
     }
@@ -326,6 +335,7 @@ export async function getProjectDelivery(opts: { cohortId?: string } = {}): Prom
       starts_on: t?.starts_on ?? null,
       ends_on: t?.ends_on ?? null,
       already_case_study: caseStudies.has(r.project_id),
+      archived_at: r.archived_at ?? null,
       is_active_project: !!r.active_project_id && r.active_project_id === r.project_id,
       releases: projectReleases,
       buckets: projectReleases.reduce((acc, rel) => ({

@@ -9,6 +9,7 @@ import { InvalidInternshipTransitionError } from '../services/internship/interns
 import { isInternshipEnabled } from '../services/portalFlagsService';
 import { recordMeetingJoin } from '../services/internship/internshipAttendanceService';
 import { internDashboard } from '../services/internship/internshipStudentDashboard';
+import { internProjectPortfolio } from '../services/internship/internshipProjectPortfolio';
 
 /**
  * Participant activation endpoints: the onboarding checklist and the tool
@@ -98,6 +99,25 @@ export async function handleGetInternshipDashboard(req: Request, res: Response):
     res.json({ state: ctx.application.state, ...dashboard });
   } catch (err) {
     fail(res, err, 'internship_dashboard_failed');
+  }
+}
+
+/**
+ * GET /api/portal/internship/projects
+ *
+ * The intern's own project portfolio: every owned project with the shared admin
+ * readiness calculation, the verified-vs-self-reported story split, repo, stage,
+ * risk and Command Center link. Scoped to the caller's enrollment server-side; a
+ * read, never a mutation.
+ */
+export async function handleGetInternshipProjects(req: Request, res: Response): Promise<void> {
+  try {
+    const ctx = await requireOpenApplication(req, res);
+    if (!ctx) return;
+    const portfolio = await internProjectPortfolio(ctx.enrollmentId);
+    res.json({ state: ctx.application.state, ...portfolio });
+  } catch (err) {
+    fail(res, err, 'internship_projects_failed');
   }
 }
 
