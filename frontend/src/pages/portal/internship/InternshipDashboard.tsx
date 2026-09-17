@@ -3,6 +3,11 @@ import { Link } from 'react-router-dom';
 import { InternDashboard, Week3Handoff, fetchInternshipDashboard } from '../../../services/internshipApi';
 import InternshipProjects from './InternshipProjects';
 import InternshipFeedback from './InternshipFeedback';
+import CondensedHeaderCard from '../today/CondensedHeaderCard';
+// The next-step hero and the scroll-condensed top-bar slot both use the shared
+// timeline card styles, so the internship dashboard matches Classroom/Projects
+// rather than carrying its own look. Import is deduped by webpack.
+import '../../../components/timeline/timeline.css';
 
 /**
  * The student "My Internship" dashboard (Phase 2 shell): the single next action,
@@ -48,7 +53,16 @@ function HandoffCard({ h }: { h: Week3Handoff }) {
   );
 }
 
-const InternshipDashboard: React.FC = () => {
+/**
+ * `condensed` (from PortalShell's scroll state) collapses the full hero as the
+ * page scrolls; `onCondensed` reports the compact next-step card up to the page,
+ * which hands it to PortalShell's sticky top-bar slot — the same mechanism
+ * Classroom and Projects use.
+ */
+const InternshipDashboard: React.FC<{
+  condensed?: boolean;
+  onCondensed?: (slot: React.ReactNode | null) => void;
+}> = ({ condensed = false, onCondensed }) => {
   const [d, setD] = useState<InternDashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,8 +74,30 @@ const InternshipDashboard: React.FC = () => {
     return () => { alive = false; };
   }, []);
 
+  // Feed the scroll-condensed top-bar slot with the current next step. Cleared on
+  // unmount (e.g. switching to the Onboarding view) so a stale card can't linger.
+  useEffect(() => {
+    if (!onCondensed) return;
+    if (!d) { onCondensed(null); return; }
+    onCondensed(
+      <CondensedHeaderCard
+        icon={<i className="ri-briefcase-4-line" aria-hidden="true" />}
+        tone="berry"
+        label="Your next step"
+        title={d.next_action ? d.next_action.label : "You're all set"}
+        sub={d.week != null ? `Week ${d.week}` : undefined}
+        action={d.next_action
+          ? <Link to={{ search: '?view=onboarding' }} className="te-btn ghost sm">Open →</Link>
+          : undefined}
+      />,
+    );
+    return () => onCondensed(null);
+  }, [d, onCondensed]);
+
   if (error) return <div className="ip-alert" role="alert">{error}</div>;
   if (!d) return <p className="ip-muted">Loading your dashboard…</p>;
+
+  const stepPct = d.progress.total ? Math.round((d.progress.done / d.progress.total) * 100) : 0;
 
   const t = d.activity.training;
   const p = d.activity.project;
@@ -69,21 +105,46 @@ const InternshipDashboard: React.FC = () => {
 
   return (
     <div className="d-flex flex-column" style={{ gap: 18 }}>
-      {/* Next action — the loudest thing. */}
-      <section style={{ ...cardStyle, background: '#292630', color: '#fff', border: 0 }}>
-        <div style={{ ...label, color: '#ac9daf' }}>Your next step{d.week ? ` · Week ${d.week}` : ''}</div>
-        {d.next_action ? (
-          <>
-            <h2 style={{ fontSize: 21, margin: '6px 0 6px', letterSpacing: '-.5px' }}>{d.next_action.label}</h2>
-            <p style={{ color: '#c9c3d0', margin: 0, maxWidth: 640 }}>{d.next_action.detail}</p>
-          </>
-        ) : (
-          <>
-            <h2 style={{ fontSize: 20, margin: '6px 0 6px', letterSpacing: '-.5px' }}>You&apos;re all set for now.</h2>
-            <p style={{ color: '#c9c3d0', margin: 0 }}>Nothing needs your action right now — keep moving through your training and project.</p>
-          </>
-        )}
-      </section>
+      {/* Next step — the loudest thing, styled to match Classroom/Projects (the
+          shared .tl-nextweek card) and collapsing into the sticky top bar on
+          scroll. The card's own tokens set an explicit heading colour, so the
+          title is legible (the old dark hero left the h2 unset, so a global rule
+          painted it near-black on the dark ground). */}
+      <div className={`te-condense-body${condensed ? ' is-condensed' : ''}`}>
+        <div className="tl-de">
+          <div
+            className={`tl-card tl-nextweek${d.next_action ? '' : ' tl-nextweek-done'}`}
+            style={{ borderTopColor: d.next_action ? 'var(--cherry)' : 'var(--leaf)', marginBottom: 0 }}
+          >
+            <div className="tl-nextweek-week">
+              <h3 style={{ textAlign: 'center' }}>{d.week != null ? `Week ${d.week}` : 'Your internship'}</h3>
+              <div className="tl-small" style={{ textAlign: 'center' }}>
+                {d.progress.total} step{d.progress.total === 1 ? '' : 's'}
+              </div>
+              <div className="tl-prog"><i style={{ width: `${stepPct}%` }} /></div>
+              <div className="tl-small" style={{ textAlign: 'center' }}>
+                <b>{d.progress.done}</b> of <b>{d.progress.total}</b> done
+              </div>
+            </div>
+            <div className="tl-nextweek-step">
+              {d.next_action ? (
+                <>
+                  <div className="eyebrow">Your next step</div>
+                  <h2>{d.next_action.label}</h2>
+                  <p>{d.next_action.detail}</p>
+                  <div><Link to={{ search: '?view=onboarding' }} className="tl-btn primary">Open my checklist</Link></div>
+                </>
+              ) : (
+                <>
+                  <div className="eyebrow">You&apos;re on track</div>
+                  <h2>You&apos;re all set for now.</h2>
+                  <p>Nothing needs your action right now — keep moving through your training and project.</p>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Read-only summary — each number states its denominator. */}
       <div className="d-flex flex-wrap" style={{ gap: 12 }}>

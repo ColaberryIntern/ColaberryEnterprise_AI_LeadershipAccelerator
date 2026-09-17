@@ -61,6 +61,9 @@ const InternshipPage: React.FC = () => {
   // Dashboard vs Onboarding view for an active intern, kept in the URL so refresh,
   // back and direct links work.
   const [searchParams, setSearchParams] = useSearchParams();
+  // The dashboard's next-step card, lifted here so PortalShell can render it in the
+  // scroll-condensed top-bar slot (the same pattern Classroom and Projects use).
+  const [condensedSlot, setCondensedSlot] = useState<React.ReactNode>(null);
   // Lets the summary be reached from the interview without a lifecycle change,
   // and lets 'go back to the interview' undo it.
   const [forceSummary, setForceSummary] = useState(false);
@@ -178,7 +181,8 @@ const InternshipPage: React.FC = () => {
   }, { replace: true });
 
   return (
-    <PortalShell>
+    <PortalShell condensedSlot={condensedSlot}>
+      {(condensed) => (
       <div className="ip-root">
         <header className="ip-head">
           <h1>AI Internship</h1>
@@ -442,7 +446,7 @@ const InternshipPage: React.FC = () => {
               ))}
             </div>
             {dashView === 'dashboard'
-              ? <InternshipDashboard />
+              ? <InternshipDashboard condensed={condensed} onCondensed={setCondensedSlot} />
               : <InternshipOnboarding onChanged={() => { void reload(); }} />}
           </>
         )}
@@ -489,6 +493,7 @@ const InternshipPage: React.FC = () => {
           </aside>
         </div>
       </div>
+      )}
     </PortalShell>
   );
 };
