@@ -47,12 +47,34 @@ describe('the four lenses are genuinely different', () => {
     // public page renders TODAY. It is pinned here precisely because the other
     // three are not: this is the change that would be a production change.
     expect(getCaseStudySurfaceProfile('enterprise').sectionOrder).toEqual([
-      'hero', 'situation', 'build', 'architecture', 'measurement',
-      'roadmap', 'contributors', 'artifacts', 'repositories', 'cta',
+      'hero', 'situation', 'decisions', 'build', 'architecture', 'measurement',
+      'roadmap', 'builder', 'contributors', 'artifacts', 'repositories', 'closing', 'cta',
     ]);
   });
 
-  it('makes every order a permutation of the same ten bands — a lens reorders, it does not drop', () => {
+  it('places the three story sections the same way on every surface: decisions early, builder after the evidence, closing last before the CTA', () => {
+    // The storytelling format (Ali's review of the CORA pilot, 2026-09-17):
+    // a reader meets the choices before the detail, the person after the
+    // evidence, and leaves on what the work shows. Each lens keeps its own
+    // opening band; the three story keys keep their relative places.
+    ORDERS.forEach(({ key, order }) => {
+      const at = (k: CaseStudySectionKey) => order.indexOf(k);
+      expect(at('decisions')).toBeGreaterThan(0);
+      expect(at('decisions')).toBeLessThan(at('measurement'));
+      expect(at('builder')).toBeGreaterThan(at('measurement'));
+      expect(at('builder')).toBeGreaterThan(at('roadmap'));
+      expect(at('closing')).toBeGreaterThan(at('builder'));
+      expect(at('closing')).toBe(order.length - (key === 'training' ? 3 : 2));
+      expect(key).toBeTruthy();
+    });
+    // Enterprise and training open on the situation and go straight to the decisions.
+    expect(getCaseStudySurfaceProfile('enterprise').sectionOrder.slice(1, 3)).toEqual(['situation', 'decisions']);
+    expect(getCaseStudySurfaceProfile('training').sectionOrder.slice(1, 3)).toEqual(['situation', 'decisions']);
+    // AI Flotation opens on the architecture, then the decisions behind it.
+    expect(getCaseStudySurfaceProfile('ai-flotation').sectionOrder.slice(1, 3)).toEqual(['architecture', 'decisions']);
+  });
+
+  it('makes every order a permutation of the same thirteen bands — a lens reorders, it does not drop', () => {
     const canonical = [...getCaseStudySurfaceProfile('enterprise').sectionOrder].sort();
     ORDERS.forEach(({ key, order }) => {
       expect([...order].sort()).toEqual(canonical);

@@ -1,3 +1,4 @@
+import { StoryBuilder, StoryClosing, StoryDecisions, builderCoversContributors } from './storyPeopleV2';
 import React from 'react';
 import { Metric } from '../../components/publicV2/Claim';
 import StoryArchitectureBand from './StoryArchitectureBand';
@@ -259,12 +260,12 @@ export function StorySectionBody({
     case 'roadmap':
       return <CaseStudyRoadmap items={record.roadmap} />;
     case 'contributors':
-      return (
-        <StoryContributors
-          contributors={record.contributors}
-          anonymousCount={record.anonymousContributorCount}
-        />
-      );
+      // Stands down when the builder card is already the credit (storyPeopleV2).
+      if (builderCoversContributors(record)) return null;
+      return <StoryContributors contributors={record.contributors} anonymousCount={record.anonymousContributorCount} />;
+    case 'decisions': return <StoryDecisions decisions={record.decisions} />;
+    case 'builder': return <StoryBuilder builder={record.builder} />;
+    case 'closing': return <StoryClosing closing={record.closing} />;
     case 'artifacts':
       // The carousel is a second VIEW of the same approved artifacts, not a
       // second set: it shows the ones that are images, and every artifact still

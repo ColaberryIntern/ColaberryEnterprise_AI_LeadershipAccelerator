@@ -989,6 +989,169 @@ the count-up shows the true wording, never "0%".
 
 ---
 
+## 8e. The story: a person, three decisions, a closing, written per surface
+
+Piloted on the CORA record for training.colaberry.com on 2026-09-17, revised twice on Ali's
+review, then approved as the format for every record ("Let's harden this format"). The
+visual story (§8d) shows the system; this section is what a reader remembers: who did it,
+what they chose, what it cost, what it showed.
+
+### The arc, in the order the page tells it
+
+person (once) → concrete stakes → the first attempt → the decisions → the complication →
+the outcome → what it demonstrates. Greenfield work has no earlier failure; never
+manufacture one. A demonstration stays a demonstration: no prose upgrade to measured
+impact, and no figure on a card that is not on the record.
+
+### Where each part lives, and who orders it
+
+The **surface profile** places three section keys, `decisions`, `builder` and `closing`
+(`caseStudySurfaceProfiles.ts`; keys in `CaseStudySectionKey`). Every renderer draws bands
+in `surface.sectionOrder`; a renderer that predates a key ignores it. The placements:
+
+| Surface | decisions | builder | closing |
+|---|---|---|---|
+| enterprise | right after `situation` | after `roadmap` | after `repositories`, before `cta` |
+| training | right after `situation` | after `roadmap` | after `builder`, before `repositories` |
+| ai-flotation | right after `architecture` | before `contributors` | before `cta` |
+
+Do not move a section by editing a page. Move it in the profile, and every site follows
+(`caseStudySurfaceLens.test.ts` pins the placements).
+
+The **words** live on the snapshot, per surface, in `content.surfaceVariants.<surface>`
+(`CaseStudySurfaceVariant`: `standfirst`, `situation`, `measurementNarrative`,
+`metricNotes`, `contributors`, `builder`, `decisions`, `closing`). `resolveSurfaceContent` lays the surface's variant over the canonical content
+(`caseStudySurfaceVariant.ts`). A surface with no
+variant reads the canonical words; a record with no variants projects byte-for-byte as
+before variants existed (`caseStudySurfaceVariant.test.ts`). A variant never carries a
+figure: `valueDisplay` and `payload` are not in the type, so the numbers are the same on
+every surface and the metric rules still hold.
+
+### Publishing one surface without touching the others
+
+`applyHumanOverride` republishes EVERY live surface of the record. When one surface must
+stay pinned (a pilot, a revision under review), compose the same services by hand, inside
+the backend container:
+
+1. `applyOverrides(content, [{ path: 'surfaceVariants', value, actor, recordedAt, note }])`
+   with the WHOLE map (merge the other surfaces' variants in unchanged);
+2. `persistCaseStudySnapshot({ status: 'draft', draft: { ..., generatedBy: 'human_edit',
+   contentHash: hashCanonical({ content, sourceCommitMap }) } })`;
+3. `approveSnapshot`; 4. `publishCaseStudy({ surfaceKey })` for each surface you mean.
+
+The committed script does all four, and refuses to write until it has shown you the
+result: `backend/src/scripts/publishCaseStudyVariants.ts` (inside the container,
+`node dist/scripts/publishCaseStudyVariants.js <slug> <variants.json> --surfaces a,b [--apply]`).
+Without `--apply` it is a dry run: the gate for every surface over the composed content, the
+projection diff of every surface NOT named (must be empty), the story review per named
+surface, and each named surface's current `published_snapshot_id`, which is the rollback
+(`approveSnapshot(previous)` then `publishCaseStudy(surface, previous)`). It stops if a named
+variant names a contributor the record has not consented to, and never writes consent.
+`--remove <surface>` returns one surface to the canonical words, which is the rollback when
+the record's identity has changed since the previous snapshot and rule 5 would refuse it.
+Record the ids the dry run prints in `deployment-log.md` before you apply.
+
+### The person: facts by class, consent by the record
+
+Four classes of fact, never mixed and never upgraded by generation:
+
+| Class | Example | Where it may appear |
+|---|---|---|
+| user-confirmed biography | "joined as an intern; hired; now an AI Systems Architect" | `builder.intro`, `builder.progression`, standfirst; ONLY with the person's name released by consent |
+| repository-supported contribution | "built the detection query, the panel, the replay job" | `builder.contribution`, `builder.skills[].evidence`; stands under the role title without a name |
+| internally measured outcome | "586 of 604 resolved" | metrics, cards, decision figures |
+| personal reflection, quotation | anything the person felt or said | NOT on the record until the person supplies it and permits it; there is no field for it |
+
+Consent is a **record fact** (`builder_identity_mode`, `builder_naming_consent`, the
+contributor's `consentRecordedAt`). The author never writes it and never implies it. The
+projection releases the name and the biography only when `builder.displayName` equals a
+contributor the consent gate projected as named for that same content; rule 5 refuses a
+profile whose name is not such a contributor. Everything else on the card (role title,
+organisation, contribution, skills) is a project fact and crosses without a name.
+
+**Sparse author.** No consented person: the card credits the role (`displayName` may be
+anything; it will not show), `intro` and `progression` empty, contribution and skills from
+the record. That is a valid story. Write the gap in the handoff ("no consented author; role
+credit"); do not invent a person, a placeholder or a team name the record does not carry.
+Do not interrupt Ali for an optional interview.
+
+**Names.** "Kes" only, never expanded; verify any full name against an approved profile
+before it appears anywhere, including links. (The verifier found the repository owner's
+GitHub handle inside evidence `href`s of the CORA payload: pre-existing, and on Ali's list.)
+
+### The decisions: three cards, each pinned and each closing on a figure
+
+`CaseStudyDecision`: `title`, `problem`, `decision`, `evidence`, `consequence` (all
+required; a card missing one is not drawn), `stage` (the label of a node in the workflow
+drawing, e.g. "Detection query"; the card reads "At Detection query"), `figure` (what the
+card closes on, as displayed: "28 Apr", "0", "97%"; the consequence is its caption).
+
+- Three is the number. One choice is a feature; five is a list.
+- `stage` names a node of the drawing the reader has just scrolled past, in the node's
+  own words shortened, so the two can be found together.
+- `figure` is a value that is on the record: a metric's display value, a date on the
+  timeline, a count in the evidence. A demonstration's cards may close without a figure;
+  the review notes it and moves on.
+- `evidence` is one line naming where the claim lives (build timeline, architecture
+  narrative, measurement notes, the two screenshots).
+- No card repeats the situation. The problem line is the specific fork, not the backstory.
+
+### The closing
+
+One paragraph, `closing` (variant or canonical): what the work shows about the role, the
+one or two figures that carry it, and the gaps stated as gaps. Every statement on the
+record. Do not write "the gaps made the next priorities clear" when the roadmap marks
+them "not pursued". No CTA language; the profile's CTA follows it.
+
+### One introduction
+
+The standfirst introduces the person once (name, the shortest true progression). The
+situation opens on the problem, not the biography. The builder card is the one place the
+progression is drawn. `story_situation_opens_on_biography` and
+`story_progression_repeated` (the review, below) catch the repeats the pilot shipped with.
+
+### The compact ending (training, approved 2026-09-17; other surfaces keep their own bands)
+
+From "Who built it" down the training page shrank from 4,227 px to 1,871 px at 1440 with
+nothing leaving the record: the build as a horizontal rail with staggered labels (compact
+rows under 900 px, never a horizontal scroll), the roadmap as a status board, the
+architecture's first paragraph and stack with the rest folded, the measurement narrative
+in one paragraph, "Who built it" standing down when the builder card names the only
+contributor. Every fold reads "Notes on N of the M ..." so the reader knows what is behind
+it. When the format reaches Enterprise and AI Flotation, port the structure, not the
+pixels: each site's tokens dress it.
+
+### Vocabulary
+
+No em-dash or en-dash anywhere a reader sees (Ali's rule, all published copy). No
+editorial bookkeeping in the story: "this revision", "first revision", "review notes",
+"candidates from the brief" belong in the handoff. No "n/a" in a metric note: say what is
+true or leave it out. Dates read "28 Apr 2026"; times, when any, Central with the zone
+written out.
+
+### The review, before Ali reads it
+
+`npx ts-node -T src/scripts/reviewCaseStudyStory.ts <slug> [surface]` (or
+`--file <composed content.json>`) prints `reviewCaseStudyStory`'s findings and rubric for
+the latest approved snapshot. It is advisory and exits 0. Warnings: no builder card, no
+decisions, an unpinned card, no closing, bookkeeping, a dash, "n/a" in a note, the
+situation opening on the biography, the progression repeated. Notes: role-only credit
+(biography unavailable), a card without a figure. The rubric scores six dimensions 0 to 2
+with the passage or gap cited (`references/story-rubric.md`); the ones marked
+"editorial" are settled by a person, and no score ever substitutes for a gate.
+
+### Done means, per surface
+
+- The dry run's gate is CLEAN for that surface and the other surfaces' projections did not
+  move; the review prints no warning you did not accept in writing.
+- The live API for `?surface=<key>` carries the builder (name only if consented), three
+  decisions with `stage` and `figure` as authored, the closing, the standfirst.
+- The live page at 1440, 768 and 390 draws the sections where the profile places them, the
+  hero and the video untouched, no horizontal scroll, no page error, no "n/a", no dash; a
+  capture of each new section in the run directory.
+- The handoff names the previous snapshot id per surface, the editorial gaps, and what was
+  not done.
+
 ## 9. Record and snapshot must agree
 
 Overriding `identity.title` in the snapshot does **not** update `case_studies.title`.
@@ -1124,6 +1287,10 @@ an already-live record too, so consent withdrawn between two clicks is caught.
 | A high readiness score authorising a publish | Readiness is advisory and reported beside the decision, never consulted by it. There is a test named for it |
 | A record with no visual story reaches a reader | `visual_story_missing` (rule 21, since 2026-09-16): a snapshot with no story, or a story that draws no workflow, is refused with the Studio's Generate-from-evidence remedy. Figures are not required; presence and a flow are |
 | A visual story that stopped being true | `visual_story_invalid` (rule 20): the same validator the save runs, so a metric that lost its verification after the story cited it refuses the publish and names the field |
+| A builder profile names a person the record has not released | rule 5 (`builder_consent`, extended 2026-09-16): a profile whose `displayName` is not a named, consented contributor of the same content is refused; the projection withholds the name and the biography on the same condition (`projectBuilder`) |
+| A variant says something on a surface it should not | rule 5 refuses a variant keyed on a non-publishable surface; `resolveSurfaceContent` applies a variant to its own surface only, and a record with none projects byte-identically (`caseStudySurfaceVariant.test.ts`) |
+| An unbacked figure hides inside a variant, a card or the closing | the claim scan (`collectNarrative`) reads every variant string, every decision card string (`stage` and `figure` included) and the closing, canonical and per surface |
+| A story section drawn in a different place on each site | the surface profile places `decisions`, `builder` and `closing`; renderers follow `sectionOrder` (`caseStudySurfaceLens.test.ts` pins the placements) |
 
 ### Prevented only by someone remembering — the useful half
 
@@ -1154,6 +1321,14 @@ an already-live record too, so consent withdrawn between two clicks is caught.
    the graph is connected and every figure is a verified metric; it cannot tell whether
    the arrows run the way the system does, or whether a "before" ever happened. That is
    read off the evidence, by a person, before `enabled` is set.
+8. **That the story reads as a story.** `reviewCaseStudyStory` (§8e) warns about the
+   shape (no person, no decisions, an unpinned card, no closing, bookkeeping, a dash,
+   the biography repeated) and scores six dimensions; it cannot tell whether the stakes
+   are real to the reader or the complication honest. Those are read by a person, with
+   `references/story-rubric.md` open, before Ali reads it.
+9. **That the compact ending stays compact.** Nothing measures the height of the page.
+   The rail, the board and the folds are code; the discipline to keep the narrative to
+   one paragraph is not.
 
 **When you add a rule here, decide which half it belongs in before you write it.** A rule
 in the second half is a rule with a half-life.

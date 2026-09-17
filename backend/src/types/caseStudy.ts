@@ -267,17 +267,26 @@ export type CaseStudyRoadmapStatus =
   | 'not_pursued'
   | 'unknown';
 
-/** The renderable sections of a detail page, in spec §23's order. */
+/**
+ * The renderable sections of a detail page, in spec §23's order, plus the
+ * three the storytelling format added on 2026-09-17: `decisions` (the cards),
+ * `builder` (Meet the builder) and `closing` (What this project shows). Each
+ * surface profile says where they go; a renderer that predates them ignores
+ * keys it does not draw, so an old page is unchanged by their presence.
+ */
 export type CaseStudySectionKey =
   | 'hero'
   | 'situation'
+  | 'decisions'
   | 'build'
   | 'architecture'
   | 'measurement'
   | 'roadmap'
+  | 'builder'
   | 'contributors'
   | 'artifacts'
   | 'repositories'
+  | 'closing'
   | 'cta';
 
 /** Where a timeline entry came from. AI may summarise chronology, never invent it. */

@@ -57,8 +57,8 @@ export const NOT_FOUND_BODY =
  * fallback that stops an empty `sectionOrder` rendering an empty page.
  */
 export const DEFAULT_SECTION_ORDER: readonly CaseStudySectionKey[] = Object.freeze([
-  'hero', 'situation', 'build', 'architecture', 'measurement',
-  'roadmap', 'contributors', 'artifacts', 'repositories', 'cta',
+  'hero', 'situation', 'decisions', 'build', 'architecture', 'measurement',
+  'roadmap', 'builder', 'contributors', 'artifacts', 'repositories', 'closing', 'cta',
 ] as CaseStudySectionKey[]);
 
 /**
@@ -76,6 +76,11 @@ export const SECTION_HEADINGS: Readonly<Record<CaseStudySectionKey, string>> = O
   artifacts: 'Artifacts',
   repositories: 'Repositories and provenance',
   cta: '',
+  // The story sections (2026-09-17). Drawn only once the page has a body for
+  // them (`isSectionSupported`); until then the keys are in the order and ignored.
+  decisions: 'Decisions that made the difference',
+  builder: 'Meet the builder',
+  closing: 'What this project shows',
 });
 
 /**
@@ -130,6 +135,12 @@ export function isSectionSupported(
       return detail.artifacts.length > 0;
     case 'repositories':
       return detail.repositories.length > 0 || detail.privateRepositoryCount > 0;
+    case 'decisions':
+      return detail.decisions.length > 0;
+    case 'builder':
+      return !!detail.builder;
+    case 'closing':
+      return !!detail.closing;
     default:
       return false;
   }
