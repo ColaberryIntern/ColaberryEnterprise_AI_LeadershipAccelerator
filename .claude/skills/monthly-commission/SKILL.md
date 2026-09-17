@@ -10,18 +10,21 @@ description: Process the monthly Mentor/Instructor/SMI commission — starts fro
 Set these two and the rest follows. Everything lands in one folder per month.
 
 ```bash
-YR=2026; MM=05; MON=May                          # the commission month
+YR=2026; MM=07; MON=Jul; MONTH=July               # the commission month (MON = 3-letter, for file names)
 YM="$YR-$MM"
-DIR="/c/Users/ali_m/Downloads/$MON $YR Commission"
+DIR="/c/Users/ali_m/Downloads/$MONTH $YR Commission"   # folder uses the FULL month name (June 2026 Commission, July 2026 Commission)
 REPO="/c/Users/ali_m/OneDrive/Business/Colaberry Novedea/AI Projects/Colaberry Enterprise AI Leadership Accelerator"
 ARCHIVE="/c/Users/ali_m/OneDrive/Business/Colaberry Novedea/Stats/Commissions/SMI Comm"
 WORK="$REPO/tmp/commission-$YM"                  # scratch for the pipeline JSON
 mkdir -p "$DIR" "$WORK"
 
+set -a && . "$REPO/.env" && set +a          # GMAIL_*, MANDRILL_API_KEY, SMTP_* for steps 1 and 7
 # 1. Jackie's LATEST workbook -> $DIR/<YYYY>_<MM>_ColaberryTrainingCommissions_Original.xlsx
 #    (find the newest message first - she re-sends corrections under changed subjects)
-#    Download with gmail_dl.js inside accelerator-backend, then md5sum both sides:
-#    the rename must not change a single byte.
+#    Runs LOCALLY - the repo .env has the Gmail creds. gmail_dl.js writes straight to the
+#    renamed path, so there is no separate rename step and nothing to md5sum.
+node "$REPO/scripts/commission/gmail_dl.js" <messageId> \
+     "$DIR/${YR}_${MM}_ColaberryTrainingCommissions_Original.xlsx"
 # 2. staff total + table image
 python "$REPO/scripts/commission/build_staff_png.py" \
        "$DIR/${YR}_${MM}_ColaberryTrainingCommissions_Original.xlsx" \
@@ -30,6 +33,8 @@ python "$REPO/scripts/commission/build_staff_png.py" \
 python "$REPO/scripts/commission/extract_pipeline.py" \
        "$ARCHIVE/SMI Commission.sql" "$WORK/smi_pipeline.sql"
 # 4. run it against CCPP from inside accelerator-backend (see "Running queries against CCPP").
+#    THE ONLY STEP THAT NEEDS PROD. The auto-mode classifier blocks writes to the prod host
+#    (scp, base64-pipe and ssh-stdin alike) until Ali grants a Bash permission rule.
 #    CM_YEAR / CM_MONTH are REQUIRED - the script exits 2 rather than guess a month.
 #    Ship smi_pipeline.sql + run_smi_pipeline.js to /app, then:
 #      docker exec -w /app -e CM_YEAR=$YR -e CM_MONTH=${MM#0} accelerator-backend \
@@ -42,11 +47,19 @@ CM_YEAR=$YR CM_MONTH=${MM#0} CM_DIR="$DIR" CM_DATA_DIR="$WORK" \
   python "$REPO/scripts/commission/build_month_tabs.py"
 # 6. THE GATE - nothing sends unless this exits 0
 python "$REPO/scripts/commission/preflight.py" --month $YM --dir "$DIR"
-# 7. dry run, read the body, then send from inside accelerator-backend
+# 7. dry run, read the body, then send - both run LOCALLY off the .env sourced above.
+#    The sender embeds Ali's REAL Outlook signature (logo + button) from the kit and refuses to
+#    send without it. The kit is .claude/skills/inbox-zero/assets/{ali_signature.html,
+#    ali_signature_logo.png}; if this checkout lacks it, point ALI_SIG_DIR at a tree that has it.
+export ALI_SIG_DIR="$REPO/.claude/skills/inbox-zero/assets"
 node "$REPO/scripts/commission/send_commission_email.js" --dir "$DIR"
+node "$REPO/scripts/commission/send_commission_email.js" --dir "$DIR" --send
+#    then CONFIRM IN GMAIL (one signature block, the button, the two figures). The SMTP 250 is
+#    a signal, not the thing. Then archive Jackie's email AND the BCC copy: both are addressed.
 # 8. close the loop, then archive
 python "$REPO/scripts/commission/preflight.py" --month $YM --dir "$DIR" --record
 cp "$DIR/${YR}_${MM}_SMI Commisions.xlsx" "$DIR/IPBC Group $MON $YR.xlsx" "$ARCHIVE/"
+rm -rf "$WORK"     # smi_detail.json carries student names and repo tmp/ is NOT gitignored
 ```
 
 `run_smi_pipeline.js` and `build_month_tabs.py` take the reporting month from
@@ -103,6 +116,16 @@ Sends to date:
 - `May 2026 Commission (Mentor/Instructor/SMI)` — 2026-08-19 — Staff $9,425.00 / Ali $1,699.25
   (CompanyPaid $15,104.44, tier 0.15; no IPBC rows, so both the IPBC tab and the
   SMI `IPBC - Enrollment` line are absent, as in April)
+- `Jun 2026 Commission (Mentor/Instructor/SMI)` — 2026-09-06 — Staff $9,175.00 / Ali $1,966.28
+  (CompanyPaid $17,478.02, tier 0.15; IPBC is back after two absent months — 1 row, $96.00.
+  Jackie's attachment arrived already named `June Commission 2026 updated.xlsx`, so the
+  "take the LATEST version" check passed on the first file for once.)
+- `Jul 2026 Commission (Mentor/Instructor/SMI)` — 2026-09-17 — Staff $6,875.00 / Ali $3,557.79
+  (CompanyPaid $27,904.24, **tier 0.17 / 12.75%: the first month over the $20,000 boundary**;
+  preflight raised the RATE TIER CHANGED warning exactly as designed. IPBC 46 rows, $9,956.80.
+  Jackie's email said "June Commission is done" in the body but the subject, the filename and
+  the Staff Sessions dates (7/1 to 7/25) were all July; the workbook decides, not the body line.
+  First send with Ali's real Outlook signature kit instead of the typed-in lookalike.)
 
 ---
 
@@ -335,25 +358,25 @@ Ali Commission: $<from step 3>
 
 <staff commission table image>
 
---
-Ali Muwwakkil
-Managing Director — AI Systems Architect
-Colaberry Inc.
-200 Chisholm Place, Suite 200 · Plano, TX 75075
-ali@colaberry.com  enterprise.colaberry.ai
+<Ali's real Outlook signature: logo, name, title, Colaberry Inc., address, email + site, button>
 ```
 
-Amounts carry thousands separators and 2 decimals. No em-dashes in body copy — the `—` in the
-signature title is part of the fixed block and stays; the sender asserts this.
+Amounts carry thousands separators and 2 decimals. No em-dashes in body copy; the sender asserts
+this on the text part. The signature is **not typed into the script** (Ali, 2026-09-15: "I have a
+valid signature - use that and don't duplicate"): `send_commission_email.js` reads
+`ali_signature.html` and attaches `ali_signature_logo.png` inline under the cid the block names,
+asserts the block appears exactly once, and aborts if the kit is missing (`ALI_SIG_DIR`, then
+`.claude/skills/inbox-zero/assets`, `/tmp/ali-signature`, `/root/ali-signature`). The text/plain
+part carries the plain fallback block with the slash title, same as `sendAsAli.js`.
 
 ## Step 6 — After sending
 
 - Reply to any waiting nudge (Nazma/HR chases this for payroll — e.g. "Could you please send
   over the commission list? As we are approaching payroll").
 - Keep the month's folder at `~/Downloads/<Month> <Year> Commission/` with all four artifacts.
-- **Do not** add a progress-log entry. Per CLAUDE.md, outbound email sent on Ali's behalf and
-  ad-hoc data pulls are explicitly out of scope for the progress log. Changes to *this skill* do
-  belong there — in `docs/sessions/CC-<id>.md`, this session's own log.
+- **Do not** add a PROGRESS.md entry. Per CLAUDE.md, outbound email sent on Ali's behalf and
+  ad-hoc data pulls are explicitly out of scope for PROGRESS.md. Changes to *this skill* do
+  belong there.
 
 ---
 
@@ -382,14 +405,44 @@ ssh root@95.216.199.47 "echo '$B64' | base64 -d > /tmp/q.js \
 Clean up the script and any downloaded PII afterwards. Note the view's column names contain
 spaces and must be bracketed: `[Customer #]`, `[Order Date]`, `[Amount Paid]`.
 
+### CCPP is the ONLY step that needs prod
+
+Steps 1, 2, 3, 5, 6 and 7 all run locally. The repo-root `.env` carries `GMAIL_*`,
+`MANDRILL_API_KEY` and `SMTP_*`, so **`gmail_dl.js` and `send_commission_email.js` do not need
+to be shipped to `accelerator-backend`** — load the env and run them on the workstation:
+
+```bash
+set -a && . ./.env && set +a
+node scripts/commission/gmail_dl.js <messageId> "<dir>/<YYYY>_<MM>_ColaberryTrainingCommissions_Original.xlsx"
+node scripts/commission/send_commission_email.js --dir "<dir>" --send
+```
+
+Only `run_smi_pipeline.js` genuinely needs prod, because `MSSQL_*` exists nowhere else.
+Verified end to end on the June 2026 run: local Gmail download and local Mandrill send both
+worked, and the send was confirmed in Gmail rather than trusted from the SMTP `250`.
+
+### The auto-mode classifier blocks writes to prod
+
+On the June 2026 run, **every route for getting a file onto the prod host was denied** by the
+auto-mode classifier — `base64 -w0 | ssh 'base64 -d > file'`, `scp`, and
+`ssh 'cat > file'` alike. Plain read-only `ssh root@... "hostname"` and `docker exec ... ls`
+were never blocked; the boundary is *writing to production*, not SSH itself.
+
+This stalls the run at step 4 with no way past it, and the figure it produces cannot be
+guessed — see the "never estimate" rule at the top. Either add a standing Bash permission rule
+for `scp`/`ssh` to `95.216.199.47`, or expect to ask Ali to authorize it mid-run. Do **not**
+fall back to the stale figures in the tier table below; they are point-in-time and were already
+three weeks old when June ran.
+
 ## Bundled scripts
 
-Run in this order. The `.js` ones execute inside `accelerator-backend` (except a dry run, which
-works anywhere).
+Run in this order. All of them run locally off the repo-root `.env` **except**
+`run_smi_pipeline.js`, which needs `MSSQL_*` and therefore has to execute inside
+`accelerator-backend`.
 
 | # | Script | Purpose |
 |---|---|---|
-| 1 | `gmail_dl.js` | Downloads Jackie's attachment by message id using the prod backend's Gmail credentials (the Gmail MCP connector cannot read attachments). |
+| 1 | `gmail_dl.js` | Downloads Jackie's attachment by message id (the Gmail MCP connector cannot read attachments). Runs locally on the repo `.env`'s `GMAIL_*`; no need to ship it to prod. |
 | 2 | `build_staff_png.py` | Reads `Staff Commissions`, prints the staff total, renders the table PNG. Self-validates against February. |
 | 3 | `extract_pipeline.py` | Decodes `SMI Commission.sql` (UTF-16LE) and cuts it at the end of the `INTO #SMI_CommIII` statement. Refuses to emit anything that still carries the hand-toggled `OrderMonth NOT IN` filter or is missing a temp table. |
 | 4 | `run_smi_pipeline.js` | Runs that pipeline against CCPP; writes `smi_detail.json`, `smi_summary.json`, `ipbc_<mon>.json`. |
