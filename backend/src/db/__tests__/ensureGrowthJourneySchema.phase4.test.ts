@@ -50,6 +50,7 @@ const EXPECTED_HANDOFF_COLUMNS = [
   'disposition_at',
   'dispositioned_by',
   'return_to_ai',
+  'integration_refused',
   'accepted_at',
   'expired_at',
   'source',

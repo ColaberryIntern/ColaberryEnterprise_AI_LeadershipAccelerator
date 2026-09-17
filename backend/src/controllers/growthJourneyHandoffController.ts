@@ -36,8 +36,9 @@ import { accessDenied, badRequest, logReadFailure, scopedContext } from './growt
  * The actor recorded on the row and in the ledger is the admin's id (`sub`),
  * never the email: the email goes to the access audit only, where T229 put it.
  *
- * Nothing here notifies anyone and nothing here writes an integration row;
- * `qualified` / `converted` reach the account and pipeline writers in T406.
+ * Nothing here notifies anyone. `qualified` / `converted` reach the existing
+ * systems only through the machine's one door (`integrateDisposition`, T406);
+ * the response carries what it wrote or why it refused, ids only.
  */
 
 const NOT_FOUND = { error: 'Not found' } as const;
@@ -48,7 +49,7 @@ export const HANDOFF_LIST_ATTRIBUTES = [
   'id', 'tenant_id', 'brand_id', 'program_id', 'subject_ref', 'lead_id', 'enrollment_id', 'decision_id',
   'owner_queue', 'assigned_to_type', 'assigned_to_id', 'ticket_id', 'assignment_blocked_reason',
   'priority', 'expected_value', 'urgent', 'reason', 'best_channel', 'consent_basis', 'sla_due_at',
-  'status', 'disposition', 'disposition_reason', 'disposition_at', 'dispositioned_by', 'return_to_ai',
+  'status', 'disposition', 'disposition_reason', 'disposition_at', 'dispositioned_by', 'return_to_ai', 'integration_refused',
   'accepted_at', 'expired_at', 'source', 'created_at', 'updated_at',
 ] as const;
 
@@ -168,8 +169,9 @@ async function auditedHandoff(
     ipAddress: req.ip ?? null,
     metadata,
   });
-  // The row and the ledger record the admin's id; the email stays in the access audit.
-  return { row, actor: { id: String(req.admin?.sub ?? 'unknown') } };
+  // The row and the ledger record the admin's id; the email stays in the access audit. The
+  // platform identity (when the bridge resolved one) is the actor on a conversion's audit event.
+  return { row, actor: { id: String(req.admin?.sub ?? 'unknown'), platformIdentityId: ctx.platformIdentityId ?? null } };
 }
 
 function renderWriteFailure(req: Request, res: Response, err: unknown, action: HandoffAction): void {
@@ -211,6 +213,7 @@ export async function dispositionHandoffHandler(req: Request, res: Response): Pr
       cooldown_source: r.cooldown_source,
       ownership_cleared: r.ownership_cleared,
       outcome_id: r.outcome_id,
+      integration: r.integration,
     });
   } catch (err) {
     renderWriteFailure(req, res, err, 'disposition');

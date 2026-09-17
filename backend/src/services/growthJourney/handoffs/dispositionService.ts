@@ -2,6 +2,8 @@ import { GrowthJourneyHandoff } from '../../../models';
 import type { GrowthJourneyHandoffAttributes, GrowthJourneyHandoffDisposition, GrowthJourneyHandoffStatus } from '../../../models/GrowthJourneyHandoff';
 import { logEvent } from '../../ledgerService';
 import { clearHumanConversation, openHumanConversation } from '../conversationOwnershipService';
+import { integrateDisposition, type IntegrationSummary } from '../integration/integrateDisposition';
+import { isIntegratingDisposition } from '../integration/dispositions';
 import { recordOutcome } from '../outcomes/outcomeRecorder';
 import { cooldownDaysFor, cooldownUntil } from './returnToAi';
 
@@ -20,12 +22,17 @@ import { cooldownDaysFor, cooldownUntil } from './returnToAi';
  * the AI's pause lifts the moment the human is done; `not_ready` / `nurture`
  * then hold the AI off for the cooldown instead.
  *
- * ─── WHAT IS NOT HERE ───────────────────────────────────────────────────────
+ * ─── THE ONE DOOR TO THE EXISTING SYSTEMS ───────────────────────────────────
  *
- * The integration writers - the account roll-up, the pipeline stage, the
- * AI Flotation conversion. T406 wires them into `qualified` / `converted`
- * behind their own checks. This file changes the handoff, the ownership row
- * and the outcome index, and nothing a person is told. It notifies nobody.
+ * `qualified` / `converted` reach the integration writers (T406) through
+ * `integrateDisposition` - the account roll-up, the pipeline stage, the AI
+ * Flotation conversion - each behind the kill switch, each idempotent on what
+ * already exists, a refusal recorded on the row (`integration_refused`) and
+ * never failing the verdict. That call sits AFTER the ownership clear and
+ * BEFORE the one terminal update, so a failure inside a writer leaves the
+ * handoff `accepted` and the retry re-runs writers that find what they wrote.
+ * This file is the only file outside `integration/` that may import it
+ * (`integrationIsolation.test.ts`). It notifies nobody.
  */
 
 export class HandoffTransitionError extends Error {
@@ -50,6 +57,8 @@ export interface HumanActor {
   /** The admin user's id (AuthPayload `sub`), the way the classification override records `decided_by`. */
   id: string;
   email?: string | null;
+  /** The admin's platform identity when the request carried one: the actor on a conversion's audit event and membership grant (T406). */
+  platformIdentityId?: string | null;
 }
 
 function guard(row: GrowthJourneyHandoff, allowed: readonly GrowthJourneyHandoffStatus[], action: string): void {
@@ -94,6 +103,8 @@ export interface DispositionResult {
   cooldown_source: 'body' | 'policy' | 'default' | null;
   ownership_cleared: number;
   outcome_id: string;
+  /** What reached the existing systems (T406); null for a disposition that never asks (not_ready, nurture, no_contact, disqualified). */
+  integration: IntegrationSummary | null;
 }
 
 /** The human's verdict: closed, or back to the AI with a cooldown. Integration writers are T406's, behind their own checks. */
@@ -120,6 +131,10 @@ export async function dispositionHandoff(row: GrowthJourneyHandoff, input: Dispo
   // A failure AFTER the update leaves an outcome or ledger row missing, which T409's
   // normaliser (handoffs are one of its sources) and the ledger adapter can back-fill.
   const ownership_cleared = await clearOwnership(row, actor, `dispositioned:${input.disposition}`, asOf);
+  const integration = isIntegratingDisposition(input.disposition)
+    ? await integrateDisposition({ handoff: row, disposition: input.disposition, actor: { id: actor.id, platformIdentityId: actor.platformIdentityId ?? null }, asOf })
+    : null;
+  patch.integration_refused = integration?.refusals[0]?.reason.slice(0, 64) ?? null;
   await row.update(patch);
 
   const outcome = await recordOutcome({
@@ -129,8 +144,9 @@ export async function dispositionHandoff(row: GrowthJourneyHandoff, input: Dispo
   });
   await ledger(row, returning ? 'growth_journey.handoff.returned_to_ai' : 'growth_journey.handoff.dispositioned', actor, {
     from, disposition: input.disposition, reason: input.reason, cooldown_until: cooldown_until?.toISOString() ?? null, cooldown_source, ownership_cleared, outcome_id: outcome.row.id,
+    integration: integration ? { status: integration.status, reason: integration.reason, writes: integration.writes, refusals: integration.refusals, outcome_ids: integration.outcome_ids } : null,
   });
-  return { row, status: row.status, cooldown_until, cooldown_source, ownership_cleared, outcome_id: outcome.row.id };
+  return { row, status: row.status, cooldown_until, cooldown_source, ownership_cleared, outcome_id: outcome.row.id, integration };
 }
 
 /** The human gives it back: `queued`, the ownership row cleared, the ticket kept (a re-assignment finds it again). */

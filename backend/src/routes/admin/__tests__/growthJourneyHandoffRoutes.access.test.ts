@@ -87,6 +87,9 @@ jest.mock('../../../services/growthJourney/offerEligibility', () => {
 jest.mock('../../../services/growthJourney/classificationService', () => ({ overrideClassification: jest.fn() }));
 const logEvent = jest.fn().mockResolvedValue(undefined);
 jest.mock('../../../services/ledgerService', () => ({ logEvent: (...a: unknown[]) => logEvent(...a) }));
+// T406: the one door to the existing systems, mocked at its boundary (its own suite drives the real writers).
+const integrateDisposition = jest.fn();
+jest.mock('../../../services/growthJourney/integration/integrateDisposition', () => ({ integrateDisposition: (...a: unknown[]) => integrateDisposition(...a) }));
 const contextFromAdminRequest = jest.fn();
 jest.mock('../../../modules/tenancy/adminScopeBridge', () => ({ contextFromAdminRequest: (...a: unknown[]) => contextFromAdminRequest(...a) }));
 const recordAccessDecision = jest.fn().mockResolvedValue(undefined);
@@ -120,7 +123,7 @@ function seed(tenantId: string, brandId: string, over: Record<string, unknown> =
     priority: 'high', expected_value: 62, urgent: false, reason: 'commercial_state:PROPOSAL_SENT',
     evidence: { brand_program_path: { brand: 'colaberry-enterprise', program: { slug: 'business-growth', kind: 'business' }, path: 'workflow_automation' }, links: { person: '/admin/people/lead:501' } },
     qualification_gaps: ['budget_signal:no_source'], talking_points: ['asked about invoicing automation'], best_channel: 'email', consent_basis: 'explicit_opt_in', sla_due_at: null,
-    status: 'queued', disposition: null, disposition_reason: null, disposition_at: null, dispositioned_by: null, return_to_ai: null, accepted_at: null, expired_at: null,
+    status: 'queued', disposition: null, disposition_reason: null, disposition_at: null, dispositioned_by: null, return_to_ai: null, integration_refused: null, accepted_at: null, expired_at: null,
     source: 'decision_deferral', idempotency_key: 'k-1', created_at: new Date('2026-09-15T00:00:00Z'), updated_at: new Date('2026-09-15T00:00:00Z'),
     update: jest.fn(),
     ...over,
@@ -148,6 +151,7 @@ beforeEach(() => {
   findByPk.mockReset().mockImplementation(fromStore); findAndCountAll.mockReset().mockResolvedValue({ rows: [], count: 0 });
   handoffCreate.mockReset(); handoffDestroy.mockReset();
   logEvent.mockClear(); recordAccessDecision.mockClear();
+  integrateDisposition.mockReset().mockResolvedValue({ status: 'skipped', reason: 'learner_program', program_kind: 'learner', disposition: 'qualified', writes: [], refusals: [], outcome_ids: [], ids: {} });
   contextFromAdminRequest.mockReset().mockResolvedValue(memberOf(TENANT.colaberry, null));
   growthJourney.growthJourneyEnabled = true;
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -481,15 +485,43 @@ describe('the state machine, through the routes', () => {
     expect(new Date(fallback.body.cooldown_until).getTime() - (handoffs.get(ROW_ID)!.disposition_at as Date).getTime()).toBe(DEFAULT_RETURN_COOLDOWN_DAYS * DAY);
   });
 
-  it('a closing disposition (qualified) → dispositioned with no cooldown; nothing beyond this run\'s tables is written (T406 owns the integration writers)', async () => {
+  it('a closing disposition (qualified) → dispositioned with no cooldown; the existing systems are reached through the one door, with the human\'s platform identity, and the response says what was written', async () => {
+    integrateDisposition.mockResolvedValue({ status: 'written', reason: null, program_kind: 'business', disposition: 'qualified', writes: ['account_rollup', 'pipeline_advance'], refusals: [], outcome_ids: ['out-77'], ids: { organization_id: 'org-1', context_id: 'ctx-1', stage: 'meeting_scheduled', advanced: true } });
     const row = seed(TENANT.colaberry, BRAND.enterprise, { status: 'accepted' });
     ownership.push({ id: 'own-0', tenant_id: TENANT.colaberry, brand_id: BRAND.enterprise, lead_id: 501, owner_type: 'human', owner_id: 'staff-1', cleared_at: null });
     const res = await post(DISPOSITION, { disposition: 'qualified', reason: 'budget confirmed; wants a proposal next week' });
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ status: 'dispositioned', cooldown_until: null, cooldown_source: null, ownership_cleared: 1 });
-    expect(row).toMatchObject({ status: 'dispositioned', disposition: 'qualified', return_to_ai: null });
+    expect(res.body).toMatchObject({ status: 'dispositioned', cooldown_until: null, cooldown_source: null, ownership_cleared: 1, integration: { status: 'written', reason: null, program_kind: 'business', disposition: 'qualified', writes: ['account_rollup', 'pipeline_advance'], refusals: [], outcome_ids: ['out-77'], ids: { organization_id: 'org-1', context_id: 'ctx-1', stage: 'meeting_scheduled', advanced: true } } });
+    expect(res.body.handoff.integration_refused).toBeNull();
+    expect(row).toMatchObject({ status: 'dispositioned', disposition: 'qualified', return_to_ai: null, integration_refused: null });
+    expect(integrateDisposition).toHaveBeenCalledTimes(1);
+    expect(integrateDisposition.mock.calls[0][0]).toMatchObject({ handoff: { id: ROW_ID }, disposition: 'qualified', actor: { id: 'staff-1', platformIdentityId: 'pid-1' } });
+    expect(JSON.stringify(integrateDisposition.mock.calls)).not.toContain('@');
     expect(outcomes[0]).toMatchObject({ outcome_type: 'handoff_dispositioned', source_ref: `${ROW_ID}:qualified`, metadata: { disposition: 'qualified', returned_to_ai: false, cooldown_until: null } });
     expect(ledgerEvents()).toEqual(['growth_journey.handoff.dispositioned']);
+  });
+
+  it('a refused integration (a Flotation lead with no company) never fails the verdict: 200, dispositioned, integration_refused on the row and the refusal in the response', async () => {
+    integrateDisposition.mockResolvedValue({ status: 'refused', reason: 'lead_has_no_company', program_kind: 'consulting', disposition: 'qualified', writes: [], refusals: [{ writer: 'flotation_intake', reason: 'lead_has_no_company' }], outcome_ids: [], ids: {} });
+    const row = seed(TENANT.colaberry, BRAND.enterprise, { status: 'accepted' });
+    const res = await post(DISPOSITION, { disposition: 'qualified', reason: 'wants the discovery call' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ status: 'dispositioned', integration: { status: 'refused', reason: 'lead_has_no_company' }, handoff: { integration_refused: 'lead_has_no_company' } });
+    expect(row.integration_refused).toBe('lead_has_no_company');
+    expect(outcomes).toHaveLength(1);
+    expect(ledgerEvents()).toEqual(['growth_journey.handoff.dispositioned']);
+  });
+
+  it('the returning dispositions and the other closing ones never open the door', async () => {
+    for (const disposition of ['not_ready', 'nurture', 'no_contact', 'disqualified']) {
+      handoffs.clear(); outcomes.length = 0;
+      seed(TENANT.colaberry, BRAND.enterprise, { status: 'accepted' });
+      const res = await post(DISPOSITION, { disposition, reason: 'the human decided this one' });
+      expect(res.status).toBe(200);
+      expect(res.body.integration).toBeNull();
+      expect(res.body.handoff.integration_refused).toBeNull();
+    }
+    expect(integrateDisposition).not.toHaveBeenCalled();
   });
 
   it('release from accepted → queued: the ownership row cleared, the ticket kept, the assignee gone, the ledger row written', async () => {

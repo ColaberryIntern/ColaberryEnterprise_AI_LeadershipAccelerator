@@ -45,6 +45,11 @@ export const GROWTH_JOURNEY_PHASE4_STATEMENTS: readonly string[] = [
   // policy, capacity full, creator unregistered) - on the row, so the queue
   // page can say it without re-running the checks.
   //
+  // `integration_refused` (T406) says why a `qualified` / `converted` disposition
+  // wrote nothing to the existing systems (the kill switch, a lead with no
+  // company, ...) - on the row, so the disposition still records and the
+  // reviewer can see what did not happen without re-running the writers.
+  //
   // `evidence` is the §9 packet, built from stored rows only, and carries ids,
   // counts, timestamps and outcome types — never an address, a message body or
   // a transcript. The contract makes that a phase-failing check, and the
@@ -80,6 +85,7 @@ export const GROWTH_JOURNEY_PHASE4_STATEMENTS: readonly string[] = [
      disposition_at TIMESTAMPTZ,
      dispositioned_by VARCHAR(128),
      return_to_ai JSONB,
+     integration_refused VARCHAR(64),
      accepted_at TIMESTAMPTZ,
      expired_at TIMESTAMPTZ,
      source VARCHAR(32) NOT NULL,

@@ -106,6 +106,8 @@ export interface GrowthJourneyHandoffAttributes {
   disposition_at?: Date | null;
   dispositioned_by?: string | null;
   return_to_ai?: GrowthJourneyReturnToAi | null;
+  /** T406: why a qualified / converted disposition wrote nothing to the existing systems; null when it did, or was not asked to. */
+  integration_refused?: string | null;
   accepted_at?: Date | null;
   expired_at?: Date | null;
   source: GrowthJourneyHandoffSource;
@@ -148,6 +150,7 @@ class GrowthJourneyHandoff
   declare disposition_at: Date | null;
   declare dispositioned_by: string | null;
   declare return_to_ai: GrowthJourneyReturnToAi | null;
+  declare integration_refused: string | null;
   declare accepted_at: Date | null;
   declare expired_at: Date | null;
   declare source: GrowthJourneyHandoffSource;
@@ -188,6 +191,7 @@ GrowthJourneyHandoff.init(
     disposition_at: { type: DataTypes.DATE, allowNull: true },
     dispositioned_by: { type: DataTypes.STRING(128), allowNull: true },
     return_to_ai: { type: DataTypes.JSONB, allowNull: true },
+    integration_refused: { type: DataTypes.STRING(64), allowNull: true },
     accepted_at: { type: DataTypes.DATE, allowNull: true },
     expired_at: { type: DataTypes.DATE, allowNull: true },
     source: { type: DataTypes.STRING(32), allowNull: false },

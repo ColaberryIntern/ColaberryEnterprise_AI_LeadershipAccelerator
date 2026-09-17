@@ -7,6 +7,7 @@ const m = {
   clearHumanConversation: jest.fn(),
   recordOutcome: jest.fn(),
   cooldownDaysFor: jest.fn(),
+  integrateDisposition: jest.fn(),
 };
 jest.mock('../../../../models', () => ({ GrowthJourneyHandoff: {}, GrowthJourneyPolicy: {} }));
 jest.mock('../../../ledgerService', () => ({ logEvent: (...a: unknown[]) => m.logEvent(...a) }));
@@ -15,6 +16,8 @@ jest.mock('../../conversationOwnershipService', () => ({
   clearHumanConversation: (...a: unknown[]) => m.clearHumanConversation(...a),
 }));
 jest.mock('../../outcomes/outcomeRecorder', () => ({ recordOutcome: (...a: unknown[]) => m.recordOutcome(...a) }));
+// T406: the one door to the existing systems, mocked at its boundary; its own suite drives the writers.
+jest.mock('../../integration/integrateDisposition', () => ({ integrateDisposition: (...a: unknown[]) => m.integrateDisposition(...a) }));
 jest.mock('../returnToAi', () => ({
   ...jest.requireActual('../returnToAi'),
   cooldownDaysFor: (...a: unknown[]) => m.cooldownDaysFor(...a),
@@ -67,6 +70,7 @@ beforeEach(() => {
   m.clearHumanConversation.mockResolvedValue({ cleared: 1 });
   m.recordOutcome.mockResolvedValue({ row: { id: 'out-1' }, replayed: false });
   m.cooldownDaysFor.mockResolvedValue({ days: 14, source: 'default' });
+  m.integrateDisposition.mockResolvedValue({ status: 'skipped', reason: 'learner_program', program_kind: 'learner', disposition: 'qualified', writes: [], refusals: [], outcome_ids: [], ids: {} });
 });
 
 describe('the transition table', () => {
@@ -159,8 +163,9 @@ describe('disposition', () => {
     expect(m.cooldownDaysFor).toHaveBeenCalledWith('b-ent', 7);
     expect(r.update).toHaveBeenCalledWith({
       disposition, disposition_reason: 'revisit in Q1', disposition_at: AS_OF, dispositioned_by: 'admin:staff-1',
-      status: 'returned_to_ai', return_to_ai: { program_slug: 'business-growth', cooldown_until: until.toISOString(), reason: `${disposition}:revisit in Q1` },
+      status: 'returned_to_ai', return_to_ai: { program_slug: 'business-growth', cooldown_until: until.toISOString(), reason: `${disposition}:revisit in Q1` }, integration_refused: null,
     });
+    expect(m.integrateDisposition).not.toHaveBeenCalled();
     expect(m.clearHumanConversation).toHaveBeenCalledWith({ leadId: 501, brandId: 'b-ent', clearedBy: 'admin:staff-1', reason: `dispositioned:${disposition}`, asOf: AS_OF });
     expect(m.recordOutcome).toHaveBeenCalledWith(expect.objectContaining({
       outcome_type: 'handoff_dispositioned', source: 'growth_journey_handoffs', source_ref: `h-1:${disposition}`, occurred_at: AS_OF,
@@ -169,14 +174,14 @@ describe('disposition', () => {
     expect(m.logEvent).toHaveBeenCalledWith('growth_journey.handoff.returned_to_ai', 'admin:staff-1', 'growth_journey_handoff', 'h-1',
       expect.objectContaining({ from: 'accepted', disposition, reason: 'revisit in Q1', cooldown_until: until.toISOString(), cooldown_source: 'body', ownership_cleared: 1, outcome_id: 'out-1' }),
       { tenant_id: 't-col', brand_id: 'b-ent' });
-    expect(result).toEqual({ row: r, status: 'returned_to_ai', cooldown_until: until, cooldown_source: 'body', ownership_cleared: 1, outcome_id: 'out-1' });
+    expect(result).toEqual({ row: r, status: 'returned_to_ai', cooldown_until: until, cooldown_source: 'body', ownership_cleared: 1, outcome_id: 'out-1', integration: null });
   });
 
   it.each(CLOSING_DISPOSITIONS)('%s closes: dispositioned, no cooldown asked for, the ownership cleared, the outcome says returned_to_ai false', async (disposition) => {
     const r = row('accepted');
     const result = await dispositionHandoff(asModel(r), { disposition, reason: 'the human decided' }, ACTOR, AS_OF);
     expect(m.cooldownDaysFor).not.toHaveBeenCalled();
-    expect(r.update).toHaveBeenCalledWith({ disposition, disposition_reason: 'the human decided', disposition_at: AS_OF, dispositioned_by: 'admin:staff-1', status: 'dispositioned' });
+    expect(r.update).toHaveBeenCalledWith({ disposition, disposition_reason: 'the human decided', disposition_at: AS_OF, dispositioned_by: 'admin:staff-1', status: 'dispositioned', integration_refused: null });
     expect(r.return_to_ai).toBeNull();
     expect(m.clearHumanConversation).toHaveBeenCalledTimes(1);
     expect(m.recordOutcome).toHaveBeenCalledWith(expect.objectContaining({ source_ref: `h-1:${disposition}`, metadata: { disposition, returned_to_ai: false, cooldown_until: null } }));
@@ -222,8 +227,9 @@ describe('disposition', () => {
     r.update.mockImplementation(async (patch: Record<string, unknown>) => { order.push('update'); return Object.assign(r, patch); });
     m.recordOutcome.mockImplementation(async () => { order.push('outcome'); return { row: { id: 'out-1' }, replayed: false }; });
     m.logEvent.mockImplementation(async () => { order.push('ledger'); });
+    m.integrateDisposition.mockImplementation(async () => { order.push('integration'); return { status: 'skipped', reason: 'learner_program', program_kind: 'learner', disposition: 'qualified', writes: [], refusals: [], outcome_ids: [], ids: {} }; });
     await dispositionHandoff(asModel(r), { disposition: 'qualified', reason: 'budget confirmed' }, ACTOR, AS_OF);
-    expect(order).toEqual(['clear', 'update', 'outcome', 'ledger']);
+    expect(order).toEqual(['clear', 'integration', 'update', 'outcome', 'ledger']);
   });
 
   it('the integration writers are not called from here: no organisation, pipeline stage, conversion or ticket touched (T406)', () => {
@@ -233,6 +239,60 @@ describe('disposition', () => {
     // The disposition service never imports the decision model or reaches the outcome row again once written.
     expect(code).not.toMatch(/GrowthJourneyDecision\b/);
     expect(code).not.toMatch(/\.destroy\(/);
+  });
+});
+
+describe('the one door to the existing systems (T406)', () => {
+  const written = { status: 'written', reason: null, program_kind: 'business', disposition: 'qualified', writes: ['account_rollup', 'pipeline_advance'], refusals: [], outcome_ids: ['out-9'], ids: { organization_id: 'org-1', stage: 'meeting_scheduled', advanced: true } };
+
+  it.each(['qualified', 'converted'])('%s calls integrateDisposition once, with the row, the verdict, the actor (id + platform identity) and the clock, between the ownership clear and the terminal update', async (disposition) => {
+    m.integrateDisposition.mockResolvedValue({ ...written, disposition });
+    const r = row('accepted');
+    const result = await dispositionHandoff(asModel(r), { disposition: disposition as 'qualified', reason: 'the human decided' }, { ...ACTOR, platformIdentityId: 'pid-1' }, AS_OF);
+    expect(m.integrateDisposition).toHaveBeenCalledTimes(1);
+    expect(m.integrateDisposition).toHaveBeenCalledWith({ handoff: r, disposition, actor: { id: 'staff-1', platformIdentityId: 'pid-1' }, asOf: AS_OF });
+    expect(r.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'dispositioned', integration_refused: null }));
+    expect(result.integration).toEqual({ ...written, disposition });
+    expect(m.logEvent).toHaveBeenCalledWith('growth_journey.handoff.dispositioned', 'admin:staff-1', 'growth_journey_handoff', 'h-1', expect.objectContaining({ integration: { status: 'written', reason: null, writes: ['account_rollup', 'pipeline_advance'], refusals: [], outcome_ids: ['out-9'] } }), expect.anything());
+    // The email never reaches the door; a missing platform identity is null, never the admin id.
+    expect(JSON.stringify(m.integrateDisposition.mock.calls)).not.toContain('@');
+    m.integrateDisposition.mockClear();
+    await dispositionHandoff(asModel(row('accepted')), { disposition: 'qualified', reason: 'the human decided' }, ACTOR, AS_OF);
+    expect(m.integrateDisposition.mock.calls[0][0]).toMatchObject({ actor: { id: 'staff-1', platformIdentityId: null } });
+  });
+
+  it.each(['not_ready', 'nurture', 'no_contact', 'disqualified'])('%s never opens the door, and the row records integration_refused null', async (disposition) => {
+    const r = row('accepted');
+    const result = await dispositionHandoff(asModel(r), { disposition: disposition as 'no_contact', reason: 'the human decided' }, ACTOR, AS_OF);
+    expect(m.integrateDisposition).not.toHaveBeenCalled();
+    expect(r.integration_refused).toBeNull();
+    expect(result.integration).toBeNull();
+  });
+
+  it('a refusal (the kill switch, a lead with no company) never fails the verdict: the row is dispositioned with integration_refused set, the outcome and the ledger row written', async () => {
+    m.integrateDisposition.mockResolvedValue({ ...written, status: 'refused', reason: 'lead_has_no_company', writes: [], refusals: [{ writer: 'flotation_intake', reason: 'lead_has_no_company' }], outcome_ids: [], ids: {} });
+    const r = row('accepted');
+    const result = await dispositionHandoff(asModel(r), { disposition: 'qualified', reason: 'wants the discovery call' }, ACTOR, AS_OF);
+    expect(r.status).toBe('dispositioned');
+    expect(r.integration_refused).toBe('lead_has_no_company');
+    expect(m.recordOutcome).toHaveBeenCalledTimes(1);
+    expect(m.logEvent).toHaveBeenCalledWith('growth_journey.handoff.dispositioned', expect.any(String), expect.any(String), 'h-1', expect.objectContaining({ integration: expect.objectContaining({ status: 'refused', reason: 'lead_has_no_company' }) }), expect.anything());
+    expect(result.integration?.status).toBe('refused');
+    // A composed reason is cut to the column's 64 characters, never rejected.
+    m.integrateDisposition.mockResolvedValue({ ...written, status: 'refused', reason: 'x', writes: [], refusals: [{ writer: 'account_rollup', reason: 'r'.repeat(90) }], outcome_ids: [], ids: {} });
+    const r2 = row('accepted');
+    await dispositionHandoff(asModel(r2), { disposition: 'qualified', reason: 'wants the discovery call' }, ACTOR, AS_OF);
+    expect((r2.integration_refused as string).length).toBe(64);
+  });
+
+  it('a writer that THROWS (the database, not a refusal) leaves the handoff accepted - the retry re-runs writers that find what they wrote', async () => {
+    m.integrateDisposition.mockRejectedValue(new Error('connection reset'));
+    const r = row('accepted');
+    await expect(dispositionHandoff(asModel(r), { disposition: 'converted', reason: 'signed the proposal' }, ACTOR, AS_OF)).rejects.toThrow('connection reset');
+    expect(r.update).not.toHaveBeenCalled();
+    expect(r.status).toBe('accepted');
+    expect(m.recordOutcome).not.toHaveBeenCalled();
+    expect(m.logEvent).not.toHaveBeenCalled();
   });
 });
 
