@@ -59,9 +59,12 @@ import { pickBestEnrollment } from '../enrollmentPick';
  * in order, stopping at the first hit: (1) `explorer_journey_profiles.lead_id`
  * (the bridge's own persisted link), (2) `enrollment_leads.email` matched on the
  * normalised address, (3) `enrollments` matched on `LOWER(email)` and deduped
- * through `participantService.pickBestEnrollment` - the bridge's rule (mgmt_role
- * > non-explorer > paid > newest), because `enrollments.email` is not unique and
- * a shadow account would otherwise be the one reported.
+ * through `pickBestEnrollment` (`services/enrollmentPick.ts`, the bridge's rule:
+ * mgmt_role > non-explorer > paid > newest), because `enrollments.email` is not
+ * unique and a shadow account would otherwise be the one reported. Step 3 reads
+ * every status, deliberately: a withdrawn or completed member who paid is still
+ * a customer to this run - CUSTOMER is a hard stop (no outreach), which is the
+ * conservative direction for someone who once bought.
  *
  * `customer` is a PAID relationship, never "an enrolment exists": every AI
  * Flotation submit mints a guest enrolment, and a guest with a `payment_status`

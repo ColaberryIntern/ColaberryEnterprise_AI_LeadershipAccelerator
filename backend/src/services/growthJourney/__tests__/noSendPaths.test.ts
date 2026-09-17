@@ -32,6 +32,9 @@ const FORBIDDEN_MODULES = [
   'prospectAccount',
   'aliPersonalOutreachService',
   'unsubscribeEnforcementService',
+  // T407: it imports the mailer for magic links; its one pure rule the resolver
+  // needs, `pickBestEnrollment`, lives in `services/enrollmentPick.ts`.
+  'participantService',
   // NOT `leadContextService`: Phase 1's subjectResolver imports its READ half
   // (`getLeadContexts`). The writer, `ensureLeadTenantContext`, is banned by
   // name in FORBIDDEN_CALLS below, which is the property that matters.

@@ -133,7 +133,7 @@ describe('authority - the title, through the one existing rule', () => {
     expect(svc).toMatch(/import \{ normalizeTitleCategory \} from '\.\/leadTitleCategory'/);
     expect(svc).toMatch(/export \{ normalizeTitleCategory \}/);
     expect(svc).not.toMatch(/export function normalizeTitleCategory/);
-    const scorer = fs.readFileSync(path.join(__dirname, '..', 'scoreVector.ts'), 'utf8');
+    const scorer = fs.readFileSync(path.join(__dirname, '..', 'countedScorers.ts'), 'utf8');
     expect(scorer).toMatch(/import \{ normalizeTitleCategory \} from '\.\.\/\.\.\/leadTitleCategory'/);
     expect(scorer).not.toMatch(/\b(ceo|cto|cfo)\b/i); // no regex of its own
   });
@@ -158,15 +158,14 @@ describe('a business subject with every source present', () => {
 
 describe('the scorer still defaults nothing to zero', () => {
   it('the new scorers spell no `?? 0` and no `|| 0` in code (the control: the plan\'s text scan)', () => {
-    const src = fs.readFileSync(path.join(__dirname, '..', 'scoreVector.ts'), 'utf8');
-    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-    const from = code.indexOf('function scoreRelationshipEngagement');
-    const to = code.indexOf('const SCORERS');
-    expect(from).toBeGreaterThan(0);
-    expect(to).toBeGreaterThan(from);
-    const block = code.slice(from, to);
+    // The counted scorers live in their own file since the close-out (the vector crossed 500 lines); the scan reads it whole.
+    const src = fs.readFileSync(path.join(__dirname, '..', 'countedScorers.ts'), 'utf8');
+    const block = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    expect(block).toContain('function scoreRelationshipEngagement');
     expect(block).toContain('function scoreFrictionRisk');
     expect(block).toContain('function scoreAuthority');
+    // And the vector itself stays under CLAUDE.md's hard ceiling now that they are out.
+    expect(fs.readFileSync(path.join(__dirname, '..', 'scoreVector.ts'), 'utf8').split(String.fromCharCode(10)).length).toBeLessThan(500);
     expect(block).not.toMatch(/\?\?\s*0\b/);
     expect(block).not.toMatch(/\|\|\s*0\b/);
     // The control the scan would catch: a scorer that read a missing count as zero.
