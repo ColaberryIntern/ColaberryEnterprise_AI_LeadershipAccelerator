@@ -36,6 +36,7 @@ describe('SKILL.md §8e names only checks that exist', () => {
     expect(fs.existsSync(path.join(SRC, 'scripts', 'reviewCaseStudyStory.ts'))).toBe(true);
     expect(fs.existsSync(path.join(SRC, 'scripts', 'publishCaseStudyVariants.ts'))).toBe(true);
     expect(read('scripts/publishCaseStudyVariants.ts')).toContain('--remove');
+    expect(read('scripts/publishCaseStudyVariants.ts')).toContain('--canonical');
     expect(fs.existsSync(path.join(ROOT, '.claude', 'skills', 'build-case-study', 'references', 'story-rubric.md'))).toBe(true);
   });
 

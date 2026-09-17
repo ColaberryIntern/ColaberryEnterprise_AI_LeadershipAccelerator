@@ -5,6 +5,7 @@
  *
  *   node dist/scripts/publishCaseStudyVariants.js <slug-or-id> <variants.json> --surfaces training,enterprise [--apply]
  *   node dist/scripts/publishCaseStudyVariants.js <slug-or-id> --remove enterprise [--apply]
+ *   ... --canonical architecture=/tmp/architecture.json   (repeatable; a whole canonical section)
  *   (from src: npx ts-node -T src/scripts/publishCaseStudyVariants.ts ...)
  *
  * WHY NOT applyHumanOverride. That path republishes EVERY live surface of the
@@ -25,6 +26,11 @@
  *      `published_snapshot_id` (the rollback);
  *   4. with --apply: persist (draft, human_edit), approve, publish each named
  *      surface. Without it: nothing is written.
+ *
+ * --canonical replaces a whole canonical section (the fix for a dash or a stale
+ * sentence in prose a variant cannot reach). A canonical change reaches every
+ * surface, so the dry run's "unnamed surface would change" check stops the run
+ * unless every surface the record is published on is named.
  *
  * Rollback: `approveSnapshot(previous id)` then `publishCaseStudy(surface,
  * previous id)` where the gate accepts the previous content; where it no
@@ -52,6 +58,8 @@ interface Args {
   file: string | null;
   surfaces: CaseStudySurfaceKey[];
   remove: CaseStudySurfaceKey | null;
+  /** Whole canonical sections to replace, path to file. */
+  canonical: { path: string; file: string }[];
   apply: boolean;
   note: string;
 }
@@ -62,12 +70,16 @@ function parseArgs(argv: readonly string[]): Args {
   const target = positional[0];
   if (!target) throw new Error('usage: publishCaseStudyVariants <slug-or-id> <variants.json> --surfaces a,b [--apply] | <slug-or-id> --remove <surface> [--apply]');
   const remove = flag('--remove') as CaseStudySurfaceKey | null;
-  const file = remove ? null : positional[1] ?? null;
+  const canonical = argv
+    .map((a, i) => (a === '--canonical' && argv[i + 1] ? argv[i + 1] : null))
+    .filter((v): v is string => Boolean(v))
+    .map((spec) => { const eq = spec.indexOf('='); if (eq < 1) throw new Error(`--canonical wants <section>=<file>, got ${spec}`); return { path: spec.slice(0, eq), file: spec.slice(eq + 1) }; });
+  const file = remove || canonical.length ? (positional[1] && !positional[1].includes('=') ? positional[1] : null) : positional[1] ?? null;
   const surfaces = (remove ? [remove] : (flag('--surfaces') ?? '').split(',').map((s) => s.trim()).filter(Boolean)) as CaseStudySurfaceKey[];
-  if (!remove && !file) throw new Error('a variants.json file is required unless --remove is given');
+  if (!remove && !file && canonical.length === 0) throw new Error('a variants.json file is required unless --remove or --canonical is given');
   if (surfaces.length === 0) throw new Error('--surfaces a,b (or --remove <surface>) is required');
   for (const s of surfaces) if (!(PUBLISHABLE_SURFACE_KEYS as readonly string[]).includes(s)) throw new Error(`not a publishable surface: ${s}`);
-  return { target, file, surfaces, remove, apply: argv.includes('--apply'), note: flag('--note') ?? 'Story variants (publishCaseStudyVariants)' };
+  return { target, file, surfaces, remove, canonical, apply: argv.includes('--apply'), note: flag('--note') ?? 'Story variants (publishCaseStudyVariants)' };
 }
 
 interface SnapshotRow { id: string; version: number; content: CaseStudySnapshotContent; provenance: Record<string, unknown> | null; source_commit_map: Record<string, unknown> | null }
@@ -105,7 +117,7 @@ async function main(): Promise<void> {
   if (args.remove) {
     if (!existing[args.remove]) throw new Error(`no variant for ${args.remove} to remove`);
     delete existing[args.remove];
-  } else {
+  } else if (args.file) {
     const incoming = JSON.parse(fs.readFileSync(args.file as string, 'utf8')) as Record<string, CaseStudySurfaceVariant>;
     for (const s of args.surfaces) {
       if (!incoming[s]) throw new Error(`${args.file} carries no entry for ${s}`);
@@ -117,9 +129,15 @@ async function main(): Promise<void> {
     }
   }
   const recordedAt = new Date().toISOString();
-  const application = applyOverrides(snap.content, [
-    { path: 'surfaceVariants', value: existing, actor: ACTOR, recordedAt, note: args.note },
-  ]);
+  const overrides = [
+    ...(args.remove || args.file ? [{ path: 'surfaceVariants', value: existing, actor: ACTOR, recordedAt, note: args.note }] : []),
+    ...args.canonical.map((c) => {
+      const value = JSON.parse(fs.readFileSync(c.file, 'utf8')) as unknown;
+      console.log(`canonical ${c.path}: replaced from ${c.file}`);
+      return { path: c.path, value, actor: ACTOR, recordedAt, note: args.note };
+    }),
+  ];
+  const application = applyOverrides(snap.content, overrides);
   if (application.ignored.length) throw new Error(`overrides ignored: ${JSON.stringify(application.ignored)}`);
   const composed = application.content;
 
