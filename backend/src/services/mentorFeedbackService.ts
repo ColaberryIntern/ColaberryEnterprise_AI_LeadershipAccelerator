@@ -1,6 +1,19 @@
 import OpenAI from 'openai';
 import AssignmentSubmission from '../models/AssignmentSubmission';
 import MentorReviewItem, { MentorReviewStatus } from '../models/MentorReviewItem';
+import {
+  RELEASED_MENTOR_STATUSES,
+  isReleasedToStudent,
+  toStudentFeedback,
+  type StudentFeedbackItem,
+} from './mentorFeedbackGate';
+
+export {
+  RELEASED_MENTOR_STATUSES,
+  isReleasedToStudent,
+  toStudentFeedback,
+  type StudentFeedbackItem,
+} from './mentorFeedbackGate';
 
 const CONFIDENCE_THRESHOLD = parseFloat(process.env.MENTOR_CONFIDENCE_THRESHOLD || '0.8');
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
@@ -183,16 +196,34 @@ export async function getFeedbackForSubmission(
   });
   if (!item) return null;
 
-  // Human-review gate: only feedback that cleared review reaches the student.
-  // pending_review = a human hasn't vetted the low-confidence feedback yet;
-  // dismissed = a human explicitly rejected it. Neither is shown — the route
-  // treats null as "no mentor feedback available yet" (404).
-  const RELEASED: MentorReviewStatus[] = ['auto_approved', 'approved'];
-  if (!RELEASED.includes(item.status)) return null;
+  // The route treats null as "no mentor feedback available yet" (404).
+  if (!isReleasedToStudent(item.status)) return null;
 
   return {
     ai_feedback: item.ai_feedback,
     status: item.status,
     reviewer_notes: item.status === 'approved' ? item.reviewer_notes : null,
   };
+}
+
+/**
+ * Every released mentor feedback item for an enrollment, newest first, each with
+ * its submission's context. Owner-scoped by `enrollment_id`; returns an empty list
+ * (not an error) for an intern with no released feedback. A missing id short-circuits
+ * to empty so it can never widen to another enrollment's feedback.
+ */
+export async function listReleasedFeedback(enrollmentId: string): Promise<StudentFeedbackItem[]> {
+  if (!enrollmentId) return [];
+  const items = await MentorReviewItem.findAll({
+    where: { enrollment_id: enrollmentId, status: RELEASED_MENTOR_STATUSES },
+    order: [['created_at', 'DESC']],
+  });
+  if (!items.length) return [];
+
+  const subs = await AssignmentSubmission.findAll({ where: { id: items.map((i) => i.submission_id) } });
+  const subById = new Map(subs.map((s) => [s.id, s]));
+
+  return items
+    .map((i) => toStudentFeedback(i, subById.get(i.submission_id) ?? null))
+    .filter((x): x is StudentFeedbackItem => x !== null);
 }

@@ -411,6 +411,38 @@ export async function fetchInternshipProjects(): Promise<InternProjectPortfolio>
   return data;
 }
 
+// ── Released mentor feedback ─────────────────────────────────────────────────
+
+export interface StudentFeedbackItem {
+  review_id: string;
+  submission_id: string;
+  /** AI-generated guidance. `human_reviewed` says whether a mentor then vetted it. */
+  ai_feedback: string;
+  review_status: 'auto_approved' | 'approved';
+  human_reviewed: boolean;
+  /** Present only on a mentor-approved item. */
+  reviewer_notes: string | null;
+  reviewed_at: string | null;
+  created_at: string | null;
+  submission: {
+    title: string;
+    assignment_type: string;
+    version_number: number;
+    status: string;
+    submitted_at: string | null;
+  } | null;
+}
+
+export interface InternshipFeedbackView {
+  state: string;
+  feedback: StudentFeedbackItem[];
+}
+
+export async function fetchInternshipFeedback(): Promise<InternshipFeedbackView> {
+  const { data } = await portalApi.get<InternshipFeedbackView>('/api/portal/internship/feedback');
+  return data;
+}
+
 /**
  * Record a tool-readiness acknowledgement.
  *
