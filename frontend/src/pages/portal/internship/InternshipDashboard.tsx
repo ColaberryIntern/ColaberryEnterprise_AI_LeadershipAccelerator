@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { InternDashboard, Week3Handoff, fetchInternshipDashboard } from '../../../services/internshipApi';
 import InternshipProjects from './InternshipProjects';
 import InternshipFeedback from './InternshipFeedback';
+import InternshipCertification from './InternshipCertification';
 import CondensedHeaderCard from '../today/CondensedHeaderCard';
 // The next-step hero and the scroll-condensed top-bar slot both use the shared
 // timeline card styles, so the internship dashboard matches Classroom/Projects
@@ -214,6 +215,9 @@ const InternshipDashboard: React.FC<{
 
       {/* Released mentor feedback — AI-generated guidance, gated to reviewed/approved. */}
       <InternshipFeedback />
+
+      {/* Certification — practice readiness (an estimate) + the official claim, kept apart. */}
+      <InternshipCertification />
 
       {/* Training direction + meetings. */}
       <section style={{ ...cardStyle }}>
