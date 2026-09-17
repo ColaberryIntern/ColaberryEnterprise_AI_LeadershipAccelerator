@@ -21,6 +21,9 @@ September 2026 sessions. Every rule in quotes is Ali's, verbatim.
 - "you should be checking hotmail and alimuwwakkil@gmail.com as well" (2026-09-16)
 - "add the email from slack - i need to see those - they shouldn't be hidden" (2026-09-16)
 - "When emailing as me, make my tone a little less formal - says ram." (2026-09-17)
+- "did you not bcc me on the email - always bcc me on everything you send out on my behalf"
+  (2026-09-17, after the BCC copy of the Jul 2026 commission email had been archived out of his
+  inbox as a "copy of mail sent as him")
 
 ## What they mean in practice
 
@@ -36,8 +39,10 @@ off-OneDrive checkout with the prod OAuth client; the recipe is in memory
 **Only what needs tackling stays.** After every item is handled, the inbox holds exactly the things
 Ali still has to act on. Cleared on sight, with verification: acknowledgements and FYIs
 ("thanks, received", "done and live" with nothing asked), automated reports Ali has already read,
-GitHub notices of his own approvals, digests, and the BCC copy of any email sent as him (Gmail
-sometimes files it in the inbox; `gmailArchive.js` with `expect` set to the subject).
+GitHub notices of his own approvals and digests. NOT the BCC copy of an email sent as him: every
+send carries `bcc: ali@colaberry.com`, Gmail files that copy in his inbox, and it stays there. It
+is how he sees what went out under his name; archiving it hides the send from him (the Jul 2026
+commission copy was archived and restored the same hour). He clears it himself.
 
 **Addressed means gone.** A reply sent, a Basecamp comment posted, a decision recorded, a task
 handed to its owner with a due date: then the email leaves the inbox, and only then. Archive the

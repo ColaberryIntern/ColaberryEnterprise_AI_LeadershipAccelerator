@@ -62,9 +62,11 @@ This skill is that human loop, made fast: one screen, one item at a time, one de
    read is reported as unreadable, never as clean.
 10. **Only what needs tackling stays.** (Ali, 2026-09-15: "If they are just acknowledgements, let's
    clear them out as well. I only want things that need to be tackled.") Acknowledgements, FYIs,
-   reports already read, notices of Ali's own actions and BCC copies of mail sent as him are
-   archived on sight, each one verified by re-fetch. Slack mail is never among them: it stays
-   visible (gate-1 rule `slack_0f`), and a Slack message found archived is restored.
+   reports already read and notices of Ali's own actions are archived on sight, each one verified
+   by re-fetch. Two things are never among them. Slack mail stays visible (gate-1 rule `slack_0f`),
+   and a Slack message found archived is restored. The BCC copy of any email sent as Ali stays in
+   his inbox: it is his receipt of what went out under his name (Ali, 2026-09-17: "always bcc me
+   on everything you send out on my behalf"), and he clears it himself.
 11. **Mail leaves as Ali only through the guarded sender** (`scripts/send.sh` → `sendAsAli.js`):
    real signature exactly once, no em or en dash, no trailing sign-off, Ali BCC'd, threaded when
    replying, and in his voice, a little less formal (Ram, 2026-09-17). `references/direct-ops.md`
