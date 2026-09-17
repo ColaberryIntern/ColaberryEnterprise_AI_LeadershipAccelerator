@@ -28,9 +28,10 @@ import { cooldownDaysFor, cooldownUntil } from './returnToAi';
  * `integrateDisposition` - the account roll-up, the pipeline stage, the AI
  * Flotation conversion - each behind the kill switch, each idempotent on what
  * already exists, a refusal recorded on the row (`integration_refused`) and
- * never failing the verdict. That call sits AFTER the ownership clear and
- * BEFORE the one terminal update, so a failure inside a writer leaves the
- * handoff `accepted` and the retry re-runs writers that find what they wrote.
+ * never failing the verdict. That call sits BEFORE the ownership clear and
+ * the one terminal update, so a failure inside a writer leaves the handoff
+ * `accepted` with the human still owning the thread, and the retry re-runs
+ * writers that find what they wrote.
  * This file is the only file outside `integration/` that may import it
  * (`integrationIsolation.test.ts`). It notifies nobody.
  */
@@ -130,11 +131,14 @@ export async function dispositionHandoff(row: GrowthJourneyHandoff, input: Dispo
   // the AI paused for that lead until someone fixed the table by hand (the T405 verifier's observation).
   // A failure AFTER the update leaves an outcome or ledger row missing, which T409's
   // normaliser (handoffs are one of its sources) and the ledger adapter can back-fill.
-  const ownership_cleared = await clearOwnership(row, actor, `dispositioned:${input.disposition}`, asOf);
+  // The existing systems are written while the human still owns the thread: a writer
+  // that throws leaves the handoff `accepted` AND the ownership row open, so the AI
+  // stays paused until the retry lands (the T406 verifier's observation).
   const integration = isIntegratingDisposition(input.disposition)
     ? await integrateDisposition({ handoff: row, disposition: input.disposition, actor: { id: actor.id, platformIdentityId: actor.platformIdentityId ?? null }, asOf })
     : null;
   patch.integration_refused = integration?.refusals[0]?.reason.slice(0, 64) ?? null;
+  const ownership_cleared = await clearOwnership(row, actor, `dispositioned:${input.disposition}`, asOf);
   await row.update(patch);
 
   const outcome = await recordOutcome({

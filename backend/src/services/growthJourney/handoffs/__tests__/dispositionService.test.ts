@@ -229,7 +229,7 @@ describe('disposition', () => {
     m.logEvent.mockImplementation(async () => { order.push('ledger'); });
     m.integrateDisposition.mockImplementation(async () => { order.push('integration'); return { status: 'skipped', reason: 'learner_program', program_kind: 'learner', disposition: 'qualified', writes: [], refusals: [], outcome_ids: [], ids: {} }; });
     await dispositionHandoff(asModel(r), { disposition: 'qualified', reason: 'budget confirmed' }, ACTOR, AS_OF);
-    expect(order).toEqual(['clear', 'integration', 'update', 'outcome', 'ledger']);
+    expect(order).toEqual(['integration', 'clear', 'update', 'outcome', 'ledger']);
   });
 
   it('the integration writers are not called from here: no organisation, pipeline stage, conversion or ticket touched (T406)', () => {
@@ -245,7 +245,7 @@ describe('disposition', () => {
 describe('the one door to the existing systems (T406)', () => {
   const written = { status: 'written', reason: null, program_kind: 'business', disposition: 'qualified', writes: ['account_rollup', 'pipeline_advance'], refusals: [], outcome_ids: ['out-9'], ids: { organization_id: 'org-1', stage: 'meeting_scheduled', advanced: true } };
 
-  it.each(['qualified', 'converted'])('%s calls integrateDisposition once, with the row, the verdict, the actor (id + platform identity) and the clock, between the ownership clear and the terminal update', async (disposition) => {
+  it.each(['qualified', 'converted'])('%s calls integrateDisposition once, with the row, the verdict, the actor (id + platform identity) and the clock, before the ownership clear and the terminal update', async (disposition) => {
     m.integrateDisposition.mockResolvedValue({ ...written, disposition });
     const r = row('accepted');
     const result = await dispositionHandoff(asModel(r), { disposition: disposition as 'qualified', reason: 'the human decided' }, { ...ACTOR, platformIdentityId: 'pid-1' }, AS_OF);
@@ -285,10 +285,11 @@ describe('the one door to the existing systems (T406)', () => {
     expect((r2.integration_refused as string).length).toBe(64);
   });
 
-  it('a writer that THROWS (the database, not a refusal) leaves the handoff accepted - the retry re-runs writers that find what they wrote', async () => {
+  it('a writer that THROWS (the database, not a refusal) leaves the handoff accepted with the human still owning the thread - the retry re-runs writers that find what they wrote', async () => {
     m.integrateDisposition.mockRejectedValue(new Error('connection reset'));
     const r = row('accepted');
     await expect(dispositionHandoff(asModel(r), { disposition: 'converted', reason: 'signed the proposal' }, ACTOR, AS_OF)).rejects.toThrow('connection reset');
+    expect(m.clearHumanConversation).not.toHaveBeenCalled();
     expect(r.update).not.toHaveBeenCalled();
     expect(r.status).toBe('accepted');
     expect(m.recordOutcome).not.toHaveBeenCalled();
