@@ -189,8 +189,9 @@ router.get('/api/admin/campaign-intelligence/graph', requireAdmin, async (req: R
     return;
   }
   try {
-    const { timeWindow, brandId, campaignId } = scope;
-    const data = await getCampaignGraphData(timeWindow, brandId, campaignId);
+    // T411: the journey terms ride the same parsed scope; an empty `journey` is no filter at all.
+    const { timeWindow, brandId, campaignId, journey } = scope;
+    const data = await getCampaignGraphData(timeWindow, brandId, campaignId, journey);
     if (req.query.timeline === 'true') {
       const paths = getCachedLeadPaths();
       if (paths) data.timeline_buckets = buildTimelineBuckets(paths);

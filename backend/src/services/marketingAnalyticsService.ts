@@ -237,6 +237,160 @@ export async function getCampaignMetrics(filters?: CampaignMetricFilters): Promi
   return result;
 }
 
+
+/* ── Growth Journey dimension (Phase 4 T411) ──────────────────────────────── */
+
+/**
+ * One programme x path row of the campaign table: the same counts, grouped by the
+ * Growth Journey dimension instead of by campaign.
+ *
+ * ─── MISSING IS `null`, NOT 0 ───────────────────────────────────────────────
+ *
+ * A programme no lead is on has no open rate, no conversion rate and no
+ * engagement - it has no leads. Reporting 0% would state a fact the data does
+ * not contain (the same rule T409's handoff rates follow), so every rate and
+ * every count is `null` for such a row and `has_leads` says which kind of row
+ * this is. The programme still APPEARS, from `journey_programs`, because "the
+ * programme is not running yet" is the answer the page needs.
+ */
+export interface JourneyMetricRow {
+  brand_id: string;
+  program_slug: string;
+  program_name: string;
+  program_status: string;
+  /** The classification's primary path, or null for the programme's row with no path chosen. */
+  path_slug: string | null;
+  has_leads: boolean;
+  leads_count: number | null;
+  classified_count: number | null;
+  campaigns_count: number | null;
+  emails_sent: number | null;
+  opens_count: number | null;
+  clicks_count: number | null;
+  replies_count: number | null;
+  meetings_count: number | null;
+  enrollments_count: number | null;
+  open_rate: number | null;
+  click_rate: number | null;
+  reply_rate: number | null;
+  conversion_rate: number | null;
+}
+
+const pct = (numerator: number, denominator: number): number | null =>
+  denominator > 0 ? Math.round((numerator / denominator) * 10000) / 100 : null;
+
+/**
+ * The campaigns table, one dimension over: brand x programme x path.
+ *
+ * Reads the Growth Journey rows the graph dimension reads (the LATEST
+ * classification per lead, by `created_at`) and joins the interaction outcomes
+ * the campaign table already counts, so the two views cannot disagree about
+ * what an open or a reply is. Brand is a WHERE on the journey rows here rather
+ * than on campaigns, because a journey belongs to a brand directly.
+ *
+ * The date range applies to the OUTCOMES, not to the classification: a lead
+ * classified in August whose campaign replied in September belongs in
+ * September's engagement, which is how the campaign table already reads.
+ */
+export async function getCampaignMetricsByJourney(filters?: CampaignMetricFilters): Promise<JourneyMetricRow[]> {
+  const startTime = Date.now();
+  const dateFilter = buildDateFilter(filters);
+  const brandClause = filters?.brandId ? 'AND p.brand_id = :brandId' : '';
+  const replacements: Record<string, string> = { ...dateFilter.replacements };
+  if (filters?.brandId) replacements.brandId = filters.brandId;
+
+  const query = `
+    WITH latest_classification AS (
+      SELECT DISTINCT ON (c.lead_id)
+        c.lead_id, c.brand_id, c.journey_program_slug, c.primary_path
+      FROM growth_journey_classifications c
+      WHERE c.lead_id IS NOT NULL
+      ORDER BY c.lead_id, c.created_at DESC
+    ),
+    journey_leads AS (
+      SELECT
+        lc.brand_id, lc.journey_program_slug, lc.primary_path, lc.lead_id,
+        COUNT(DISTINCT io.campaign_id) AS campaigns,
+        COUNT(DISTINCT io.id) FILTER (WHERE io.outcome = 'sent') AS sent,
+        COUNT(DISTINCT io.id) FILTER (WHERE io.outcome = 'opened') AS opened,
+        COUNT(DISTINCT io.id) FILTER (WHERE io.outcome = 'clicked') AS clicked,
+        COUNT(DISTINCT io.id) FILTER (WHERE io.outcome = 'replied') AS replied,
+        COUNT(DISTINCT io.id) FILTER (WHERE io.outcome = 'booked_meeting') AS booked
+      FROM latest_classification lc
+      LEFT JOIN interaction_outcomes io
+        ON io.lead_id = lc.lead_id
+        ${dateFilter.clauseFor(`io.${ACTIVITY_DATE_COLUMNS.interaction_outcomes}`)}
+      GROUP BY lc.brand_id, lc.journey_program_slug, lc.primary_path, lc.lead_id
+    ),
+    journey_enrollments AS (
+      SELECT lc.brand_id, lc.journey_program_slug, lc.primary_path,
+        COUNT(DISTINCT e.id) AS enrollments
+      FROM latest_classification lc
+      JOIN leads l ON l.id = lc.lead_id
+      JOIN enrollments e ON LOWER(e.email) = LOWER(l.email) AND e.status = 'active'
+      GROUP BY lc.brand_id, lc.journey_program_slug, lc.primary_path
+    )
+    SELECT
+      p.brand_id,
+      p.slug AS program_slug,
+      p.name AS program_name,
+      p.status AS program_status,
+      jl.primary_path AS path_slug,
+      COUNT(jl.lead_id)::int AS leads_count,
+      COALESCE(SUM(jl.campaigns), 0)::int AS campaigns_count,
+      COALESCE(SUM(jl.sent), 0)::int AS emails_sent,
+      COALESCE(SUM(jl.opened), 0)::int AS opens_count,
+      COALESCE(SUM(jl.clicked), 0)::int AS clicks_count,
+      COALESCE(SUM(jl.replied), 0)::int AS replies_count,
+      COALESCE(SUM(jl.booked), 0)::int AS meetings_count,
+      COALESCE(MAX(je.enrollments), 0)::int AS enrollments_count
+    FROM journey_programs p
+    LEFT JOIN journey_leads jl
+      ON jl.journey_program_slug = p.slug AND jl.brand_id = p.brand_id
+    LEFT JOIN journey_enrollments je
+      ON je.journey_program_slug = p.slug AND je.brand_id = p.brand_id
+      AND (je.primary_path = jl.primary_path OR (je.primary_path IS NULL AND jl.primary_path IS NULL))
+    WHERE p.status <> 'retired'
+      ${brandClause}
+    GROUP BY p.brand_id, p.slug, p.name, p.status, jl.primary_path
+    ORDER BY p.slug ASC, jl.primary_path ASC NULLS LAST
+  `;
+
+  const rows = await sequelize.query(query, { replacements, type: QueryTypes.SELECT }) as any[];
+
+  const result = rows.map((row) => {
+    const leads = Number(row.leads_count) || 0;
+    if (leads === 0) {
+      // A programme with no classified lead: every number is null, and the row still exists.
+      return {
+        brand_id: row.brand_id, program_slug: row.program_slug, program_name: row.program_name || row.program_slug,
+        program_status: row.program_status, path_slug: row.path_slug ?? null, has_leads: false,
+        leads_count: null, classified_count: null, campaigns_count: null, emails_sent: null, opens_count: null,
+        clicks_count: null, replies_count: null, meetings_count: null, enrollments_count: null,
+        open_rate: null, click_rate: null, reply_rate: null, conversion_rate: null,
+      };
+    }
+    const sent = Number(row.emails_sent) || 0;
+    const opens = Number(row.opens_count) || 0;
+    const clicks = Number(row.clicks_count) || 0;
+    const replies = Number(row.replies_count) || 0;
+    const enrollments = Number(row.enrollments_count) || 0;
+    return {
+      brand_id: row.brand_id, program_slug: row.program_slug, program_name: row.program_name || row.program_slug,
+      program_status: row.program_status, path_slug: row.path_slug ?? null, has_leads: true,
+      leads_count: leads, classified_count: leads, campaigns_count: Number(row.campaigns_count) || 0,
+      emails_sent: sent, opens_count: opens, clicks_count: clicks, replies_count: replies,
+      meetings_count: Number(row.meetings_count) || 0, enrollments_count: enrollments,
+      // Rates over the population that could have produced them; null when that population is empty.
+      open_rate: pct(opens, sent), click_rate: pct(clicks, sent), reply_rate: pct(replies, sent),
+      conversion_rate: pct(enrollments, leads),
+    };
+  });
+
+  logAgentExecution('revenue_aggregator', 'success', Date.now() - startTime).catch(() => {});
+  return result;
+}
+
 /**
  * The date range, as a clause for WHICHEVER timestamp column the CTE has. Until this build the
  * builder returned one clause hard-wired to a column that does not exist and nothing

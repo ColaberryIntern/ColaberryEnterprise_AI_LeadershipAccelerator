@@ -22,7 +22,8 @@ jest.mock('sequelize', () => {
 });
 
 import { Op } from 'sequelize';
-import { filterPathsByCampaign, getTimeWindowCutoff, parseGraphScope, visitorCountOptions, type LeadPathRecord } from '../campaignGraphService';
+import { filterPathsByCampaign, filterPathsByJourney, getTimeWindowCutoff, parseGraphScope, visitorCountOptions, type LeadPathRecord } from '../campaignGraphService';
+import type { LeadJourneyFacts } from '../campaignJourneyDimension';
 
 describe('getTimeWindowCutoff', () => {
   it('resolves every window the UI is allowed to offer', () => {
@@ -99,12 +100,80 @@ describe('parseGraphScope - the graph route query, including the 400', () => {
   const UUID = 'c0000000-0000-4000-8000-000000000001';
 
   it('absent and empty both mean no filter; values are trimmed', () => {
-    expect(parseGraphScope({})).toEqual({ ok: true, timeWindow: undefined, brandId: undefined, campaignId: undefined });
-    expect(parseGraphScope({ timeWindow: ' 30d ', brandId: '', campaignId: `  ${UUID} ` })).toEqual({ ok: true, timeWindow: '30d', brandId: undefined, campaignId: UUID });
+    expect(parseGraphScope({})).toEqual({ ok: true, timeWindow: undefined, brandId: undefined, campaignId: undefined, journey: {} });
+    expect(parseGraphScope({ timeWindow: ' 30d ', brandId: '', campaignId: `  ${UUID} ` })).toEqual({ ok: true, timeWindow: '30d', brandId: undefined, campaignId: UUID, journey: {} });
   });
 
   it('a malformed campaign id is refused rather than rendering an empty journey', () => {
     expect(parseGraphScope({ campaignId: 'not-a-uuid' })).toEqual({ ok: false, error: 'campaignId must be a UUID' });
-    expect(parseGraphScope({ campaignId: ['a', 'b'] })).toEqual({ ok: true, timeWindow: undefined, brandId: undefined, campaignId: undefined });
+    expect(parseGraphScope({ campaignId: ['a', 'b'] })).toEqual({ ok: true, timeWindow: undefined, brandId: undefined, campaignId: undefined, journey: {} });
+  });
+
+  it('T411: the journey terms are parsed, trimmed, and empty when absent', () => {
+    expect(parseGraphScope({ programSlug: ' business-growth ', pathSlug: 'workflow_automation', state: 'EXPLORING_SOLUTIONS' })).toEqual({
+      ok: true, timeWindow: undefined, brandId: undefined, campaignId: undefined,
+      journey: { programSlug: 'business-growth', pathSlug: 'workflow_automation', state: 'EXPLORING_SOLUTIONS' },
+    });
+    expect(parseGraphScope({ programSlug: '' }).ok && parseGraphScope({ programSlug: '' })).toMatchObject({ journey: {} });
+    // One term alone is a filter, and composes with a window.
+    expect(parseGraphScope({ timeWindow: '7d', state: 'PROPOSAL_SENT' })).toMatchObject({ ok: true, timeWindow: '7d', journey: { state: 'PROPOSAL_SENT' } });
+  });
+
+  it('T411: a malformed journey term is refused, for the campaign id\'s reason - it would render a programme nobody is on', () => {
+    expect(parseGraphScope({ programSlug: 'business growth' })).toEqual({ ok: false, error: 'programSlug must be a slug' });
+    expect(parseGraphScope({ pathSlug: "'; DROP TABLE leads; --" })).toEqual({ ok: false, error: 'pathSlug must be a slug' });
+    expect(parseGraphScope({ state: 'x'.repeat(65) })).toEqual({ ok: false, error: 'state must be a slug' });
+    // A non-string (an array in the query string) is no term, as it is for the campaign id.
+    expect(parseGraphScope({ programSlug: ['a', 'b'] })).toMatchObject({ ok: true, journey: {} });
+  });
+});
+
+describe('filterPathsByJourney - the Growth Journey dimension on the graph (T411)', () => {
+  const journey = (over: Partial<LeadJourneyFacts> = {}): LeadJourneyFacts => ({ program_slug: 'business-growth', path_slug: 'workflow_automation', state: 'EXPLORING_SOLUTIONS', brand_id: 'b-ent', classified_at: new Date('2026-09-01T00:00:00Z'), ...over });
+  const lead = (id: number, j: LeadJourneyFacts | null, campaigns: string[] = ['c1']) => ({
+    lead_id: id, journey: j,
+    campaign_enrollments: campaigns.map((c) => ({ campaign_id: c, campaign_name: c, enrolled_at: new Date() })),
+  } as unknown as LeadPathRecord);
+
+  const POPULATION = [
+    lead(1, journey()),                                                        // business-growth / workflow_automation / EXPLORING
+    lead(2, journey({ path_slug: 'business_training', state: 'PROPOSAL_SENT' })), // same programme, other path and state
+    lead(3, journey({ program_slug: 'cpn-scholars', path_slug: 'learner_free_training', brand_id: 'b-cpn' })), // other programme
+    lead(4, null),                                                             // never classified
+  ];
+
+  it('counts only the leads whose latest classification names the programme', () => {
+    expect(filterPathsByJourney(POPULATION, { programSlug: 'business-growth' }).map((l) => l.lead_id)).toEqual([1, 2]);
+    expect(filterPathsByJourney(POPULATION, { programSlug: 'cpn-scholars' }).map((l) => l.lead_id)).toEqual([3]);
+    expect(filterPathsByJourney(POPULATION, { programSlug: 'no-such-programme' })).toEqual([]);
+  });
+
+  it('path and state narrow further, and terms compose', () => {
+    expect(filterPathsByJourney(POPULATION, { pathSlug: 'workflow_automation' }).map((l) => l.lead_id)).toEqual([1]);
+    expect(filterPathsByJourney(POPULATION, { state: 'PROPOSAL_SENT' }).map((l) => l.lead_id)).toEqual([2]);
+    expect(filterPathsByJourney(POPULATION, { programSlug: 'business-growth', state: 'EXPLORING_SOLUTIONS' }).map((l) => l.lead_id)).toEqual([1]);
+    expect(filterPathsByJourney(POPULATION, { programSlug: 'business-growth', pathSlug: 'learner_free_training' })).toEqual([]);
+  });
+
+  it('an unclassified lead is PRESENT in the population with journey null and absent from every journey cohort', () => {
+    const unclassified = POPULATION.find((l) => l.lead_id === 4)!;
+    expect(unclassified.journey).toBeNull();
+    for (const terms of [{ programSlug: 'business-growth' }, { pathSlug: 'workflow_automation' }, { state: 'EXPLORING_SOLUTIONS' }]) {
+      expect(filterPathsByJourney(POPULATION, terms).map((l) => l.lead_id)).not.toContain(4);
+    }
+  });
+
+  it('the SAME POPULATION property: a journey cohort is a SUBSET of the unfiltered paths, whole paths kept, input unmutated', () => {
+    const cohort = filterPathsByJourney(POPULATION, { programSlug: 'business-growth' });
+    // Every member is one of the originals, by identity - the filter chooses leads, it never rebuilds them.
+    for (const l of cohort) expect(POPULATION).toContain(l);
+    expect(cohort.length).toBeLessThanOrEqual(POPULATION.length);
+    // The whole path survives: a journey-filtered lead still shows every campaign it entered.
+    expect(cohort[0].campaign_enrollments.map((e) => e.campaign_id)).toEqual(['c1']);
+    expect(POPULATION).toHaveLength(4);
+    // And it composes with the campaign filter in either order - the same set both ways.
+    const jThenC = filterPathsByCampaign(filterPathsByJourney(POPULATION, { programSlug: 'business-growth' }), 'c1').map((l) => l.lead_id);
+    const cThenJ = filterPathsByJourney(filterPathsByCampaign(POPULATION, 'c1'), { programSlug: 'business-growth' }).map((l) => l.lead_id);
+    expect(jThenC).toEqual(cThenJ);
   });
 });
