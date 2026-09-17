@@ -40,7 +40,7 @@ type Skipped = { skipped: true; reason: 'kill_switch_active' };
 
 export interface OutcomesPassSummary {
   normalized: { leads: number; created: number; replayed: number; unmapped: number; failed: number; no_brand: number } | Skipped | Failed;
-  sla: { scanned: number; expired: number; failed: number } | Skipped | Failed;
+  sla: { scanned: number; expired: number; raced: number; failed: number } | Skipped | Failed;
   rates: RatesSummary | Failed;
 }
 
@@ -104,7 +104,7 @@ async function slaStage(brandId: string, asOf: Date): Promise<OutcomesPassSummar
   try {
     const r = await expireOverdueHandoffs({ brandId, asOf });
     if (r.skipped) return { skipped: true, reason: r.reason };
-    return { scanned: r.scanned, expired: r.expired, failed: r.failed.length };
+    return { scanned: r.scanned, expired: r.expired, raced: r.raced, failed: r.failed.length };
   } catch (err: unknown) {
     const error_class = classifyError(err);
     log('growth_journey.nightly.sla_sweep_failed', { brand_id: brandId, error_class });

@@ -4,7 +4,8 @@ import { Op } from 'sequelize';
  * T409 - the SLA sweep, behaviourally over an in-memory handoff table: an
  * overdue queued or assigned row expires exactly once with one scoped ledger
  * row; accepted, future and undated rows are untouched; the brand narrows; the
- * kill switch stops the first write; one row failing stops nothing.
+ * kill switch stops the first write; one row failing stops nothing; a row taken
+ * between the read and the write (a human accept, a sweep in flight) is left alone.
  */
 
 type Row = Record<string, unknown>;
@@ -23,13 +24,18 @@ function matches(row: Row, where: Row): boolean {
 
 const rows: Row[] = [];
 const updateFailures = new Set<string>();
-const asModel = (r: Row) => ({
-  ...r,
-  update: jest.fn(async (patch: Row) => {
-    if (updateFailures.has(r.id as string)) throw Object.assign(new Error('deadlock detected'), { name: 'SequelizeDatabaseError' });
-    Object.assign(r, patch);
-    return r;
-  }),
+/** Something that happens between the sweep's read and its write, keyed by row id (a human accept; a sweep in flight). */
+const betweenReadAndWrite = new Map<string, () => void>();
+const asModel = (r: Row) => ({ ...r });
+/** The static, conditional UPDATE ... WHERE id = ? AND status IN (...): affected rows counted, like Postgres. */
+const update = jest.fn(async (...a: unknown[]) => {
+  const [patch, opts] = a as [Row, { where: Row }];
+  const id = opts.where.id as string;
+  if (updateFailures.has(id)) throw Object.assign(new Error('deadlock detected'), { name: 'SequelizeDatabaseError' });
+  betweenReadAndWrite.get(id)?.();
+  const hit = rows.filter((r) => matches(r, opts.where));
+  for (const r of hit) Object.assign(r, patch);
+  return [hit.length];
 });
 const findAll = jest.fn(async (...a: unknown[]) => {
   const { where, order, limit } = a[0] as { where: Row; order: unknown; limit: number };
@@ -41,7 +47,7 @@ const findAll = jest.fn(async (...a: unknown[]) => {
 const isKillSwitchActive = jest.fn();
 const logEvent = jest.fn();
 
-jest.mock('../../../../models', () => ({ GrowthJourneyHandoff: { findAll: (...a: unknown[]) => findAll(...a) } }));
+jest.mock('../../../../models', () => ({ GrowthJourneyHandoff: { findAll: (...a: unknown[]) => findAll(...a), update: (...a: unknown[]) => update(...a) } }));
 jest.mock('../../../launchSafety', () => ({ isKillSwitchActive: (...a: unknown[]) => isKillSwitchActive(...a) }));
 jest.mock('../../../ledgerService', () => ({ logEvent: (...a: unknown[]) => logEvent(...a) }));
 const redactForLogs = jest.fn((s: string) => jest.requireActual('../../../../utils/piiRedaction').redactForLogs(s));
@@ -60,7 +66,9 @@ const warned = () => (console.warn as jest.Mock).mock.calls.map((c) => String(c[
 beforeEach(() => {
   rows.length = 0;
   updateFailures.clear();
+  betweenReadAndWrite.clear();
   findAll.mockClear();
+  update.mockClear();
   logEvent.mockReset().mockResolvedValue(undefined);
   isKillSwitchActive.mockReset().mockResolvedValue(false);
   redactForLogs.mockClear();
@@ -75,7 +83,8 @@ describe('what expires', () => {
       handoff({ id: 'h-a', status: 'assigned', assigned_to_type: 'admin_user', assigned_to_id: 'u-7', ticket_id: 'tk-1', sla_due_at: D('2026-09-15T12:00:00Z') }),
     );
     const r = await expireOverdueHandoffs({ brandId: 'b-ent', asOf: AS_OF });
-    expect(r).toEqual({ skipped: false, scanned: 2, expired: 2, failed: [], expired_ids: ['h-a', 'h-q'] });
+    expect(r).toEqual({ skipped: false, scanned: 2, expired: 2, raced: 0, failed: [], expired_ids: ['h-a', 'h-q'] });
+    expect(update).toHaveBeenCalledWith({ status: 'expired', expired_at: AS_OF }, { where: { id: 'h-q', status: ['queued', 'assigned'] } });
     expect(rows.map((x) => [x.id, x.status, x.expired_at])).toEqual([['h-q', 'expired', AS_OF], ['h-a', 'expired', AS_OF]]);
     expect(logEvent).toHaveBeenCalledTimes(2);
     expect(logEvent).toHaveBeenCalledWith(
@@ -90,7 +99,7 @@ describe('what expires', () => {
   it('exactly once: the same sweep over the same clock finds nothing the second time - the moved row is outside the where clause, not behind a flag', async () => {
     rows.push(handoff({ id: 'h-q' }));
     expect(await expireOverdueHandoffs({ asOf: AS_OF })).toMatchObject({ expired: 1 });
-    expect(await expireOverdueHandoffs({ asOf: AS_OF })).toEqual({ skipped: false, scanned: 0, expired: 0, failed: [], expired_ids: [] });
+    expect(await expireOverdueHandoffs({ asOf: AS_OF })).toEqual({ skipped: false, scanned: 0, expired: 0, raced: 0, failed: [], expired_ids: [] });
     expect(await expireOverdueHandoffs({ asOf: new Date(AS_OF.getTime() + 86_400_000) })).toMatchObject({ scanned: 0, expired: 0 });
     expect(logEvent).toHaveBeenCalledTimes(1);
     expect(findAll).toHaveBeenLastCalledWith(expect.objectContaining({ where: { status: ['queued', 'assigned'], sla_due_at: { [Op.lt]: expect.any(Date) } } }));
@@ -144,13 +153,25 @@ describe('gates and failure', () => {
     rows.push(handoff({ id: 'h-bad', sla_due_at: D('2026-09-16T01:00:00Z') }), handoff({ id: 'h-ok', sla_due_at: D('2026-09-16T02:00:00Z') }));
     updateFailures.add('h-bad');
     const r = await expireOverdueHandoffs({ asOf: AS_OF });
-    expect(r).toEqual({ skipped: false, scanned: 2, expired: 1, failed: [{ handoff_id: 'h-bad', error_class: expect.any(String) }], expired_ids: ['h-ok'] });
+    expect(r).toEqual({ skipped: false, scanned: 2, expired: 1, raced: 0, failed: [{ handoff_id: 'h-bad', error_class: expect.any(String) }], expired_ids: ['h-ok'] });
     expect(rows.map((x) => [x.id, x.status])).toEqual([['h-bad', 'queued'], ['h-ok', 'expired']]);
     expect(logEvent).toHaveBeenCalledTimes(1);
     expect(logEvent.mock.calls[0][3]).toBe('h-ok');
     const line = warned().find((l) => l.includes('growth_journey.handoff.expire_failed'));
     expect(JSON.parse(line as string)).toMatchObject({ handoff_id: 'h-bad', brand_id: 'b-ent', owner_queue: 'sales', from: 'queued', error_class: expect.any(String) });
     expect(redactForLogs).toHaveBeenCalledTimes(1);
+  });
+
+  it('a row taken between the read and the write - a human accepted it, or a sweep in flight expired it - is left alone: 0 rows affected, no ledger row, counted as raced; the next row still expires', async () => {
+    rows.push(handoff({ id: 'h-taken', sla_due_at: D('2026-09-16T01:00:00Z') }), handoff({ id: 'h-inflight', sla_due_at: D('2026-09-16T02:00:00Z') }), handoff({ id: 'h-ok', sla_due_at: D('2026-09-16T03:00:00Z') }));
+    betweenReadAndWrite.set('h-taken', () => { const r = rows.find((x) => x.id === 'h-taken') as Row; r.status = 'accepted'; r.accepted_at = AS_OF; });
+    betweenReadAndWrite.set('h-inflight', () => { const r = rows.find((x) => x.id === 'h-inflight') as Row; r.status = 'expired'; r.expired_at = D('2026-09-17T04:24:59Z'); });
+    const r = await expireOverdueHandoffs({ asOf: AS_OF });
+    expect(r).toEqual({ skipped: false, scanned: 3, expired: 1, raced: 2, failed: [], expired_ids: ['h-ok'] });
+    expect(rows.map((x) => [x.id, x.status, x.expired_at])).toEqual([['h-taken', 'accepted', null], ['h-inflight', 'expired', D('2026-09-17T04:24:59Z')], ['h-ok', 'expired', AS_OF]]);
+    expect(logEvent).toHaveBeenCalledTimes(1);
+    expect(logEvent.mock.calls[0][3]).toBe('h-ok');
+    expect(warned()).toEqual([]);
   });
 
   it('a ledger write failing after the row moved is that row failed (the status stays moved - the next sweep cannot find it - and the class is reported), the next row still expires', async () => {

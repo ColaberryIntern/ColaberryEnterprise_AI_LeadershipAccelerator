@@ -40,7 +40,7 @@ beforeEach(() => {
   redactForLogs.mockClear();
   m.handoffFindAll.mockResolvedValue([{ lead_id: 501 }, { lead_id: 502 }, { lead_id: 501 }, { lead_id: 503 }]);
   m.isKillSwitchActive.mockResolvedValue(false);
-  m.expireOverdueHandoffs.mockResolvedValue({ skipped: false, scanned: 3, expired: 2, failed: [{ handoff_id: 'h-x', error_class: 'SequelizeDatabaseError' }], expired_ids: ['h-1', 'h-2'] });
+  m.expireOverdueHandoffs.mockResolvedValue({ skipped: false, scanned: 4, expired: 2, raced: 1, failed: [{ handoff_id: 'h-x', error_class: 'SequelizeDatabaseError' }], expired_ids: ['h-1', 'h-2'] });
   m.loadHandoffRates.mockResolvedValue(emptyRates());
   m.normalizeExistingOutcomes.mockResolvedValue(normalized());
   jest.spyOn(console, 'warn').mockImplementation(() => undefined);
@@ -51,7 +51,7 @@ describe('the three stages', () => {
   it('normalises each DISTINCT lead the brand handed off in the window once, bounded, then sweeps the brand, then reads the rates - in that order', async () => {
     const order: string[] = [];
     m.normalizeExistingOutcomes.mockImplementation(async ({ leadId }: { leadId: number }) => { order.push(`normalize:${leadId}`); return normalized(); });
-    m.expireOverdueHandoffs.mockImplementation(async () => { order.push('sweep'); return { skipped: false, scanned: 0, expired: 0, failed: [], expired_ids: [] }; });
+    m.expireOverdueHandoffs.mockImplementation(async () => { order.push('sweep'); return { skipped: false, scanned: 0, expired: 0, raced: 0, failed: [], expired_ids: [] }; });
     m.loadHandoffRates.mockImplementation(async () => { order.push('rates'); return emptyRates(); });
     const r = await runOutcomesPass({ brandId: BRAND, asOf: AS_OF, leadLimit: 50 });
     expect(order).toEqual(['normalize:501', 'normalize:502', 'normalize:503', 'sweep', 'rates']);
@@ -61,7 +61,7 @@ describe('the three stages', () => {
     expect(m.expireOverdueHandoffs).toHaveBeenCalledWith({ brandId: BRAND, asOf: AS_OF });
     expect(m.loadHandoffRates).toHaveBeenCalledWith({ brandId: BRAND, asOf: AS_OF, windowDays: 30 });
     expect(r.normalized).toEqual({ leads: 3, created: 6, replayed: 3, unmapped: 3, failed: 0, no_brand: 0 });
-    expect(r.sla).toEqual({ scanned: 0, expired: 0, failed: 0 });
+    expect(r.sla).toEqual({ scanned: 0, expired: 0, raced: 0, failed: 0 });
   });
 
   it('the lead bound holds: with a limit of 2 only the two most recently touched distinct leads normalise; the default is 200', async () => {
@@ -77,7 +77,7 @@ describe('the three stages', () => {
     m.normalizeExistingOutcomes.mockResolvedValue(normalized({ status: 'no_brand', created: 0, replayed: 0, unmapped: [], failed: [] }));
     const r = await runOutcomesPass({ brandId: BRAND, asOf: AS_OF });
     expect(r.normalized).toEqual({ leads: 3, created: 0, replayed: 0, unmapped: 0, failed: 0, no_brand: 3 });
-    expect(r.sla).toEqual({ scanned: 3, expired: 2, failed: 1 });
+    expect(r.sla).toEqual({ scanned: 4, expired: 2, raced: 1, failed: 1 });
   });
 
   it('the rates summary is values only - numbers and nulls, per queue too - never a row', async () => {
@@ -102,7 +102,7 @@ describe('failure domains and the kill switch', () => {
     m.handoffFindAll.mockRejectedValue(Object.assign(new Error('relation missing'), { name: 'SequelizeDatabaseError' }));
     const r = await runOutcomesPass({ brandId: BRAND, asOf: AS_OF });
     expect(r.normalized).toEqual({ failed: true, error_class: expect.any(String) });
-    expect(r.sla).toEqual({ scanned: 3, expired: 2, failed: 1 });
+    expect(r.sla).toEqual({ scanned: 4, expired: 2, raced: 1, failed: 1 });
     expect((r.rates as { handoffs: number }).handoffs).toBe(0);
     expect(warned().some((l) => l.includes('growth_journey.nightly.normalize_failed') && l.includes(BRAND))).toBe(true);
     expect(redactForLogs).toHaveBeenCalledTimes(1);

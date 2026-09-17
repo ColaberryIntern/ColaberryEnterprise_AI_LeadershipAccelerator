@@ -39,7 +39,7 @@ const ran = (over: Record<string, unknown> = {}) => ({
   status: 'ran', subjects: 3, recorded: 2, replayed: 1, skipped: [{ subject_ref: 'lead:501', status: 'unresolved' }], errors: [],
   handoffs: { disabled: 2, none: 0, materialized: 0, assigned: 0, queued: 0 }, ...over,
 });
-const OUTCOMES = { normalized: { leads: 2, created: 3, replayed: 1, unmapped: 1, failed: 0, no_brand: 0 }, sla: { scanned: 1, expired: 1, failed: 0 }, rates: { window_days: 30, handoffs: 4, accepted: 2, verdicts: 1, acceptance_rate: 0.5, expiry_rate: 0.25, connection_rate: null, meeting_rate: null, qualification_rate: 1, conversion_rate: 0, false_positive_handoff_rate: 0, time_to_accept_hours: null, by_queue: {} } };
+const OUTCOMES = { normalized: { leads: 2, created: 3, replayed: 1, unmapped: 1, failed: 0, no_brand: 0 }, sla: { scanned: 1, expired: 1, raced: 0, failed: 0 }, rates: { window_days: 30, handoffs: 4, accepted: 2, verdicts: 1, acceptance_rate: 0.5, expiry_rate: 0.25, connection_rate: null, meeting_rate: null, qualification_rate: 1, conversion_rate: 0, false_positive_handoff_rate: 0, time_to_accept_hours: null, by_queue: {} } };
 const logged = () => (console.log as jest.Mock).mock.calls.map((c) => String(c[0]));
 
 beforeEach(() => {

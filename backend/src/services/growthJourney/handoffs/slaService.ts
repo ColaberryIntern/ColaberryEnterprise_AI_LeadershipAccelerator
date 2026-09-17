@@ -15,7 +15,17 @@ import { logEvent } from '../../ledgerService';
  * predicate is on the row itself (`status IN (queued, assigned) AND
  * sla_due_at < asOf`), so a row this sweep moved is outside the next sweep's
  * where clause: the second run over the same clock finds nothing, which is
- * what makes "exactly once" a property of the query and not of a flag.
+ * what makes "exactly once" a property of the query and not of a flag. The
+ * write repeats the predicate (`WHERE id = ? AND status IN (queued, assigned)`)
+ * and counts affected rows, so a human who accepted the row between the read
+ * and the write keeps it, and two sweeps in flight expire it once: the loser
+ * affects 0 rows, writes no ledger row, and reports the row as `raced`.
+ *
+ * The status is the source of truth and the ledger row follows it, outside a
+ * transaction (`logEvent` takes none - the pattern T405's dispositions use).
+ * A ledger write that fails after the status moved is reported in `failed`
+ * with the row already `expired`; the next sweep will not re-emit it, and
+ * T410's ledger adapter can back-fill from `status` + `expired_at`.
  *
  * It notifies nobody. An expiry is a row a human reads on the board (and the
  * rates in `outcomes/handoffRates.ts` count it); a page, an email, a Basecamp
@@ -44,6 +54,8 @@ export type ExpireOverdueResult =
       skipped: false;
       scanned: number;
       expired: number;
+      /** Rows no longer expirable at write time: accepted meanwhile, or expired by a sweep in flight. Left alone. */
+      raced: number;
       failed: Array<{ handoff_id: string; error_class: string }>;
       /** Ids only. */
       expired_ids: string[];
@@ -68,11 +80,16 @@ export async function expireOverdueHandoffs(args: ExpireOverdueArgs = {}): Promi
     limit: args.limit ?? DEFAULT_SWEEP_LIMIT,
   });
 
-  const result: Extract<ExpireOverdueResult, { skipped: false }> = { skipped: false, scanned: rows.length, expired: 0, failed: [], expired_ids: [] };
+  const result: Extract<ExpireOverdueResult, { skipped: false }> = { skipped: false, scanned: rows.length, expired: 0, raced: 0, failed: [], expired_ids: [] };
   for (const row of rows) {
     const from = row.status;
     try {
-      await row.update({ status: 'expired', expired_at: asOf });
+      // Conditional on the row still being expirable: 0 affected means someone got there first.
+      const [affected] = await GrowthJourneyHandoff.update({ status: 'expired', expired_at: asOf }, { where: { id: row.id, status: [...EXPIRABLE_STATUSES] } });
+      if (affected === 0) {
+        result.raced += 1;
+        continue;
+      }
       await logEvent(
         HANDOFF_EXPIRED_EVENT,
         ACTOR,
