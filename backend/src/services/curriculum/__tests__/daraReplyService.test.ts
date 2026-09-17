@@ -146,12 +146,43 @@ describe('maybeTriggerDaraReply', () => {
     expect(mockCreateCompletion).not.toHaveBeenCalled();
   });
 
-  it('boundary/failure: an LLM error is caught and logged, never thrown into the caller', async () => {
+  it('boundary/failure: an LLM error that also fails on retry is caught and logged, never thrown into the caller — but a real, honest fallback message IS sent (never pure silence)', async () => {
     mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
     mockCreateCompletion.mockRejectedValue(new Error('OpenAI is down'));
 
     await expect(maybeTriggerDaraReply(ROOM_ID, STUDENT_ID)).resolves.toBeUndefined();
-    expect(mockSendDmMessage).not.toHaveBeenCalled();
+
+    // Real production incident, 2026-09-17: a caught failure used to leave the
+    // student with pure silence. Now it must send a real, deterministic
+    // fallback via the exact same sendDmMessage() path a real reply uses.
+    expect(mockSendDmMessage).toHaveBeenCalledTimes(1);
+    expect(mockSendDmMessage).toHaveBeenCalledWith(
+      { enrollmentId: DARA_ID, cohortId: null, isAdmin: false }, ROOM_ID,
+      expect.stringContaining('technical issue'),
+    );
+  });
+
+  it('retry: a completion failure that succeeds on the SECOND attempt produces a real reply, never falls through to the fallback message', async () => {
+    mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+    mockCreateCompletion
+      .mockRejectedValueOnce(new Error('transient blip'))
+      .mockResolvedValueOnce({ choices: [{ message: { content: 'Module 3 covers supervised learning fundamentals.' } }] });
+
+    await maybeTriggerDaraReply(ROOM_ID, STUDENT_ID);
+
+    expect(mockCreateCompletion).toHaveBeenCalledTimes(2);
+    expect(mockSendDmMessage).toHaveBeenCalledTimes(1);
+    expect(mockSendDmMessage).toHaveBeenCalledWith(
+      { enrollmentId: DARA_ID, cohortId: null, isAdmin: false }, ROOM_ID, 'Module 3 covers supervised learning fundamentals.',
+    );
+  });
+
+  it('boundary: the fallback message itself failing to send never throws into the caller', async () => {
+    mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+    mockCreateCompletion.mockRejectedValue(new Error('OpenAI is down'));
+    mockSendDmMessage.mockRejectedValue(new Error('DM send also down'));
+
+    await expect(maybeTriggerDaraReply(ROOM_ID, STUDENT_ID)).resolves.toBeUndefined();
   });
 
   it('boundary: an empty/whitespace-only completion never posts an empty reply', async () => {
