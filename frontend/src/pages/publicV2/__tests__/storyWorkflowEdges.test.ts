@@ -164,6 +164,35 @@ describe('routeHorizontalEdges, through the layout', () => {
     expect(ten.labelLines.length).toBeLessThanOrEqual(4);
   });
 
+  it('in the column layout, draws no label under a box either, and gives a skip edge a gap when there is one', () => {
+    // The CORA after shape on a phone: two skip edges (completes > gap, fetch > advance) and a labelled retry.
+    const after = panel(
+      [node('launch'), node('completes'), node('event'), node('pipeline'), node('gap', 'recovery'), node('fetch', 'recovery'), node('replay', 'recovery'), node('advance', 'manual')],
+      [
+        edge('launch', 'completes'), edge('completes', 'event'), edge('event', 'pipeline'),
+        edge('completes', 'gap', 'no completion event'), edge('gap', 'fetch'), edge('fetch', 'replay'), edge('replay', 'pipeline', 'replay'),
+        edge('fetch', 'advance', 'source unavailable'), edge('advance', 'pipeline'),
+        edge('fetch', 'gap', 'retry'),
+      ],
+    );
+    const column = layoutWorkflow(after, 'vertical', { maxWidth: 342 });
+    const shown = column.edges.filter((e) => e.label && e.labelFits);
+    expect(shown.length).toBeGreaterThan(0);
+    for (const e of shown) {
+      for (const n of column.nodes) expect({ edge: `${e.from}>${e.to}`, over: n.key, hit: overlaps(labelBox(e), n) }).toEqual({ edge: `${e.from}>${e.to}`, over: n.key, hit: false });
+    }
+    for (let i = 0; i < shown.length; i += 1) {
+      for (let j = i + 1; j < shown.length; j += 1) expect(overlaps(labelBox(shown[i]), labelBox(shown[j]))).toBe(false);
+    }
+    // A skip edge whose gap below is free keeps its label there, in the gap under the box it leaves.
+    const skip = column.edges.find((e) => e.from === 'completes' && e.to === 'gap')!;
+    const completes = column.nodes.find((n) => n.key === 'completes')!;
+    expect(skip.labelFits).toBe(true);
+    expect(skip.labelY - LABEL_LIFT - 4).toBeCloseTo(completes.y + completes.height + 22, 5);
+    // Every label is still on its edge for the panel, drawn or not.
+    expect(column.edges.filter((e) => e.label).map((e) => e.label)).toEqual(['no completion event', 'replay', 'source unavailable', 'retry']);
+  });
+
   it('still says every edge, drawn label or not', () => {
     expect(l.edges).toHaveLength(proposes.edges.length);
     for (const e of l.edges) expect(e.label).toBe(proposes.edges.find((p) => p.from === e.from && p.to === e.to)!.label);

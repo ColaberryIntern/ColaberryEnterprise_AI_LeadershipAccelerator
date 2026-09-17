@@ -1,6 +1,6 @@
 import type { CaseStudyWorkflowLane, PublicCaseStudyWorkflowPanel } from '../../services/caseStudyPublicTypes';
 import { wrapLabel } from './storyVisualModel';
-import { bez, cubic, routeHorizontalEdges } from './storyWorkflowEdges';
+import { bez, cubic, routeHorizontalEdges, settleColumnLabels } from './storyWorkflowEdges';
 import type { WorkflowEdgePath, WorkflowNodeBox } from './storyWorkflowEdges';
 
 export type { WorkflowEdgePath, WorkflowNodeBox } from './storyWorkflowEdges';
@@ -188,7 +188,7 @@ function vertical(panel: PublicCaseStudyWorkflowPanel, steps: ReadonlyMap<string
     });
   });
   const height = V.pad * 2 + ordered.length * boxH + (ordered.length - 1) * V.gapY;
-  const edges = panel.edges.map((e) => {
+  const routed = panel.edges.map((e) => {
     const a = boxes.get(e.from)!;
     const b = boxes.get(e.to)!;
     const returns = b.y <= a.y;
@@ -210,6 +210,8 @@ function vertical(panel: PublicCaseStudyWorkflowPanel, steps: ReadonlyMap<string
     }
     return { from: e.from, to: e.to, d, labelX, labelY, label: e.label, status: e.status, motion: e.motion, returns, labelFits: true };
   });
+  // A skip edge's midpoint is behind a box; its label finds a gap or is said in the panel.
+  const edges = settleColumnLabels(routed, boxes, V.gapY);
   const bands = lanes.map((lane, i) => ({
     lane, label: panel.laneLabels[lane], x: V.pad + i * V.indent - 6, y: V.pad, width: 3, height: height - V.pad * 2,
   }));
