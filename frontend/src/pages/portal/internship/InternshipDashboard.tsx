@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { InternDashboard, Week3Handoff, fetchInternshipDashboard } from '../../../services/internshipApi';
 import InternshipProjects from './InternshipProjects';
+import InternshipFeedback from './InternshipFeedback';
 
 /**
  * The student "My Internship" dashboard (Phase 2 shell): the single next action,
@@ -149,6 +150,9 @@ const InternshipDashboard: React.FC = () => {
 
       {/* The project portfolio — owned projects, verified vs self-reported, readiness. */}
       <InternshipProjects />
+
+      {/* Released mentor feedback — AI-generated guidance, gated to reviewed/approved. */}
+      <InternshipFeedback />
 
       {/* Training direction + meetings. */}
       <section style={{ ...cardStyle }}>

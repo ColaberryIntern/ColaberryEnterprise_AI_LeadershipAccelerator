@@ -10,6 +10,7 @@ import { isInternshipEnabled } from '../services/portalFlagsService';
 import { recordMeetingJoin } from '../services/internship/internshipAttendanceService';
 import { internDashboard } from '../services/internship/internshipStudentDashboard';
 import { internProjectPortfolio } from '../services/internship/internshipProjectPortfolio';
+import { listReleasedFeedback } from '../services/mentorFeedbackService';
 
 /**
  * Participant activation endpoints: the onboarding checklist and the tool
@@ -118,6 +119,24 @@ export async function handleGetInternshipProjects(req: Request, res: Response): 
     res.json({ state: ctx.application.state, ...portfolio });
   } catch (err) {
     fail(res, err, 'internship_projects_failed');
+  }
+}
+
+/**
+ * GET /api/portal/internship/feedback
+ *
+ * The intern's released mentor feedback on their submissions — auto-approved or
+ * mentor-approved only, never unvetted or dismissed. Scoped to the caller's
+ * enrollment server-side; a read, never a mutation.
+ */
+export async function handleGetInternshipFeedback(req: Request, res: Response): Promise<void> {
+  try {
+    const ctx = await requireOpenApplication(req, res);
+    if (!ctx) return;
+    const feedback = await listReleasedFeedback(ctx.enrollmentId);
+    res.json({ state: ctx.application.state, feedback });
+  } catch (err) {
+    fail(res, err, 'internship_feedback_failed');
   }
 }
 
