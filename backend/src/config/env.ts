@@ -412,6 +412,12 @@ export const env = {
   // Used to build absolute one-click unsubscribe links embedded in outbound campaign
   // email. Must be the public https host, not the internal container port.
   publicAppUrl: process.env.PUBLIC_APP_URL || 'https://enterprise.colaberry.ai',
+  // Where Synthflow posts a call's completion. Sent on EVERY call we place, because the
+  // per-agent dashboard setting it used to depend on was found unset for two agents in a
+  // row (the internship interviewer, then AI Flotation) - and a call whose completion never
+  // arrives is a conversation nobody ever reads. Empty string disables it.
+  synthflowWebhookUrl: process.env.SYNTHFLOW_WEBHOOK_URL
+    || `${process.env.PUBLIC_APP_URL || 'https://enterprise.colaberry.ai'}/api/webhook/synthflow/call-complete`,
 
   // Open House landing/registration page (training.colaberry.com) — destination for the
   // Accelerator Open House campaign email CTAs. The page is owned by the landing-page work

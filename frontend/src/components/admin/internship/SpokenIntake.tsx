@@ -35,6 +35,29 @@ const WATCH_FOR_MS = 20 * 60 * 1000;
 
 type Stage = 'form' | 'placing' | 'watching' | 'done' | 'gave_up';
 
+/**
+ * Synthflow's transcript is plain text, one speaker per line: `agent: ...` / `human: ...`.
+ * Turned into the same turns the typed interview shows, so the conversation reads the same
+ * way whichever mouth it came through. A line with no speaker continues the previous turn.
+ */
+export function transcriptToTurns(transcript: string): Array<{ role: 'user' | 'assistant'; text: string }> {
+  const turns: Array<{ role: 'user' | 'assistant'; text: string }> = [];
+  for (const raw of transcript.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const m = /^(agent|assistant|ai|bot|human|user|customer|caller)\s*:\s*(.*)$/i.exec(line);
+    if (m) {
+      const role = /^(agent|assistant|ai|bot)$/i.test(m[1]) ? 'assistant' : 'user';
+      turns.push({ role, text: m[2] });
+    } else if (turns.length) {
+      turns[turns.length - 1].text += `\n${line}`;
+    } else {
+      turns.push({ role: 'assistant', text: line });
+    }
+  }
+  return turns;
+}
+
 export default function SpokenIntake({ student, onViewAs }: Props) {
   const [phone, setPhone] = useState('');
   const [idea, setIdea] = useState('');
@@ -139,15 +162,42 @@ export default function SpokenIntake({ student, onViewAs }: Props) {
   const writtenUp = progress?.understanding?.status === 'extracted';
   const building = Boolean(progress?.build);
   const failed = call?.status === 'failed' || (progress?.understanding && progress.understanding.status !== 'extracted');
+  const turns = call?.transcript ? transcriptToTurns(call.transcript) : [];
+  const onTheLine = !ended
+    ? (call?.live_status === 'ringing' || call?.live_status === 'pending' ? 'Ringing' : call?.live_status === 'in-progress' ? 'On the phone' : 'Connecting')
+    : '';
 
   return (
-    <div className="border rounded p-3" style={{ maxWidth: 640 }} aria-live="polite">
+    <div className="border rounded p-3" aria-live="polite">
+      {/* The conversation, where the typed one would be. Synthflow hands it over when the
+          call ends - not during - so this fills in at once rather than line by line. */}
+      <div className="border rounded p-3 mb-3" style={{ maxHeight: 420, overflowY: 'auto', background: 'var(--bs-tertiary-bg, #f8f9fa)' }}>
+        {turns.length === 0 ? (
+          <p className="text-muted small mb-0">
+            {ended
+              ? 'The call ended without a conversation to show.'
+              : `${onTheLine}. The conversation appears here when the call ends - the phone system only hands over the transcript afterwards.`}
+          </p>
+        ) : (
+          turns.map((t, i) => (
+            <div key={i} className={`d-flex mb-2 ${t.role === 'user' ? 'justify-content-end' : 'justify-content-start'}`}>
+              <div
+                className={`rounded px-3 py-2 small ${t.role === 'user' ? 'bg-primary text-white' : 'bg-white border'}`}
+                style={{ maxWidth: '78%', whiteSpace: 'pre-wrap' }}
+              >
+                {t.text}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
       <ol className="list-unstyled mb-3 d-flex flex-column gap-2 small">
         <Step done state="done" label={placed?.deduped ? 'Call already placed a moment ago - watching that one' : 'Call placed'} detail={placed?.call_id ? `call ${placed.call_id}` : undefined} />
         <Step
           done={ended}
           state={call?.status === 'failed' ? 'failed' : ended ? 'done' : 'waiting'}
-          label={call?.status === 'failed' ? `Call did not complete${call.end_reason ? ` (${call.end_reason})` : ''}` : ended ? 'Call ended, transcript in' : 'On the phone'}
+          label={call?.status === 'failed' ? `Call did not complete${call.end_reason ? ` (${call.end_reason})` : ''}` : ended ? 'Call ended, conversation in' : onTheLine}
           detail={call?.duration ? `${Math.round(call.duration / 60)} min` : undefined}
         />
         <Step

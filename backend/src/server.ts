@@ -3300,6 +3300,18 @@ async function start(): Promise<void> {
     });
   }
 
+  // AI Flotation calls the completion webhook missed. Every call now carries our webhook
+  // URL, but a delivery we do not control is not a guarantee, and a prospect has no page
+  // polling on their behalf. Reads each `sent` call back from Synthflow and completes it
+  // the way the webhook would. Bounded, idempotent, one failure never stops the sweep.
+  // Not gated on any feature flag: the calls are placed whether or not anything else is on.
+  cron.schedule('*/5 * * * *', () => {
+    import('./services/delivery/flotationCallCompletion')
+      .then(({ reconcileOpenFlotationCalls }) => reconcileOpenFlotationCalls())
+      .then((out) => { if (out.reconciled.length) console.log(`[FlotationCalls] sweep completed ${out.reconciled.length} of ${out.checked} open call(s)`); })
+      .catch((err) => console.warn('[FlotationCalls] sweep failed:', err?.message));
+  });
+
   // Start follow-up email scheduler if enabled
   if (env.enableFollowUpScheduler) {
     startScheduler();
