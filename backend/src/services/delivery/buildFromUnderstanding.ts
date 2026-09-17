@@ -67,9 +67,17 @@ export type BuildFromUnderstandingResult =
     }
   | {
       ok: false;
-      reason: 'not_found' | 'not_extracted' | 'not_confirmed' | 'failed';
+      reason: 'not_found' | 'not_extracted' | 'not_confirmed' | 'too_thin' | 'failed';
       error: string;
     };
+
+/**
+ * Fewer understood items than this and nothing is built. The write-up still stands; the
+ * project does not. On 2026-09-17 a 37-second call - "hello", "I'm an AI", "I just told
+ * you that" - produced a one-item understanding and a published project with nothing in it.
+ * A floor is not a gate: no one has to approve, it just has to be a conversation.
+ */
+export const MIN_ITEMS_TO_BUILD = 3;
 
 export async function startBuildFromUnderstanding(params: {
   recordId: string;
@@ -84,6 +92,14 @@ export async function startBuildFromUnderstanding(params: {
   }
   if (params.requireConfirmed && !record.confirmed_at) {
     return { ok: false, reason: 'not_confirmed', error: 'the customer has not confirmed this understanding' };
+  }
+  const itemCount = Array.isArray(record.items) ? record.items.length : 0;
+  if (itemCount < MIN_ITEMS_TO_BUILD) {
+    return {
+      ok: false,
+      reason: 'too_thin',
+      error: `only ${itemCount} thing${itemCount === 1 ? '' : 's'} could be understood from this conversation - not enough to build from. The write-up is kept; have the conversation again with more in it.`,
+    };
   }
 
   const understanding: ProjectUnderstanding = {

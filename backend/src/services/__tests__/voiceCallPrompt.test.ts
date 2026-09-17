@@ -32,10 +32,14 @@ describe('buildFlotationCallPrompt', () => {
     expect(prompt).toMatch(/Never imply you are a human/);
   });
 
-  it('leads with what they actually wrote', () => {
+  it('leads with what they actually wrote, and treats it as already answered', () => {
+    // This used to say "refer to THIS, not to a generic script. Ask them to walk you
+    // through it." - and on 2026-09-17 the agent did exactly that, against a brief that
+    // had already walked through it. See delivery/__tests__/interviewMethod.test.ts.
     const prompt = buildFlotationCallPrompt(facts);
     expect(prompt).toContain('Dispatchers rebuild the same spreadsheet every morning.');
-    expect(prompt).toMatch(/refer.{0,20}to THIS, not to a generic script/i);
+    expect(prompt).toMatch(/ALREADY ANSWERED/);
+    expect(prompt).toMatch(/Open with ONE sentence that shows you read it/);
   });
 
   it('tells the agent to find out the work when they wrote nothing', () => {

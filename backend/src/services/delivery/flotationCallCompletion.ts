@@ -30,6 +30,7 @@ import { Op } from 'sequelize';
 import { CommunicationLog, Lead } from '../../models';
 import { fetchSynthflowCall, isTerminalCallStatus } from '../synthflowService';
 import { finishIntake, buildTargetFromCall, type IntakeOutcome } from './projectIntake';
+import { conversationWithWrittenBrief } from './interviewMethod';
 
 export const FLOTATION_SOURCE = 'ai-flotation';
 
@@ -87,7 +88,9 @@ export async function completeFlotationCall(input: CallCompletionInput): Promise
 
   const leadRecord: any = commLog.lead_id ? await Lead.findByPk(commLog.lead_id) : null;
   const intake = await finishIntake({
-    conversation: input.transcript,
+    // What they wrote before the call, then what was said. The typed door gets this for
+    // free - the brief is the first turn - and the spoken door must not get less.
+    conversation: conversationWithWrittenBrief(meta.written, input.transcript),
     source: 'voice_transcript',
     sourceRef: input.callId,
     facts: {

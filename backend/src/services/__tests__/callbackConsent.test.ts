@@ -227,10 +227,23 @@ describe('who the call is for travels with the call', () => {
     expect(mockLog.mock.calls[0][0].metadata).toMatchObject({ enrollment_id: ENR, requested_by: 'admin' });
   });
 
+  it('carries what they wrote, so the extractor can see it after the call', async () => {
+    // The agent gets the brief in its prompt; the extractor never sees a prompt. Without
+    // this, a 37-second call about a fully described project extracts one item.
+    await requestInstantCallback({ ...PAYLOAD, message: 'Build an AI Proposal Assistant for Patriot AI Solutions.' }, 'corr-1', { enrollmentId: ENR });
+    expect(mockLog.mock.calls[0][0].metadata.written).toBe('Build an AI Proposal Assistant for Patriot AI Solutions.');
+  });
+
+  it('bounds it, so one paste cannot fill the log row', async () => {
+    await requestInstantCallback({ ...PAYLOAD, message: 'x'.repeat(9000) }, 'corr-1', {});
+    expect(mockLog.mock.calls[0][0].metadata.written).toHaveLength(5000);
+  });
+
   it("a prospect's own call carries neither - nothing to guess from later", async () => {
     await requestInstantCallback(PAYLOAD, 'corr-1');
     const meta = mockLog.mock.calls[0][0].metadata;
     expect(meta).not.toHaveProperty('enrollment_id');
     expect(meta).not.toHaveProperty('requested_by');
+    expect(meta).not.toHaveProperty('written');
   });
 });

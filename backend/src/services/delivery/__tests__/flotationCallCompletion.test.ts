@@ -70,6 +70,21 @@ describe('completeFlotationCall', () => {
     expect(out).toEqual({ handled: true, completed: true, intake: expect.objectContaining({ build: { started: true, project_id: 'proj-1' } }) });
   });
 
+  it('puts what they wrote before the call in front of the transcript', async () => {
+    // THE 2026-09-17 CALL. Ali pasted a 2,300-character brief, the call ran 37 seconds,
+    // and the extractor saw only the 381-character transcript - so a full description
+    // became a one-item understanding. The brief is stamped on the call when it is
+    // placed; here it rejoins the conversation the extractor reads.
+    mockCommFindOne.mockResolvedValue(row({ metadata: { source: 'ai-flotation', written: 'Build an AI Proposal Assistant for Patriot AI Solutions.' } }));
+
+    await completeFlotationCall({ callId: 'call_1', status: 'completed', transcript: TRANSCRIPT });
+
+    const { conversation } = mockFinish.mock.calls[0][0];
+    expect(conversation).toContain('human (written before the call): Build an AI Proposal Assistant for Patriot AI Solutions.');
+    expect(conversation).toContain(TRANSCRIPT);
+    expect(conversation.indexOf('Patriot')).toBeLessThan(conversation.indexOf('Tell me about'));
+  });
+
   it("lands on the student an admin's call was stamped with", async () => {
     mockCommFindOne.mockResolvedValue(row({ metadata: { source: 'ai-flotation', enrollment_id: 'enr-9', requested_by: 'admin' } }));
     await completeFlotationCall({ callId: 'call_1', status: 'completed', transcript: TRANSCRIPT });

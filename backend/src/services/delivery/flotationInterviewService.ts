@@ -36,7 +36,7 @@
  */
 
 import { chatJson } from '../runtime/runtimeAi';
-import { UNDERSTANDING_DIMENSIONS, DIMENSION_LABELS } from './projectUnderstanding';
+import { interviewMethodLines } from './interviewMethod';
 
 export interface InterviewTurn {
   role: 'user' | 'assistant';
@@ -82,21 +82,8 @@ export function buildInterviewPrompt(facts: InterviewFacts, exchanges: number): 
     'You are interviewing someone about a business problem they want software to solve. You are curious and brief, and you are talking, not filling in a form.',
     who,
     '',
-    'WHAT YOU ARE TRYING TO UNDERSTAND, over the whole conversation:',
-    ...UNDERSTANDING_DIMENSIONS.slice(0, 12).map((d) => `  ${DIMENSION_LABELS[d]}`),
-    '',
-    'HOW TO ASK — this matters more than coverage:',
-    '- ONE question at a time. Never stack two questions in a message.',
-    '- Do NOT ask what you can reasonably infer from what they have already said. Infer it, and say what you assumed in passing so they can correct you.',
-    '- Do NOT ask about anything that does not change what gets built. If the answer would not change the work, skip it.',
-    '- Follow what they seem to care about. If they keep returning to one pain, go deeper there rather than completing your list.',
-    '- Short messages. Two or three sentences. No preamble, no "great question", no summarising back at length.',
-    '- Plain language. Never say "requirements", "stakeholders", "leverage" or "solution".',
-    '',
-    'A QUESTION YOU COULD HAVE ANSWERED YOURSELF IS A FAILURE. Walking the list above one item at a time is the single worst thing you can do here — that is the form this is replacing.',
-    '',
-    'WHEN TO STOP:',
-    'Stop when you understand the workflow, who touches it, what hurts, and what "better" looks like. You do not need every topic above.',
+    // The method is shared with the phone interview, word for word - see interviewMethod.ts.
+    ...interviewMethodLines(),
     remaining <= 3
       ? `You have at most ${remaining} exchanges left. Prioritise what is still missing and be ready to close.`
       : '',
