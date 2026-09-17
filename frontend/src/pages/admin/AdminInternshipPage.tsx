@@ -11,6 +11,7 @@ import { InternshipKpi, fetchInternshipKpis } from '../../services/adminInternsh
 import InternshipDocumentPanel from '../../components/admin/internship/InternshipDocumentPanel';
 import InternshipConversionPanel from '../../components/admin/internship/InternshipConversionPanel';
 import InternshipProjectAuthor from './components/InternshipProjectAuthor';
+import InternshipProjectReadiness from './components/InternshipProjectReadiness';
 import FlotationIntakePanel from '../../components/admin/internship/FlotationIntakePanel';
 import StartProjectForStudent from '../../components/admin/internship/StartProjectForStudent';
 
@@ -275,6 +276,10 @@ const AdminInternshipPage: React.FC = () => {
       <StartProjectForStudent />
 
       <FlotationIntakePanel />
+
+      <SectionCard title="Ready for a project" icon="user-star-line" subtitle="Active interns, and who has cleared the first three weeks">
+        <InternshipProjectReadiness onSelect={(id) => setSelected(id)} />
+      </SectionCard>
 
       <SectionCard title="Queue" icon="inbox-2-line">
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>

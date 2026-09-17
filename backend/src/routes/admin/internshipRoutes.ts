@@ -8,6 +8,7 @@ import { assessApplicant } from '../../services/internship/internshipApplicantAs
 import { internActivity } from '../../services/internship/internshipActivityService';
 import { internshipProjectReview } from '../../services/internship/internshipProjectReview';
 import { authorAndAssignInternshipProject } from '../../services/internship/internshipProjectAuthoring';
+import { internshipProjectReadiness } from '../../services/internship/internshipProjectReadiness';
 import { InvalidInternshipTransitionError } from '../../services/internship/internshipStateMachine';
 import { REASON_CODES } from '../../services/internship/internshipReasonCodes';
 import fs from 'fs';
@@ -156,6 +157,27 @@ router.post('/api/admin/internship/applications/:id/project-review', requireSect
       context: { message: err?.message },
     }));
     res.status(500).json({ error: 'Could not review the project.' });
+  }
+});
+
+/**
+ * GET /api/admin/internship/project-readiness
+ * The manager's roster: every active intern with their first-three-weeks gate,
+ * attendance, and whether they already have a project — so "who is ready for a
+ * project" is answerable at a glance.
+ */
+router.get('/api/admin/internship/project-readiness', requireSection('internship'), async (_req: Request, res: Response) => {
+  try {
+    const rows = await internshipProjectReadiness();
+    res.json({ interns: rows });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_project_readiness_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not load project readiness.' });
   }
 });
 

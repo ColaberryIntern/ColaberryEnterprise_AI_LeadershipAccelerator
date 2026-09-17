@@ -228,6 +228,27 @@ export async function reviewInternshipProject(applicationId: string, question?: 
   return data;
 }
 
+// ── Project readiness roster (who's ready for a project) ─────────────────────
+
+export interface ProjectReadinessRow {
+  application_id: string;
+  enrollment_id: string;
+  full_name: string | null;
+  email: string | null;
+  weeks_done: number;
+  weeks_total: number;
+  training_ready: boolean;
+  sessions_attended: number;
+  has_project: boolean;
+  project_name: string | null;
+  ready_for_project: boolean;
+}
+
+export async function fetchInternshipProjectReadiness(): Promise<{ interns: ProjectReadinessRow[] }> {
+  const { data } = await api.get('/api/admin/internship/project-readiness');
+  return data;
+}
+
 // ── Author & assign a project (manager's delivery surface) ───────────────────
 
 export interface AuthoredStoryInput {
