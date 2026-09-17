@@ -79,13 +79,18 @@
 
   /* ---------------------------------------------------------------- cards --- */
 
+  /** A count is shown whole from ten up and to one decimal below ten; the stored value is untouched. */
+  function roundedCount(value) {
+    return Number.isInteger(value) ? value : value >= 10 ? Math.round(value) : Math.round(value * 10) / 10;
+  }
+
   function cardFigure(metric) {
     var p = metric.payload;
     if (p && (p.shape === 'ratio' || p.shape === 'share') && p.denominator > 0) {
       var pct = (p.numerator / p.denominator) * 100;
       return (pct >= 10 || pct === 0 ? Math.round(pct) : Math.round(pct * 10) / 10) + '%';
     }
-    if (p && p.shape === 'count' && metric.unit) return fmt(p.value) + ' ' + metric.unit;
+    if (p && p.shape === 'count' && metric.unit) return fmt(roundedCount(p.value)) + ' ' + metric.unit;
     var first = String(metric.valueDisplay).split(/[,;(]/)[0].trim();
     return first || metric.valueDisplay;
   }

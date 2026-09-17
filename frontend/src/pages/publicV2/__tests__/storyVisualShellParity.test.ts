@@ -89,6 +89,8 @@ const metrics: PublicCaseStudyMetric[] = [
   metric({ label: 'Time to recovery', valueDisplay: 'median 34 minutes, p90 47 minutes', payload: { shape: 'span', startDate: '2026-04-27', endDate: '2026-04-29' } }),
   metric({ label: 'Small share', valueDisplay: '3.2% of calls', payload: { shape: 'share', numerator: 11, denominator: 339 } as PublicCaseStudyMetric['payload'] }),
   metric({ label: 'Decision records', valueDisplay: '14 decision records', unit: 'records', payload: { shape: 'count', value: 1400 } as PublicCaseStudyMetric['payload'] }),
+  metric({ label: 'Wait', valueDisplay: 'median 34 minutes, p90 47 minutes', unit: 'minutes', payload: { shape: 'count', value: 34.2 } as PublicCaseStudyMetric['payload'] }),
+  metric({ label: 'Small wait', valueDisplay: '4.25 minutes', unit: 'minutes', payload: { shape: 'count', value: 4.25 } as PublicCaseStudyMetric['payload'] }),
 ];
 
 const charts: PublicCaseStudyVisualChart[] = [
@@ -151,7 +153,7 @@ describe('the shell port draws what the page draws', () => {
     }
     expect(JSON.parse(JSON.stringify(shell.outcomeCardsFor(story)))).toEqual(JSON.parse(JSON.stringify(outcomeCardsFor(story))));
     // The values themselves, so a shared mistake cannot pass as agreement.
-    expect(metrics.map((m) => cardFigure(m))).toEqual(['97%', '96%', '0 records', 'median 34 minutes', '3.2%', '1,400 records']);
+    expect(metrics.map((m) => cardFigure(m))).toEqual(['97%', '96%', '0 records', 'median 34 minutes', '3.2%', '1,400 records', '34 minutes', '4.3 minutes']);
   });
 
   it('resolves the same chart rows, percents, summaries and notes, and drops the empty chart', () => {
