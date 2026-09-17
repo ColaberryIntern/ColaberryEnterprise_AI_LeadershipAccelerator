@@ -357,6 +357,49 @@ export async function fetchInternshipDashboard(): Promise<InternDashboard> {
   return data;
 }
 
+// ── Project portfolio ────────────────────────────────────────────────────────
+
+export interface ProjectReadinessComponent { key: string; label: string; score: number; weight: number; gap?: string }
+export interface ProjectReadiness { score: number; ready: boolean; components: ProjectReadinessComponent[]; gaps: string[] }
+
+export interface InternProjectStories {
+  total: number;
+  /** Self-reported completion — the readiness denominator. A claim, not a check. */
+  self_reported_complete: number;
+  /** Platform-confirmed (verified_at). Shown alongside, never swapped in. */
+  verified: number;
+  awaiting_verification: number;
+}
+
+export interface InternProject {
+  project_id: string;
+  name: string | null;
+  role: 'active' | 'owned' | 'archived';
+  stage: string;
+  has_repo: boolean;
+  repo_url: string | null;
+  command_center_url: string | null;
+  readiness: ProjectReadiness;
+  stories: InternProjectStories;
+  artifacts: number;
+  already_case_study: boolean;
+  risk_state: string;
+  risk_reason: string;
+}
+
+export interface InternProjectPortfolio {
+  state: string;
+  enrollment_id: string;
+  projects: InternProject[];
+  active_count: number;
+  has_live_project: boolean;
+}
+
+export async function fetchInternshipProjects(): Promise<InternProjectPortfolio> {
+  const { data } = await portalApi.get<InternProjectPortfolio>('/api/portal/internship/projects');
+  return data;
+}
+
 /**
  * Record a tool-readiness acknowledgement.
  *
