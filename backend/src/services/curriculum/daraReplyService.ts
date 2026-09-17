@@ -37,6 +37,38 @@ async function getOpenAI(): Promise<OpenAI> {
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
 const HISTORY_LIMIT = 20;
 
+// Real production incident (2026-09-17, Ali live-testing): a real completion
+// call failed with "404 status code (no body)" — the shape of a transient
+// network/edge blip, not a deterministic bug (the prior call, same model,
+// same client, 21 seconds earlier, succeeded). One bounded retry (never
+// unbounded, per root CLAUDE.md's Stall Detection) turns a good fraction of
+// these into a real answer instead of silence.
+const COMPLETION_RETRY_DELAY_MS = 800;
+
+async function createCompletionWithRetry(
+  openai: OpenAI,
+  params: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+): Promise<OpenAI.Chat.ChatCompletion> {
+  try {
+    return await openai.chat.completions.create(params);
+  } catch (e: any) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'dara', event: 'completion_failed_retrying',
+      error_class: e?.name || 'Error', message: String(e?.message || e),
+    }));
+    await new Promise((resolve) => setTimeout(resolve, COMPLETION_RETRY_DELAY_MS));
+    return openai.chat.completions.create(params);
+  }
+}
+
+// The one honest, deterministic (never LLM-generated — if the LLM itself is
+// what's failing, it can't be asked to produce this) fallback the student
+// ever sees. "Never off-ledger" for a reply pipeline means never leaving a
+// student with pure silence after a real failure, the same way it means
+// never skipping a handoff ticket.
+const REPLY_FAILURE_FALLBACK_MESSAGE =
+  "Sorry — I ran into a technical issue and couldn't process that. Please try asking again in a moment.";
+
 /**
  * Attachment refs persisted on a message by postMessage. Defensive about the
  * shape because `metadata` is a free-form JSONB column — a malformed entry is
@@ -133,7 +165,7 @@ export async function maybeTriggerDaraReply(roomId: string, senderEnrollmentId: 
 
     const openai = await getOpenAI();
     const completionModel = attach.parts.length ? (process.env.DARA_VISION_MODEL || 'gpt-4o') : MODEL;
-    let completion = await openai.chat.completions.create({
+    let completion = await createCompletionWithRetry(openai, {
       model: completionModel,
       messages: chatMessages,
       temperature: 0.7,
@@ -162,7 +194,7 @@ export async function maybeTriggerDaraReply(roomId: string, senderEnrollmentId: 
         });
         chatMessages.push({ role: 'tool', tool_call_id: call.id, content: result });
       }
-      completion = await openai.chat.completions.create({
+      completion = await createCompletionWithRetry(openai, {
         model: completionModel,
         messages: chatMessages,
         temperature: 0.7,
@@ -213,6 +245,29 @@ export async function maybeTriggerDaraReply(roomId: string, senderEnrollmentId: 
         reason: String(e?.message || e),
         details: { room_id: roomId },
       });
+    }
+
+    // Real incident, 2026-09-17: a caught failure here used to leave the
+    // student staring at pure silence forever (no error, no fallback —
+    // sendDmMessage's own HTTP response already looked like a clean success
+    // by the time this ran). Best-effort, deterministic, never LLM-generated
+    // — if the LLM is what just failed, it can't be trusted to produce this.
+    // Its own send re-triggers maybeTriggerDaraReply recursively, same as
+    // every real reply; the loop guard at the top of this function (sender
+    // === Dara's own id) makes that a structural no-op, not a real risk.
+    try {
+      const daraEnrollmentId = await getDaraEnrollmentId();
+      if (daraEnrollmentId) {
+        const { sendDmMessage } = await import('../communityRooms/dmService');
+        await sendDmMessage(
+          { enrollmentId: daraEnrollmentId, cohortId: null, isAdmin: false }, roomId, REPLY_FAILURE_FALLBACK_MESSAGE,
+        );
+      }
+    } catch (fallbackError: any) {
+      console.warn(JSON.stringify({
+        level: 'warn', service: 'dara', event: 'reply_failure_fallback_also_failed',
+        room_id: roomId, error_class: fallbackError?.name || 'Error', message: String(fallbackError?.message || fallbackError),
+      }));
     }
   }
 }
