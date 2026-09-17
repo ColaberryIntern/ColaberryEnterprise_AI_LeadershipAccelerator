@@ -443,6 +443,35 @@ export async function fetchInternshipFeedback(): Promise<InternshipFeedbackView>
   return data;
 }
 
+// ── Certification (headline: practice readiness + official claim, kept separate) ──
+
+export interface InternCertReadiness {
+  state: string;
+  /** Colaberry estimate (100-1000), NOT an Anthropic exam score. */
+  overall_scaled: number | null;
+  knowledge_scaled: number | null;
+  evidence_coverage_pct: number | null;
+  /** When false, the estimate is a coverage figure, not exam-weighted. */
+  weights_available: boolean;
+  computed_at: string | null;
+}
+export interface InternOfficialCert {
+  status: 'none' | 'pending' | 'approved' | 'rejected';
+  passed_on: string | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+}
+export interface InternshipCertificationView {
+  state: string;
+  readiness: InternCertReadiness;
+  official: InternOfficialCert;
+}
+
+export async function fetchInternshipCertification(): Promise<InternshipCertificationView> {
+  const { data } = await portalApi.get<InternshipCertificationView>('/api/portal/internship/certification');
+  return data;
+}
+
 /**
  * Record a tool-readiness acknowledgement.
  *

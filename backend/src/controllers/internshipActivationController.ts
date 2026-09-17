@@ -11,6 +11,7 @@ import { recordMeetingJoin } from '../services/internship/internshipAttendanceSe
 import { internDashboard } from '../services/internship/internshipStudentDashboard';
 import { internProjectPortfolio } from '../services/internship/internshipProjectPortfolio';
 import { listReleasedFeedback } from '../services/mentorFeedbackService';
+import { internCertification } from '../services/internship/internshipCertification';
 
 /**
  * Participant activation endpoints: the onboarding checklist and the tool
@@ -137,6 +138,24 @@ export async function handleGetInternshipFeedback(req: Request, res: Response): 
     res.json({ state: ctx.application.state, feedback });
   } catch (err) {
     fail(res, err, 'internship_feedback_failed');
+  }
+}
+
+/**
+ * GET /api/portal/internship/certification
+ *
+ * The intern's certification headline: practice readiness (a Colaberry estimate)
+ * and the official certificate claim, kept separate. Scoped to the caller's
+ * enrollment; a read, never a mutation.
+ */
+export async function handleGetInternshipCertification(req: Request, res: Response): Promise<void> {
+  try {
+    const ctx = await requireOpenApplication(req, res);
+    if (!ctx) return;
+    const certification = await internCertification(ctx.enrollmentId);
+    res.json({ state: ctx.application.state, ...certification });
+  } catch (err) {
+    fail(res, err, 'internship_certification_failed');
   }
 }
 
