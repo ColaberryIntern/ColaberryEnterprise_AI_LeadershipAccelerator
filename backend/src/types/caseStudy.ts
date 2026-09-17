@@ -686,6 +686,13 @@ export interface CaseStudySnapshotContent {
   /** Decisions that made the difference, canonical for every surface. Absent or empty means no cards. */
   readonly decisions?: readonly CaseStudyDecision[];
   /**
+   * The closing paragraph: what the work shows, in one short paragraph after
+   * the evidence and before the related records. Canonical for every surface;
+   * absent means the page ends on its last band, as before. Same claim
+   * discipline as the standfirst: every statement in it must be on the record.
+   */
+  readonly closing?: string;
+  /**
    * Per-surface narrative variants, keyed by publishable surface. A variant is
    * applied by the public projection for THAT surface only, on top of the
    * canonical content, so one record can address a learner audience on
@@ -736,7 +743,14 @@ export interface CaseStudyBuilderProfile {
   };
 }
 
-/** One decision card: the problem, the decision, the evidence, the consequence, in ordinary language. */
+/**
+ * One decision card: the problem, the decision, the evidence, the consequence,
+ * in ordinary language. `stage` pins the card to the step of the workflow
+ * illustration where the decision lives ("02 Detect"), so a reader can find it
+ * in the drawing; `figure` is the one number or date the card closes on, with
+ * the consequence as its caption. Both optional: a card without them reads as
+ * four labelled parts.
+ */
 export interface CaseStudyDecision {
   readonly key: string;
   readonly title: string;
@@ -746,6 +760,10 @@ export interface CaseStudyDecision {
   readonly consequence: string;
   /** Optional: the evidence row the card leans on. */
   readonly evidenceId?: string;
+  /** Optional: the workflow step the decision lives at, as a short label. */
+  readonly stage?: string;
+  /** Optional: the figure the card closes on, as displayed ("28 Apr", "0", "97%"). */
+  readonly figure?: string;
 }
 
 /**
@@ -767,6 +785,7 @@ export interface CaseStudySurfaceVariant {
   readonly contributors?: readonly CaseStudyContributor[];
   readonly builder?: CaseStudyBuilderProfile;
   readonly decisions?: readonly CaseStudyDecision[];
+  readonly closing?: string;
 }
 
 /* ──────────────────────────────────────────────── the visual story ──────── */

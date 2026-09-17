@@ -116,6 +116,7 @@ const detail = (artifacts: readonly PublicCaseStudyArtifact[]): PublicCaseStudyD
   visualStory: null,
   builder: null,
   decisions: [],
+  closing: null,
   situation: null,
   timeline: [],
   architecture: architecture(),

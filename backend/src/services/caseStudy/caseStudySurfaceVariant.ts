@@ -27,7 +27,8 @@ import { arr, safeHttpUrl, text } from './caseStudyPublicSections';
  *
  * WHAT A VARIANT MAY CHANGE, AND WHAT IT MAY NOT. Words: the standfirst, the
  * situation, the measurement narrative, a metric's notes, the contributor
- * list, the builder profile and the decision cards. Never a figure: a metric's
+ * list, the builder profile, the decision cards and the closing paragraph.
+ * Never a figure: a metric's
  * `valueDisplay` and `payload` are not in the variant type, so the numbers a
  * reader sees are the same on every surface and the publish gate's rules on
  * them still hold. The claim scan reads every variant string.
@@ -49,6 +50,8 @@ export interface ResolvedSurfaceContent {
   readonly standfirst: string | null;
   readonly builder: CaseStudyBuilderProfile | null;
   readonly decisions: readonly CaseStudyDecision[];
+  /** The closing paragraph, the variant's or the canonical one. */
+  readonly closing: string | null;
 }
 
 function variantFor(content: CaseStudySnapshotContent, surfaceKey: CaseStudySurfaceKey): CaseStudySurfaceVariant | null {
@@ -81,7 +84,8 @@ export function resolveSurfaceContent(
   const v = variantFor(content, surfaceKey);
   const canonicalBuilder = content?.builder ?? null;
   const canonicalDecisions = arr<CaseStudyDecision>(content?.decisions);
-  if (!v) return { content, standfirst: null, builder: canonicalBuilder, decisions: canonicalDecisions };
+  const canonicalClosing = text(content?.closing) || null;
+  if (!v) return { content, standfirst: null, builder: canonicalBuilder, decisions: canonicalDecisions, closing: canonicalClosing };
   const measurement = content.measurement
     ? {
       ...content.measurement,
@@ -101,6 +105,7 @@ export function resolveSurfaceContent(
     standfirst: text(v.standfirst) || null,
     builder: v.builder ?? canonicalBuilder,
     decisions: v.decisions ? arr<CaseStudyDecision>(v.decisions) : canonicalDecisions,
+    closing: text(v.closing) || canonicalClosing,
   };
 }
 
@@ -143,7 +148,11 @@ export function projectBuilder(
   };
 }
 
-/** Decision cards for the wire; a card missing any of its four parts is not drawn. */
+/**
+ * Decision cards for the wire; a card missing any of its four parts is not
+ * drawn. The stage pin and the closing figure are optional and cross as null
+ * when absent.
+ */
 export function projectDecisions(decisions: readonly CaseStudyDecision[]): PublicCaseStudyDecision[] {
   const out: PublicCaseStudyDecision[] = [];
   for (const d of decisions) {
@@ -152,7 +161,9 @@ export function projectDecisions(decisions: readonly CaseStudyDecision[]): Publi
       key: text(d.key), title: text(d.title), problem: text(d.problem),
       decision: text(d.decision), evidence: text(d.evidence), consequence: text(d.consequence),
     };
-    if (Object.values(card).every(Boolean)) out.push(card);
+    if (Object.values(card).every(Boolean)) {
+      out.push({ ...card, stage: text(d.stage) || null, figure: text(d.figure) || null });
+    }
   }
   return out;
 }

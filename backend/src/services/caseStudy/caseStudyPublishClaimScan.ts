@@ -208,10 +208,13 @@ export function collectNarrative(content: CaseStudySnapshotContent): readonly Te
       push(`${prefix}[${i}].decision`, 'a decision card', d?.decision);
       push(`${prefix}[${i}].evidence`, 'a decision card evidence line', d?.evidence);
       push(`${prefix}[${i}].consequence`, 'a decision card', d?.consequence);
+      push(`${prefix}[${i}].stage`, 'a decision card stage pin', d?.stage);
+      push(`${prefix}[${i}].figure`, 'a decision card figure', d?.figure);
     });
   };
   builderText('builder', (content as any)?.builder);
   decisionText('decisions', (content as any)?.decisions);
+  push('closing', 'the closing paragraph', (content as any)?.closing);
   const variants = (content as any)?.surfaceVariants;
   if (variants && typeof variants === 'object') {
     for (const [surface, v] of Object.entries(variants as Record<string, any>)) {
@@ -231,6 +234,7 @@ export function collectNarrative(content: CaseStudySnapshotContent): readonly Te
       arr(v.contributors).forEach((c: any, i: number) => push(`${vp}.contributors[${i}].role`, 'a contributor role', c?.role));
       builderText(`${vp}.builder`, v.builder);
       decisionText(`${vp}.decisions`, v.decisions);
+      push(`${vp}.closing`, 'the closing paragraph', v.closing);
     }
   }
 

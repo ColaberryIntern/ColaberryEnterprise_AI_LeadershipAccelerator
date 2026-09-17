@@ -453,6 +453,10 @@ export interface PublicCaseStudyDecision {
   readonly decision: string;
   readonly evidence: string;
   readonly consequence: string;
+  /** The workflow step the decision lives at ("02 Detect"), or null. */
+  readonly stage: string | null;
+  /** The figure the card closes on, as displayed, or null; the consequence is its caption. */
+  readonly figure: string | null;
 }
 
 export interface PublicCaseStudyVisualStory {
@@ -555,6 +559,8 @@ export interface PublicCaseStudyDetail {
   readonly builder: PublicCaseStudyBuilder | null;
   /** Decisions that made the difference; empty means no cards. */
   readonly decisions: readonly PublicCaseStudyDecision[];
+  /** The closing paragraph, or null when the record has none for this surface. */
+  readonly closing: string | null;
   readonly situation: PublicCaseStudySituation | null;
   readonly timeline: readonly PublicCaseStudyTimelineEntry[];
   readonly architecture: PublicCaseStudyArchitecture | null;

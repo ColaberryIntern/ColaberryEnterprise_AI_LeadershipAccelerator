@@ -402,6 +402,7 @@ export function projectionFixture(
   visualStory: null,
   builder: null,
   decisions: [],
+  closing: null,
     situation: {
       heading: 'The situation',
       body: ['Adjusters were triaging by hand.'],

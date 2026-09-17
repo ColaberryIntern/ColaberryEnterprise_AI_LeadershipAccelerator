@@ -86,6 +86,7 @@ const detail = (over: Partial<PublicCaseStudyDetail> = {}): PublicCaseStudyDetai
   visualStory: null,
   builder: null,
   decisions: [],
+  closing: null,
   situation: null,
   timeline: [],
   architecture: architecture(),

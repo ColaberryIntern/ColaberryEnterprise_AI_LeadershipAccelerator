@@ -122,6 +122,7 @@ const detail = (over: Partial<PublicCaseStudyDetail> = {}): PublicCaseStudyDetai
   visualStory: null,
   builder: null,
   decisions: [],
+  closing: null,
   situation: {
     heading: 'The situation',
     body: ['Planners rebuilt the same route by hand every morning.'],

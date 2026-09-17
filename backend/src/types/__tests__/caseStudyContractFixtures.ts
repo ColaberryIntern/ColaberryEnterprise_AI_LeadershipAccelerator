@@ -82,6 +82,7 @@ export const DETAIL_FIXTURE: PublicCaseStudyDetail = {
   // The ordinary record carries no builder card and no decision cards either.
   builder: null,
   decisions: [],
+  closing: null,
   situation: {
     heading: 'The situation',
     body: ['Replenishment planners were reconciling three systems by hand.'],
