@@ -51,8 +51,8 @@ export interface NightlyBrandSummary {
   skipped: number;
   errors: number;
   handoffs: RunShadowDecisionsResult['handoffs'];
-  /** The nightly assignment pass over the brand's queues: rows offered, rows assigned. */
-  assignment: { offered: number; assigned: number } | null;
+  /** The nightly assignment pass over the brand's queues: rows offered, rows assigned - or its own failure, the decisions above untouched. */
+  assignment: { offered: number; assigned: number } | { failed: true; error_class: string } | null;
   error_class?: string;
 }
 
@@ -98,6 +98,16 @@ async function assignmentPass(brandId: string, flags: GrowthJourneyFlags, asOf: 
   return { offered, assigned };
 }
 
+async function guardedAssignmentPass(base: { brand_id: string; program_slug: string }, flags: GrowthJourneyFlags, asOf: Date): Promise<NightlyBrandSummary['assignment']> {
+  try {
+    return await assignmentPass(base.brand_id, flags, asOf);
+  } catch (err: unknown) {
+    const error_class = classifyError(err);
+    log('growth_journey.nightly.assignment_failed', { brand_id: base.brand_id, program_slug: base.program_slug, error_class });
+    return { failed: true, error_class };
+  }
+}
+
 export async function runScheduledShadowDecisions(options: RunScheduledShadowDecisionsOptions = {}): Promise<NightlyResult> {
   const flags = options.flags ?? env.growthJourney;
   if (!isGrowthJourneyCapabilityEnabled('journeyDecisions', flags)) {
@@ -115,7 +125,9 @@ export async function runScheduledShadowDecisions(options: RunScheduledShadowDec
     const base = { brand_id: String(program.brand_id), program_slug: String(program.slug), program_status: String(program.status) };
     try {
       const r = await runShadowDecisions({ brandId: base.brand_id, trigger: 'nightly', flags, asOf, limit: options.limit });
-      const assignment = r.status === 'ran' && isGrowthJourneyCapabilityEnabled('journeyHandoffs', flags) ? await assignmentPass(base.brand_id, flags, asOf) : null;
+      // The pass has its own failure domain: the decisions above are on disk whatever happens
+      // to the queues, and the summary says so instead of zeroing the brand (the T408 verifier).
+      const assignment = r.status === 'ran' && isGrowthJourneyCapabilityEnabled('journeyHandoffs', flags) ? await guardedAssignmentPass(base, flags, asOf) : null;
       per_brand.push({
         ...base,
         status: r.status,

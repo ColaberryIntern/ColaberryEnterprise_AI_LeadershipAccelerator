@@ -122,6 +122,19 @@ describe('the assignment pass', () => {
     expect(r.per_brand[2].assignment).toEqual({ offered: 2, assigned: 1 });
   });
 
+  it('a pass that THROWS is its own failure: the brand keeps its decision counts and status ran, the pass is recorded failed with its class, the next brand runs', async () => {
+    m.assignRankedQueue.mockImplementation(async ({ brandId }: { brandId: string }) => {
+      if (brandId === 'b-ent') throw new Error('policy read failed');
+      return [];
+    });
+    const r = await runScheduledShadowDecisions({ flags: flags({ journeyHandoffs: true }), asOf: AS_OF });
+    if (r.skipped) throw new Error('skipped');
+    expect(r).toMatchObject({ brands: 4, ran: 4, failed: 0, recorded: 8 });
+    expect(r.per_brand[2]).toMatchObject({ brand_id: 'b-ent', status: 'ran', recorded: 2, subjects: 3, assignment: { failed: true, error_class: expect.any(String) } });
+    expect(r.per_brand[3].assignment).toEqual({ offered: 0, assigned: 0 });
+    expect(logged().some((l) => l.includes('growth_journey.nightly.assignment_failed') && l.includes('b-ent'))).toBe(true);
+  });
+
   it('the pass runs AFTER the brand\'s decisions, never before', async () => {
     const order: string[] = [];
     m.runShadowDecisions.mockImplementation(async ({ brandId }: { brandId: string }) => { order.push(`decide:${brandId}`); return ran(); });

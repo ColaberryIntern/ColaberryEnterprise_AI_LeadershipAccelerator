@@ -1843,6 +1843,7 @@ export function startScheduler(): void {
       console.error('[Scheduler] GrowthJourneyShadowDecisions failed:', err);
     });
   });
+
   // Reliability alerting (Trust Center P1-5): rolling 15-min ai_events error-rate
   // check, alerts ali@colaberry.com on breach (2h in-memory cooldown, see
   // reliabilityAlertingService.ts). Cadence matches the check's own window.
