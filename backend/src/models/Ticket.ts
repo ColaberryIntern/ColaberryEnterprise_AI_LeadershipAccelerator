@@ -30,7 +30,15 @@ export type TicketType = 'task' | 'bug' | 'feature' | 'curriculum' | 'agent_acti
   // links to. See managerReliabilityIntentService.ts's
   // applyConfirmedReliabilityChange(). Distinct from every other type so
   // reliability-incident history stays queryable on its own.
-  | 'data_reliability_incident';
+  | 'data_reliability_incident'
+  // Dara v2 (Curriculum AI Employee) Phase 3 (2026-09-17) — a real student DM
+  // conversation with Dara, ProofDesk-linked. Mirrors 'student_support'
+  // exactly in shape but kept as its own type deliberately: 'student_support'
+  // is Reese's own reactive-mentoring conversation type, and reusing it for a
+  // different AI employee's DMs would conflate two distinct relationships in
+  // any filter/dedup/evidence query keyed on type. See
+  // backend/src/services/curriculum/daraTicketLinkService.ts.
+  | 'curriculum_support';
 export type TicketActorType = 'human' | 'cory' | 'agent'
   // Reese Phase 1 — a real AI staff-mentor identity, distinct from generic
   // autonomous background agents ('agent') so ticket activity attributed to Reese

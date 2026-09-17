@@ -20,6 +20,9 @@ const GRANTS: Record<AgentKey, readonly AgentToolName[]> = {
   // Reese reads what a student attaches to a DM, so an outreach conversation
   // can be about the thing they actually sent.
   reese: ['read_attachments'],
+  // Dara v2 Phase 3 — a student can attach a screenshot (e.g. a broken quiz
+  // page, a confusing lesson diagram) to a curriculum-support DM.
+  dara: ['read_attachments'],
 };
 
 /** Tools disabled globally by the env kill switch (comma-separated names). */

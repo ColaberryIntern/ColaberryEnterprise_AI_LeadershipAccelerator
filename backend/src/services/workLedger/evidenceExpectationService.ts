@@ -147,6 +147,11 @@ const TYPE_DEFAULTS: Record<TicketType, TicketEvidenceExpectations> = {
   // classified the same way as company_directive/workforce_decision:
   // a governance decision, no visual or multi-step-workflow dimension.
   data_reliability_incident: { visualProof: NOT_APPLICABLE, workGraph: NOT_APPLICABLE, decisions: EXPECTED },
+
+  // Dara v2 Phase 3 — conversational curriculum support, mirrors
+  // 'student_support' exactly: no decision-recording, work-graph, or
+  // screenshot pipeline connected today.
+  curriculum_support: { visualProof: NOT_APPLICABLE, workGraph: NOT_APPLICABLE, decisions: NOT_APPLICABLE },
 };
 
 /**

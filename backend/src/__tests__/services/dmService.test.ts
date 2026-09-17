@@ -17,6 +17,9 @@ jest.mock('../../services/reese/reeseIdentitySeed', () => ({ getReeseEnrollmentI
 // import never pulls in the real model-association graph (reeseSystemPrompt ->
 // learnerContextService -> models/index.ts) into this mocked test environment.
 jest.mock('../../services/reese/reeseReplyService', () => ({ maybeTriggerReeseReply: jest.fn() }));
+// Dara v2 Phase 3 — same reasoning, same pattern, for Dara's own hooks.
+jest.mock('../../services/curriculum/daraIdentitySeed', () => ({ getDaraEnrollmentId: jest.fn() }));
+jest.mock('../../services/curriculum/daraReplyService', () => ({ maybeTriggerDaraReply: jest.fn() }));
 // sendDmMessage() dynamically imports communityNotificationService the same
 // way it dynamically imports reeseReplyService above — mock the whole module
 // so this file only asserts dmService.ts calls it correctly (its own
@@ -33,6 +36,8 @@ import { postMessage, listMessages } from '../../services/communityRooms/roomMes
 import { isStaffOrMgmt } from '../../services/access/staffAccess';
 import { getReeseEnrollmentId } from '../../services/reese/reeseIdentitySeed';
 import { maybeTriggerReeseReply } from '../../services/reese/reeseReplyService';
+import { getDaraEnrollmentId } from '../../services/curriculum/daraIdentitySeed';
+import { maybeTriggerDaraReply } from '../../services/curriculum/daraReplyService';
 
 const findOrCreateRoom = CommunityRoom.findOrCreate as jest.Mock;
 const findByPkRoom = CommunityRoom.findByPk as jest.Mock;
@@ -48,11 +53,14 @@ const listMock = listMessages as jest.Mock;
 const isStaffOrMgmtMock = isStaffOrMgmt as jest.Mock;
 const getReeseEnrollmentIdMock = getReeseEnrollmentId as jest.Mock;
 const maybeTriggerReeseReplyMock = maybeTriggerReeseReply as jest.Mock;
+const getDaraEnrollmentIdMock = getDaraEnrollmentId as jest.Mock;
+const maybeTriggerDaraReplyMock = maybeTriggerDaraReply as jest.Mock;
 const createNotificationMock = createNotification as jest.Mock;
 
 const me = '11111111-1111-1111-1111-111111111111';
 const other = '22222222-2222-2222-2222-222222222222';
 const reese = '99999999-9999-9999-9999-999999999999';
+const dara = '88888888-8888-8888-8888-888888888888';
 const cohort = 'cohort-1';
 const ctx = { enrollmentId: me, cohortId: cohort, isAdmin: false };
 const [a, b] = [me, other].sort();
@@ -67,11 +75,15 @@ beforeEach(() => {
   // existing (pre-Reese) tests exercise the SAME rejection path they always did
   // — the bypass only activates when `me`/`otherId` literally equals it.
   getReeseEnrollmentIdMock.mockResolvedValue(reese);
-  // No Reese membership by default — sendDmMessage's reply-trigger hook
-  // (reeseReplyService.maybeTriggerReeseReply) no-ops cleanly in every
-  // pre-existing test that isn't specifically testing Reese reply behavior.
+  // Same for Dara's own id — distinct from every other test identity by
+  // default, same reasoning as Reese's above.
+  getDaraEnrollmentIdMock.mockResolvedValue(dara);
+  // No Reese/Dara membership by default — sendDmMessage's reply-trigger hooks
+  // no-op cleanly in every pre-existing test that isn't specifically testing
+  // Reese/Dara reply behavior.
   findOneMember.mockResolvedValue(null);
   maybeTriggerReeseReplyMock.mockResolvedValue(undefined);
+  maybeTriggerDaraReplyMock.mockResolvedValue(undefined);
   // Default DM-recipient-notification lookup: "other" is the sole other room
   // member, matching openDm's real 2-person room shape. Tests in the "inbox"
   // describe block override this with their own mockImplementation.
@@ -169,14 +181,52 @@ describe('Reese Phase 1 — assertSameCohort identity-keyed bypass (T008)', () =
   });
 });
 
+describe('Dara v2 Phase 3 — assertSameCohort identity-keyed bypass', () => {
+  it('happy path: a non-staff student in one cohort can DM Dara, who has no cohort of their own', async () => {
+    findByPkEnroll.mockResolvedValue({ id: dara, cohort_id: null });
+    isStaffOrMgmtMock.mockResolvedValue(false);
+    const r = await openDm(me, dara, cohort);
+    expect(r).toEqual({ roomId: 'room-1' });
+  });
+
+  it('happy path: Dara (as the DM opener) can reach a student in any cohort', async () => {
+    findByPkEnroll.mockResolvedValue({ id: other, cohort_id: 'SOME-OTHER-COHORT' });
+    isStaffOrMgmtMock.mockResolvedValue(false);
+    const r = await openDm(dara, other, null);
+    expect(r).toEqual({ roomId: 'room-1' });
+  });
+
+  it('regression/boundary: two ordinary students (neither Dara, neither staff) in different cohorts are still blocked — the bypass never widens beyond Dara\'s specific id', async () => {
+    findByPkEnroll.mockResolvedValue({ id: other, cohort_id: 'OTHER-COHORT' });
+    isStaffOrMgmtMock.mockResolvedValue(false);
+    await expect(openDm(me, other, cohort)).rejects.toMatchObject({ name: 'DmError' });
+    expect(findOrCreateRoom).not.toHaveBeenCalled();
+  });
+
+  it('boundary: still rejects a cross-cohort DM even if the Dara-id lookup itself fails/returns null (fail-closed, not fail-open)', async () => {
+    getDaraEnrollmentIdMock.mockResolvedValue(null);
+    findByPkEnroll.mockResolvedValue({ id: other, cohort_id: 'OTHER-COHORT' });
+    isStaffOrMgmtMock.mockResolvedValue(false);
+    await expect(openDm(me, other, cohort)).rejects.toMatchObject({ name: 'DmError' });
+  });
+
+  it('boundary: still rejects (as a clean DmError, not an unhandled crash) even if the Dara-id lookup THROWS', async () => {
+    getDaraEnrollmentIdMock.mockRejectedValue(new Error('db connection reset'));
+    findByPkEnroll.mockResolvedValue({ id: other, cohort_id: 'OTHER-COHORT' });
+    isStaffOrMgmtMock.mockResolvedValue(false);
+    await expect(openDm(me, other, cohort)).rejects.toMatchObject({ name: 'DmError' });
+  });
+});
+
 describe('send / list guards', () => {
-  it('sendDmMessage delegates to postMessage for a dm room, then invokes the Reese reply-trigger hook', async () => {
+  it('sendDmMessage delegates to postMessage for a dm room, then invokes both the Reese and Dara reply-trigger hooks', async () => {
     findByPkRoom.mockResolvedValue({ id: 'room-1', room_type: 'dm' });
     postMock.mockResolvedValue({ id: 'm1', content: 'hi' });
     const m = await sendDmMessage(ctx, 'room-1', 'hi');
     expect(m).toEqual({ id: 'm1', content: 'hi' });
     expect(postMock).toHaveBeenCalledWith(ctx, 'room-1', { content: 'hi' });
     expect(maybeTriggerReeseReplyMock).toHaveBeenCalledWith('room-1', ctx.enrollmentId);
+    expect(maybeTriggerDaraReplyMock).toHaveBeenCalledWith('room-1', ctx.enrollmentId);
   });
 
   it('sendDmMessage still returns the posted message even if the Reese reply-trigger hook rejects (belt-and-suspenders — never breaks the sender\'s own request)', async () => {
@@ -186,6 +236,15 @@ describe('send / list guards', () => {
     // future edit removes reeseReplyService.ts's internal try/catch) — the
     // call site's own try/catch must still protect the sender's message.
     maybeTriggerReeseReplyMock.mockRejectedValue(new Error('reply generation blew up'));
+
+    const m = await sendDmMessage(ctx, 'room-1', 'hi');
+    expect(m).toEqual({ id: 'm1', content: 'hi' });
+  });
+
+  it('sendDmMessage still returns the posted message even if the Dara reply-trigger hook rejects (same belt-and-suspenders posture)', async () => {
+    findByPkRoom.mockResolvedValue({ id: 'room-1', room_type: 'dm' });
+    postMock.mockResolvedValue({ id: 'm1', content: 'hi' });
+    maybeTriggerDaraReplyMock.mockRejectedValue(new Error('reply generation blew up'));
 
     const m = await sendDmMessage(ctx, 'room-1', 'hi');
     expect(m).toEqual({ id: 'm1', content: 'hi' });
@@ -214,6 +273,17 @@ describe('send / list guards', () => {
       postMock.mockResolvedValue({ id: 'm1', content: 'hi' });
       findAllMember.mockResolvedValue([{ enrollment_id: reese }]);
       getReeseEnrollmentIdMock.mockResolvedValue(reese);
+
+      await sendDmMessage(ctx, 'room-1', 'hi');
+
+      expect(createNotificationMock).not.toHaveBeenCalled();
+    });
+
+    it('boundary: sending a DM where the other participant is Dara creates zero notifications', async () => {
+      findByPkRoom.mockResolvedValue({ id: 'room-1', room_type: 'dm' });
+      postMock.mockResolvedValue({ id: 'm1', content: 'hi' });
+      findAllMember.mockResolvedValue([{ enrollment_id: dara }]);
+      getDaraEnrollmentIdMock.mockResolvedValue(dara);
 
       await sendDmMessage(ctx, 'room-1', 'hi');
 
