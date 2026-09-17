@@ -1,6 +1,7 @@
 import { createTicket } from '../ticketService';
 import { resolveStudentDisplayName } from '../reese/resolveStudentDisplayName';
 import { snippet } from '../agentBlueprint/agentTicketLinkService';
+import { createBasecampTodoForHandoff } from './daraBasecampGatewayService';
 
 /**
  * Dara v2 Phase 4 — mandatory inter-agent ticket handoff ("never off-ledger").
@@ -27,9 +28,19 @@ import { snippet } from '../agentBlueprint/agentTicketLinkService';
  * terminal-state signal (see validateAgentTicketStandard.ts's
  * AGENT_TICKET_RESOLVER_REGISTRY entry for Dara) — it stays open until a
  * human actually resolves it. Never closed by elapsed time.
+ *
+ * Phase 7 activation (Ali, 2026-09-17, "keep moving fwd") — every real
+ * handoff now also attempts a real Basecamp todo (Phase 6's gateway,
+ * Phase 7's CB System identity) as a secondary, best-effort notification in
+ * the tool a human actually checks day to day. The internal ticket above is
+ * the one guarantee ("never off-ledger") — the Basecamp echo is additive and
+ * its own failure (or the gateway simply being unconfigured) never blocks or
+ * un-does the real ticket already created; `createBasecampTodoForHandoff()`
+ * never throws, by its own contract.
  */
 export interface DaraHandoffResult {
   id: string;
+  basecampTodoUrl?: string;
 }
 
 export async function createDaraHandoff(
@@ -41,9 +52,10 @@ export async function createDaraHandoff(
 ): Promise<DaraHandoffResult> {
   const studentName = await resolveStudentDisplayName(studentEnrollmentId);
   const cleanReason = snippet((reason || "Outside Dara's curriculum/certification scope.").trim());
+  const title = `Curriculum handoff — ${studentName} (needs a human)`;
 
   const ticket = await createTicket({
-    title: `Curriculum handoff — ${studentName} (needs a human)`,
+    title,
     description:
       `Dara escalated a real-time conversation with ${studentName}: ${cleanReason}` +
       (conversationTicketId ? `\n\nSee the ongoing conversation ticket for full context.` : ''),
@@ -56,5 +68,7 @@ export async function createDaraHandoff(
     entity_id: triggeringMessageId,
   });
 
-  return { id: ticket.id };
+  const basecampResult = await createBasecampTodoForHandoff(ticket.id, title, studentName, cleanReason);
+
+  return { id: ticket.id, basecampTodoUrl: basecampResult.basecampAppUrl };
 }

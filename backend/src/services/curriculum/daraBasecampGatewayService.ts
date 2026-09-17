@@ -1,40 +1,34 @@
 import crypto from 'crypto';
-import { bcPost } from '../ops/basecampClient';
+import { cbSystemBcPost } from './daraCbSystemBasecampClient';
 import WorkLedgerEvent from '../../models/WorkLedgerEvent';
 import { emitEvent } from '../workLedger/workLedgerService';
 import { getDaraBasecampConfig } from './daraBasecampConfigService';
 import { getDaraAdminUserId } from './daraIdentitySeed';
 
 /**
- * Dara v2 Phase 6 — the "governed Basecamp Agent-to-Human Work Gateway."
+ * Dara v2 Phase 6/7 — the "governed Basecamp Agent-to-Human Work Gateway."
  *
- * REAL, DIRECT-RESEARCH FINDING THIS DESIGN RESPONDS TO (not from memory,
- * verified against the actual current code): the shared Basecamp credential
- * this repo's `basecampClient.ts`/`basecampToken.ts` already use (Phase 2's
- * approved reuse decision) is a bare OAuth bearer token tied to Ali's own
- * personal grant — there is no "on behalf of" header anywhere in the client.
- * Any write made through it is attributed, in Basecamp's own UI and activity
- * log, to Ali personally — not to any AI identity. A separate "CB System"
- * service-account token DOES exist in this codebase (person id 37708014),
- * but it is provisioned and used only by `scripts/ops-engine/*.js` (host
- * cron scripts outside this backend, with their own token cache/refresh
- * mechanism) — reusing it from here would be new integration work, not a
- * drop-in swap.
+ * REAL, DIRECT-RESEARCH FINDING (Phase 6): the shared Basecamp credential
+ * originally reused here (Ali's own personal OAuth grant) has no "on behalf
+ * of" header — any write made through it is attributed, in Basecamp's own
+ * UI and activity log, to Ali personally, not to any AI identity.
  *
- * Given that, this module does NOT change the Phase 2 credential decision
- * unilaterally (that's a real call for Ali, flagged in the Phase 6 gate
- * packet) — it mitigates the honesty gap the only way available without a
- * new credential: every real todo this creates carries a mandatory,
- * unmissable AI-disclosure line in its own body, so a human reading it in
- * Basecamp (regardless of who the API says authored it) is never misled
- * about who — or what — is actually asking. This directly serves Dara's own
- * persona guardrail: "Never pretend to be human or hide that you are an AI."
+ * REAL ACTIVATION DECISION (Phase 7, Ali, 2026-09-17): "Use CB System for
+ * agent communication." This gateway now posts via `daraCbSystemBasecampClient.ts`
+ * — the real, already-provisioned CB System service-account identity (person
+ * id 37708014), verified live against the real API before this was wired
+ * (a real todo fetch + people lookup, not assumed). This resolves the
+ * attribution problem at the identity layer rather than only mitigating it —
+ * the mandatory AI-disclosure line below is now belt-and-suspenders, not the
+ * only defense, and is kept for the same reason Dara's persona guardrail
+ * states it plainly regardless: never let the mechanism obscure that this is
+ * an AI acting, even when the identity itself is honest too.
  *
  * Idempotency: real API calls to an external, human-visible system are the
  * one case in this whole mission where "duplicate on retry" is genuinely
  * bad (a second visible todo, not just a redundant internal row) — so this
  * checks for an existing WorkLedgerEvent under the same idempotency key
- * BEFORE attempting the real bcPost, not only after (emitEvent()'s own
+ * BEFORE attempting the real post, not only after (emitEvent()'s own
  * built-in idempotency-key dedup protects the LEDGER write, not the
  * external side effect that already happened by the time it's called).
  *
@@ -87,12 +81,16 @@ export async function createBasecampTodoForHandoff(
     `Flagged re: ${studentName}: ${reason}</div>`;
 
   try {
-    const todo = await bcPost<BasecampTodoResponse>(
+    const todo = await cbSystemBcPost<BasecampTodoResponse>(
       `/buckets/${config.projectId}/todolists/${config.todolistId}/todos.json`,
       {
         content: title,
         due_on: threeDaysFromNow(),
-        assignee_ids: [config.assigneeBasecampPersonId],
+        // Omitted entirely (not an empty array) when no real assignee id is
+        // configured — Basecamp treats a present-but-empty assignee_ids as
+        // "unassign everyone", which is a different, unintended statement
+        // from "nobody was ever set."
+        ...(config.assigneeBasecampPersonId ? { assignee_ids: [config.assigneeBasecampPersonId] } : {}),
         description,
       },
     );

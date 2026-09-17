@@ -17,11 +17,18 @@ import { DARA_AGENT_NAME } from './daraIdentitySeed';
  * assignee id can only come from a human who actually knows the destination
  * exists and is correct. Stored on Dara's own AiAgent.config JSONB, same
  * column every other Dara config value (pilot_cohort_ids) already uses.
+ *
+ * `assigneeBasecampPersonId` is deliberately OPTIONAL, not required like the
+ * other two fields — a real, direct lookup against the account's people
+ * directory (via the actual CB System token) found no Swati Raman match in
+ * the 15 people visible to that identity. Rather than fabricate an id,
+ * unassigned todos are a real, valid, honest fallback — landing in the
+ * configured project is itself the delivery.
  */
 export interface DaraBasecampConfig {
   projectId: string;
   todolistId: string;
-  assigneeBasecampPersonId: number;
+  assigneeBasecampPersonId: number | null;
 }
 
 export async function getDaraBasecampConfig(): Promise<DaraBasecampConfig | null> {
@@ -29,10 +36,10 @@ export async function getDaraBasecampConfig(): Promise<DaraBasecampConfig | null
   const cfg = (agent?.config as any)?.basecamp_gateway;
   if (!cfg || typeof cfg !== 'object') return null;
 
-  const { project_id: projectId, todolist_id: todolistId, assignee_basecamp_person_id: assigneeBasecampPersonId } = cfg;
+  const { project_id: projectId, todolist_id: todolistId, assignee_basecamp_person_id: rawAssignee } = cfg;
   if (typeof projectId !== 'string' || !projectId) return null;
   if (typeof todolistId !== 'string' || !todolistId) return null;
-  if (typeof assigneeBasecampPersonId !== 'number' || !assigneeBasecampPersonId) return null;
+  const assigneeBasecampPersonId = typeof rawAssignee === 'number' && rawAssignee > 0 ? rawAssignee : null;
 
   return { projectId, todolistId, assigneeBasecampPersonId };
 }
