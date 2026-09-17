@@ -154,7 +154,12 @@ export async function maybeTriggerDaraReply(roomId: string, senderEnrollmentId: 
         if (call.type !== 'function') continue;
         let args: { reason?: string } = {};
         try { args = JSON.parse(call.function.arguments || '{}'); } catch { /* malformed args -> empty, tool degrades gracefully */ }
-        const result = await executeDaraTool(call.function.name, args, { ticketId, daraAdminUserId });
+        const result = await executeDaraTool(call.function.name, args, {
+          ticketId,
+          daraAdminUserId,
+          studentEnrollmentId: senderEnrollmentId,
+          triggeringMessageId: triggeringMessage?.id ?? null,
+        });
         chatMessages.push({ role: 'tool', tool_call_id: call.id, content: result });
       }
       completion = await openai.chat.completions.create({

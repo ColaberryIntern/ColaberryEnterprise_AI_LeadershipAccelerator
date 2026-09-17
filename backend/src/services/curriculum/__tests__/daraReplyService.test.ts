@@ -181,7 +181,7 @@ describe('maybeTriggerDaraReply', () => {
       expect(mockExecuteDaraTool).toHaveBeenCalledWith(
         'escalate_to_human',
         { reason: 'This is a homework question, not a curriculum question.' },
-        { ticketId: 'ticket-1', daraAdminUserId: DARA_ADMIN_ID },
+        { ticketId: 'ticket-1', daraAdminUserId: DARA_ADMIN_ID, studentEnrollmentId: STUDENT_ID, triggeringMessageId: 'student-msg-1' },
       );
       expect(mockSendDmMessage).toHaveBeenCalledWith(
         { enrollmentId: DARA_ID, cohortId: null, isAdmin: false }, ROOM_ID, "I've flagged this for Swati to follow up.",
@@ -206,7 +206,7 @@ describe('maybeTriggerDaraReply', () => {
       await expect(maybeTriggerDaraReply(ROOM_ID, STUDENT_ID)).resolves.toBeUndefined();
 
       expect(mockExecuteDaraTool).toHaveBeenCalledWith(
-        'escalate_to_human', {}, { ticketId: 'ticket-1', daraAdminUserId: DARA_ADMIN_ID },
+        'escalate_to_human', {}, { ticketId: 'ticket-1', daraAdminUserId: DARA_ADMIN_ID, studentEnrollmentId: STUDENT_ID, triggeringMessageId: 'student-msg-1' },
       );
     });
 

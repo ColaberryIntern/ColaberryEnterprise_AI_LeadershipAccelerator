@@ -81,6 +81,17 @@ export const TOOL_CAPABILITIES: Record<string, ToolCapability> = {
     reads: ['Curriculum video links, checked live against the YouTube Data API (curriculumHealth/videoLinkHealthService.ts)'],
     produces: ['An alert row via alertService.ts when a video is broken — never edits a curriculum card directly'],
   },
+  respond_to_curriculum_dm: {
+    reads: ['The student\'s direct-message conversation history in a room with Dara (curriculum/daraReplyService.ts)'],
+    produces: ['A reply message in the student DM thread, answering only curriculum/certification questions'],
+  },
+  escalate_to_human: {
+    reads: [],
+    produces: [
+      'A new, standalone agent_handoff ticket, assigned via Dara\'s own reports_to chain (curriculum/daraHandoffService.ts)',
+      'A cross-reference comment on the conversation\'s own curriculum_support ticket',
+    ],
+  },
 
   // --- cory-engine (autonomousEngine.ts's runAutonomousCycle(), 8-step pipeline —
   // grounded in agentRegistrySeed.ts's own re-verified comment) ---

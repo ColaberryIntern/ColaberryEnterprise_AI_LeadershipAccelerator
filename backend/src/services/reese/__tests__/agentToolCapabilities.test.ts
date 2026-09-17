@@ -114,7 +114,7 @@ describe('deriveAgentCapabilities', () => {
     expect(result.produces).toContain('A fresh StudentAssessment row, only when the existing one is missing or past its own reassessment_date');
   });
 
-  it('happy path: Dara\'s real 4-tool set (AI Employee Consolidation Program, Employee #1, Phase 4) resolves fully documented', () => {
+  it('happy path: Dara\'s original 4-tool set (AI Employee Consolidation Program, Employee #1, Phase 4) resolves fully documented', () => {
     const result = deriveAgentCapabilities([
       'flag_curriculum_content_gaps',
       'flag_certification_readiness',
@@ -125,6 +125,21 @@ describe('deriveAgentCapabilities', () => {
     expect(result.undocumentedTools).toEqual([]);
     expect(result.produces.some((p) => p.includes('creates no ticket'))).toBe(true);
     expect(result.produces.some((p) => p.includes('workforce_tasks row when a course area has zero blueprints'))).toBe(true);
+  });
+
+  it('happy path: Dara\'s real 6-tool set including the v2 Phase 3/4 student-DM and escalation tools resolves fully documented', () => {
+    const result = deriveAgentCapabilities([
+      'flag_curriculum_content_gaps',
+      'flag_certification_readiness',
+      'scan_curriculum_integrity',
+      'monitor_curriculum_video_health',
+      'respond_to_curriculum_dm',
+      'escalate_to_human',
+    ]);
+
+    expect(result.undocumentedTools).toEqual([]);
+    expect(result.produces.some((p) => p.includes('agent_handoff ticket'))).toBe(true);
+    expect(result.reads.some((r) => r.includes('direct-message conversation history in a room with Dara'))).toBe(true);
   });
 
   it('every entry in TOOL_CAPABILITIES has at least one read or produce fact (no dead/empty entries)', () => {

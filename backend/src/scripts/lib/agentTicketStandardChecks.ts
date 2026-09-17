@@ -266,6 +266,28 @@ export const AGENT_TICKET_RESOLVER_REGISTRY: readonly ResolverMapping[] = [
       'open for human review via its reports_to chain, not force-closed.',
   },
 
+  {
+    // Dara v2 Phase 4 (2026-09-17) — student-facing curriculum-support DM
+    // (type='curriculum_support') and, per its own "never off-ledger"
+    // requirement, a standalone handoff ticket (type='agent_handoff') for
+    // every real out-of-scope escalation. See backend/src/services/curriculum/.
+    creatorAgentName: 'Dara',
+    resolverAgentName: null,
+    resolverRulesFile: null,
+    resolverIoFile: null,
+    artifactsFile: null,
+    knownGap:
+      'No recurring resolver exists for either ticket type this agent creates. An ' +
+      "agent_handoff ticket represents a real, one-off escalation (a student question " +
+      "outside Dara's curriculum/certification scope, or an account/homework issue) — not " +
+      'a state with a clean automated terminal signal to resolve against; per this ' +
+      "directive's hard ban on time-based closure, it stays open until a human (Swati, " +
+      "Dara's reports_to) actually replies and resolves it, same honest-gap posture as " +
+      "AgentBehaviorMonitorAgent above. A curriculum_support conversation ticket closes " +
+      'the same way Reese\'s student_support tickets do conceptually, but Dara has no ' +
+      'equivalent supersession resolver yet — left open, not force-closed.',
+  },
+
   // --- Department Strategy Architect agents (16) — Agent Ticket Standard audit, 2026-08-18,
   // session CC-20260818-a7d2. All 16 share one engine (departmentInitiativeEngine.ts /
   // strategyArchitectAgent.ts) and, as of this audit, genuinely have no recurring resolver:
