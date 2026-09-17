@@ -20,7 +20,8 @@ jest.mock('../../ticketCreatorReportsToResolver', () => ({ resolveReportsToChain
 // is truthy (i.e. almost all of them, per beforeEach below).
 // Trust Contract fix (2026-08-24) — getAgentDetail() now also calls the REAL
 // getLastTicketActivityForAgent() (same module), mocked alongside its sibling.
-jest.mock('../../workforce/liveAgentsService', () => ({ countOpenTicketsForAgent: jest.fn(), getLastTicketActivityForAgent: jest.fn() }));
+// Dara v2 Phase 6 — same for getOldestOpenTicketAge() (open-ticket accountability).
+jest.mock('../../workforce/liveAgentsService', () => ({ countOpenTicketsForAgent: jest.fn(), getLastTicketActivityForAgent: jest.fn(), getOldestOpenTicketAge: jest.fn() }));
 // Trust Contract Phase 1 (2026-08-26) — the 3 new real-evidence fields.
 jest.mock('../../agentPersonaVersionHistoryService', () => ({ getPersonaVersionHistory: jest.fn() }));
 jest.mock('../../trustMetricsService', () => ({ agentCostRows: jest.fn() }));
@@ -37,7 +38,7 @@ import OrgMember from '../../../models/OrgMember';
 import { Ticket } from '../../../models';
 import { derivePresence } from '../../communityService';
 import { resolveReportsToChainWithTrail } from '../../ticketCreatorReportsToResolver';
-import { countOpenTicketsForAgent, getLastTicketActivityForAgent } from '../../workforce/liveAgentsService';
+import { countOpenTicketsForAgent, getLastTicketActivityForAgent, getOldestOpenTicketAge } from '../../workforce/liveAgentsService';
 import { getPersonaVersionHistory } from '../../agentPersonaVersionHistoryService';
 import { agentCostRows } from '../../trustMetricsService';
 import { getAgentAuthorizationSummary } from '../../agentAuthorizationService';
@@ -56,6 +57,7 @@ const mockDerivePresence = derivePresence as unknown as jest.Mock;
 const mockResolveChain = resolveReportsToChainWithTrail as unknown as jest.Mock;
 const mockCountOpenTickets = countOpenTicketsForAgent as unknown as jest.Mock;
 const mockLastActivity = getLastTicketActivityForAgent as unknown as jest.Mock;
+const mockOldestOpenTicketAge = getOldestOpenTicketAge as unknown as jest.Mock;
 const mockPersonaHistory = getPersonaVersionHistory as unknown as jest.Mock;
 const mockCostRows = agentCostRows as unknown as jest.Mock;
 const mockAuthSummary = getAgentAuthorizationSummary as unknown as jest.Mock;
@@ -78,6 +80,7 @@ beforeEach(() => {
   mockTicketFindAll.mockResolvedValue([]);
   mockCountOpenTickets.mockResolvedValue(0);
   mockLastActivity.mockResolvedValue(null);
+  mockOldestOpenTicketAge.mockResolvedValue(null);
   mockAgentFindAll.mockResolvedValue([]);
   mockPersonaHistory.mockResolvedValue([]);
   mockCostRows.mockResolvedValue([]);
@@ -247,6 +250,34 @@ describe('getAgentDetail', () => {
 
     expect(result!.open_ticket_count).toBe(0);
     expect(mockCountOpenTickets).not.toHaveBeenCalled();
+  });
+
+  // Dara v2 Phase 6 ("open-ticket accountability") — real, informational age
+  // of the oldest still-open ticket, via the shared getOldestOpenTicketAge().
+  it('oldest_open_ticket_age_days reflects the real age via the shared query', async () => {
+    mockOldestOpenTicketAge.mockResolvedValue({ oldestOpenCreatedAt: new Date('2026-08-01T00:00:00Z'), ageDays: 17 });
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.oldest_open_ticket_age_days).toBe(17);
+    expect(mockOldestOpenTicketAge).toHaveBeenCalledWith('admin-1', reeseAgent);
+  });
+
+  it('oldest_open_ticket_age_days is null (never a fabricated 0) when the agent genuinely has zero open tickets', async () => {
+    mockOldestOpenTicketAge.mockResolvedValue(null);
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.oldest_open_ticket_age_days).toBeNull();
+  });
+
+  it('oldest_open_ticket_age_days is null, and getOldestOpenTicketAge is never called, when there is no linked AdminUser identity', async () => {
+    mockAdminFindOne.mockResolvedValue(null);
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.oldest_open_ticket_age_days).toBeNull();
+    expect(mockOldestOpenTicketAge).not.toHaveBeenCalled();
   });
 
   // Trust Contract fix (2026-08-24) — Ali, live: "Reese has several tickets
