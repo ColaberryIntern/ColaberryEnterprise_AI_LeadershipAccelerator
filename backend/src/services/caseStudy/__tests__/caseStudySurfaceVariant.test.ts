@@ -197,6 +197,12 @@ describe('the publish gate reads variants', () => {
     orphan.identity = { ...(orphan.identity as object), builderIdentityMode: 'named', builderNamingConsent: true };
     const o = orphan as unknown as CaseStudySnapshotContent;
     expect(blockersOf(o, record(o)).map((x) => x.path)).toContain('surfaceVariants.training.builder.displayName');
+    // The sparse-author card: an EMPTY displayName is a role credit and passes on a record with
+    // no consent at all (the rollout's three role-only records). A non-empty name does not.
+    const roleOnly = withVariant({ contributors: [{ displayMode: 'role_only', role: 'Learner', kind: 'learner' }], builder: { ...builder, displayName: '', intro: [], progression: [] } });
+    expect(blockersOf(roleOnly, record(roleOnly)).filter((x) => x.path.endsWith('builder.displayName'))).toEqual([]);
+    const namedNoConsent = withVariant({ contributors: [{ displayMode: 'role_only', role: 'Learner', kind: 'learner' }], builder: { ...builder, displayName: 'Learner', intro: [], progression: [] } });
+    expect(blockersOf(namedNoConsent, record(namedNoConsent)).map((x) => x.path)).toContain('surfaceVariants.training.builder.displayName');
   });
 
   it('refuses a variant keyed on a surface that is not publishable', () => {

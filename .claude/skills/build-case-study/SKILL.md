@@ -1069,11 +1069,15 @@ contributor the consent gate projected as named for that same content; rule 5 re
 profile whose name is not such a contributor. Everything else on the card (role title,
 organisation, contribution, skills) is a project fact and crosses without a name.
 
-**Sparse author.** No consented person: the card credits the role (`displayName` may be
-anything; it will not show), `intro` and `progression` empty, contribution and skills from
-the record. That is a valid story. Write the gap in the handoff ("no consented author; role
-credit"); do not invent a person, a placeholder or a team name the record does not carry.
-Do not interrupt Ali for an optional interview.
+**Sparse author.** No consented person: the card credits the role. `displayName` is the
+EMPTY STRING (rule 5 refuses any non-empty name that is not a consented contributor, even
+though the projection would withhold it; the rollout hit this on three records at once),
+`intro` and `progression` empty, `initials` one letter for the role so the mark is not a
+blank circle ("L" for a learner, "C" for the Colaberry team), contribution and skills from
+the record. That is a valid story: the review prints `story_biography_unavailable` as a
+note, not a warning. Write the gap in the handoff ("no consented author; role credit"); do
+not invent a person, a placeholder or a team name the record does not carry. Do not
+interrupt Ali for an optional interview.
 
 **Names.** "Kes" only, never expanded; verify any full name against an approved profile
 before it appears anywhere, including links. (The verifier found the repository owner's
@@ -1129,6 +1133,15 @@ editorial bookkeeping in the story: "this revision", "first revision", "review n
 true or leave it out. Dates read "28 Apr 2026"; times, when any, Central with the zone
 written out.
 
+A variant cannot fix a dash in the CANONICAL prose (the situation, the architecture, the
+measurement narrative of a record written before the rule). The review names the path
+(`story_dash @ architecture.narrative[4]` on the training-system record, found during the
+rollout); the fix is a whole-section override of that section through the same
+persist-approve-publish path, republishing only the surfaces the record is on
+(`publishCaseStudyVariants.ts --canonical <section>=<file>` carries it beside the variants).
+Scan every record before you call a rollout done: `reviewCaseStudyStory` per surface prints
+the dash paths for the sections it reads.
+
 ### The review, before Ali reads it
 
 `npx ts-node -T src/scripts/reviewCaseStudyStory.ts <slug> [surface]` (or
@@ -1148,7 +1161,10 @@ with the passage or gap cited (`references/story-rubric.md`); the ones marked
   decisions with `stage` and `figure` as authored, the closing, the standfirst.
 - The live page at 1440, 768 and 390 draws the sections where the profile places them, the
   hero and the video untouched, no horizontal scroll, no page error, no "n/a", no dash; a
-  capture of each new section in the run directory.
+  capture of each new section in the run directory. training.colaberry.com revalidates a
+  page 60 seconds after a publish: the first request after that serves the old page and
+  triggers the rebuild (`x-nextjs-cache: STALE`), the next serves the new one. Read it
+  twice before calling it wrong.
 - The handoff names the previous snapshot id per surface, the editorial gaps, and what was
   not done.
 
@@ -1329,6 +1345,11 @@ an already-live record too, so consent withdrawn between two clicks is caught.
 9. **That the compact ending stays compact.** Nothing measures the height of the page.
    The rail, the board and the folds are code; the discipline to keep the narrative to
    one paragraph is not.
+10. **That the skill and the gate agree.** §8e once said a role-only card's `displayName`
+    "may be anything"; rule 5 said otherwise and blocked three records in one dry run. The
+    gate was right. `skillStoryRules.test.ts` proves the checks §8e names exist; it cannot
+    prove the prose describes them correctly. When a dry run contradicts this file, the
+    dry run wins, and this file changes the same day.
 
 **When you add a rule here, decide which half it belongs in before you write it.** A rule
 in the second half is a rule with a half-life.

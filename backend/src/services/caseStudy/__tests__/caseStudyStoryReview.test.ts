@@ -81,14 +81,18 @@ describe('the story review', () => {
     const f = codes(c);
     expect(f).toContain('warning:story_situation_opens_on_biography');
     expect(f).toContain('warning:story_progression_repeated');
-    // The standfirst may say it once.
+    // The standfirst may say it once, and the current role title is a role, not a repeat:
+    // "what an AI Systems Architect is responsible for" in the closing is fine.
     expect(reviewCaseStudyStory(story(), 'training').findings.map((x) => x.code)).not.toContain('story_progression_repeated');
+    const roleInClosing = story({}, { closing: 'This shows what an AI Systems Architect is responsible for.' });
+    expect(reviewCaseStudyStory(roleInClosing, 'training').findings.map((x) => x.code)).not.toContain('story_progression_repeated');
   });
 
   it('treats a role-only builder as a valid story with a note, and an unpinned card as a warning, a missing figure as a note', () => {
     const c = story({}, {
       contributors: [{ displayMode: 'role_only', role: 'Builder', kind: 'colaberry_team' }],
-      builder: { ...KES, displayName: 'Nobody Consented' },
+      // The sparse-author card as the rollout ships it: an empty name, an initial for the mark.
+      builder: { ...KES, displayName: '', initials: 'L', intro: [], progression: [] },
       decisions: [{ ...DECISIONS[0], stage: undefined, figure: undefined }],
     });
     const f = codes(c);
