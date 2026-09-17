@@ -50,6 +50,7 @@ import { scheduleForEnrollment } from './scheduleForEnrollment';
 import { hashPlan } from './planHash';
 import {
   saveIntake, getIntake, savePlanDraft, getPlan, publishPlan, StoredPlan, BuildIntake,
+  listIntakesByStatus,
 } from './planStore';
 import { getProvisionQueue } from './boundedQueue';
 import { setProjectNameIfEmpty } from './projectNaming';
@@ -530,8 +531,13 @@ async function setStatus(
 export async function retryBuild(projectId: string, enrollmentId: string): Promise<{ projectId: string; correlationId: string; status: BuildStatus }> {
   const intake = await getIntake(projectId);
   if (!intake) throw Object.assign(new Error('No intake to retry from'), { status: 404, error_class: 'NoIntake' });
-  return startBuild({
-    projectId,
+  return startBuild(inputFromIntake(intake, enrollmentId));
+}
+
+/** The intake on file, in the shape generation takes. */
+function inputFromIntake(intake: BuildIntake, enrollmentId: string): StartBuildInput {
+  return {
+    projectId: intake.project_id,
     enrollmentId,
     idea: intake.idea,
     name: intake.name ?? undefined,
@@ -541,7 +547,70 @@ export async function retryBuild(projectId: string, enrollmentId: string): Promi
     doneDefinition: intake.done_definition ?? undefined,
     targetWeeks: intake.target_weeks != null ? Number(intake.target_weeks) : undefined,
     answers: (intake.answers ?? undefined) as StartBuildInput['answers'],
-  });
+  };
+}
+
+/**
+ * Resume every build the last process left mid-generation.
+ *
+ * WHY THIS EXISTS. Generation runs on an in-process queue, and `generating` is written
+ * to the database before it starts. When the process dies - and every deploy kills it -
+ * the queue dies with it but the row does not. It sits at `generating` forever, and
+ * `startBuild` refuses to touch a row in that state, so neither the student's retry nor
+ * an admin's could ever recover it. A project started from a phone call during a deploy
+ * would simply never appear, with nothing anywhere saying why. Found by reasoning, not
+ * by a report: on 2026-09-16 an intake was stranded exactly this way by a one-off script
+ * that exited before its queue drained.
+ *
+ * WHEN IT IS SAFE. At boot, before the server listens. The queue is per process and this
+ * is a new process, so a `generating` row cannot belong to any live run - there is
+ * nothing to race. Each instance sees only its own database, so a dev boot cannot resume
+ * a prod build.
+ *
+ * WHAT IT SKIPS. `saveIntakeTruth` and `nameProject` ran the first time and are not
+ * repeated; only generation is. A row with no enrolment cannot be resumed (generation
+ * needs one to publish) and is marked failed with a reason, so it stops looking alive.
+ *
+ * Bounded by the queue it runs on. If a resumed generation fails, it fails the way any
+ * generation fails - `failed` with `last_error` - and the student can retry.
+ */
+export async function recoverStrandedBuilds(): Promise<{ resumed: string[]; abandoned: string[] }> {
+  const stranded = await listIntakesByStatus('generating');
+  const resumed: string[] = [];
+  const abandoned: string[] = [];
+
+  for (const intake of stranded) {
+    const correlationId = randomUUID();
+    if (!intake.enrollment_id) {
+      await setStatus(intake.project_id, 'failed', {
+        error_class: 'StrandedWithoutEnrollment',
+        message: 'generation was interrupted by a restart and the intake names no enrolment to resume for',
+      }).catch(() => { /* nothing better to do; the next boot will try again */ });
+      log('sbp_build_stranded_abandoned', correlationId, 'failure', { projectId: intake.project_id, error_class: 'StrandedWithoutEnrollment' });
+      abandoned.push(intake.project_id);
+      continue;
+    }
+
+    log('sbp_build_resumed_after_restart', correlationId, 'partial', {
+      projectId: intake.project_id, previous_correlation_id: intake.correlation_id ?? null,
+    });
+    const input = inputFromIntake(intake, intake.enrollment_id);
+    void getProvisionQueue()
+      .run(() => runGeneration(input, correlationId), `generate:${intake.project_id}`)
+      .catch((err) => {
+        log('sbp_build_queue_failed', correlationId, 'failure', {
+          projectId: intake.project_id, error_class: err?.error_class ?? 'Error', message: err?.message,
+        });
+      });
+    resumed.push(intake.project_id);
+  }
+
+  if (stranded.length) {
+    log('sbp_stranded_builds_swept', randomUUID(), abandoned.length ? 'partial' : 'success', {
+      resumed: resumed.length, abandoned: abandoned.length,
+    });
+  }
+  return { resumed, abandoned };
 }
 
 /** Current state of a build, for polling. */
