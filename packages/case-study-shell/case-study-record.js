@@ -367,7 +367,124 @@
       ]);
     },
 
+    /* The story sections (2026-09-17): the decision cards, Meet the builder
+       and the closing, placed by the surface profile. Everything printed is
+       the projection's word: a null builder name credits the role, and no
+       biography or link is invented for it. Same parts, same order as the
+       other sites; this stylesheet's tokens. */
+    decisions: function (c) {
+      var cards = (c.decisions || []).filter(function (d) {
+        return d && d.title && d.problem && d.decision && d.evidence && d.consequence;
+      });
+      if (!cards.length) return null;
+      var pinned = cards.every(function (d) { return d.stage; });
+      var count = { 2: 'Two', 3: 'Three', 4: 'Four', 5: 'Five' }[cards.length] || String(cards.length);
+      var lead = el('p', 'cs-decisions__lead', (cards.length === 1 ? 'One choice shaped the system.' : count + ' choices shaped the system.')
+        + (pinned ? (cards.length === 1 ? ' It lives at a specific point in the drawing above.' : ' Each one lives at a specific point in the drawing above.') : ''));
+      var ol = el('ol', 'cs-decisions__list');
+      cards.forEach(function (d, i) {
+        var li = el('li', 'cs-decision');
+        var top = el('div', 'cs-decision__top');
+        var index = el('span', 'cs-decision__index', String(i + 1));
+        index.setAttribute('aria-hidden', 'true');
+        top.appendChild(index);
+        if (d.stage) top.appendChild(el('span', 'cs-decision__stage', 'At ' + d.stage));
+        li.appendChild(top);
+        li.appendChild(el('h3', 'cs-decision__title', d.title));
+        li.appendChild(el('p', 'cs-decision__text', d.problem));
+        li.appendChild(el('p', 'cs-decision__text', d.decision));
+        var ev = el('p', 'cs-decision__evidence');
+        ev.appendChild(el('span', 'cs-term', 'Evidence'));
+        ev.appendChild(document.createTextNode(' ' + d.evidence));
+        li.appendChild(ev);
+        var out = el('p', 'cs-decision__outcome');
+        if (d.figure) out.appendChild(el('strong', 'cs-decision__figure', d.figure));
+        out.appendChild(el('span', null, d.consequence));
+        li.appendChild(out);
+        ol.appendChild(li);
+      });
+      var s = section('decisions', 'Decisions that made the difference', [lead, ol]);
+      if (s) { s.classList.add('cs-decisions'); s.setAttribute('data-testid', 'story-decisions'); }
+      return s;
+    },
+
+    builder: function (c) {
+      var b = c.builder;
+      if (!b || !b.roleTitle || !b.contribution) return null;
+      var card = el('div', 'cs-builder__card');
+      var who = el('div', 'cs-builder__who');
+      var head = el('div', 'cs-builder__head');
+      if (b.photoUrl) {
+        var img = el('img', 'cs-builder-photo');
+        img.src = b.photoUrl;
+        img.alt = b.name || b.roleTitle;
+        head.appendChild(img);
+      } else {
+        var mark = el('span', 'cs-builder-mark', b.initials || (b.name ? b.name.charAt(0) : ''));
+        mark.setAttribute('aria-hidden', 'true');
+        head.appendChild(mark);
+      }
+      var names = el('div');
+      names.appendChild(el('p', 'cs-builder__name', b.name || b.roleTitle));
+      if (b.name) names.appendChild(el('p', 'cs-builder__role', b.organization ? b.roleTitle + ', ' + b.organization : b.roleTitle));
+      head.appendChild(names);
+      who.appendChild(head);
+      var steps = b.progression || [];
+      if (steps.length) {
+        var rail = el('ol', 'cs-builder__progression');
+        rail.setAttribute('aria-label', 'Career progression');
+        steps.forEach(function (step, i) {
+          var li = el('li', null, step);
+          li.setAttribute('data-current', i === steps.length - 1 ? 'true' : 'false');
+          rail.appendChild(li);
+        });
+        who.appendChild(rail);
+      }
+      who.appendChild(el('p', 'cs-term', 'Project contribution'));
+      who.appendChild(el('p', 'cs-builder__contribution', b.contribution));
+      if (b.profileUrl) {
+        var link = el('a', 'cs-back', 'Approved profile');
+        link.href = b.profileUrl;
+        link.rel = 'noopener';
+        who.appendChild(link);
+      }
+      card.appendChild(who);
+      var skills = (b.skills || []).filter(function (sk) { return sk && sk.label && sk.evidence; });
+      if (skills.length) {
+        var did = el('div', 'cs-builder__did');
+        did.appendChild(el('p', 'cs-term', 'Skills demonstrated'));
+        var ul = el('ul', 'cs-builder__skills');
+        skills.forEach(function (sk) {
+          var li = el('li', 'cs-builder__skill');
+          li.appendChild(el('strong', null, sk.label));
+          li.appendChild(el('span', null, sk.evidence));
+          ul.appendChild(li);
+        });
+        did.appendChild(ul);
+        card.appendChild(did);
+      }
+      var source = b.provenance && b.provenance.source;
+      var line = source === 'approved_profile'
+        ? 'From an approved profile; project contribution from the repository record.'
+        : source === 'repository' ? 'From the repository record.'
+          : 'Career facts as confirmed to Colaberry; project contribution from the repository record.';
+      var s = section('builder', 'Meet the builder', [card, el('p', 'cs-builder__provenance', line)]);
+      if (s) { s.classList.add('cs-builder'); s.setAttribute('data-testid', 'story-builder'); }
+      return s;
+    },
+
+    closing: function (c) {
+      if (!c.closing) return null;
+      var s = section('closing', 'What this project shows', [el('p', 'cs-prose cs-closing__text', c.closing)]);
+      if (s) { s.classList.add('cs-closing'); s.setAttribute('data-testid', 'story-closing'); }
+      return s;
+    },
+
     contributors: function (c) {
+      // Stands down when the builder card already names the only contributor:
+      // the card is the credit.
+      var only = (c.contributors || []).length === 1 ? c.contributors[0] : null;
+      if (c.builder && c.builder.name && only && only.displayMode === 'named' && only.displayName === c.builder.name && !(c.anonymousContributorCount > 0)) return null;
       return section('contributors', 'Who built it', [
         list(c.contributors, function (p) {
           // `displayMode` is the server's consent decision, already made. A

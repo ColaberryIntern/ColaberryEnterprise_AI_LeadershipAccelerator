@@ -116,13 +116,16 @@ export type CaseStudyTimelineSourceKind = 'repository' | 'delivery' | 'artifact'
 export type CaseStudySectionKey =
   | 'hero'
   | 'situation'
+  | 'decisions'
   | 'build'
   | 'architecture'
   | 'measurement'
   | 'roadmap'
+  | 'builder'
   | 'contributors'
   | 'artifacts'
   | 'repositories'
+  | 'closing'
   | 'cta';
 
 /** Deterministic and named. Nothing decides what is featured at render time. */

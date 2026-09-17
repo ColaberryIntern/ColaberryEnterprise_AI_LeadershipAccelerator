@@ -74,8 +74,8 @@ import type { PublicVerificationClass } from '../../types/caseStudyPublic';
  * operator can see that the difference is the lens and not the record.
  */
 const ENTERPRISE_ORDER = [
-  'hero', 'situation', 'build', 'architecture', 'measurement',
-  'roadmap', 'contributors', 'artifacts', 'repositories', 'cta',
+  'hero', 'situation', 'decisions', 'build', 'architecture', 'measurement',
+  'roadmap', 'builder', 'contributors', 'artifacts', 'repositories', 'closing', 'cta',
 ] as const;
 
 /**
@@ -95,8 +95,8 @@ const ENTERPRISE_ORDER = [
  * surface. Do not make that hero fact surface-conditional.
  */
 const TRAINING_ORDER = [
-  'hero', 'situation', 'contributors', 'build', 'artifacts',
-  'architecture', 'measurement', 'roadmap', 'repositories', 'cta',
+  'hero', 'situation', 'decisions', 'contributors', 'build', 'artifacts',
+  'architecture', 'measurement', 'roadmap', 'builder', 'closing', 'repositories', 'cta',
 ] as const;
 
 /**
@@ -116,8 +116,8 @@ const TRAINING_ORDER = [
  * suppressed. `requiredSections` makes that unexpressible.
  */
 const AI_FLOTATION_ORDER = [
-  'hero', 'architecture', 'build', 'repositories', 'measurement',
-  'situation', 'roadmap', 'artifacts', 'contributors', 'cta',
+  'hero', 'architecture', 'decisions', 'build', 'repositories', 'measurement',
+  'situation', 'roadmap', 'artifacts', 'builder', 'contributors', 'closing', 'cta',
 ] as const;
 
 /**
@@ -143,8 +143,8 @@ const AI_FLOTATION_ORDER = [
  * governance, this comment becomes a predicate. Until then it is this comment.
  */
 const REFACTORED_ORDER = [
-  'hero', 'build', 'architecture', 'repositories', 'artifacts',
-  'roadmap', 'measurement', 'situation', 'contributors', 'cta',
+  'hero', 'build', 'architecture', 'decisions', 'repositories', 'artifacts',
+  'roadmap', 'measurement', 'situation', 'builder', 'contributors', 'closing', 'cta',
 ] as const;
 
 /**

@@ -258,6 +258,9 @@ export function describeSectionKey(value: CaseStudySectionKey): string {
     case 'artifacts': return 'Artifacts';
     case 'repositories': return 'Repositories and provenance';
     case 'cta': return 'Call to action';
+    case 'decisions': return 'Decisions that made the difference';
+    case 'builder': return 'Meet the builder';
+    case 'closing': return 'What this project shows';
     default: return assertNever(value, 'CaseStudySectionKey');
   }
 }

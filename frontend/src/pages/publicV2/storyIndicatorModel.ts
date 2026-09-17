@@ -105,6 +105,7 @@ export const SECTION_COUNT_NOUNS: Readonly<Record<string, string>> = Object.free
   contributors: 'named contributors',
   artifacts: 'artifacts',
   repositories: 'linked repositories',
+  decisions: 'decisions',
 });
 
 /**
@@ -155,6 +156,8 @@ export function sectionCount(
         // Linked repositories. The withheld ones are disclosed by their own
         // note; counting them here would promise links that do not exist.
         return detail.repositories.length;
+      case 'decisions':
+        return detail.decisions.length;
       default:
         return 0;
     }
