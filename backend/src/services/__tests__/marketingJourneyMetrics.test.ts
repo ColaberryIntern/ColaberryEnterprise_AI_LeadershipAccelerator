@@ -74,6 +74,46 @@ describe('the SQL', () => {
   });
 });
 
+describe('the counting unit is the campaign table\'s: DISTINCT LEADS, over campaign outcomes only (the T411 verifier)', () => {
+  it('every outcome counter counts distinct LEADS, never event rows - a row count would let an open rate exceed 100%', async () => {
+    await getCampaignMetricsByJourney();
+    const { sql } = lastSql();
+    for (const outcome of ['sent', 'opened', 'clicked', 'replied', 'booked_meeting']) {
+      expect(sql).toContain(`COUNT(DISTINCT io.lead_id) FILTER (WHERE io.outcome = '${outcome}')`);
+    }
+    // The same unit the campaign table uses for the identically named fields.
+    expect(sql).toContain("COUNT(DISTINCT io.lead_id) FILTER (WHERE io.outcome = 'sent')");
+    expect(sql).not.toContain('COUNT(DISTINCT io.id)');
+    // Distinct campaigns, not lead-campaign pairs; and the per-lead fan-out is gone with the grouping.
+    expect(sql).toContain('COUNT(DISTINCT io.campaign_id) AS campaigns');
+    expect(sql).toContain('COUNT(DISTINCT lc.lead_id) AS leads');
+    expect(sql).not.toContain('SUM(jl.');
+    expect(sql).toContain('GROUP BY lc.brand_id, lc.journey_program_slug, lc.primary_path ');
+  });
+
+  it('only CAMPAIGN outcomes count, as the campaign table requires - a non-campaign interaction is not campaign engagement', async () => {
+    await getCampaignMetricsByJourney();
+    const { sql } = lastSql();
+    // The whole join condition, not just the presence of the phrase: a widened condition
+    // (`... IS NOT NULL OR true`) would satisfy a containment check and count everything.
+    expect(sql).toContain('LEFT JOIN interaction_outcomes io ON io.lead_id = lc.lead_id AND io.campaign_id IS NOT NULL');
+    const cte = sql.slice(sql.indexOf('journey_leads AS'), sql.indexOf('journey_enrollments AS'));
+    // No backslash in this assertion on purpose: written through a heredoc once, `\b` became a real
+    // backspace byte and the regex matched nothing - a vacuous check the close-out mutation walked through.
+    expect(cte.includes(' OR ')).toBe(false);
+  });
+
+  it('no rate can exceed 100%: the counts share a unit, and the ceiling holds even if a row arrived saying otherwise', async () => {
+    // An impossible row (more opens than sends) is a model bug upstream; the answer is still bounded.
+    mockQuery.mockResolvedValue([row({ emails_sent: 4, opens_count: 9, clicks_count: 7, replies_count: 6, enrollments_count: 40, leads_count: 8 })]);
+    const [r] = await getCampaignMetricsByJourney();
+    for (const k of ['open_rate', 'click_rate', 'reply_rate', 'conversion_rate'] as const) {
+      expect(r[k]).not.toBeNull();
+      expect(r[k] as number).toBeLessThanOrEqual(100);
+    }
+  });
+});
+
 describe('missing is null, never zero', () => {
   it('a programme with no leads: every count and every rate is null, the row still appears, and has_leads says so', async () => {
     mockQuery.mockResolvedValue([row({ program_slug: 'flotation-projects', program_name: 'Flotation Projects', path_slug: null, leads_count: 0, campaigns_count: 0, emails_sent: 0, opens_count: 0, clicks_count: 0, replies_count: 0, meetings_count: 0, enrollments_count: 0 })]);

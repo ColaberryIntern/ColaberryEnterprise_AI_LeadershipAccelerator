@@ -53,6 +53,11 @@ it('the journey filter narrows the PATH LIST, like brand and campaign, and the f
   expect(journeyBranch).not.toContain('graphCache = {');
   // The only assignment to the cache is in the unfiltered path.
   expect(src.match(/graphCache = \{/g)).toHaveLength(1);
+  // Every term the answer claims it filtered by is a term it applied: the brand half is really applied,
+  // through the same campaign brand map the brand branch builds (the T411 verifier's finding).
+  expect(journeyBranch).toContain('filterPathsByBrand(cohort, brandId, map)');
+  expect(journeyBranch).toContain('loadCampaignBrandMap(campaignIds)');
+  expect(journeyBranch).toContain('filterPathsByCampaign(cohort, campaignId)');
 });
 
 it('the dimension module writes nothing and reaches no pipeline module', () => {

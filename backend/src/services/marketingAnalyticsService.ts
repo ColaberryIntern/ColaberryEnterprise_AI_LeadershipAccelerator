@@ -276,17 +276,30 @@ export interface JourneyMetricRow {
   conversion_rate: number | null;
 }
 
+/**
+ * A percentage over a population that could have produced it, or `null` when
+ * that population is empty. Both counts are DISTINCT LEADS, so the ratio cannot
+ * exceed 100% unless the two counts disagree about what they count - and the
+ * ceiling is applied here as well, because an impossible number on a dashboard
+ * is a model bug the reader cannot see.
+ */
 const pct = (numerator: number, denominator: number): number | null =>
-  denominator > 0 ? Math.round((numerator / denominator) * 10000) / 100 : null;
+  denominator > 0 ? Math.min(100, Math.round((numerator / denominator) * 10000) / 100) : null;
 
 /**
  * The campaigns table, one dimension over: brand x programme x path.
  *
  * Reads the Growth Journey rows the graph dimension reads (the LATEST
- * classification per lead, by `created_at`) and joins the interaction outcomes
- * the campaign table already counts, so the two views cannot disagree about
- * what an open or a reply is. Brand is a WHERE on the journey rows here rather
- * than on campaigns, because a journey belongs to a brand directly.
+ * classification per lead, by `created_at`) and joins the campaign interaction
+ * outcomes the campaign table already counts. The COUNTING UNIT is the one the
+ * campaign table uses for these field names - DISTINCT LEADS, not event rows
+ * (`interaction_outcomes` has no unique index on (lead_id, campaign_id,
+ * outcome), which is why the campaign table keeps `total_opens` separately from
+ * `unique_opens`). Counting rows here would let `open_rate` exceed 100% - an
+ * impossible number, and the T411 verifier found it before anybody read one.
+ * `campaigns_count` is likewise DISTINCT campaigns, not lead-campaign pairs.
+ * Brand is a WHERE on the journey rows here rather than on campaigns, because a
+ * journey belongs to a brand directly.
  *
  * The date range applies to the OUTCOMES, not to the classification: a lead
  * classified in August whose campaign replied in September belongs in
@@ -309,18 +322,20 @@ export async function getCampaignMetricsByJourney(filters?: CampaignMetricFilter
     ),
     journey_leads AS (
       SELECT
-        lc.brand_id, lc.journey_program_slug, lc.primary_path, lc.lead_id,
+        lc.brand_id, lc.journey_program_slug, lc.primary_path,
+        COUNT(DISTINCT lc.lead_id) AS leads,
         COUNT(DISTINCT io.campaign_id) AS campaigns,
-        COUNT(DISTINCT io.id) FILTER (WHERE io.outcome = 'sent') AS sent,
-        COUNT(DISTINCT io.id) FILTER (WHERE io.outcome = 'opened') AS opened,
-        COUNT(DISTINCT io.id) FILTER (WHERE io.outcome = 'clicked') AS clicked,
-        COUNT(DISTINCT io.id) FILTER (WHERE io.outcome = 'replied') AS replied,
-        COUNT(DISTINCT io.id) FILTER (WHERE io.outcome = 'booked_meeting') AS booked
+        COUNT(DISTINCT io.lead_id) FILTER (WHERE io.outcome = 'sent') AS sent,
+        COUNT(DISTINCT io.lead_id) FILTER (WHERE io.outcome = 'opened') AS opened,
+        COUNT(DISTINCT io.lead_id) FILTER (WHERE io.outcome = 'clicked') AS clicked,
+        COUNT(DISTINCT io.lead_id) FILTER (WHERE io.outcome = 'replied') AS replied,
+        COUNT(DISTINCT io.lead_id) FILTER (WHERE io.outcome = 'booked_meeting') AS booked
       FROM latest_classification lc
       LEFT JOIN interaction_outcomes io
         ON io.lead_id = lc.lead_id
+        AND io.campaign_id IS NOT NULL
         ${dateFilter.clauseFor(`io.${ACTIVITY_DATE_COLUMNS.interaction_outcomes}`)}
-      GROUP BY lc.brand_id, lc.journey_program_slug, lc.primary_path, lc.lead_id
+      GROUP BY lc.brand_id, lc.journey_program_slug, lc.primary_path
     ),
     journey_enrollments AS (
       SELECT lc.brand_id, lc.journey_program_slug, lc.primary_path,
@@ -336,13 +351,13 @@ export async function getCampaignMetricsByJourney(filters?: CampaignMetricFilter
       p.name AS program_name,
       p.status AS program_status,
       jl.primary_path AS path_slug,
-      COUNT(jl.lead_id)::int AS leads_count,
-      COALESCE(SUM(jl.campaigns), 0)::int AS campaigns_count,
-      COALESCE(SUM(jl.sent), 0)::int AS emails_sent,
-      COALESCE(SUM(jl.opened), 0)::int AS opens_count,
-      COALESCE(SUM(jl.clicked), 0)::int AS clicks_count,
-      COALESCE(SUM(jl.replied), 0)::int AS replies_count,
-      COALESCE(SUM(jl.booked), 0)::int AS meetings_count,
+      COALESCE(MAX(jl.leads), 0)::int AS leads_count,
+      COALESCE(MAX(jl.campaigns), 0)::int AS campaigns_count,
+      COALESCE(MAX(jl.sent), 0)::int AS emails_sent,
+      COALESCE(MAX(jl.opened), 0)::int AS opens_count,
+      COALESCE(MAX(jl.clicked), 0)::int AS clicks_count,
+      COALESCE(MAX(jl.replied), 0)::int AS replies_count,
+      COALESCE(MAX(jl.booked), 0)::int AS meetings_count,
       COALESCE(MAX(je.enrollments), 0)::int AS enrollments_count
     FROM journey_programs p
     LEFT JOIN journey_leads jl

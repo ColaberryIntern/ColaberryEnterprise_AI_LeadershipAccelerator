@@ -163,6 +163,24 @@ describe('filterPathsByJourney - the Growth Journey dimension on the graph (T411
     }
   });
 
+  it('a journey term and a brand term COMPOSE: the cohort is the intersection, never the journey alone (the T411 verifier)', () => {
+    // The brand half is `filterPathsByBrand`, which the graph applies through the campaign brand map;
+    // here the composition is asserted on the predicates the graph composes - journey INTERSECT campaign-brand.
+    const brandOf = new Map<string, string>([['c1', 'b-ent'], ['c2', 'b-cpn']]);
+    const population = [
+      lead(1, journey(), ['c1']),                                   // business-growth, entered an Enterprise campaign
+      lead(2, journey(), ['c2']),                                   // business-growth, entered a CPN campaign only
+      lead(3, journey({ program_slug: 'cpn-scholars' }), ['c1']),    // other programme, Enterprise campaign
+    ];
+    const inBrand = (l: LeadPathRecord, b: string) => l.campaign_enrollments.some((e) => brandOf.get(e.campaign_id) === b);
+    const jThenB = filterPathsByJourney(population, { programSlug: 'business-growth' }).filter((l) => inBrand(l, 'b-ent')).map((l) => l.lead_id);
+    const bThenJ = filterPathsByJourney(population.filter((l) => inBrand(l, 'b-ent')), { programSlug: 'business-growth' }).map((l) => l.lead_id);
+    expect(jThenB).toEqual([1]);
+    expect(bThenJ).toEqual([1]);
+    // Not the journey alone: lead 2 is on the programme but in no Enterprise campaign.
+    expect(filterPathsByJourney(population, { programSlug: 'business-growth' }).map((l) => l.lead_id)).toEqual([1, 2]);
+  });
+
   it('the SAME POPULATION property: a journey cohort is a SUBSET of the unfiltered paths, whole paths kept, input unmutated', () => {
     const cohort = filterPathsByJourney(POPULATION, { programSlug: 'business-growth' });
     // Every member is one of the originals, by identity - the filter chooses leads, it never rebuilds them.

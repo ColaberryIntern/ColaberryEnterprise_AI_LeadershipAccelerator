@@ -1440,16 +1440,23 @@ export async function getCampaignGraphData(
 ): Promise<CampaignGraphData> {
   // T411: the journey dimension narrows the same way brand and campaign do - the cohort is chosen
   // from the UNFILTERED paths for this window and the cache is never overwritten, so node-users,
-  // edge-users and slice keep measuring against the same population. Applied first so it composes
-  // with a campaign or brand term rather than competing with it.
+  // edge-users and slice keep measuring against the same population. Applied first so it COMPOSES
+  // with a campaign or brand term: the cohort is the intersection, and every term the answer claims
+  // to be filtered by is a term it really applied. (The T411 verifier caught the first draft
+  // labelling an all-brand cohort with `brand_filter`, which is the kind of number nobody can check.)
   if (hasJourneyScope(journey)) {
     const base = await getCampaignGraphData(timeWindow, brandId, campaignId);
     const allPaths = graphCache?.leadPaths ?? [];
-    const cohort = filterPathsByJourney(allPaths, journey as JourneyScopeTerms);
-    const scoped = campaignId
-      ? filterPathsByCampaign(cohort, campaignId)
-      : cohort;
-    const data = await buildGraphFromPaths(scoped);
+    let cohort = filterPathsByJourney(allPaths, journey as JourneyScopeTerms);
+    if (campaignId) cohort = filterPathsByCampaign(cohort, campaignId);
+    if (brandId && !campaignId) {
+      // The brand map is built from the WHOLE population's campaigns, as the brand branch does,
+      // so a cohort that entered no campaign of this brand is empty rather than unfiltered.
+      const campaignIds = Array.from(new Set(allPaths.flatMap((p) => p.campaign_enrollments.map((e) => e.campaign_id))));
+      const { map } = await loadCampaignBrandMap(campaignIds);
+      cohort = filterPathsByBrand(cohort, brandId, map);
+    }
+    const data = await buildGraphFromPaths(cohort);
     data.time_window = timeWindow || 'all';
     data.brands = base.brands;
     data.brand_filter = brandId ?? null;
