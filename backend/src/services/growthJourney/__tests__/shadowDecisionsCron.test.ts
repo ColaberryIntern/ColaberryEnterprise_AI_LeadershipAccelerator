@@ -112,6 +112,7 @@ describe('the cron DECIDES ONLY - it must never send', () => {
       '../../utils/piiRedaction',
       './decisionService',
       './handoffs/handoffService',
+      './outcomes/nightlyOutcomesPass',
     ]);
   });
 });

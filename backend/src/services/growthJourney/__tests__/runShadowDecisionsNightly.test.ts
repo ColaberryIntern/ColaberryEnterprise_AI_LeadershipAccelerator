@@ -2,11 +2,13 @@ const m = {
   programFindAll: jest.fn(),
   runShadowDecisions: jest.fn(),
   assignRankedQueue: jest.fn(),
+  runOutcomesPass: jest.fn(),
 };
 jest.mock('../../../models', () => ({ JourneyProgram: { findAll: (...a: unknown[]) => m.programFindAll(...a) } }));
 jest.mock('../../../models/GrowthJourneyHandoff', () => ({ OWNER_QUEUES: ['admissions', 'sales', 'solution_architect', 'support', 'ali', 'human_review'] }));
 jest.mock('../decisionService', () => ({ runShadowDecisions: (...a: unknown[]) => m.runShadowDecisions(...a) }));
 jest.mock('../handoffs/handoffService', () => ({ assignRankedQueue: (...a: unknown[]) => m.assignRankedQueue(...a) }));
+jest.mock('../outcomes/nightlyOutcomesPass', () => ({ runOutcomesPass: (...a: unknown[]) => m.runOutcomesPass(...a) }));
 // The redactor, REAL but observed: every line the runner prints must have gone through it.
 const redactForLogs = jest.fn((s: string) => jest.requireActual('../../../utils/piiRedaction').redactForLogs(s));
 jest.mock('../../../utils/piiRedaction', () => ({ redactForLogs: (s: string) => redactForLogs(s) }));
@@ -37,6 +39,7 @@ const ran = (over: Record<string, unknown> = {}) => ({
   status: 'ran', subjects: 3, recorded: 2, replayed: 1, skipped: [{ subject_ref: 'lead:501', status: 'unresolved' }], errors: [],
   handoffs: { disabled: 2, none: 0, materialized: 0, assigned: 0, queued: 0 }, ...over,
 });
+const OUTCOMES = { normalized: { leads: 2, created: 3, replayed: 1, unmapped: 1, failed: 0, no_brand: 0 }, sla: { scanned: 1, expired: 1, failed: 0 }, rates: { window_days: 30, handoffs: 4, accepted: 2, verdicts: 1, acceptance_rate: 0.5, expiry_rate: 0.25, connection_rate: null, meeting_rate: null, qualification_rate: 1, conversion_rate: 0, false_positive_handoff_rate: 0, time_to_accept_hours: null, by_queue: {} } };
 const logged = () => (console.log as jest.Mock).mock.calls.map((c) => String(c[0]));
 
 beforeEach(() => {
@@ -45,6 +48,7 @@ beforeEach(() => {
   m.programFindAll.mockResolvedValue(PROGRAMS);
   m.runShadowDecisions.mockResolvedValue(ran());
   m.assignRankedQueue.mockResolvedValue([]);
+  m.runOutcomesPass.mockResolvedValue(OUTCOMES);
   jest.spyOn(console, 'log').mockImplementation(() => undefined);
 });
 afterEach(() => jest.restoreAllMocks());
@@ -100,8 +104,9 @@ describe('with the capability on', () => {
     const r = await runScheduledShadowDecisions({ flags: flags({ journeyHandoffs: true }), asOf: AS_OF });
     if (r.skipped) throw new Error('skipped');
     expect(r.ran).toBe(0);
-    expect(r.per_brand.every((b) => b.status === 'disabled' && b.assignment === null)).toBe(true);
+    expect(r.per_brand.every((b) => b.status === 'disabled' && b.assignment === null && b.outcomes === null)).toBe(true);
     expect(m.assignRankedQueue).not.toHaveBeenCalled();
+    expect(m.runOutcomesPass).not.toHaveBeenCalled();
   });
 });
 
@@ -139,8 +144,38 @@ describe('the assignment pass', () => {
     const order: string[] = [];
     m.runShadowDecisions.mockImplementation(async ({ brandId }: { brandId: string }) => { order.push(`decide:${brandId}`); return ran(); });
     m.assignRankedQueue.mockImplementation(async ({ brandId, ownerQueue }: { brandId: string; ownerQueue: string }) => { if (ownerQueue === 'admissions') order.push(`assign:${brandId}`); return []; });
+    m.runOutcomesPass.mockImplementation(async ({ brandId }: { brandId: string }) => { order.push(`outcomes:${brandId}`); return OUTCOMES; });
     await runScheduledShadowDecisions({ flags: flags({ journeyHandoffs: true }), asOf: AS_OF });
-    expect(order).toEqual(['decide:b-cpn', 'assign:b-cpn', 'decide:b-training', 'assign:b-training', 'decide:b-ent', 'assign:b-ent', 'decide:b-flotation', 'assign:b-flotation']);
+    expect(order).toEqual(['decide:b-cpn', 'assign:b-cpn', 'outcomes:b-cpn', 'decide:b-training', 'assign:b-training', 'outcomes:b-training', 'decide:b-ent', 'assign:b-ent', 'outcomes:b-ent', 'decide:b-flotation', 'assign:b-flotation', 'outcomes:b-flotation']);
+  });
+});
+
+describe('the outcomes stage (T409)', () => {
+  it('runs only under journeyHandoffs - with it off no brand gets one - and with it on once per ran brand, with the clock, after the assignment pass; its summary lands on the brand line', async () => {
+    await runScheduledShadowDecisions({ flags: flags(), asOf: AS_OF });
+    expect(m.runOutcomesPass).not.toHaveBeenCalled();
+    const r = await runScheduledShadowDecisions({ flags: flags({ journeyHandoffs: true }), asOf: AS_OF });
+    if (r.skipped) throw new Error('skipped');
+    expect(m.runOutcomesPass).toHaveBeenCalledTimes(4);
+    for (const p of PROGRAMS) expect(m.runOutcomesPass).toHaveBeenCalledWith({ brandId: p.brand_id, asOf: AS_OF });
+    expect(r.per_brand.every((b) => b.outcomes === OUTCOMES)).toBe(true);
+  });
+
+  it('a brand whose decisions failed gets no outcomes stage; the others still do', async () => {
+    m.runShadowDecisions.mockImplementation(async ({ brandId }: { brandId: string }) => { if (brandId === 'b-training') throw new Error('down'); return ran(); });
+    const r = await runScheduledShadowDecisions({ flags: flags({ journeyHandoffs: true }), asOf: AS_OF });
+    if (r.skipped) throw new Error('skipped');
+    expect(m.runOutcomesPass).toHaveBeenCalledTimes(3);
+    expect(r.per_brand[1]).toMatchObject({ brand_id: 'b-training', status: 'failed', outcomes: null });
+    expect(r.per_brand[2].outcomes).toEqual(OUTCOMES);
+  });
+
+  it('the stage answering a failed domain is carried as such on the brand line, the brand itself still ran', async () => {
+    m.runOutcomesPass.mockResolvedValue({ normalized: { failed: true, error_class: 'SequelizeDatabaseError' }, sla: { skipped: true, reason: 'kill_switch_active' }, rates: OUTCOMES.rates });
+    const r = await runScheduledShadowDecisions({ flags: flags({ journeyHandoffs: true }), asOf: AS_OF });
+    if (r.skipped) throw new Error('skipped');
+    expect(r).toMatchObject({ ran: 4, failed: 0 });
+    expect(r.per_brand[0].outcomes).toMatchObject({ normalized: { failed: true }, sla: { skipped: true } });
   });
 });
 
@@ -154,12 +189,20 @@ describe('the summary is counts only', () => {
     const parsed = JSON.parse(summary[0]);
     expect(parsed).toMatchObject({ service: 'growth-journey', level: 'info', brands: 4, ran: 4, failed: 0, subjects: 12, recorded: 8, replayed: 4, skipped_subjects: 8, errors: 4 });
     expect(parsed.per_brand).toHaveLength(4);
-    expect(parsed.per_brand[0]).toEqual({ brand_id: 'b-cpn', program_slug: 'cpn-scholars', program_status: 'draft', status: 'ran', subjects: 3, recorded: 2, replayed: 1, skipped: 2, errors: 1, handoffs: { disabled: 2, none: 0, materialized: 0, assigned: 0, queued: 0 }, assignment: null });
+    expect(parsed.per_brand[0]).toEqual({ brand_id: 'b-cpn', program_slug: 'cpn-scholars', program_status: 'draft', status: 'ran', subjects: 3, recorded: 2, replayed: 1, skipped: 2, errors: 1, handoffs: { disabled: 2, none: 0, materialized: 0, assigned: 0, queued: 0 }, assignment: null, outcomes: null });
     expect(summary[0]).not.toMatch(/lead:|enrollment:|subject_ref|@/);
     // Every printed line went through the redactor - the summary and (below) a brand failure line alike.
     expect(redactForLogs).toHaveBeenCalledTimes(logged().length);
     expect(redactForLogs.mock.calls.map((c) => c[0])).toEqual(expect.arrayContaining([expect.stringContaining('growth_journey.nightly.summary')]));
     // The returned result carries the same counts and no refs either.
     expect(JSON.stringify(r)).not.toMatch(/lead:|enrollment:|subject_ref/);
+  });
+
+  it('with the outcomes stage on, the brand line carries its counts and rate values (nulls kept) and still no ref', async () => {
+    await runScheduledShadowDecisions({ flags: flags({ journeyHandoffs: true }), asOf: AS_OF });
+    const parsed = JSON.parse(logged().find((l) => l.includes('growth_journey.nightly.summary')) as string);
+    expect(parsed.per_brand[0].outcomes).toEqual(OUTCOMES);
+    expect(parsed.per_brand[0].outcomes.rates.connection_rate).toBeNull();
+    expect(JSON.stringify(parsed)).not.toMatch(/lead:|enrollment:|subject_ref|@/);
   });
 });

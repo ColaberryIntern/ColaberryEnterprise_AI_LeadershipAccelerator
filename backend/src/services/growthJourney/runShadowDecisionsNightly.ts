@@ -6,6 +6,7 @@ import { classifyError } from '../../utils/errorClassifier';
 import { redactForLogs } from '../../utils/piiRedaction';
 import { runShadowDecisions, type RunShadowDecisionsResult } from './decisionService';
 import { assignRankedQueue } from './handoffs/handoffService';
+import { runOutcomesPass, type OutcomesPassSummary } from './outcomes/nightlyOutcomesPass';
 
 /**
  * The nightly batch: `GrowthJourneyShadowDecisions` (Phase 4 T408), shipped
@@ -19,9 +20,12 @@ import { assignRankedQueue } from './handoffs/handoffService';
  * brand (each decision materialising its own handoffs through T404's writer,
  * when `journeyHandoffs` is on), and then the queue's assignment pass runs
  * once per brand × queue, so a row that was queued yesterday for want of
- * capacity is offered today's. One brand failing is one line in the summary,
- * never the end of the run; the summary is counts only - no subject ref, no
- * address - and goes through `redactForLogs` like every other line here.
+ * capacity is offered today's. Then (T409) the brand's outcomes stage: the
+ * normaliser over the leads it handed off, the SLA sweep, the rates - each
+ * its own failure domain inside `runOutcomesPass`. One brand failing is one
+ * line in the summary, never the end of the run; the summary is counts only
+ * - no subject ref, no address - and goes through `redactForLogs` like every
+ * other line here.
  *
  * ─── THREE GATES BEFORE A SINGLE READ ───────────────────────────────────────
  *
@@ -53,6 +57,8 @@ export interface NightlyBrandSummary {
   handoffs: RunShadowDecisionsResult['handoffs'];
   /** The nightly assignment pass over the brand's queues: rows offered, rows assigned - or its own failure, the decisions above untouched. */
   assignment: { offered: number; assigned: number } | { failed: true; error_class: string } | null;
+  /** T409: the outcomes stage (normalise, expire, rates) - counts and rate values, each stage answering for itself. */
+  outcomes: OutcomesPassSummary | null;
   error_class?: string;
 }
 
@@ -127,7 +133,10 @@ export async function runScheduledShadowDecisions(options: RunScheduledShadowDec
       const r = await runShadowDecisions({ brandId: base.brand_id, trigger: 'nightly', flags, asOf, limit: options.limit });
       // The pass has its own failure domain: the decisions above are on disk whatever happens
       // to the queues, and the summary says so instead of zeroing the brand (the T408 verifier).
-      const assignment = r.status === 'ran' && isGrowthJourneyCapabilityEnabled('journeyHandoffs', flags) ? await guardedAssignmentPass(base, flags, asOf) : null;
+      const handoffsOn = r.status === 'ran' && isGrowthJourneyCapabilityEnabled('journeyHandoffs', flags);
+      const assignment = handoffsOn ? await guardedAssignmentPass(base, flags, asOf) : null;
+      // T409: after the queues have today's capacity, the outcomes stage - never throws.
+      const outcomes = handoffsOn ? await runOutcomesPass({ brandId: base.brand_id, asOf }) : null;
       per_brand.push({
         ...base,
         status: r.status,
@@ -138,11 +147,12 @@ export async function runScheduledShadowDecisions(options: RunScheduledShadowDec
         errors: r.errors.length,
         handoffs: r.handoffs,
         assignment,
+        outcomes,
       });
     } catch (err: unknown) {
       // One brand's failure is one line here; the next brand still runs.
       const error_class = classifyError(err);
-      per_brand.push({ ...base, status: 'failed', subjects: 0, recorded: 0, replayed: 0, skipped: 0, errors: 0, handoffs: { ...EMPTY_HANDOFFS }, assignment: null, error_class });
+      per_brand.push({ ...base, status: 'failed', subjects: 0, recorded: 0, replayed: 0, skipped: 0, errors: 0, handoffs: { ...EMPTY_HANDOFFS }, assignment: null, outcomes: null, error_class });
       log('growth_journey.nightly.brand_failed', { brand_id: base.brand_id, program_slug: base.program_slug, error_class });
     }
   }
@@ -162,6 +172,6 @@ export async function runScheduledShadowDecisions(options: RunScheduledShadowDec
     per_brand,
   };
   // Counts only: brand ids, programme slugs and statuses, numbers. No subject ref, no address.
-  log('growth_journey.nightly.summary', { ...result, per_brand: per_brand.map(({ brand_id, program_slug, program_status, status, subjects, recorded, replayed, skipped, errors, handoffs, assignment, error_class }) => ({ brand_id, program_slug, program_status, status, subjects, recorded, replayed, skipped, errors, handoffs, assignment, error_class })) });
+  log('growth_journey.nightly.summary', { ...result, per_brand: per_brand.map(({ brand_id, program_slug, program_status, status, subjects, recorded, replayed, skipped, errors, handoffs, assignment, outcomes, error_class }) => ({ brand_id, program_slug, program_status, status, subjects, recorded, replayed, skipped, errors, handoffs, assignment, outcomes, error_class })) });
   return result;
 }
