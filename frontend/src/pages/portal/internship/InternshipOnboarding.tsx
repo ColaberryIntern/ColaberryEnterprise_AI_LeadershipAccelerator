@@ -180,11 +180,19 @@ const InternshipOnboarding: React.FC<{ onChanged?: () => void }> = ({ onChanged 
                     </span>
                     <span>{m.title || m.kind}</span>
                     {m.audience === 'interns_only' && <span className="ip-tag">interns only</span>}
-                    {/* Interns join through Rooms (never a raw Zoom link — that
-                        lives only on the public Eventbrite listing), so joining is
-                        one place and can be attendance-tracked. */}
+                    {/* Name the room and deep-link to it. Interns join through Rooms
+                        (never a raw Zoom link — that lives only on the public
+                        Eventbrite listing), so joining is one place and is
+                        attendance-tracked. */}
+                    {m.room_name && (
+                      <span className="ip-muted" style={{ fontSize: 12.5 }}>in the <strong>{m.room_name}</strong> room</span>
+                    )}
                     {m.room_slug
-                      ? <Link to="/portal/rooms" className="te-btn ghost sm" onClick={() => { void recordInternshipMeetingJoin(m.day).catch(() => { /* attendance is best-effort */ }); }}>Open in Rooms</Link>
+                      ? <Link
+                          to={m.room_id ? `/portal/rooms/${m.room_id}` : '/portal/rooms'}
+                          className="te-btn ghost sm"
+                          onClick={() => { void recordInternshipMeetingJoin(m.day).catch(() => { /* attendance is best-effort */ }); }}
+                        >Open{m.room_name ? ` ${m.room_name}` : ' in Rooms'}</Link>
                       : <span className="ip-muted" style={{ fontSize: 12 }}>room coming</span>}
                   </li>
                 ))}

@@ -49,22 +49,22 @@ export interface MeetingRoomsResult {
  * rule (interns-only meeting → interns room; everything else → public room) is
  * tested without touching the database or Zoom.
  */
+export interface RoomRef { slug: string; id: string; name: string; link: string | null; }
+
 export function applyRoomLinks(
   meetings: readonly RequiredMeeting[],
-  rooms: {
-    internsSlug: string; internsLink: string | null;
-    publicSlug: string; publicLink: string | null;
-  },
+  rooms: { interns: RoomRef; public: RoomRef },
 ): RequiredMeeting[] {
   return meetings.map((m) => {
-    const interns = m.audience === 'interns_only';
-    const link = interns ? rooms.internsLink : rooms.publicLink;
+    const room = m.audience === 'interns_only' ? rooms.interns : rooms.public;
     return {
       ...m,
-      room_slug: interns ? rooms.internsSlug : rooms.publicSlug,
+      room_slug: room.slug,
+      room_id: room.id,
+      room_name: room.name,
       // Keep an existing link if this run could not mint one, so a Zoom outage
       // never blanks a working Join button.
-      join_url: link ?? m.join_url ?? null,
+      join_url: room.link ?? m.join_url ?? null,
     };
   });
 }
@@ -188,8 +188,8 @@ export async function ensureInternshipMeetingRooms(): Promise<MeetingRoomsResult
   // wrong meetings. Every other settings key is preserved.
   const settings = internshipSettings(cohort);
   const meetings = applyRoomLinks(DEFAULT_INTERNSHIP_SETTINGS.required_meetings, {
-    internsSlug: internsRoom.slug, internsLink,
-    publicSlug: publicRoom.slug, publicLink,
+    interns: { slug: internsRoom.slug, id: internsRoom.id, name: internsRoom.name, link: internsLink },
+    public: { slug: publicRoom.slug, id: publicRoom.id, name: publicRoom.name, link: publicLink },
   });
   await cohort.update({ settings_json: { ...settings, required_meetings: meetings } });
 
