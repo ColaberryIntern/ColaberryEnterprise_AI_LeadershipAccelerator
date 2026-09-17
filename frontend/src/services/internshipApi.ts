@@ -347,9 +347,20 @@ export interface DashboardActivity {
 export interface AttentionItem { key: string; label: string; detail: string; waiting_on: string | null; blocking: boolean }
 export interface AttentionQueue { your_turn: AttentionItem[]; waiting_on_colaberry: AttentionItem[] }
 
+export type HandoffPhase = 'unknown' | 'before_week_3' | 'awaiting_assignment' | 'access_pending' | 'in_progress';
+export interface Week3Handoff {
+  phase: HandoffPhase;
+  owner: 'colaberry' | 'intern';
+  title: string;
+  detail: string;
+  project_name: string | null;
+  actionable: boolean;
+}
+
 export interface InternDashboard extends OnboardingView {
   activity: DashboardActivity;
   attention: AttentionQueue;
+  handoff: Week3Handoff;
 }
 
 export async function fetchInternshipDashboard(): Promise<InternDashboard> {

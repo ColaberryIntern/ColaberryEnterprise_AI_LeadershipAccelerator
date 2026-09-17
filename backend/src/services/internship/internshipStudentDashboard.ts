@@ -2,6 +2,7 @@ import type InternshipApplication from '../../models/InternshipApplication';
 import { activeInternView, type ActiveInternView } from './internshipActivationService';
 import { internActivity, type InternActivity } from './internshipActivityService';
 import type { ChecklistStepStatus } from './internshipOnboarding';
+import { deriveWeek3Handoff, type Week3Handoff } from './internshipWeek3Handoff';
 
 /**
  * The student "My Internship" dashboard payload.
@@ -36,6 +37,9 @@ export interface AttentionQueue {
 export interface InternDashboard extends ActiveInternView {
   activity: InternActivity;
   attention: AttentionQueue;
+  /** Where the intern is in the Week-3 "your first Colaberry project" handoff, and
+   *  whose move it is. Derived from their week and their active project's state. */
+  handoff: Week3Handoff;
 }
 
 const toItem = (s: ChecklistStepStatus): AttentionItem => ({
@@ -64,5 +68,10 @@ export async function internDashboard(application: InternshipApplication): Promi
     activeInternView(application),
     internActivity((application as any).enrollment_id),
   ]);
-  return { ...view, activity, attention: deriveAttentionQueue(view.checklist) };
+  return {
+    ...view,
+    activity,
+    attention: deriveAttentionQueue(view.checklist),
+    handoff: deriveWeek3Handoff(view.week, activity.project),
+  };
 }

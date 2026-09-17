@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { InternDashboard, fetchInternshipDashboard } from '../../../services/internshipApi';
+import { InternDashboard, Week3Handoff, fetchInternshipDashboard } from '../../../services/internshipApi';
 import InternshipProjects from './InternshipProjects';
 
 /**
@@ -24,6 +24,26 @@ function Stat({ head, value, sub, tone }: { head: string; value: React.ReactNode
       <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-.5px', margin: '4px 0 2px' }}>{value}</div>
       {sub && <div style={{ fontSize: 12, color: '#6b7280' }}>{sub}</div>}
     </div>
+  );
+}
+
+// The Week-3 handoff card. Tone follows whose move it is: an intern-actionable
+// phase is affirmative green; a Colaberry-owned phase is calm blue and carries a
+// "we're on it" tag, never a warning; before-week-3 / unknown are neutral.
+function HandoffCard({ h }: { h: Week3Handoff }) {
+  const intern = h.owner === 'intern' && h.actionable;
+  const colaberry = h.owner === 'colaberry' && h.phase !== 'unknown';
+  const accent = intern ? '#167b61' : colaberry ? '#2b6cb0' : '#5a6878';
+  const bg = intern ? '#f0f8f4' : colaberry ? '#f0f5fb' : '#f6f7f9';
+  return (
+    <section style={{ ...cardStyle, borderLeft: `4px solid ${accent}`, background: bg }}>
+      <div className="d-flex align-items-center" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ ...label, color: accent }}>Your first project</div>
+        {colaberry && <span className="badge" style={{ background: '#e4edf9', color: '#2b6cb0', fontWeight: 600 }}>waiting on Colaberry</span>}
+      </div>
+      <h2 style={{ fontSize: 16.5, margin: '4px 0 4px' }}>{h.title}</h2>
+      <p className="ip-muted" style={{ margin: 0, fontSize: 13.5, maxWidth: 640 }}>{h.detail}</p>
+    </section>
   );
 }
 
@@ -91,6 +111,10 @@ const InternshipDashboard: React.FC = () => {
           tone="neutral"
         />
       </div>
+
+      {/* Journey: the Week-3 "your first Colaberry project" handoff. Colaberry-owned
+          phases are shown as ours, never as the intern being behind. */}
+      <HandoffCard h={d.handoff} />
 
       {/* Attention, split by whose turn it is. */}
       <div className="d-flex flex-wrap" style={{ gap: 18 }}>
