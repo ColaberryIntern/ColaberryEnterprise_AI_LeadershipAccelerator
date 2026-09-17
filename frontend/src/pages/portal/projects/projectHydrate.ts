@@ -345,7 +345,8 @@ export function overlayCompletions(p: StudentProject, tree: BackendProjectTree):
   // Requirement chips read from the stories that fulfil them. Recomputed on the
   // merged lists so a story the server just verified moves its requirement in
   // the same pull.
-  const reqs = deriveReqStates(withServerTasks.reqs, changed ? lists : withServerTasks.lists);
+  const mergedLists = changed ? lists : withServerTasks.lists;
+  const reqs = deriveReqStates(reconcileReqCatalog(withServerTasks.reqs, mergedLists), mergedLists);
   const reqsChanged = reqs !== withServerTasks.reqs;
 
   const base: StudentProject = (!changed && !urlChanged && !adopted && !statusStale && !reqsChanged) ? p : {
@@ -372,10 +373,49 @@ export function overlayCompletions(p: StudentProject, tree: BackendProjectTree):
  * no evidence about it and says nothing. Returns the SAME array when no chip
  * would change, so overlay callers keep their same-reference fast path.
  */
+/**
+ * A task that came from the published plan, as opposed to the browser's
+ * starter template. The template mints ids like `p1786580195079-t2` and
+ * cites requirement keys of its own (`R4`); when a real plan later publishes,
+ * those tasks stay in the tree, hand-tickable but never verifiable. A learner
+ * with 8 of 8 plan stories verified read "8 of 9" because the template's
+ * one task had become a ninth requirement nothing could ever verify. Five
+ * projects carried 28 such tasks on 2026-09-17.
+ */
+export function isPlanStoryTask(t: Pick<ProjectTask, 'storyId'>): boolean {
+  return /^STORY-\d+$/i.test((t.storyId || '').trim());
+}
+
+/**
+ * The requirement catalog a PUBLISHED plan implies: exactly the keys its
+ * stories cite. A requirement only a template task cites is dropped; one a
+ * plan story cites that the catalog lacks is added as `planned`. When the
+ * tree has no plan stories at all (a starter-only build) the catalog is left
+ * alone, because then the template IS the build.
+ */
+export function reconcileReqCatalog(reqs: ProjectReq[], lists: ProjectList[]): ProjectReq[] {
+  const cited = new Set<string>();
+  let anyPlan = false;
+  for (const l of lists) for (const t of l.tasks) {
+    if (!isPlanStoryTask(t)) continue;
+    anyPlan = true;
+    if (t.req) cited.add(t.req);
+  }
+  if (!anyPlan) return reqs;
+  const kept = reqs.filter((r) => cited.has(r.id));
+  const known = new Set(kept.map((r) => r.id));
+  const added: ProjectReq[] = Array.from(cited).filter((id) => !known.has(id)).map((id) => ({ id, name: id, kind: 'FUNC', state: 'planned' as const }));
+  if (kept.length === reqs.length && added.length === 0) return reqs;
+  return [...kept, ...added];
+}
+
 export function deriveReqStates(reqs: ProjectReq[], lists: ProjectList[]): ProjectReq[] {
   const citing = new Map<string, ProjectTask[]>();
+  const anyPlan = lists.some((l) => l.tasks.some(isPlanStoryTask));
   for (const l of lists) for (const t of l.tasks) {
     if (!t.req) continue;
+    // Once a plan exists, only its stories speak for a requirement.
+    if (anyPlan && !isPlanStoryTask(t)) continue;
     const arr = citing.get(t.req);
     if (arr) arr.push(t); else citing.set(t.req, [t]);
   }
@@ -523,7 +563,7 @@ export function backendTreeToProject(tree: BackendProjectTree): StudentProject {
   // with 14 of 15 stories verified was shown "0/14 verified" and wrote in
   // asking whether her work was being recorded.
   const reqs: ProjectReq[] = deriveReqStates(
-    reqIds.map((id): ProjectReq => ({ id, name: id, kind: 'FUNC', state: 'planned' })),
+    reconcileReqCatalog(reqIds.map((id): ProjectReq => ({ id, name: id, kind: 'FUNC', state: 'planned' })), lists),
     lists,
   );
 

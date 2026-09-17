@@ -31,6 +31,11 @@ jest.mock('../githubRepoClient', () => ({
   fetchRepoFacts: (...a: any[]) => mockFetchRepoFacts(...a),
 }));
 
+const mockRecordWriteAccess = jest.fn().mockResolvedValue(true);
+const mockQuery = jest.fn().mockResolvedValue([{ project_id: 'proj-ambit' }]);
+jest.mock('../repoConnectService', () => ({ recordWriteAccess: (...a: any[]) => mockRecordWriteAccess(...a) }));
+jest.mock('../../../../config/database', () => ({ sequelize: { query: (...a: any[]) => mockQuery(...a) } }));
+
 import { acceptInvitationFor, listPendingInvitations, sweepPendingInvitations } from '../repoInvitations';
 
 /** One invitation as GitHub shapes it, reduced to the fields we read. */
@@ -187,6 +192,45 @@ describe('acceptInvitationFor — an EXPIRED invitation', () => {
 });
 
 describe('sweepPendingInvitations', () => {
+  /**
+   * The grant must be WRITTEN, not just returned. Until 2026-09-17 the sweep
+   * accepted, read permissions.push, put it in its result, and nobody stored
+   * it; a learner who had granted access on both repos was still shown the
+   * 'cannot write' banner and asked to do it again.
+   */
+  it('records the permission it just read onto the bound connection', async () => {
+    mockRecordWriteAccess.mockClear(); mockQuery.mockClear();
+    const live = invitation();
+    mockRequest
+      .mockResolvedValueOnce(listReturns([live]))
+      .mockResolvedValueOnce(listReturns([live]))
+      .mockResolvedValueOnce(noContent);
+    const out = await sweepPendingInvitations();
+    expect(out.accepted).toHaveLength(1);
+    expect(mockQuery).toHaveBeenCalledTimes(1);
+    expect(mockQuery.mock.calls[0][1].replacements).toEqual({ owner: 'qninying', repo: 'ai-operations-center' });
+    expect(mockRecordWriteAccess).toHaveBeenCalledWith('proj-ambit', out.accepted[0].can_push === true);
+  });
+
+  it('does not record for a repo with no bound project, and never fails the sweep when recording fails', async () => {
+    mockRecordWriteAccess.mockClear(); mockQuery.mockClear();
+    mockQuery.mockResolvedValueOnce([{ project_id: null }]);
+    const live = invitation();
+    mockRequest
+      .mockResolvedValueOnce(listReturns([live]))
+      .mockResolvedValueOnce(listReturns([live]))
+      .mockResolvedValueOnce(noContent);
+    const out = await sweepPendingInvitations();
+    expect(out.accepted).toHaveLength(1);
+    expect(mockRecordWriteAccess).not.toHaveBeenCalled();
+    mockQuery.mockRejectedValueOnce(new Error('db down'));
+    mockRequest
+      .mockResolvedValueOnce(listReturns([live]))
+      .mockResolvedValueOnce(listReturns([live]))
+      .mockResolvedValueOnce(noContent);
+    await expect(sweepPendingInvitations()).resolves.toEqual(expect.objectContaining({ accepted: expect.any(Array) }));
+  });
+
   it('takes the live ones and quarantines the expired ones', async () => {
     const live = invitation();
     const dead = invitation({
