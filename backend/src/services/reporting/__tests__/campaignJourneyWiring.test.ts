@@ -56,6 +56,10 @@ it('the journey filter narrows the PATH LIST, like brand and campaign, and the f
   // Every term the answer claims it filtered by is a term it applied: the brand half is really applied,
   // through the same campaign brand map the brand branch builds (the T411 verifier's finding).
   expect(journeyBranch).toContain('filterPathsByBrand(cohort, brandId, map)');
+  // The GATE, not just the call: flipping `!campaignId` to `campaignId` restores the unfiltered-brand
+  // defect with one character, and a test that only pins the call walks straight past it (the T411
+  // verifier's re-check found exactly that). The campaign-takes-precedence rule is part of the contract.
+  expect(journeyBranch).toContain('if (brandId && !campaignId) {');
   expect(journeyBranch).toContain('loadCampaignBrandMap(campaignIds)');
   expect(journeyBranch).toContain('filterPathsByCampaign(cohort, campaignId)');
 });
