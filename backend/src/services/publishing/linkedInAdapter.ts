@@ -335,7 +335,7 @@ export class LinkedInAdapter implements SocialProviderAdapter {
  * The post's text as LinkedIn will show it: the copy, then the tracked link on its own line,
  * then any disclosure. The link is a URL in the commentary - LinkedIn turns the first URL in a
  * post into a clickable preview, and that is how a click reaches `/r/<code>` and the campaign
- * graph. Until 2026-09-16 the adapter sent the text alone: the link was minted, stored on the
+ * graph. Until 2026-09-17 the adapter sent the text alone: the link was minted, stored on the
  * variant, shown in the preview and named in the handoff package, and never reached the
  * post. Found on Ali's first tracked-link test, before it fired.
  */
