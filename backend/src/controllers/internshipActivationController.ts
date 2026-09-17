@@ -8,6 +8,7 @@ import { ACKNOWLEDGEMENT_STATES, REQUIREMENT_KEYS } from '../models/InternshipRe
 import { InvalidInternshipTransitionError } from '../services/internship/internshipStateMachine';
 import { isInternshipEnabled } from '../services/portalFlagsService';
 import { recordMeetingJoin } from '../services/internship/internshipAttendanceService';
+import { internDashboard } from '../services/internship/internshipStudentDashboard';
 
 /**
  * Participant activation endpoints: the onboarding checklist and the tool
@@ -79,6 +80,24 @@ export async function handleGetInternshipOnboarding(req: Request, res: Response)
     res.json({ state: ctx.application.state, ...view });
   } catch (err) {
     fail(res, err, 'internship_onboarding_failed');
+  }
+}
+
+/**
+ * GET /api/portal/internship/dashboard
+ *
+ * The student "My Internship" dashboard: the active-intern view plus their own
+ * training/project/cert/attendance activity and an attention queue split by whose
+ * turn it is. Owner-scoped to the session; a read, never a mutation.
+ */
+export async function handleGetInternshipDashboard(req: Request, res: Response): Promise<void> {
+  try {
+    const ctx = await requireOpenApplication(req, res);
+    if (!ctx) return;
+    const dashboard = await internDashboard(ctx.application);
+    res.json({ state: ctx.application.state, ...dashboard });
+  } catch (err) {
+    fail(res, err, 'internship_dashboard_failed');
   }
 }
 

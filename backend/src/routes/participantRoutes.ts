@@ -26,6 +26,7 @@ import {
 } from '../controllers/internshipDocumentController';
 import {
   handleGetInternshipOnboarding, handleRecordAcknowledgement, handleRecordMeetingJoin,
+  handleGetInternshipDashboard,
 } from '../controllers/internshipActivationController';
 import { requireBuildEntitlement } from '../middlewares/requireBuildEntitlement';
 import { requireContentEntitlement } from '../middlewares/requireContentEntitlement';
@@ -356,6 +357,7 @@ router.get('/api/portal/internship/documents', requireParticipant, handleGetInte
 // anyone — activation is reviewer/system only, so a student cannot put themselves
 // in the cohort by calling an endpoint.
 router.get('/api/portal/internship/onboarding', requireParticipant, handleGetInternshipOnboarding);
+router.get('/api/portal/internship/dashboard', requireParticipant, handleGetInternshipDashboard);
 router.post('/api/portal/internship/acknowledgements', internshipWriteRateLimiter, requireParticipant, handleRecordAcknowledgement);
 router.post('/api/portal/internship/meetings/join', internshipWriteRateLimiter, requireParticipant, handleRecordMeetingJoin);
 
