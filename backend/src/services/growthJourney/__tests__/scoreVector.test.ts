@@ -1,6 +1,6 @@
 import { sourcedKeys } from '../scoring/dimensions';
 import { scoreSubject } from '../scoring/scoreVector';
-import { AT, fullLead, signals } from './fixtures/scoreFixtures';
+import { AT, fullLead, signals, zeroCounts } from './fixtures/scoreFixtures';
 
 /**
  * T306 — what the SCORER does with a subject.
@@ -18,7 +18,7 @@ describe('a sourceless dimension is null and named, never zero', () => {
   it('scores null and appears in gaps with :no_source', () => {
     const v = scoreSubject(signals({ lead: fullLead }), 'business');
     const sourceless = v.dimensions.filter((d) => d.source === 'none' && d.key !== 'recorded_signals');
-    expect(sourceless).toHaveLength(7);
+    expect(sourceless).toHaveLength(4); // T407: seven became four
     for (const d of sourceless) {
       expect({ key: d.key, value: d.value, factors: d.factors.length }).toEqual({
         key: d.key,
@@ -187,7 +187,9 @@ describe('a measured zero and an unmeasured null are different answers', () => {
     // revenue recorded".
     const v = scoreSubject(signals({ lead: { annual_revenue: 'confidential' } }), 'business');
     expect(v.dimensions.find((d) => d.key === 'fit')?.value).toBeNull();
-    expect(v.available).toBe(false);
+    // T407: a lead row exists, so authority measures its floor (no title = unknown); nothing else scores.
+    expect(v.dimensions.filter((d) => d.value !== null).map((d) => d.key)).toEqual(['authority_stakeholder_readiness']);
+    expect(v.summary).toBeNull();
   });
 
   it('(a2) an unparseable employee count is absent, not zero employees', () => {
@@ -229,12 +231,14 @@ describe('a measured zero and an unmeasured null are different answers', () => {
     };
     for (const program of ['business', 'consulting'] as const) {
       const v = scoreSubject(signals({ lead: empty }), program);
-      expect({
-        program,
-        summary: v.summary,
-        available: v.available,
-        anyValue: v.dimensions.some((d) => d.value !== null),
-      }).toEqual({ program, summary: null, available: false, anyValue: false });
+      // T407: for a BUSINESS lead the title dimension measures its floor (a lead exists, its seniority is
+      // unknown), so one dimension holds 0; every other one is null and there is no summary. Consulting
+      // has no title dimension and measures nothing at all.
+      const valued = v.dimensions.filter((d) => d.value !== null).map((d) => d.key);
+      expect({ program, summary: v.summary, available: v.available, valued }).toEqual(
+        program === 'business' ? { program, summary: null, available: true, valued: ['authority_stakeholder_readiness'] } : { program, summary: null, available: false, valued: [] },
+      );
+      if (program === 'business') expect(v.dimensions.find((d) => d.key === 'authority_stakeholder_readiness')?.value).toBe(0);
     }
   });
 
@@ -297,9 +301,9 @@ describe('every scored dimension shows its components', () => {
 });
 
 describe('the summary exists only when every sourced dimension produced a value', () => {
-  it('all three answered gives a weighted number', () => {
+  it('all six answered gives a weighted number (T407: the counts and the title joined the three)', () => {
     const v = scoreSubject(
-      signals({ lead: fullLead, observed: { page_events: 10, behavioral_signals: 5 } }),
+      signals({ lead: fullLead, observed: { page_events: 10, behavioral_signals: 5 }, ...zeroCounts }),
       'business',
     );
     expect(v.summary).not.toBeNull();
@@ -309,18 +313,20 @@ describe('the summary exists only when every sourced dimension produced a value'
 
   it('ONE missing sourced dimension makes the summary null, not partial', () => {
     // A partial summary is a number whose meaning changes per subject.
-    const v = scoreSubject(signals({ lead: fullLead, observed: null }), 'business');
+    const v = scoreSubject(signals({ lead: fullLead, observed: null, ...zeroCounts }), 'business');
     expect(v.summary).toBeNull();
+    // And the counts missing alone does the same (T407): a lead whose tables were not read has no summary.
+    expect(scoreSubject(signals({ lead: fullLead, observed: { page_events: 1, behavioral_signals: 1 } }), 'business').summary).toBeNull();
   });
 
-  it('the sourceless seven never suppress the summary on their own', () => {
+  it('the sourceless four never suppress the summary on their own', () => {
     // They are not "contributing" dimensions: if they suppressed it, the summary
     // could never exist at all and the field would be decorative.
     const v = scoreSubject(
-      signals({ lead: fullLead, observed: { page_events: 1, behavioral_signals: 1 } }),
+      signals({ lead: fullLead, observed: { page_events: 1, behavioral_signals: 1 }, ...zeroCounts }),
       'business',
     );
-    expect(v.gaps.filter((g) => g.endsWith(':no_source'))).toHaveLength(7);
+    expect(v.gaps.filter((g) => g.endsWith(':no_source'))).toHaveLength(4);
     expect(v.summary).not.toBeNull();
   });
 
@@ -329,15 +335,25 @@ describe('the summary exists only when every sourced dimension produced a value'
       signals({
         lead: { evaluating_90_days: true, industry: 'Manufacturing' },
         observed: { page_events: 0, behavioral_signals: 0 },
+        ...zeroCounts,
       }),
       'business',
     );
-    // fit = industry only = 20 (weight .4), intent = 0 (weight .3), urgency = 100 (weight .3)
-    // (20*.4 + 0*.3 + 100*.3) / 1.0 = 38
+    // T407, six sourced dimensions: fit = industry only = 20 (weight .2), intent = 0 (.15), urgency = 100 (.3),
+    // relationship_engagement = 0 (.15), friction_risk = 0 but INVERSE so it counts 100 - 0 = 100 (.1),
+    // authority = no title = unknown = 0 (.1).
+    // (20*.2 + 0*.15 + 100*.3 + 0*.15 + 100*.1 + 0*.1) / 1.0 = 4 + 30 + 10 = 44
     expect(v.dimensions.find((d) => d.key === 'fit')?.value).toBe(20);
     expect(v.dimensions.find((d) => d.key === 'intent')?.value).toBe(0);
     expect(v.dimensions.find((d) => d.key === 'urgency')?.value).toBe(100);
-    expect(v.summary).toBe(38);
+    expect(v.dimensions.find((d) => d.key === 'relationship_engagement')?.value).toBe(0);
+    expect(v.dimensions.find((d) => d.key === 'friction_risk')?.value).toBe(0);
+    expect(v.dimensions.find((d) => d.key === 'authority_stakeholder_readiness')?.value).toBe(0);
+    expect(v.summary).toBe(44);
+    // The inverse dimension pulls the summary DOWN as friction rises: 2 declines (60) -> friction counts 40 -> 4 + 30 + 4 = 38.
+    const frictional = scoreSubject(signals({ lead: { evaluating_90_days: true, industry: 'Manufacturing' }, observed: { page_events: 0, behavioral_signals: 0 }, ...zeroCounts, inbound: { ...zeroCounts.inbound, declined: 2 } }), 'business');
+    expect(frictional.dimensions.find((d) => d.key === 'friction_risk')?.value).toBe(60);
+    expect(frictional.summary).toBe(38);
   });
 });
 

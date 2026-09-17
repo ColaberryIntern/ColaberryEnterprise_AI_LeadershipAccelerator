@@ -54,10 +54,10 @@ const LEAD_CREATED = new Date('2026-08-01T00:00:00Z');
 
 const subject = (over: Record<string, unknown> = {}) => ({
   status: 'resolved',
-  subject: { lead_id: 501, enrollment_id: null, visitor_id: null, org_member_id: null, email_normalized: 'x@example.com', brand_relationships: [], ...over },
+  subject: { lead_id: 501, enrollment_id: null, visitor_id: null, org_member_id: null, email_normalized: 'x@example.com', brand_relationships: [], customer: { paid: false, basis: 'none' }, ...over },
 });
 
-const NONE = { inbound: { replied: 0, booked_meeting: 0, answered: 0, declined: 0 }, appointments: { scheduled: 0, completed: 0, no_show: 0, cancelled: 0 }, hasDeliveryEngagement: false };
+const NONE = { inbound: { replied: 0, booked_meeting: 0, answered: 0, declined: 0, no_response: 0 }, appointments: { scheduled: 0, completed: 0, no_show: 0, cancelled: 0 }, hasDeliveryEngagement: false };
 
 function arrange(over: Partial<Record<keyof typeof m, unknown>> = {}) {
   for (const fn of Object.values(m)) fn.mockReset();
@@ -127,12 +127,48 @@ describe('a business subject', () => {
     expect(r.ctx.overlays).not.toContain('NO_RESPONSE');
   });
 
-  it('an enrolment is a customer', async () => {
-    arrange({ resolveSubject: subject({ enrollment_id: 'enr-9' }) });
+  it('T407: a PAID enrolment is a customer and the lifecycle reaches CUSTOMER without a pipeline stage; a guest, unpaid enrolment is not', async () => {
+    arrange({ resolveSubject: subject({ enrollment_id: 'enr-9', customer: { paid: true, basis: 'payment_status' } }) });
+    const paid = await load();
+    if (paid.status !== 'loaded') throw new Error(paid.status);
+    expect(paid.ctx.state).toBe('CUSTOMER');
+    expect(paid.ctx.enrollment_id).toBe('enr-9');
+    expect(paid.lifecycle.evidence).toContain('enrolment or payment exists');
+    // The same subject with the same enrolment id, unpaid (every AI Flotation submit mints a guest one): not a customer.
+    arrange({ resolveSubject: subject({ enrollment_id: 'enr-9', customer: { paid: false, basis: 'none' } }) });
+    const guest = await load();
+    if (guest.status !== 'loaded') throw new Error(guest.status);
+    expect(guest.ctx.state).not.toBe('CUSTOMER');
+    expect(guest.ctx.enrollment_id).toBe('enr-9');
+    // An active subscription is the other basis.
+    arrange({ resolveSubject: subject({ enrollment_id: 'enr-9', customer: { paid: true, basis: 'subscription' } }) });
+    const subscribed = await load();
+    if (subscribed.status !== 'loaded') throw new Error(subscribed.status);
+    expect(subscribed.ctx.state).toBe('CUSTOMER');
+  });
+
+  it('T407: the counted rows reach the scorer as a measurement - zero counts score 0 - and the title scores authority', async () => {
+    arrange({ leadFindByPk: { id: 501, email: 'x@example.com', phone: null, title: 'VP Engineering', idea_input: 'automate invoicing', selected_systems: ['salesforce'], pipeline_stage: null, industry: 'logistics', created_at: LEAD_CREATED } });
     const r = await load();
     if (r.status !== 'loaded') throw new Error(r.status);
-    expect(r.ctx.state).toBe('CUSTOMER');
-    expect(r.ctx.enrollment_id).toBe('enr-9');
+    const dim = (k: string) => r.ctx.scores.dimensions.find((d) => d.key === k);
+    expect(dim('relationship_engagement')?.value).toBe(0);
+    expect(dim('friction_risk')?.value).toBe(0);
+    expect(dim('authority_stakeholder_readiness')?.value).toBe(80);
+    expect(r.ctx.scores.gaps.some((g) => g.startsWith('relationship_engagement') || g.startsWith('friction_risk') || g.startsWith('authority'))).toBe(false);
+    arrange({ loadLifecycleSourceCounts: { ...NONE, inbound: { ...NONE.inbound, replied: 2, no_response: 1 } } });
+    const counted = await load();
+    if (counted.status !== 'loaded') throw new Error(counted.status);
+    expect(counted.ctx.scores.dimensions.find((d) => d.key === 'relationship_engagement')?.value).toBe(50);
+    expect(counted.ctx.scores.dimensions.find((d) => d.key === 'friction_risk')?.value).toBe(15);
+  });
+
+  it('T407: with no lead there is nothing to count for, and the counted dimensions are a named gap, never 0', async () => {
+    arrange({ resolveSubject: subject({ lead_id: null, enrollment_id: 'enr-9', email_normalized: null }), programFindOne: { id: 'p-ent', slug: 'business-growth', kind: 'business', status: 'draft' } });
+    const r = await load();
+    if (r.status !== 'loaded') throw new Error(r.status);
+    expect(r.ctx.scores.gaps).toEqual(expect.arrayContaining(['relationship_engagement:counts_unavailable', 'friction_risk:counts_unavailable']));
+    expect(r.ctx.scores.dimensions.find((d) => d.key === 'relationship_engagement')?.value).toBeNull();
   });
 
   it('hands the contact resolver the tenant from the brand, the subject\'s own address, and (T403) the programme kind its queue follows from', async () => {
@@ -231,13 +267,17 @@ describe('a failing lookup is named, and the context is still built', () => {
     const r = await load();
     if (r.status !== 'loaded') throw new Error(r.status);
     expect(r.unavailable).toEqual(['lead']);
-    expect(r.ctx.scores.available).toBe(false);
+    // Every LEAD-derived dimension is a gap; the counted ones are keyed on the lead id and were read, so they measure (T407).
+    for (const k of ['fit', 'intent', 'urgency', 'authority_stakeholder_readiness']) expect(r.ctx.scores.dimensions.find((d) => d.key === k)?.value).toBeNull();
+    expect(r.ctx.scores.dimensions.find((d) => d.key === 'relationship_engagement')?.value).toBe(0);
+    expect(r.ctx.scores.summary).toBeNull();
     expect(r.ctx.freshness.created_at).toBeNull();
   });
 
-  it('the counts throw: the lifecycle runs on zero counts, and says so', async () => {
+  it('the counts throw: the lifecycle runs on zero counts, and says so; the counted dimensions are a gap, not 0 (T407)', async () => {
     arrange({ loadLifecycleSourceCounts: () => Promise.reject(new Error('db down')) });
     const r = await load();
+    if (r.status === 'loaded') expect(r.ctx.scores.gaps).toContain('relationship_engagement:counts_unavailable');
     if (r.status !== 'loaded') throw new Error(r.status);
     expect(r.unavailable).toEqual(['lifecycle_sources']);
     expect(r.ctx.state).toBe('EXPLORING_SOLUTIONS');

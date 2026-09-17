@@ -4,6 +4,10 @@ import { InteractionOutcome, Lead, ScheduledEmail, CampaignLead, Campaign, Follo
 import type { OutcomeType } from '../models/InteractionOutcome';
 import { classifyLead } from './leadClassificationService';
 import { logActivity } from './activityService';
+import { normalizeTitleCategory } from './leadTitleCategory';
+
+/** The title rule lives in `./leadTitleCategory` (pure, T407); re-exported so existing importers keep their name. */
+export { normalizeTitleCategory };
 
 export interface RecordOutcomeParams {
   lead_id: number;
@@ -13,23 +17,6 @@ export interface RecordOutcomeParams {
   step_index: number;
   outcome: OutcomeType;
   metadata?: Record<string, any>;
-}
-
-/** Normalize title into a broad category for aggregation */
-export function normalizeTitleCategory(title?: string): string {
-  if (!title) return 'unknown';
-  const t = title.toLowerCase();
-
-  if (/\b(ceo|cto|cfo|cio|coo|cmo|chief)\b/.test(t)) return 'C-Suite';
-  if (/\b(svp|senior vice president)\b/.test(t)) return 'SVP';
-  if (/\b(vp|vice president)\b/.test(t)) return 'VP';
-  if (/\b(director|head of)\b/.test(t)) return 'Director';
-  if (/\b(senior manager|sr\.\s*manager)\b/.test(t)) return 'Sr. Manager';
-  if (/\b(manager|mgr)\b/.test(t)) return 'Manager';
-  if (/\b(lead|principal|staff|senior|sr\.)\b/.test(t)) return 'Senior IC';
-  if (/\b(founder|co-founder|owner|partner)\b/.test(t)) return 'Founder';
-
-  return 'IC';
 }
 
 /** Normalize employee count into buckets for aggregation */

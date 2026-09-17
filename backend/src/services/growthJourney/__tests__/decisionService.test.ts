@@ -72,7 +72,7 @@ function loaded(over: Partial<LoadedDecisionContext> = {}): LoadedDecisionContex
     status: 'loaded',
     ctx: c,
     strategy: businessStrategy,
-    subject: { lead_id: 501, enrollment_id: null, visitor_id: null, org_member_id: null, email_normalized: 'x@example.com', brand_relationships: [] },
+    subject: { lead_id: 501, enrollment_id: null, visitor_id: null, org_member_id: null, email_normalized: 'x@example.com', brand_relationships: [], customer: { paid: false, basis: 'none' } },
     program: { id: 'p-ent', slug: 'business-growth', kind: 'business', status: 'draft' },
     brand: { id: 'b-ent', slug: 'colaberry-enterprise', tenant_id: 't-col' },
     lifecycle: { state: c.state, stateEnteredAt: c.state_entered_at as Date, overlays: c.overlays, evidence: ['test'], projected: true },

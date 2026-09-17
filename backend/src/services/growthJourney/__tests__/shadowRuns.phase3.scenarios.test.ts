@@ -311,17 +311,36 @@ describe('the second content gate, reached only when a policy is content-ready',
 });
 
 describe('the two facts carried from T311, pinned', () => {
-  it('the REAL resolver, given a lead anchor, never consults an enrolment: isCustomer is false for every lead: ref', async () => {
+  it('T407 replaces the first fact: the REAL resolver, given a lead anchor, WALKS to an enrolment and answers customer by payment - a paid one makes isCustomer true, a guest one does not', async () => {
     const f = fx('colaberry-enterprise/CUSTOMER');
     arrange(f);
     m.leadFindByPk.mockResolvedValue({ id: f.lead!.id, email: f.lead!.email });
-    const actual = jest.requireActual('../subjectResolver') as { resolveSubject: (a: { leadId: number }) => Promise<{ status: string; subject?: { enrollment_id: string | null } }> };
-    const r = await actual.resolveSubject({ leadId: f.lead!.id });
-    expect(r.status).toBe('resolved');
-    expect(r.subject?.enrollment_id).toBeNull();
-    expect(m.enrollmentFindByPk).not.toHaveBeenCalled();
-    // So the CUSTOMER fixture reaches its state by the pipeline_stage signal alone.
+    type Res = { status: string; subject?: { enrollment_id: string | null; customer: { paid: boolean; basis: string } }; sources?: string[] };
+    const actual = jest.requireActual('../subjectResolver') as { resolveSubject: (a: { leadId: number }) => Promise<Res> };
+    // Nothing links the lead to an enrolment: no enrolment, not a customer - the fixture still reaches CUSTOMER by pipeline_stage alone.
+    const none = await actual.resolveSubject({ leadId: f.lead!.id });
+    expect(none).toMatchObject({ status: 'resolved', subject: { enrollment_id: null, customer: { paid: false, basis: 'none' } } });
+    expect(m.explorerProfileFindOne).toHaveBeenCalledTimes(1);
+    expect(m.enrollmentLeadFindOne).toHaveBeenCalledTimes(1);
+    expect(m.enrollmentFindAll).toHaveBeenCalledTimes(1);
     expect(f.lead!.pipeline_stage).toBe('enrolled');
+    // A paid enrolment reached by email: a customer, basis payment_status.
+    m.enrollmentFindAll.mockResolvedValue([{ id: 'enr-paid', email: f.lead!.email, enrollment_type: 'standard', payment_status: 'paid', created_at: new Date('2026-08-01') }]);
+    m.enrollmentFindByPk.mockResolvedValue({ id: 'enr-paid', payment_status: 'paid', tier: 'member' });
+    const paid = await actual.resolveSubject({ leadId: f.lead!.id });
+    expect(paid).toMatchObject({ status: 'resolved', subject: { enrollment_id: 'enr-paid', customer: { paid: true, basis: 'payment_status' } }, sources: ['lead', 'enrollment', 'enrollment_email'] });
+    // A guest enrolment (every AI Flotation submit mints one): reached, and NOT a customer.
+    m.enrollmentFindByPk.mockResolvedValue({ id: 'enr-paid', payment_status: 'paid', tier: 'guest' });
+    const guest = await actual.resolveSubject({ leadId: f.lead!.id });
+    expect(guest).toMatchObject({ status: 'resolved', subject: { enrollment_id: 'enr-paid', customer: { paid: false, basis: 'none' } } });
+  });
+
+  it('T407: a paid customer reaches CUSTOMER through the real pipeline WITHOUT pipeline_stage = enrolled', async () => {
+    const f = fx('colaberry-enterprise/EXPLORING_SOLUTIONS');
+    arrange({ ...f, subject: { ...f.subject, customer: { paid: true, basis: 'payment_status' } } });
+    const r = await run({ ...f, subject: { ...f.subject, customer: { paid: true, basis: 'payment_status' } } });
+    expect(r.row.state_at_decision).toBe('CUSTOMER');
+    expect(r.row.reason).toMatch(/^hard_stop:converted$/);
   });
 
   it('asked.evaluating_90_days is not wired: the urgency dimension is a named gap on every service-brand decision', async () => {

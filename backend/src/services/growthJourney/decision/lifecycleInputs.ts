@@ -12,15 +12,17 @@ import { Appointment, DeliveryEngagement, InteractionOutcome, Lead } from '../..
  * exactly as declared: counts by the vocabulary each table already has. No
  * status is invented and no row is written.
  *
- * `isCustomer` is "an enrolment exists" — the subject resolves to an
- * `enrollments` row — which is what T307 meant by "an enrolment or payment".
- * No lead-keyed payment table was found in this run's discovery; `pipeline_stage
- * = enrolled` is read by the lifecycle itself as the other signal. Stated so it
- * can be widened when a payment source exists.
+ * `isCustomer` is NOT read here. Since T407 it is the subject resolver's
+ * `customer.paid` — a paid, non-guest enrolment or an active subscription — never
+ * "an enrolment exists" (every AI Flotation submit mints a guest enrolment).
+ * `pipeline_stage = enrolled` is read by the lifecycle itself as the other signal.
+ *
+ * `no_response` is counted since T407: it is deal risk (the friction dimension
+ * reads it) and it needs none of the opt-out status literals T304 bans.
  */
 
 export interface LifecycleSourceCounts {
-  inbound: { replied: number; booked_meeting: number; answered: number; declined: number };
+  inbound: { replied: number; booked_meeting: number; answered: number; declined: number; no_response: number };
   appointments: { scheduled: number; completed: number; no_show: number; cancelled: number };
   hasDeliveryEngagement: boolean;
 }
@@ -41,12 +43,13 @@ export type LeadSignalColumns = Pick<
   | 'estimated_roi'
   | 'departments_impacted'
   | 'lead_temperature'
+  | 'title'
   | 'email'
   | 'phone'
   | 'created_at'
 >;
 
-const NO_INBOUND = { replied: 0, booked_meeting: 0, answered: 0, declined: 0 };
+const NO_INBOUND = { replied: 0, booked_meeting: 0, answered: 0, declined: 0, no_response: 0 };
 const NO_APPOINTMENTS = { scheduled: 0, completed: 0, no_show: 0, cancelled: 0 };
 
 /** Counts for a lead, or the empty counts for a subject with no lead. */

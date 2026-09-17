@@ -1,6 +1,8 @@
-import { Lead, Enrollment, Visitor, OrgMember } from '../../models';
+import { Sequelize } from 'sequelize';
+import { CommunityMember, Enrollment, EnrollmentLead, ExplorerJourneyProfile, Lead, OrgMember, Subscription, Visitor } from '../../models';
 import { resolveExplorerLead, normalizeEmail } from '../explorerGrowth/explorerIdentityBridge';
 import { getLeadContexts } from '../../modules/tenancy/leadContextService';
+import { pickBestEnrollment } from '../enrollmentPick';
 
 /**
  * The generic subject, as a READ-ONLY VIEW over the identity that already
@@ -48,6 +50,26 @@ import { getLeadContexts } from '../../modules/tenancy/leadContextService';
  * single nullable return would collapse those two, and "we could not identify
  * this person" would start reading as "this person has no history" — which is
  * the difference between asking who someone is and deciding what to send them.
+ *
+ * ─── THE LEAD → ENROLMENT WALK, AND WHAT A CUSTOMER IS (T407) ──────────────
+ *
+ * Until T407 a `{ leadId }` anchor never yielded an enrolment, so `isCustomer`
+ * was false for every lead-anchored subject and the customer signal was
+ * `pipeline_stage = enrolled` alone. The walk now runs three read-only steps,
+ * in order, stopping at the first hit: (1) `explorer_journey_profiles.lead_id`
+ * (the bridge's own persisted link), (2) `enrollment_leads.email` matched on the
+ * normalised address, (3) `enrollments` matched on `LOWER(email)` and deduped
+ * through `participantService.pickBestEnrollment` - the bridge's rule (mgmt_role
+ * > non-explorer > paid > newest), because `enrollments.email` is not unique and
+ * a shadow account would otherwise be the one reported.
+ *
+ * `customer` is a PAID relationship, never "an enrolment exists": every AI
+ * Flotation submit mints a guest enrolment, and a guest with a `payment_status`
+ * is still a guest (`enrollments.tier` is the access truth, and `payment_status`
+ * is not meaningful for guests - the model says so). So `paid` is a non-guest
+ * enrolment with `payment_status = 'paid'` (`basis: 'payment_status'`), else an
+ * `active` subscription on the enrolment (`basis: 'subscription'`), else
+ * `{ paid: false, basis: 'none' }`.
  */
 
 /** Every identity anchor §6.2 permits. At least one is required. */
@@ -58,7 +80,19 @@ export interface SubjectAnchor {
   orgMemberId?: string | null;
 }
 
-export type SubjectSource = 'lead' | 'enrollment' | 'visitor' | 'org_member' | 'lead_tenant_context';
+export type SubjectSource = 'lead' | 'enrollment' | 'visitor' | 'org_member' | 'lead_tenant_context'
+  /** T407: HOW a lead anchor reached its enrolment - the profile link, the enrollment_leads bridge, or the email match. */
+  | 'explorer_profile' | 'enrollment_lead' | 'enrollment_email';
+
+export type CustomerBasis = 'payment_status' | 'subscription' | 'none';
+
+/** Whether the subject PAYS - never whether an enrolment merely exists. */
+export interface CustomerFact {
+  paid: boolean;
+  basis: CustomerBasis;
+}
+
+export const NOT_A_CUSTOMER: CustomerFact = Object.freeze({ paid: false, basis: 'none' });
 
 export type UnresolvedReason =
   /** No anchor at all. §6.2 requires at least one. */
@@ -100,6 +134,8 @@ export interface SubjectView {
    * without that filter.
    */
   brand_relationships: BrandRelationship[];
+  /** T407: the paid relationship, from the enrolment's own payment_status / tier or an active subscription. */
+  customer: CustomerFact;
 }
 
 export type SubjectResolution =
@@ -213,6 +249,15 @@ export async function resolveSubject(anchor: SubjectAnchor): Promise<SubjectReso
       }
     }
 
+    // ── lead → enrolment (T407): three read-only steps, the first hit wins ──
+    if (leadId !== null && enrollmentId === null) {
+      const found = await enrollmentForLead(leadId, emailNormalized);
+      if (found) {
+        enrollmentId = found.enrollmentId;
+        sources.push('enrollment', found.via);
+      }
+    }
+
     // If nothing matched anywhere, the anchors were real but stale.
     if (sources.length === 0) {
       return { status: 'unresolved', reason: 'anchor_not_found' };
@@ -233,6 +278,8 @@ export async function resolveSubject(anchor: SubjectAnchor): Promise<SubjectReso
       }));
     }
 
+    const customer = enrollmentId ? await customerFactFor(enrollmentId) : NOT_A_CUSTOMER;
+
     return {
       status: 'resolved',
       subject: {
@@ -242,6 +289,7 @@ export async function resolveSubject(anchor: SubjectAnchor): Promise<SubjectReso
         org_member_id: orgMemberId,
         email_normalized: emailNormalized,
         brand_relationships: brandRelationships,
+        customer,
       },
       sources,
     };
@@ -268,6 +316,47 @@ export async function resolveSubject(anchor: SubjectAnchor): Promise<SubjectReso
     );
     return { status: 'unresolved', reason: 'lookup_failed' };
   }
+}
+
+/* ── T407: the walk and the customer fact ──────────────────────────────── */
+
+type EnrolmentVia = 'explorer_profile' | 'enrollment_lead' | 'enrollment_email';
+
+/**
+ * The enrolment a lead reaches, by the first of three read-only steps that
+ * answers. Step 3 dedupes through the bridge's rule; a step that finds a row
+ * with no enrolment on it (an `enrollment_leads` prospect) falls through.
+ */
+async function enrollmentForLead(leadId: number, emailNormalized: string | null): Promise<{ enrollmentId: string; via: EnrolmentVia } | null> {
+  const profile = await ExplorerJourneyProfile.findOne({ where: { lead_id: leadId }, attributes: ['enrollment_id'] });
+  const viaProfile = profile?.enrollment_id ?? null;
+  if (viaProfile) return { enrollmentId: viaProfile, via: 'explorer_profile' };
+  if (!emailNormalized) return null;
+
+  const enrollmentLead = await EnrollmentLead.findOne({
+    where: Sequelize.where(Sequelize.fn('LOWER', Sequelize.col('email')), emailNormalized),
+    attributes: ['enrollment_id'],
+    order: [['created_at', 'DESC']],
+  });
+  const viaLead = enrollmentLead?.enrollment_id ?? null;
+  if (viaLead) return { enrollmentId: viaLead, via: 'enrollment_lead' };
+
+  const candidates = await Enrollment.findAll({
+    where: Sequelize.where(Sequelize.fn('LOWER', Sequelize.col('Enrollment.email')), emailNormalized),
+    attributes: ['id', 'email', 'enrollment_type', 'payment_status', 'created_at'],
+    include: [{ model: CommunityMember, as: 'communityMember', attributes: ['mgmt_role'], required: false }],
+  });
+  const best = pickBestEnrollment(candidates as Array<Enrollment & { communityMember?: { mgmt_role?: string | null } | null }>);
+  return best ? { enrollmentId: best.id, via: 'enrollment_email' } : null;
+}
+
+/** A paid, non-guest enrolment, else an active subscription on it, else not a customer. */
+async function customerFactFor(enrollmentId: string): Promise<CustomerFact> {
+  const enrollment = await Enrollment.findByPk(enrollmentId, { attributes: ['id', 'payment_status', 'tier'] });
+  if (enrollment && enrollment.tier !== 'guest' && enrollment.payment_status === 'paid') return { paid: true, basis: 'payment_status' };
+  const subscription = await Subscription.findOne({ where: { enrollment_id: enrollmentId, status: 'active' }, attributes: ['id'] });
+  if (subscription) return { paid: true, basis: 'subscription' };
+  return NOT_A_CUSTOMER;
 }
 
 /**

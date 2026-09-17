@@ -14,7 +14,7 @@ import { businessStrategy } from '../strategies/businessCandidates';
 import { loadLearnerFacts } from '../strategies/learnerFacts';
 import { learnerStrategy } from '../strategies/learnerStrategy';
 import { resolveSubject, type SubjectAnchor, type SubjectView, type UnresolvedReason } from '../subjectResolver';
-import { loadLifecycleSourceCounts, type LeadSignalColumns } from './lifecycleInputs';
+import { loadLifecycleSourceCounts, type LeadSignalColumns, type LifecycleSourceCounts } from './lifecycleInputs';
 
 /**
  * Load everything one shadow decision needs, for one subject in one brand
@@ -142,12 +142,21 @@ function classificationRef(row: Awaited<ReturnType<typeof latestClassification>>
   };
 }
 
-/** T306's vector for the programme, over the lead columns as signals. `asked` is left undefined: nothing records the asking. */
-function scoresFor(lead: LeadSignalColumns | null, kind: JourneyProgramKind, asOf: Date): ScoreVector {
+/**
+ * T306's vector for the programme, over the lead columns and the counted rows as
+ * signals. `asked` is left undefined: nothing records the asking.
+ *
+ * The counts reach the scorer as `null` when there is no lead to count for or
+ * the tables could not be read - a GAP - and as the counted numbers otherwise,
+ * zeros included: a lead nobody replied to has a measured engagement of 0, not
+ * an unknown one (T407).
+ */
+function scoresFor(lead: LeadSignalColumns | null, counts: LifecycleSourceCounts | null, kind: JourneyProgramKind, asOf: Date): ScoreVector {
   return scoreSubject(
     {
       lead: lead
         ? {
+            title: lead.title,
             industry: lead.industry,
             annual_revenue: lead.annual_revenue,
             employee_count: lead.employee_count,
@@ -161,6 +170,8 @@ function scoresFor(lead: LeadSignalColumns | null, kind: JourneyProgramKind, asO
           }
         : null,
       observed: null,
+      inbound: counts ? { ...counts.inbound } : null,
+      appointments: counts ? { ...counts.appointments } : null,
       labels: { lead_temperature: lead?.lead_temperature ?? null },
       computed_at: asOf,
     },
@@ -228,7 +239,8 @@ export async function loadDecisionContext(args: LoadDecisionContextArgs): Promis
   const lead = orNull(leadRaw) as LeadSignalColumns | null;
   const classification = classificationRef(orNull(classificationRaw));
   const profile = orNull(profileRaw);
-  const counts = orNull(countsRaw) ?? { inbound: { replied: 0, booked_meeting: 0, answered: 0, declined: 0 }, appointments: { scheduled: 0, completed: 0, no_show: 0, cancelled: 0 }, hasDeliveryEngagement: false };
+  const countsRead = orNull(countsRaw);
+  const counts = countsRead ?? { inbound: { replied: 0, booked_meeting: 0, answered: 0, declined: 0, no_response: 0 }, appointments: { scheduled: 0, completed: 0, no_show: 0, cancelled: 0 }, hasDeliveryEngagement: false };
   const learnerResult = learnerRaw === null || learnerRaw === UNAVAILABLE ? null : learnerRaw;
   const learner: LearnerFacts | null = learnerResult && learnerResult.status === 'learner' ? learnerResult.facts : null;
   const returnToAi = orNull(returnRaw) ?? NO_RETURN;
@@ -248,9 +260,13 @@ export async function loadDecisionContext(args: LoadDecisionContextArgs): Promis
     programKind: program.kind,
   });
 
-  const isCustomer = subject.enrollment_id !== null;
+  // A customer is a PAID one: the resolver's answer (a paid, non-guest enrolment or an
+  // active subscription), never "an enrolment exists" - every AI Flotation submit
+  // mints a guest enrolment (T407).
+  const isCustomer = subject.customer.paid;
   const lifecycle = projectLifecycle(program.kind, previousProfile, lead, classification, counts, isCustomer, learner, asOf);
-  const scores = scoresFor(lead, program.kind, asOf);
+  // Counts are a measurement only for a subject with a lead whose tables were read.
+  const scores = scoresFor(lead, subject.lead_id !== null && countsRead !== null ? countsRead : null, program.kind, asOf);
   const freshness = await freshnessFor(program.kind, learner, previousProfile.created_at, lead?.created_at ?? null, asOf, unavailable);
 
   const ctx: JourneySubjectContext = {

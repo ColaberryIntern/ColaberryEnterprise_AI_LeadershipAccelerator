@@ -461,15 +461,16 @@ describe('a signal-less subject: the acceptance clause, both halves', () => {
     // score half. This composes the REAL T306 scorer, which is the only way the
     // clause is actually covered.
     const state = classifyBusinessState(input());
-    const scores = scoreSubject({ lead: null, observed: null, computed_at: AS_OF }, 'business');
+    const scores = scoreSubject({ lead: null, observed: null, inbound: null, appointments: null, computed_at: AS_OF }, 'business');
 
     expect(state.state).toBe('NEW_BUSINESS_LEAD');
     expect(scores.summary).toBeNull();
     expect(scores.available).toBe(false);
-    // Seven sourceless dimensions plus the three that had no value for this
-    // subject: every one named, none defaulted.
-    expect(scores.gaps.filter((g) => g.endsWith(':no_source'))).toHaveLength(7);
+    // Four sourceless dimensions (T407 wired three) plus the six that had no value
+    // for this subject - no lead, no counts: every one named, none defaulted.
+    expect(scores.gaps.filter((g) => g.endsWith(':no_source'))).toHaveLength(4);
     expect(scores.gaps).toContain('urgency:default_not_distinguishable_from_unasked');
+    expect(scores.gaps).toEqual(expect.arrayContaining(['relationship_engagement:counts_unavailable', 'friction_risk:counts_unavailable', 'authority_stakeholder_readiness:no_value_for_subject']));
     expect(scores.dimensions.every((d) => d.value === null)).toBe(true);
   });
 });

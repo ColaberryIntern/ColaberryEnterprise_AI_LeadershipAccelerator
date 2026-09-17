@@ -87,7 +87,7 @@ function policyRows(): Array<Record<string, unknown>> {
 }
 
 const flags = (over: Partial<GrowthJourneyFlags> = {}): GrowthJourneyFlags => ({
-  growthJourneyEnabled: true, journeySignalIngest: false, journeyClassification: false, journeyExecution: false, ...over,
+  growthJourneyEnabled: true, journeySignalIngest: false, journeyClassification: false, journeyDecisions: false, journeyHandoffs: false, journeyExecution: false, ...over,
 });
 
 const lead = (over: Record<string, unknown> = {}) => ({
@@ -99,7 +99,7 @@ let createdRows: Array<Record<string, unknown>>;
 
 function arrange(opts: { lead?: Record<string, unknown>; brand?: keyof typeof BRANDS; lock?: Record<string, unknown> | null; locks?: Array<Record<string, unknown>>; pageEventsThrow?: boolean } = {}) {
   const b = BRANDS[opts.brand ?? 'flotation'];
-  m.resolveSubject.mockResolvedValue({ status: 'resolved', subject: { lead_id: 501, enrollment_id: null, visitor_id: 'v-1', org_member_id: null, email_normalized: 'person@example.com', brand_relationships: [] }, sources: ['lead'] });
+  m.resolveSubject.mockResolvedValue({ status: 'resolved', subject: { lead_id: 501, enrollment_id: null, visitor_id: 'v-1', org_member_id: null, email_normalized: 'person@example.com', brand_relationships: [], customer: { paid: false, basis: 'none' } }, sources: ['lead'] });
   m.leadFindByPk.mockResolvedValue(lead(opts.lead));
   m.leadSourceFindByPk.mockResolvedValue({ id: 'src-af', slug: b.slug });
   m.entryPointFindByPk.mockResolvedValue({ id: 'ep-wf', slug: 'workflow_intake', entry_type: null });

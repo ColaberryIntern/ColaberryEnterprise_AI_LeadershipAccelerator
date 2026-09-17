@@ -50,7 +50,7 @@ beforeEach(() => {
   policyFindAll.mockImplementation(async (q) => matching(q));
   policyFindOne.mockImplementation(async (q) => { const rows = matching(q); return rows.find((r) => r.decision === 'deny') ?? rows[0] ?? null; });
   brandFindAll.mockImplementation(async (q: { where: { id: string[] } }) => BRANDS.filter((b) => q.where.id.includes(b.id)));
-  resolveSubject.mockResolvedValue({ status: 'resolved', subject: { lead_id: 501, enrollment_id: null, visitor_id: null, org_member_id: null, email_normalized: 'p@example.com', brand_relationships: [] }, sources: ['lead'] });
+  resolveSubject.mockResolvedValue({ status: 'resolved', subject: { lead_id: 501, enrollment_id: null, visitor_id: null, org_member_id: null, email_normalized: 'p@example.com', brand_relationships: [], customer: { paid: false, basis: 'none' } }, sources: ['lead'] });
   transitionCreate.mockImplementation(async (row: Record<string, unknown>) => {
     if (created.some((r) => r.idempotency_key === row.idempotency_key)) throw new UniqueError('dup');
     const rec = { id: `t-${created.length + 1}`, ...row }; created.push(rec); return rec;

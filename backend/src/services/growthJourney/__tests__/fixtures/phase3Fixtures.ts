@@ -24,12 +24,14 @@ import { channel, contact } from './learnerFixtures';
  *
  * ─── TWO FACTS THE FIXTURES STATE, CARRIED FROM T311 ────────────────────────
  *
- * `isCustomer` means "an enrolment exists", and the subject resolver walks
- * enrollment -> lead and never lead -> enrollment. So for every `lead:`
- * anchored subject it is false, and the customer signal is `pipeline_stage =
- * enrolled` alone. The CUSTOMER and PROJECT_STARTED fixtures below reach their
- * terminal state that way, and a test asserts the resolver's answer for a lead
- * anchor carries no enrolment. Widening the resolver is its own change.
+ * `isCustomer` was "an enrolment exists" and the resolver walked only
+ * enrollment -> lead, so every `lead:` anchored subject reached CUSTOMER by
+ * `pipeline_stage = enrolled` alone. T407 changed both facts: the resolver walks
+ * lead -> enrolment (profile link, enrollment_leads, then email deduped by the
+ * bridge's rule) and a customer is a PAID one (`subject.customer.paid`). None of
+ * these fixtures states a paid customer, so the CUSTOMER and PROJECT_STARTED
+ * fixtures still reach their terminal state by the pipeline_stage signal; a
+ * fixture may set `subject.customer` to state the other path.
  *
  * `asked.evaluating_90_days` is owned and decided, not wired: nothing records
  * the asking, so that dimension is a named gap on every business decision.
@@ -130,13 +132,13 @@ export interface ClassificationSignals {
 }
 
 export interface Counts {
-  inbound: { replied: number; booked_meeting: number; answered: number; declined: number };
+  inbound: { replied: number; booked_meeting: number; answered: number; declined: number; no_response: number };
   appointments: { scheduled: number; completed: number; no_show: number; cancelled: number };
   hasDeliveryEngagement: boolean;
 }
 
 export const NONE: Counts = {
-  inbound: { replied: 0, booked_meeting: 0, answered: 0, declined: 0 },
+  inbound: { replied: 0, booked_meeting: 0, answered: 0, declined: 0, no_response: 0 },
   appointments: { scheduled: 0, completed: 0, no_show: 0, cancelled: 0 },
   hasDeliveryEngagement: false,
 };
@@ -175,7 +177,7 @@ export interface ShadowFixture {
   scenario: string | null;
   brand: GjBrandSlug;
   anchor: { leadId: number } | { enrollmentId: string };
-  subject: { lead_id: number | null; enrollment_id: string | null; email: string };
+  subject: { lead_id: number | null; enrollment_id: string | null; email: string; customer?: { paid: boolean; basis: 'payment_status' | 'subscription' | 'none' } };
   lead: LeadSignals | null;
   classification: ClassificationSignals | null;
   /** The previous `growth_journey_profiles` projection, when one exists. */

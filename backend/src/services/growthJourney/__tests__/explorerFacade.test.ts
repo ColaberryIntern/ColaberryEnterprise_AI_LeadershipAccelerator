@@ -69,6 +69,7 @@ const resolved = (over: Record<string, unknown> = {}) => ({
     org_member_id: null,
     email_normalized: 'a@example.test',
     brand_relationships: [],
+    customer: { paid: false, basis: 'none' },
     ...over,
   },
 });
