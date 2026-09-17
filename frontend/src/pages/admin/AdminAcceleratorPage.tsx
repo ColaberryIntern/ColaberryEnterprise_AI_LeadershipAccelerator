@@ -15,6 +15,8 @@ import CurriculumCompletionTab from './components/CurriculumCompletionTab';
 import CurrentClassesDashboard from './components/CurrentClassesDashboard';
 import AdminCommunityRolesPage from './AdminCommunityRolesPage';
 import { resolveAcceleratorNav } from './utils/resolveAcceleratorNav';
+import { matchesPaymentFilter, paymentBadgeFor, PAYMENT_FILTER_OPTIONS } from './enrollmentPaymentFilter';
+import type { PaymentFilter } from './enrollmentPaymentFilter';
 import PersonLink from '../../components/admin/person/PersonLink';
 
 // Program-wide surfaces embedded as tabs. Lazy so folding three substantial
@@ -79,7 +81,7 @@ interface EnrollmentInfo {
   payment_method?: string;
   amount_paid?: number;
   paysimple_url?: string | null;
-  subscription?: { plan: string; status: string; amount_cents: number; current_period_end?: string | null } | null;
+  subscription?: { plan: string; status: string; amount_cents: number; current_period_end?: string | null; created_at?: string | null } | null;
   portal_enabled?: boolean;
   created_at?: string;
   enrollment_type?: string;
@@ -229,7 +231,7 @@ function AdminAcceleratorPage() {
   const [cohortEnrollments, setCohortEnrollments] = useState<EnrollmentInfo[]>([]);
   const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
   const [portalFilter, setPortalFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
-  const [paymentFilter, setPaymentFilter] = useState<'all' | 'paid' | 'pending_invoice' | 'failed'>('all');
+  const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>('all');
   const [historyTarget, setHistoryTarget] = useState<{ id: string; name: string } | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -653,7 +655,7 @@ function AdminAcceleratorPage() {
   const filteredEnrollments = cohortEnrollments.filter((e) => {
     if (portalFilter === 'enabled' && !e.portal_enabled) return false;
     if (portalFilter === 'disabled' && e.portal_enabled) return false;
-    if (paymentFilter !== 'all' && e.payment_status !== paymentFilter) return false;
+    if (!matchesPaymentFilter(e, paymentFilter)) return false;
     return true;
   });
 
@@ -672,14 +674,16 @@ function AdminAcceleratorPage() {
     return <StatusBadge label={status} tone={tones[status]} />;
   };
 
-  const paymentBadge = (status: string) => {
-    const tones: Record<string, BadgeTone> = {
-      paid: 'success', pending_invoice: 'warning', failed: 'danger',
-    };
-    const labels: Record<string, string> = {
-      paid: 'Paid', pending_invoice: 'Pending Invoice', failed: 'Failed',
-    };
-    return <StatusBadge label={labels[status] || status} tone={tones[status]} />;
+  // Label, tone and the 'checkout started' line come from enrollmentPaymentFilter,
+  // which also knows an abandoned checkout from a free signup.
+  const paymentBadge = (e: EnrollmentInfo) => {
+    const b = paymentBadgeFor(e);
+    return (
+      <>
+        <StatusBadge label={b.label} tone={b.tone} />
+        {b.detail && <div className="text-muted" style={{ fontSize: '0.72rem' }}>{b.detail}</div>}
+      </>
+    );
   };
 
   const formatDate = (d: string) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
@@ -1083,11 +1087,8 @@ function AdminAcceleratorPage() {
           padded={false}
           actions={
             <div className="d-flex gap-2 align-items-center">
-              <select className="form-select form-select-sm" style={{ width: 'auto' }} value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value as any)}>
-                <option value="all">All Payments</option>
-                <option value="paid">Paid</option>
-                <option value="pending_invoice">Pending Invoice</option>
-                <option value="failed">Failed</option>
+              <select className="form-select form-select-sm" style={{ width: 'auto' }} value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value as PaymentFilter)}>
+                {PAYMENT_FILTER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
               <select className="form-select form-select-sm" style={{ width: 'auto' }} value={portalFilter} onChange={(e) => setPortalFilter(e.target.value as any)}>
                 <option value="all">All Portal</option>
@@ -1144,7 +1145,7 @@ function AdminAcceleratorPage() {
                           {e.utm_campaign && <div className="text-muted" style={{ fontSize: '0.72rem' }}>{e.utm_campaign}</div>}
                         </td>
                         <td>
-                          {paymentBadge(e.payment_status || 'failed')}
+                          {paymentBadge(e)}
                           {typeof e.amount_paid === 'number' && e.amount_paid > 0 ? (
                             <div className="text-muted" style={{ fontSize: '0.72rem' }}>
                               ${e.amount_paid.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} paid
