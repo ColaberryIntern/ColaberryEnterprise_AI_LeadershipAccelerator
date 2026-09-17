@@ -1,0 +1,41 @@
+WEBVTT
+
+1
+00:00:00.500 --> 00:00:06.900
+An AI voice agent finishes a call with a prospect. Someone has to decide what happens next.
+
+2
+00:00:08.000 --> 00:00:17.690
+Until March 2026 the analysis of an answered call ended in a task. A request for a person and a hang-up looked the same on the console.
+
+3
+00:00:18.800 --> 00:00:29.900
+Kes built rule-based detection with no language model in it, a fixed priority order, and one handler per intent that schedules, changes the lead's state, or stops.
+
+4
+00:00:31.000 --> 00:00:39.630
+The Lead Lifecycle Monitor shows each lead's last intent and the next action the rules scheduled. Every row here is a placeholder.
+
+5
+00:00:40.700 --> 00:00:48.850
+Stop signals win over requests, the platform's own actions win over the transcript, and the first match decides.
+
+6
+00:00:50.000 --> 00:00:57.500
+On the drill-down, the job the handler cancelled sits beside the follow-up it scheduled, with its reason in the payload.
+
+7
+00:00:58.600 --> 00:01:08.070
+In August an audit found one contact still being retried across five reasons. Kes capped or removed every remaining loop the same day.
+
+8
+00:01:09.200 --> 00:01:23.830
+Read from the production tables: 2,227 of 2,326 answered calls received a next step by rule, and retries after inconclusive calls went from 551 to none.
+
+9
+00:01:24.900 --> 00:01:31.880
+The record says what it cannot show: no labelled sample says how often the rules chose the right intent.
+
+10
+00:01:33.000 --> 00:01:40.650
+Every claim on this page is pinned to a commit or a query. Every figure spoken here is on the page underneath.
