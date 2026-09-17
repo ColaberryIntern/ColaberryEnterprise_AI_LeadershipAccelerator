@@ -287,6 +287,38 @@
     };
   }
 
+  /** The column layout's labels: the routed spot, then the gap below the box left, then the gap above the box entered; else the panel says it. */
+  function settleColumnLabels(edges, boxes, gapY) {
+    var all = Object.keys(boxes).map(function (k) { return boxes[k]; });
+    var placed = [];
+    function clear(rect) {
+      return !all.some(function (box) { return overlaps(rect, box, 1); }) && !placed.some(function (p) { return overlaps(rect, p, 2); });
+    }
+    return edges.map(function (e) {
+      if (!e.label || !e.labelFits) return e;
+      var a = boxes[e.from]; var b = boxes[e.to];
+      var spots = [[e.labelX, e.labelY]];
+      if (!e.returns) {
+        spots.push([a.x + a.width / 2, a.y + a.height + gapY / 2 + LABEL_LIFT + 4]);
+        spots.push([b.x + b.width / 2, b.y - gapY / 2 + LABEL_LIFT + 4]);
+      }
+      for (var i = 0; i < spots.length; i += 1) {
+        var rect = labelRect(e.label, spots[i][0], spots[i][1]);
+        if (clear(rect)) {
+          placed.push(rect);
+          var out = {};
+          Object.keys(e).forEach(function (k) { out[k] = e[k]; });
+          out.labelX = spots[i][0]; out.labelY = spots[i][1];
+          return out;
+        }
+      }
+      var hidden = {};
+      Object.keys(e).forEach(function (k) { hidden[k] = e[k]; });
+      hidden.labelFits = false;
+      return hidden;
+    });
+  }
+
   function routeHorizontalEdges(panel, boxes, gapX, gapY) {
     var all = Object.keys(boxes).map(function (k) { return boxes[k]; });
     var placed = [];
@@ -380,7 +412,7 @@
       };
     });
     var height = V.pad * 2 + ordered.length * boxH + (ordered.length - 1) * V.gapY;
-    var edges = panel.edges.map(function (e) {
+    var routed = panel.edges.map(function (e) {
       var a = boxes[e.from]; var b = boxes[e.to];
       var returns = b.y <= a.y;
       var d, labelX, labelY;
@@ -399,6 +431,7 @@
       }
       return { from: e.from, to: e.to, d: d, labelX: labelX, labelY: labelY, label: e.label, status: e.status, motion: e.motion, returns: returns, labelFits: true };
     });
+    var edges = settleColumnLabels(routed, boxes, V.gapY);
     var bands = lanes.map(function (lane, i) {
       return { lane: lane, label: panel.laneLabels[lane], x: V.pad + i * V.indent - 6, y: V.pad, width: 3, height: height - V.pad * 2 };
     });

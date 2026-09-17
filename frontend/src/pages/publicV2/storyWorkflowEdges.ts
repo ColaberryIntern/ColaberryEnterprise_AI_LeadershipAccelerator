@@ -135,6 +135,40 @@ function back(a: WorkflowNodeBox, b: WorkflowNodeBox, gapY: number): Routed {
 }
 
 /**
+ * The column layout's labels, settled after the fact. A forward edge that
+ * skips boxes runs behind them, and its midpoint label sat under one (seen
+ * live on every brand at 768 and 390 on 2026-09-16). Each label now tries,
+ * in order: the point the routing gave it; the gap just below the box it
+ * leaves; the gap just above the box it enters. The first spot clear of every
+ * box and every label already placed wins; with none, the panel says it.
+ */
+export function settleColumnLabels(
+  edges: readonly WorkflowEdgePath[],
+  boxes: ReadonlyMap<string, WorkflowNodeBox>,
+  gapY: number,
+): readonly WorkflowEdgePath[] {
+  const all = [...boxes.values()];
+  const placed: Rect[] = [];
+  const clear = (rect: Rect): boolean =>
+    !all.some((box) => overlaps(rect, box, 1)) && !placed.some((p) => overlaps(rect, p, 2));
+  return edges.map((e) => {
+    if (!e.label || !e.labelFits) return e;
+    const a = boxes.get(e.from)!;
+    const b = boxes.get(e.to)!;
+    const spots: [number, number][] = [[e.labelX, e.labelY]];
+    if (!e.returns) {
+      spots.push([a.x + a.width / 2, a.y + a.height + gapY / 2 + LABEL_LIFT + 4]);
+      spots.push([b.x + b.width / 2, b.y - gapY / 2 + LABEL_LIFT + 4]);
+    }
+    for (const [x, y] of spots) {
+      const rect = labelRect(e.label, x, y);
+      if (clear(rect)) { placed.push(rect); return { ...e, labelX: x, labelY: y }; }
+    }
+    return { ...e, labelFits: false };
+  });
+}
+
+/**
  * Every edge of the panel routed over the boxes the horizontal layout placed,
  * in declared order, each label drawn only where nothing else is.
  */
