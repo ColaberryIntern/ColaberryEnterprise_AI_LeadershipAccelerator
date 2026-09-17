@@ -58,6 +58,11 @@ const BUILD_PROVIDED_ASSETS: readonly [string, string][] = [
   ['/assets/case-studies.js', 'case-study-shell/case-studies.js'],
   ['/assets/case-study-record.js', 'case-study-shell/case-study-record.js'],
   ['/assets/case-studies.css', 'case-study-shell/case-studies.css'],
+  // The visual story band (2026-09-16): three scripts and a sheet, same builder, same promise.
+  ['/assets/case-study-visual-model.js', 'case-study-shell/case-study-visual-model.js'],
+  ['/assets/case-study-visual-graph.js', 'case-study-shell/case-study-visual-graph.js'],
+  ['/assets/case-study-visual-story.js', 'case-study-shell/case-study-visual-story.js'],
+  ['/assets/case-study-visual-story.css', 'case-study-shell/case-study-visual-story.css'],
 ];
 
 /** Resolve a URL path against a built app directory, the way `try_files` would. */

@@ -1053,6 +1053,12 @@ a.record:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; 
   --cs-accent: var(--accent);
   --cs-accent-contrast: var(--accent-contrast);
   --cs-radius: calc(var(--radius) + 4px);
+  /* The visual story band's three status tokens (case-study-visual-story.css):
+     resolved, needs attention, failed. Semantic, and already in this palette. */
+  --cs-ok: var(--success);
+  --cs-warn: var(--warning);
+  --cs-bad: var(--danger);
+  --cs-font-mono: var(--mono);
 }
 
 /* ── The design: one page, two widths ────────────────────────────────

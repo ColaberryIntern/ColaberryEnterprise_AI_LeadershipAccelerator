@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" />
     <link rel="stylesheet" href="/assets/site.css" />
     <link rel="stylesheet" href="/assets/case-studies.css" />
+    <link rel="stylesheet" href="/assets/case-study-visual-story.css" />
 
   </head>
   <body>
@@ -77,6 +78,10 @@
     </footer>
 
     <script src="/assets/track-v2.js" data-site="{{brand.sourceSlug}}" data-api="{{brand.platformApiBase}}" defer></script>
+    <!-- The visual story band, in this order: model, drawing, band; the record renderer mounts it. -->
+    <script src="/assets/case-study-visual-model.js" defer></script>
+    <script src="/assets/case-study-visual-graph.js" defer></script>
+    <script src="/assets/case-study-visual-story.js" defer></script>
     <script src="/assets/case-study-record.js" data-api="{{brand.platformApiBase}}"
             data-surface="ai-flotation" data-index="/results/" defer></script>
   </body>

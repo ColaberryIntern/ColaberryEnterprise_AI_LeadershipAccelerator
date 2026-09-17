@@ -339,10 +339,20 @@
     measurement: function (c) {
       var m = c.measurement;
       var metrics = (m && m.metrics) || [];
-      return section('measurement', 'The measurement', [
-        m ? prose(m.narrative) : null,
-        metrics.length ? appendAll(el('ul', 'cs-metrics'), metrics.map(metricCard)) : null,
-      ]);
+      var cards = metrics.length ? appendAll(el('ul', 'cs-metrics'), metrics.map(metricCard)) : null;
+      /* WHEN THE VISUAL STORY ALREADY SHOWS THE FIGURES, the cards fold. Ali,
+         2026-09-16, on the Enterprise pilot: "Shouldn't the new cards replace
+         the old cards? I don't think they both need to be there." The full
+         notes (baseline, sample, methodology, limitations) stay one click
+         away; the same figures are not printed twice on one page. */
+      if (cards && storyShowsFigures(c)) {
+        var fold = el('details', 'cs-measure-fold');
+        fold.setAttribute('data-testid', 'story-measurement-notes');
+        fold.appendChild(el('summary', null, 'Full notes on all ' + metrics.length + ' metric' + (metrics.length === 1 ? '' : 's')));
+        fold.appendChild(cards);
+        cards = fold;
+      }
+      return section('measurement', 'The measurement', [m ? prose(m.narrative) : null, cards]);
     },
 
     roadmap: function (c) {
@@ -455,6 +465,37 @@
       head.appendChild(fig);
     }
     return head;
+  }
+
+  /* ============================ THE VISUAL STORY =============================
+     Ali, 2026-09-16, on the Enterprise pilot: "They need to be done for all the
+     published sites." The band (workflow drawing, outcome cards with their
+     count-up, charts) is `case-study-visual-story.js`, framework-free and
+     loaded before this file; it mounts under the facts, above the first band,
+     exactly where the Enterprise page puts it. A page that did not load the
+     band's scripts renders the record as before: the story is an extra on the
+     wire, never a dependency of the record.
+     ======================================================================== */
+
+  function visualStoryModule() {
+    return typeof window !== 'undefined' && window.CaseStudyVisualStory ? window.CaseStudyVisualStory : null;
+  }
+
+  function storyShowsFigures(c) {
+    var mod = visualStoryModule();
+    return Boolean(mod && c.visualStory && mod.showsFigures(c.visualStory));
+  }
+
+  /* Mounted AFTER `host` is in the document, so the drawing can measure the
+     width it is given and fit it rather than guess from the viewport. */
+  function mountVisualStory(host, c) {
+    var mod = visualStoryModule();
+    var mounted = mod.mount(host, c.visualStory, {
+      onInteraction: function (visual, action) {
+        if (typeof window.rfxTrack === 'function') window.rfxTrack('case_study_visual_interaction', { slug: c.slug, visual: visual, action: action });
+      },
+    });
+    if (!mounted && host.parentNode) host.parentNode.removeChild(host);
   }
 
   function facts(c) {
@@ -700,6 +741,11 @@
       root.appendChild(hero(c, surface));
       var f = facts(c);
       if (f) root.appendChild(f);
+      if (visualStoryModule() && c.visualStory) {
+        var storyHost = el('div', 'cs-visual-story-host');
+        root.appendChild(storyHost);
+        mountVisualStory(storyHost, c);
+      }
 
       var order = (surface && surface.sectionOrder) || [];
       /* Placed against the order this page will actually render, so a figure
