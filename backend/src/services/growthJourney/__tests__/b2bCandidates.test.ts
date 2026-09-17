@@ -377,3 +377,53 @@ describe('T402 — a human owns the thread: the AI\'s commercial outreach pauses
     });
   });
 });
+
+/* ── T405: the cooldown ────────────────────────────────────────────────────── */
+
+describe('T405 — a human sent the person back: every generator declines returned_to_ai_cooldown while the overlay is on', () => {
+  const COOLDOWN = 'RETURNED_TO_AI';
+  const REASON = 'returned_to_ai_cooldown';
+
+  describe.each(PROGRAMMES)('%s', (_name, p, ctx) => {
+    it('no candidate at all, in every Layer-1 state, with every channel open and a portal account: email, nudge, everything', () => {
+      for (const state of [...p.states.fresh, ...p.states.problemKnown, ...p.states.exploring]) {
+        const g = generateB2b(p, ctx({ state, enrollment_id: 'enr-9', overlays: [COOLDOWN], contact: contact() }));
+        expect(g.candidates).toEqual([]);
+        expect(g.not_emitted.filter((x) => x.reason === REASON).map((x) => x.generator)).toContain('inAppNudge');
+        expect(g.not_emitted.filter((x) => x.reason === REASON).length).toBeGreaterThanOrEqual(2);
+        // A generator whose predicate is false for this state says so (the education/case-study pair is exclusive by
+        // contact evidence); every one whose predicate holds says the cooldown.
+        for (const n of g.not_emitted) expect([REASON, 'predicate_false', 'stalled_overlay_takes_precedence', 'already_reached_out:case_study_takes_over', 'not_yet_reached_out:education_first']).toContain(n.reason);
+      }
+    });
+
+    it('the cooldown is the reason, not a closed channel or a human in the thread: the same context without the overlay generates', () => {
+      const state = p.states.exploring[0];
+      const held = generateB2b(p, ctx({ state, enrollment_id: 'enr-9', overlays: [COOLDOWN], contact: contact() }));
+      const free = generateB2b(p, ctx({ state, enrollment_id: 'enr-9', overlays: [], contact: contact() }));
+      expect(held.candidates).toEqual([]);
+      expect(free.candidates.length).toBeGreaterThanOrEqual(2);
+      expect(free.not_emitted.some((x) => x.reason === REASON)).toBe(false);
+    });
+
+    it('the suppression still fires for a DECLINED person on cooldown - saying no is not outreach', () => {
+      const g = generateB2b(p, ctx({ state: p.states.fresh[0], overlays: ['DECLINED', COOLDOWN], contact: contact() }));
+      expect(g.candidates.map((c) => c.action_type)).toEqual(['SUPPRESS_CONTACT']);
+    });
+
+    it('nothing is deferred either: a commercial-state or human-review subject on cooldown is not handed back to a human', () => {
+      const commercial = p.states.commercial[0];
+      expect(generateB2b(p, ctx({ state: commercial, overlays: [] })).deferred.some((d) => d.would === 'create_handoff')).toBe(true); // non-vacuity
+      expect(generateB2b(p, ctx({ state: commercial, overlays: [COOLDOWN] })).deferred.some((d) => d.would === 'create_handoff')).toBe(false);
+      expect(generateB2b(p, ctx({ state: p.states.exploring[0], overlays: ['HUMAN_REVIEW'] })).deferred.some((d) => d.would === 'create_handoff')).toBe(true);
+      expect(generateB2b(p, ctx({ state: p.states.exploring[0], overlays: ['HUMAN_REVIEW', COOLDOWN] })).deferred.some((d) => d.would === 'create_handoff')).toBe(false);
+    });
+
+    it('the refusal names the cooldown, and it outranks the state-based reasons', () => {
+      const exploring = ctx({ state: p.states.exploring[0], overlays: [COOLDOWN] });
+      expect(b2bEmptyReason(p, exploring, generateB2b(p, exploring))).toBe(REASON);
+      const commercial = ctx({ state: p.states.commercial[0], overlays: [COOLDOWN] });
+      expect(b2bEmptyReason(p, commercial, generateB2b(p, commercial))).toBe(REASON);
+    });
+  });
+});

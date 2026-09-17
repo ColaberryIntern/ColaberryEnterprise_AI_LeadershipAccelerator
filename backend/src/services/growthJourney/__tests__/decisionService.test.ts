@@ -77,6 +77,7 @@ function loaded(over: Partial<LoadedDecisionContext> = {}): LoadedDecisionContex
     brand: { id: 'b-ent', slug: 'colaberry-enterprise', tenant_id: 't-col' },
     lifecycle: { state: c.state, stateEnteredAt: c.state_entered_at as Date, overlays: c.overlays, evidence: ['test'], projected: true },
     previousProfile: { state: null, state_entered_at: null, created_at: null },
+    returnToAi: { active: false, handoff_id: null, cooldown_until: null, reason: null },
     unavailable: [],
     ...over,
   };

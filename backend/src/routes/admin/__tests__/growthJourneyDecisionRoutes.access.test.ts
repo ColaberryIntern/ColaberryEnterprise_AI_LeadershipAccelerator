@@ -14,6 +14,8 @@ import jwt from 'jsonwebtoken';
 const growthJourney = { growthJourneyEnabled: true, journeySignalIngest: false, journeyClassification: false, journeyExecution: false };
 jest.mock('../../../config/env', () => ({ env: { jwtSecret: 'test-secret', nodeEnv: 'test', growthJourney } }));
 jest.mock('../../../services/aiEventService', () => ({ emitAiEvent: jest.fn().mockResolvedValue(undefined) }));
+// The handoff controller (same router, Phase 4) reaches the ledger at load; mocked at its boundary like the siblings below.
+jest.mock('../../../services/ledgerService', () => ({ logEvent: jest.fn().mockResolvedValue(undefined) }));
 
 const findByPk = jest.fn();
 const findAndCountAll = jest.fn();

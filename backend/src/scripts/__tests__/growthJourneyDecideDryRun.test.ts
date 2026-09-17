@@ -53,6 +53,7 @@ function loaded() {
     brand: { id: 'b-ent', slug: 'colaberry-enterprise', tenant_id: 't-col' },
     lifecycle: { state: c.state, stateEnteredAt: c.asOf, overlays: c.overlays, evidence: [], projected: true },
     previousProfile: { state: null, state_entered_at: null, created_at: null },
+    returnToAi: { active: false, handoff_id: null, cooldown_until: null, reason: null },
     unavailable: [],
   };
 }

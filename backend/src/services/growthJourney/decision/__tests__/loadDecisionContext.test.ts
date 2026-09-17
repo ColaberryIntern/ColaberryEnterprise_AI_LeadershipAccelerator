@@ -7,6 +7,7 @@ const m = {
   leadFindByPk: jest.fn(),
   profileFindOne: jest.fn(),
   explorerProfileFindByPk: jest.fn(),
+  handoffFindOne: jest.fn(),
   resolveSubject: jest.fn(),
   latestClassification: jest.fn(),
   resolveContactEvidence: jest.fn(),
@@ -20,6 +21,7 @@ jest.mock('../../../../models', () => ({
   Lead: { findByPk: (...a: unknown[]) => m.leadFindByPk(...a) },
   GrowthJourneyProfile: { findOne: (...a: unknown[]) => m.profileFindOne(...a) },
   ExplorerJourneyProfile: { findByPk: (...a: unknown[]) => m.explorerProfileFindByPk(...a) },
+  GrowthJourneyHandoff: { findOne: (...a: unknown[]) => m.handoffFindOne(...a) },
 }));
 jest.mock('../../subjectResolver', () => ({ resolveSubject: (...a: unknown[]) => m.resolveSubject(...a) }));
 jest.mock('../../classificationService', () => ({ latestClassification: (...a: unknown[]) => m.latestClassification(...a) }));
@@ -65,6 +67,7 @@ function arrange(over: Partial<Record<keyof typeof m, unknown>> = {}) {
   m.leadFindByPk.mockResolvedValue({ id: 501, email: 'x@example.com', phone: null, idea_input: 'automate invoicing', selected_systems: ['salesforce'], pipeline_stage: null, industry: 'logistics', created_at: LEAD_CREATED });
   m.profileFindOne.mockResolvedValue(null);
   m.explorerProfileFindByPk.mockResolvedValue(null);
+  m.handoffFindOne.mockResolvedValue(null);
   m.latestClassification.mockResolvedValue({ id: 'c-1', brand_relationship: 'colaberry-enterprise', primary_path: 'workflow_automation', secondary_paths: [], intent: 'automation_request', requires_human_review: false, source_step: 3 });
   m.resolveContactEvidence.mockResolvedValue(contact());
   m.loadLifecycleSourceCounts.mockResolvedValue(NONE);
@@ -248,6 +251,45 @@ describe('the builder\'s tier-0 flags', () => {
     if (r.status !== 'loaded') throw new Error(r.status);
     expect(r.ctx.hardStop).toEqual({ converted: false, unsubscribed: false, dnc: false, consentRevoked: false, killSwitch: false, campaignInactive: false });
     expect(r.ctx.program_status).toBe('draft');
+  });
+});
+
+describe("T405 - the human's cooldown as an overlay", () => {
+  const DAY = 86_400_000;
+  const returned = (until: Date) => ({ id: 'h-1', return_to_ai: { program_slug: 'business-growth', cooldown_until: until.toISOString(), reason: 'not_ready:q1' } });
+
+  it("an open returned_to_ai row puts RETURNED_TO_AI on the context on top of the lifecycle's overlays - and NOT on the lifecycle projection the profile row is written from", async () => {
+    const until = new Date(AS_OF.getTime() + 10 * DAY);
+    arrange({ handoffFindOne: returned(until) });
+    const r = await load();
+    if (r.status !== 'loaded') throw new Error(r.status);
+    expect(r.ctx.overlays).toEqual(['NO_RESPONSE', 'RETURNED_TO_AI']);
+    expect(r.lifecycle.overlays).toEqual(['NO_RESPONSE']);
+    expect(r.returnToAi).toEqual({ active: true, handoff_id: 'h-1', cooldown_until: until, reason: 'not_ready:q1' });
+    expect(r.unavailable).toEqual([]);
+    expect(m.handoffFindOne).toHaveBeenCalledWith({ where: { subject_ref: 'lead:501', brand_id: 'b-ent', status: 'returned_to_ai' }, order: [['updated_at', 'DESC']] });
+  });
+
+  it('past cooldown_until the overlay is gone; with no returned row there never was one', async () => {
+    arrange({ handoffFindOne: returned(new Date(AS_OF.getTime() - DAY)) });
+    const expired = await load();
+    if (expired.status !== 'loaded') throw new Error(expired.status);
+    expect(expired.ctx.overlays).toEqual(['NO_RESPONSE']);
+    expect(expired.returnToAi.active).toBe(false);
+    arrange();
+    const none = await load();
+    if (none.status !== 'loaded') throw new Error(none.status);
+    expect(none.ctx.overlays).toEqual(['NO_RESPONSE']);
+    expect(none.returnToAi).toEqual({ active: false, handoff_id: null, cooldown_until: null, reason: null });
+  });
+
+  it('a failing lookup is named return_to_ai in unavailable and the context is still built, without the overlay', async () => {
+    arrange({ handoffFindOne: () => Promise.reject(new Error('db down')) });
+    const r = await load();
+    if (r.status !== 'loaded') throw new Error(r.status);
+    expect(r.unavailable).toEqual(['return_to_ai']);
+    expect(r.ctx.overlays).toEqual(['NO_RESPONSE']);
+    expect(r.returnToAi.active).toBe(false);
   });
 });
 

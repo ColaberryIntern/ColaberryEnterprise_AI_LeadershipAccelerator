@@ -233,6 +233,17 @@ function pausedForHuman(ctx: JourneySubjectContext, c: JourneyCandidate | Candid
   return ctx.contact.human_conversation === 'yes' && PAUSED_ACTIONS.has(c.action_type);
 }
 
+/**
+ * T405: a human sent this learner back with a cooldown (`not_ready` / `nurture`).
+ * The loader carries it as the `RETURNED_TO_AI` overlay while `cooldown_until`
+ * is ahead of the clock. EVERY candidate is withheld - not only the two that put
+ * a second voice in a conversation, because here there is no conversation: the
+ * human looked and said not yet. Time lifts it; nothing here does.
+ */
+const RETURNED_TO_AI = 'RETURNED_TO_AI';
+const RETURNED_TO_AI_COOLDOWN = 'returned_to_ai_cooldown';
+const onReturnCooldown = (ctx: JourneySubjectContext) => ctx.overlays.includes(RETURNED_TO_AI);
+
 /** Why no candidate could be grounded, for the refusal to name. */
 function classificationGap(ctx: JourneySubjectContext): string {
   const family = ctx.classification?.primary_path ?? null;
@@ -277,6 +288,7 @@ export function generateLearnerCandidates(ctx: JourneySubjectContext): LearnerGe
     for (const g of EXPLORER_GENERATORS) {
       const c = g.run(governorCtx);
       if (!c) not_emitted.push({ generator: g.name, reason: 'predicate_false' });
+      else if (onReturnCooldown(ctx)) not_emitted.push({ generator: g.name, reason: RETURNED_TO_AI_COOLDOWN });
       else if (pausedForHuman(ctx, c)) not_emitted.push({ generator: g.name, reason: HUMAN_IN_CONVERSATION });
       else candidates.push(withholdForeignCampaign(c, ctx.brand_slug));
     }
@@ -285,6 +297,9 @@ export function generateLearnerCandidates(ctx: JourneySubjectContext): LearnerGe
 
   const not_emitted = EXPLORER_GENERATORS.map((g) => ({ generator: g.name, reason: NO_LEARNER_PROFILE }));
   const grounded = classificationNurture(ctx);
+  if (grounded && onReturnCooldown(ctx)) {
+    return { basis: 'none', candidates: [], not_emitted: [...not_emitted, { generator: 'classificationNurture', reason: RETURNED_TO_AI_COOLDOWN }] };
+  }
   if (grounded && pausedForHuman(ctx, grounded)) {
     return { basis: 'none', candidates: [], not_emitted: [...not_emitted, { generator: 'classificationNurture', reason: HUMAN_IN_CONVERSATION }] };
   }
@@ -312,6 +327,8 @@ const FRICTION_THRESHOLD = 25;
 export function learnerDeferrals(ctx: JourneySubjectContext): JourneyDeferral[] {
   const facts = ctx.learner;
   if (!facts || ctx.program_kind !== 'learner') return [];
+  // A learner a human just sent back is not queued for a human again until the cooldown ends.
+  if (onReturnCooldown(ctx)) return [];
   const out: JourneyDeferral[] = [];
   const base = { brand: ctx.brand_slug, state: facts.primary_state, path: ctx.classification?.primary_path ?? null, layer: 4 };
   const has = (o: string) => (facts.overlays as readonly string[]).includes(o);
@@ -362,6 +379,7 @@ export const learnerStrategy: LearnerStrategy = Object.freeze({
 export function learnerEmptyReason(g: LearnerGeneration): string | null {
   if (g.candidates.length > 0) return null;
   if (g.basis === 'explorer_profile') {
+    if (g.not_emitted.some((n) => n.reason === RETURNED_TO_AI_COOLDOWN)) return RETURNED_TO_AI_COOLDOWN;
     return g.not_emitted.some((n) => n.reason === HUMAN_IN_CONVERSATION) ? HUMAN_IN_CONVERSATION : null;
   }
   const first = g.not_emitted[0];

@@ -4,6 +4,7 @@ import { redactForLogs } from '../../../utils/piiRedaction';
 import { latestClassification } from '../classificationService';
 import { subjectRefOf } from '../classification/inputs';
 import { resolveContactEvidence } from '../governor/contactEvidence';
+import { NO_RETURN, resolveReturnToAi, RETURNED_TO_AI_OVERLAY, type ReturnToAiState } from '../handoffs/returnToAi';
 import type { ContactEvidence, JourneyClassificationRef, JourneyProgramKind, JourneyStrategy, JourneySubjectContext, LearnerFacts, ScoreVector } from '../governor/types';
 import { classifyBusinessState } from '../lifecycle/businessLifecycle';
 import { classifyFlotationState } from '../lifecycle/aiFlotationLifecycle';
@@ -55,6 +56,16 @@ import { loadLifecycleSourceCounts, type LeadSignalColumns } from './lifecycleIn
  * is `asOf`, and `created_at` is when the subject was first seen: the
  * projection's own `created_at` if one exists, else the lead's. A subject with
  * neither is `missing_timestamps`, which the pipeline refuses by name.
+ *
+ * ─── RETURNED_TO_AI, THE HUMAN'S COOLDOWN (Phase 4, T405) ───────────────────
+ *
+ * A `not_ready` / `nurture` disposition leaves a `returned_to_ai` handoff row
+ * with `cooldown_until`. While that is ahead of the clock the subject carries
+ * the `RETURNED_TO_AI` overlay on top of whatever the lifecycle projected, and
+ * every generator declines `returned_to_ai_cooldown`. Read through `guarded`
+ * like every other input: a failed lookup is named in `unavailable` and the
+ * overlay is absent, the same posture as a failed classification read - the
+ * decision's Why shows the gap rather than inventing a cooldown nobody set.
  */
 
 export interface LoadDecisionContextArgs {
@@ -81,6 +92,8 @@ export interface LoadedDecisionContext {
   brand: { id: string; slug: string; tenant_id: string };
   lifecycle: LifecycleProjection;
   previousProfile: { state: string | null; state_entered_at: Date | null; created_at: Date | null };
+  /** The human's cooldown, when one is open at `asOf`; `NO_RETURN` otherwise (or when the lookup failed). */
+  returnToAi: ReturnToAiState;
   unavailable: string[];
 }
 
@@ -203,12 +216,13 @@ export async function loadDecisionContext(args: LoadDecisionContextArgs): Promis
   const brand = { id: String(brandRow.id), slug: String(brandRow.slug), tenant_id: String(brandRow.tenant_id) };
   const program = { id: String(programRow.id), slug: String(programRow.slug), kind: programRow.kind as JourneyProgramKind, status: String(programRow.status ?? 'draft') };
 
-  const [leadRaw, classificationRaw, profileRaw, countsRaw, learnerRaw] = await Promise.all([
+  const [leadRaw, classificationRaw, profileRaw, countsRaw, learnerRaw, returnRaw] = await Promise.all([
     guarded('lead', unavailable, async () => (subject.lead_id === null ? null : Lead.findByPk(subject.lead_id))),
     guarded('classification', unavailable, () => latestClassification(subjectRef, brandId)),
     guarded('profile', unavailable, () => GrowthJourneyProfile.findOne({ where: { subject_ref: subjectRef, brand_id: brandId } })),
     guarded('lifecycle_sources', unavailable, () => loadLifecycleSourceCounts(subject.lead_id)),
     program.kind === 'learner' ? guarded('learner_facts', unavailable, () => loadLearnerFacts(anchor, asOf)) : Promise.resolve(null),
+    guarded('return_to_ai', unavailable, () => resolveReturnToAi({ subjectRef, brandId, asOf })),
   ]);
 
   const lead = orNull(leadRaw) as LeadSignalColumns | null;
@@ -217,6 +231,7 @@ export async function loadDecisionContext(args: LoadDecisionContextArgs): Promis
   const counts = orNull(countsRaw) ?? { inbound: { replied: 0, booked_meeting: 0, answered: 0, declined: 0 }, appointments: { scheduled: 0, completed: 0, no_show: 0, cancelled: 0 }, hasDeliveryEngagement: false };
   const learnerResult = learnerRaw === null || learnerRaw === UNAVAILABLE ? null : learnerRaw;
   const learner: LearnerFacts | null = learnerResult && learnerResult.status === 'learner' ? learnerResult.facts : null;
+  const returnToAi = orNull(returnRaw) ?? NO_RETURN;
 
   const previousProfile = {
     state: profile ? String(profile.state) : null,
@@ -252,7 +267,8 @@ export async function loadDecisionContext(args: LoadDecisionContextArgs): Promis
     classification,
     state: lifecycle.state,
     state_entered_at: lifecycle.stateEnteredAt,
-    overlays: lifecycle.overlays,
+    // The lifecycle's overlays, plus the human's cooldown while it is open.
+    overlays: returnToAi.active ? [...lifecycle.overlays, RETURNED_TO_AI_OVERLAY] : lifecycle.overlays,
     scores,
     contact,
     // The builder's tier-0 flags. `killSwitch` is the capability gate, checked
@@ -273,7 +289,7 @@ export async function loadDecisionContext(args: LoadDecisionContextArgs): Promis
     learner,
   };
 
-  return { status: 'loaded', ctx, strategy: STRATEGY_BY_KIND[program.kind], subject, program, brand, lifecycle, previousProfile, unavailable };
+  return { status: 'loaded', ctx, strategy: STRATEGY_BY_KIND[program.kind], subject, program, brand, lifecycle, previousProfile, returnToAi, unavailable };
 }
 
 /** The freshness pair, per subject kind. See the header. */

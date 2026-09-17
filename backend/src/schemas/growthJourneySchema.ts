@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { GrowthJourneyHandoffDisposition, GrowthJourneyHandoffStatus, GrowthJourneyOwnerQueue } from '../models/GrowthJourneyHandoff';
 
 /**
  * Zod contracts for the Growth Journey admin read routes (T207).
@@ -84,3 +85,52 @@ export const decisionsQuerySchema = z.object({
 
 export type DecisionParams = z.infer<typeof decisionParamsSchema>;
 export type DecisionsQuery = z.infer<typeof decisionsQuerySchema>;
+
+/**
+ * The human's handoff queue and their three moves (Phase 4, T405). Two reads
+ * and three writes. The vocabularies are the model's, pinned with `satisfies`
+ * so a status the model gains and this file does not is a compile error.
+ * `.strict()` on every body: an unknown key is a 400, not ignored; `accept`
+ * and `release` take an empty object (release may carry a reason).
+ */
+export const HANDOFF_STATUSES = ['queued', 'assigned', 'accepted', 'dispositioned', 'returned_to_ai', 'expired', 'cancelled'] as const satisfies readonly GrowthJourneyHandoffStatus[];
+export const HANDOFF_DISPOSITIONS = ['qualified', 'not_ready', 'nurture', 'no_contact', 'disqualified', 'converted'] as const satisfies readonly GrowthJourneyHandoffDisposition[];
+export const HANDOFF_OWNER_QUEUES = ['admissions', 'sales', 'solution_architect', 'support', 'ali', 'human_review'] as const satisfies readonly GrowthJourneyOwnerQueue[];
+/** The queue's default filter - the model's `OPEN_HANDOFF_STATUSES`, restated here so the controller needs no runtime import of the model file. */
+export const HANDOFF_OPEN_STATUSES = ['queued', 'assigned', 'accepted'] as const satisfies readonly GrowthJourneyHandoffStatus[];
+
+export const handoffParamsSchema = z.object({
+  id: z.string().uuid(),
+});
+
+export const handoffsQuerySchema = z.object({
+  tenant_id: z.string().uuid().optional(),
+  brand_id: z.string().uuid().optional(),
+  /** Defaults to the open queue (queued, assigned, accepted). `all` lists every status. */
+  status: z.enum([...HANDOFF_STATUSES, 'open', 'all']).default('open'),
+  owner_queue: z.enum(HANDOFF_OWNER_QUEUES).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export const handoffAcceptBodySchema = z.object({}).strict();
+
+export const handoffDispositionBodySchema = z
+  .object({
+    disposition: z.enum(HANDOFF_DISPOSITIONS),
+    reason: z.string().min(8).max(500),
+    /** `not_ready` / `nurture` only: the cooldown in days; else the brand's cooldown policy, else 14. */
+    cooldown_days: z.number().int().min(1).max(90).optional(),
+  })
+  .strict();
+
+export const handoffReleaseBodySchema = z
+  .object({
+    reason: z.string().min(1).max(500).default('released'),
+  })
+  .strict();
+
+export type HandoffParams = z.infer<typeof handoffParamsSchema>;
+export type HandoffsQuery = z.infer<typeof handoffsQuerySchema>;
+export type HandoffDispositionBody = z.infer<typeof handoffDispositionBodySchema>;
+export type HandoffReleaseBody = z.infer<typeof handoffReleaseBodySchema>;

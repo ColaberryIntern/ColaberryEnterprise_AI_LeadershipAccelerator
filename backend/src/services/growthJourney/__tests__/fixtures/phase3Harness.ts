@@ -34,6 +34,7 @@ export const m = {
   leadFindByPk: jest.fn(),
   profileFindOne: jest.fn(),
   explorerProfileFindByPk: jest.fn(),
+  handoffFindOne: jest.fn(),
   decisionCreate: jest.fn(),
   decisionFindOne: jest.fn(),
   classificationFindOne: jest.fn(),
@@ -58,6 +59,7 @@ export const modelsMock = {
   LeadTenantContext: { findAll: (...a: unknown[]) => m.leadTenantContextFindAll(...a) },
   GrowthJourneyProfile: { findOne: (...a: unknown[]) => m.profileFindOne(...a) },
   ExplorerJourneyProfile: { findByPk: (...a: unknown[]) => m.explorerProfileFindByPk(...a) },
+  GrowthJourneyHandoff: { findOne: (...a: unknown[]) => m.handoffFindOne(...a) },
   GrowthJourneyDecision: {
     create: (...a: unknown[]) => m.decisionCreate(...a),
     findOne: (...a: unknown[]) => m.decisionFindOne(...a),
@@ -120,6 +122,7 @@ export function arrange(f: ShadowFixture, opts: ArrangeOptions = {}): void {
   m.policyFindOne.mockImplementation(async (q: { where: { brand_id: string; offer_family: string } }) =>
     policyRowFor(q.where.brand_id, q.where.offer_family, opts.contentReady ?? new Set()),
   );
+  m.handoffFindOne.mockResolvedValue(null);
   m.contentRuleFindAll.mockResolvedValue([]);
   m.contentAssetFindAll.mockResolvedValue([]);
   m.leadTenantContextFindAll.mockResolvedValue([]);

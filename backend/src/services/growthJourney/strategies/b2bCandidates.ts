@@ -135,6 +135,9 @@ const POSITION = { suppress: 90, stalled: 40, educate: 50, caseStudy: 50, clarif
 
 const familyOf = (ctx: JourneySubjectContext) => ctx.classification?.primary_path ?? null;
 const has = (ctx: JourneySubjectContext, overlay: string) => ctx.overlays.includes(overlay);
+/** The loader's overlay for an open return-to-AI cooldown, and the reason every generator gives while it is on (T405). */
+const RETURNED_TO_AI = 'RETURNED_TO_AI';
+const RETURNED_TO_AI_COOLDOWN = 'returned_to_ai_cooldown';
 const pastLayerOne = (p: B2bProgramme, ctx: JourneySubjectContext) =>
   p.states.qualified.includes(ctx.state) || p.states.commercial.includes(ctx.state) || ctx.state === p.states.terminal;
 /** T304's fact: we have already reached out to this person inside the contact window. */
@@ -153,6 +156,9 @@ function emailBlock(ctx: JourneySubjectContext): string | null {
   // not show nurture being considered for them.
   if (has(ctx, 'DECLINED')) return 'declined_overlay';
   if (has(ctx, 'HUMAN_REVIEW')) return 'human_review_overlay';
+  // T405: a human sent this person back with a cooldown (`not_ready` / `nurture`).
+  // Time lifts it - the loader stops adding the overlay after `cooldown_until`.
+  if (has(ctx, RETURNED_TO_AI)) return RETURNED_TO_AI_COOLDOWN;
   // T402: a human owns the thread. The AI's commercial outreach PAUSES - not
   // outranked, never generated - until the human releases or dispositions.
   // 'no' and 'unknown' change nothing here: 'unknown' is step 4b's business,
@@ -286,6 +292,7 @@ const clarificationQuestion: Generator = (p, ctx) => {
 
 const inAppNudge: Generator = (p, ctx) => {
   if (has(ctx, 'DECLINED')) return 'declined_overlay';
+  if (has(ctx, RETURNED_TO_AI)) return RETURNED_TO_AI_COOLDOWN;
   if (!ctx.enrollment_id) return 'no_portal_account';
   if (ctx.contact.channels.in_app.eligible !== true) return `in_app_ineligible:${ctx.contact.channels.in_app.reason}`;
   if (pastLayerOne(p, ctx)) return `past_layer_one:${ctx.state}`;
@@ -314,6 +321,10 @@ export const B2B_GENERATORS: ReadonlyArray<{ name: string; run: Generator }> = O
 function deferrals(p: B2bProgramme, ctx: JourneySubjectContext): JourneyDeferral[] {
   const out: JourneyDeferral[] = [];
   const base = { brand: ctx.brand_slug, state: ctx.state, path: familyOf(ctx) };
+  // A person a human just sent back is NOT handed back to a human the next
+  // night: the commercial-state deferral that Phase 4's writer would turn into
+  // a new open handoff waits out the cooldown with everything else.
+  const onCooldown = has(ctx, RETURNED_TO_AI);
   if (p.states.qualified.includes(ctx.state)) {
     // ONE reply is §8's Layer-2 trigger — discovery questions, a scheduling
     // offer — not yet a person's time. The first draft named a handoff to
@@ -321,10 +332,10 @@ function deferrals(p: B2bProgramme, ctx: JourneySubjectContext): JourneyDeferral
     out.push({ would: 'discovery_questions', reason: `qualified_state:${ctx.state}`, payload: { ...base, layer: 2 } });
     out.push({ would: 'scheduling_offer', reason: `qualified_state:${ctx.state}`, payload: { ...base, layer: 2 } });
   }
-  if (p.states.commercial.includes(ctx.state)) {
+  if (p.states.commercial.includes(ctx.state) && !onCooldown) {
     out.push({ would: 'create_handoff', reason: `commercial_state:${ctx.state}`, payload: { ...base, layer: 4, owner: p.handoff.owner } });
   }
-  if (has(ctx, 'HUMAN_REVIEW')) {
+  if (has(ctx, 'HUMAN_REVIEW') && !onCooldown) {
     out.push({ would: 'create_handoff', reason: 'human_review_overlay', payload: { ...base, layer: 4, owner: 'human_review' } });
   }
   if (has(ctx, 'MEETING_NO_SHOW')) {
@@ -360,6 +371,8 @@ export function generateB2b(p: B2bProgramme, ctx: JourneySubjectContext): B2bGen
 /** The most specific reason nothing was proposed. Pure over the generation record. */
 export function b2bEmptyReason(p: B2bProgramme, ctx: JourneySubjectContext, g: B2bGeneration): string | null {
   if (g.candidates.length > 0) return null;
+  // The cooldown outranks the state: nothing is proposed AND nothing is deferred while it is on.
+  if (has(ctx, RETURNED_TO_AI)) return RETURNED_TO_AI_COOLDOWN;
   if (p.states.qualified.includes(ctx.state)) return `qualified_state_needs_layer_2:${ctx.state}`;
   if (p.states.commercial.includes(ctx.state)) return `commercial_state_needs_layer_4:${ctx.state}`;
   const specific = g.not_emitted.find((n) => n.reason !== 'predicate_false' && n.reason !== 'no_portal_account');
