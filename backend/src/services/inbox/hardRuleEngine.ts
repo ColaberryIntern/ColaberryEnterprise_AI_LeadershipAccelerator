@@ -61,6 +61,17 @@ export function isBasecampSender(fromAddress: string | null | undefined): boolea
 }
 
 /**
+ * True when the sender is Slack itself (workspace invites, account details,
+ * "new messages from X in <workspace>" digests). Slack rotates per-message
+ * no-reply-<token>@slack.com addresses for invites, so an exact-address VIP
+ * entry cannot cover it; the domain is the stable identity. Same look-alike
+ * guard as isBasecampSender.
+ */
+export function isSlackSender(fromAddress: string | null | undefined): boolean {
+  return /@(?:[\w-]+\.)*slack\.com(?![\w.-])/i.test((fromAddress || '').trim());
+}
+
+/**
  * True when a Basecamp notification is a person directly tagging or assigning
  * Ali — an @mention or a to-do assignment — rather than project-management
  * noise. Basecamp encodes both directly in the subject:
@@ -222,6 +233,21 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
     const reason = 'Basecamp comment directly addresses Ali by name';
     console.log(`${LOG_PREFIX} Basecamp direct comment: ${reason}`);
     return { matched: true, state: 'INBOX', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
+  }
+
+  // --- 0f. Slack workspace mail → INBOX ---
+  // Slack carries a List-Unsubscribe header, so every invite, account notice
+  // and "new messages in <workspace>" digest fell into the List-Unsubscribe
+  // rule below and was auto-archived. Ali never saw the NuOrg workspace invite
+  // or the first messages from Shilpa and Luda (2026-09-16). Slack mail is a
+  // person or a workspace asking him to act; it stays in the inbox. This sits
+  // ahead of the VIP check on purpose: a VIP row would also route it to the
+  // inbox, but VIP rows feed the vipInboxWatcher alert path, and a text for
+  // every Slack digest is not wanted.
+  if (isSlackSender(email.from_address)) {
+    const reason = 'Slack workspace notification (invite, account, or new messages)';
+    console.log(`${LOG_PREFIX} Slack: ${reason}`);
+    return { matched: true, state: 'INBOX', rule_id: 'slack_0f', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
   }
 
   // --- 1. VIP Check ---
