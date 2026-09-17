@@ -7,6 +7,7 @@ import { RoomAccessContext } from './roomEntitlementService';
 import { postMessage, listMessages } from './roomMessageService';
 import { isStaffOrMgmt } from '../access/staffAccess';
 import { getReeseEnrollmentId } from '../reese/reeseIdentitySeed';
+import { getDaraEnrollmentId } from '../curriculum/daraIdentitySeed';
 
 // 1:1 direct messages, modelled as a 2-person private CommunityRoom
 // (room_type 'dm') so they reuse the persisted RoomMessage layer — messages
@@ -51,6 +52,26 @@ async function assertSameCohort(me: string, otherId: string, myCohortId: string 
     }));
   }
   if (reeseEnrollmentId && (me === reeseEnrollmentId || otherId === reeseEnrollmentId)) return;
+
+  // Dara v2 Phase 3 — identical, identity-keyed bypass for Dara's own real
+  // enrollment id, same reasoning as Reese's above: a student can always
+  // reach Dara for a curriculum question regardless of cohort, since Dara's
+  // own enrollment has no cohort_id either. Kept as an explicit duplicate of
+  // the Reese block above rather than a generalized "any AI agent" mechanism
+  // — two real cases, not yet the three this repo's own CLAUDE.md treats as
+  // the extraction threshold; a third agent needing this is the trigger to
+  // generalize, not add a third copy.
+  let daraEnrollmentId: string | null = null;
+  try {
+    daraEnrollmentId = await getDaraEnrollmentId();
+  } catch (e: any) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'dm', event: 'dara_enrollment_lookup_failed',
+      error_class: e?.name || 'Error', message: String(e?.message || e),
+    }));
+  }
+  if (daraEnrollmentId && (me === daraEnrollmentId || otherId === daraEnrollmentId)) return;
+
   throw new DmError(myCohortId ? 'You can only message people in your cohort' : 'You are not in a cohort yet');
 }
 
@@ -138,6 +159,19 @@ async function notifyDmRecipient(roomId: string, senderId: string, messageId: st
     }
     if (reeseEnrollmentId && recipientId === reeseEnrollmentId) return;
 
+    // Dara v2 Phase 3 — same skip, same reasoning, explicit duplicate (see
+    // assertSameCohort's own comment above for why this isn't generalized yet).
+    let daraEnrollmentId: string | null = null;
+    try {
+      daraEnrollmentId = await getDaraEnrollmentId();
+    } catch (e: any) {
+      console.warn(JSON.stringify({
+        level: 'warn', service: 'dm', event: 'dara_enrollment_lookup_failed_notify',
+        room_id: roomId, error_class: e?.name || 'Error', message: String(e?.message || e),
+      }));
+    }
+    if (daraEnrollmentId && recipientId === daraEnrollmentId) return;
+
     const { createNotification } = await import('../communityNotificationService');
     await createNotification(recipientId, senderId, 'new_message', 'dm', messageId);
   } catch (e: any) {
@@ -181,6 +215,19 @@ export async function sendDmMessage(
   } catch (e: any) {
     console.warn(JSON.stringify({
       level: 'warn', service: 'dm', event: 'reese_reply_trigger_failed',
+      room_id: roomId, error_class: e?.name || 'Error', message: String(e?.message || e),
+    }));
+  }
+  // Dara v2 Phase 3 — same reactive-only reply trigger, same belt-and-
+  // suspenders try/catch. maybeTriggerDaraReply() is a strict no-op for any
+  // room Dara isn't a member of and for any message Dara herself just sent
+  // (loop guard) — see daraReplyService.ts.
+  try {
+    const { maybeTriggerDaraReply } = await import('../curriculum/daraReplyService');
+    await maybeTriggerDaraReply(roomId, ctx.enrollmentId);
+  } catch (e: any) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'dm', event: 'dara_reply_trigger_failed',
       room_id: roomId, error_class: e?.name || 'Error', message: String(e?.message || e),
     }));
   }
