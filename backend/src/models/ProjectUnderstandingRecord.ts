@@ -60,6 +60,8 @@ class ProjectUnderstandingRecord extends Model {
   declare confirmed_at: Date | null;
   declare scope: unknown | null;
   declare scope_generated_at: Date | null;
+  /** Which project this became - written once by the build bridge, never by the scope cache. */
+  declare build_handoff: unknown | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -84,6 +86,7 @@ ProjectUnderstandingRecord.init(
     confirmed_at: { type: DataTypes.DATE, allowNull: true },
     scope: { type: DataTypes.JSONB, allowNull: true },
     scope_generated_at: { type: DataTypes.DATE, allowNull: true },
+    build_handoff: { type: DataTypes.JSONB, allowNull: true },
   },
   {
     sequelize,
