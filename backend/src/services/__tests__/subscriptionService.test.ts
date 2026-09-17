@@ -586,6 +586,25 @@ describe('subscriptionService', () => {
       warn.mockRestore();
     });
 
+    it('does not fail activation when the supersede scan errors or returns nothing usable (best-effort, non-blocking)', async () => {
+      const sub = { id: 's-new', status: 'pending', plan: 'monthly', enrollment_id: 'e1', paysimple_payment_id: null, update: jest.fn() };
+      (Subscription.findOne as jest.Mock).mockResolvedValue(sub);
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', email: 'x@example.com', cohort_id: 'c-july', enrolled_at: null, update: jest.fn() });
+      const error = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      (Subscription.findAll as jest.Mock).mockResolvedValueOnce(undefined); // a bare mock, or a driver returning nothing
+      await expect(activateByRef('SUB-e1-2', { paymentId: 10, amount: 199 }, NOW)).resolves.toBeTruthy();
+      expect(sub.update).toHaveBeenCalled();
+
+      (Subscription.findAll as jest.Mock).mockRejectedValueOnce(new Error('db hiccup'));
+      const sub2 = { ...sub, update: jest.fn() };
+      (Subscription.findOne as jest.Mock).mockResolvedValue(sub2);
+      await expect(activateByRef('SUB-e1-3', { paymentId: 11, amount: 199 }, NOW)).resolves.toBeTruthy();
+      expect(sub2.update).toHaveBeenCalled();
+      expect(error).toHaveBeenCalledWith(expect.stringContaining('supersede scan failed'), 'db hiccup');
+      error.mockRestore();
+    });
+
     it('does not fail activation when the Explorer retirement lookup errors (best-effort, non-blocking)', async () => {
       const sub = { status: 'pending', plan: 'monthly', enrollment_id: 'e1', paysimple_payment_id: null, update: jest.fn() };
       const enrollment = { id: 'e1', email: 'sonya@example.com', cohort_id: 'c-july', enrolled_at: null, update: jest.fn() };

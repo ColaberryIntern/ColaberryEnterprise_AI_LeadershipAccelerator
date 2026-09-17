@@ -469,16 +469,25 @@ export async function activateByRef(
   // Comp rows are left alone (a comp does not replace a paid seat and vice versa),
   // and a row that already carries a gateway schedule is not superseded blindly:
   // that would orphan a live schedule, so it is logged for a human instead.
-  const others = await Subscription.findAll({
-    where: { enrollment_id: sub.enrollment_id, status: 'active', id: { [Op.ne]: sub.id } },
-  });
-  for (const other of others) {
-    if (other.plan === 'comp') continue;
-    if ((other as any).paysimple_schedule_id) {
-      console.warn(`[Subscription] enrollment ${sub.enrollment_id}: new activation ${sub.id} alongside scheduled row ${other.id} (schedule ${(other as any).paysimple_schedule_id}); left both active for review`);
-      continue;
+  // Never fail an activation over the supersede bookkeeping: the payment cleared
+  // and the member is in. A miss here shows up as a duplicate active row, which
+  // the next activation or a human can clean up; a thrown error here would
+  // leave a paid member pending.
+  try {
+    const rows = await Subscription.findAll({
+      where: { enrollment_id: sub.enrollment_id, status: 'active', id: { [Op.ne]: sub.id } },
+    });
+    const others = Array.isArray(rows) ? rows : [];
+    for (const other of others) {
+      if (other.plan === 'comp') continue;
+      if ((other as any).paysimple_schedule_id) {
+        console.warn(`[Subscription] enrollment ${sub.enrollment_id}: new activation ${sub.id} alongside scheduled row ${other.id} (schedule ${(other as any).paysimple_schedule_id}); left both active for review`);
+        continue;
+      }
+      await other.update({ status: 'canceled', canceled_at: now, cancel_reason: `superseded_by_renewal:${sub.id}`, updated_at: now });
     }
-    await other.update({ status: 'canceled', canceled_at: now, cancel_reason: `superseded_by_renewal:${sub.id}`, updated_at: now });
+  } catch (err: any) {
+    console.error('[Subscription] supersede scan failed (non-fatal):', err?.message);
   }
 
   // Convert Explorer → paying member. Flipping enrollment_type off 'explorer'
