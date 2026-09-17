@@ -19,6 +19,7 @@ import {
   PERSON_OUTCOME_ATTRIBUTES,
   PERSON_RELATIONSHIP_ATTRIBUTES,
   PERSON_TRANSITION_ATTRIBUTES,
+  matchesScope,
   personScopeWhere,
 } from '../personJourneyService';
 
@@ -31,9 +32,21 @@ it('imports the models and the two tenancy helpers and nothing else - no strateg
   expect(src).not.toMatch(/\.(create|update|destroy|upsert|bulkCreate)\(/);
 });
 
-it('the relationships come from the authorized reader - the confidentiality rule - never from the model directly', () => {
+it('the relationships come from the authorized reader - the confidentiality rule - never from the model directly, and are then filtered by the queries\' own clause', () => {
   expect(src).toMatch(/getAuthorizedLeadContexts\(leadId, ctx\.authorizedTenantIds, ctx\.isPlatformSuperAdmin\)/);
   expect(src).not.toMatch(/LeadTenantContext/);
+  expect(src).toMatch(/\.filter\(\(c\) => matchesScope\(c, where\)\)/);
+  // One scope rule: no second brand or tenant predicate written by hand.
+  expect(src).not.toMatch(/inBrandScope|authorizedBrandIds\.includes|authorizedTenantIds\.includes|brand_id === /);
+});
+
+it('matchesScope reads a clause the way the query would: equality, membership, and the empty clause matching all', () => {
+  expect(matchesScope({ lead_id: 501, tenant_id: 't-1', brand_id: 'b-1' }, { lead_id: 501, tenant_id: 't-1' })).toBe(true);
+  expect(matchesScope({ lead_id: 501, tenant_id: 't-2', brand_id: 'b-1' }, { lead_id: 501, tenant_id: 't-1' })).toBe(false);
+  expect(matchesScope({ lead_id: 501, tenant_id: 't-1', brand_id: 'b-1' }, { lead_id: 501, tenant_id: ['t-1', 't-2'], brand_id: ['b-1'] })).toBe(true);
+  expect(matchesScope({ lead_id: 501, tenant_id: 't-1', brand_id: 'b-2' }, { lead_id: 501, tenant_id: ['t-1', 't-2'], brand_id: ['b-1'] })).toBe(false);
+  expect(matchesScope({ lead_id: 501, tenant_id: 't-1', brand_id: 'b-2' }, { lead_id: 501 })).toBe(true);
+  expect(matchesScope({ lead_id: 501, tenant_id: 't-1' }, { lead_id: 501, tenant_id: null })).toBe(false);
 });
 
 it('no column list names an email, a message body, a candidate blob, an evidence packet or free metadata of a context', () => {

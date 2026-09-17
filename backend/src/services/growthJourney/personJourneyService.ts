@@ -11,9 +11,12 @@ import { tenantScopeWhere, type PlatformRequestContext } from '../../modules/ten
  * A lead with a CPN relationship and an Enterprise relationship shows ONE of
  * them to a Training-only operator - the existence of the other relationship
  * is itself confidential (`leadContextService.ts`, `getAuthorizedLeadContexts`).
- * The relationships come from that reader and are then narrowed to the
- * caller's brands; every other collection is read under `tenantScopeWhere(ctx)`
- * plus the requested brand, the same clause the list routes use. A lead the
+ * The relationships come from that reader and are then filtered by the SAME
+ * clause every other collection is queried with - `tenantScopeWhere(ctx)` plus
+ * the requested brand, the list routes' clause - applied to the rows in memory.
+ * One rule, not two: an identity with memberships in two tenants that selected
+ * one sees that tenant's relationships only, exactly as it sees that tenant's
+ * rows only (the T410 verifier's edge). A lead the
  * caller can see nothing of is `not_found`, byte-identical to a lead that does
  * not exist, so the route can never confirm a person to an outsider.
  *
@@ -95,11 +98,9 @@ function pick<K extends readonly string[]>(row: Record<string, unknown>, keys: K
   return out;
 }
 
-/** The brands the caller may see a row of: the requested one, else the memberships' confinement, else all. */
-function inBrandScope(ctx: PlatformRequestContext, brandId: string): boolean {
-  if (ctx.isPlatformSuperAdmin) return true;
-  if (ctx.brandId) return brandId === ctx.brandId;
-  return ctx.authorizedBrandIds === null || ctx.authorizedBrandIds.includes(brandId);
+/** A row against the clause the queries carry - equality or membership per key - so the in-memory filter IS the query's scope. */
+export function matchesScope(row: Record<string, unknown>, where: Record<string, unknown>): boolean {
+  return Object.entries(where).every(([k, v]) => (Array.isArray(v) ? v.includes(row[k]) : row[k] === v));
 }
 
 /** The list routes' clause plus the lead: tenant(s), the brand confinement, the requested brand. */
@@ -123,8 +124,11 @@ export async function loadPersonJourney(args: PersonJourneyArgs): Promise<Person
     GrowthJourneyConversationOwnership.findOne({ where: { ...where, cleared_at: null }, attributes: [...PERSON_CONVERSATION_ATTRIBUTES], order: [['since_at', 'DESC']] }),
   ]);
 
-  // The relationships reader filters by tenant; the brand confinement is applied here, the same way the list clause does.
-  const relationships = contexts.filter((c) => inBrandScope(ctx, c.brand_id)).map((c) => pick(c as unknown as Record<string, unknown>, PERSON_RELATIONSHIP_ATTRIBUTES));
+  // The authorized reader answers by membership; the SAME clause the six queries carry then narrows to the selected tenant and the brand confinement.
+  const relationships = contexts
+    .map((c) => c as unknown as Record<string, unknown>)
+    .filter((c) => matchesScope(c, where))
+    .map((c) => pick(c, PERSON_RELATIONSHIP_ATTRIBUTES));
 
   const nothingVisible = relationships.length === 0 && classifications.length === 0 && decisions.length === 0 && transitions.length === 0 && handoffs.length === 0 && outcomes.length === 0 && !conversation;
   if (nothingVisible) return { status: 'not_found' };

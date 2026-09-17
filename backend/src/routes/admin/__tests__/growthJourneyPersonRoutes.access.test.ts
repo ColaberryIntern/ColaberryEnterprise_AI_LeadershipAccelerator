@@ -200,6 +200,24 @@ describe('confidentiality', () => {
     }
   });
 
+  it('an identity with memberships in BOTH tenants that selected Colaberry sees Colaberry relationships only - the relationships are scoped by the same clause as every other collection (the T410 verifier\'s edge)', async () => {
+    contextFromAdminRequest.mockResolvedValue({ ...memberOf(TENANT.colaberry), authorizedTenantIds: [TENANT.colaberry, TENANT.cpn] });
+    const res = await get(URL);
+    expect(res.status).toBe(200);
+    expect(res.body.scope.tenant_id).toBe(TENANT.colaberry);
+    expect(res.body.relationships.map((r: Row) => r.id).sort()).toEqual(['ctx-ent', 'ctx-tr']);
+    expect(res.body.classifications.map((r: Row) => r.id)).toEqual(['c-ent']);
+    expect(res.text).not.toContain(TENANT.cpn);
+    // And the other way round: selected CPN, the Colaberry rows are gone from every collection alike.
+    contextFromAdminRequest.mockResolvedValue({ ...memberOf(TENANT.cpn), authorizedTenantIds: [TENANT.colaberry, TENANT.cpn] });
+    const cpn = await get(URL);
+    expect(cpn.status).toBe(200);
+    expect(cpn.body.relationships.map((r: Row) => r.id)).toEqual(['ctx-cpn']);
+    expect(cpn.body.classifications.map((r: Row) => r.id)).toEqual(['c-cpn']);
+    expect(cpn.body.handoffs).toEqual([]);
+    expect(cpn.text).not.toContain(TENANT.colaberry);
+  });
+
   it('a requested brand inside the tenant narrows the same way; a platform superadmin sees every relationship in every tenant', async () => {
     contextFromAdminRequest.mockResolvedValue(memberOf(TENANT.colaberry, BRAND.enterprise, null));
     const narrowed = await get(`${URL}?brand_id=${BRAND.enterprise}`);
