@@ -231,6 +231,26 @@ export async function activate(params: {
     }));
   }
 
+  // Placement into the dedicated internship cohort. An intern with NO class cohort
+  // — an external applicant who converted — is placed into the internship cohort so
+  // their weeks-1-3 curriculum progress is tracked (getStudentWeekBreakdown keys off
+  // enrollment.cohort_id). An existing student KEEPS their class cohort untouched:
+  // they train against it, so we only ever fill an empty pointer, never overwrite a
+  // real one. Best-effort — a failure leaves them where they were (cohort-less), and
+  // never blocks activation.
+  try {
+    const enr = await Enrollment.findByPk(application.enrollment_id, { attributes: ['id', 'cohort_id'] });
+    if (enr && !(enr as any).cohort_id) {
+      await (enr as any).update({ cohort_id: cohort.id });
+    }
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'intern_cohort_placement_failed', outcome: 'partial',
+      error_class: err?.constructor?.name ?? 'Error', context: { enrollment_id: application.enrollment_id },
+    }));
+  }
+
   await application.reload();
   return {
     ok: true,
