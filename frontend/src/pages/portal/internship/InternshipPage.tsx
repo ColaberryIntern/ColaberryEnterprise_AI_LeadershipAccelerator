@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import PortalShell from '../today/PortalShell';
 import './InternshipPage.css';
 import {
@@ -12,6 +13,7 @@ import InternshipInterview from './InternshipInterview';
 import InternshipSummary from './InternshipSummary';
 import InternshipDocuments from './InternshipDocuments';
 import InternshipOnboarding from './InternshipOnboarding';
+import InternshipDashboard from './InternshipDashboard';
 
 /**
  * The AI Internship application surface.
@@ -56,6 +58,9 @@ const InternshipPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<Saving>('idle');
   const [error, setError] = useState<string | null>(null);
+  // Dashboard vs Onboarding view for an active intern, kept in the URL so refresh,
+  // back and direct links work.
+  const [searchParams, setSearchParams] = useSearchParams();
   // Lets the summary be reached from the interview without a lifecycle change,
   // and lets 'go back to the interview' undo it.
   const [forceSummary, setForceSummary] = useState(false);
@@ -163,6 +168,14 @@ const InternshipPage: React.FC = () => {
   const showOnboarding = ['approved', 'offer_letter_ready', 'signed_documents_uploaded',
     'documents_verified', 'payment_pending', 'activation_pending', 'active', 'paused']
     .includes(state);
+
+  // The Dashboard/Onboarding switch is only offered to an ACTIVE intern (an
+  // applicant mid-onboarding has no dashboard yet). Default to the dashboard.
+  const isActive = state === 'active';
+  const dashView: 'dashboard' | 'onboarding' = searchParams.get('view') === 'onboarding' ? 'onboarding' : 'dashboard';
+  const setView = (v: 'dashboard' | 'onboarding') => setSearchParams((prev) => {
+    const p = new URLSearchParams(prev); p.set('view', v); return p;
+  }, { replace: true });
 
   return (
     <PortalShell>
@@ -410,7 +423,31 @@ const InternshipPage: React.FC = () => {
           <InternshipDocuments onChanged={() => { void reload(); }} />
         )}
 
-        {showOnboarding && (
+        {showOnboarding && isActive && (
+          <>
+            <div className="ip-viewtabs" role="tablist" aria-label="Internship view" style={{ display: 'flex', gap: 22, borderBottom: '1px solid #e5e8ed', marginBottom: 18 }}>
+              {(['dashboard', 'onboarding'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  role="tab"
+                  aria-selected={dashView === v}
+                  onClick={() => setView(v)}
+                  style={{
+                    border: 0, background: 'none', cursor: 'pointer', padding: '10px 0', textTransform: 'capitalize',
+                    borderBottom: dashView === v ? '3px solid #ed3349' : '3px solid transparent',
+                    color: dashView === v ? '#20262f' : '#6b7280', fontWeight: dashView === v ? 700 : 400,
+                  }}
+                >{v === 'dashboard' ? 'Dashboard' : 'Onboarding'}</button>
+              ))}
+            </div>
+            {dashView === 'dashboard'
+              ? <InternshipDashboard />
+              : <InternshipOnboarding onChanged={() => { void reload(); }} />}
+          </>
+        )}
+
+        {showOnboarding && !isActive && (
           <InternshipOnboarding onChanged={() => { void reload(); }} />
         )}
 

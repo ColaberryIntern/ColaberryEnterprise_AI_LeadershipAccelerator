@@ -327,6 +327,36 @@ export async function recordInternshipMeetingJoin(meetingKey: string): Promise<v
   await portalApi.post('/api/portal/internship/meetings/join', { meeting_key: meetingKey });
 }
 
+// ── My Internship dashboard ──────────────────────────────────────────────────
+
+export interface DashboardActivity {
+  enrollment_id: string;
+  training: {
+    weeks: Array<{ week: number; published: number; completed: number; completed_pct: number; done: boolean }>;
+    first_three_weeks: { done: number; total: number; ready: boolean };
+  } | null;
+  project: {
+    name: string; stage: string | null; requirements_pct: number | null;
+    repo_connected: boolean; total_stories: number; verified_stories: number;
+  } | null;
+  cert_prep: { state: string; overall_scaled: number | null; evidence_coverage_pct: number | null; computed_at: string | null } | null;
+  case_studies: Array<{ id: string; title: string; status: string; slug: string }>;
+  attendance: { total: number; by_meeting: Record<string, number>; last_attended_at: string | null };
+}
+
+export interface AttentionItem { key: string; label: string; detail: string; waiting_on: string | null; blocking: boolean }
+export interface AttentionQueue { your_turn: AttentionItem[]; waiting_on_colaberry: AttentionItem[] }
+
+export interface InternDashboard extends OnboardingView {
+  activity: DashboardActivity;
+  attention: AttentionQueue;
+}
+
+export async function fetchInternshipDashboard(): Promise<InternDashboard> {
+  const { data } = await portalApi.get<InternDashboard>('/api/portal/internship/dashboard');
+  return data;
+}
+
 /**
  * Record a tool-readiness acknowledgement.
  *
