@@ -1,23 +1,24 @@
 /**
- * Dara v2 Phase 6 — the Basecamp gateway. Proves: fail-closed with no real
+ * Dara v2 Phase 6/7 — the Basecamp gateway. Proves: fail-closed with no real
  * config, never a duplicate real external write on retry, the mandatory
  * AI-disclosure line is always present, and a real failure is recorded
- * honestly rather than swallowed.
+ * honestly rather than swallowed. Posts via the real CB System identity
+ * (daraCbSystemBasecampClient.ts), per Ali's Phase 7 activation decision.
  */
-jest.mock('../../ops/basecampClient', () => ({ bcPost: jest.fn() }));
+jest.mock('../daraCbSystemBasecampClient', () => ({ cbSystemBcPost: jest.fn() }));
 jest.mock('../../../models/WorkLedgerEvent', () => ({ findOne: jest.fn() }));
 jest.mock('../../workLedger/workLedgerService', () => ({ emitEvent: jest.fn() }));
 jest.mock('../daraBasecampConfigService', () => ({ getDaraBasecampConfig: jest.fn() }));
 jest.mock('../daraIdentitySeed', () => ({ getDaraAdminUserId: jest.fn() }));
 
-import { bcPost } from '../../ops/basecampClient';
+import { cbSystemBcPost } from '../daraCbSystemBasecampClient';
 import WorkLedgerEvent from '../../../models/WorkLedgerEvent';
 import { emitEvent } from '../../workLedger/workLedgerService';
 import { getDaraBasecampConfig } from '../daraBasecampConfigService';
 import { getDaraAdminUserId } from '../daraIdentitySeed';
 import { createBasecampTodoForHandoff } from '../daraBasecampGatewayService';
 
-const mockBcPost = bcPost as unknown as jest.Mock;
+const mockBcPost = cbSystemBcPost as unknown as jest.Mock;
 const mockWorkLedgerFindOne = WorkLedgerEvent.findOne as unknown as jest.Mock;
 const mockEmitEvent = emitEvent as unknown as jest.Mock;
 const mockGetConfig = getDaraBasecampConfig as unknown as jest.Mock;
@@ -73,6 +74,15 @@ describe('createBasecampTodoForHandoff', () => {
       created: true, reason: 'created', basecampTodoId: 999,
       basecampAppUrl: 'https://3.basecamp.com/123/buckets/proj-1/todos/999',
     });
+  });
+
+  it('boundary: no real assignee configured -> assignee_ids is OMITTED entirely, never sent as an empty array (which would unassign, not "never set")', async () => {
+    mockGetConfig.mockResolvedValue({ ...CONFIG, assigneeBasecampPersonId: null });
+
+    await createBasecampTodoForHandoff(HANDOFF_TICKET_ID, 'title', 'Jordan Rivera', 'reason');
+
+    const body = mockBcPost.mock.calls[0][1];
+    expect(body).not.toHaveProperty('assignee_ids');
   });
 
   it('happy path: records a real, attributed, idempotency-keyed WorkLedgerEvent on success', async () => {

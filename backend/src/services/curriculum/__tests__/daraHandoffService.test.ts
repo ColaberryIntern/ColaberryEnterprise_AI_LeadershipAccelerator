@@ -4,13 +4,16 @@
  */
 jest.mock('../../ticketService', () => ({ createTicket: jest.fn() }));
 jest.mock('../../reese/resolveStudentDisplayName', () => ({ resolveStudentDisplayName: jest.fn() }));
+jest.mock('../daraBasecampGatewayService', () => ({ createBasecampTodoForHandoff: jest.fn() }));
 
 import { createTicket } from '../../ticketService';
 import { resolveStudentDisplayName } from '../../reese/resolveStudentDisplayName';
+import { createBasecampTodoForHandoff } from '../daraBasecampGatewayService';
 import { createDaraHandoff } from '../daraHandoffService';
 
 const mockCreateTicket = createTicket as unknown as jest.Mock;
 const mockResolveStudentDisplayName = resolveStudentDisplayName as unknown as jest.Mock;
+const mockCreateBasecampTodo = createBasecampTodoForHandoff as unknown as jest.Mock;
 
 const DARA_ADMIN_ID = 'dara-admin-1';
 const STUDENT_ID = 'student-enrollment-1';
@@ -21,6 +24,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockResolveStudentDisplayName.mockResolvedValue('Jordan Rivera');
   mockCreateTicket.mockResolvedValue({ id: 'handoff-ticket-1' });
+  mockCreateBasecampTodo.mockResolvedValue({ created: false, reason: 'basecamp_gateway_not_configured' });
 });
 
 describe('createDaraHandoff', () => {
@@ -29,7 +33,7 @@ describe('createDaraHandoff', () => {
       DARA_ADMIN_ID, STUDENT_ID, 'This is a homework question.', CONVERSATION_TICKET_ID, MESSAGE_ID,
     );
 
-    expect(result).toEqual({ id: 'handoff-ticket-1' });
+    expect(result.id).toBe('handoff-ticket-1');
     expect(mockCreateTicket).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'agent_handoff',
@@ -88,5 +92,36 @@ describe('createDaraHandoff', () => {
 
     const description = mockCreateTicket.mock.calls[0][0].description as string;
     expect(description).not.toContain(longReason);
+  });
+
+  // Phase 7 activation — every real handoff also attempts a Basecamp echo.
+  describe('Basecamp echo (Phase 7 activation)', () => {
+    it('happy path: calls the gateway with the real new ticket id, title, student name, and reason, after the internal ticket already exists', async () => {
+      mockCreateBasecampTodo.mockResolvedValue({ created: true, reason: 'created', basecampTodoId: 999, basecampAppUrl: 'https://app.basecamp.com/1/buckets/2/todos/999' });
+
+      const result = await createDaraHandoff(DARA_ADMIN_ID, STUDENT_ID, 'This is a homework question.', CONVERSATION_TICKET_ID, MESSAGE_ID);
+
+      expect(mockCreateBasecampTodo).toHaveBeenCalledWith('handoff-ticket-1', expect.stringContaining('Jordan Rivera'), 'Jordan Rivera', 'This is a homework question.');
+      expect(result.basecampTodoUrl).toBe('https://app.basecamp.com/1/buckets/2/todos/999');
+    });
+
+    it('"never off-ledger" for the internal ticket: the gateway being unconfigured never prevents or undoes the real ticket already created', async () => {
+      mockCreateBasecampTodo.mockResolvedValue({ created: false, reason: 'basecamp_gateway_not_configured' });
+
+      const result = await createDaraHandoff(DARA_ADMIN_ID, STUDENT_ID, 'x', CONVERSATION_TICKET_ID, MESSAGE_ID);
+
+      expect(result.id).toBe('handoff-ticket-1');
+      expect(result.basecampTodoUrl).toBeUndefined();
+    });
+
+    it('boundary: createBasecampTodoForHandoff is called with the ticket AFTER it is created, never before (dedup key depends on the real ticket id)', async () => {
+      const callOrder: string[] = [];
+      mockCreateTicket.mockImplementation(async () => { callOrder.push('createTicket'); return { id: 'handoff-ticket-1' }; });
+      mockCreateBasecampTodo.mockImplementation(async () => { callOrder.push('createBasecampTodo'); return { created: false, reason: 'basecamp_gateway_not_configured' }; });
+
+      await createDaraHandoff(DARA_ADMIN_ID, STUDENT_ID, 'x', CONVERSATION_TICKET_ID, MESSAGE_ID);
+
+      expect(callOrder).toEqual(['createTicket', 'createBasecampTodo']);
+    });
   });
 });

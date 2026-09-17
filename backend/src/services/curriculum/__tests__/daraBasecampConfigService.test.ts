@@ -42,9 +42,14 @@ describe('getDaraBasecampConfig', () => {
     expect(await getDaraBasecampConfig()).toBeNull();
   });
 
-  it('fail-closed: null when assignee_basecamp_person_id is missing or not a real number', async () => {
+  it('happy path: assignee_basecamp_person_id is OPTIONAL — a real, valid target with no assignee resolves, not fails closed', async () => {
+    mockAiAgentFindOne.mockResolvedValue({ config: { basecamp_gateway: { project_id: 'proj-1', todolist_id: 'list-1' } } });
+    expect(await getDaraBasecampConfig()).toEqual({ projectId: 'proj-1', todolistId: 'list-1', assigneeBasecampPersonId: null });
+  });
+
+  it('defensive: a malformed (non-number, or non-positive) assignee_basecamp_person_id degrades to null rather than passing garbage through', async () => {
     mockAiAgentFindOne.mockResolvedValue({ config: { basecamp_gateway: { project_id: 'proj-1', todolist_id: 'list-1', assignee_basecamp_person_id: '12345' } } });
-    expect(await getDaraBasecampConfig()).toBeNull();
+    expect(await getDaraBasecampConfig()).toEqual({ projectId: 'proj-1', todolistId: 'list-1', assigneeBasecampPersonId: null });
   });
 
   it('fail-closed: null when basecamp_gateway is malformed (not an object)', async () => {
