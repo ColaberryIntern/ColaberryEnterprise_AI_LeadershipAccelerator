@@ -33,6 +33,9 @@ describe('subscriptionService', () => {
     (Cohort.findByPk as jest.Mock).mockResolvedValue(null);
     // Default: no account credit. Credit tests override per-case.
     (AccountCredit.findAll as jest.Mock).mockResolvedValue([]);
+    // Default: no other subscription rows on the enrollment (activateByRef's
+    // supersede scan). Renewal tests override per-case.
+    (Subscription.findAll as jest.Mock).mockResolvedValue([]);
     mockRetireExplorer.mockResolvedValue(undefined);
   });
 
@@ -544,6 +547,43 @@ describe('subscriptionService', () => {
       await activateByRef('SUB-e1-1', { paymentId: 9, amount: 199 }, NOW);
 
       expect(mockRetireExplorer).toHaveBeenCalledWith('sonya@example.com', 'e1');
+    });
+
+    it('supersedes the earlier active paid row on a link renewal (regression: 3 members carried two active rows on 2026-09-17)', async () => {
+      const sub = { id: 's-new', status: 'pending', plan: 'monthly', enrollment_id: 'e1', paysimple_payment_id: null, update: jest.fn() };
+      const stale = { id: 's-old', status: 'active', plan: 'monthly', enrollment_id: 'e1', paysimple_schedule_id: null, update: jest.fn() };
+      const comp = { id: 's-comp', status: 'active', plan: 'comp', enrollment_id: 'e1', paysimple_schedule_id: null, update: jest.fn() };
+      (Subscription.findOne as jest.Mock).mockResolvedValue(sub);
+      (Subscription.findAll as jest.Mock).mockResolvedValue([stale, comp]);
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', email: 'b@example.com', cohort_id: 'c-july', enrolled_at: null, update: jest.fn() });
+
+      await activateByRef('SUB-e1-2', { paymentId: 10, amount: 199 }, NOW);
+
+      // The query is scoped to this enrollment's OTHER active rows.
+      const where = (Subscription.findAll as jest.Mock).mock.calls.at(-1)[0].where;
+      expect(where.enrollment_id).toBe('e1');
+      expect(where.status).toBe('active');
+      const staleUpdate = stale.update.mock.calls[0][0];
+      expect(staleUpdate.status).toBe('canceled');
+      expect(staleUpdate.cancel_reason).toBe('superseded_by_renewal:s-new');
+      expect(staleUpdate.canceled_at.getTime()).toBe(NOW);
+      // A comp seat is not a paid seat and is left alone.
+      expect(comp.update).not.toHaveBeenCalled();
+    });
+
+    it('never supersedes a row that carries a live gateway schedule (would orphan the schedule); logs it instead', async () => {
+      const sub = { id: 's-new', status: 'pending', plan: 'monthly', enrollment_id: 'e1', paysimple_payment_id: null, update: jest.fn() };
+      const scheduled = { id: 's-sched', status: 'active', plan: 'monthly', enrollment_id: 'e1', paysimple_schedule_id: '4511911', update: jest.fn() };
+      (Subscription.findOne as jest.Mock).mockResolvedValue(sub);
+      (Subscription.findAll as jest.Mock).mockResolvedValue([scheduled]);
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', email: 'r@example.com', cohort_id: 'c-july', enrolled_at: null, update: jest.fn() });
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      await activateByRef('SUB-e1-2', { paymentId: 10, amount: 199 }, NOW);
+
+      expect(scheduled.update).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('schedule 4511911'));
+      warn.mockRestore();
     });
 
     it('does not fail activation when the Explorer retirement lookup errors (best-effort, non-blocking)', async () => {

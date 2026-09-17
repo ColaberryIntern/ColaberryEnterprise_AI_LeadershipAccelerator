@@ -128,13 +128,22 @@ export async function scheduleSubscription(
   });
 
   const scheduleId = String(schedule.Id);
+  // If the member was already past their period end when scheduled, the first
+  // charge is their NEXT boundary and the elapsed period is written off. The
+  // row has to say so: two members scheduled on 2026-09-01 kept a period end of
+  // 30/31 August, so the reminder job read them as lapsed and mailed a pay link
+  // on 6 and 7 September while PaySimple was set to collect on the 30th. Moving
+  // the period end to the first charge date is not a charge and not a credit,
+  // it is the ledger agreeing with the gateway. GREATEST() keeps a period end
+  // that is already later than the first charge untouched.
   await sequelize.query(
     `UPDATE subscriptions
         SET paysimple_schedule_id = :sid,
             paysimple_customer_id = :cid,
+            current_period_end = GREATEST(current_period_end, :firstCharge::timestamptz),
             updated_at = now()
       WHERE id = :id AND status = 'active' AND paysimple_schedule_id IS NULL`,
-    { replacements: { sid: scheduleId, cid: String(customerId), id: c.subscriptionId } },
+    { replacements: { sid: scheduleId, cid: String(customerId), id: c.subscriptionId, firstCharge: c.firstChargeOn.toISOString() } },
   );
   return { scheduled: true, scheduleId };
 }
