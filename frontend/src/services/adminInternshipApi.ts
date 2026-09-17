@@ -131,6 +131,27 @@ export async function decideInternshipApplication(id: string, body: {
   return data;
 }
 
+/** One outstanding reason an applicant cannot be activated yet. */
+export interface ActivationBlocker { key: string; label: string; waiting_on: string | null }
+
+/**
+ * Put an approved, documents-verified applicant into the internship cohort — the
+ * only action that does so. A refusal comes back NOT as a thrown error but as
+ * `{ ok:false, blockers }`, because the reviewer needs to see WHY (an unverified
+ * document, an inactive membership), not just that it failed.
+ */
+export async function activateInternshipApplication(id: string): Promise<
+  { ok: true; state: string | null } | { ok: false; blockers: ActivationBlocker[]; error: string }
+> {
+  try {
+    const { data } = await api.post(`/api/admin/internship/applications/${id}/activate`, {});
+    return { ok: true, state: (data?.state ?? data?.application?.state) ?? null };
+  } catch (err: any) {
+    const d = err?.response?.data;
+    return { ok: false, blockers: (d?.blockers as ActivationBlocker[]) ?? [], error: d?.error ?? 'Could not activate.' };
+  }
+}
+
 // ── AI assessment ─────────────────────────────────────────────────────────────
 
 export type RequirementStatus = 'met' | 'not_met' | 'unclear';

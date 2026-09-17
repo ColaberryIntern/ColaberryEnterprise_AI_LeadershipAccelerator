@@ -1,0 +1,62 @@
+/* Internship admin redesign — the master/detail shell.
+ *
+ * The old screen was one long column that GREW when you opened an applicant:
+ * ~11 cards injected inline, selection state bouncing you top-to-bottom. This
+ * lays out a fixed queue beside a detail pane that scrolls on its own and shows
+ * one tab at a time, so opening someone never moves the queue.
+ * Tokens come from admin-shell.css; the fallbacks keep it sane in isolation. */
+
+.aint-modes{display:flex;gap:4px;background:var(--surface-sunken,#eef0f4);border-radius:999px;padding:4px;margin:0 0 16px}
+.aint-modes button{border:0;background:transparent;color:var(--text-muted,#6b7280);font-weight:600;font-size:13.5px;padding:8px 16px;border-radius:999px;cursor:pointer}
+.aint-modes button.on{background:var(--surface-card,#fff);color:var(--text-strong,#182231);box-shadow:0 1px 2px rgba(20,30,50,.08)}
+
+/* KPI filter row — clicking one filters the queue and never clears the open applicant. */
+.aint-kpis{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px}
+.aint-kpi{flex:1 1 150px;min-width:140px;text-align:left;background:var(--surface-card,#fff);border:1px solid var(--border-subtle,#e2e6ec);border-radius:12px;padding:12px 14px;cursor:pointer;position:relative;transition:.14s}
+.aint-kpi:hover{border-color:var(--border-strong,#cdd4dd)}
+.aint-kpi:disabled{cursor:default;opacity:.75}
+.aint-kpi.on{border-color:var(--berry,#2563a8);box-shadow:0 0 0 1px var(--berry,#2563a8) inset}
+.aint-kpi .v{font-size:23px;font-weight:700;letter-spacing:-.02em}
+.aint-kpi .l{font-size:11.5px;color:var(--text-muted,#6b7280)}
+.aint-kpi .u{font-size:10.5px;font-style:italic;color:var(--text-faint,#9aa4b2)}
+
+/* Two-pane master / detail */
+.aint-master{display:grid;grid-template-columns:360px 1fr;gap:16px;align-items:start}
+@media(max-width:960px){ .aint-master{grid-template-columns:1fr} .aint-master .aint-detail{display:none} .aint-master.show .aint-queue{display:none} .aint-master.show .aint-detail{display:block} }
+
+.aint-queue{position:sticky;top:12px;background:var(--surface-card,#fff);border:1px solid var(--border-subtle,#e2e6ec);border-radius:12px;overflow:hidden}
+.aint-qhead{padding:12px 14px;border-bottom:1px solid var(--border-subtle,#e2e6ec)}
+.aint-search{margin-top:8px;display:flex;align-items:center;gap:8px;background:var(--surface-sunken,#eef0f4);border:1px solid var(--border-subtle,#e2e6ec);border-radius:9px;padding:6px 10px}
+.aint-search input{border:0;background:transparent;width:100%;font-size:13px;outline:none;color:inherit}
+.aint-filters{display:flex;gap:6px;flex-wrap:wrap;padding:10px 14px 6px}
+.aint-chip{border:1px solid var(--border-subtle,#e2e6ec);background:var(--surface-subtle,#f7f8fb);color:var(--text-body,#3f4a5a);font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;cursor:pointer}
+.aint-chip.on{background:var(--berry,#2563a8);border-color:var(--berry,#2563a8);color:#fff}
+.aint-chip .n{opacity:.7;margin-left:4px}
+.aint-qlist{max-height:66vh;overflow:auto}
+.aint-qrow{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--border-subtle,#e2e6ec);background:transparent;padding:11px 14px;border-left:3px solid transparent;cursor:pointer}
+.aint-qrow:hover{background:var(--surface-subtle,#f7f8fb)}
+.aint-qrow.on{background:var(--berry-soft,#e9f0f9);border-left-color:var(--berry,#2563a8)}
+.aint-qrow .nm{font-weight:600;font-size:13.5px;color:var(--text-strong,#182231)}
+.aint-qrow .em{font-size:11.5px;color:var(--text-muted,#6b7280)}
+.aint-qrow .meta{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:11.5px;color:var(--text-muted,#6b7280);flex-wrap:wrap}
+.aint-prog{height:5px;width:56px;background:var(--surface-sunken,#eef0f4);border-radius:3px;overflow:hidden;display:inline-block}
+.aint-prog i{display:block;height:100%;background:var(--berry,#2563a8)}
+.aint-flag{background:var(--red,#c0392b);color:#fff;border-radius:999px;font-size:10.5px;font-weight:700;min-width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px}
+
+/* Detail pane */
+.aint-detail{background:var(--surface-card,#fff);border:1px solid var(--border-subtle,#e2e6ec);border-radius:12px;overflow:hidden;min-height:66vh}
+.aint-dhead{position:sticky;top:0;z-index:3;background:var(--surface-card,#fff);border-bottom:1px solid var(--border-subtle,#e2e6ec);padding:16px 20px 0}
+.aint-dtop{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.aint-dname{font-size:19px;font-weight:700;letter-spacing:-.02em;color:var(--text-strong,#182231)}
+.aint-dfacts{display:flex;gap:14px;flex-wrap:wrap;margin-top:4px;font-size:12.5px;color:var(--text-muted,#6b7280)}
+.aint-dfacts b{color:var(--text-body,#3f4a5a);font-weight:600}
+.aint-dactions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.aint-tabs{display:flex;gap:2px;margin-top:14px;overflow-x:auto}
+.aint-tabs button{border:0;background:transparent;color:var(--text-muted,#6b7280);font-weight:600;font-size:13px;padding:10px 13px;border-bottom:2.5px solid transparent;white-space:nowrap;cursor:pointer}
+.aint-tabs button.on{color:var(--text-strong,#182231);border-bottom-color:var(--berry,#2563a8)}
+.aint-tabs button .tn{margin-left:6px;font-size:10.5px;background:var(--surface-sunken,#eef0f4);color:var(--text-muted,#6b7280);border-radius:999px;padding:1px 6px}
+.aint-dbody{padding:18px 20px}
+.aint-empty{text-align:center;color:var(--text-muted,#6b7280);padding:70px 24px}
+.aint-empty .ic{font-size:32px;margin-bottom:8px}
+.aint-back{display:none}
+@media(max-width:960px){ .aint-back{display:inline-flex} }
