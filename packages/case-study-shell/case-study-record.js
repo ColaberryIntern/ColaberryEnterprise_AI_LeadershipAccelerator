@@ -371,10 +371,14 @@
       return section('contributors', 'Who built it', [
         list(c.contributors, function (p) {
           // `displayMode` is the server's consent decision, already made. A
-          // role-only contributor has no name in the payload to print.
-          return el('li', 'cs-person', p.displayMode === 'named'
-            ? p.displayName + ' — ' + p.role
-            : p.role);
+          // role-only contributor has no name in the payload to print. A named
+          // one reads "Kes, AI Systems Architect ...": the name in bold, then
+          // the role, joined by a comma (published copy carries no dashes).
+          if (p.displayMode !== 'named') return el('li', 'cs-person', p.role);
+          var li = el('li', 'cs-person');
+          li.appendChild(el('strong', 'cs-person__name', p.displayName));
+          li.appendChild(document.createTextNode(', ' + p.role));
+          return li;
         }, 'cs-people'),
       ]);
     },
