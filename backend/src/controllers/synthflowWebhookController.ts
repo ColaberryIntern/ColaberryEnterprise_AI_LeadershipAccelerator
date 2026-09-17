@@ -6,7 +6,7 @@ import { CallContactLog } from '../models';
 import { processCallTranscript } from '../services/callTranscriptProcessor';
 import { sendSmsViaGhl, syncLeadToGhl, findContactByEmail } from '../services/ghlService';
 import { logActivity } from '../services/activityService';
-import { finishIntake, buildTargetFromCall } from '../services/delivery/projectIntake';
+import { completeFlotationCall } from '../services/delivery/flotationCallCompletion';
 import OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import { env } from '../config/env';
@@ -143,7 +143,7 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
     //
     // Non-fatal and deliberately last: recording that the call happened is this endpoint's
     // actual contract with the vendor, and it must not be lost because a downstream step
-    // failed. `finishIntake` never throws, but the guard stays
+    // failed. `completeFlotationCall` never throws past a missing row, but the guard stays
     // because that is a promise made by another module and this one should not depend on
     // it holding forever.
     // ── AI Internship interview calls ──────────────────────────────────────
@@ -193,31 +193,29 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
       }
     }
 
-    if (callCompleted && transcript && commMeta.source === 'ai-flotation') {
+    if (commMeta.source === 'ai-flotation') {
       try {
-        const leadRecord = commLog.lead_id ? await Lead.findByPk(commLog.lead_id) : null;
         // The spoken mouth of the ONE intake. Everything after the last word - extraction,
-        // and the build that starts on its own - is `finishIntake`, the same function the
-        // typed interview calls when it is done. An admin-requested call was stamped with
-        // the student it is for; a prospect's call is found by their email.
-        const outcome = await finishIntake({
-          conversation: transcript,
-          source: 'voice_transcript',
-          sourceRef: call_id,
-          facts: {
-            name: (leadRecord as any)?.name || null,
-            company: (leadRecord as any)?.company || null,
-            role: (leadRecord as any)?.role || (leadRecord as any)?.title || null,
-          },
-          leadId: commLog.lead_id as number | null,
-          buildFor: buildTargetFromCall({ enrollmentId: commMeta.enrollment_id, email: (leadRecord as any)?.email }),
+        // and the build that starts on its own - is `completeFlotationCall`, which the admin
+        // page's poll and the five-minute sweep also call when this webhook does not arrive.
+        // The log row was written above; the completion skips that part on a terminal row.
+        const outcome = await completeFlotationCall({
+          callId: String(call_id),
+          status: String(status || ''),
+          transcript: transcript || '',
+          durationSeconds: typeof duration === 'number' ? duration : null,
+          endReason: disposition ?? null,
+          recordingUrl: recording_url ?? null,
         });
         console.log(
-          `[Synthflow Webhook] project understanding ${outcome.understanding}` +
-            (outcome.build ? ` build=${outcome.build.started ? outcome.build.project_id : 'not started: ' + outcome.build.reason}` : ''),
+          `[Synthflow Webhook] flotation call ${outcome.handled ? (outcome.completed ? 'completed' : 'ended without a conversation') : outcome.reason}` +
+            (outcome.handled && outcome.intake
+              ? ` understanding=${outcome.intake.understanding}` +
+                (outcome.intake.build ? ` build=${outcome.intake.build.started ? outcome.intake.build.project_id : 'not started: ' + outcome.intake.build.reason}` : '')
+              : ''),
         );
       } catch (undErr: any) {
-        console.warn('[Synthflow Webhook] project understanding error:', undErr.message);
+        console.warn('[Synthflow Webhook] flotation completion error:', undErr.message);
       }
     }
 

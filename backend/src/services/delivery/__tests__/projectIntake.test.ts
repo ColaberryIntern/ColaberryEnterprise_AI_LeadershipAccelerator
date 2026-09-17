@@ -300,14 +300,24 @@ describe('the mirror - both doors are the same function', () => {
   });
 
   it('the spoken mouth ends through finishIntake, never through the extractor directly', () => {
-    // A call's transcript arrives at the Synthflow webhook. If that file recorded the
-    // understanding itself, voice would stop where chat continues - which is exactly the
-    // gap this test was written to close.
-    expect(spokenDoor).toMatch(/from '[./]+services\/delivery\/projectIntake'/);
-    expect(spokenDoor).toContain('await finishIntake({');
-    expect(spokenDoor).toContain("source: 'voice_transcript'");
-    expect(spokenDoor).not.toContain('recordUnderstandingFromConversation');
-    expect(spokenDoor).toContain('buildTargetFromCall({ enrollmentId: commMeta.enrollment_id');
+    // A call's transcript can arrive three ways - the webhook, the admin page's poll, the
+    // five-minute sweep - and all three go through flotationCallCompletion, which is the
+    // one place voice calls finishIntake. If the webhook recorded the understanding
+    // itself, voice would stop where chat continues - exactly the gap this closes.
+    const completion = read('services', 'delivery', 'flotationCallCompletion.ts');
+    expect(completion).toContain('await finishIntake({');
+    expect(completion).toContain("source: 'voice_transcript'");
+    expect(completion).toContain('buildTargetFromCall({ enrollmentId: meta.enrollment_id');
+
+    expect(spokenDoor).toMatch(/from '[./]+services\/delivery\/flotationCallCompletion'/);
+    expect(spokenDoor).toContain('await completeFlotationCall({');
+    for (const door of [spokenDoor, adminDoor]) {
+      expect(door).not.toContain('recordUnderstandingFromConversation');
+      // Neither door ends a call itself; the admin route only READS voice understandings.
+      expect(door).not.toContain('finishIntake(');
+    }
+    // The admin poll reconciles through the same module, not its own copy.
+    expect(adminDoor).toContain('await reconcileFlotationCall(callId)');
   });
 
   it('both doors place the call through requestInstantCallback with the same brand', () => {

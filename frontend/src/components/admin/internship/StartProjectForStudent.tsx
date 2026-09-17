@@ -30,7 +30,7 @@ import SpokenIntake from './SpokenIntake';
  * session id per conversation; the server uses it to make the final turn idempotent.
  */
 
-type Phase = 'pick' | 'talk' | 'done';
+type Phase = 'pick' | 'choose' | 'talk' | 'done';
 type Mode = 'typed' | 'spoken';
 
 const newSessionId = (): string =>
@@ -84,6 +84,11 @@ export default function StartProjectForStudent() {
     setStudent(s);
     setMatches([]);
     setQuery('');
+    setPhase('choose');
+  };
+
+  const choose = (m: Mode) => {
+    setMode(m);
     setPhase('talk');
   };
 
@@ -180,21 +185,34 @@ export default function StartProjectForStudent() {
             <i className="ri-user-line text-muted" aria-hidden="true" />
             <span>Building for <strong>{student.full_name || student.email}</strong></span>
             {student.full_name && <span className="text-muted">{student.email}</span>}
-            {turns.length === 0 && phase === 'talk' && (
-              <div className="btn-group btn-group-sm ms-auto" role="group" aria-label="How to run the interview">
-                <button type="button" className={`btn ${mode === 'typed' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setMode('typed')}>
-                  <i className="ri-keyboard-line me-1" />Type it out
-                </button>
-                <button type="button" className={`btn ${mode === 'spoken' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setMode('spoken')}>
-                  <i className="ri-phone-line me-1" />Have it call
-                </button>
-              </div>
+            {phase !== 'choose' && (
+              <span className="text-muted ms-auto">
+                <i className={`${mode === 'spoken' ? 'ri-phone-line' : 'ri-keyboard-line'} me-1`} aria-hidden="true" />
+                {mode === 'spoken' ? 'by phone' : 'typed'}
+              </span>
             )}
           </div>
 
+          {phase === 'choose' && (
+            <div className="row g-3" style={{ maxWidth: 720 }}>
+              <div className="col-md-6">
+                <button type="button" className="btn btn-outline-primary w-100 text-start p-3 h-100" onClick={() => choose('typed')}>
+                  <div className="fw-semibold"><i className="ri-keyboard-line me-2" />Type it out</div>
+                  <div className="small text-muted mt-1">You play the customer in the chat below. Same questions a prospect gets on aiflotation.com.</div>
+                </button>
+              </div>
+              <div className="col-md-6">
+                <button type="button" className="btn btn-outline-primary w-100 text-start p-3 h-100" onClick={() => choose('spoken')}>
+                  <div className="fw-semibold"><i className="ri-phone-line me-2" />Have it call</div>
+                  <div className="small text-muted mt-1">The AI Flotation agent phones a number and runs the interview by voice. The conversation appears here when the call ends.</div>
+                </button>
+              </div>
+            </div>
+          )}
+
           {mode === 'spoken' && phase === 'talk' && <SpokenIntake student={student} onViewAs={() => void viewAs()} />}
 
-          {mode === 'typed' && (
+          {mode === 'typed' && phase !== 'choose' && (
           <>
           <div
             ref={logRef}

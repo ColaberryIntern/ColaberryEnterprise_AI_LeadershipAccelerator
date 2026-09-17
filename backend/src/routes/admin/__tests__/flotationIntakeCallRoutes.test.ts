@@ -22,6 +22,7 @@ const mockRecordFindOne = jest.fn();
 const mockEnrollmentFindByPk = jest.fn();
 const mockCommFindOne = jest.fn();
 const mockCallback = jest.fn();
+const mockReconcile = jest.fn();
 
 jest.mock('../../../models/ProjectUnderstandingRecord', () => ({
   __esModule: true,
@@ -36,6 +37,9 @@ jest.mock('../../../services/delivery/buildFromUnderstanding', () => ({ startBui
 jest.mock('../../../services/delivery/projectIntake', () => ({ runIntakeTurn: jest.fn() }));
 jest.mock('../../../services/callbackRequestService', () => ({
   requestInstantCallback: (...a: any[]) => mockCallback(...a),
+}));
+jest.mock('../../../services/delivery/flotationCallCompletion', () => ({
+  reconcileFlotationCall: (...a: any[]) => mockReconcile(...a),
 }));
 
 import flotationIntakeRoutes from '../flotationIntakeRoutes';
@@ -52,6 +56,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockEnrollmentFindByPk.mockResolvedValue(STUDENT);
   mockCallback.mockResolvedValue({ status: 'call_initiated', lead_id: 42, call_id: 'call_1', deduped: false });
+  mockReconcile.mockResolvedValue({ reconciled: false, reason: 'no_record' });
 });
 
 describe('POST /api/admin/flotation/intake/call', () => {
@@ -152,18 +157,43 @@ describe('GET /api/admin/flotation/intake/call/:callId - where the call has got 
     expect(res.status).toBe(404);
   });
 
-  it('ringing: placed, no transcript, nothing written up yet', async () => {
+  it('ringing: placed, no transcript, nothing written up yet - and it asked Synthflow', async () => {
     mockCommFindOne.mockResolvedValue({ status: 'sent', provider_response: null });
     mockRecordFindOne.mockResolvedValue(null);
+    mockReconcile.mockResolvedValue({ reconciled: false, reason: 'still_active', status: 'ringing' });
 
     const res = await request(app).get('/api/admin/flotation/intake/call/call_1').set('Authorization', `Bearer ${ADMIN}`);
 
     expect(mockCommFindOne).toHaveBeenCalledWith({ where: { provider: 'synthflow', provider_message_id: 'call_1' } });
+    expect(mockReconcile).toHaveBeenCalledWith('call_1');
     expect(res.body).toEqual({
-      call: { status: 'sent', duration: null, has_transcript: false, end_reason: null },
+      call: { status: 'sent', live_status: 'ringing', duration: null, has_transcript: false, transcript: '', end_reason: null },
       understanding: null,
       build: null,
     });
+  });
+
+  it('a call still at sent that Synthflow says has ended is completed on the spot, and the page sees the result', async () => {
+    // THE GAP. Three out of three Flotation calls sat at `sent` forever because the webhook
+    // never came. The poll now reads the call back and completes it - same function as the
+    // webhook - so the page moves on without anyone waiting for a delivery we do not control.
+    const before = { status: 'sent', provider_response: null };
+    const after = { status: 'delivered', provider_response: { duration: 200, transcript: 'agent: Hello\nhuman: We run a tool library.', end_call_reason: 'completed' } };
+    mockCommFindOne.mockResolvedValueOnce(before).mockResolvedValueOnce(after);
+    mockReconcile.mockResolvedValue({ reconciled: true, status: 'completed', intake: { understanding: 'created', understanding_id: 'rec-1', build: { started: true, project_id: 'proj-9' } } });
+    mockRecordFindOne.mockResolvedValue({ id: 'rec-1', status: 'extracted', title: 'Tool Library', items: [1, 2], build_handoff: { project_id: 'proj-9', started_at: 't' } });
+
+    const res = await request(app).get('/api/admin/flotation/intake/call/call_1').set('Authorization', `Bearer ${ADMIN}`);
+
+    expect(res.body.call).toMatchObject({ status: 'delivered', live_status: null, has_transcript: true, transcript: 'agent: Hello\nhuman: We run a tool library.' });
+    expect(res.body.build).toEqual({ project_id: 'proj-9', started_at: 't' });
+  });
+
+  it('does not ask Synthflow about a call that has already ended', async () => {
+    mockCommFindOne.mockResolvedValue({ status: 'delivered', provider_response: { transcript: 'x' } });
+    mockRecordFindOne.mockResolvedValue(null);
+    await request(app).get('/api/admin/flotation/intake/call/call_1').set('Authorization', `Bearer ${ADMIN}`);
+    expect(mockReconcile).not.toHaveBeenCalled();
   });
 
   it('ended, written up and building: the whole story from the rows the pipeline left', async () => {
@@ -181,7 +211,7 @@ describe('GET /api/admin/flotation/intake/call/:callId - where the call has got 
 
     expect(mockRecordFindOne).toHaveBeenCalledWith({ where: { source: 'voice_transcript', source_ref: 'call_1' } });
     expect(res.body).toEqual({
-      call: { status: 'delivered', duration: 312, has_transcript: true, end_reason: 'completed' },
+      call: { status: 'delivered', live_status: null, duration: 312, has_transcript: true, transcript: 'Agent: ...', end_reason: 'completed' },
       understanding: { id: 'rec-1', status: 'extracted', title: 'Tool Loan Management', items: 4 },
       build: { project_id: 'proj-9', started_at: '2026-09-16T21:00:00Z' },
     });
@@ -191,7 +221,7 @@ describe('GET /api/admin/flotation/intake/call/:callId - where the call has got 
     mockCommFindOne.mockResolvedValue({ status: 'failed', provider_response: { end_call_reason: 'no-answer', transcript: '' } });
     mockRecordFindOne.mockResolvedValue(null);
     const res = await request(app).get('/api/admin/flotation/intake/call/call_1').set('Authorization', `Bearer ${ADMIN}`);
-    expect(res.body.call).toEqual({ status: 'failed', duration: null, has_transcript: false, end_reason: 'no-answer' });
+    expect(res.body.call).toEqual({ status: 'failed', live_status: null, duration: null, has_transcript: false, transcript: '', end_reason: 'no-answer' });
     expect(res.body.understanding).toBeNull();
   });
 
