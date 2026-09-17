@@ -84,19 +84,12 @@ const REPORTS = [
     sendHourUTC: 19,  // 2 PM CT
     description: 'Client project. Per-list cards with DRAFTED BY CB pattern. Karun on CC (added 2026-06-01).',
   },
-  {
-    name: 'LandJet',
-    scriptPath: 'backend/src/scripts/dailyClientProjectsReport.js',
-    args: ['--only=LandJet', '--with-contextual'],
-    projectId: 46699826,
-    needsOpenai: true,
-    recipients: STANDARD_RECIPIENTS,
-    cbRunnerState: 'tmp/cb-ai-runner-state-46699826.json',
-    skipFlag: '--skip-clients',
-    cadence: 'daily',
-    sendHourUTC: 20,  // 3 PM CT
-    description: 'Client project. Per-list cards with DRAFTED BY CB pattern.',
-  },
+  // ---- LandJet daily client report: RETIRED 2026-09-17 ----
+  // Ali: "remove the landjet emails from my queue. They are no longer a potential
+  // client." The entry that fired dailyClientProjectsReport.js --only=LandJet at
+  // 20 UTC daily is gone from here; the LandJet CB AI runner crontab line on prod
+  // (runCbAiTasksGeneric.js --project=46699826) is commented out the same day.
+  // Basecamp project 46699826 is left as is for Ali to archive or keep.
   // ---- Anthropic Partner Network daily countdown: RETIRED 2026-09-16 ----
   // Ali: "let's remove this auto email and archive the project - it is no
   // longer relevant." The entry that fired dailyAnthropicPartnerCountdown.js at
