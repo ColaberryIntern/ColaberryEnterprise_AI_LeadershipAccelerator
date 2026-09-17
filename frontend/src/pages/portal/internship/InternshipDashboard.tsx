@@ -4,6 +4,7 @@ import { InternDashboard, Week3Handoff, fetchInternshipDashboard } from '../../.
 import InternshipProjects from './InternshipProjects';
 import InternshipFeedback from './InternshipFeedback';
 import InternshipCertification from './InternshipCertification';
+import InternshipCaseStudies from './InternshipCaseStudies';
 import CondensedHeaderCard from '../today/CondensedHeaderCard';
 // The next-step hero and the scroll-condensed top-bar slot both use the shared
 // timeline card styles, so the internship dashboard matches Classroom/Projects
@@ -218,6 +219,9 @@ const InternshipDashboard: React.FC<{
 
       {/* Certification — practice readiness (an estimate) + the official claim, kept apart. */}
       <InternshipCertification />
+
+      {/* Case studies — the editorial pipeline for projects already nominated. */}
+      <InternshipCaseStudies caseStudies={d.activity.case_studies} />
 
       {/* Training direction + meetings. */}
       <section style={{ ...cardStyle }}>
