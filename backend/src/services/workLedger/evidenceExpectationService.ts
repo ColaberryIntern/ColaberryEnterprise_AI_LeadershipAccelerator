@@ -147,6 +147,17 @@ const TYPE_DEFAULTS: Record<TicketType, TicketEvidenceExpectations> = {
   // classified the same way as company_directive/workforce_decision:
   // a governance decision, no visual or multi-step-workflow dimension.
   data_reliability_incident: { visualProof: NOT_APPLICABLE, workGraph: NOT_APPLICABLE, decisions: EXPECTED },
+
+  // Dara v2 Phase 3 — conversational curriculum support, mirrors
+  // 'student_support' exactly: no decision-recording, work-graph, or
+  // screenshot pipeline connected today.
+  curriculum_support: { visualProof: NOT_APPLICABLE, workGraph: NOT_APPLICABLE, decisions: NOT_APPLICABLE },
+
+  // Dara v2 Phase 4 — a real handoff ticket, human-resolved only (no
+  // automated terminal-state signal to record a decision against; the human
+  // reply itself is the resolution, not a separate recorded decision). No
+  // visual or multi-step-workflow dimension.
+  agent_handoff: { visualProof: NOT_APPLICABLE, workGraph: NOT_APPLICABLE, decisions: NOT_APPLICABLE },
 };
 
 /**

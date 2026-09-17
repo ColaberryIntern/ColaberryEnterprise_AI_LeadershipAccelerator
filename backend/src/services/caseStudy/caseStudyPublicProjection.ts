@@ -42,6 +42,7 @@
  */
 
 import { getCaseStudySurfaceProfile, normalizeFacetList, normalizeFacetSlug } from './caseStudyFilterService';
+import { projectBuilder, projectDecisions, resolveSurfaceContent } from './caseStudySurfaceVariant';
 import {
   arr,
   pairOf,
@@ -214,21 +215,28 @@ export function projectPublicSummary(input: PublicProjectionInput): PublicCaseSt
 
 /** One page. Every key below is a key of `PublicCaseStudyDetail`. */
 export function projectPublicDetail(input: PublicProjectionInput): PublicCaseStudyDetail {
-  const c = common(input);
-  const content = input.content;
+  // THE SURFACE READS ITS OWN WORDS. A variant for this surface is laid over the
+  // canonical content first; a record with none reads the canonical object
+  // itself, so nothing below can tell the difference.
+  const resolved = resolveSurfaceContent(input.content, input.surfaceKey);
+  const content = resolved.content;
+  const c = common({ ...input, content });
+  // The variant's standfirst outranks the publication row's summary override,
+  // which outranks the identity's standfirst; the meta description follows it.
+  const standfirst = resolved.standfirst ?? c.standfirst;
   const profile = getCaseStudySurfaceProfile(input.surfaceKey);
   const people = projectContributors(content);
   const repos = projectRepositories(content?.repositories ?? []);
   const engagement = content?.identity?.engagementWindow;
   const production = content?.identity?.productionStatus;
   const description = truncate(
-    c.standfirst || text(content?.identity?.summary) || c.title, 300,
+    standfirst || text(content?.identity?.summary) || c.title, 300,
   );
   return {
     surfaceKey: input.surfaceKey,
     slug: input.slug,
     title: c.title,
-    standfirst: c.standfirst,
+    standfirst,
     organizationLabel: c.organizationLabel,
     industry: c.industry,
     primaryCapability: c.primaryCapability,
@@ -250,6 +258,11 @@ export function projectPublicDetail(input: PublicProjectionInput): PublicCaseStu
     // Null unless the record carries a valid story enabled for THIS surface, so
     // every other record's payload is unchanged apart from this one key.
     visualStory: projectVisualStory(content, input.surfaceKey),
+    // Both consent-gated inside `projectBuilder`: the biography needs a named,
+    // consented contributor on this same content; the decisions are prose.
+    builder: projectBuilder(resolved.builder, people.contributors),
+    decisions: projectDecisions(resolved.decisions),
+    closing: resolved.closing,
     situation: projectSituation(content),
     timeline: projectTimeline(content?.buildTimeline ?? []),
     architecture: projectArchitecture(content),

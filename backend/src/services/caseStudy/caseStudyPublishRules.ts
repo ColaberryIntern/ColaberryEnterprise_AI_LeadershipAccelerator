@@ -25,6 +25,7 @@ import { isPublishableSurfaceKey } from '../../types/caseStudyGuards';
 import { repoLogIdentity } from './caseStudyRepoReader';
 import type {
   CaseStudyBuilderIdentityMode,
+  CaseStudyContributor,
   CaseStudyMetricEntry,
   CaseStudyOrganizationIdentityMode,
   CaseStudySnapshotContent,
@@ -337,26 +338,77 @@ export function ruleBuilderConsent(
       'record the builder\'s consent, or set the builder identity mode to "role_only" so the page credits the role without the person');
   }
 
-  arr(content.contributors).forEach((c, i) => {
-    if (!c || c.displayMode !== 'named') return;
-    const who = `contributor "${text(c.displayName) || '(unnamed)'}"`;
-    const role = has(c.role) ? ` (${text(c.role)})` : '';
-    if (!consented) {
-      b.add('builder_consent', `contributors[${i}].displayName`,
-        `${who}${role} would be named but builder naming consent is not approved`,
-        'record that contributor\'s consent, or change their displayMode to "role_only"');
+  /**
+   * THE SAME RULE FOR EVERY LIST OF PEOPLE ON THE SNAPSHOT. A per-surface
+   * variant may carry its own contributor list (2026-09-16), so a name the
+   * canonical list would be refused for cannot slip through a variant.
+   * `namedOk` collects the names this rule lets through, so the builder
+   * profile below is held to the same list.
+   */
+  const namedOk = new Set<string>();
+  const checkPeople = (prefix: string, people: unknown): void => {
+    arr(people as readonly CaseStudyContributor[]).forEach((c, i) => {
+      if (!c || c.displayMode !== 'named') return;
+      const who = `contributor "${text(c.displayName) || '(unnamed)'}"`;
+      const role = has(c.role) ? ` (${text(c.role)})` : '';
+      let ok = true;
+      if (!consented) {
+        ok = false;
+        b.add('builder_consent', `${prefix}[${i}].displayName`,
+          `${who}${role} would be named but builder naming consent is not approved`,
+          'record that contributor\'s consent, or change their displayMode to "role_only"');
+      }
+      if (mode !== 'named') {
+        ok = false;
+        b.add('builder_consent', `${prefix}[${i}].displayMode`,
+          `${who}${role} would be named while the builder identity mode is "${mode}"`,
+          'change the contributor to "role_only", or raise the builder identity mode to "named" with consent on file');
+      }
+      if (!has(c.consentRecordedAt)) {
+        ok = false;
+        b.add('builder_consent', `${prefix}[${i}].consentRecordedAt`,
+          `${who}${role} is named but records no consent timestamp`,
+          'stamp consentRecordedAt with when the consent was actually given; a named person with no recorded consent is the failure this field exists to prevent');
+      }
+      if (ok && has(c.displayName)) namedOk.add(text(c.displayName));
+    });
+  };
+  checkPeople('contributors', content.contributors);
+  const variants = (content as { surfaceVariants?: Record<string, any> }).surfaceVariants;
+  const variantEntries = variants && typeof variants === 'object' ? Object.entries(variants) : [];
+  for (const [surface, v] of variantEntries) {
+    if (!isPublishableSurfaceKey(surface)) {
+      b.add('builder_consent', `surfaceVariants.${surface}`,
+        `a surface variant is keyed on "${surface}", which is not a publishable surface`,
+        `key the variant on one of ${PUBLISHABLE_SURFACE_KEYS.join(', ')}, or remove it`);
+      continue;
     }
-    if (mode !== 'named') {
-      b.add('builder_consent', `contributors[${i}].displayMode`,
-        `${who}${role} would be named while the builder identity mode is "${mode}"`,
-        'change the contributor to "role_only", or raise the builder identity mode to "named" with consent on file');
+    if (v && typeof v === 'object' && v.contributors !== undefined) checkPeople(`surfaceVariants.${surface}.contributors`, v.contributors);
+  }
+  /**
+   * THE BUILDER PROFILE NAMES NOBODY THE GATE DID NOT. Its `displayName` must
+   * be a contributor this rule let through in the SAME content it will be
+   * projected with: the canonical profile against the canonical list, a
+   * variant's profile against that variant's list when it has one. The
+   * projection withholds the biography anyway; this makes the mistake a
+   * refusal with a path rather than a silently blank card.
+   */
+  const checkBuilder = (prefix: string, profile: unknown, people: unknown): void => {
+    const name = text((profile as { displayName?: unknown } | null)?.displayName);
+    if (!profile || typeof profile !== 'object' || !name) return;
+    const list = arr(people as readonly CaseStudyContributor[]);
+    const namedHere = list.some((c) => c?.displayMode === 'named' && text(c.displayName) === name && namedOk.has(name));
+    if (!namedHere) {
+      b.add('builder_consent', `${prefix}.displayName`,
+        `the builder profile names "${name}" but no named, consented contributor of that name is on the same content`,
+        'add the person as a named contributor with consent on file, or leave displayName empty so the card credits the role only');
     }
-    if (!has(c.consentRecordedAt)) {
-      b.add('builder_consent', `contributors[${i}].consentRecordedAt`,
-        `${who}${role} is named but records no consent timestamp`,
-        'stamp consentRecordedAt with when the consent was actually given; a named person with no recorded consent is the failure this field exists to prevent');
-    }
-  });
+  };
+  checkBuilder('builder', (content as { builder?: unknown }).builder, content.contributors);
+  for (const [surface, v] of variantEntries) {
+    if (!v || typeof v !== 'object' || !isPublishableSurfaceKey(surface)) continue;
+    checkBuilder(`surfaceVariants.${surface}.builder`, v.builder, v.contributors !== undefined ? v.contributors : content.contributors);
+  }
 }
 
 /** 6 — a repository that is not demonstrably public may not be linked. */

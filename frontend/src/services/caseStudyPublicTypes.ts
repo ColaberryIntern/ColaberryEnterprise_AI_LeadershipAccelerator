@@ -425,6 +425,40 @@ export interface PublicCaseStudyVisualChart {
   readonly limitations: readonly string[];
 }
 
+/**
+ * Meet the builder, as the page shows it. The biography fields (`name`,
+ * `intro`, `progression`, `profileUrl`, `photoUrl`) are null or empty unless
+ * the server matched the profile to a named, consented contributor; the role
+ * title, contribution and skills are project facts and always come through.
+ */
+export interface PublicCaseStudyBuilder {
+  readonly name: string | null;
+  readonly roleTitle: string;
+  readonly organization: string | null;
+  readonly initials: string | null;
+  readonly intro: readonly string[];
+  readonly progression: readonly string[];
+  readonly contribution: string;
+  readonly skills: readonly { readonly label: string; readonly evidence: string }[];
+  readonly profileUrl: string | null;
+  readonly photoUrl: string | null;
+  readonly provenance: { readonly source: 'user_confirmed' | 'approved_profile' | 'repository'; readonly confirmedAt: string };
+}
+
+/** One "decision that made the difference": problem, decision, evidence, consequence. */
+export interface PublicCaseStudyDecision {
+  readonly key: string;
+  readonly title: string;
+  readonly problem: string;
+  readonly decision: string;
+  readonly evidence: string;
+  readonly consequence: string;
+  /** The workflow step the decision lives at ("02 Detect"), or null. */
+  readonly stage: string | null;
+  /** The figure the card closes on, as displayed, or null; the consequence is its caption. */
+  readonly figure: string | null;
+}
+
 export interface PublicCaseStudyVisualStory {
   readonly schemaVersion: 1;
   readonly presentationVersion: 'v2';
@@ -521,6 +555,12 @@ export interface PublicCaseStudyDetail {
   } | null;
   /** Null unless the record carries a visual story enabled for this surface. */
   readonly visualStory: PublicCaseStudyVisualStory | null;
+  /** Meet the builder, or null; the biography inside is consent-gated server-side. */
+  readonly builder: PublicCaseStudyBuilder | null;
+  /** Decisions that made the difference; empty means no cards. */
+  readonly decisions: readonly PublicCaseStudyDecision[];
+  /** The closing paragraph, or null when the record has none for this surface. */
+  readonly closing: string | null;
   readonly situation: PublicCaseStudySituation | null;
   readonly timeline: readonly PublicCaseStudyTimelineEntry[];
   readonly architecture: PublicCaseStudyArchitecture | null;

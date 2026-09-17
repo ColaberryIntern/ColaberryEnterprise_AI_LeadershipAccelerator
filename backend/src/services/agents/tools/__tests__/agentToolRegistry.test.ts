@@ -22,8 +22,12 @@ describe('agentToolRegistry — grants', () => {
     expect(agentHasTool('reese', 'read_attachments')).toBe(true);
   });
 
-  it('reports exactly the two agents holding the tool', () => {
-    expect(agentsWithTool('read_attachments').sort()).toEqual(['cory', 'reese']);
+  it('grants read_attachments to Dara (Dara v2 Phase 3)', () => {
+    expect(agentHasTool('dara', 'read_attachments')).toBe(true);
+  });
+
+  it('reports exactly the three agents holding the tool', () => {
+    expect(agentsWithTool('read_attachments').sort()).toEqual(['cory', 'dara', 'reese']);
   });
 
   it('lists an agent tools', () => {
@@ -36,6 +40,7 @@ describe('agentToolRegistry — kill switch', () => {
     process.env.AGENT_TOOLS_DISABLED = 'read_attachments';
     expect(agentHasTool('cory', 'read_attachments')).toBe(false);
     expect(agentHasTool('reese', 'read_attachments')).toBe(false);
+    expect(agentHasTool('dara', 'read_attachments')).toBe(false);
     expect(agentsWithTool('read_attachments')).toEqual([]);
     expect(listAgentTools('reese')).toEqual([]);
   });

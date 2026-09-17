@@ -68,6 +68,18 @@ Every time Claude states, in a reply, a brief, a session log, a commit message, 
 
 The exception is machine-facing fields that the code defines as UTC (ISO-8601 columns, API payloads, cron expressions): those stay as the code requires, and are converted the moment they are written for a person.
 
+## Emails sent as Ali: a little less formal
+
+Every email that goes out under Ali's name reads like Ali typing to a colleague, not like a memo. Ram's feedback on 2026-09-17: the tone had drifted formal. So:
+
+- Short sentences, contractions where a person would use them ("I'll", "that's", "we're"), first names, one idea per paragraph.
+- Say the thing, then stop. No throat-clearing openers ("I hope this finds you well"), no "please be advised", no "kindly", no "per my earlier".
+- Warm where warmth is real: a thank-you is one plain sentence, not a paragraph.
+- Numbered lists only when the reader has to act on each item; otherwise prose.
+- Internal notes to the team can be looser than notes to a client or a vendor, but neither should read as drafted by a lawyer.
+
+The hard rules do not change: no em dashes anywhere, the real signature exactly once, no trailing sign-off or name before it, and every send goes through the guarded sender (`sendAsAli.js`). The memory file `feedback_email_style.md` carries the mechanics; this section carries the voice.
+
 ---
 
 # Telemetry Synchronization Contract

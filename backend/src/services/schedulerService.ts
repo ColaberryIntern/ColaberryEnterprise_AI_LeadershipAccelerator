@@ -2231,18 +2231,27 @@ export function startScheduler(): void {
   // holding two active rows, three members lapsing into permanent silence, a card
   // that expired the month before its renewal. None of those announced themselves.
   //
-  // Unlike the reminder job this needs no feature flag: it cannot touch a customer
-  // and it cannot move money. The worst it does is email Ali.
-  cron.schedule('0 8 * * *', () => {
-    instrumentCronJob('BillingWatch', async () => {
-      const { runBillingWatch } = await import('./billing/billingHealthReport');
-      const r = await runBillingWatch({ send: true });
-      console.log(`[Scheduler] BillingWatch: needsAttention=${r.needsAttention} sent=${r.sent}`);
-    }).catch((err) => {
-      console.error('[Scheduler] Billing watch error:', err);
-    });
-  }, { timezone: 'America/Chicago' });
-  console.log('[Scheduler] BillingWatch scheduled (0 8 * * * America/Chicago)');
+  // It cannot touch a customer and it cannot move money, but "the worst it does
+  // is email Ali" turned out to matter: the dev instance shares this scheduler
+  // and its database has no reminders table and no schedule ids, so every
+  // morning it mailed a false ACT NOW ("21 schedules not in our book", "check
+  // could not run") next to the real report. Only the instance that owns the
+  // renewal reminders owns the watch that precedes them, so it rides the same
+  // switch (RENEWAL_REMINDERS_ENABLED on the production host, nowhere else).
+  if (env.renewalRemindersEnabled) {
+    cron.schedule('0 8 * * *', () => {
+      instrumentCronJob('BillingWatch', async () => {
+        const { runBillingWatch } = await import('./billing/billingHealthReport');
+        const r = await runBillingWatch({ send: true });
+        console.log(`[Scheduler] BillingWatch: needsAttention=${r.needsAttention} sent=${r.sent}`);
+      }).catch((err) => {
+        console.error('[Scheduler] Billing watch error:', err);
+      });
+    }, { timezone: 'America/Chicago' });
+    console.log('[Scheduler] BillingWatch scheduled (0 8 * * * America/Chicago)');
+  } else {
+    console.log('[Scheduler] BillingWatch not scheduled (RENEWAL_REMINDERS_ENABLED is off on this instance)');
+  }
 
   // Reap idle preview stacks every 5 minutes (stops stacks untouched for 30 min).
   cron.schedule('*/5 * * * *', () => {

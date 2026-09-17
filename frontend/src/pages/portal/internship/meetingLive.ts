@@ -14,6 +14,8 @@ export const LIVE_WINDOW_MINUTES = 75;
 export interface LiveMeeting {
   title: string;
   room_slug: string | null;
+  room_id: string | null;
+  room_name: string | null;
   /** The meeting's day — its attendance key. */
   day: string;
 }
@@ -53,7 +55,13 @@ export function findLiveMeeting(
     const start = parseTimeToMinutes(m.time);
     if (start == null) continue;
     if (minutes >= start && minutes < start + LIVE_WINDOW_MINUTES) {
-      return { title: m.title || m.kind, room_slug: m.room_slug ?? null, day: m.day };
+      return {
+        title: m.title || m.kind,
+        room_slug: m.room_slug ?? null,
+        room_id: m.room_id ?? null,
+        room_name: m.room_name ?? null,
+        day: m.day,
+      };
     }
   }
   return null;

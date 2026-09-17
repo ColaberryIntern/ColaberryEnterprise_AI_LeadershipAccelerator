@@ -121,7 +121,16 @@ export interface PlacedCall {
 
 export interface IntakeCallProgress {
   /** 'sent' = placed, 'delivered' = ended with the transcript in, 'failed' = did not complete. */
-  call: { status: string; duration: number | null; has_transcript: boolean; end_reason: string | null };
+  call: {
+    status: string;
+    /** Synthflow's own word for where a `sent` call is right now: ringing, in-progress. */
+    live_status: string | null;
+    duration: number | null;
+    has_transcript: boolean;
+    /** The conversation, once the call has ended. Rendered where the typed one would be. */
+    transcript: string;
+    end_reason: string | null;
+  };
   understanding: { id: string; status: string; title: string | null; items: number } | null;
   build: { project_id: string; started_at: string } | null;
 }

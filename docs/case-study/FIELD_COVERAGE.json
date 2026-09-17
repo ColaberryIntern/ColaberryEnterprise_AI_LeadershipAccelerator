@@ -1135,6 +1135,20 @@
       "disposition": "deterministic",
       "rule": "snapshot-composite"
     },
+    "CaseStudySnapshotContent.builder": {
+      "authoring": "admin, as a whole-section override; user-confirmed career facts beside repository-supported contribution",
+      "sourcePriority": "human override; sync never generates it",
+      "aiMayInfer": false,
+      "approvalRequired": true,
+      "indexHome": "—",
+      "detailHome": "the Meet the builder card, after the outcomes; the intro near the opening visual",
+      "publicBehaviour": "projectBuilder: biography only behind consent; provenance note never projected; links through safeHttpUrl",
+      "emptyBehaviour": "absent: no card",
+      "privacy": "public",
+      "test": "caseStudySurfaceVariant.test.ts",
+      "disposition": "human_approved",
+      "rule": "authored"
+    },
     "CaseStudySnapshotContent.buildTimeline": {
       "authoring": "assembled by caseStudySnapshotBuilder from the sections above",
       "sourcePriority": "sections + human overrides",
@@ -1149,6 +1163,20 @@
       "disposition": "deterministic",
       "rule": "snapshot-composite"
     },
+    "CaseStudySnapshotContent.closing": {
+      "authoring": "admin, as an override; one short paragraph on what the work shows, every statement on the record",
+      "sourcePriority": "human override; sync never generates it",
+      "aiMayInfer": true,
+      "approvalRequired": true,
+      "indexHome": "—",
+      "detailHome": "the closing band, after the evidence and before the related records",
+      "publicBehaviour": "projected as text; the closing of a surface variant outranks it on that surface; claim-scanned",
+      "emptyBehaviour": "absent: the page ends on its last band",
+      "privacy": "public",
+      "test": "caseStudySurfaceVariant.test.ts",
+      "disposition": "human_approved",
+      "rule": "authored"
+    },
     "CaseStudySnapshotContent.contributors": {
       "authoring": "assembled by caseStudySnapshotBuilder from the sections above",
       "sourcePriority": "sections + human overrides",
@@ -1162,6 +1190,20 @@
       "test": "caseStudySnapshotBuilder.test.ts",
       "disposition": "deterministic",
       "rule": "snapshot-composite"
+    },
+    "CaseStudySnapshotContent.decisions": {
+      "authoring": "admin, as a whole-section override; problem, decision, evidence, consequence per card",
+      "sourcePriority": "human override; sync never generates it",
+      "aiMayInfer": true,
+      "approvalRequired": true,
+      "indexHome": "—",
+      "detailHome": "Decisions that made the difference, after The situation on training; each card may pin a workflow stage and close on a figure",
+      "publicBehaviour": "projectDecisions: a card missing any part is not drawn; stage and figure cross as null when absent; every string claim-scanned",
+      "emptyBehaviour": "absent or empty: no cards",
+      "privacy": "public",
+      "test": "caseStudySurfaceVariant.test.ts",
+      "disposition": "human_approved",
+      "rule": "authored"
     },
     "CaseStudySnapshotContent.heroMetrics": {
       "authoring": "assembled by caseStudySnapshotBuilder from the sections above",
@@ -1246,6 +1288,20 @@
       "test": "caseStudySnapshotBuilder.test.ts",
       "disposition": "deterministic",
       "rule": "snapshot-composite"
+    },
+    "CaseStudySnapshotContent.surfaceVariants": {
+      "authoring": "admin, as a whole-section override keyed by publishable surface; words one audience reads differently",
+      "sourcePriority": "human override; sync never generates it",
+      "aiMayInfer": true,
+      "approvalRequired": true,
+      "indexHome": "—",
+      "detailHome": "wherever the field it replaces lives, on that surface only",
+      "publicBehaviour": "resolveSurfaceContent overlays the variant for its surface; every string claim-scanned; rule 5 checks its people; never a figure",
+      "emptyBehaviour": "absent: every surface reads the canonical words",
+      "privacy": "public",
+      "test": "caseStudySurfaceVariant.test.ts",
+      "disposition": "human_approved",
+      "rule": "authored"
     },
     "CaseStudySnapshotContent.taxonomy": {
       "authoring": "assembled by caseStudySnapshotBuilder from the sections above",
@@ -1765,6 +1821,20 @@
       "disposition": "deterministic",
       "rule": "public-projection-mirror"
     },
+    "PublicCaseStudyDetail.builder": {
+      "authoring": "not authored — computed by caseStudyPublicProjection.ts",
+      "sourcePriority": "projection of the approved snapshot",
+      "aiMayInfer": false,
+      "approvalRequired": false,
+      "indexHome": "—",
+      "detailHome": "detail page",
+      "publicBehaviour": "always present",
+      "emptyBehaviour": "empty array or empty string",
+      "privacy": "public",
+      "test": "caseStudyPublicProjection.test.ts",
+      "disposition": "deterministic",
+      "rule": "public-projection-mirror"
+    },
     "PublicCaseStudyDetail.builtBy": {
       "authoring": "not authored — computed by caseStudyPublicProjection.ts",
       "sourcePriority": "projection of the approved snapshot",
@@ -1793,6 +1863,20 @@
       "disposition": "deterministic",
       "rule": "public-projection-mirror"
     },
+    "PublicCaseStudyDetail.closing": {
+      "authoring": "not authored — computed by caseStudyPublicProjection.ts",
+      "sourcePriority": "projection of the approved snapshot",
+      "aiMayInfer": false,
+      "approvalRequired": false,
+      "indexHome": "—",
+      "detailHome": "detail page",
+      "publicBehaviour": "always present",
+      "emptyBehaviour": "empty array or empty string",
+      "privacy": "public",
+      "test": "caseStudyPublicProjection.test.ts",
+      "disposition": "deterministic",
+      "rule": "public-projection-mirror"
+    },
     "PublicCaseStudyDetail.contributors": {
       "authoring": "not authored — computed by caseStudyPublicProjection.ts",
       "sourcePriority": "projection of the approved snapshot",
@@ -1808,6 +1892,20 @@
       "rule": "public-projection-mirror"
     },
     "PublicCaseStudyDetail.cta": {
+      "authoring": "not authored — computed by caseStudyPublicProjection.ts",
+      "sourcePriority": "projection of the approved snapshot",
+      "aiMayInfer": false,
+      "approvalRequired": false,
+      "indexHome": "—",
+      "detailHome": "detail page",
+      "publicBehaviour": "always present",
+      "emptyBehaviour": "empty array or empty string",
+      "privacy": "public",
+      "test": "caseStudyPublicProjection.test.ts",
+      "disposition": "deterministic",
+      "rule": "public-projection-mirror"
+    },
+    "PublicCaseStudyDetail.decisions": {
       "authoring": "not authored — computed by caseStudyPublicProjection.ts",
       "sourcePriority": "projection of the approved snapshot",
       "aiMayInfer": false,

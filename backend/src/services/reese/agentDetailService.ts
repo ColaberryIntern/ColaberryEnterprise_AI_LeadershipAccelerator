@@ -8,7 +8,7 @@ import { Ticket } from '../../models';
 import { derivePresence } from '../communityService';
 import type { CommunityPresenceStatus } from '../../models/CommunityMember';
 import { buildCreatorIdMatchList } from '../agentBlueprint/legacyCreatorAliases';
-import { countOpenTicketsForAgent, getLastTicketActivityForAgent } from '../workforce/liveAgentsService';
+import { countOpenTicketsForAgent, getLastTicketActivityForAgent, getOldestOpenTicketAge } from '../workforce/liveAgentsService';
 import { deriveAgentCapabilities } from './agentToolCapabilities';
 import { resolveReportsToChainWithTrail } from '../ticketCreatorReportsToResolver';
 import { getPersonaVersionHistory, type PersonaVersionHistoryRow } from '../agentPersonaVersionHistoryService';
@@ -93,6 +93,13 @@ export interface AgentDetailResult {
    * status).length` would undercount — this field is the honest, uncapped answer. `0`
    * when there's no linked `adminUser`, matching `tickets`' own fallback below. */
   open_ticket_count: number;
+  /** Dara v2 Phase 6 ("open-ticket accountability") — the oldest still-open
+   * ticket's real age, via the shared `getOldestOpenTicketAge()` (same
+   * match-list/open-status query as `open_ticket_count` above). Null when
+   * there's no linked `adminUser` OR the agent genuinely has zero open
+   * tickets — never a fabricated age. Read-only/informational: nothing in
+   * this codebase uses this to auto-close anything. */
+  oldest_open_ticket_age_days: number | null;
   tickets: Array<{
     id: string;
     ticket_number: number | null;
@@ -396,6 +403,11 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
   // use, independent of the `tickets` array's MAX_TICKETS cap above.
   const openTicketCount = adminUser ? await countOpenTicketsForAgent(adminUser.id, agent) : 0;
 
+  // Dara v2 Phase 6 ("open-ticket accountability") — same shared query shape,
+  // ASC instead of COUNT. Null (not 0) when there's nothing open, so a caller
+  // never confuses "no data" with "brand new, zero days old".
+  const oldestOpenTicketAge = adminUser ? await getOldestOpenTicketAge(adminUser.id, agent) : null;
+
   // Trust Contract fix (2026-08-24) — real, unlimited "last touched a ticket"
   // signal for agents `last_run_at` will never cover (see trust_contract's
   // last_activity_at doc comment above).
@@ -484,6 +496,7 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
       : null,
     live_status: liveStatus,
     open_ticket_count: openTicketCount,
+    oldest_open_ticket_age_days: oldestOpenTicketAge?.ageDays ?? null,
     tickets: tickets.map((t: any) => ({
       id: t.id,
       ticket_number: t.ticket_number ?? null,

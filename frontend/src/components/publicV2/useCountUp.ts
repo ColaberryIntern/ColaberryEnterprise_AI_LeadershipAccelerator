@@ -24,9 +24,13 @@ import { useEffect, useRef, useState } from 'react';
  * a callback writing into an unmounted component.
  */
 
-/** Splits "2,500+ certified" into 2500, "" and "+ certified". */
+/**
+ * Splits "2,500+ certified" into 2500, "" and "+ certified". The number ends
+ * on its last digit, so the space in "34 minutes" belongs to the suffix and
+ * every frame reads "21 minutes", not "21minutes".
+ */
 function parseFigure(text: string): { value: number; prefix: string; suffix: string } | null {
-  const match = text.match(/^(\D*?)([\d][\d,\s]*)(.*)$/s);
+  const match = text.match(/^(\D*?)(\d(?:[\d,\s]*\d)?)(.*)$/s);
   if (!match) return null;
   const digits = match[2].replace(/[,\s]/g, '');
   const value = Number(digits);

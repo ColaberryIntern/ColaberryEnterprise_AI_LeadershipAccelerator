@@ -51,6 +51,7 @@ jest.mock('../../../services/delivery/projectIntake', () => ({
 // The voice door lives in the same file and is tested in flotationIntakeCallRoutes.test.ts;
 // here it only needs to not drag the real database config in through its import.
 jest.mock('../../../services/callbackRequestService', () => ({ requestInstantCallback: jest.fn() }));
+jest.mock('../../../services/delivery/flotationCallCompletion', () => ({ reconcileFlotationCall: jest.fn() }));
 
 import flotationIntakeRoutes from '../flotationIntakeRoutes';
 

@@ -86,6 +86,22 @@ const InternshipOnboarding: React.FC<{ onChanged?: () => void }> = ({ onChanged 
 
       {error && <div className="ip-alert" role="alert">{error}</div>}
 
+      {/* Point active interns at the training: the first three weeks come first,
+          and the project follows once they are done. */}
+      {view.is_active && (
+        <div style={{
+          margin: '10px 0', padding: '12px 14px', borderRadius: 10,
+          background: 'rgba(43,108,176,.06)', border: '1px solid rgba(43,108,176,.28)',
+        }}>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>Start with your first three weeks</div>
+          <p className="ip-muted" style={{ margin: '4px 0 10px', fontSize: 13.5 }}>
+            Work through weeks 1-3 in the Classroom. Once you finish them, your manager
+            assigns your first project and you build it alongside the rest of the curriculum.
+          </p>
+          <Link to="/portal/classroom" className="te-btn berry sm">Go to the Classroom</Link>
+        </div>
+      )}
+
       {!view.is_active && blockers.length > 0 && (
         <div className="ip-confirm" role="status">
           <p>
@@ -180,11 +196,19 @@ const InternshipOnboarding: React.FC<{ onChanged?: () => void }> = ({ onChanged 
                     </span>
                     <span>{m.title || m.kind}</span>
                     {m.audience === 'interns_only' && <span className="ip-tag">interns only</span>}
-                    {/* Interns join through Rooms (never a raw Zoom link — that
-                        lives only on the public Eventbrite listing), so joining is
-                        one place and can be attendance-tracked. */}
+                    {/* Name the room and deep-link to it. Interns join through Rooms
+                        (never a raw Zoom link — that lives only on the public
+                        Eventbrite listing), so joining is one place and is
+                        attendance-tracked. */}
+                    {m.room_name && (
+                      <span className="ip-muted" style={{ fontSize: 12.5 }}>in the <strong>{m.room_name}</strong> room</span>
+                    )}
                     {m.room_slug
-                      ? <Link to="/portal/rooms" className="te-btn ghost sm" onClick={() => { void recordInternshipMeetingJoin(m.day).catch(() => { /* attendance is best-effort */ }); }}>Open in Rooms</Link>
+                      ? <Link
+                          to={m.room_id ? `/portal/rooms/${m.room_id}` : '/portal/rooms'}
+                          className="te-btn ghost sm"
+                          onClick={() => { void recordInternshipMeetingJoin(m.day).catch(() => { /* attendance is best-effort */ }); }}
+                        >Open{m.room_name ? ` ${m.room_name}` : ' in Rooms'}</Link>
                       : <span className="ip-muted" style={{ fontSize: 12 }}>room coming</span>}
                   </li>
                 ))}

@@ -262,6 +262,43 @@ export type PublicCaseStudyContributor =
       readonly kind: CaseStudyBuiltByType;
     };
 
+
+/**
+ * Meet the builder, as the page shows it. `name`, `intro`, `progression`,
+ * `profileUrl` and `photoUrl` are BIOGRAPHY and are null or empty unless the
+ * profile's name matched a named, consented contributor at projection time;
+ * `roleTitle`, `contribution` and `skills` are project facts and always come
+ * through. `provenance` says where the biography came from and when it was
+ * confirmed; who confirmed it is internal and never here.
+ */
+export interface PublicCaseStudyBuilder {
+  readonly name: string | null;
+  readonly roleTitle: string;
+  readonly organization: string | null;
+  readonly initials: string | null;
+  readonly intro: readonly string[];
+  readonly progression: readonly string[];
+  readonly contribution: string;
+  readonly skills: readonly { readonly label: string; readonly evidence: string }[];
+  readonly profileUrl: string | null;
+  readonly photoUrl: string | null;
+  readonly provenance: { readonly source: 'user_confirmed' | 'approved_profile' | 'repository'; readonly confirmedAt: string };
+}
+
+/** One "decision that made the difference": problem, decision, evidence, consequence. */
+export interface PublicCaseStudyDecision {
+  readonly key: string;
+  readonly title: string;
+  readonly problem: string;
+  readonly decision: string;
+  readonly evidence: string;
+  readonly consequence: string;
+  /** The workflow step the decision lives at ("02 Detect"), or null. */
+  readonly stage: string | null;
+  /** The figure the card closes on, as displayed, or null; the consequence is its caption. */
+  readonly figure: string | null;
+}
+
 /**
  * WHAT AN IMAGE ON THIS PAGE IS ALLOWED TO MEAN.
  *
@@ -494,6 +531,12 @@ export interface PublicCaseStudyDetail {
   } | null;
   /** Null unless the record carries a visual story enabled for this surface. */
   readonly visualStory: PublicCaseStudyVisualStory | null;
+  /** Meet the builder, or null; the biography inside is consent-gated. */
+  readonly builder: PublicCaseStudyBuilder | null;
+  /** Decisions that made the difference; empty means no cards. */
+  readonly decisions: readonly PublicCaseStudyDecision[];
+  /** The closing paragraph, or null when the record has none for this surface. */
+  readonly closing: string | null;
   readonly architecture: PublicCaseStudyArchitecture | null;
   readonly measurement: PublicCaseStudyMeasurement | null;
   readonly roadmap: readonly PublicCaseStudyRoadmapItem[];
@@ -559,6 +602,9 @@ const PUBLIC_DETAIL_KEY_MAP: Record<keyof PublicCaseStudyDetail, true> = {
   heroMetrics: true,
   walkthroughVideo: true,
   visualStory: true,
+  builder: true,
+  decisions: true,
+  closing: true,
   situation: true,
   timeline: true,
   architecture: true,

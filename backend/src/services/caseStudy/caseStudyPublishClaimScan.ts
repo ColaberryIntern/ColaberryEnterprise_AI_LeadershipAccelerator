@@ -180,6 +180,64 @@ export function collectNarrative(content: CaseStudySnapshotContent): readonly Te
     });
   }
 
+  /* ── added 2026-09-16 with the storytelling rollout: the builder, the
+   * decisions and every per-surface variant ──
+   *
+   * A variant is the same prose said to a different audience, so it is scanned
+   * exactly as the canonical field would be, under its own path so a finding
+   * names the surface. The builder card and the decision cards are words a
+   * reader takes as narrative; their figures ("0 duplicate call records in 339")
+   * must already be metrics on the record or they are caught here.
+   */
+  const builderText = (prefix: string, b: any): void => {
+    if (!b || typeof b !== 'object') return;
+    push(`${prefix}.roleTitle`, 'the builder role title', b.roleTitle);
+    push(`${prefix}.organization`, 'the builder organisation', b.organization);
+    arr(b.intro).forEach((t: unknown, i: number) => push(`${prefix}.intro[${i}]`, 'the builder introduction', t));
+    arr(b.progression).forEach((t: unknown, i: number) => push(`${prefix}.progression[${i}]`, 'a career progression step', t));
+    push(`${prefix}.contribution`, 'the builder contribution', b.contribution);
+    arr(b.skills).forEach((sk: any, i: number) => {
+      push(`${prefix}.skills[${i}].label`, 'a demonstrated skill', sk?.label);
+      push(`${prefix}.skills[${i}].evidence`, 'a demonstrated skill evidence line', sk?.evidence);
+    });
+  };
+  const decisionText = (prefix: string, list: unknown): void => {
+    arr(list as readonly unknown[]).forEach((d: any, i: number) => {
+      push(`${prefix}[${i}].title`, 'a decision card title', d?.title);
+      push(`${prefix}[${i}].problem`, 'a decision card', d?.problem);
+      push(`${prefix}[${i}].decision`, 'a decision card', d?.decision);
+      push(`${prefix}[${i}].evidence`, 'a decision card evidence line', d?.evidence);
+      push(`${prefix}[${i}].consequence`, 'a decision card', d?.consequence);
+      push(`${prefix}[${i}].stage`, 'a decision card stage pin', d?.stage);
+      push(`${prefix}[${i}].figure`, 'a decision card figure', d?.figure);
+    });
+  };
+  builderText('builder', (content as any)?.builder);
+  decisionText('decisions', (content as any)?.decisions);
+  push('closing', 'the closing paragraph', (content as any)?.closing);
+  const variants = (content as any)?.surfaceVariants;
+  if (variants && typeof variants === 'object') {
+    for (const [surface, v] of Object.entries(variants as Record<string, any>)) {
+      if (!v || typeof v !== 'object') continue;
+      const vp = `surfaceVariants.${surface}`;
+      push(`${vp}.standfirst`, 'the standfirst', v.standfirst);
+      arr(v.situation?.narrative).forEach((t: unknown, i: number) => push(`${vp}.situation.narrative[${i}]`, 'the situation narrative', t));
+      arr(v.situation?.constraints).forEach((t: unknown, i: number) => push(`${vp}.situation.constraints[${i}]`, 'a stated constraint', t));
+      arr(v.situation?.goals).forEach((t: unknown, i: number) => push(`${vp}.situation.goals[${i}]`, 'a stated goal', t));
+      arr(v.measurementNarrative).forEach((t: unknown, i: number) => push(`${vp}.measurementNarrative[${i}]`, 'the measurement narrative', t));
+      if (v.metricNotes && typeof v.metricNotes === 'object') {
+        for (const [key, note] of Object.entries(v.metricNotes as Record<string, any>)) {
+          push(`${vp}.metricNotes.${key}.baseline`, 'a metric baseline', note?.baseline);
+          push(`${vp}.metricNotes.${key}.sample`, 'a metric sample description', note?.sample);
+        }
+      }
+      arr(v.contributors).forEach((c: any, i: number) => push(`${vp}.contributors[${i}].role`, 'a contributor role', c?.role));
+      builderText(`${vp}.builder`, v.builder);
+      decisionText(`${vp}.decisions`, v.decisions);
+      push(`${vp}.closing`, 'the closing paragraph', v.closing);
+    }
+  }
+
   return out;
 }
 

@@ -25,6 +25,7 @@ import { CommunicationLog, Enrollment, Lead } from '../../models';
 import { startBuildFromUnderstanding } from '../../services/delivery/buildFromUnderstanding';
 import { runIntakeTurn } from '../../services/delivery/projectIntake';
 import { requestInstantCallback } from '../../services/callbackRequestService';
+import { reconcileFlotationCall } from '../../services/delivery/flotationCallCompletion';
 
 /** The brand whose intake this is. The call is scripted and routed by this slug. */
 const FLOTATION_SOURCE = 'ai-flotation';
@@ -263,18 +264,32 @@ router.get('/api/admin/flotation/intake/call/:callId', requireAdmin, async (req:
     const callId = String(req.params.callId || '').trim();
     if (!callId || callId.length > 128) return res.status(400).json({ error: 'call id required' });
 
-    const commLog: any = await CommunicationLog.findOne({ where: { provider: 'synthflow', provider_message_id: callId } });
+    let commLog: any = await CommunicationLog.findOne({ where: { provider: 'synthflow', provider_message_id: callId } });
     if (!commLog) return res.status(404).json({ error: 'call not found' });
+
+    // Still `sent`? Ask Synthflow rather than wait for a webhook that may never come - the
+    // same completion runs either way, so the page sees the same thing it would have.
+    let live: string | null = null;
+    if (commLog.status === 'sent') {
+      const out = await reconcileFlotationCall(callId);
+      if (out.reconciled) commLog = await CommunicationLog.findOne({ where: { provider: 'synthflow', provider_message_id: callId } });
+      else if (out.reason === 'still_active') live = out.status ?? 'in-progress';
+    }
 
     const record: any = await ProjectUnderstandingRecord.findOne({ where: { source: 'voice_transcript', source_ref: callId } });
     const build = record?.build_handoff || record?.scope?.build || null;
+    const transcript = String(commLog.provider_response?.transcript || '');
 
     return res.json({
       call: {
         // 'sent' = placed, 'delivered' = ended and the transcript is in, 'failed' = did not complete.
         status: commLog.status,
+        /** Synthflow's own word for where the call is while still `sent`: ringing, in-progress. */
+        live_status: live,
         duration: commLog.provider_response?.duration ?? null,
-        has_transcript: Boolean(commLog.provider_response?.transcript),
+        has_transcript: transcript.length > 0,
+        // The conversation itself, so the page can show it where the typed one would be.
+        transcript: transcript.slice(0, 20_000),
         end_reason: commLog.provider_response?.end_call_reason ?? null,
       },
       understanding: record ? { id: record.id, status: record.status, title: record.title, items: (record.items || []).length } : null,

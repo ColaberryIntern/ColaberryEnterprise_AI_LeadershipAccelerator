@@ -56,9 +56,13 @@
 
   /* ------------------------------------------------------------- count-up --- */
 
-  /** Splits "2,500+ certified" into 2500, "" and "+ certified"; null when nothing leads with a number. */
+  /**
+   * Splits "2,500+ certified" into 2500, "" and "+ certified"; null when nothing
+   * leads with a number. The number ends on its last digit, so the space in
+   * "34 minutes" belongs to the suffix and every frame reads "21 minutes".
+   */
   function parseFigure(text) {
-    var m = String(text).match(/^(\D*?)(\d[\d,\s]*)([\s\S]*)$/);
+    var m = String(text).match(/^(\D*?)(\d(?:[\d,\s]*\d)?)([\s\S]*)$/);
     if (!m) return null;
     var value = Number(m[2].replace(/[,\s]/g, ''));
     if (!isFinite(value) || value <= 0) return null;

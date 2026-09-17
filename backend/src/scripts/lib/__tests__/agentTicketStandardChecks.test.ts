@@ -363,8 +363,8 @@ describe('AGENT_TICKET_RESOLVER_REGISTRY / findResolverMapping', () => {
     }
   });
 
-  it('no agent outside the original-6-minus-Reese, the 16 Architects, and AgentBehaviorMonitorAgent carries an undocumented knownGap', () => {
-    const expectedGapBearers = new Set(['Reese', 'AgentBehaviorMonitorAgent', ...departmentArchitectCreators]);
+  it('no agent outside the original-6-minus-Reese, the 16 Architects, AgentBehaviorMonitorAgent, and Dara carries an undocumented knownGap', () => {
+    const expectedGapBearers = new Set(['Reese', 'AgentBehaviorMonitorAgent', 'Dara', ...departmentArchitectCreators]);
     for (const mapping of AGENT_TICKET_RESOLVER_REGISTRY) {
       if (!expectedGapBearers.has(mapping.creatorAgentName)) {
         expect(mapping.knownGap).toBeUndefined();
@@ -377,5 +377,17 @@ describe('AGENT_TICKET_RESOLVER_REGISTRY / findResolverMapping', () => {
     expect(mapping).toBeDefined();
     expect(mapping?.resolverAgentName).toBeNull();
     expect(mapping?.knownGap).toMatch(/point-in-time security/);
+  });
+
+  it('Dara v2 Phase 4: mapped with an honest null resolver and a documented knownGap for both ticket types, not a fabricated resolver', () => {
+    const mapping = findResolverMapping('Dara');
+    expect(mapping).toBeDefined();
+    expect(mapping?.resolverAgentName).toBeNull();
+    expect(mapping?.resolverRulesFile).toBeNull();
+    expect(mapping?.resolverIoFile).toBeNull();
+    expect(mapping?.artifactsFile).toBeNull();
+    expect(mapping?.knownGap).toMatch(/agent_handoff/);
+    expect(mapping?.knownGap).toMatch(/curriculum_support/);
+    expect(mapping?.knownGap).not.toMatch(/daysSince|ageInDays|Date\.now\(\)/); // never a time-based excuse
   });
 });

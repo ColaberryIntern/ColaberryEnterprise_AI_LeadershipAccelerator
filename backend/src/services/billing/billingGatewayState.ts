@@ -17,7 +17,7 @@ export interface GatewayState {
   cardExpiryByEmail?: Map<string, string>;
 }
 
-interface RecurringRow { Id: number | string; PaymentAmount?: number }
+interface RecurringRow { Id: number | string; PaymentAmount?: number; ScheduleStatus?: string }
 
 /** Our plan prices. Filtering to these keeps the legacy bootcamp product's ~1,200
  *  schedules out of a comparison that is only about the Accelerator book. */
@@ -38,8 +38,14 @@ export async function getPaySimpleGatewayState(): Promise<GatewayState> {
       all.push(...rows);
       if (rows.length < 200) break;
     }
+    // Only schedules that can still charge belong in the comparison. A member who
+    // cancels gets their schedule Suspended at the gateway and the id cleared from
+    // the book (cancelSubscription); counting a suspended schedule as "at gateway
+    // but not in our book" raised the ACT NOW alarm on every run from 2026-09-02
+    // for three correctly-cancelled members (Nzau, Chukwukere, Albazzaz).
     state.scheduleIds = all
       .filter((r) => OUR_PRICES.has(Number(r.PaymentAmount)))
+      .filter((r) => String(r.ScheduleStatus ?? 'Active').toLowerCase() === 'active')
       .map((r) => String(r.Id));
   } catch (err: any) {
     // Deliberately swallowed into a log, not a throw: see the header note.

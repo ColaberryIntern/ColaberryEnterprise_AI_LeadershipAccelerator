@@ -681,6 +681,111 @@ export interface CaseStudySnapshotContent {
   readonly walkthroughVideo?: CaseStudyWalkthroughVideo;
   /** The before/after workflow illustration, outcome cards and charts. See `caseStudyVisual.ts`. Absent means the record renders as it did before the section existed. */
   readonly visualStory?: CaseStudyVisualStorySection;
+  /** Meet the builder, canonical for every surface. Absent means no card. See `CaseStudyBuilderProfile`. */
+  readonly builder?: CaseStudyBuilderProfile;
+  /** Decisions that made the difference, canonical for every surface. Absent or empty means no cards. */
+  readonly decisions?: readonly CaseStudyDecision[];
+  /**
+   * The closing paragraph: what the work shows, in one short paragraph after
+   * the evidence and before the related records. Canonical for every surface;
+   * absent means the page ends on its last band, as before. Same claim
+   * discipline as the standfirst: every statement in it must be on the record.
+   */
+  readonly closing?: string;
+  /**
+   * Per-surface narrative variants, keyed by publishable surface. A variant is
+   * applied by the public projection for THAT surface only, on top of the
+   * canonical content, so one record can address a learner audience on
+   * training.colaberry.com and a buyer on enterprise.colaberry.ai without two
+   * records. Absent means every surface reads the canonical content. See
+   * `CaseStudySurfaceVariant`.
+   */
+  readonly surfaceVariants?: Partial<Readonly<Record<CaseStudySurfaceKey, CaseStudySurfaceVariant>>>;
+}
+
+/* ─────────────────────────────────── the builder, the decisions, the variants ─ */
+
+/**
+ * The person (or team) the reader meets. A profile carries two kinds of fact
+ * and keeps them apart: the REUSABLE biography (`intro`, `progression`, role
+ * title, organisation), which is user-confirmed and belongs to the person, and
+ * the PROJECT-SPECIFIC contribution and skills, which are tied to this record's
+ * evidence. The public projection releases the name and the biography only
+ * when `displayName` matches a named, consented contributor of the same
+ * content; the contribution and the skills are project facts and stand on
+ * their own under the role title. There is no person table: the profile is
+ * authored per record and carried by the override machinery like every other
+ * section, which is the smallest extension that keeps consent where it is.
+ */
+export interface CaseStudyBuilderProfile {
+  /** Must equal a named contributor's `displayName` for the name to be shown. */
+  readonly displayName: string;
+  readonly roleTitle: string;
+  readonly organization?: string;
+  /** One or two letters for the avatar treatment when no approved photo exists. */
+  readonly initials?: string;
+  /** Person-focused introduction, one or two short paragraphs; biography, consent-gated. */
+  readonly intro: readonly string[];
+  /** Career progression as supplied, oldest first, e.g. Intern, Hired by Colaberry, AI Systems Architect; consent-gated. */
+  readonly progression?: readonly string[];
+  /** What this person did on THIS project, from the repository or an approved record. */
+  readonly contribution: string;
+  /** Each skill names the artifact or decision that demonstrates it. */
+  readonly skills: readonly { readonly label: string; readonly evidence: string }[];
+  /** Only an already-approved, permitted profile page or photo; never a fabricated headshot. */
+  readonly profileUrl?: string;
+  readonly photoUrl?: string;
+  /** Where the biography came from. The note is internal and never projected. */
+  readonly provenance: {
+    readonly source: 'user_confirmed' | 'approved_profile' | 'repository';
+    readonly confirmedAt: IsoDate;
+    readonly note?: string;
+  };
+}
+
+/**
+ * One decision card: the problem, the decision, the evidence, the consequence,
+ * in ordinary language. `stage` pins the card to the step of the workflow
+ * illustration where the decision lives ("02 Detect"), so a reader can find it
+ * in the drawing; `figure` is the one number or date the card closes on, with
+ * the consequence as its caption. Both optional: a card without them reads as
+ * four labelled parts.
+ */
+export interface CaseStudyDecision {
+  readonly key: string;
+  readonly title: string;
+  readonly problem: string;
+  readonly decision: string;
+  readonly evidence: string;
+  readonly consequence: string;
+  /** Optional: the evidence row the card leans on. */
+  readonly evidenceId?: string;
+  /** Optional: the workflow step the decision lives at, as a short label. */
+  readonly stage?: string;
+  /** Optional: the figure the card closes on, as displayed ("28 Apr", "0", "97%"). */
+  readonly figure?: string;
+}
+
+/**
+ * What one surface may say differently. Every field is optional and REPLACES
+ * its canonical counterpart whole (the situation section, the measurement
+ * narrative, the contributor list), except `metricNotes`, which overlays the
+ * named prose fields of the metric with that key. Figures are never here: a
+ * variant carries words, and the publish gate's claim scan reads all of them.
+ */
+export interface CaseStudySurfaceVariant {
+  readonly standfirst?: string;
+  readonly situation?: CaseStudySituationSection;
+  readonly measurementNarrative?: readonly string[];
+  /** Prose overlays by metric key, for a note that reads wrongly on one audience's page. */
+  readonly metricNotes?: Readonly<Record<string, {
+    readonly baseline?: string;
+    readonly sample?: string;
+  }>>;
+  readonly contributors?: readonly CaseStudyContributor[];
+  readonly builder?: CaseStudyBuilderProfile;
+  readonly decisions?: readonly CaseStudyDecision[];
+  readonly closing?: string;
 }
 
 /* ──────────────────────────────────────────────── the visual story ──────── */
