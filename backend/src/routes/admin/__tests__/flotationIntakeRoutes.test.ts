@@ -102,6 +102,18 @@ describe('GET /api/admin/flotation/understandings', () => {
     });
   });
 
+  it('reads the hand-off from its own column first, and from the old scope key for older rows', async () => {
+    mockRecordFindAll.mockResolvedValue([
+      { id: 'new', title: 'New', source: 'chat', items: [], confirmed_at: null, lead_id: 1, build_handoff: { project_id: 'proj-col', started_at: 't1' }, scope: { version: 3 } },
+      { id: 'old', title: 'Old', source: 'chat', items: [], confirmed_at: null, lead_id: 1, build_handoff: null, scope: { build: { project_id: 'proj-legacy', started_at: 't0' } } },
+    ]);
+    mockLeadFindAll.mockResolvedValue([{ id: 1, name: 'Marta', email: 'marta@northside.test', company: null }]);
+
+    const res = await request(app).get('/api/admin/flotation/understandings').set('Authorization', `Bearer ${ADMIN}`);
+
+    expect(res.body.understandings.map((u: any) => u.build.project_id)).toEqual(['proj-col', 'proj-legacy']);
+  });
+
   it('lists only extracted understandings', async () => {
     await request(app).get('/api/admin/flotation/understandings').set('Authorization', `Bearer ${ADMIN}`);
     expect(mockRecordFindAll).toHaveBeenCalledWith(expect.objectContaining({ where: { status: 'extracted' } }));

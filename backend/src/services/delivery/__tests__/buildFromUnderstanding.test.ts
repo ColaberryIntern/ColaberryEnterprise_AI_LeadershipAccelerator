@@ -6,6 +6,9 @@
  * can be refused rather than silently built from.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
+
 const mockFindByPk = jest.fn();
 const mockResolveProject = jest.fn();
 const mockStartBuild = jest.fn();
@@ -30,6 +33,7 @@ const record = (over: any = {}) => ({
   proposed_surfaces: [],
   confirmed_at: null,
   scope: null,
+  build_handoff: null,
   items: [
     { dimension: 'problem', value: 'Managing tool loans is challenging with a paper sign-out sheet.', classification: 'FACT', provenance: 'source_message' },
     { dimension: 'actors', value: 'Marta runs the desk on Saturdays.', classification: 'FACT', provenance: 'source_message' },
@@ -62,23 +66,24 @@ describe('startBuildFromUnderstanding', () => {
     );
   });
 
-  it('remembers the hand-off on the understanding, after the build has started', async () => {
+  it('remembers the hand-off in its OWN column, after the build has started', async () => {
     const rec = record();
     mockFindByPk.mockResolvedValue(rec);
 
     await startBuildFromUnderstanding({ recordId: 'rec-1', enrollmentId: 'enr-1' });
 
     expect(rec.update).toHaveBeenCalledWith({
-      scope: expect.objectContaining({
-        build: expect.objectContaining({ project_id: 'proj-1', enrollment_id: 'enr-1', correlation_id: 'corr-1' }),
-      }),
+      build_handoff: expect.objectContaining({ project_id: 'proj-1', enrollment_id: 'enr-1', correlation_id: 'corr-1' }),
     });
+    // And never inside `scope`, which the scope generator replaces whole.
+    const written = rec.update.mock.calls[0][0];
+    expect(written).not.toHaveProperty('scope');
   });
 
   it('is one project per conversation: a second call returns the first project', async () => {
     // resolveProjectForNewBuild mints a NEW project once the first has build content, so
     // without this a retry would build the same conversation twice.
-    mockFindByPk.mockResolvedValue(record({ scope: { build: { project_id: 'proj-earlier', correlation_id: 'corr-earlier' } } }));
+    mockFindByPk.mockResolvedValue(record({ build_handoff: { project_id: 'proj-earlier', correlation_id: 'corr-earlier' } }));
 
     const result = await startBuildFromUnderstanding({ recordId: 'rec-1', enrollmentId: 'enr-1' });
 
@@ -87,13 +92,41 @@ describe('startBuildFromUnderstanding', () => {
     expect(mockResolveProject).not.toHaveBeenCalled();
   });
 
-  it('keeps the cached prototypes when it records the hand-off', async () => {
-    const rec = record({ scope: { prototypes: { concepts: [] } } });
+  it('survives the scope cache being regenerated between two arrivals of the final turn', async () => {
+    // THE 2026-09-17 DEFECT. The hand-off used to live at scope.build. Between two arrivals
+    // of the same final turn the page fetched its preview, the scope generator wrote
+    // `scope` whole, the hand-off was gone, and the second arrival built a second project
+    // (85032431 then 35541e66, one conversation). A regenerated scope must not matter.
+    const rec = record({
+      build_handoff: { project_id: 'proj-first', correlation_id: 'corr-first' },
+      scope: { version: 99, summary: 'freshly regenerated, no build key in here' },
+    });
+    mockFindByPk.mockResolvedValue(rec);
+
+    const result = await startBuildFromUnderstanding({ recordId: 'rec-1', enrollmentId: 'enr-1' });
+
+    expect(result).toMatchObject({ ok: true, projectId: 'proj-first', reused: true });
+    expect(mockStartBuild).not.toHaveBeenCalled();
+  });
+
+  it('still honours a hand-off recorded the old way, under scope.build', async () => {
+    // Conversations from before the column keep their project rather than getting a second.
+    mockFindByPk.mockResolvedValue(record({ scope: { build: { project_id: 'proj-legacy', correlation_id: 'corr-legacy' } } }));
+
+    const result = await startBuildFromUnderstanding({ recordId: 'rec-1', enrollmentId: 'enr-1' });
+
+    expect(result).toMatchObject({ ok: true, projectId: 'proj-legacy', reused: true });
+    expect(mockStartBuild).not.toHaveBeenCalled();
+  });
+
+  it('leaves the cached scope and prototypes alone when it records the hand-off', async () => {
+    const rec = record({ scope: { version: 3, prototypes: { concepts: [] } } });
     mockFindByPk.mockResolvedValue(rec);
 
     await startBuildFromUnderstanding({ recordId: 'rec-1', enrollmentId: 'enr-1' });
 
-    expect(rec.update).toHaveBeenCalledWith({ scope: expect.objectContaining({ prototypes: { concepts: [] } }) });
+    expect(rec.update).toHaveBeenCalledTimes(1);
+    expect(rec.update.mock.calls[0][0]).toEqual({ build_handoff: expect.any(Object) });
   });
 
   it('refuses an understanding that does not exist', async () => {
@@ -139,5 +172,25 @@ describe('startBuildFromUnderstanding', () => {
     mockFindByPk.mockResolvedValue(rec);
 
     expect(await startBuildFromUnderstanding({ recordId: 'rec-1', enrollmentId: 'enr-1' })).toMatchObject({ ok: true, projectId: 'proj-1' });
+  });
+});
+
+describe('the hand-off has exactly one writer', () => {
+  // The column exists because a cache write from another module erased the hand-off. That
+  // stays fixed only while nothing else touches the column: the scope generator and the
+  // prototype cache may write `scope`; only the bridge may write `build_handoff`.
+  const delivery = path.resolve(__dirname, '..');
+  const files = fs.readdirSync(delivery).filter((f) => f.endsWith('.ts'));
+
+  it('is written only by buildFromUnderstanding.ts', () => {
+    const writers = files.filter((f) => /update\(\s*\{[^}]*build_handoff/s.test(fs.readFileSync(path.join(delivery, f), 'utf8')));
+    expect(writers).toEqual(['buildFromUnderstanding.ts']);
+  });
+
+  it('is never written inside scope again', () => {
+    for (const f of files) {
+      const src = fs.readFileSync(path.join(delivery, f), 'utf8');
+      expect({ file: f, hit: /scope:\s*\{[^}]*build:/.test(src) }).toEqual({ file: f, hit: false });
+    }
   });
 });

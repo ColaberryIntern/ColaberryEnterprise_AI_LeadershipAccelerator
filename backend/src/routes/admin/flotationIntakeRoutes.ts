@@ -58,7 +58,7 @@ router.get('/api/admin/flotation/understandings', requireAdmin, async (_req: Req
       understandings: records.map((r) => {
         const lead = r.lead_id ? leadById.get(r.lead_id) : null;
         const enrollment = lead ? enrollmentByEmail.get(String(lead.email || '').toLowerCase()) : null;
-        const build = (r.scope as any)?.build || null;
+        const build = r.build_handoff || (r.scope as any)?.build || null;
         return {
           id: r.id,
           title: r.title,
@@ -267,7 +267,7 @@ router.get('/api/admin/flotation/intake/call/:callId', requireAdmin, async (req:
     if (!commLog) return res.status(404).json({ error: 'call not found' });
 
     const record: any = await ProjectUnderstandingRecord.findOne({ where: { source: 'voice_transcript', source_ref: callId } });
-    const build = record?.scope?.build || null;
+    const build = record?.build_handoff || record?.scope?.build || null;
 
     return res.json({
       call: {

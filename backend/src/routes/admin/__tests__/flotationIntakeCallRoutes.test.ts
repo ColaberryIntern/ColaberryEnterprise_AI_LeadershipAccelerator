@@ -173,7 +173,8 @@ describe('GET /api/admin/flotation/intake/call/:callId - where the call has got 
     });
     mockRecordFindOne.mockResolvedValue({
       id: 'rec-1', status: 'extracted', title: 'Tool Loan Management', items: [1, 2, 3, 4],
-      scope: { build: { project_id: 'proj-9', started_at: '2026-09-16T21:00:00Z' } },
+      build_handoff: { project_id: 'proj-9', started_at: '2026-09-16T21:00:00Z' },
+      scope: { version: 3 },
     });
 
     const res = await request(app).get('/api/admin/flotation/intake/call/call_1').set('Authorization', `Bearer ${ADMIN}`);

@@ -94,7 +94,13 @@ export async function startBuildFromUnderstanding(params: {
   const intake = toBuildIntake(understanding);
 
   // Once per conversation. A second call is answered with the first call's project.
-  const prior = (record.scope as any)?.build as BuildHandoffRecord | undefined;
+  //
+  // Read from its own column. It used to live at `scope.build`, and `scope` is a cache the
+  // scope generator replaces whole: the page fetched its preview between two arrivals of
+  // the same final turn, the cache write wiped the hand-off, and the second arrival built a
+  // second project (2026-09-17, one conversation, projects 85032431 and 35541e66). The
+  // legacy key is still read so conversations from before the column keep their project.
+  const prior = (record.build_handoff ?? (record.scope as any)?.build) as BuildHandoffRecord | undefined;
   if (prior?.project_id) {
     return {
       ok: true,
@@ -132,7 +138,7 @@ export async function startBuildFromUnderstanding(params: {
     // write would allow a duplicate on retry, which is the lesser evil against a hand-off
     // that is recorded but never happened.
     try {
-      await record.update({ scope: { ...((record.scope as any) || {}), build: handoff } });
+      await record.update({ build_handoff: handoff });
     } catch (err: any) {
       console.warn('[BuildFromUnderstanding] hand-off recorded in SBP but not on the understanding:', err?.message);
     }

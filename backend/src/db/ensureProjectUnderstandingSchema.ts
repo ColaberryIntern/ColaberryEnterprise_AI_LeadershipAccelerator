@@ -56,6 +56,11 @@ export async function ensureProjectUnderstandingSchema(): Promise<void> {
     `ALTER TABLE project_understandings ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ`,
     `ALTER TABLE project_understandings ADD COLUMN IF NOT EXISTS scope JSONB`,
     `ALTER TABLE project_understandings ADD COLUMN IF NOT EXISTS scope_generated_at TIMESTAMPTZ`,
+    // The build hand-off: which project this understanding became. Its OWN column, not a
+    // key inside `scope`, because `scope` is a cache the scope generator REPLACES whole -
+    // on 2026-09-17 that wiped the hand-off between two arrivals of the same final turn and
+    // the second one minted a second project. Nothing but the bridge writes this.
+    `ALTER TABLE project_understandings ADD COLUMN IF NOT EXISTS build_handoff JSONB`,
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_project_understandings_source_ref
        ON project_understandings (source, source_ref)`,
     `CREATE INDEX IF NOT EXISTS idx_project_understandings_lead
