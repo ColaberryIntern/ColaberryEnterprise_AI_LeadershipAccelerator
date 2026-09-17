@@ -9,22 +9,26 @@ const meetings: RequiredMeeting[] = [
   { day: 'Friday', kind: 'session', audience: 'public', title: 'AI Friday Trends' },
 ];
 const rooms = {
-  internsSlug: 'ai-internship-standup', internsLink: 'https://zoom.us/j/111',
-  publicSlug: 'colaberry-ai-sessions', publicLink: 'https://zoom.us/j/222',
+  interns: { slug: 'ai-internship-standup', id: 'room-interns', name: 'AI Internship', link: 'https://zoom.us/j/111' },
+  public: { slug: 'colaberry-ai-sessions', id: 'room-public', name: 'Colaberry AI Sessions', link: 'https://zoom.us/j/222' },
 };
 
 describe('applyRoomLinks', () => {
-  it('routes the interns-only meeting to the interns room link', () => {
+  it('routes the interns-only meeting to the interns room (slug, id, name, link)', () => {
     const out = applyRoomLinks(meetings, rooms);
     const standup = out.find((m) => m.title === 'Intern standup')!;
     expect(standup.room_slug).toBe('ai-internship-standup');
+    expect(standup.room_id).toBe('room-interns');
+    expect(standup.room_name).toBe('AI Internship');
     expect(standup.join_url).toBe('https://zoom.us/j/111');
   });
 
-  it('routes public meetings to the public room link', () => {
+  it('routes public meetings to the public room', () => {
     const out = applyRoomLinks(meetings, rooms);
     for (const m of out.filter((x) => x.audience === 'public')) {
       expect(m.room_slug).toBe('colaberry-ai-sessions');
+      expect(m.room_id).toBe('room-public');
+      expect(m.room_name).toBe('Colaberry AI Sessions');
       expect(m.join_url).toBe('https://zoom.us/j/222');
     }
   });
@@ -33,14 +37,15 @@ describe('applyRoomLinks', () => {
     const withPrior: RequiredMeeting[] = [
       { day: 'Monday', kind: 'standup', audience: 'interns_only', join_url: 'https://zoom.us/j/OLD' },
     ];
-    const out = applyRoomLinks(withPrior, { ...rooms, internsLink: null });
+    const out = applyRoomLinks(withPrior, { ...rooms, interns: { ...rooms.interns, link: null } });
     expect(out[0].join_url).toBe('https://zoom.us/j/OLD'); // not blanked
     expect(out[0].room_slug).toBe('ai-internship-standup'); // slug still set
+    expect(out[0].room_name).toBe('AI Internship');
   });
 
   it('leaves join_url null when there is neither a new nor a prior link', () => {
     const fresh: RequiredMeeting[] = [{ day: 'Wednesday', kind: 'session', audience: 'public' }];
-    const out = applyRoomLinks(fresh, { ...rooms, publicLink: null });
+    const out = applyRoomLinks(fresh, { ...rooms, public: { ...rooms.public, link: null } });
     expect(out[0].join_url).toBeNull();
   });
 

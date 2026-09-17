@@ -287,6 +287,8 @@ export interface RequiredMeeting {
   title?: string;
   join_url?: string | null;
   room_slug?: string | null;
+  room_id?: string | null;
+  room_name?: string | null;
   registration_url?: string | null;
 }
 

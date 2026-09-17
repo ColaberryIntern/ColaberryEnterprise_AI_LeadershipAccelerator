@@ -55,6 +55,10 @@ export interface RequiredMeeting {
   join_url?: string | null;
   /** Slug of the /portal/rooms room, so a join routes through attendance capture. */
   room_slug?: string | null;
+  /** The room's id, so the intern view can deep-link straight to it (/portal/rooms/:id). */
+  room_id?: string | null;
+  /** The room's display name, e.g. "AI Internship", shown so the intern knows where to go. */
+  room_name?: string | null;
   /** Eventbrite series URL for the public sessions; null for the interns-only call. */
   registration_url?: string | null;
 }

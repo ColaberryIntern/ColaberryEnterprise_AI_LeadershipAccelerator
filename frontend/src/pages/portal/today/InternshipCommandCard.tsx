@@ -74,7 +74,7 @@ const InternshipCommandCard: React.FC = () => {
         >
           <span aria-hidden="true" style={{ width: 9, height: 9, borderRadius: '50%', background: '#b23a3a', flex: 'none' }} />
           <strong style={{ fontSize: 13.5 }}>{live.title} is live now.</strong>
-          <Link className="te-btn berry sm" to="/portal/rooms" style={{ marginLeft: 'auto' }} onClick={() => { void recordInternshipMeetingJoin(live.day).catch(() => { /* attendance is best-effort */ }); }}>Join in Rooms</Link>
+          <Link className="te-btn berry sm" to={live.room_id ? `/portal/rooms/${live.room_id}` : '/portal/rooms'} style={{ marginLeft: 'auto' }} onClick={() => { void recordInternshipMeetingJoin(live.day).catch(() => { /* attendance is best-effort */ }); }}>Join{live.room_name ? ` ${live.room_name}` : ' in Rooms'}</Link>
         </div>
       )}
 
