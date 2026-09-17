@@ -134,3 +134,19 @@ export type HandoffParams = z.infer<typeof handoffParamsSchema>;
 export type HandoffsQuery = z.infer<typeof handoffsQuerySchema>;
 export type HandoffDispositionBody = z.infer<typeof handoffDispositionBodySchema>;
 export type HandoffReleaseBody = z.infer<typeof handoffReleaseBodySchema>;
+
+/* ── Person 360 (T410) ──────────────────────────────────────────────────────── */
+
+export const personParamsSchema = z.object({
+  leadId: z.coerce.number().int().positive(),
+});
+
+export const personQuerySchema = z.object({
+  tenant_id: z.string().uuid().optional(),
+  brand_id: z.string().uuid().optional(),
+  /** Rows per collection (classifications, decisions, transitions, handoffs, outcomes), newest first. */
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+
+export type PersonParams = z.infer<typeof personParamsSchema>;
+export type PersonQuery = z.infer<typeof personQuerySchema>;

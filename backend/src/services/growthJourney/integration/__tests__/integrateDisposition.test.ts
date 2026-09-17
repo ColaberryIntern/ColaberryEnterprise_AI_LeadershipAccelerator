@@ -96,7 +96,10 @@ const handoff = (kind: string | null, over: Record<string, unknown> = {}) => ({
   ...over,
 });
 const run = (kind: string | null, disposition: string, over: Record<string, unknown> = {}) => integrateDisposition({ handoff: handoff(kind, over), disposition, actor: ACTOR, asOf: AS_OF });
-const events = () => logEvent.mock.calls.map((c: unknown[]) => c[0] as string);
+// The integration's own ledger rows; the recorder's row per outcome indexed (T410) is asserted apart.
+const events = () => logEvent.mock.calls.map((c: unknown[]) => c[0] as string).filter((e) => e.startsWith('growth_journey.integration.'));
+const integrationCalls = () => logEvent.mock.calls.filter((c: unknown[]) => (c[0] as string).startsWith('growth_journey.integration.'));
+const outcomeRows = () => logEvent.mock.calls.filter((c: unknown[]) => c[0] === 'growth_journey.outcome.recorded');
 const nothingWritten = () => {
   expect(orgCreate).not.toHaveBeenCalled();
   expect(ensureLeadTenantContext).not.toHaveBeenCalled();
@@ -164,7 +167,12 @@ describe('a Business subject', () => {
     expect(s.ids).toEqual({ organization_id: 'org-1', organization_created: true, context_id: 'ctx-2', context_created: true, context_updated: false, stage: 'meeting_scheduled', advanced: true });
     expect(s.outcome_ids).toEqual([outcomes[0].id]);
     expect(events()).toEqual(['growth_journey.integration.account_rollup', 'growth_journey.integration.pipeline_advance']);
-    for (const call of logEvent.mock.calls) {
+    // T410: the outcome indexed is one ledger row of its own - the recorder's, actor growth_journey, entity the outcome - between the two writers'.
+    expect(outcomeRows()).toHaveLength(1);
+    expect(outcomeRows()[0].slice(1, 4)).toEqual(['growth_journey', 'growth_journey_outcome', outcomes[0].id]);
+    expect(outcomeRows()[0][4]).toMatchObject({ outcome_type: 'opportunity_stage', source: 'leads.pipeline_stage', source_ref: '501:meeting_scheduled', handoff_id: HANDOFF_ID, lead_id: 501 });
+    expect(logEvent.mock.calls.map((c: unknown[]) => c[0])).toEqual(['growth_journey.integration.account_rollup', 'growth_journey.outcome.recorded', 'growth_journey.integration.pipeline_advance']);
+    for (const call of integrationCalls()) {
       expect(call[1]).toBe('admin:staff-1');
       expect(call[2]).toBe('growth_journey_handoff');
       expect(call[3]).toBe(HANDOFF_ID);
@@ -240,6 +248,8 @@ describe('an AI Flotation subject', () => {
     expect(outcomes).toHaveLength(1);
     expect(outcomes[0]).toMatchObject({ outcome_type: 'project_started', source: 'delivery_engagements', source_ref: s.ids.engagement_id, handoff_id: HANDOFF_ID, metadata: { created: true, organization_id: s.ids.organization_id, project_id: s.ids.project_id, disposition: 'qualified' } });
     expect(events()).toEqual(['growth_journey.integration.flotation_intake']);
+    expect(outcomeRows()).toHaveLength(1);
+    expect(outcomeRows()[0][4]).toMatchObject({ outcome_type: 'project_started', source: 'delivery_engagements', source_ref: s.ids.engagement_id, handoff_id: HANDOFF_ID });
     expect(orgCreate).not.toHaveBeenCalled();
     expect(activities).toEqual([]);
     expect(JSON.stringify([logEvent.mock.calls, outcomes, s])).not.toContain('@');
@@ -266,6 +276,7 @@ describe('an AI Flotation subject', () => {
     expect(conversions.size).toBe(0);
     expect(outcomes).toEqual([]);
     expect(events()).toEqual(['growth_journey.integration.refused']);
+    expect(outcomeRows()).toEqual([]);
     expect(logEvent.mock.calls[0][4]).toMatchObject({ writer: 'flotation_intake', reason: 'lead_has_no_company', disposition: 'qualified', handoff_id: HANDOFF_ID });
     expect(JSON.stringify(logEvent.mock.calls)).not.toContain('@');
   });

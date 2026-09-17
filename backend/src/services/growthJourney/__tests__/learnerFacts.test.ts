@@ -1,5 +1,6 @@
 // The loader's three collaborators are injected, so these mocks exist only to
 // keep the module-level imports from reaching a database at load time.
+jest.mock('../ledger', () => ({ recordJourneyEvent: jest.fn(async () => ({ recorded: true })) }));  // T410: the ledger adapter, at its boundary
 jest.mock('../explorerFacade', () => ({ getLearnerJourney: jest.fn() }));
 jest.mock('../../explorerGrowth/explorerSignalReader', () => ({ readLearnerSignals: jest.fn() }));
 jest.mock('../../explorerGrowth/explorerScoringService', () => ({ scoreLearner: jest.fn() }));

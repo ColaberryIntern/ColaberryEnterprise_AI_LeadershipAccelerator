@@ -5,6 +5,7 @@ import type {
   GrowthJourneyOutcomeType,
 } from '../../../models/GrowthJourneyOutcome';
 import { isUniqueViolation } from '../../../utils/uniqueViolation';
+import { recordJourneyEvent } from '../ledger';
 import { findAddressLikeValue } from '../noAddress';
 
 /**
@@ -86,7 +87,13 @@ export async function recordOutcome(input: RecordOutcomeInput): Promise<RecordOu
   };
 
   try {
-    return { row: await GrowthJourneyOutcome.create(row), replayed: false };
+    const created = await GrowthJourneyOutcome.create(row);
+    // T410: one ledger row per outcome indexed (a replay is not a write); the metadata stays on the row.
+    await recordJourneyEvent('growth_journey.outcome.recorded', 'growth_journey_outcome', created.id, { tenant_id: row.tenant_id, brand_id: row.brand_id }, {
+      subject_ref: row.subject_ref, lead_id: row.lead_id, handoff_id: row.handoff_id, decision_id: row.decision_id,
+      outcome_type: row.outcome_type, source: row.source, source_ref: row.source_ref, occurred_at: row.occurred_at,
+    });
+    return { row: created, replayed: false };
   } catch (err: unknown) {
     if (!isUniqueViolation(err)) throw err;
     const existing = await GrowthJourneyOutcome.findOne({

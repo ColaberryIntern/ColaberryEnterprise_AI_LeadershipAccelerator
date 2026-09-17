@@ -14,6 +14,7 @@ const brandFindAll = jest.fn();
 const resolveSubject = jest.fn();
 const leadContextWriter = jest.fn();
 
+jest.mock('../ledger', () => ({ recordJourneyEvent: jest.fn(async () => ({ recorded: true })) }));  // T410: the ledger adapter, at its boundary
 jest.mock('../../../models', () => ({
   GrowthJourneyTransition: { create: (...a: unknown[]) => transitionCreate(...a), findOne: (...a: unknown[]) => transitionFindOne(...a) },
   LeadTenantContext: { create: (...a: unknown[]) => leadContextWriter(...a), findOrCreate: (...a: unknown[]) => leadContextWriter(...a) },

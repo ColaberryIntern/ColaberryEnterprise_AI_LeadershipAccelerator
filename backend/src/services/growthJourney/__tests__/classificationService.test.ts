@@ -31,6 +31,7 @@ const m = {
   resolvePublicContext: jest.fn(),
 };
 
+jest.mock('../ledger', () => ({ recordJourneyEvent: jest.fn(async () => ({ recorded: true })) }));  // T410: the ledger adapter, at its boundary
 jest.mock('../../../models', () => ({
   GrowthJourneyClassification: {
     create: (...a: unknown[]) => m.classificationCreate(...a),

@@ -405,7 +405,10 @@ describe('the state machine, through the routes', () => {
     contextFromAdminRequest.mockResolvedValue(memberOf(TENANT.colaberry, BRAND.enterprise, [BRAND.enterprise]));
   });
 
-  const ledgerEvents = () => logEvent.mock.calls.map((c) => c[0] as string);
+  // The handoff's own ledger rows; the recorder's row per outcome indexed (T410) is counted apart.
+  const ledgerEvents = () => logEvent.mock.calls.map((c) => c[0] as string).filter((e) => e.startsWith('growth_journey.handoff.'));
+  const ledgerCall = (event: string) => logEvent.mock.calls.find((c) => c[0] === event) as unknown[];
+  const outcomeRows = () => logEvent.mock.calls.filter((c) => c[0] === 'growth_journey.outcome.recorded');
 
   it('queued → accept → 200 accepted: the human owns the thread, the outcome is on the index, the ledger row carries tenant and brand', async () => {
     const row = seed(TENANT.colaberry, BRAND.enterprise);
@@ -417,7 +420,12 @@ describe('the state machine, through the routes', () => {
     expect(ownership[0]).toMatchObject({ tenant_id: TENANT.colaberry, brand_id: BRAND.enterprise, lead_id: 501, owner_type: 'human', owner_id: 'staff-1', source: 'handoff_accepted', channel: 'email', cleared_at: null });
     expect(outcomes).toHaveLength(1);
     expect(outcomes[0]).toMatchObject({ outcome_type: 'handoff_accepted', source: 'growth_journey_handoffs', source_ref: `${ROW_ID}:accepted`, handoff_id: ROW_ID, decision_id: 'd-1', subject_ref: 'lead:501' });
-    expect(logEvent).toHaveBeenCalledTimes(1);
+    expect(ledgerEvents()).toEqual(['growth_journey.handoff.accepted']);
+    // T410: the outcome on the index is one ledger row of its own, written before the handoff's, tenant and brand on it.
+    expect(outcomeRows()).toHaveLength(1);
+    expect(outcomeRows()[0].slice(0, 4)).toEqual(['growth_journey.outcome.recorded', 'growth_journey', 'growth_journey_outcome', outcomes[0].id]);
+    expect(outcomeRows()[0][5]).toEqual({ tenant_id: TENANT.colaberry, brand_id: BRAND.enterprise });
+    expect(logEvent).toHaveBeenCalledTimes(2);
     expect(logEvent).toHaveBeenCalledWith('growth_journey.handoff.accepted', 'admin:staff-1', 'growth_journey_handoff', ROW_ID, expect.objectContaining({ from: 'queued', handoff_id: ROW_ID, ownership_id: 'own-1' }), { tenant_id: TENANT.colaberry, brand_id: BRAND.enterprise });
     // The actor is the admin's id, never the email - in the response, the row, the ledger and the outcome.
     expect(res.text).not.toContain('@');
@@ -437,7 +445,8 @@ describe('the state machine, through the routes', () => {
     expect(twice.body).toEqual({ error: 'handoff is accepted; it cannot be accepted', error_class: 'ValidationError', from: 'accepted' });
     expect(row.update).toHaveBeenCalledTimes(1);
     expect(ownership).toHaveLength(1);
-    expect(logEvent).toHaveBeenCalledTimes(1);
+    expect(ledgerEvents()).toEqual(['growth_journey.handoff.accepted']);
+    expect(outcomeRows()).toHaveLength(1);
     // Every refused transition was still an allowed, audited access: the guard ran, the machine said no.
     expect(recordAccessDecision).toHaveBeenCalledTimes(4);
     for (const call of recordAccessDecision.mock.calls) expect(call[0]).toMatchObject({ decision: 'allowed' });
@@ -463,8 +472,9 @@ describe('the state machine, through the routes', () => {
     expect(ownership[0].cleared_at).toBeInstanceOf(Date);
     expect(outcomes[1]).toMatchObject({ outcome_type: 'handoff_dispositioned', source_ref: `${ROW_ID}:not_ready`, metadata: { disposition: 'not_ready', returned_to_ai: true, cooldown_until: res.body.cooldown_until } });
     expect(ledgerEvents()).toEqual(['growth_journey.handoff.accepted', 'growth_journey.handoff.returned_to_ai']);
-    expect(logEvent.mock.calls[1][4]).toMatchObject({ from: 'accepted', disposition: 'not_ready', cooldown_source: 'body', ownership_cleared: 1 });
-    expect(logEvent.mock.calls[1][5]).toEqual({ tenant_id: TENANT.colaberry, brand_id: BRAND.enterprise });
+    expect(outcomeRows()).toHaveLength(2);
+    expect(ledgerCall('growth_journey.handoff.returned_to_ai')[4]).toMatchObject({ from: 'accepted', disposition: 'not_ready', cooldown_source: 'body', ownership_cleared: 1 });
+    expect(ledgerCall('growth_journey.handoff.returned_to_ai')[5]).toEqual({ tenant_id: TENANT.colaberry, brand_id: BRAND.enterprise });
     // Returned is terminal for this row: no further move is legal.
     expect((await post(ACCEPT, {})).status).toBe(409);
     expect((await post(RELEASE, {})).status).toBe(409);

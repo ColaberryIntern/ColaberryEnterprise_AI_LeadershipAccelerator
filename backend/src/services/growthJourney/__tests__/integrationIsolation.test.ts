@@ -45,7 +45,7 @@ const ALLOWED_IMPORTS_BY_FILE: Record<string, readonly string[]> = {
   'services/growthJourney/integration/dispositions.ts': [],
   'services/growthJourney/integration/pipelineAdvance.ts': ['launchSafety', 'pipelineService', 'dispositions'],
   'services/growthJourney/integration/flotationIntake.ts': ['leadConversion', 'launchSafety'],
-  'services/growthJourney/integration/integrateDisposition.ts': ['models', 'ledgerService', 'outcomeRecorder', 'accountRollup', 'dispositions', 'flotationIntake', 'pipelineAdvance'],
+  'services/growthJourney/integration/integrateDisposition.ts': ['models', 'ledger', 'outcomeRecorder', 'accountRollup', 'dispositions', 'flotationIntake', 'pipelineAdvance'],
 };
 
 const basename = (spec: string) => spec.split('/').pop()!.replace(/\.(ts|js)$/, '');

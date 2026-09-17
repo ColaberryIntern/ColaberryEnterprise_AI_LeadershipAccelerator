@@ -61,6 +61,7 @@ const outcomeCreate = jest.fn(async (...a: unknown[]) => {
 });
 const outcomeFindOne = jest.fn(async (...a: unknown[]) => { const { where } = a[0] as { where: Row }; return store.find((r) => matches(r, where)) ?? null; });
 
+jest.mock('../../ledger', () => ({ recordJourneyEvent: jest.fn(async () => ({ recorded: true })) }));  // T410: the ledger adapter, at its boundary
 jest.mock('../../../../models', () => ({
   InteractionOutcome: { findAll: (...a: unknown[]) => t.InteractionOutcome.findAll(...a) },
   Appointment: { findAll: (...a: unknown[]) => t.Appointment.findAll(...a) },

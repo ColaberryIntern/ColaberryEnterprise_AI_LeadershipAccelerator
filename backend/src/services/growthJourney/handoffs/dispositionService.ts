@@ -1,6 +1,6 @@
 import { GrowthJourneyHandoff } from '../../../models';
 import type { GrowthJourneyHandoffAttributes, GrowthJourneyHandoffDisposition, GrowthJourneyHandoffStatus } from '../../../models/GrowthJourneyHandoff';
-import { logEvent } from '../../ledgerService';
+import { recordJourneyEvent } from '../ledger';
 import { clearHumanConversation, openHumanConversation } from '../conversationOwnershipService';
 import { integrateDisposition, type IntegrationSummary } from '../integration/integrateDisposition';
 import { isIntegratingDisposition } from '../integration/dispositions';
@@ -67,7 +67,7 @@ function guard(row: GrowthJourneyHandoff, allowed: readonly GrowthJourneyHandoff
 }
 
 async function ledger(row: GrowthJourneyHandoff, event: string, actor: HumanActor, payload: Record<string, unknown>): Promise<void> {
-  await logEvent(event, `${ACTOR_PREFIX}:${actor.id}`, ENTITY, row.id, { handoff_id: row.id, subject_ref: row.subject_ref, lead_id: row.lead_id, owner_queue: row.owner_queue, ...payload }, { tenant_id: row.tenant_id, brand_id: row.brand_id });
+  await recordJourneyEvent(event, ENTITY, row.id, { tenant_id: row.tenant_id, brand_id: row.brand_id }, { handoff_id: row.id, subject_ref: row.subject_ref, lead_id: row.lead_id, owner_queue: row.owner_queue, ...payload }, `${ACTOR_PREFIX}:${actor.id}`);
 }
 
 async function clearOwnership(row: GrowthJourneyHandoff, actor: HumanActor, reason: string, asOf: Date): Promise<number> {

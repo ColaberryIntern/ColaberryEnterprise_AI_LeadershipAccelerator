@@ -3,6 +3,7 @@ import * as path from 'path';
 
 const m = { resolveBrand: jest.fn(), programFindOne: jest.fn(), createHandoff: jest.fn(), assignHandoff: jest.fn() };
 
+jest.mock('../ledger', () => ({ recordJourneyEvent: jest.fn(async () => ({ recorded: true })) }));  // T410: the ledger adapter, at its boundary
 jest.mock('../../../config/env', () => ({ env: { growthJourney: { growthJourneyEnabled: false } } }));
 jest.mock('../explorerProgramBridge', () => ({ EXPLORER_PROGRAM: { tenantSlug: 'colaberry', brandSlug: 'colaberry-training', programSlug: 'learner' } }));
 jest.mock('../../../modules/tenancy/tenantResolver', () => ({ resolveBrandBySlug: (...a: unknown[]) => m.resolveBrand(...a) }));

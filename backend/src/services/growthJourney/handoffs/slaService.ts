@@ -4,7 +4,7 @@ import type { GrowthJourneyHandoffStatus } from '../../../models/GrowthJourneyHa
 import { classifyError } from '../../../utils/errorClassifier';
 import { redactForLogs } from '../../../utils/piiRedaction';
 import { isKillSwitchActive } from '../../launchSafety';
-import { logEvent } from '../../ledgerService';
+import { recordJourneyEvent } from '../ledger';
 
 /**
  * The SLA sweep (Phase 4 T409): a handoff nobody accepted before its
@@ -21,11 +21,10 @@ import { logEvent } from '../../ledgerService';
  * and the write keeps it, and two sweeps in flight expire it once: the loser
  * affects 0 rows, writes no ledger row, and reports the row as `raced`.
  *
- * The status is the source of truth and the ledger row follows it, outside a
- * transaction (`logEvent` takes none - the pattern T405's dispositions use).
- * A ledger write that fails after the status moved is reported in `failed`
- * with the row already `expired`; the next sweep will not re-emit it, and
- * T410's ledger adapter can back-fill from `status` + `expired_at`.
+ * The status is the source of truth and the ledger row follows it through
+ * T410's adapter, which never throws: a ledger that is down is one warning
+ * line and the row still counts as expired - the next sweep will not re-emit
+ * it, and the ledger adapter can back-fill from `status` + `expired_at`.
  *
  * It notifies nobody. An expiry is a row a human reads on the board (and the
  * rates in `outcomes/handoffRates.ts` count it); a page, an email, a Basecamp
@@ -90,13 +89,13 @@ export async function expireOverdueHandoffs(args: ExpireOverdueArgs = {}): Promi
         result.raced += 1;
         continue;
       }
-      await logEvent(
+      await recordJourneyEvent(
         HANDOFF_EXPIRED_EVENT,
-        ACTOR,
         ENTITY,
         row.id,
-        { handoff_id: row.id, subject_ref: row.subject_ref, lead_id: row.lead_id, owner_queue: row.owner_queue, from, sla_due_at: row.sla_due_at, ticket_id: row.ticket_id, assigned_to_type: row.assigned_to_type, assigned_to_id: row.assigned_to_id },
         { tenant_id: row.tenant_id, brand_id: row.brand_id },
+        { handoff_id: row.id, subject_ref: row.subject_ref, lead_id: row.lead_id, owner_queue: row.owner_queue, from, sla_due_at: row.sla_due_at, ticket_id: row.ticket_id, assigned_to_type: row.assigned_to_type, assigned_to_id: row.assigned_to_id },
+        ACTOR,
       );
       result.expired += 1;
       result.expired_ids.push(row.id);

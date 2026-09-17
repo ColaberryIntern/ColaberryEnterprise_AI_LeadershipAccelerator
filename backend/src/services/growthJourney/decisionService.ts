@@ -6,6 +6,7 @@ import { redactForLogs } from '../../utils/piiRedaction';
 import { isUniqueViolation } from '../../utils/uniqueViolation';
 import { computeIdempotencyKey } from '../inboxCase/textNormalization';
 import { stableJson } from './classificationService';
+import { recordJourneyEvent } from './ledger';
 import { loadDecisionContext, type LoadedDecisionContext } from './decision/loadDecisionContext';
 import { evaluateFreshness } from '../explorerGrowth/governor/freshness';
 import { decideForSubject } from './governor/decideForSubject';
@@ -227,7 +228,14 @@ export function decisionRow(
 /** Append the row; a replay of the same key lands on the existing row. Never an update. */
 async function persistDecision(row: GrowthJourneyDecisionAttributes): Promise<{ row: GrowthJourneyDecision; replayed: boolean }> {
   try {
-    return { row: await GrowthJourneyDecision.create(row), replayed: false };
+    const created = await GrowthJourneyDecision.create(row);
+    // T410: one ledger row per decision written - the summary (what was chosen and why), never the candidate blob.
+    await recordJourneyEvent('growth_journey.decision.recorded', 'growth_journey_decision', created.id, { tenant_id: row.tenant_id, brand_id: row.brand_id }, {
+      subject_ref: row.subject_ref, lead_id: row.lead_id, enrollment_id: row.enrollment_id, program_id: row.program_id, classification_id: row.classification_id,
+      trigger: row.trigger, decision_date: row.decision_date, mode: row.mode, selected_action: row.selected_action, selected_path: row.selected_path, selected_channel: row.selected_channel,
+      state_at_decision: row.state_at_decision, requires_human_review: row.requires_human_review, ai_involved: row.ai_involved, executed: row.executed,
+    }, row.decided_by);
+    return { row: created, replayed: false };
   } catch (err: unknown) {
     if (!isUniqueViolation(err)) throw err;
     const existing = await GrowthJourneyDecision.findOne({ where: { idempotency_key: row.idempotency_key } });

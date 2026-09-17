@@ -9,6 +9,7 @@ const m = {
   transitionFindOne: jest.fn(),
 };
 
+jest.mock('../ledger', () => ({ recordJourneyEvent: jest.fn(async () => ({ recorded: true })) }));  // T410: the ledger adapter, at its boundary
 jest.mock('../../../models', () => ({
   GrowthJourneyProfile: {
     findOne: (...a: unknown[]) => m.profileFindOne(...a),

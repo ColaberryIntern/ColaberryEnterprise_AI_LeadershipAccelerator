@@ -9,7 +9,7 @@ import {
 import { isGrowthJourneyCapabilityEnabled, type GrowthJourneyFlags } from '../../../config/growthJourneyFlags';
 import { isUniqueViolation } from '../../../utils/uniqueViolation';
 import { computeIdempotencyKey } from '../../inboxCase/textNormalization';
-import { logEvent } from '../../ledgerService';
+import { recordJourneyEvent } from '../ledger';
 import { assignHandoff, type AssignResult } from './assignment';
 import { assertPacketCarriesNoAddress, buildEvidencePacket } from './evidencePacket';
 import { computeExpectedValue, priorityFor, rankHandoffs } from './expectedValue';
@@ -136,10 +136,10 @@ export async function createHandoff(args: CreateHandoffArgs): Promise<CreateHand
 
   try {
     const created = await GrowthJourneyHandoff.create(row);
-    await logEvent('growth_journey.handoff.created', ACTOR, ENTITY, created.id, {
+    await recordJourneyEvent('growth_journey.handoff.created', ENTITY, created.id, { tenant_id: refs.tenant_id, brand_id: refs.brand_id }, {
       handoff_id: created.id, decision_id: row.decision_id, subject_ref: refs.subject_ref, lead_id: refs.lead_id,
       owner_queue: trigger.owner_queue, source: trigger.source, reason: trigger.reason, urgent, expected_value: expected.value, priority,
-    }, { tenant_id: refs.tenant_id, brand_id: refs.brand_id });
+    }, ACTOR);
     return { row: created, replayed: false };
   } catch (err: unknown) {
     if (!isUniqueViolation(err)) throw err;

@@ -52,6 +52,8 @@ export const m = {
   loadLifecycleSourceCounts: jest.fn(),
   loadLearnerFacts: jest.fn(),
   upsertProfile: jest.fn(),
+  /** T410: `EventLedger.create` behind the real ledger adapter, for the suites that assert the decision's ledger row. */
+  ledgerCreate: jest.fn(),
 };
 
 /** The `../../../models` index, as the loader, the writer, the gates and the resolver see it. */

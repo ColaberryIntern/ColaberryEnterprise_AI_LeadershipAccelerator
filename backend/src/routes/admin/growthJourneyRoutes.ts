@@ -22,6 +22,7 @@ import {
   listHandoffsHandler,
   releaseHandoffHandler,
 } from '../../controllers/growthJourneyHandoffController';
+import { getPersonJourneyHandler } from '../../controllers/growthJourneyPersonController';
 
 /**
  * Growth Journey admin read routes (T207).
@@ -51,8 +52,8 @@ import {
  *
  * ─── READS, AND THE AUDITED WRITES ──────────────────────────────────────────
  *
- * Eight GETs and four POSTs. The participation and decision routes perform no
- * write at all; the classification override and the three handoff moves
+ * Nine GETs and four POSTs. The participation, decision and person routes
+ * perform no write at all; the classification override and the three handoff moves
  * (accept, disposition, release - Phase 4) are the writes, each audited through
  * `requireBrandAccessAudited` before the row changes. The scope every read
  * enforces comes from the caller's memberships, never from a header the client
@@ -98,5 +99,10 @@ router.get(`${BASE}/handoffs/:id`, getHandoffHandler);
 router.post(`${BASE}/handoffs/:id/accept`, acceptHandoffHandler);
 router.post(`${BASE}/handoffs/:id/disposition`, dispositionHandoffHandler);
 router.post(`${BASE}/handoffs/:id/release`, releaseHandoffHandler);
+
+// Phase 4 (T410): Person 360 - one lead's journey across the brands the caller
+// may see, stored rows only, scoped collection by collection. A lead the caller
+// can see nothing of is the byte-identical 404.
+router.get(`${BASE}/people/:leadId`, getPersonJourneyHandler);
 
 export default router;

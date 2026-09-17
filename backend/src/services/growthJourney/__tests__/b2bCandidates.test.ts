@@ -1,3 +1,4 @@
+jest.mock('../ledger', () => ({ recordJourneyEvent: jest.fn(async () => ({ recorded: true })) }));  // T410: the ledger adapter, at its boundary
 import { BUSINESS_STATES } from '../lifecycle/businessLifecycle';
 import { FLOTATION_STATES } from '../lifecycle/aiFlotationLifecycle';
 import { LEARNER_OFFER_FAMILIES } from '../../../models/OfferFamily';

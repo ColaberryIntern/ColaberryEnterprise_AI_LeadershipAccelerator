@@ -5,7 +5,7 @@ import { classifyError } from '../../../utils/errorClassifier';
 import { redactForLogs } from '../../../utils/piiRedaction';
 import { getTicketCreatorAdminUserId } from '../../agentBlueprint/ticketCreatorIdentitySeed';
 import { isKillSwitchActive } from '../../launchSafety';
-import { logEvent } from '../../ledgerService';
+import { recordJourneyEvent } from '../ledger';
 import { createTicket, type CreateTicketData } from '../../ticketService';
 import { resolveQueueCapacity } from '../capacityService';
 
@@ -98,9 +98,9 @@ export async function assignHandoff(row: GrowthJourneyHandoff, flags: GrowthJour
     ticket_id: ticket.id,
     assignment_blocked_reason: null,
   });
-  await logEvent('growth_journey.handoff.assigned', ACTOR, ENTITY, row.id, {
+  await recordJourneyEvent('growth_journey.handoff.assigned', ENTITY, row.id, { tenant_id: row.tenant_id, brand_id: row.brand_id }, {
     handoff_id: row.id, ticket_id: ticket.id, owner_queue: row.owner_queue,
     assigned_to_type: assignee.assigned_to_type, assigned_to_id: assignee.assigned_to_id, capacity: capacity.reason,
-  }, { tenant_id: row.tenant_id, brand_id: row.brand_id });
+  }, ACTOR);
   return { status: 'assigned', ticket_id: ticket.id, assigned_to_type: assignee.assigned_to_type, assigned_to_id: assignee.assigned_to_id };
 }

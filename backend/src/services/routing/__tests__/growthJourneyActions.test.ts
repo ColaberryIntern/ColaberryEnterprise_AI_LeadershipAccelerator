@@ -21,6 +21,7 @@ const m = {
   org: jest.fn(),
 };
 
+jest.mock('../../growthJourney/ledger', () => ({ recordJourneyEvent: jest.fn(async () => ({ recorded: true })) }));  // T410: the ledger adapter, at its boundary
 jest.mock('../../../models', () => ({
   GrowthJourneyEnrollment: { create: (...a: unknown[]) => m.enrollmentCreate(...a), findOne: (...a: unknown[]) => m.enrollmentFindOne(...a) },
   JourneyPath: { findOne: (...a: unknown[]) => m.pathFindOne(...a) },

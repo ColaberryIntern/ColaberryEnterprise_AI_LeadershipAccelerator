@@ -1,5 +1,5 @@
 import { Lead } from '../../../models';
-import { logEvent } from '../../ledgerService';
+import { recordJourneyEvent } from '../ledger';
 import { recordOutcome } from '../outcomes/outcomeRecorder';
 import { rollUpAccount } from './accountRollup';
 import { isIntegratingDisposition, type IntegratingDisposition } from './dispositions';
@@ -84,7 +84,7 @@ function summary(disposition: string, program_kind: string | null): IntegrationS
 }
 
 async function ledger(h: HandoffForIntegration, actor: IntegrationActor, event: string, payload: Record<string, unknown>): Promise<void> {
-  await logEvent(`${EVENT}.${event}`, `admin:${actor.id}`, ENTITY, h.id, { handoff_id: h.id, subject_ref: h.subject_ref, lead_id: h.lead_id, ...payload }, { tenant_id: h.tenant_id, brand_id: h.brand_id });
+  await recordJourneyEvent(`${EVENT}.${event}`, ENTITY, h.id, { tenant_id: h.tenant_id, brand_id: h.brand_id }, { handoff_id: h.id, subject_ref: h.subject_ref, lead_id: h.lead_id, ...payload }, `admin:${actor.id}`);
 }
 
 async function refuse(s: IntegrationSummary, h: HandoffForIntegration, actor: IntegrationActor, writer: string, reason: string): Promise<IntegrationSummary> {

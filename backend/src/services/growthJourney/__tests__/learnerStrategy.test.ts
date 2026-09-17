@@ -1,3 +1,4 @@
+jest.mock('../ledger', () => ({ recordJourneyEvent: jest.fn(async () => ({ recorded: true })) }));  // T410: the ledger adapter, at its boundary
 import * as fs from 'fs';
 import * as path from 'path';
 import { activationRescue } from '../../explorerGrowth/governor/candidates/activationRescue';

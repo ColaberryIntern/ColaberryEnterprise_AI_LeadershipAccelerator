@@ -4,6 +4,7 @@ import type { GrowthJourneyFlags } from '../../config/growthJourneyFlags';
 import { computeIdempotencyKey } from '../inboxCase/textNormalization';
 import { isUniqueViolation } from '../../utils/uniqueViolation';
 import { classifyError } from '../../utils/errorClassifier';
+import { recordJourneyEvent } from './ledger';
 import { classifyInput } from './classification/classify';
 import { makeAiClassifier, type AiClassifierDeps } from './classification/aiClassifier';
 import { loadClassificationInput, type ClassificationTrigger, type LoadExtras } from './classification/inputs';
@@ -115,6 +116,13 @@ export async function classifySubject(args: ClassifySubjectArgs): Promise<Classi
     idempotency_key,
   });
 
+  // T410: one ledger row per classification written (a replay is not a write); ids and literals only.
+  if (!written.replayed) {
+    await recordJourneyEvent('growth_journey.classification.recorded', 'growth_journey_classification', written.row.id, { tenant_id: written.row.tenant_id, brand_id: written.row.brand_id }, {
+      subject_ref: written.row.subject_ref, lead_id: written.row.lead_id, enrollment_id: written.row.enrollment_id, trigger: args.trigger, journey_program_slug: written.row.journey_program_slug,
+      primary_path: result.primary_path, source_step: result.source_step, status, requires_human_review: result.requires_human_review, ai_involved: result.ai_involved,
+    });
+  }
   logEvent({
     event: 'growth_journey.classification.recorded',
     subject_ref: loaded.input.subject_ref,
@@ -189,6 +197,11 @@ export async function overrideClassification(args: OverrideArgs): Promise<Overri
     decided_by,
     idempotency_key,
   });
+  if (!written.replayed) {
+    await recordJourneyEvent('growth_journey.classification.overridden', 'growth_journey_classification', written.row.id, { tenant_id: written.row.tenant_id, brand_id: written.row.brand_id }, {
+      override_of: prior.id, subject_ref: written.row.subject_ref, lead_id: written.row.lead_id, enrollment_id: written.row.enrollment_id, primary_path: written.row.primary_path, status: written.row.status, locked: args.lock,
+    }, decided_by);
+  }
   logEvent({ event: 'growth_journey.classification.overridden', override_of: prior.id, subject_ref: prior.subject_ref, locked: args.lock, replayed: written.replayed });
   return { status: 'overridden', row: written.row, replayed: written.replayed };
 }
@@ -245,6 +258,11 @@ export async function requestClassificationReview(args: ReviewRequestArgs): Prom
     decided_by: null,
     idempotency_key: computeIdempotencyKey([prior.id, 'review_request', args.requestedBy]),
   });
+  if (!written.replayed) {
+    await recordJourneyEvent('growth_journey.classification.review_requested', 'growth_journey_classification', written.row.id, { tenant_id: written.row.tenant_id, brand_id: written.row.brand_id }, {
+      override_of: prior.id, subject_ref: written.row.subject_ref, lead_id: written.row.lead_id, enrollment_id: written.row.enrollment_id, requested_by: args.requestedBy,
+    }, args.requestedBy);
+  }
   logEvent({ event: 'growth_journey.classification.review_requested', override_of: prior.id, subject_ref: prior.subject_ref, requested_by: args.requestedBy, replayed: written.replayed });
   return { status: 'overridden', row: written.row, replayed: written.replayed };
 }

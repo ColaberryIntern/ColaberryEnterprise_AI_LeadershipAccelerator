@@ -9,6 +9,7 @@ const m = {
   upsertProfile: jest.fn(),
 };
 
+jest.mock('../ledger', () => ({ recordJourneyEvent: jest.fn(async () => ({ recorded: true })) }));  // T410: the ledger adapter, at its boundary
 jest.mock('../../../models', () => ({
   GrowthJourneyDecision: {
     create: (...a: unknown[]) => m.decisionCreate(...a),

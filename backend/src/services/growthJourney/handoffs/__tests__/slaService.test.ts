@@ -174,11 +174,14 @@ describe('gates and failure', () => {
     expect(warned()).toEqual([]);
   });
 
-  it('a ledger write failing after the row moved is that row failed (the status stays moved - the next sweep cannot find it - and the class is reported), the next row still expires', async () => {
+  it('a ledger write failing after the row moved never fails the expiry (T410): both rows expire, the gap is one redacted warning with the class and the entity id, nothing is reported failed', async () => {
     rows.push(handoff({ id: 'h-1', sla_due_at: D('2026-09-16T01:00:00Z') }), handoff({ id: 'h-2', sla_due_at: D('2026-09-16T02:00:00Z') }));
     logEvent.mockRejectedValueOnce(Object.assign(new Error('ledger unavailable'), { name: 'SequelizeConnectionError' }));
     const r = await expireOverdueHandoffs({ asOf: AS_OF });
-    expect(r).toMatchObject({ expired: 1, failed: [{ handoff_id: 'h-1', error_class: expect.any(String) }], expired_ids: ['h-2'] });
+    expect(r).toEqual({ skipped: false, scanned: 2, expired: 2, raced: 0, failed: [], expired_ids: ['h-1', 'h-2'] });
     expect(rows.map((x) => x.status)).toEqual(['expired', 'expired']);
+    const line = warned().find((l) => l.includes('growth_journey.ledger.write_failed'));
+    expect(JSON.parse(line as string)).toMatchObject({ event_type: 'growth_journey.handoff.expired', entity_type: 'growth_journey_handoff', entity_id: 'h-1', brand_id: 'b-ent', error_class: expect.any(String) });
+    expect(redactForLogs).toHaveBeenCalledTimes(1);
   });
 });
