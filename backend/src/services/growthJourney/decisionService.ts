@@ -337,6 +337,8 @@ export interface RunShadowDecisionsResult {
   replayed: number;
   skipped: Array<{ subject_ref: string; status: string }>;
   errors: Array<{ subject_ref: string; error_class: string }>;
+  /** T408: what T404's writer did with the recorded decisions, as counts - disabled (flag off), none (no trigger), rows materialised, and of those assigned / left queued. */
+  handoffs: { disabled: number; none: number; materialized: number; assigned: number; queued: number };
 }
 
 /** `lead:<id>` / `enrollment:<id>` back to an anchor. Null for a ref this runner cannot decide for. */
@@ -354,7 +356,7 @@ export function anchorFromSubjectRef(ref: string): SubjectAnchor | null {
  */
 export async function runShadowDecisions(args: RunShadowDecisionsArgs): Promise<RunShadowDecisionsResult> {
   if (!isGrowthJourneyCapabilityEnabled('journeyDecisions', args.flags)) {
-    return { status: 'disabled', subjects: 0, recorded: 0, replayed: 0, skipped: [], errors: [] };
+    return { status: 'disabled', subjects: 0, recorded: 0, replayed: 0, skipped: [], errors: [], handoffs: { disabled: 0, none: 0, materialized: 0, assigned: 0, queued: 0 } };
   }
   const limit = args.limit ?? 500;
   const rows = await GrowthJourneyClassification.findAll({
@@ -363,7 +365,7 @@ export async function runShadowDecisions(args: RunShadowDecisionsArgs): Promise<
     group: ['subject_ref'],
     limit,
   });
-  const result: RunShadowDecisionsResult = { status: 'ran', subjects: rows.length, recorded: 0, replayed: 0, skipped: [], errors: [] };
+  const result: RunShadowDecisionsResult = { status: 'ran', subjects: rows.length, recorded: 0, replayed: 0, skipped: [], errors: [], handoffs: { disabled: 0, none: 0, materialized: 0, assigned: 0, queued: 0 } };
   for (const r of rows) {
     const ref = String(r.get('subject_ref'));
     const anchor = anchorFromSubjectRef(ref);
@@ -376,6 +378,16 @@ export async function runShadowDecisions(args: RunShadowDecisionsArgs): Promise<
       if (out.status === 'recorded') {
         if (out.replayed) result.replayed += 1;
         else result.recorded += 1;
+        const h = out.handoffs;
+        if (h.status === 'disabled') result.handoffs.disabled += 1;
+        else if (h.status === 'none') result.handoffs.none += 1;
+        else {
+          result.handoffs.materialized += h.handoffs.length;
+          for (const x of h.handoffs) {
+            if (x.assignment.status === 'assigned') result.handoffs.assigned += 1;
+            else result.handoffs.queued += 1;
+          }
+        }
       } else {
         result.skipped.push({ subject_ref: ref, status: out.status });
       }

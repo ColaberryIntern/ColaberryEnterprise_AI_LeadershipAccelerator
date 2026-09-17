@@ -89,6 +89,8 @@ function arrange(ld: LoadedDecisionContext = loaded()) {
   m.upsertProfile.mockResolvedValue({ profileId: 'gp-1', previousState: null, stateChanged: true, transitionId: 't-1', transitionReplayed: false });
   let seq = 0;
   m.decisionCreate.mockImplementation(async (row: Record<string, unknown>) => ({ id: `d-${++seq}`, ...row }));
+  // The writer's real answer with the flag off; a test that wants rows sets its own.
+  handoffs.materializeHandoffs.mockReset().mockResolvedValue({ status: 'disabled' });
 }
 
 const record = (over: Partial<Parameters<typeof decideForSubjectAndRecord>[0]> = {}) =>
@@ -390,6 +392,8 @@ describe('the batch runner', () => {
       replayed: 0,
       skipped: [{ subject_ref: 'visitor:abc', status: 'unanchored_ref' }, { subject_ref: 'lead:3', status: 'unresolved' }],
       errors: [{ subject_ref: 'lead:2', error_class: expect.any(String) }],
+      // T408: the writer's counts ride along; with journeyHandoffs off every recorded decision is `disabled`.
+      handoffs: { disabled: 1, none: 0, materialized: 0, assigned: 0, queued: 0 },
     });
     expect(calls).toBe(3);
     expect(m.classificationFindAll).toHaveBeenCalledWith(expect.objectContaining({ where: { brand_id: 'b-ent' }, limit: 500 }));
