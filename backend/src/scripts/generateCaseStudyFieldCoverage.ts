@@ -371,6 +371,39 @@ const AUTHORED: Record<string, Entry> = {
     emptyBehaviour: 'absent, disabled or off-surface: the record renders exactly as it did before the section existed',
     test: 'caseStudyVisualStoryValidate.test.ts',
   }),
+  // The storytelling rollout (2026-09-16): the builder card, the decision cards and
+  // the per-surface variants are words a person authors for a reader, gated on
+  // publish like every other narrative and carried across resync as overrides.
+  // The builder's biography is CONSENT-GATED at projection: name, intro,
+  // progression and links cross only when the profile's name matches a named,
+  // consented contributor of the same content.
+  'CaseStudySnapshotContent.builder': D({
+    disposition: 'human_approved', aiMayInfer: false, approvalRequired: true,
+    authoring: 'admin, as a whole-section override; user-confirmed career facts beside repository-supported contribution',
+    sourcePriority: 'human override; sync never generates it',
+    detailHome: 'the Meet the builder card, after the outcomes; the intro near the opening visual',
+    publicBehaviour: 'projectBuilder: biography only behind consent; provenance note never projected; links through safeHttpUrl',
+    emptyBehaviour: 'absent: no card',
+    test: 'caseStudySurfaceVariant.test.ts',
+  }),
+  'CaseStudySnapshotContent.decisions': D({
+    disposition: 'human_approved', aiMayInfer: true, approvalRequired: true,
+    authoring: 'admin, as a whole-section override; problem, decision, evidence, consequence per card',
+    sourcePriority: 'human override; sync never generates it',
+    detailHome: 'Decisions that made the difference, after the outcomes',
+    publicBehaviour: 'projectDecisions: a card missing any part is not drawn; every string claim-scanned',
+    emptyBehaviour: 'absent or empty: no cards',
+    test: 'caseStudySurfaceVariant.test.ts',
+  }),
+  'CaseStudySnapshotContent.surfaceVariants': D({
+    disposition: 'human_approved', aiMayInfer: true, approvalRequired: true,
+    authoring: 'admin, as a whole-section override keyed by publishable surface; words one audience reads differently',
+    sourcePriority: 'human override; sync never generates it',
+    detailHome: 'wherever the field it replaces lives, on that surface only',
+    publicBehaviour: 'resolveSurfaceContent overlays the variant for its surface; every string claim-scanned; rule 5 checks its people; never a figure',
+    emptyBehaviour: 'absent: every surface reads the canonical words',
+    test: 'caseStudySurfaceVariant.test.ts',
+  }),
   'CaseStudyArchitectureSection.diagramImageUrl': D({
     disposition: 'human_approved', aiMayInfer: false,
     authoring: 'admin narrative panel; rendered from diagramSource by scripts/renderCaseStudyDiagram.js',

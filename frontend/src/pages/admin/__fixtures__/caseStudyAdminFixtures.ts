@@ -400,6 +400,8 @@ export function projectionFixture(
     }],
     walkthroughVideo: null,
   visualStory: null,
+  builder: null,
+  decisions: [],
     situation: {
       heading: 'The situation',
       body: ['Adjusters were triaging by hand.'],

@@ -120,6 +120,8 @@ const detail = (over: Partial<PublicCaseStudyDetail> = {}): PublicCaseStudyDetai
   heroMetrics: [metric()],
   walkthroughVideo: null,
   visualStory: null,
+  builder: null,
+  decisions: [],
   situation: {
     heading: 'The situation',
     body: ['Planners rebuilt the same route by hand every morning.'],

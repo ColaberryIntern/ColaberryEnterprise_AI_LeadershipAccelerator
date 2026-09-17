@@ -88,7 +88,10 @@ describe('outcomeCardsFor', () => {
     expect(cardFigure(ratio)).toBe('97%');
     expect(cardFigure(share)).toBe('4.2%');
     expect(cardFigure(count)).toBe('median 34 minutes');
-    expect(cardFigure(unit)).toBe('34.2 min');
+    // The rounded public headline: whole from ten up, one decimal below ten; the stored 34.2 is untouched.
+    expect(cardFigure(unit)).toBe('34 min');
+    expect(cardFigure({ ...unit, payload: { shape: 'count', value: 4.25 } } as PublicCaseStudyMetric)).toBe('4.3 min');
+    expect(cardFigure({ ...unit, payload: { shape: 'count', value: 1400 } } as PublicCaseStudyMetric)).toBe('1,400 min');
     const [card] = outcomeCardsFor(story({ outcomeCards: [ratio] }));
     expect(card.statement).toBe('97% of lost completion events resolved, from 46% by hand');
     expect(card.animate).toBe(true);

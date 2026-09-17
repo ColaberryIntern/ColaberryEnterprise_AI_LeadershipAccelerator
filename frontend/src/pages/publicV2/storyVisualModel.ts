@@ -122,13 +122,18 @@ export interface OutcomeCardView {
  * anything else is the first clause of the record's own wording ("median 34
  * minutes"). The full wording is always printed beneath, so nothing is lost.
  */
+const roundedCount = (value: number): number =>
+  Number.isInteger(value) ? value : value >= 10 ? Math.round(value) : Math.round(value * 10) / 10;
+
 export function cardFigure(metric: PublicCaseStudyMetric): string {
   const p = metric.payload;
   if (p && (p.shape === 'ratio' || p.shape === 'share') && p.denominator > 0) {
     const pct = (p.numerator / p.denominator) * 100;
     return pct >= 10 || pct === 0 ? `${Math.round(pct)}%` : `${Math.round(pct * 10) / 10}%`;
   }
-  if (p && p.shape === 'count' && metric.unit) return `${p.value.toLocaleString('en-US')} ${metric.unit}`;
+  // A count is shown whole from ten up ("34 minutes", the rounded public headline; the
+  // record keeps 34.2 in its methodology) and to one decimal below ten, as a small share is.
+  if (p && p.shape === 'count' && metric.unit) return `${roundedCount(p.value).toLocaleString('en-US')} ${metric.unit}`;
   const first = metric.valueDisplay.split(/[,;(]/)[0].trim();
   return first || metric.valueDisplay;
 }

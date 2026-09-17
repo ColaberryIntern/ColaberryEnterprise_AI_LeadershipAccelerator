@@ -75,6 +75,8 @@ const detail = (over: Partial<PublicCaseStudyDetail> = {}): PublicCaseStudyDetai
   heroMetrics: [metric()],
   walkthroughVideo: null,
   visualStory: null,
+  builder: null,
+  decisions: [],
   situation: situation(),
   timeline: [],
   architecture: architecture(),
