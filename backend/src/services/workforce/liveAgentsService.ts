@@ -151,6 +151,40 @@ export async function getLastTicketActivityForAgent(adminUserId: string, agent: 
   return row?.updated_at ?? null;
 }
 
+/** Dara v2 Phase 5 ("open-ticket accountability") — the oldest still-OPEN
+ * ticket's `created_at`, for any agent. Same match-list/open-status shape as
+ * `countOpenTicketsForAgent()` above (ASC by created_at instead of a COUNT),
+ * added here rather than a new module since it's the same real "which
+ * tickets belong to this agent" query this file already owns.
+ *
+ * Read-only reporting only — this is information about age, never a signal
+ * this codebase (or any future caller) may use to auto-close or auto-resolve
+ * anything. No agent's ticket has ever been closed by this repo on elapsed
+ * time, and this function does not change that; it exists so a human looking
+ * at accountability can see "oldest open item is N days old," full stop.
+ */
+export async function getOldestOpenTicketAge(adminUserId: string, agent: AiAgent): Promise<{ oldestOpenCreatedAt: Date; ageDays: number } | null> {
+  const matchList = buildCreatorIdMatchList(adminUserId, agent);
+  const row = await Ticket.findOne({
+    where: {
+      [Op.and]: [
+        { status: OPEN_TICKET_STATUS_FILTER },
+        {
+          [Op.or]: [
+            { assigned_to_type: 'ai_staff', assigned_to_id: { [Op.in]: matchList } },
+            { created_by_id: { [Op.in]: matchList } },
+          ],
+        },
+      ],
+    },
+    order: [['created_at', 'ASC']],
+    attributes: ['created_at'],
+  });
+  if (!row?.created_at) return null;
+  const ageDays = Math.floor((Date.now() - row.created_at.getTime()) / (24 * 60 * 60 * 1000));
+  return { oldestOpenCreatedAt: row.created_at, ageDays };
+}
+
 export async function listLiveAgents(): Promise<LiveAgent[]> {
   const adminUsers = await findBlueprintAdminUsers();
   if (adminUsers.length === 0) return [];
