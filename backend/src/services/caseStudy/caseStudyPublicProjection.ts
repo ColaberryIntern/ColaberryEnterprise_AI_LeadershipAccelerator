@@ -262,6 +262,7 @@ export function projectPublicDetail(input: PublicProjectionInput): PublicCaseStu
     // consented contributor on this same content; the decisions are prose.
     builder: projectBuilder(resolved.builder, people.contributors),
     decisions: projectDecisions(resolved.decisions),
+    closing: resolved.closing,
     situation: projectSituation(content),
     timeline: projectTimeline(content?.buildTimeline ?? []),
     architecture: projectArchitecture(content),

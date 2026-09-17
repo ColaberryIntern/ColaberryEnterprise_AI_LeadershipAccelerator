@@ -30,8 +30,9 @@ const builder: CaseStudyBuilderProfile = {
   provenance: { source: 'user_confirmed', confirmedAt: '2026-09-16', note: 'confirmed by ali@colaberry.com' },
 };
 const decisions: CaseStudyDecision[] = [
-  { key: 'reuse', title: 'Reuse the pipeline', problem: 'Two paths drift.', decision: 'One path.', evidence: 'The extractor.', consequence: 'No drift.' },
+  { key: 'reuse', title: 'Reuse the pipeline', problem: 'Two paths drift.', decision: 'One path.', evidence: 'The extractor.', consequence: 'No drift.', stage: '04 Replay', figure: '0' },
   { key: 'half', title: 'Missing parts', problem: 'x', decision: '', evidence: 'y', consequence: 'z' },
+  { key: 'plain', title: 'No pin', problem: 'p', decision: 'd', evidence: 'e', consequence: 'c' },
 ];
 
 /** The fixture with a training variant that rewrites every field a variant may carry. */
@@ -48,6 +49,7 @@ function withVariant(over: Record<string, unknown> = {}): CaseStudySnapshotConte
       ],
       builder,
       decisions,
+      closing: 'For learners: what the work shows.',
       ...over,
     },
   };
@@ -80,6 +82,7 @@ describe('a record without a variant', () => {
       expect(Object.keys(detail).sort()).toEqual([...PUBLIC_DETAIL_KEYS].sort());
       expect(detail.builder).toBeNull();
       expect(detail.decisions).toEqual([]);
+      expect(detail.closing).toBeNull();
       expect(detail.situation?.body).toEqual(['Replenishment planners were reconciling three systems by hand.']);
     }
   });
@@ -97,9 +100,23 @@ describe('a training variant', () => {
     expect(training.situation?.body).toEqual(['Jordan met the planners first.']);
     expect(training.measurement?.narrative).toEqual(['Measured for learners.']);
     expect(training.heroMetrics[0].baseline).toBe('No before-state: the cohort had none.');
-    expect(training.decisions).toEqual([decisions[0]]);
+    // The half card is dropped; the pin and the figure cross, and read null when the card has none.
+    expect(training.decisions).toEqual([{ ...decisions[0] }, { ...decisions[2], stage: null, figure: null }]);
+    expect(training.closing).toBe('For learners: what the work shows.');
     // Enterprise reads the canonical words, exactly as a record with no variant.
     expect(enterprise).toEqual(plain);
+  });
+
+  it('reads the canonical closing on every surface until a variant says otherwise', () => {
+    const canonical = internalSnapshotContent() as unknown as Record<string, unknown>;
+    canonical.closing = 'What the work shows, for everyone.';
+    const withCanonical = canonical as unknown as CaseStudySnapshotContent;
+    expect(projectPublicDetail(input(withCanonical, 'enterprise')).closing).toBe('What the work shows, for everyone.');
+    expect(projectPublicDetail(input(withCanonical, 'training')).closing).toBe('What the work shows, for everyone.');
+    const overridden = withVariant({ closing: 'For learners only.' }) as unknown as Record<string, unknown>;
+    overridden.closing = 'What the work shows, for everyone.';
+    expect(projectPublicDetail(input(overridden as unknown as CaseStudySnapshotContent, 'training')).closing).toBe('For learners only.');
+    expect(projectPublicDetail(input(overridden as unknown as CaseStudySnapshotContent, 'enterprise')).closing).toBe('What the work shows, for everyone.');
   });
 
   it('outranks the publication row\'s summary override on its own surface only', () => {
@@ -150,12 +167,15 @@ describe('the publish gate reads variants', () => {
       'surfaceVariants.training.measurementNarrative[0]', 'surfaceVariants.training.metricNotes.stockouts.baseline',
       'surfaceVariants.training.contributors[0].role', 'surfaceVariants.training.builder.intro[0]',
       'surfaceVariants.training.builder.skills[0].evidence', 'surfaceVariants.training.decisions[0].consequence',
+      'surfaceVariants.training.decisions[0].stage', 'surfaceVariants.training.decisions[0].figure',
+      'surfaceVariants.training.closing',
     ]) expect(paths).toContain(p);
     const canonical = internalSnapshotContent() as unknown as Record<string, unknown>;
-    canonical.builder = builder; canonical.decisions = decisions;
+    canonical.builder = builder; canonical.decisions = decisions; canonical.closing = 'What the work shows.';
     const rootPaths = collectNarrative(canonical as unknown as CaseStudySnapshotContent).map((t) => t.path);
     expect(rootPaths).toContain('builder.contribution');
     expect(rootPaths).toContain('decisions[1].evidence');
+    expect(rootPaths).toContain('closing');
   });
 
   it('refuses a named contributor inside a variant exactly as it would in the canonical list', () => {
