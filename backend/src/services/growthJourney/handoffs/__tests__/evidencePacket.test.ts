@@ -22,7 +22,7 @@ const decision = (over: Partial<DecisionRowView> = {}): DecisionRowView => ({
 const signals = (over: Partial<StoredSignals> = {}): StoredSignals => ({
   lead: { pipeline_stage: 'meeting_scheduled', industry: 'logistics', employee_count: 120, annual_revenue: null, has_company: true },
   context: { organization_id: 'org-1', first_source_id: 'src-1', first_entry_point_id: 'ep-1', first_campaign_id: 'camp-1', first_touch_at: new Date('2026-08-01T00:00:00Z') },
-  counts: { inbound: { replied: 1, booked_meeting: 1, answered: 0, declined: 0 }, appointments: { scheduled: 1, completed: 0, no_show: 0, cancelled: 0 }, hasDeliveryEngagement: false },
+  counts: { inbound: { replied: 1, booked_meeting: 1, answered: 0, declined: 0, no_response: 0 }, appointments: { scheduled: 1, completed: 0, no_show: 0, cancelled: 0 }, hasDeliveryEngagement: false },
   contacts: { by_channel: { email: { outbound: 3, inbound: 1, last_outbound_at: new Date('2026-09-10T00:00:00Z'), last_inbound_at: new Date('2026-09-11T00:00:00Z') } }, total_outbound: 3, total_inbound: 1 },
   explicit_request: { present: true, reasons: ['request_outcome_in_72h:1'] },
   sla_hours: 24,
@@ -82,6 +82,17 @@ describe('every §9 field is present, or explicitly unavailable with a reason', 
     expect(p.sla).toEqual({ available: false, reason: 'no_sla_policy' });
     expect(p.qualification_gaps).toEqual(['no_lead_row', 'no_decision']);
     expect(p.links).toEqual({ person: '/admin/people/lead:501', decision_id: null, organization_id: null });
+  });
+
+  it('T414: a family the brand refused is a named qualification gap - the path stays null, and no need or talking point is drawn from it', () => {
+    const base = args().refs;
+    const p = buildEvidencePacket(args({ refs: { ...base, brand_id: 'b-flot', brand_slug: 'ai-flotation', path: null, path_refused: 'business_training:explicit_deny' } }));
+    expect(p.qualification_gaps).toEqual(['urgency', 'path_not_offered_by_brand:business_training:explicit_deny', 'firmographic:annual_revenue']);
+    expect((p.brand_program_path as { path: unknown }).path).toBeNull();
+    expect(p.likely_need).toEqual({ available: false, reason: 'no_path' });
+    expect(p.talking_points).toEqual([]);
+    // Absent refusal, absent gap: the full case above is unchanged.
+    expect(buildEvidencePacket(args()).qualification_gaps).toEqual(['urgency', 'firmographic:annual_revenue']);
   });
 
   it('the best permitted channel is the first eligible in email, sms, voice, in_app order — and none when all are closed', () => {

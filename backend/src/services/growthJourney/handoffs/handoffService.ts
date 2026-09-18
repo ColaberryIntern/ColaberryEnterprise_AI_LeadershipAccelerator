@@ -197,7 +197,17 @@ export interface MaterializeArgs {
   refs: SubjectRefs;
   flags: GrowthJourneyFlags;
   asOf: Date;
+  /**
+   * `'now'` (the default): the queue's ranked pass runs right after the rows are created - right for
+   * one subject. `'ranked_pass'`: the rows are created and left `queued` for the CALLER's pass over the
+   * whole queue. A batch that assigned subject by subject gave a one-slot queue to whichever subject it
+   * happened to decide first, not to the one the ranking puts first (T414, §16 I).
+   */
+  assignment?: 'now' | 'ranked_pass';
 }
+
+/** The assignment answer for a row the caller's ranked pass will take: not blocked, just not yet offered. */
+export const AWAITING_RANKED_PASS = 'awaiting_ranked_pass';
 
 export type MaterializeResult =
   | { status: 'disabled' }
@@ -221,6 +231,17 @@ export async function materializeHandoffs(args: MaterializeArgs): Promise<Materi
   for (const trigger of triggers) {
     const { row, replayed } = await createHandoff({ refs: args.refs, trigger, decision: args.decision, asOf: args.asOf });
     created.push({ trigger, row, replayed });
+  }
+  if (args.assignment === 'ranked_pass') {
+    return {
+      status: 'materialized',
+      handoffs: created.map((c) => ({
+        trigger: c.trigger,
+        handoff_id: c.row.id,
+        replayed: c.replayed,
+        assignment: c.row.status === 'queued' ? { status: 'queued' as const, reason: AWAITING_RANKED_PASS } : { status: 'not_queued' as const, current: c.row.status },
+      })),
+    };
   }
   const passes = new Map<string, AssignResult>();
   for (const queue of new Set(created.map((c) => c.row.owner_queue))) {

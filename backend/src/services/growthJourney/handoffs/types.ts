@@ -57,7 +57,10 @@ export interface SubjectRefs {
   subject_ref: string;
   lead_id: number | null;
   enrollment_id: string | null;
+  /** A family the BRAND may offer, or null - never a family its policy refuses (T414). */
   path: string | null;
+  /** `<family>:<gate reason>` when the classification named a family the brand's policy refused. */
+  path_refused?: string | null;
 }
 
 /** What the loaders read from the existing records, counts and ids only. */

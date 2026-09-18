@@ -84,8 +84,10 @@ function consentSection(decision: DecisionRowView | null): Record<string, unknow
   return { consent, best_permitted_channel: best };
 }
 
-function qualificationGaps(decision: DecisionRowView | null, signals: StoredSignals): string[] {
+function qualificationGaps(decision: DecisionRowView | null, signals: StoredSignals, refs: SubjectRefs): string[] {
   const gaps: string[] = [...(decision?.score_gaps ?? [])];
+  // Said, never shown as the path: the classification asked for a family this brand does not offer.
+  if (refs.path_refused) gaps.push(`path_not_offered_by_brand:${refs.path_refused}`);
   const lead = signals.lead;
   if (!lead) gaps.push('no_lead_row');
   else {
@@ -121,7 +123,7 @@ export function buildEvidencePacket(a: BuildPacketArgs): EvidencePacket {
       outcomes: signals.counts ? { inbound: signals.counts.inbound, appointments: signals.counts.appointments, has_delivery_engagement: signals.counts.hasDeliveryEngagement } : unavailable('counts_not_loaded'),
     },
     transcript: unavailable('permission_has_no_source'),
-    qualification_gaps: qualificationGaps(decision, signals),
+    qualification_gaps: qualificationGaps(decision, signals, refs),
     likely_need: need ? need.likely_need : unavailable(refs.path ? `no_table_entry:${refs.path}` : 'no_path'),
     talking_points: need ? need.talking_points : [],
     ...consentSection(decision),

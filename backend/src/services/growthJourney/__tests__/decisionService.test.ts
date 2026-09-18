@@ -23,9 +23,11 @@ jest.mock('../decision/loadDecisionContext', () => ({
 }));
 jest.mock('../profileService', () => ({ upsertProfile: (...a: unknown[]) => m.upsertProfile(...a) }));
 // The pipeline's real offer gate reads a model; the tests state their own policy.
+// T414: `resolveOfferEligibility` is the gate the handoff's packet path passes; a test may refuse a family.
+const offerGate = { resolve: jest.fn() };
 jest.mock('../offerEligibility', () => ({
   assertOfferAllowed: async () => ({ allowed: true, reason: 'test', rule_id: null }),
-  resolveOfferEligibility: async () => ({ allowed: true, reason: 'test', rule_id: null }),
+  resolveOfferEligibility: (...a: unknown[]) => offerGate.resolve(...a),
   OfferNotEligibleError: class extends Error {},
 }));
 // T305's gate is the writer's seam, not its subject: it answers with the gap
@@ -92,6 +94,7 @@ function arrange(ld: LoadedDecisionContext = loaded()) {
   m.decisionCreate.mockImplementation(async (row: Record<string, unknown>) => ({ id: `d-${++seq}`, ...row }));
   // The writer's real answer with the flag off; a test that wants rows sets its own.
   handoffs.materializeHandoffs.mockReset().mockResolvedValue({ status: 'disabled' });
+  offerGate.resolve.mockReset().mockResolvedValue({ allowed: true, reason: 'allowed', rule_id: null });
 }
 
 const record = (over: Partial<Parameters<typeof decideForSubjectAndRecord>[0]> = {}) =>
@@ -493,5 +496,44 @@ describe('T404 — after persistDecision, the row is handed to the handoff write
     arrange();
     await record({ flags: { ...onFlags(), journeyDecisions: false } });
     expect(handoffs.materializeHandoffs).not.toHaveBeenCalled();
+  });
+});
+
+describe('T414 — what the fixtures found: the batch leaves assignment to the ranked pass; the packet path passes the offer gate', () => {
+  const HANDOFFS_ON = (): GrowthJourneyFlags => ({ ...onFlags(), journeyHandoffs: true });
+  // A commercial state: WAIT with no selected path, and a create_handoff deferral - the case the fallback path served.
+  const commercial = () => loaded({ ctx: bizCtx({ state: 'DISCOVERY_READY', overlays: [] }) });
+
+  it('the batch runner hands every decision to the writer in ranked_pass mode; a single decision keeps the default (assign now)', async () => {
+    arrange(commercial());
+    m.classificationFindAll.mockResolvedValue([{ get: () => 'lead:501' }]);
+    await runShadowDecisions({ brandId: 'b-ent', trigger: 'nightly', flags: HANDOFFS_ON(), asOf: bizCtx().asOf });
+    expect(handoffs.materializeHandoffs.mock.calls[0][0].assignment).toBe('ranked_pass');
+    handoffs.materializeHandoffs.mockClear();
+    await record({ flags: HANDOFFS_ON() });
+    expect(handoffs.materializeHandoffs.mock.calls[0][0].assignment).toBeUndefined();
+  });
+
+  it('a classification family the brand may offer is the packet path; one its policy refuses is NOT the path - it rides as path_refused, with the gate\'s reason', async () => {
+    arrange(commercial());
+    await record({ flags: HANDOFFS_ON() });
+    expect(offerGate.resolve).toHaveBeenCalledWith({ brandId: 'b-ent', offerFamily: 'workflow_automation', at: bizCtx().asOf });
+    expect(handoffs.materializeHandoffs.mock.calls[0][0].refs).toMatchObject({ path: 'workflow_automation', path_refused: null });
+
+    arrange(commercial());
+    offerGate.resolve.mockResolvedValue({ allowed: false, reason: 'explicit_deny', rule_id: null });
+    await record({ flags: HANDOFFS_ON() });
+    expect(handoffs.materializeHandoffs.mock.calls[0][0].refs).toMatchObject({ path: null, path_refused: 'workflow_automation:explicit_deny' });
+  });
+
+  it('the gate is not asked when no handoff will be written: the handoffs flag off, or a decision that asks for none', async () => {
+    arrange(commercial());
+    await record({ flags: onFlags() });
+    expect(offerGate.resolve).not.toHaveBeenCalled();
+    arrange();
+    await record({ flags: HANDOFFS_ON() });
+    expect(handoffs.materializeHandoffs.mock.calls[0][0].decision.deferred_actions.some((d: { would: string }) => d.would === 'create_handoff')).toBe(false);
+    expect(offerGate.resolve).not.toHaveBeenCalled();
+    expect(handoffs.materializeHandoffs.mock.calls[0][0].refs).toMatchObject({ path: null, path_refused: null });
   });
 });

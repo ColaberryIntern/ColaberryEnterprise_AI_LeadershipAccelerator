@@ -88,6 +88,7 @@ import { PACKET_FIELDS } from '../evidencePacket';
 import { findAddressLikeValue } from '../../noAddress';
 import { CREATOR_AGENT_NAME } from '../assignment';
 import {
+  AWAITING_RANKED_PASS,
   assignHandoff,
   assignRankedQueue,
   createHandoff,
@@ -175,6 +176,26 @@ describe('the exit fixture: a DISCOVERY_READY Business subject', () => {
     expect(a.status === 'materialized' && a.handoffs[0].replayed).toBe(false);
     expect(b.status === 'materialized' && b.handoffs[0].replayed).toBe(true);
     expect(events('growth_journey.handoff.created')).toHaveLength(1);
+  });
+
+  it('T414: ranked_pass mode creates the row and offers it to NOTHING - no gate is asked, no ticket is written; the caller\'s pass assigns in rank order', async () => {
+    arrangeOpen();
+    const r = await materializeHandoffs({ decision: decision(), refs: refs(), flags: ON, asOf: CLOCK, assignment: 'ranked_pass' });
+    expect(r).toEqual({ status: 'materialized', handoffs: [{ trigger: expect.objectContaining({ owner_queue: 'sales' }), handoff_id: 'h-1', replayed: false, assignment: { status: 'queued', reason: AWAITING_RANKED_PASS } }] });
+    expect(store[0]).toMatchObject({ status: 'queued', assignment_blocked_reason: null });
+    expect(m.killSwitch).not.toHaveBeenCalled();
+    expect(m.createTicket).not.toHaveBeenCalled();
+    // The pass the nightly runs afterwards is what assigns it.
+    const pass = await assignRankedQueue({ brandId: 'b-ent', ownerQueue: 'sales', flags: ON, asOf: CLOCK });
+    expect(pass).toEqual([{ handoff_id: 'h-1', assignment: expect.objectContaining({ status: 'assigned' }) }]);
+  });
+
+  it('T414: in ranked_pass mode a replay onto a row already assigned answers not_queued, never queued', async () => {
+    arrangeOpen();
+    await materializeHandoffs({ decision: decision(), refs: refs(), flags: ON, asOf: CLOCK });
+    expect(store[0].status).toBe('assigned');
+    const r = await materializeHandoffs({ decision: decision(), refs: refs(), flags: ON, asOf: CLOCK, assignment: 'ranked_pass' });
+    expect(r.status === 'materialized' && r.handoffs[0]).toMatchObject({ replayed: true, assignment: { status: 'not_queued', current: 'assigned' } });
   });
 
   it('a NEW decision for the same subject while the first handoff is still open lands on that row (one open per subject per brand)', async () => {

@@ -12,7 +12,7 @@ import { evaluateFreshness } from '../explorerGrowth/governor/freshness';
 import { decideForSubject } from './governor/decideForSubject';
 import type { DecideDeps, JourneyCandidate, JourneyDecision, JourneySubjectContext } from './governor/types';
 import { resolveJourneyContent } from './journeyContent';
-import { assertOfferAllowed } from './offerEligibility';
+import { assertOfferAllowed, resolveOfferEligibility } from './offerEligibility';
 import { upsertProfile, type UpsertProfileResult } from './profileService';
 import { materializeHandoffs, type MaterializeResult } from './handoffs/handoffService';
 import type { DecisionRowView } from './handoffs/types';
@@ -79,6 +79,8 @@ export interface DecideAndRecordArgs {
   trigger: DecisionTrigger;
   flags: GrowthJourneyFlags;
   asOf?: Date;
+  /** T414: `'ranked_pass'` leaves the handoffs for the caller's pass over the whole queue (the batch runner's mode). */
+  handoffAssignment?: 'now' | 'ranked_pass';
 }
 
 export type DecideAndRecordResult =
@@ -252,7 +254,22 @@ async function persistDecision(row: GrowthJourneyDecisionAttributes): Promise<{ 
  * decision is already recorded and a handoff that did not materialise is a
  * replay away.
  */
-async function handoffsFor(row: GrowthJourneyDecision, loaded: LoadedDecisionContext, flags: GrowthJourneyFlags, asOf: Date): Promise<MaterializeResult> {
+/**
+ * T414: the packet's path is a family the BRAND may offer, or nothing. The selected path passed the
+ * pipeline's offer gate with its candidate; the classification's family, the fallback, had not - an AI
+ * Flotation subject whose classification named business_training (a data defect, or an override)
+ * reached the solution architect with business-training talking points in its packet. The same gate
+ * the pipeline asks decides here; a refused family becomes a named gap, never the path.
+ */
+async function packetPathFor(row: GrowthJourneyDecision, loaded: LoadedDecisionContext, asOf: Date): Promise<{ path: string | null; path_refused: string | null }> {
+  if (row.selected_path) return { path: row.selected_path, path_refused: null };
+  const family = loaded.ctx.classification?.primary_path ?? null;
+  if (!family) return { path: null, path_refused: null };
+  const gate = await resolveOfferEligibility({ brandId: loaded.ctx.brand_id, offerFamily: family, at: asOf });
+  return gate.allowed ? { path: family, path_refused: null } : { path: null, path_refused: `${family}:${gate.reason}` };
+}
+
+async function handoffsFor(row: GrowthJourneyDecision, loaded: LoadedDecisionContext, flags: GrowthJourneyFlags, asOf: Date, assignment?: 'now' | 'ranked_pass'): Promise<MaterializeResult> {
   const view: DecisionRowView = {
     id: row.id, tenant_id: row.tenant_id, brand_id: row.brand_id, program_id: row.program_id, subject_ref: row.subject_ref,
     lead_id: row.lead_id, enrollment_id: row.enrollment_id, classification_id: row.classification_id, decision_date: row.decision_date,
@@ -266,10 +283,13 @@ async function handoffsFor(row: GrowthJourneyDecision, loaded: LoadedDecisionCon
     tenant_id: loaded.ctx.tenant_id, brand_id: loaded.ctx.brand_id, brand_slug: loaded.ctx.brand_slug,
     program: loaded.ctx.program_id ? { id: loaded.ctx.program_id, slug: loaded.ctx.program_slug ?? '', kind: loaded.ctx.program_kind } : null,
     subject_ref: loaded.ctx.subject_ref, lead_id: loaded.ctx.lead_id, enrollment_id: loaded.ctx.enrollment_id,
-    path: row.selected_path ?? loaded.ctx.classification?.primary_path ?? null,
   };
   try {
-    return await materializeHandoffs({ decision: view, refs, flags, asOf });
+    // The gate is asked only when a handoff will actually be written. If this predicate ever misses a
+    // trigger the writer knows, the packet goes out with NO path - the safe side, never a refused family.
+    const asks = view.requires_human_review || view.deferred_actions.some((d) => (d as { would?: unknown }).would === 'create_handoff');
+    const { path, path_refused } = asks && isGrowthJourneyCapabilityEnabled('journeyHandoffs', flags) ? await packetPathFor(row, loaded, asOf) : { path: null, path_refused: null };
+    return await materializeHandoffs({ decision: view, refs: { ...refs, path, path_refused }, flags, asOf, assignment });
   } catch (err: unknown) {
     log('growth_journey.handoff.materialize_failed', { decision_id: row.id, subject_ref: row.subject_ref, brand_id: row.brand_id, error_class: classifyError(err) });
     return { status: 'none', reason: `materialize_failed:${classifyError(err)}` };
@@ -323,7 +343,7 @@ export async function decideForSubjectAndRecord(args: DecideAndRecordArgs): Prom
 
   const row = decisionRow(loaded, outcome.decision, args.trigger, notEmittedOf(loaded));
   const persisted = await persistDecision(row);
-  const handoffs = await handoffsFor(persisted.row, loaded, args.flags, asOf);
+  const handoffs = await handoffsFor(persisted.row, loaded, args.flags, asOf, args.handoffAssignment);
   return { status: 'recorded', row: persisted.row, replayed: persisted.replayed, decision: outcome.decision, profile, unavailable: loaded.unavailable, handoffs };
 }
 
@@ -345,7 +365,12 @@ export interface RunShadowDecisionsResult {
   replayed: number;
   skipped: Array<{ subject_ref: string; status: string }>;
   errors: Array<{ subject_ref: string; error_class: string }>;
-  /** T408: what T404's writer did with the recorded decisions, as counts - disabled (flag off), none (no trigger), rows materialised, and of those assigned / left queued. */
+  /**
+   * T408: what T404's writer did with the recorded decisions, as counts - disabled (flag off), none (no
+   * trigger), rows materialised, and of those assigned / left queued. Since T414 the batch leaves every
+   * row for the caller's ranked pass, so `assigned` is 0 here by construction and `queued` counts every
+   * row it materialised; the nightly's `assignment` block reports what the pass assigned.
+   */
   handoffs: { disabled: number; none: number; materialized: number; assigned: number; queued: number };
 }
 
@@ -382,7 +407,10 @@ export async function runShadowDecisions(args: RunShadowDecisionsArgs): Promise<
       continue;
     }
     try {
-      const out = await decideForSubjectAndRecord({ anchor, brandId: args.brandId, trigger: args.trigger, flags: args.flags, asOf: args.asOf });
+      // A batch never assigns first-come: its handoffs wait for the caller's ranked pass over the whole
+      // queue (the nightly runs it after every subject of the brand), so a one-slot queue goes to the
+      // subject the ranking puts first - urgent, then value - not the one this loop reached first (T414).
+      const out = await decideForSubjectAndRecord({ anchor, brandId: args.brandId, trigger: args.trigger, flags: args.flags, asOf: args.asOf, handoffAssignment: 'ranked_pass' });
       if (out.status === 'recorded') {
         if (out.replayed) result.replayed += 1;
         else result.recorded += 1;
