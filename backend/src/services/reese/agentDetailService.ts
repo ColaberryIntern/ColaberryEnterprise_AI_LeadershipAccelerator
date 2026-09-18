@@ -17,6 +17,8 @@ import { getAgentAuthorizationSummary } from '../agentAuthorizationService';
 import { computeAgentGoalsDimensions } from '../agentGoalsDimensionsService';
 import { classifyAgentAutonomyLevel } from '../agentCapabilityClassifier';
 import { getReeseEmployeeFacts, type AgentDetailResult } from './agentDetailEmployeeFacts';
+import { computeLastTicketPerBehaviour } from './reeseBehaviourLastTicket';
+import { BEHAVIOUR_KEY_BY_CRON_AGENT_NAME } from './reeseBehaviourMetadata';
 
 export type { AgentDetailResult } from './agentDetailEmployeeFacts';
 
@@ -104,7 +106,11 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
   // derives its distinct list from this same query, unchanged in result.
   const allTicketTypeRows = adminUser
     ? await Ticket.findAll({
-        attributes: ['type', 'metadata'],
+        // R9 — id/ticket_number/title/status/updated_at added so
+        // computeLastTicketPerBehaviour() below can derive each behaviour's
+        // real last ticket from this SAME already-fetched set, with zero
+        // extra queries.
+        attributes: ['id', 'ticket_number', 'title', 'status', 'type', 'metadata', 'updated_at'],
         where: {
           [Op.or]: [
             { assigned_to_type: 'ai_staff', assigned_to_id: { [Op.in]: buildCreatorIdMatchList(adminUser.id, agent) } },
@@ -210,6 +216,13 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
   ]);
   const costSummary = costRows[0] ? { cost_usd: costRows[0].costUsd, runs: costRows[0].runs } : null;
 
+  // R9 — Ali, live: "I'd also like to see the last time the tool and
+  // scheduled work was used/run and the ticket." Reese-only, computed from
+  // the ticket rows already fetched above (zero new queries). `{}` for
+  // every other agent — never populated outside this branch.
+  const lastTicketByBehaviour =
+    agent.agent_name === 'Reese' ? computeLastTicketPerBehaviour(allTicketTypeRows as any[]) : {};
+
   // Reese Product Phase 1, R7 — truthful employee facts, Reese-only. Gated
   // strictly on agent_name so no other agent's response shape or content
   // changes by a single byte (proven by this file's own existing tests,
@@ -221,7 +234,13 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
           openTicketCount,
           reportsTo,
           reeseEnrollmentId: enrollmentId,
-          relatedTasks: relatedTaskRows.map((t: any) => ({ agent_name: t.agent_name, enabled: t.enabled })),
+          relatedTasks: relatedTaskRows.map((t: any) => ({
+            agent_name: t.agent_name,
+            enabled: t.enabled,
+            run_count: t.run_count ?? 0,
+            error_count: t.error_count ?? 0,
+          })),
+          lastTicketByBehaviour,
         })
       : null;
 
@@ -281,6 +300,10 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
       last_run_at: t.last_run_at ?? null,
       run_count: t.run_count ?? 0,
       error_count: t.error_count ?? 0,
+      // R9 — Reese-only cross-reference (the "and the ticket" half of
+      // Scheduled work). BEHAVIOUR_KEY_BY_CRON_AGENT_NAME has no entry for
+      // any non-Reese sibling row, so this is `null` for every other agent.
+      last_ticket: lastTicketByBehaviour[BEHAVIOUR_KEY_BY_CRON_AGENT_NAME[t.agent_name]] ?? null,
     })),
     owned_behaviors: ownedBehaviorRows.map((b: any) => ({
       id: b.id,

@@ -575,6 +575,8 @@ describe('getAgentDetail', () => {
           id: 'sweep-id', agent_name: 'ReeseAutonomousOutreachSweep', description: 'Daily scan for risk signals.',
           trigger_type: 'cron', schedule: '0 15 * * *', enabled: true, status: 'idle',
           last_run_at: new Date('2026-08-25T15:00:00Z'), run_count: 12, error_count: 0,
+          // R9 — no ticket rows mocked in this test, so honestly null.
+          last_ticket: null,
         },
       ]);
     });
@@ -906,6 +908,55 @@ describe('getAgentDetail', () => {
         expect(byName['Presence heartbeat']).toBe(true);
         expect(byName['Student support supersession resolver']).toBe(false);
         expect(byName['Reactive DM reply']).toBe(true); // agent.enabled, not registry-gated
+      });
+
+      // R9 (2026-09-18) — Ali, live: "I'd also like to see a link to the
+      // last ticket or time this process run." Wires computeLastTicketPerBehaviour()
+      // end to end, into both employee_facts.behaviours and related_tasks.
+      it('last_ticket: the real most recent ticket flows through to both employee_facts.behaviours and related_tasks, keyed by real type', async () => {
+        mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, module: 'reese' });
+        mockAgentFindAll.mockResolvedValue([
+          { id: 'sweep-row', agent_name: 'ReeseAutonomousOutreachSweep', enabled: true },
+        ]);
+        mockTicketFindAll.mockResolvedValue([
+          { id: 'support-1', ticket_number: 5, title: 'Older support', status: 'in_progress', type: 'student_support', updated_at: new Date('2026-09-01T00:00:00Z') },
+          { id: 'support-2', ticket_number: 6, title: 'Newer support', status: 'in_progress', type: 'student_support', updated_at: new Date('2026-09-10T00:00:00Z') },
+          { id: 'outreach-1', ticket_number: 7, title: 'Outreach signal', status: 'todo', type: 'reese_autonomous_outreach', updated_at: new Date('2026-09-05T00:00:00Z') },
+        ]);
+
+        const result = await getAgentDetail('agent-1');
+        const byKey = Object.fromEntries(result!.employee_facts!.behaviours.map((b) => [b.key, b.last_ticket]));
+
+        expect(byKey.reactive_dm_reply).toEqual({ id: 'support-2', ticket_number: 6, title: 'Newer support', at: new Date('2026-09-10T00:00:00Z') });
+        expect(byKey.autonomous_outreach_sweep).toEqual({ id: 'outreach-1', ticket_number: 7, title: 'Outreach signal', at: new Date('2026-09-05T00:00:00Z') });
+        expect(byKey.welcome_dms).toBeNull();
+
+        const sweepTask = result!.related_tasks.find((t) => t.agent_name === 'ReeseAutonomousOutreachSweep');
+        expect(sweepTask!.last_ticket).toEqual({ id: 'outreach-1', ticket_number: 7, title: 'Outreach signal', at: new Date('2026-09-05T00:00:00Z') });
+      });
+
+      // Phase 1 workspace mission, R11 (2026-09-18) — "Show whether each
+      // action is model-selected, rule-triggered, or human-directed. Show
+      // callable, configured, authorized, enabled, and healthy as distinct
+      // facts."
+      it('trigger_mode and status facts: real per-behaviour classification, and healthy is honestly null for non-cron-tracked behaviours', async () => {
+        mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, module: 'reese' });
+        mockAgentFindAll.mockResolvedValue([
+          { id: 'sweep-row', agent_name: 'ReeseAutonomousOutreachSweep', enabled: true, run_count: 20, error_count: 0 },
+          { id: 'heartbeat-row', agent_name: 'ReesePresenceHeartbeat', enabled: true, run_count: 500, error_count: 4 },
+        ]);
+
+        const result = await getAgentDetail('agent-1');
+        const byKey = Object.fromEntries(result!.employee_facts!.behaviours.map((b) => [b.key, b]));
+
+        expect(byKey.reactive_dm_reply.trigger_mode).toBe('model_selected');
+        expect(byKey.autonomous_outreach_sweep.trigger_mode).toBe('rule_triggered');
+        expect(byKey.autonomous_outreach_sweep.status.healthy).toBe(true);
+        expect(byKey.presence_heartbeat.status.healthy).toBe(false);
+        // reactive_dm_reply has no per-behaviour run tracking -- honest null,
+        // never a fabricated true/false.
+        expect(byKey.reactive_dm_reply.status.healthy).toBeNull();
+        expect(byKey.reactive_dm_reply.status.callable).toBe(true);
       });
     });
   });

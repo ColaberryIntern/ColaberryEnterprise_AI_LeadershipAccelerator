@@ -12,6 +12,17 @@ export interface AgentDetailIdentity {
   is_ai_operated: boolean;
 }
 
+/** R9 — the real most-recent ticket a behaviour or scheduled task produced
+ * or closed, Reese-only (`null` for every other agent). See
+ * reeseBehaviourLastTicket.ts's header for exactly which real ticket type
+ * backs each behaviour. */
+export interface AgentDetailLastTicketRef {
+  id: string;
+  ticket_number: number | null;
+  title: string;
+  at: string;
+}
+
 export interface AgentDetailTicket {
   id: string;
   ticket_number: number | null;
@@ -54,6 +65,9 @@ export interface AgentDetailRelatedTask {
   last_run_at: string | null;
   run_count: number;
   error_count: number;
+  /** R9 — Reese-only; `null` for every other agent and for a cron behaviour
+   * that has never produced a ticket. */
+  last_ticket: AgentDetailLastTicketRef | null;
 }
 
 /** AI Employee Consolidation Program (2026-09-15/16) — "Capabilities &
@@ -255,6 +269,23 @@ export interface AgentDetailEmployeeFactsBehaviour {
   /** The matching "Scheduled work" row's agent_name, for a same-page link —
    * `null` for the 3 behaviours controlled on this card directly. */
   scheduled_work_ref: string | null;
+  /** R9 — the real most-recent ticket this behaviour produced or closed;
+   * `null` for a behaviour that structurally never produces one or
+   * genuinely has none yet. */
+  last_ticket: AgentDetailLastTicketRef | null;
+  /** Phase 1 workspace mission, R11 — whether this behaviour's execution is
+   * decided by the model, a fixed rule, or a human. */
+  trigger_mode: 'model_selected' | 'rule_triggered' | 'human_directed';
+  /** Phase 1 workspace mission, R11 — callable/configured/authorized/enabled/
+   * healthy as distinct facts, instead of collapsing them into `enabled`
+   * above. `healthy` is `null` when no per-behaviour run signal exists. */
+  status: {
+    callable: boolean;
+    configured: boolean;
+    authorized: boolean;
+    enabled: boolean;
+    healthy: boolean | null;
+  };
 }
 
 export interface AgentDetailEmployeeFacts {

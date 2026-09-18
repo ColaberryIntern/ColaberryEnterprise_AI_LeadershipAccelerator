@@ -112,6 +112,7 @@ import { ensureTicketIndexesSchema } from './db/ensureTicketIndexesSchema';
 import { ensureSessionReminderSchema } from './db/ensureSessionReminderSchema';
 import { ensureEnrollmentNotificationSchema } from './db/ensureEnrollmentNotificationSchema';
 import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
+import { ensureAgentWorkLifecycleFieldsSchema } from './db/ensureAgentWorkLifecycleFieldsSchema';
 import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
 import { ensureOrgAccountSchema } from './db/ensureOrgAccountSchema';
 import { ensureMultiTenantSchema } from './db/ensureMultiTenantSchema';
@@ -2511,6 +2512,10 @@ async function start(): Promise<void> {
   // + FK from M1's pre-existing work_ledger_events.work_unit_id (idempotent DDL,
   // additive only).
   await ensureWorkGraphSchema();
+  // Reese Agentic Employee & Manager Workspace, Phase 1, R12 — 3 new nullable/
+  // defaulted columns on ticket_work_units (plan_version/next_wakeup_at/
+  // attempt_count), schema-only, nothing reads or writes them yet.
+  await ensureAgentWorkLifecycleFieldsSchema();
   // ProofDesk Governance — Milestone 4 (Governance Enforcement, SHADOW MODE ONLY):
   // approval_requests table + FK from M1's pre-existing
   // work_ledger_events.authorization_decision_id (idempotent DDL, additive only).

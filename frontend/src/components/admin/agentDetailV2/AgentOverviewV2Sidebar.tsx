@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { AgentDetail, ReeseBehaviourKey, setReeseBehaviourSwitch } from '../../../services/agentDetailApi';
 import { AgentRoleCharter, getAgentRoleCharter, saveAgentRoleCharter, AgentRoleCharterInput } from '../../../services/agentRoleCharterApi';
 import { timeAgo } from '../shell/trust';
+import { scheduledWorkColors, toolColors } from './agentDetailV2Correlation';
 
 // Reese Product Phase 1 follow-up (2026-09-18) — Ali, live: "reactive_dm_reply
 // and health_assessment share Reese's own ai_agents.enabled column, a real
@@ -13,6 +14,18 @@ function sharedSwitchNote(key: ReeseBehaviourKey): string | null {
   if (key === 'health_assessment') return "Shares Reese's own on/off switch with Reactive DM reply.";
   return null;
 }
+
+// Phase 1 workspace mission, R11 (2026-09-18) — Ali's new mission doc: "Show
+// whether each action is model-selected, rule-triggered, or human-directed."
+const TRIGGER_MODE_LABEL: Record<string, string> = {
+  model_selected: 'Model-selected',
+  rule_triggered: 'Rule-triggered',
+  human_directed: 'Human-directed',
+};
+
+const STATUS_FACT_LABEL: Record<string, string> = {
+  callable: 'Callable', configured: 'Configured', authorized: 'Authorized', enabled: 'Enabled', healthy: 'Healthy',
+};
 
 // Agent Detail V2, sidebar (2026-09-11) — Identity, Role Charter, Reports to
 // (chain), Persona/prompt. The mockup Ali pasted didn't include Role
@@ -48,6 +61,8 @@ interface Props {
 
 export default function AgentOverviewV2Sidebar({ detail, agentId, agentDisplayName }: Props) {
   const { identity, agent, reports_to, persona_version_history, employee_facts } = detail;
+  const workColor = scheduledWorkColors(detail);
+  const toolColor = toolColors(detail);
 
   const [charter, setCharter] = useState<AgentRoleCharter | null | undefined>(undefined);
   const [charterLoadError, setCharterLoadError] = useState<string | null>(null);
@@ -269,7 +284,10 @@ export default function AgentOverviewV2Sidebar({ detail, agentId, agentDisplayNa
                 return (
                   <div key={b.key} style={{ borderBottom: '1px solid var(--adv2-rule-2)', paddingBottom: 8 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 13.5, fontWeight: 500 }}>{b.name}</span>
+                      <span style={{ fontSize: 13.5, fontWeight: 500 }}>
+                        {b.scheduled_work_ref && <span className="adv2-dot" style={{ background: workColor[b.scheduled_work_ref] }} />}
+                        {b.name}
+                      </span>
                       <button
                         className={`adv2-pill ${displayEnabled ? 'adv2-trust' : 'adv2-bad'}`}
                         style={{ border: 0, cursor: isSaving ? 'default' : 'pointer', minWidth: 68, textAlign: 'center' }}
@@ -281,13 +299,40 @@ export default function AgentOverviewV2Sidebar({ detail, agentId, agentDisplayNa
                       </button>
                     </div>
                     {(b.tools.length > 0 || b.scheduled_work_ref) && (
-                      <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--adv2-ink-3)', display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                        {b.tools.length > 0 && <span className="adv2-mono">uses: {b.tools.join(', ')}</span>}
+                      <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--adv2-ink-3)', display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                        {b.tools.length > 0 && (
+                          <span className="adv2-mono">
+                            uses:{' '}
+                            {b.tools.map((t, i) => (
+                              <React.Fragment key={t}>
+                                {i > 0 && ', '}
+                                <span className="adv2-dot" style={{ background: toolColor[t], width: 6, height: 6 }} />{t}
+                              </React.Fragment>
+                            ))}
+                          </span>
+                        )}
                         {b.scheduled_work_ref && (
                           <a className="adv2-link" href={`#task-${b.scheduled_work_ref}`}>↓ Scheduled work</a>
                         )}
                       </div>
                     )}
+                    <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--adv2-ink-3)' }}>
+                      Last ticket:{' '}
+                      {b.last_ticket ? (
+                        <a className="adv2-link" href={`/admin/tickets?open=${b.last_ticket.id}`} target="_blank" rel="noopener noreferrer">
+                          {b.last_ticket.ticket_number ? `#${b.last_ticket.ticket_number}` : b.last_ticket.title} · {timeAgo(b.last_ticket.at)}
+                        </a>
+                      ) : 'None'}
+                    </div>
+                    <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--adv2-ink-3)', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                      <span className="adv2-pill adv2-neutral">{TRIGGER_MODE_LABEL[b.trigger_mode]}</span>
+                      {(Object.keys(STATUS_FACT_LABEL) as Array<keyof typeof STATUS_FACT_LABEL>).map((factKey) => {
+                        const value = b.status[factKey as keyof typeof b.status];
+                        const tone = value === null ? 'adv2-neutral' : value ? 'adv2-trust' : 'adv2-bad';
+                        const text = value === null ? `${STATUS_FACT_LABEL[factKey]}: —` : `${STATUS_FACT_LABEL[factKey]}: ${value ? 'yes' : 'no'}`;
+                        return <span key={factKey} className={`adv2-pill ${tone}`} style={{ fontSize: 10.5 }}>{text}</span>;
+                      })}
+                    </div>
                     {note && <p className="adv2-muted" style={{ margin: '4px 0 0', fontSize: 11.5 }}>{note}</p>}
                     {error && <p style={{ margin: '4px 0 0', fontSize: 11.5, color: 'var(--adv2-bad)' }}>{error}</p>}
                   </div>
