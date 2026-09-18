@@ -5,6 +5,7 @@ import { LEVEL_PILL_CLASS } from './AgentDetailV2Header';
 import { timeAgo } from '../shell/trust';
 import { getTicketTypeLabel } from '../../../utils/ticketTypeMeta';
 import AgentOverviewV2Tickets from './AgentOverviewV2Tickets';
+import { scheduledWorkColors, toolColors, toolLastUsed } from './agentDetailV2Correlation';
 
 // Agent Detail V2, main column (2026-09-11) — Ali: "same content just a
 // different view." Every established honest phrase from the pre-redesign
@@ -38,6 +39,9 @@ interface Props {
 export default function AgentOverviewV2MainColumn({ detail }: Props) {
   const { agent, trust_contract, cost_summary, authorization_summary, capabilities, related_tasks, owned_behaviors, tickets, ticket_breakdown } = detail;
   const currentIndex = agent.autonomy_level ? AUTONOMY_LEVELS.indexOf(agent.autonomy_level) : -1;
+  const toolColor = toolColors(detail);
+  const toolLastUsedAt = toolLastUsed(detail);
+  const workColor = scheduledWorkColors(detail);
 
   const shadowNote = authorization_summary.total === 0
     ? 'No authorization checks recorded for this agent yet — nothing to evaluate a promotion on.'
@@ -156,11 +160,19 @@ export default function AgentOverviewV2MainColumn({ detail }: Props) {
           <p className="adv2-muted" style={{ padding: '0 18px 16px' }}>No tools recorded.</p>
         ) : capabilities.by_tool.map((tool) => (
           <div className="adv2-tool" key={tool.tool}>
-            <div><code>{tool.tool}</code>{!tool.documented && <span className="adv2-pill adv2-warn" style={{ marginLeft: 8 }}>undocumented</span>}</div>
-            <div className="adv2-what">
-              {tool.documented ? (
-                <>{tool.reads.length > 0 && `Reads: ${tool.reads.join(', ')}. `}{tool.produces.length > 0 && `Produces: ${tool.produces.join(', ')}.`}</>
-              ) : <span className="adv2-gap">No documented reads/produces yet for this tool</span>}
+            <div>
+              <span className="adv2-dot" style={{ background: toolColor[tool.tool] }} />
+              <code>{tool.tool}</code>{!tool.documented && <span className="adv2-pill adv2-warn" style={{ marginLeft: 8 }}>undocumented</span>}
+            </div>
+            <div>
+              <div className="adv2-what">
+                {tool.documented ? (
+                  <>{tool.reads.length > 0 && `Reads: ${tool.reads.join(', ')}. `}{tool.produces.length > 0 && `Produces: ${tool.produces.join(', ')}.`}</>
+                ) : <span className="adv2-gap">No documented reads/produces yet for this tool</span>}
+              </div>
+              <div className="adv2-muted" style={{ fontSize: 12, marginTop: 4 }}>
+                Last used: {toolLastUsedAt[tool.tool] ? timeAgo(toolLastUsedAt[tool.tool] as string) : 'not recorded yet'}
+              </div>
             </div>
           </div>
         ))}
@@ -178,11 +190,22 @@ export default function AgentOverviewV2MainColumn({ detail }: Props) {
           // visual change for any agent.
           <div className="adv2-task" id={`task-${task.agent_name}`} key={task.id}>
             <div>
-              <h3>{task.agent_name} <span className={`adv2-pill ${task.enabled ? 'adv2-trust' : 'adv2-neutral'}`}>{task.enabled ? 'Enabled' : 'Disabled'}</span></h3>
+              <h3>
+                <span className="adv2-dot" style={{ background: workColor[task.agent_name] }} />
+                {task.agent_name} <span className={`adv2-pill ${task.enabled ? 'adv2-trust' : 'adv2-neutral'}`}>{task.enabled ? 'Enabled' : 'Disabled'}</span>
+              </h3>
               {task.description && <p>{task.description}</p>}
               <div className="adv2-meta">
                 {task.schedule && <div><span>Schedule</span> <code>{task.schedule}</code></div>}
                 <div><span>Last run</span> {task.last_run_at ? timeAgo(task.last_run_at) : 'Never'}</div>
+                <div>
+                  <span>Last ticket</span>{' '}
+                  {task.last_ticket ? (
+                    <a className="adv2-link" href={`/admin/tickets?open=${task.last_ticket.id}`} target="_blank" rel="noopener noreferrer">
+                      {task.last_ticket.ticket_number ? `#${task.last_ticket.ticket_number}` : task.last_ticket.title} · {timeAgo(task.last_ticket.at)}
+                    </a>
+                  ) : 'None'}
+                </div>
               </div>
             </div>
             <div className="adv2-side"><div className="adv2-v">{task.run_count} / {task.error_count}</div>runs / errors</div>

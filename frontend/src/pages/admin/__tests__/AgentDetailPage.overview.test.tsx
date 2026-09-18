@@ -254,6 +254,36 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
       expect(container.querySelector('a[href="#task-ReeseAutonomousOutreachSweep"]')).not.toBeNull();
     });
 
+    // Reese Product Phase 1 follow-up (2026-09-18) — Ali, live: "I'd also
+    // like to see a link to the last ticket... the ticket should open in a
+    // new tab."
+    it('links a behaviour\'s real last ticket, opening in a new tab, and shows an honest "None" when there is none', async () => {
+      getAgentDetail.mockResolvedValue({
+        ...EMPLOYEE_FACTS_DETAIL,
+        related_tasks: [{
+          id: 'sweep-id', agent_name: 'ReeseAutonomousOutreachSweep', description: null,
+          trigger_type: 'cron', schedule: '0 15 * * *', enabled: true, status: 'idle',
+          last_run_at: new Date(Date.now() - 3600_000).toISOString(), run_count: 1, error_count: 0,
+          last_ticket: { id: 'ticket-7', ticket_number: 7, title: 'Outreach', at: new Date(Date.now() - 3600_000).toISOString() },
+        }],
+        employee_facts: {
+          ...EMPLOYEE_FACTS_DETAIL.employee_facts,
+          behaviours: [
+            { ...EMPLOYEE_FACTS_DETAIL.employee_facts.behaviours[0], last_ticket: null },
+            { ...EMPLOYEE_FACTS_DETAIL.employee_facts.behaviours[2], last_ticket: { id: 'ticket-7', ticket_number: 7, title: 'Outreach', at: new Date(Date.now() - 3600_000).toISOString() } },
+          ],
+        },
+      });
+      await renderAgentPage();
+      await openOverviewTab();
+
+      const link = container.querySelector('a[href="/admin/tickets?open=ticket-7"]');
+      expect(link).not.toBeNull();
+      expect(link?.getAttribute('target')).toBe('_blank');
+      expect(link?.textContent).toContain('#7');
+      expect(container.textContent).toContain('Last ticket: None');
+    });
+
     it('discloses the shared-switch coupling on both rows', async () => {
       getAgentDetail.mockResolvedValue(EMPLOYEE_FACTS_DETAIL);
       await renderAgentPage();
