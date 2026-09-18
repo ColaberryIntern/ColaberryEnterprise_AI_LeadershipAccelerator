@@ -31,6 +31,8 @@ jest.mock('../../../modules/tenancy/adminScopeBridge', () => ({
 }));
 jest.mock('../../../services/campaignLinkService', () => ({ getChannelROIAggregation: jest.fn(), flagUnregisteredTraffic: jest.fn() }));
 jest.mock('../../../services/marketing/needsAttentionService', () => ({ getNeedsAttentionQueue: jest.fn() }));
+// The overview route (main, 2026-09-17) is registered in the same file and would boot Sequelize.
+jest.mock('../../../services/marketing/overviewSummary', () => ({ getMarketingOverview: jest.fn() }));
 
 import marketingRoutes from '../marketingRoutes';
 
