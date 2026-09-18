@@ -46,7 +46,8 @@ const IntelligenceDiscoveryPage = lazy(() => import('../pages/admin/intelligence
 const IntelligenceSettingsPage = lazy(() => import('../pages/admin/intelligence/IntelligenceSettingsPage'));
 const MissedOpportunitiesPage = lazy(() => import('../pages/admin/MissedOpportunitiesPage'));
 const AgentOrphansPage = lazy(() => import('../pages/admin/AgentOrphansPage'));
-const AdminMarketingDashboardPage = lazy(() => import('../pages/admin/marketing/AdminMarketingDashboardPage'));
+const AdminMarketingOverviewPage = lazy(() => import('../pages/admin/marketing/AdminMarketingOverviewPage'));
+const AdminMarketingPerformancePage = lazy(() => import('../pages/admin/marketing/AdminMarketingPerformancePage'));
 const AdminBrandsPage = lazy(() => import('../pages/admin/marketing/AdminBrandsPage'));
 const AdminMarketingCalendarPage = lazy(() => import('../pages/admin/marketing/AdminMarketingCalendarPage'));
 const AdminContentComposerPage = lazy(() => import('../pages/admin/marketing/composer/AdminContentComposerPage'));
@@ -208,7 +209,8 @@ const adminRoutes = (
         <Route path="/admin/intelligence/settings" element={<IntelligenceSettingsPage />} />
         <Route path="/admin/agent-orphans" element={<AgentOrphansPage />} />
         <Route path="/admin/communications" element={<AdminCommunicationsPage />} />
-        <Route path="/admin/marketing" element={<AdminMarketingDashboardPage />} />
+        <Route path="/admin/marketing" element={<AdminMarketingOverviewPage />} />
+        <Route path="/admin/marketing/performance" element={<AdminMarketingPerformancePage />} />
         {/* Brands is a marketing surface and now lives under the marketing prefix with its
             siblings. `/admin/brands` stays as a redirect rather than a deletion: it is in
             bookmarks, it is where the LinkedIn OAuth callback returns the browser, and the

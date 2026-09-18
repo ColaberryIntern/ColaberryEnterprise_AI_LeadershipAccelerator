@@ -126,7 +126,10 @@ const CANDIDATES: readonly Candidate[] = [
     key: 'broken_links',
     metricKey: 'marketing.broken_tracked_links',
     severity: 'action',
-    href: '/admin/marketing',
+    // The link registry. Until 2026-09-18 this was the bare '/admin/marketing', which was right
+    // while that address was the analytics dashboard. It is now the Overview - the page this
+    // queue renders ON - so the bare path became a link to itself.
+    href: '/admin/marketing/performance?tab=registry',
     value: (c) => c.brokenLinks,
     raise: (v) => v > 0,
     title: (v) => `${v} active tracking link${v === 1 ? '' : 's'} point${v === 1 ? 's' : ''} at a destination that is no longer allowed`,
@@ -136,8 +139,9 @@ const CANDIDATES: readonly Candidate[] = [
     key: 'unmapped_spend',
     metricKey: 'marketing.ad_spend',
     severity: 'warning',
-    // No ads workspace exists yet; the dashboard is the truthful destination until one does.
-    href: '/admin/marketing',
+    // No ads workspace exists yet; revenue intelligence is the truthful destination until one
+    // does. Not the bare '/admin/marketing' - see broken_links above.
+    href: '/admin/marketing/performance?tab=revenue',
     value: (c) => c.unmappedSpendItems,
     raise: (v) => v > 0,
     title: (v) => `${v} spend line${v === 1 ? '' : 's'} not mapped to a campaign`,
@@ -147,8 +151,9 @@ const CANDIDATES: readonly Candidate[] = [
     key: 'unattributed_traffic',
     metricKey: 'growth.source_attribution',
     severity: 'warning',
-    // Attribution lives on each campaign's tab; no cross-campaign page exists yet.
-    href: '/admin/marketing',
+    // Attribution lives in the per-campaign performance table on the revenue tab; no
+    // cross-campaign attribution page exists yet.
+    href: '/admin/marketing/performance?tab=revenue',
     value: (c) => c.unattributedVisitorShare,
     raise: (v) => v >= UNATTRIBUTED_SHARE_THRESHOLD,
     title: (v) => `${Math.round(v * 100)}% of visitors have no attributed source`,

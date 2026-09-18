@@ -45,6 +45,7 @@ const SPEC_ROUTES = [
   '/admin/marketing/connectors',
   '/admin/marketing/settings',
   '/admin/marketing/brands',
+  '/admin/marketing/performance',
 ];
 
 describe('every marketing route resolves to a section', () => {
@@ -123,6 +124,7 @@ describe('the sidebar advertises only what exists', () => {
       '/admin/marketing/calendar',
       '/admin/marketing/publishing',
       '/admin/marketing/brands',
+      '/admin/marketing/performance',
     ];
     const advertised = marketingLinks.map((l) => l.path);
     built.forEach((p) => expect(advertised).toContain(p));
