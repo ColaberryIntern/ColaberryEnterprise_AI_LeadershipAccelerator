@@ -170,4 +170,36 @@ describe('PUT /api/admin/agents/:id/charter', () => {
     const [, calledInput] = mockUpsertRoleCharter.mock.calls[0];
     expect(Object.keys(calledInput).sort()).toEqual(['kpis', 'mission', 'responsibilities', 'roleTitle']);
   });
+
+  it('Product Phase 1, R4: a manager in the reporting chain (not a platform admin) is 403d for trying to set an authority list', async () => {
+    mockOrgMemberFindOne.mockResolvedValue({ id: 'org-member-1' });
+    mockIsAgentInHumanDownstream.mockResolvedValue(true);
+
+    const res = await request(buildApp())
+      .put('/api/admin/agents/agent-1/charter')
+      .set('Authorization', `Bearer ${managerToken()}`)
+      .send({ ...validBody, authorityForbidden: ['Promise a refund'] });
+
+    expect(res.status).toBe(403);
+    expect(mockUpsertRoleCharter).not.toHaveBeenCalled();
+  });
+
+  it('Product Phase 1, R4: a platform super_admin may set version/boundaries/authority/escalation', async () => {
+    mockUpsertRoleCharter.mockResolvedValue({
+      agentId: 'agent-1',
+      charter: { ...validBody, updatedByEmail: 'ali@colaberry.com', updatedAt: new Date(), version: 2, boundaries: [], authorityAutonomous: [], authorityApprovalRequired: [], authorityForbidden: ['Promise a refund'], escalationPolicy: null, effectiveAt: new Date() },
+    });
+
+    const res = await request(buildApp())
+      .put('/api/admin/agents/agent-1/charter')
+      .set('Authorization', `Bearer ${superAdminToken()}`)
+      .send({ ...validBody, version: 2, authorityForbidden: ['Promise a refund'] });
+
+    expect(res.status).toBe(200);
+    expect(mockUpsertRoleCharter).toHaveBeenCalledWith(
+      'agent-1',
+      expect.objectContaining({ version: 2, authorityForbidden: ['Promise a refund'] }),
+      'ali@colaberry.com',
+    );
+  });
 });

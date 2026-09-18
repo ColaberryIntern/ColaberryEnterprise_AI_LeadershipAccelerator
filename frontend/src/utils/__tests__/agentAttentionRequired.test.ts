@@ -47,6 +47,7 @@ function makeDetail(overrides: Partial<AgentDetail> = {}): AgentDetail {
     },
     goals: [],
     goals_overall: 0,
+    employee_facts: null,
     ...overrides,
   };
 }

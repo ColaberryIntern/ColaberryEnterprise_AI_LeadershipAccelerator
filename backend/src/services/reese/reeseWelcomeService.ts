@@ -58,7 +58,7 @@
 import ReeseWelcome, { type ReeseWelcomeKind } from '../../models/ReeseWelcome';
 import Enrollment from '../../models/Enrollment';
 import Cohort from '../../models/Cohort';
-import { getReeseEnrollmentId } from './reeseIdentitySeed';
+import { getReeseEnrollmentId, isReeseEnabled } from './reeseIdentitySeed';
 
 export type WelcomeOutcome =
   | 'sent'
@@ -252,7 +252,11 @@ async function sendOnce(
  */
 export async function maybeSendWelcomes(enrollmentId: string): Promise<WelcomeResult[]> {
   try {
-    if (!enabled()) return [{ kind: 'account', outcome: 'disabled' }];
+    // Product Phase 1, R2 — two independent kill switches, either one stops
+    // welcomes: the env flag above (unchanged) and, newly, Reese's own
+    // AiAgent.enabled row (previously read by nothing on this path — an
+    // admin disabling Reese in Admin > Agents did not stop her intros).
+    if (!enabled() || !(await isReeseEnabled())) return [{ kind: 'account', outcome: 'disabled' }];
 
     // Reese must never introduce Reese to Reese. Cheap identity check first,
     // before any write — the same guard reeseReplyService relies on to make a

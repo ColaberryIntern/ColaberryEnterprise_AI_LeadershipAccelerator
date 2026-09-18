@@ -197,6 +197,7 @@ const DETAIL: AgentDetail = {
   },
   goals: [],
   goals_overall: 0,
+  employee_facts: null,
 };
 
 let container: HTMLDivElement;
