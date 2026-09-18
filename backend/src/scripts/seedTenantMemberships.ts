@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import { AdminUser, Brand, PlatformIdentityLink, Tenant, TenantMembership } from '../models';
+import { AdminUser, Brand, PlatformIdentity, PlatformIdentityLink, Tenant, TenantMembership } from '../models';
 import { ensurePlatformIdentity, grantTenantMembership, linkIdentity } from '../modules/identity/platformIdentityService';
 import {
   buildMembershipPlan,
@@ -32,7 +32,11 @@ import {
  * on identity, tenant, brand, role). None takes a transaction, so a run that
  * fails midway is completed by running it again. Platform super-admins are
  * granted FIRST, so a run that dies after the first row never leaves the
- * operator locked out of the tool's own consequences.
+ * operator locked out of the tool's own consequences - and a super-admin whose
+ * admin row is ALREADY linked to a different identity refuses the write outright,
+ * because their memberships would be skipped and the first row would close the
+ * ramp with the operator behind it. Existing links are read at plan time, so the
+ * dry run names every conflict (by admin id) before anything is written.
  *
  * Nothing in the loop runs this against production; that run is Ali's.
  *
@@ -89,6 +93,18 @@ export function assertLockoutAcknowledged(args: Args, plan: MembershipPlan): voi
   }
 }
 
+/** A platform super-admin already linked to a DIFFERENT identity would be skipped - and the first row would close the ramp with the operator behind it. */
+export function assertNoSuperAdminConflict(plan: MembershipPlan): void {
+  const conflicted = new Set(plan.link_conflict_admin_ids);
+  const supers = plan.people.filter((p) => conflicted.has(p.admin_id) && p.memberships.some((m) => m.role === 'platform_super_admin'));
+  if (supers.length) {
+    throw new Error(
+      `refusing to write: platform super-admin ${supers.map((p) => p.admin_id).join(', ')} is linked to a different identity, ` +
+        'so this write would grant them nothing and close the ramp with the operator behind it. Resolve the link by hand, then re-run.',
+    );
+  }
+}
+
 /* ── the reads ──────────────────────────────────────────────────────────────── */
 
 export async function loadWorld(): Promise<{
@@ -97,6 +113,7 @@ export async function loadWorld(): Promise<{
   brands: { id: string; slug: string; tenant_id: string }[];
   alreadyCoveredAdminIds: string[];
   membershipTableEmpty: boolean;
+  existingLinks: { admin_id: string; identity_email: string }[];
 }> {
   const [admins, tenants, brands, membershipCount, links, active] = await Promise.all([
     AdminUser.findAll({ attributes: ['id', 'email', 'is_ai_operated'], raw: true }),
@@ -106,16 +123,25 @@ export async function loadWorld(): Promise<{
     PlatformIdentityLink.findAll({ where: { link_type: 'admin_user' }, attributes: ['platform_identity_id', 'linked_entity_id'], raw: true }),
     TenantMembership.findAll({ where: { status: 'active' }, attributes: ['platform_identity_id'], raw: true }),
   ]);
+  const linkRows = links as unknown as { platform_identity_id: string; linked_entity_id: string }[];
   const identitiesWithAccess = new Set((active as unknown as { platform_identity_id: string }[]).map((m) => m.platform_identity_id));
-  const alreadyCoveredAdminIds = (links as unknown as { platform_identity_id: string; linked_entity_id: string }[])
+  const alreadyCoveredAdminIds = linkRows
     .filter((l) => identitiesWithAccess.has(l.platform_identity_id))
     .map((l) => String(l.linked_entity_id));
+  // The linked identities' emails, read only for the ids that are linked: a link to another address is a conflict.
+  const identityIds = [...new Set(linkRows.map((l) => l.platform_identity_id))];
+  const identities = identityIds.length
+    ? ((await PlatformIdentity.findAll({ where: { id: identityIds }, attributes: ['id', 'primary_email'], raw: true })) as unknown as { id: string; primary_email: string }[])
+    : [];
+  const emailById = new Map(identities.map((i) => [i.id, i.primary_email]));
+  const existingLinks = linkRows.map((l) => ({ admin_id: String(l.linked_entity_id), identity_email: emailById.get(l.platform_identity_id) ?? '' }));
   return {
     admins: (admins as unknown as { id: string; email: string; is_ai_operated: boolean | null }[]).map((a) => ({ id: String(a.id), email: a.email, is_ai_operated: Boolean(a.is_ai_operated) })),
     tenants: (tenants as unknown as { id: string; slug: string }[]).map((t) => ({ id: t.id, slug: t.slug })),
     brands: (brands as unknown as { id: string; slug: string; tenant_id: string }[]).map((b) => ({ id: b.id, slug: b.slug, tenant_id: b.tenant_id })),
     alreadyCoveredAdminIds,
     membershipTableEmpty: membershipCount === 0,
+    existingLinks,
   };
 }
 
@@ -179,6 +205,7 @@ export async function run(args: Args, out: (line: string) => void = (l) => conso
     return 0;
   }
   assertLockoutAcknowledged(args, plan);
+  assertNoSuperAdminConflict(plan);
   const r = await applyPlan(plan);
   out(`written: identities created=${r.identities_created} existing=${r.identities_existing}; links created=${r.links_created} existing=${r.links_existing} conflicts=${r.link_conflicts}; memberships created=${r.memberships_created} existing=${r.memberships_existing}`);
   if (r.link_conflicts) out(`${r.link_conflicts} admin(s) are linked to a different identity: their memberships were NOT granted; resolve the link by hand.`);

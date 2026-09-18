@@ -67,6 +67,21 @@ describe('the plan', () => {
     expect(p.closes_ramp).toBe(false);
     expect(plan().closes_ramp).toBe(true);
   });
+
+  it('an admin already linked to a DIFFERENT identity is a plan-time conflict - listed by id and locked out unless already covered; the same address in any case is no conflict', () => {
+    const links = [
+      { admin_id: 'u-2', identity_email: 'Someone.Else@colaberry.com' },
+      { admin_id: 'u-1', identity_email: ' ALI@Colaberry.com ' },
+    ];
+    const p = plan({ existingLinks: links });
+    expect(p.link_conflict_admin_ids).toEqual(['u-2']);
+    expect(p.counts.lockouts).toBe(5);
+    expect(p.lockout_admin_ids).toEqual(['u-2', 'u-4', 'u-5', 'u-6', 'u-7']);
+    // The roster's arithmetic is unchanged - the LINK CONFLICT line says which of it will not be granted.
+    expect(p.counts.memberships).toBe(4);
+    expect(plan({ existingLinks: links, alreadyCoveredAdminIds: ['u-2'], membershipTableEmpty: false }).counts.lockouts).toBe(4);
+    expect(plan().link_conflict_admin_ids).toEqual([]);
+  });
 });
 
 describe('refused before any plan', () => {
@@ -123,6 +138,11 @@ describe('the rendering', () => {
     expect(text).toContain('tenant_memberships is EMPTY now: this write closes the migration ramp for EVERY admin');
     expect(text).not.toContain('@');
     expect(text.toLowerCase()).not.toContain('colaberry.com');
+    expect(text).not.toContain('LINK CONFLICT');
+    const conflicted = renderMembershipPlan(plan({ existingLinks: [{ admin_id: 'u-2', identity_email: 'someone.else@colaberry.com' }] })).join('\n');
+    expect(conflicted).toContain('LINK CONFLICT: 1 admin(s) already linked to a different identity - the link stays, and their memberships above will NOT be granted: u-2');
+    expect(conflicted).toContain('LOCK-OUT: 5 admin(s)');
+    expect(conflicted).not.toContain('@');
   });
 
   it('the title follows the mode, and a closed ramp is stated as such', () => {

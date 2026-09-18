@@ -52,6 +52,12 @@ export interface PlanBrand {
   tenant_id: string;
 }
 
+/** An `admin_user` link that already exists, with the linked identity's email. */
+export interface ExistingAdminLink {
+  admin_id: string;
+  identity_email: string;
+}
+
 export interface PlannedPerson {
   admin_id: string;
   /** Normalised; held for the write only and never rendered. */
@@ -73,6 +79,8 @@ export interface MembershipPlan {
   };
   /** Admin ids (never emails) the roster does not cover - each loses access at the first write. */
   lockout_admin_ids: string[];
+  /** Admin ids already linked to a DIFFERENT identity: the service keeps that link, so their memberships are not granted. */
+  link_conflict_admin_ids: string[];
 }
 
 export class RosterValidationError extends Error {
@@ -109,6 +117,8 @@ export interface BuildMembershipPlanArgs {
   alreadyCoveredAdminIds?: readonly string[];
   /** Is `tenant_memberships` empty right now? */
   membershipTableEmpty: boolean;
+  /** The `admin_user` links that already exist - a link to another address is a conflict the write will not resolve. */
+  existingLinks?: readonly ExistingAdminLink[];
 }
 
 export function buildMembershipPlan(args: BuildMembershipPlanArgs): MembershipPlan {
@@ -155,9 +165,16 @@ export function buildMembershipPlan(args: BuildMembershipPlanArgs): MembershipPl
   }
   const people = [...byAdmin.values()];
 
-  // 3. The lock-out list: every admin with no membership AFTER this write - not in the roster and not
-  //    already covered by an earlier seed.
-  const covered = new Set([...people.map((p) => p.admin_id), ...(args.alreadyCoveredAdminIds ?? [])]);
+  // 3. Plan-time link conflicts: an admin already linked to a different identity keeps that link (the
+  //    service never reassigns), so the roster's memberships for them would grant nothing they can use.
+  const linkedEmail = new Map((args.existingLinks ?? []).map((l) => [l.admin_id, normalizeEmail(l.identity_email)]));
+  const conflicted = people.filter((p) => linkedEmail.has(p.admin_id) && linkedEmail.get(p.admin_id) !== p.email);
+  const conflictIds = new Set(conflicted.map((p) => p.admin_id));
+
+  // 4. The lock-out list: every admin with no membership AFTER this write - not in the roster (or in it
+  //    but conflicted) and not already covered by an earlier seed.
+  const granted = people.filter((p) => !conflictIds.has(p.admin_id)).map((p) => p.admin_id);
+  const covered = new Set([...granted, ...(args.alreadyCoveredAdminIds ?? [])]);
   const locked = args.admins.filter((a) => !covered.has(a.id));
   return {
     people,
@@ -171,6 +188,7 @@ export function buildMembershipPlan(args: BuildMembershipPlanArgs): MembershipPl
       lockouts_ai_operated: locked.filter((a) => a.is_ai_operated).length,
     },
     lockout_admin_ids: locked.map((a) => a.id).sort(),
+    link_conflict_admin_ids: conflicted.map((p) => p.admin_id).sort(),
   };
 }
 
@@ -187,5 +205,8 @@ export function renderMembershipPlan(plan: MembershipPlan, mode: 'dry-run' | 'wr
       : '  tenant_memberships already has rows: the ramp is closed; this write changes access only for the roster',
     `  LOCK-OUT: ${c.lockouts} admin(s) will hold no membership after this write and are denied every tenant (${c.lockouts_human} human, ${c.lockouts_ai_operated} AI-operated)`,
     ...(plan.lockout_admin_ids.length ? [`  lock-out admin ids: ${plan.lockout_admin_ids.join(', ')}`] : []),
+    ...(plan.link_conflict_admin_ids.length
+      ? [`  LINK CONFLICT: ${plan.link_conflict_admin_ids.length} admin(s) already linked to a different identity - the link stays, and their memberships above will NOT be granted: ${plan.link_conflict_admin_ids.join(', ')}`]
+      : []),
   ];
 }

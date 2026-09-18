@@ -16,6 +16,7 @@ const m = {
   membershipCount: jest.fn(),
   membershipFindAll: jest.fn(),
   linkFindAll: jest.fn(),
+  identityFindAll: jest.fn(),
   ensurePlatformIdentity: jest.fn(),
   linkIdentity: jest.fn(),
   grantTenantMembership: jest.fn(),
@@ -26,6 +27,7 @@ jest.mock('../../models', () => ({
   Brand: { findAll: (...a: unknown[]) => m.brandFindAll(...a) },
   TenantMembership: { count: (...a: unknown[]) => m.membershipCount(...a), findAll: (...a: unknown[]) => m.membershipFindAll(...a) },
   PlatformIdentityLink: { findAll: (...a: unknown[]) => m.linkFindAll(...a) },
+  PlatformIdentity: { findAll: (...a: unknown[]) => m.identityFindAll(...a) },
 }));
 jest.mock('../../modules/identity/platformIdentityService', () => ({
   ensurePlatformIdentity: (...a: unknown[]) => m.ensurePlatformIdentity(...a),
@@ -64,6 +66,7 @@ function world(opts: { membershipCount?: number } = {}) {
   m.membershipCount.mockResolvedValue(opts.membershipCount ?? 0);
   m.membershipFindAll.mockResolvedValue([]);
   m.linkFindAll.mockResolvedValue([]);
+  m.identityFindAll.mockResolvedValue([]);
   const ids = new Map<string, string>();
   m.ensurePlatformIdentity.mockImplementation(async ({ email }: { email: string }) => {
     const created = !ids.has(email);
@@ -192,7 +195,7 @@ describe('the write', () => {
   });
 
   it('applyPlan on an empty plan calls nothing', async () => {
-    const r = await applyPlan({ people: [], closes_ramp: false, counts: { identities: 0, links: 0, memberships: 0, lockouts: 0, lockouts_human: 0, lockouts_ai_operated: 0 }, lockout_admin_ids: [] });
+    const r = await applyPlan({ people: [], closes_ramp: false, counts: { identities: 0, links: 0, memberships: 0, lockouts: 0, lockouts_human: 0, lockouts_ai_operated: 0 }, lockout_admin_ids: [], link_conflict_admin_ids: [] });
     expect(r.memberships_created).toBe(0);
     expect(m.ensurePlatformIdentity).not.toHaveBeenCalled();
   });
@@ -211,13 +214,50 @@ describe('the reads and the source', () => {
     expect(m.membershipFindAll).toHaveBeenCalledWith({ where: { status: 'active' }, attributes: ['platform_identity_id'], raw: true });
   });
 
+  it('a link to a DIFFERENT identity is a plan-time conflict: the identity emails are read only for the linked ids, the dry run names the admin id, and the lock-out count includes them', async () => {
+    await run(parseArgs(['--roster', 'r.json']), () => undefined, readRoster);
+    expect(m.identityFindAll).not.toHaveBeenCalled();
+    m.linkFindAll.mockResolvedValue([{ platform_identity_id: 'pid-z', linked_entity_id: 'u-2' }]);
+    m.identityFindAll.mockResolvedValue([{ id: 'pid-z', primary_email: 'someone.else@colaberry.com' }]);
+    const lines: string[] = [];
+    await run(parseArgs(['--roster', 'r.json']), (l) => lines.push(l), readRoster);
+    expect(m.identityFindAll).toHaveBeenCalledWith({ where: { id: ['pid-z'] }, attributes: ['id', 'primary_email'], raw: true });
+    const text = lines.join('\n');
+    expect(text).toContain('LINK CONFLICT: 1 admin(s) already linked to a different identity - the link stays, and their memberships above will NOT be granted: u-2');
+    expect(text).toContain('LOCK-OUT: 5 admin(s)');
+    expect(text).toContain('--acknowledge-lockout 5');
+    expect(text).not.toContain('@');
+  });
+
+  it('a platform super-admin linked to a DIFFERENT identity refuses the write before any service call, naming the id and never the address', async () => {
+    m.linkFindAll.mockResolvedValue([{ platform_identity_id: 'pid-z', linked_entity_id: 'u-1' }]);
+    m.identityFindAll.mockResolvedValue([{ id: 'pid-z', primary_email: 'other@colaberry.com' }]);
+    let err: Error | null = null;
+    try {
+      await run(parseArgs(['--roster', 'r.json', '--confirm-production', '--acknowledge-lockout', '5']), () => undefined, readRoster);
+    } catch (e) {
+      err = e as Error;
+    }
+    expect(err?.message).toMatch(/refusing to write: platform super-admin u-1 is linked to a different identity/);
+    expect(err?.message).not.toContain('@');
+    expect(m.ensurePlatformIdentity).not.toHaveBeenCalled();
+    expect(m.linkIdentity).not.toHaveBeenCalled();
+    expect(m.grantTenantMembership).not.toHaveBeenCalled();
+    // A conflicted NON-super-admin does not refuse: the write proceeds and the service reports the conflict.
+    m.linkFindAll.mockResolvedValue([{ platform_identity_id: 'pid-z', linked_entity_id: 'u-3' }]);
+    m.linkIdentity.mockImplementation(async ({ linkedEntityId }: { linkedEntityId: string }) => (linkedEntityId === 'u-3' ? { created: false, conflictWithIdentityId: 'pid-z' } : { created: true }));
+    const lines: string[] = [];
+    expect(await run(parseArgs(['--roster', 'r.json', '--confirm-production', '--acknowledge-lockout', '5']), (l) => lines.push(l), readRoster)).toBe(0);
+    expect(lines.join('\n')).toContain('conflicts=1');
+  });
+
   it('imports only the identity service\'s three functions, the models, fs and the planner - and writes through nothing else', () => {
     const imports = Array.from(code.matchAll(/from '([^']+)';/g)).map((x) => x[1]);
     expect(imports.sort()).toEqual(['../models', '../modules/identity/platformIdentityService', '../services/growthJourney/access/membershipPlan', 'fs']);
     expect(code).toContain('import { ensurePlatformIdentity, grantTenantMembership, linkIdentity } from ');
     expect(code).not.toMatch(/\.create\(|\.update\(|\.destroy\(|\.upsert\(|bulkCreate|sequelize\.query/);
     expect(code).not.toMatch(/emailService|mandrill|notify|sendNewLeadAlert|isGrowthJourneyCapabilityEnabled|growthJourneyEnabled/);
-    // An email is never printed: the only output of an admin is its id.
-    expect(code).not.toMatch(/out\([^)]*email/);
+    // An email is never printed - through the out() sink, the console or stdout: the only output of an admin is its id.
+    expect(code).not.toMatch(/(out|console\.\w+|stdout\.write)\([^)]*email/);
   });
 });
