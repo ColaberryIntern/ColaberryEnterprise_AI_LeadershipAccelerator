@@ -1387,6 +1387,34 @@
       "disposition": "human_approved",
       "rule": "human-vocabulary"
     },
+    "CaseStudyTaxonomy.deliveryContext": {
+      "authoring": "admin override at review: client_delivery | internal_platform | capability_demonstration",
+      "sourcePriority": "human override only — a model may never infer it",
+      "aiMayInfer": false,
+      "approvalRequired": true,
+      "indexHome": "Government chapter card label",
+      "detailHome": "—",
+      "publicBehaviour": "projected verbatim; a demonstration is labelled, never cited as past performance",
+      "emptyBehaviour": "null; record stays off the Government chapter (fail closed)",
+      "privacy": "public",
+      "test": "caseStudyGovTaxonomy.test.ts",
+      "disposition": "human_approved",
+      "rule": "authored"
+    },
+    "CaseStudyTaxonomy.govCapabilities": {
+      "authoring": "admin override at review, one of seven procurement categories",
+      "sourcePriority": "human override only — no sync or repo source",
+      "aiMayInfer": false,
+      "approvalRequired": true,
+      "indexHome": "Government chapter card chips",
+      "detailHome": "—",
+      "publicBehaviour": "projected as a canonical-order list; unknown members dropped",
+      "emptyBehaviour": "absent, never []; record stays off the Government chapter",
+      "privacy": "public",
+      "test": "caseStudyGovTaxonomy.test.ts",
+      "disposition": "human_approved",
+      "rule": "authored"
+    },
     "CaseStudyTaxonomy.industry": {
       "authoring": "admin narrative panel",
       "sourcePriority": "human override > repo sync",
@@ -2759,7 +2787,35 @@
       "disposition": "deterministic",
       "rule": "public-projection-mirror"
     },
+    "PublicCaseStudySummary.deliveryContext": {
+      "authoring": "not authored — computed by caseStudyPublicProjection.ts",
+      "sourcePriority": "projection of the approved snapshot",
+      "aiMayInfer": false,
+      "approvalRequired": false,
+      "indexHome": "index card",
+      "detailHome": "nested in detail",
+      "publicBehaviour": "always present",
+      "emptyBehaviour": "empty array or empty string",
+      "privacy": "public",
+      "test": "caseStudyPublicProjection.test.ts",
+      "disposition": "deterministic",
+      "rule": "public-projection-mirror"
+    },
     "PublicCaseStudySummary.featured": {
+      "authoring": "not authored — computed by caseStudyPublicProjection.ts",
+      "sourcePriority": "projection of the approved snapshot",
+      "aiMayInfer": false,
+      "approvalRequired": false,
+      "indexHome": "index card",
+      "detailHome": "nested in detail",
+      "publicBehaviour": "always present",
+      "emptyBehaviour": "empty array or empty string",
+      "privacy": "public",
+      "test": "caseStudyPublicProjection.test.ts",
+      "disposition": "deterministic",
+      "rule": "public-projection-mirror"
+    },
+    "PublicCaseStudySummary.govCapabilities": {
       "authoring": "not authored — computed by caseStudyPublicProjection.ts",
       "sourcePriority": "projection of the approved snapshot",
       "aiMayInfer": false,

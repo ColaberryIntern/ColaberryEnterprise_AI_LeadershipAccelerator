@@ -38,6 +38,7 @@ import CaseStudyCollection from '../../models/CaseStudyCollection';
 import CaseStudyPublication from '../../models/CaseStudyPublication';
 import CaseStudySnapshot from '../../models/CaseStudySnapshot';
 import { normalizeFacetList, normalizeFacetSlug } from './caseStudyFilterService';
+import { readDeliveryContext, readGovCapabilities } from './caseStudyGovTaxonomy';
 import { resolveRecordVerification } from './caseStudyPublicProjection';
 import type { CaseStudyFilterCandidate } from './caseStudyFilterService';
 import type { PublicProjectionPublicationFacts } from './caseStudyPublicProjection';
@@ -119,6 +120,10 @@ function toCandidate(
       ?? (str(study.built_by_type) || null)) as CaseStudyBuiltByType | null,
     deliverables: normalizeFacetList(taxonomy?.deliverables),
     projectStatus: (taxonomy?.projectStatus ?? null) as CaseStudyRoadmapStatus | null,
+    // Snapshot-only on purpose: there is no row column to fall back to, because
+    // these are review-time human decisions, not facts a sync can produce.
+    govCapabilities: readGovCapabilities(taxonomy?.govCapabilities),
+    deliveryContext: readDeliveryContext(taxonomy?.deliveryContext),
     verificationClass: verification.verificationClass,
     verificationMethod: verification.verificationMethod,
     // Visibilities only. No owner, no name, no URL ever enters a candidate.

@@ -64,6 +64,38 @@ export type CaseStudyBuiltByType =
   | 'ai_flotation_team'
   | 'joint_team';
 
+/** The seven procurement categories. Mirrors `backend/src/types/caseStudy.ts`. */
+export type CaseStudyGovCapability =
+  | 'ai-strategy-readiness'
+  | 'agentic-multi-agent-ai'
+  | 'rag-document-intelligence'
+  | 'data-engineering-modernization'
+  | 'decision-intelligence-forecasting'
+  | 'ai-workforce-enablement'
+  | 'ai-governance-assurance';
+
+export const CASE_STUDY_GOV_CAPABILITIES: readonly CaseStudyGovCapability[] = [
+  'ai-strategy-readiness',
+  'agentic-multi-agent-ai',
+  'rag-document-intelligence',
+  'data-engineering-modernization',
+  'decision-intelligence-forecasting',
+  'ai-workforce-enablement',
+  'ai-governance-assurance',
+];
+
+/** Delivered to a client, our own platform, or a demonstration. Mirrors the backend. */
+export type CaseStudyDeliveryContext =
+  | 'client_delivery'
+  | 'internal_platform'
+  | 'capability_demonstration';
+
+export const CASE_STUDY_DELIVERY_CONTEXTS: readonly CaseStudyDeliveryContext[] = [
+  'client_delivery',
+  'internal_platform',
+  'capability_demonstration',
+];
+
 export type CaseStudyRoadmapStatus =
   | 'shipped'
   | 'in_progress'
@@ -506,6 +538,14 @@ export interface PublicCaseStudySummary {
   /** Null when nothing is verified. The card then shows a proof point, not a number. */
   readonly headlineMetric: PublicCaseStudyMetric | null;
   readonly deliverables: readonly string[];
+  /**
+   * OPTIONAL ON THE WIRE, required on the server. A bundle can outlive the
+   * backend it shipped with (see `normalizeDetailResponse`), so a card from an
+   * older server arrives without these and must render as "not on the chapter",
+   * never throw.
+   */
+  readonly govCapabilities?: readonly CaseStudyGovCapability[];
+  readonly deliveryContext?: CaseStudyDeliveryContext | null;
   readonly featured: boolean;
   readonly publishedAt: string;
   readonly updatedAt: string;
@@ -669,6 +709,9 @@ export interface PublicCaseStudyTaxonomyFacets {
     readonly slug: PublicVerificationClass;
     readonly count: number;
   }[];
+  /** Optional on the wire for the same deploy-ordering reason as the card fields. */
+  readonly govCapabilities?: readonly { readonly slug: CaseStudyGovCapability; readonly count: number }[];
+  readonly deliveryContexts?: readonly { readonly slug: CaseStudyDeliveryContext; readonly count: number }[];
 }
 
 export interface PublicCaseStudyTaxonomyResponse {
