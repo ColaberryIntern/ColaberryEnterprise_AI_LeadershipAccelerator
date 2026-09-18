@@ -29,11 +29,12 @@ jest.mock('../../pipelineService', () => ({ ...jest.requireActual('../../pipelin
 jest.mock('../../delivery/leadConversion', () => ({ convertLeadToClient: (...a: unknown[]) => require('./fixtures/phase4Harness').m4.convertLead(...a) }));
 
 import { anchorOf4, AS_OF_4, arrangeWorld, clock, flags4, handoffsOf, lineFor, m4, printTable, T, tally, UNIQUES, writes, type TableLine } from './fixtures/phase4Harness';
-import { brandRow, allowedFor } from './fixtures/phase3Fixtures';
+import { allowedFor, brandRow, programRow } from './fixtures/phase3Fixtures';
 import { classifyArrival, exitTwins, twoTriggerSubject, type HandoffFixture } from './fixtures/phase4Fixtures';
 import { sequelize } from '../../../config/database';
 import { decideForSubjectAndRecord } from '../decisionService';
 import { acceptHandoff, dispositionHandoff, HandoffTransitionError, type DispositionResult } from '../handoffs/dispositionService';
+import { createHandoff } from '../handoffs/handoffService';
 import { PACKET_FIELDS } from '../handoffs/evidencePacket';
 
 /**
@@ -194,19 +195,53 @@ describe('exit, the retry path: a writer failing midway leaves the handoff accep
 
 /* ── one open handoff per subject per brand ──────────────────────────────────── */
 
+/**
+ * TWO indexes, and they are not interchangeable (the T414 verifier's finding): two deferrals of ONE
+ * decision share `[subject_ref, brand_id, source, decision_id]`, so the second is collapsed by
+ * `growth_journey_handoffs_idempotency_unique` - the partial `..._open_subject_unique` index never runs.
+ * The rule the plan names ("one open handoff per subject per brand") is only exercised by a trigger
+ * whose KEY differs while a row is open, which is what the second test here does.
+ */
 describe('one open handoff per subject per brand', () => {
-  it('a decision that asks for TWO handoffs (the commercial state and a human-review flag) leaves ONE open row; the second trigger lands on it', async () => {
+  it('two deferrals of ONE decision share an idempotency key: the second lands on the first row (the idempotency index, not the partial one)', async () => {
     const f = twoTriggerSubject();
     arrangeWorld([f], { asOf: AS_OF_4 });
     const r = await decide(f, AS_OF_4);
     expect(r.handoffs.status).toBe('materialized');
-    const made = (r.handoffs as { handoffs: Array<{ trigger: { owner_queue: string }; handoff_id: string; replayed: boolean }> }).handoffs;
+    const made = (r.handoffs as { handoffs: Array<{ trigger: { owner_queue: string; source: string }; handoff_id: string; replayed: boolean }> }).handoffs;
     expect(made.map((h) => h.trigger.owner_queue)).toEqual(['sales', 'human_review']);
+    // Both are decision deferrals, so both compute the SAME idempotency key - this is the index that collapses them.
+    expect(made.map((h) => h.trigger.source)).toEqual(['decision_deferral', 'decision_deferral']);
     expect(made.map((h) => h.replayed)).toEqual([false, true]);
     expect(new Set(made.map((h) => h.handoff_id)).size).toBe(1);
     const open = handoffsOf(f).filter((h) => ['queued', 'assigned', 'accepted'].includes(String(h.status)));
     expect(open).toHaveLength(1);
     expect(open[0].owner_queue).toBe(f.expect.queue);
     table.push(lineFor(f.key, open[0], '-'));
+  });
+
+  it('a DIFFERENTLY keyed trigger for the same subject while its row is open - an operator routing it by hand - is refused by the partial unique index and lands on the open row', async () => {
+    const f = twoTriggerSubject();
+    arrangeWorld([f], { asOf: AS_OF_4 });
+    await decide(f, AS_OF_4);
+    const [row] = handoffsOf(f) as Row[];
+    const refs = {
+      tenant_id: String(row.tenant_id), brand_id: String(row.brand_id), brand_slug: f.brand,
+      program: { id: String(row.program_id), slug: programRow(f.brand).slug, kind: 'business' as const },
+      subject_ref: String(row.subject_ref), lead_id: f.subject.lead_id, enrollment_id: null, path: null,
+    };
+    // A manual trigger: another source, another event - a different idempotency key by construction.
+    const manual = await createHandoff({ refs, trigger: { source: 'manual', owner_queue: 'human_review', reason: 'routing_rule:rp-1', event_ref: 'rule:rp-1' }, decision: null, asOf: AS_OF_4 });
+    expect(manual.replayed).toBe(true);
+    expect(manual.row.id).toBe(row.id);
+    expect(manual.row.owner_queue).toBe('sales'); // the OPEN row, not the queue the manual trigger asked for
+    expect(handoffsOf(f)).toHaveLength(1);
+    // Non-vacuity: the manual trigger's key really is different - the same key would have been collapsed by the
+    // idempotency index instead, and once the open row is CLOSED the same trigger is free to make a new one.
+    await (row as unknown as { update: (p: Record<string, unknown>) => Promise<unknown> }).update({ status: 'dispositioned' });
+    const after = await createHandoff({ refs, trigger: { source: 'manual', owner_queue: 'human_review', reason: 'routing_rule:rp-1', event_ref: 'rule:rp-2' }, decision: null, asOf: AS_OF_4 });
+    expect(after.replayed).toBe(false);
+    expect(after.row.id).not.toBe(row.id);
+    expect(after.row.owner_queue).toBe('human_review');
   });
 });
