@@ -100,6 +100,13 @@ const InternshipPage: React.FC = () => {
 
   useEffect(() => { void reload(); }, [reload]);
 
+  // Stable identities on purpose. These are props of InternshipInterview, whose own
+  // loader depends on them; passed as inline arrows they changed on every render of
+  // this page (the portal shell re-renders on its once-a-minute presence ping), which
+  // re-ran that loader and wiped the answer the applicant was typing.
+  const onInterviewProgressed = useCallback(() => { void reload(); }, [reload]);
+  const onInterviewComplete = useCallback(() => { setForceSummary(true); void reload(); }, [reload]);
+
   // Landing here with no application yet means the student arrived by URL rather
   // than through the card. Start one, so the page is never a dead end.
   useEffect(() => {
@@ -411,8 +418,8 @@ const InternshipPage: React.FC = () => {
 
         {showInterview && (
           <InternshipInterview
-            onProgressed={() => { void reload(); }}
-            onComplete={() => { setForceSummary(true); void reload(); }}
+            onProgressed={onInterviewProgressed}
+            onComplete={onInterviewComplete}
           />
         )}
 
