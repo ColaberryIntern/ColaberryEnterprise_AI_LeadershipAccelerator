@@ -413,6 +413,19 @@ export async function revokeAccount(accountId: string, revokedBy: string | null)
  * adapter. `provider_account_id` holds the OIDC `sub` for a member and the organization id for
  * a page; the URN shape is the provider's, not ours.
  */
+/**
+ * The provider's own id for an account: a Facebook Page id, an Instagram account id, a LinkedIn
+ * organization number. What an adapter addresses when the network does not use a URN.
+ */
+export async function getProviderAccountId(accountId: string): Promise<string> {
+  const account = await ChannelAccount.findByPk(accountId);
+  if (!account) throw new WorkflowError('Channel account not found', 404, 'NotFound');
+  if (account.status === 'revoked' || account.revoked_at) {
+    throw new WorkflowError('This account was disconnected.', 409, 'AccountRevoked');
+  }
+  return account.provider_account_id;
+}
+
 export async function getAuthorUrn(accountId: string): Promise<string> {
   const account = await ChannelAccount.findByPk(accountId);
   if (!account) throw new WorkflowError('Channel account not found', 404, 'NotFound');

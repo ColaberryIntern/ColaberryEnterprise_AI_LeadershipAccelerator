@@ -5,6 +5,7 @@ import type { LinkedInHttp } from './linkedInHttp';
 import { LINKEDIN_DOCUMENT_MIME_TYPES, LINKEDIN_IMAGE_MIME_TYPES, uploadDocument, uploadImages, type UploadedImage } from './linkedInImages';
 import { LINKEDIN_VIDEO_MIME_TYPES, uploadVideo } from './linkedInVideo';
 import { pollProblems } from '../content/pollSpec';
+import { assemblePostText } from './postText';
 import {
   AdapterUnsupportedError,
   ProviderPublishError,
@@ -105,9 +106,9 @@ export class LinkedInAdapter implements SocialProviderAdapter {
   }
 
   /**
-   * The OAuth authorization-code exchange is not built yet, and this refuses rather than
-   * pretending. Connecting happens through `channelAccountService.connectAccount` with a token
-   * obtained out of band until that flow lands.
+   * Connecting happens in services/marketing/oauth and linkedInCallbackRoutes, not here: an
+   * adapter-level connect would be a second way in, with its own state handling to get wrong.
+   * (Until 2026-09-16 this comment said the OAuth flow did not exist. It does; it is live.)
    */
   async connect(_input: ConnectInput): Promise<ConnectionResult> {
     throw new AdapterUnsupportedError(
@@ -340,10 +341,9 @@ export class LinkedInAdapter implements SocialProviderAdapter {
  * post. Found on Ali's first tracked-link test, before it fired.
  */
 export function assembleCommentary(content: Pick<PublishPayload, 'text' | 'linkUrl' | 'disclosureText'>): string {
-  const parts = [content.text];
-  if (content.linkUrl && !content.text.includes(content.linkUrl)) parts.push(content.linkUrl);
-  if (content.disclosureText) parts.push(content.disclosureText);
-  return parts.join('\n\n');
+  // Moved to postText.ts when Meta needed the same rule; re-exported under the old name so the
+  // LinkedIn tests that pin this behaviour keep pointing at it.
+  return assemblePostText(content);
 }
 
 /** LinkedIn names its voting windows; the composer stores days. validate() refuses any other value. */

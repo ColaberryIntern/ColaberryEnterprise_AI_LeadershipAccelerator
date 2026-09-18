@@ -25,16 +25,27 @@ it('turns on exactly the implemented providers named, tolerating spaces', () => 
 });
 
 it('drops a typo and a provider with no adapter, each with a warning, rather than switching it on', () => {
-  const on = liveConnectorsFromEnv({ LIVE_CONNECTORS: 'linkedin_member,linkedn_member,meta_instagram' });
+  // TikTok is the example here because Meta stopped being one on 2026-09-18, when its adapter
+  // landed. Whichever provider is unimplemented, the env must not be able to switch it on.
+  const on = liveConnectorsFromEnv({ LIVE_CONNECTORS: 'linkedin_member,linkedn_member,tiktok' });
   expect([...on]).toEqual(['linkedin_member']);
   const warned = (console.warn as jest.Mock).mock.calls.map((c) => JSON.parse(c[0]));
   expect(warned.map((w) => [w.event, w.context.key])).toEqual([
     ['live_connector_unknown', 'linkedn_member'],
-    ['live_connector_not_implemented', 'meta_instagram'],
+    ['live_connector_not_implemented', 'tiktok'],
   ]);
-  // Meta has a self-serve-looking registry entry but no adapter; switching it on would recreate
-  // the first dev deploy's no_live_adapter dead letters. The env cannot do that.
-  expect(decidePublishMode(getProviderCapabilities('meta_instagram'), 'publish', on).mode).toBe('handoff');
+  // Switching on a provider with no adapter would recreate the first dev deploy's
+  // no_live_adapter dead letters. The env cannot do that.
+  expect(decidePublishMode(getProviderCapabilities('tiktok'), 'publish', on).mode).toBe('handoff');
+});
+
+it('Meta CAN be switched on now that its adapter exists - and is off until someone does', () => {
+  const on = liveConnectorsFromEnv({ LIVE_CONNECTORS: 'meta_facebook_page,meta_instagram' });
+  expect([...on].sort()).toEqual(['meta_facebook_page', 'meta_instagram']);
+  // Still handoff for Facebook: its app review has not been submitted, which is a separate gate
+  // from the switch. Both must be satisfied.
+  expect(decidePublishMode(getProviderCapabilities('meta_facebook_page'), 'publish', on).mode).toBe('handoff');
+  expect(liveConnectorsFromEnv({}).has('meta_facebook_page')).toBe(false);
 });
 
 it('IMPLEMENTED_CONNECTORS is exactly the set of adapters the registry can build', () => {
