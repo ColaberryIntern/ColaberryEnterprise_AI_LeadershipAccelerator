@@ -57,10 +57,31 @@ export const NAV_GROUPS: NavGroup[] = [
     { path: '/admin/opportunities', label: 'Opportunities', icon: 'line-chart-line' },
     { path: '/admin/funnel', label: 'Funnel', icon: 'filter-2-line' },
   ]},
+  // Marketing — the social publishing workflow, in the order the work happens.
+  //
+  // Every one of these pages was built and routed, and until 2026-09-17 not one of them
+  // appeared here: the sidebar advertised a single "Marketing" link to the analytics
+  // dashboard, and the Composer, Content queue, Calendar, Publishing queue and Brands were
+  // reachable only by typing a URL. The pages were shipped against a spec that listed
+  // fifteen destinations, the nav was written for the ones that did not exist yet, and a
+  // test (adminNavMarketing.test.ts) forbade the built ones from the sidebar - so each page
+  // became an orphan on the day it landed and a green suite kept it there.
+  //
+  // `section: 'campaigns'` is deliberate and must not become 'marketing': it is the section
+  // the BACKEND gate already maps these APIs to (mgmtSectionGate PATH_SECTION covers
+  // /api/admin/brands and /api/admin/content), and a link whose section the API does not
+  // recognise renders for someone the API will then 403.
+  { label: 'Marketing', section: 'campaigns', links: [
+    { path: '/admin/marketing', label: 'Overview', icon: 'broadcast-line' },
+    { path: '/admin/marketing/composer', label: 'Composer', icon: 'quill-pen-line' },
+    { path: '/admin/marketing/content', label: 'Content', icon: 'list-check-2' },
+    { path: '/admin/marketing/calendar', label: 'Calendar', icon: 'calendar-2-line' },
+    { path: '/admin/marketing/publishing', label: 'Publishing', icon: 'send-plane-line' },
+    { path: '/admin/marketing/brands', label: 'Brands', icon: 'price-tag-3-line' },
+  ]},
   { label: 'Campaigns', section: 'campaigns', links: [
     { path: '/admin/campaigns', label: 'Campaigns', icon: 'megaphone-line' },
     { path: '/admin/communications', label: 'Communications', icon: 'chat-3-line' },
-    { path: '/admin/marketing', label: 'Marketing', icon: 'broadcast-line' },
     { path: '/admin/visitors', label: 'Visitors', icon: 'eye-line' },
     // Explorer Growth OS Command Center (spec §26). Deliberately in the
     // Campaigns group: `section: 'campaigns'` is what the spec assigns the page,
@@ -213,13 +234,14 @@ export const UNLISTED_PATH_SECTIONS: ReadonlyArray<readonly [string, string]> = 
   ['/admin/tracking-estate', 'campaigns'],
   // Executive summary — the Command Center's own job, so the landing section.
   ['/admin/executive-narrative', 'dashboard'],
-  // Brand administration. Registered BEFORE its page exists (that is T013), because the
-  // classification and the page are separate obligations and only one of them is urgent:
-  // `mgmtSectionGate` already maps `/api/admin/brands` to 'campaigns', and while this side
-  // returns null the two gates disagree — ProtectedRoute computes
-  // `allowed = section ? canSection(section) : !isScopedRep`, so a scoped identity is bounced
-  // off a page the API would have served, with nothing explaining why. Caught by
-  // adminNavMarketing.test.ts asserting the two sides agree, not by review.
+  // Brand administration. The page now lives at /admin/marketing/brands and is listed in the
+  // Marketing group; this entry keeps the OLD path classified, because /admin/brands still
+  // resolves (it redirects, preserving the query string the LinkedIn OAuth callback returns
+  // with). Without it a scoped identity following a bookmark is bounced off a path the API
+  // would have served: `mgmtSectionGate` maps `/api/admin/brands` to 'campaigns', and
+  // ProtectedRoute computes `allowed = section ? canSection(section) : !isScopedRep`, so a
+  // null here and a 'campaigns' there disagree. Caught by adminNavMarketing.test.ts asserting
+  // the two sides agree, not by review.
   ['/admin/brands', 'campaigns'],
   // Audit ledger. Classified from what it QUERIES (event_type, actor,
   // entity_type, entity_id, payload) rather than from its name — it is a

@@ -69,7 +69,7 @@ describe('the happy path', () => {
 
     expect(res.status).toBe(302);
     const loc = location(res);
-    expect(loc.pathname).toBe('/admin/brands');
+    expect(loc.pathname).toBe('/admin/marketing/brands');
     expect(Object.fromEntries(loc.searchParams)).toEqual({ linkedin: 'connected', brand: BRAND, account: 'acct-1' });
 
     // The exchange: code and secret in the POST body, never a URL.

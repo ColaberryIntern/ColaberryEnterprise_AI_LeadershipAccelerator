@@ -14,9 +14,12 @@ import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import AdminBrandsPage from '../AdminBrandsPage';
+import { RedirectKeepingQuery } from '../../../../routes/adminRoutes';
 
 /** Kept in step with backend/src/routes/linkedInCallbackRoutes.ts DEFAULT_RETURN_PATH by hand; a mismatch fails the route assertion below. */
-const BACKEND_RETURN_PATH = '/admin/brands';
+const BACKEND_RETURN_PATH = '/admin/marketing/brands';
+/** The pre-2026-09-17 path. Still live as a query-preserving redirect, for bookmarks and for a callback in flight during a deploy. */
+const LEGACY_PATH = '/admin/brands';
 const BRAND = '22222222-2222-4222-8222-222222222222';
 
 // CRA's jest config resets mock implementations before every test, so they are set in
@@ -49,7 +52,8 @@ function renderAt(url: string) {
     root.render(
       <MemoryRouter initialEntries={[url]}>
         <Routes>
-          <Route path="/admin/brands" element={<AdminBrandsPage />} />
+          <Route path="/admin/marketing/brands" element={<AdminBrandsPage />} />
+          <Route path="/admin/brands" element={<RedirectKeepingQuery to="/admin/marketing/brands" />} />
           <Route path="*" element={<div data-testid="not-found">404</div>} />
         </Routes>
       </MemoryRouter>,
@@ -93,6 +97,15 @@ describe('coming back from LinkedIn', () => {
     renderAt(`${BACKEND_RETURN_PATH}?linkedin=error&reason=SomethingNew`);
     await flush();
     expect(container.querySelector('[data-testid="linkedin-connect-notice"]')!.textContent).toMatch(/failed \(SomethingNew\)/);
+  });
+
+  it('the legacy /admin/brands still lands on the page, carrying the callback query with it', async () => {
+    // A bare <Navigate> would drop the query and show a connected operator a page with nothing
+    // on it to say so. The redirect keeps it.
+    renderAt(`${LEGACY_PATH}?linkedin=connected&brand=${BRAND}&account=acct-1`);
+    await flush();
+    expect(container.querySelector('[data-testid="not-found"]')).toBeNull();
+    expect(container.querySelector('[data-testid="linkedin-connect-notice"]')!.textContent).toMatch(/LinkedIn account connected/);
   });
 
   it('with no ?linkedin= there is no notice', async () => {
