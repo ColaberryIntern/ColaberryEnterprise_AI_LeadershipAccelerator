@@ -1,8 +1,18 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AgentDetail } from '../../../services/agentDetailApi';
+import { AgentDetail, ReeseBehaviourKey, setReeseBehaviourSwitch } from '../../../services/agentDetailApi';
 import { AgentRoleCharter, getAgentRoleCharter, saveAgentRoleCharter, AgentRoleCharterInput } from '../../../services/agentRoleCharterApi';
 import { timeAgo } from '../shell/trust';
+
+// Reese Product Phase 1 follow-up (2026-09-18) — Ali, live: "reactive_dm_reply
+// and health_assessment share Reese's own ai_agents.enabled column, a real
+// coupling the switch service documents; disclosed here so toggling one
+// explains why the other also moves, rather than reading as a bug.
+function sharedSwitchNote(key: ReeseBehaviourKey): string | null {
+  if (key === 'reactive_dm_reply') return "Shares Reese's own on/off switch with Health assessment.";
+  if (key === 'health_assessment') return "Shares Reese's own on/off switch with Reactive DM reply.";
+  return null;
+}
 
 // Agent Detail V2, sidebar (2026-09-11) — Identity, Role Charter, Reports to
 // (chain), Persona/prompt. The mockup Ali pasted didn't include Role
@@ -43,6 +53,37 @@ export default function AgentOverviewV2Sidebar({ detail, agentId, agentDisplayNa
   const [charterLoadError, setCharterLoadError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<AgentRoleCharterInput>(emptyDraft);
+
+  // Reese Product Phase 1 follow-up (2026-09-18) — real, local, optimistic
+  // state for the behaviour switches, applied on top of the server's last
+  // snapshot without a full page reload (same pattern the charter editor
+  // above already uses). `alsoChanged` from the API response is what keeps
+  // reactive_dm_reply and health_assessment showing the same value after
+  // either one is toggled — they share one real column.
+  const [behaviourOverrides, setBehaviourOverrides] = useState<Partial<Record<ReeseBehaviourKey, boolean>>>({});
+  const [savingBehaviourKey, setSavingBehaviourKey] = useState<ReeseBehaviourKey | null>(null);
+  const [behaviourErrors, setBehaviourErrors] = useState<Partial<Record<ReeseBehaviourKey, string>>>({});
+
+  const handleToggleBehaviour = useCallback(async (key: ReeseBehaviourKey, nextEnabled: boolean, label: string) => {
+    if (!nextEnabled) {
+      const confirmed = window.confirm(`Turn OFF ${label}? This is reversible — you can turn it back on any time.`);
+      if (!confirmed) return;
+    }
+    setSavingBehaviourKey(key);
+    setBehaviourErrors((prev) => ({ ...prev, [key]: undefined }));
+    try {
+      const result = await setReeseBehaviourSwitch(agentId, key, nextEnabled);
+      setBehaviourOverrides((prev) => {
+        const next = { ...prev };
+        for (const changedKey of result.alsoChanged) next[changedKey] = result.enabled;
+        return next;
+      });
+    } catch (err: any) {
+      setBehaviourErrors((prev) => ({ ...prev, [key]: err?.response?.data?.error || 'Failed to update.' }));
+    } finally {
+      setSavingBehaviourKey(null);
+    }
+  }, [agentId]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -216,17 +257,43 @@ export default function AgentOverviewV2Sidebar({ detail, agentId, agentDisplayNa
               <dt>Manager chain</dt>
               <dd>{employee_facts.manager_chain_note}</dd>
             </dl>
-            <p className="adv2-muted" style={{ marginTop: 12, marginBottom: 6, fontSize: 12.5 }}>Behaviours and their kill switches</p>
-            <dl className="adv2-rows adv2-rows-narrow">
-              {employee_facts.behaviours.map((b) => (
-                <React.Fragment key={b.name}>
-                  <dt>{b.name}</dt>
-                  <dd>
-                    <span className={`adv2-pill ${b.enabled ? 'adv2-trust' : 'adv2-bad'}`}>{b.enabled ? 'On' : 'Off'}</span>
-                  </dd>
-                </React.Fragment>
-              ))}
-            </dl>
+            <p className="adv2-muted" style={{ marginTop: 12, marginBottom: 6, fontSize: 12.5 }}>
+              Behaviours and their kill switches — connected to Capabilities above and Scheduled work below, not a separate list.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {employee_facts.behaviours.map((b) => {
+                const displayEnabled = behaviourOverrides[b.key] ?? b.enabled;
+                const isSaving = savingBehaviourKey === b.key;
+                const note = sharedSwitchNote(b.key);
+                const error = behaviourErrors[b.key];
+                return (
+                  <div key={b.key} style={{ borderBottom: '1px solid var(--adv2-rule-2)', paddingBottom: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 500 }}>{b.name}</span>
+                      <button
+                        className={`adv2-pill ${displayEnabled ? 'adv2-trust' : 'adv2-bad'}`}
+                        style={{ border: 0, cursor: isSaving ? 'default' : 'pointer', minWidth: 68, textAlign: 'center' }}
+                        disabled={isSaving}
+                        onClick={() => handleToggleBehaviour(b.key, !displayEnabled, b.name)}
+                        aria-label={`Turn ${b.name} ${displayEnabled ? 'off' : 'on'}`}
+                      >
+                        {isSaving ? 'Saving…' : displayEnabled ? 'On' : 'Off'}
+                      </button>
+                    </div>
+                    {(b.tools.length > 0 || b.scheduled_work_ref) && (
+                      <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--adv2-ink-3)', display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                        {b.tools.length > 0 && <span className="adv2-mono">uses: {b.tools.join(', ')}</span>}
+                        {b.scheduled_work_ref && (
+                          <a className="adv2-link" href={`#task-${b.scheduled_work_ref}`}>↓ Scheduled work</a>
+                        )}
+                      </div>
+                    )}
+                    {note && <p className="adv2-muted" style={{ margin: '4px 0 0', fontSize: 11.5 }}>{note}</p>}
+                    {error && <p style={{ margin: '4px 0 0', fontSize: 11.5, color: 'var(--adv2-bad)' }}>{error}</p>}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </section>
       )}

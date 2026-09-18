@@ -235,11 +235,26 @@ export interface AgentDetail {
   employee_facts: AgentDetailEmployeeFacts | null;
 }
 
+export type ReeseBehaviourKey =
+  | 'reactive_dm_reply'
+  | 'autonomous_outreach_sweep'
+  | 'outreach_follow_ups'
+  | 'welcome_dms'
+  | 'student_support_supersession_resolver'
+  | 'presence_heartbeat'
+  | 'health_assessment';
+
 export interface AgentDetailEmployeeFactsBehaviour {
+  key: ReeseBehaviourKey;
   name: string;
   enabled: boolean;
   population: string;
   kill_switch: string;
+  /** Real tool/side-effect names from Capabilities this behaviour uses. */
+  tools: string[];
+  /** The matching "Scheduled work" row's agent_name, for a same-page link —
+   * `null` for the 3 behaviours controlled on this card directly. */
+  scheduled_work_ref: string | null;
 }
 
 export interface AgentDetailEmployeeFacts {
@@ -272,5 +287,20 @@ export interface AgentGoalsDimension {
 
 export async function getAgentDetail(agentId: string): Promise<AgentDetail> {
   const res = await api.get<AgentDetail>(`/api/admin/agents/${agentId}`);
+  return res.data;
+}
+
+export interface SetReeseBehaviourSwitchResult {
+  key: ReeseBehaviourKey;
+  enabled: boolean;
+  alsoChanged: ReeseBehaviourKey[];
+}
+
+export async function setReeseBehaviourSwitch(
+  agentId: string,
+  key: ReeseBehaviourKey,
+  enabled: boolean,
+): Promise<SetReeseBehaviourSwitchResult> {
+  const res = await api.patch<SetReeseBehaviourSwitchResult>(`/api/admin/agents/${agentId}/behaviours/${key}`, { enabled });
   return res.data;
 }

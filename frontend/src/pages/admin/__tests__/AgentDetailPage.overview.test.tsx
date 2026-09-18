@@ -12,7 +12,7 @@ import { AgentDetail } from '../../../services/agentDetailApi';
 // sub-tab clicks needed. This file's own mocking setup is unchanged from
 // before — AgentOverviewV2 still takes only `detail`, no inbox dependency.
 
-jest.mock('../../../services/agentDetailApi', () => ({ getAgentDetail: jest.fn() }));
+jest.mock('../../../services/agentDetailApi', () => ({ getAgentDetail: jest.fn(), setReeseBehaviourSwitch: jest.fn() }));
 jest.mock('../../../services/managerInboxApi', () => ({ getManagerInboxItems: jest.fn() }));
 jest.mock('../../../services/workforceOrgChartApi', () => ({
   resetAgents: jest.fn(),
@@ -29,7 +29,7 @@ jest.mock('../../../services/agentOneOnOneApi', () => ({ listOneOnOnes: jest.fn(
 jest.mock('../../../services/agentRoleCharterApi', () => ({ getAgentRoleCharter: jest.fn(), saveAgentRoleCharter: jest.fn() }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { getAgentDetail } = require('../../../services/agentDetailApi') as { getAgentDetail: jest.Mock };
+const { getAgentDetail, setReeseBehaviourSwitch } = require('../../../services/agentDetailApi') as { getAgentDetail: jest.Mock; setReeseBehaviourSwitch: jest.Mock };
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getManagerInboxItems } = require('../../../services/managerInboxApi') as { getManagerInboxItems: jest.Mock };
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -192,8 +192,8 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
         charter_effective_at: '2026-09-18T00:00:00Z',
         manager_chain_note: 'Reports to: Ali Muwwakkil',
         behaviours: [
-          { name: 'Reactive DM reply', enabled: true, population: 'Whoever messages her.', kill_switch: "Reese's own ai_agents.enabled." },
-          { name: 'Autonomous outreach sweep', enabled: true, population: 'Pilot cohort.', kill_switch: 'Registry row enabled.' },
+          { key: 'reactive_dm_reply', name: 'Reactive DM reply', enabled: true, population: 'Whoever messages her.', kill_switch: "Reese's own ai_agents.enabled.", tools: ['respond_to_dm'], scheduled_work_ref: null },
+          { key: 'autonomous_outreach_sweep', name: 'Autonomous outreach sweep', enabled: true, population: 'Pilot cohort.', kill_switch: 'Registry row enabled.', tools: [], scheduled_work_ref: 'ReeseAutonomousOutreachSweep' },
         ],
       },
     });
@@ -213,5 +213,110 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
     await openOverviewTab();
 
     expect(container.textContent).not.toContain('Employee facts');
+  });
+
+  describe('Employee facts: behaviour switches (Reese Product Phase 1 follow-up, 2026-09-18)', () => {
+    const EMPLOYEE_FACTS_DETAIL = {
+      ...DETAIL,
+      employee_facts: {
+        availability: 'available',
+        work_state: 'idle',
+        work_state_detail: null,
+        last_meaningful_action: null,
+        charter_version: 2,
+        charter_effective_at: '2026-09-18T00:00:00Z',
+        manager_chain_note: 'Reports to: Ali Muwwakkil',
+        behaviours: [
+          { key: 'reactive_dm_reply', name: 'Reactive DM reply', enabled: true, population: 'Whoever messages her.', kill_switch: "Reese's own ai_agents.enabled.", tools: ['respond_to_dm'], scheduled_work_ref: null },
+          { key: 'health_assessment', name: 'Health assessment', enabled: true, population: 'Whoever gets a reply.', kill_switch: 'Shares the reply switch.', tools: ['assess_student_health'], scheduled_work_ref: null },
+          { key: 'autonomous_outreach_sweep', name: 'Autonomous outreach sweep', enabled: true, population: 'Pilot cohort.', kill_switch: 'Registry row enabled.', tools: [], scheduled_work_ref: 'ReeseAutonomousOutreachSweep' },
+        ],
+      },
+    };
+
+    async function clickBehaviourToggle(name: string) {
+      const row = Array.from(container.querySelectorAll('span')).find((el) => el.textContent === name);
+      const button = row?.parentElement?.querySelector('button');
+      if (!button) throw new Error(`Toggle button for "${name}" not found`);
+      await act(async () => {
+        button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+
+    it('shows the real tool correlation and the Scheduled work link', async () => {
+      getAgentDetail.mockResolvedValue(EMPLOYEE_FACTS_DETAIL);
+      await renderAgentPage();
+      await openOverviewTab();
+
+      expect(container.textContent).toContain('uses: respond_to_dm');
+      expect(container.textContent).toContain('uses: assess_student_health');
+      expect(container.querySelector('a[href="#task-ReeseAutonomousOutreachSweep"]')).not.toBeNull();
+    });
+
+    it('discloses the shared-switch coupling on both rows', async () => {
+      getAgentDetail.mockResolvedValue(EMPLOYEE_FACTS_DETAIL);
+      await renderAgentPage();
+      await openOverviewTab();
+
+      expect(container.textContent).toContain("Shares Reese's own on/off switch with Health assessment.");
+      expect(container.textContent).toContain("Shares Reese's own on/off switch with Reactive DM reply.");
+    });
+
+    it('turning ON calls the API immediately, no confirmation needed', async () => {
+      getAgentDetail.mockResolvedValue({
+        ...EMPLOYEE_FACTS_DETAIL,
+        employee_facts: { ...EMPLOYEE_FACTS_DETAIL.employee_facts, behaviours: [{ ...EMPLOYEE_FACTS_DETAIL.employee_facts.behaviours[2], enabled: false }] },
+      });
+      setReeseBehaviourSwitch.mockResolvedValue({ key: 'autonomous_outreach_sweep', enabled: true, alsoChanged: ['autonomous_outreach_sweep'] });
+      const confirmSpy = jest.spyOn(window, 'confirm');
+      await renderAgentPage();
+      await openOverviewTab();
+
+      await clickBehaviourToggle('Autonomous outreach sweep');
+
+      expect(confirmSpy).not.toHaveBeenCalled();
+      expect(setReeseBehaviourSwitch).toHaveBeenCalledWith('agent-cory', 'autonomous_outreach_sweep', true);
+      confirmSpy.mockRestore();
+    });
+
+    it('turning OFF asks for confirmation first, and does nothing if declined', async () => {
+      getAgentDetail.mockResolvedValue(EMPLOYEE_FACTS_DETAIL);
+      const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
+      await renderAgentPage();
+      await openOverviewTab();
+
+      await clickBehaviourToggle('Reactive DM reply');
+
+      expect(confirmSpy).toHaveBeenCalled();
+      expect(setReeseBehaviourSwitch).not.toHaveBeenCalled();
+      confirmSpy.mockRestore();
+    });
+
+    it('turning OFF and confirming calls the API and moves BOTH shared-switch rows to Off', async () => {
+      getAgentDetail.mockResolvedValue(EMPLOYEE_FACTS_DETAIL);
+      jest.spyOn(window, 'confirm').mockReturnValue(true);
+      setReeseBehaviourSwitch.mockResolvedValue({ key: 'reactive_dm_reply', enabled: false, alsoChanged: ['reactive_dm_reply', 'health_assessment'] });
+      await renderAgentPage();
+      await openOverviewTab();
+
+      await clickBehaviourToggle('Reactive DM reply');
+
+      expect(setReeseBehaviourSwitch).toHaveBeenCalledWith('agent-cory', 'reactive_dm_reply', false);
+      const offButtons = Array.from(container.querySelectorAll('button')).filter((b) => b.textContent === 'Off');
+      expect(offButtons.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('a failed toggle shows the real error message, not a silent failure', async () => {
+      getAgentDetail.mockResolvedValue(EMPLOYEE_FACTS_DETAIL);
+      jest.spyOn(window, 'confirm').mockReturnValue(true);
+      setReeseBehaviourSwitch.mockRejectedValue({ response: { data: { error: 'This agent is not in your reporting chain.' } } });
+      await renderAgentPage();
+      await openOverviewTab();
+
+      await clickBehaviourToggle('Reactive DM reply');
+
+      expect(container.textContent).toContain('This agent is not in your reporting chain.');
+    });
   });
 });

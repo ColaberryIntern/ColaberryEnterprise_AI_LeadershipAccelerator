@@ -292,12 +292,62 @@ export interface AgentDetailResult {
   employee_facts: EmployeeFacts | null;
 }
 
-/** Reese Product Phase 1, R7. */
+/** Reese Product Phase 1, R7/R9 — every real switch key this UI can write.
+ * `reactive_dm_reply` and `health_assessment` share ONE underlying column
+ * (Reese's own `ai_agents.enabled`) -- a real coupling, disclosed on both
+ * rows, not a UI bug. */
+export type ReeseBehaviourKey =
+  | 'reactive_dm_reply'
+  | 'autonomous_outreach_sweep'
+  | 'outreach_follow_ups'
+  | 'welcome_dms'
+  | 'student_support_supersession_resolver'
+  | 'presence_heartbeat'
+  | 'health_assessment';
+
+export const BEHAVIOUR_KEY_BY_NAME: Record<string, ReeseBehaviourKey> = {
+  'Reactive DM reply': 'reactive_dm_reply',
+  'Autonomous outreach sweep': 'autonomous_outreach_sweep',
+  'Outreach follow-ups': 'outreach_follow_ups',
+  'Welcome DMs': 'welcome_dms',
+  'Student support supersession resolver': 'student_support_supersession_resolver',
+  'Presence heartbeat': 'presence_heartbeat',
+  'Health assessment': 'health_assessment',
+};
+
+// Reese Product Phase 1, R9 — Ali, live, on the Employee facts card: "I feel
+// like the Employee Facts should be connected to capabilities, tools and
+// scheduled work tabs. They should be related and therefore correlated."
+// Grounded in TOOL_INVENTORY.md's own `source` field (which real controller
+// calls which real tool), never invented. `[]` for behaviours the tool
+// inventory has no entry for (the presence heartbeat touches no tool or
+// side effect it tracks).
+const BEHAVIOUR_TOOLS: Record<ReeseBehaviourKey, string[]> = {
+  reactive_dm_reply: ['respond_to_dm', 'read_learner_context', 'read_student_success_snapshot', 'assess_student_health', 'read_attachments'],
+  health_assessment: ['assess_student_health'],
+  autonomous_outreach_sweep: ['Autonomous outreach DM send'],
+  outreach_follow_ups: ['Outreach follow-up DM send', 'Escalation'],
+  welcome_dms: ['Welcome DM send'],
+  student_support_supersession_resolver: ['Student-support ticket auto-close'],
+  presence_heartbeat: [],
+};
+
+/** Reese Product Phase 1, R7/R9. */
 export interface EmployeeFactsBehaviourRow {
+  key: ReeseBehaviourKey;
   name: string;
   enabled: boolean;
   population: string;
   kill_switch: string;
+  /** Real tool/side-effect names from TOOL_INVENTORY.md this behaviour uses
+   * -- the correlation to the Capabilities section above it on the same
+   * page. `[]` when none apply. */
+  tools: string[];
+  /** The exact sibling `agent_name` this behaviour's switch lives on in the
+   * "Scheduled work" section below -- `null` for the 3 behaviours controlled
+   * on Reese's own row instead (reactive_dm_reply, health_assessment,
+   * welcome_dms have no Scheduled work entry of their own). */
+  scheduled_work_ref: string | null;
 }
 
 export interface EmployeeFacts {
@@ -324,7 +374,17 @@ const CRON_REGISTRY_NAMES: Record<string, string> = {
   'Student support supersession resolver': 'ReeseStudentSupportSupersessionResolver',
 };
 
-function welcomeEnabled(): boolean {
+/** Reese Product Phase 1, R9 — welcome DMs moved from an env-var-only switch
+ * to a real database setting (`ai_agents.config.welcome_enabled`) so it can
+ * be toggled from this card, matching the other 6 behaviours. Reads the
+ * ALREADY-LOADED agent row (never a second query) -- falls back to the env
+ * var only when the DB value has never been set, so deploying this change
+ * alone never silently changes live behaviour (see
+ * reeseIdentitySeed.ts's isReeseWelcomeEnabled(), the same fallback used by
+ * the real enforcement path in reeseWelcomeService.ts). */
+function welcomeEnabledFromAgent(agent: { config?: Record<string, unknown> | null }): boolean {
+  const configValue = agent.config?.welcome_enabled;
+  if (typeof configValue === 'boolean') return configValue;
   return String(process.env.REESE_WELCOME_ENABLED ?? 'true').toLowerCase() !== 'false';
 }
 
@@ -339,7 +399,7 @@ function welcomeEnabled(): boolean {
  * `agent.agent_name === 'Reese'`, never for any other agent.
  */
 export async function getReeseEmployeeFacts(
-  agent: { id: string; agent_name: string; enabled: boolean },
+  agent: { id: string; agent_name: string; enabled: boolean; config?: Record<string, unknown> | null },
   ctx: {
     lastTicketActivityAt: Date | null;
     openTicketCount: number;
@@ -360,17 +420,26 @@ export async function getReeseEmployeeFacts(
 
   const behaviours: EmployeeFactsBehaviourRow[] = REESE_BEHAVIOURS.map((b) => {
     const cronRegistryName = CRON_REGISTRY_NAMES[b.name];
+    const key = BEHAVIOUR_KEY_BY_NAME[b.name];
     let enabled: boolean;
     if (b.name === 'Reactive DM reply' || b.name === 'Health assessment') {
       enabled = reeseEnabled;
     } else if (b.name === 'Welcome DMs') {
-      enabled = reeseEnabled && welcomeEnabled();
+      enabled = reeseEnabled && welcomeEnabledFromAgent(agent);
     } else if (cronRegistryName) {
       enabled = cronEnabled.get(cronRegistryName) ?? false;
     } else {
       enabled = false;
     }
-    return { name: b.name, enabled, population: b.population, kill_switch: b.killSwitch };
+    return {
+      key,
+      name: b.name,
+      enabled,
+      population: b.population,
+      kill_switch: b.killSwitch,
+      tools: BEHAVIOUR_TOOLS[key],
+      scheduled_work_ref: cronRegistryName ?? null,
+    };
   });
 
   // Availability is truthful, not the presence heartbeat: unavailable when
