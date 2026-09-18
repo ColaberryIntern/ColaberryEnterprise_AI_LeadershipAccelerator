@@ -5,6 +5,20 @@ import type { CommunityPresenceStatus } from '../../models/CommunityMember';
 import RoomMessage from '../../models/RoomMessage';
 import { getRoleCharter } from '../agentRoleCharterService';
 import { REESE_BEHAVIOURS } from '../../scripts/lib/reeseBehaviourInventory';
+import type { LastTicketRef } from './reeseBehaviourLastTicket';
+import {
+  type ReeseBehaviourKey,
+  BEHAVIOUR_KEY_BY_NAME,
+  BEHAVIOUR_TOOLS,
+  CRON_REGISTRY_NAMES,
+  welcomeEnabledFromAgent,
+} from './reeseBehaviourMetadata';
+
+// R9 — re-exported so reeseBehaviourSwitchService.ts's existing import path
+// (`from './agentDetailEmployeeFacts'`) keeps working unchanged after the
+// R9 extraction into reeseBehaviourMetadata.ts.
+export type { ReeseBehaviourKey } from './reeseBehaviourMetadata';
+export { BEHAVIOUR_KEY_BY_NAME } from './reeseBehaviourMetadata';
 
 // Reese Product Phase 1, R7 — agentDetailService.ts was 565 lines, over this
 // repo's 500-line hard ceiling (CLAUDE.md's Modular Composition Rule). Its
@@ -143,6 +157,13 @@ export interface AgentDetailResult {
     last_run_at: Date | null;
     run_count: number;
     error_count: number;
+    /** R9 — Ali, live: "I'd also like to see the last time the tool and
+     * scheduled work was used/run and the ticket." Reese-only, via
+     * computeLastTicketPerBehaviour() in reeseBehaviourLastTicket.ts; `null`
+     * for every other agent (this field is never populated outside the
+     * Reese branch in agentDetailService.ts) and for a Reese cron behaviour
+     * that has never produced a ticket. */
+    last_ticket: LastTicketRef | null;
   }>;
   /** AI Employee Consolidation Program (2026-09-15/16) — "Capabilities &
    * Automations": the real legacy behaviors/tools this employee OWNS, via
@@ -292,46 +313,6 @@ export interface AgentDetailResult {
   employee_facts: EmployeeFacts | null;
 }
 
-/** Reese Product Phase 1, R7/R9 — every real switch key this UI can write.
- * `reactive_dm_reply` and `health_assessment` share ONE underlying column
- * (Reese's own `ai_agents.enabled`) -- a real coupling, disclosed on both
- * rows, not a UI bug. */
-export type ReeseBehaviourKey =
-  | 'reactive_dm_reply'
-  | 'autonomous_outreach_sweep'
-  | 'outreach_follow_ups'
-  | 'welcome_dms'
-  | 'student_support_supersession_resolver'
-  | 'presence_heartbeat'
-  | 'health_assessment';
-
-export const BEHAVIOUR_KEY_BY_NAME: Record<string, ReeseBehaviourKey> = {
-  'Reactive DM reply': 'reactive_dm_reply',
-  'Autonomous outreach sweep': 'autonomous_outreach_sweep',
-  'Outreach follow-ups': 'outreach_follow_ups',
-  'Welcome DMs': 'welcome_dms',
-  'Student support supersession resolver': 'student_support_supersession_resolver',
-  'Presence heartbeat': 'presence_heartbeat',
-  'Health assessment': 'health_assessment',
-};
-
-// Reese Product Phase 1, R9 — Ali, live, on the Employee facts card: "I feel
-// like the Employee Facts should be connected to capabilities, tools and
-// scheduled work tabs. They should be related and therefore correlated."
-// Grounded in TOOL_INVENTORY.md's own `source` field (which real controller
-// calls which real tool), never invented. `[]` for behaviours the tool
-// inventory has no entry for (the presence heartbeat touches no tool or
-// side effect it tracks).
-const BEHAVIOUR_TOOLS: Record<ReeseBehaviourKey, string[]> = {
-  reactive_dm_reply: ['respond_to_dm', 'read_learner_context', 'read_student_success_snapshot', 'assess_student_health', 'read_attachments'],
-  health_assessment: ['assess_student_health'],
-  autonomous_outreach_sweep: ['Autonomous outreach DM send'],
-  outreach_follow_ups: ['Outreach follow-up DM send', 'Escalation'],
-  welcome_dms: ['Welcome DM send'],
-  student_support_supersession_resolver: ['Student-support ticket auto-close'],
-  presence_heartbeat: [],
-};
-
 /** Reese Product Phase 1, R7/R9. */
 export interface EmployeeFactsBehaviourRow {
   key: ReeseBehaviourKey;
@@ -348,6 +329,13 @@ export interface EmployeeFactsBehaviourRow {
    * on Reese's own row instead (reactive_dm_reply, health_assessment,
    * welcome_dms have no Scheduled work entry of their own). */
   scheduled_work_ref: string | null;
+  /** R9 — Ali, live: "I'd also like to see a link to the last ticket or
+   * time this process run." The real most-recent ticket this behaviour's
+   * own service produced or closed (see reeseBehaviourLastTicket.ts's
+   * header for the exact type-per-behaviour grounding); `null` for a
+   * behaviour that structurally never produces a ticket (welcome_dms,
+   * presence_heartbeat, health_assessment) or genuinely has none yet. */
+  last_ticket: LastTicketRef | null;
 }
 
 export interface EmployeeFacts {
@@ -365,27 +353,6 @@ export interface EmployeeFacts {
   charter_effective_at: Date | null;
   manager_chain_note: string;
   behaviours: EmployeeFactsBehaviourRow[];
-}
-
-const CRON_REGISTRY_NAMES: Record<string, string> = {
-  'Autonomous outreach sweep': 'ReeseAutonomousOutreachSweep',
-  'Outreach follow-ups': 'ReeseOutreachFollowUps',
-  'Presence heartbeat': 'ReesePresenceHeartbeat',
-  'Student support supersession resolver': 'ReeseStudentSupportSupersessionResolver',
-};
-
-/** Reese Product Phase 1, R9 — welcome DMs moved from an env-var-only switch
- * to a real database setting (`ai_agents.config.welcome_enabled`) so it can
- * be toggled from this card, matching the other 6 behaviours. Reads the
- * ALREADY-LOADED agent row (never a second query) -- falls back to the env
- * var only when the DB value has never been set, so deploying this change
- * alone never silently changes live behaviour (see
- * reeseIdentitySeed.ts's isReeseWelcomeEnabled(), the same fallback used by
- * the real enforcement path in reeseWelcomeService.ts). */
-function welcomeEnabledFromAgent(agent: { config?: Record<string, unknown> | null }): boolean {
-  const configValue = agent.config?.welcome_enabled;
-  if (typeof configValue === 'boolean') return configValue;
-  return String(process.env.REESE_WELCOME_ENABLED ?? 'true').toLowerCase() !== 'false';
 }
 
 /**
@@ -410,6 +377,10 @@ export async function getReeseEmployeeFacts(
     /** Sibling AiAgent rows sharing Reese's `module` — the same
      * `relatedTaskRows` agentDetailService.ts already queries once. */
     relatedTasks: Array<{ agent_name: string; enabled: boolean }>;
+    /** R9 — the real most-recent ticket per behaviour, computed once by
+     * agentDetailService.ts (computeLastTicketPerBehaviour(), zero extra
+     * queries) and passed through rather than re-derived here. */
+    lastTicketByBehaviour: Partial<Record<ReeseBehaviourKey, LastTicketRef>>;
   },
 ): Promise<EmployeeFacts> {
   // Reese's own row enabled flag, from THIS request's already-loaded agent —
@@ -439,6 +410,7 @@ export async function getReeseEmployeeFacts(
       kill_switch: b.killSwitch,
       tools: BEHAVIOUR_TOOLS[key],
       scheduled_work_ref: cronRegistryName ?? null,
+      last_ticket: ctx.lastTicketByBehaviour[key] ?? null,
     };
   });
 

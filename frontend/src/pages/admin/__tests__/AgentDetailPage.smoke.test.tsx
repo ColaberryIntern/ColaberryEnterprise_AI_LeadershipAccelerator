@@ -591,6 +591,21 @@ describe('AgentDetailPage — "Tools & capabilities" per-tool drill-down', () =>
     expect(respondToDm?.textContent).toContain('A reply message in the student DM thread');
   });
 
+  // Reese Product Phase 1 follow-up (2026-09-18) — Ali, live: "color
+  // coordinate the tools so they show up the same place all over... I'd
+  // also like to see the last time the tool... was used." Each tool row
+  // gets a distinct color dot (assignDistinctAvatarColors — real colors,
+  // never blank) and an honest "Last used" line.
+  it('gives each tool its own distinct color dot, and an honest "not recorded yet" when no behaviour activity backs it', async () => {
+    await renderAgentPage();
+
+    const rows = Array.from(container.querySelectorAll('.adv2-tool'));
+    const dots = rows.map((d) => (d.querySelector('.adv2-dot') as HTMLElement | null)?.style.background);
+    expect(dots.every((d) => !!d)).toBe(true);
+    expect(new Set(dots).size).toBe(dots.length);
+    expect(container.textContent).toContain('Last used: not recorded yet');
+  });
+
   it('honesty path: an undocumented tool renders an "undocumented" badge and a per-tool disclosure, never fabricated reads/produces', async () => {
     getAgentDetail.mockResolvedValue({
       ...DETAIL,
@@ -659,6 +674,42 @@ describe('AgentDetailPage — "Scheduled tasks" section', () => {
     expect(container.textContent).toContain('0 15 * * *');
     expect(container.textContent).toContain('5h ago');
     expect(container.textContent).toContain('Enabled');
+  });
+
+  // Reese Product Phase 1 follow-up (2026-09-18) — Ali, live: "I'd also like
+  // to see the last time the tool and scheduled work was used/run and the
+  // ticket... the ticket should open in a new tab."
+  it('renders a real last-ticket link that opens in a new tab, and a boundary "None" when there is no ticket yet', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      related_tasks: [
+        {
+          id: 'sweep-id', agent_name: 'ReeseAutonomousOutreachSweep',
+          description: 'Daily scan of the approved pilot cohort for two real risk signals.',
+          trigger_type: 'cron', schedule: '0 15 * * *', enabled: true, status: 'idle',
+          last_run_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), run_count: 12, error_count: 0,
+          last_ticket: { id: 'ticket-9', ticket_number: 9, title: 'Outreach follow-up', at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString() },
+        },
+        {
+          id: 'heartbeat-id', agent_name: 'ReesePresenceHeartbeat', description: null,
+          trigger_type: 'cron', schedule: '*/15 * * * *', enabled: true, status: 'idle',
+          last_run_at: null, run_count: 0, error_count: 0, last_ticket: null,
+        },
+      ],
+    });
+
+    await renderAgentPage();
+
+    const link = container.querySelector('a[href="/admin/tickets?open=ticket-9"]');
+    expect(link).not.toBeNull();
+    expect(link?.getAttribute('target')).toBe('_blank');
+    expect(link?.getAttribute('rel')).toContain('noopener');
+    expect(link?.textContent).toContain('#9');
+    expect(container.textContent).toContain('Last ticket');
+    // The heartbeat task has no ticket — an honest "None", not a fabricated link.
+    const rows = Array.from(container.querySelectorAll('.adv2-task'));
+    const heartbeatRow = rows.find((r) => r.textContent?.includes('ReesePresenceHeartbeat'));
+    expect(heartbeatRow?.querySelector('a[href^="/admin/tickets"]')).toBeNull();
   });
 
   it('honesty boundary: shows a disabled badge for a paused task, never disguising it as running', async () => {
