@@ -8,6 +8,7 @@ import {
   getIntakeCall,
   placeIntakeCall,
 } from '../../../services/adminFlotationIntakeApi';
+import { saveActiveIntake, readActiveIntake, clearActiveIntake } from './flotationIntakeSession';
 
 /**
  * The spoken interview, from the management side.
@@ -59,13 +60,23 @@ export function transcriptToTurns(transcript: string): Array<{ role: 'user' | 'a
 }
 
 export default function SpokenIntake({ student, onViewAs }: Props) {
+  // Resume a call that was in flight before a page refresh, for THIS student.
+  // Computed once (lazy useState initializer) so it seeds the state below without
+  // an effect and without tripping exhaustive-deps.
+  const [resume] = useState(() => {
+    const a = readActiveIntake();
+    return a && a.student.id === student.id && a.placed.call_id ? a : null;
+  });
+
   const [phone, setPhone] = useState('');
   const [idea, setIdea] = useState('');
-  const [stage, setStage] = useState<Stage>('form');
-  const [placed, setPlaced] = useState<PlacedCall | null>(null);
+  const [stage, setStage] = useState<Stage>(resume ? 'watching' : 'form');
+  const [placed, setPlaced] = useState<PlacedCall | null>(resume ? resume.placed : null);
   const [progress, setProgress] = useState<IntakeCallProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const startedAt = useRef<number>(0);
+  const startedAt = useRef<number>(resume ? resume.ts : 0);
+  // A one-second clock, so the operator sees a live timer while the call runs.
+  const [nowTs, setNowTs] = useState(() => Date.now());
 
   const place = async () => {
     if (!phone.trim() || stage === 'placing') return;
@@ -75,6 +86,8 @@ export default function SpokenIntake({ student, onViewAs }: Props) {
       const result = await placeIntakeCall({ enrollmentId: student.id, phone: phone.trim(), idea: idea.trim() || undefined });
       setPlaced(result);
       startedAt.current = Date.now();
+      // Remember it so a refresh can re-attach to this call rather than losing it.
+      if (result.call_id) saveActiveIntake({ placed: result, student });
       setStage(result.call_id ? 'watching' : 'gave_up');
     } catch (err) {
       setError(describeCallError(err));
@@ -93,20 +106,29 @@ export default function SpokenIntake({ student, onViewAs }: Props) {
         if (!live) return;
         setProgress(p);
         if (p.build || p.call.status === 'failed' || (p.understanding && p.understanding.status !== 'extracted')) {
+          clearActiveIntake();
           setStage('done');
           return;
         }
       } catch {
         // A missed poll is not a failed call; the next one will say.
       }
-      if (live && Date.now() - startedAt.current > WATCH_FOR_MS) setStage('gave_up');
+      if (live && Date.now() - startedAt.current > WATCH_FOR_MS) { clearActiveIntake(); setStage('gave_up'); }
     };
     void tick();
     const t = setInterval(() => { void tick(); }, POLL_MS);
     return () => { live = false; clearInterval(t); };
   }, [stage, placed]);
 
+  // Drive the on-call timer, but only while actually watching a call.
+  useEffect(() => {
+    if (stage !== 'watching') return undefined;
+    const t = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [stage]);
+
   const reset = () => {
+    clearActiveIntake();
     setStage('form');
     setPlaced(null);
     setProgress(null);
@@ -166,6 +188,8 @@ export default function SpokenIntake({ student, onViewAs }: Props) {
   const onTheLine = !ended
     ? (call?.live_status === 'ringing' || call?.live_status === 'pending' ? 'Ringing' : call?.live_status === 'in-progress' ? 'On the phone' : 'Connecting')
     : '';
+  const elapsedSec = stage === 'watching' && startedAt.current ? Math.max(0, Math.floor((nowTs - startedAt.current) / 1000)) : 0;
+  const elapsed = elapsedSec ? `${Math.floor(elapsedSec / 60)}:${String(elapsedSec % 60).padStart(2, '0')}` : '';
 
   return (
     <div className="border rounded p-3" aria-live="polite">
@@ -210,7 +234,10 @@ export default function SpokenIntake({ student, onViewAs }: Props) {
       </ol>
 
       {stage === 'watching' && !failed && (
-        <p className="small text-muted mb-2"><span className="spinner-border spinner-border-sm me-2" />Checking every few seconds. You can leave this page; the call finishes on its own.</p>
+        <p className="small text-muted mb-2">
+          <span className="spinner-border spinner-border-sm me-2" />
+          {ended ? 'Wrapping up the write-up' : `${onTheLine}${elapsed ? ` · ${elapsed}` : ''}`}. Checking every few seconds — you can safely refresh or leave this page; the call keeps going and this view picks back up. The transcript appears once the call ends.
+        </p>
       )}
       {stage === 'gave_up' && !building && (
         <p className="small text-warning mb-2">

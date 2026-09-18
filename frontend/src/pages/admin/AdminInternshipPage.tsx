@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../../components/admin/shell';
 import './internship/adminInternship.css';
 import { useInternshipReview, ReviewProvider } from './internship/reviewContext';
@@ -40,7 +41,17 @@ const MODES: Array<{ key: Mode; label: string }> = [
 
 const AdminInternshipPage: React.FC = () => {
   const review = useInternshipReview();
-  const [mode, setMode] = useState<Mode>('apps');
+  // Which section is open lives in the URL (?view=), so a refresh keeps you where
+  // you were instead of dropping back to Applications — which, mid phone-intake,
+  // meant losing the whole live call view.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const raw = searchParams.get('view');
+  const mode: Mode = raw === 'projects' || raw === 'manage' ? raw : 'apps';
+  const setMode = (m: Mode) => setSearchParams((prev) => {
+    const p = new URLSearchParams(prev);
+    p.set('view', m);
+    return p;
+  }, { replace: true });
 
   const openApplicant = (id: string) => { setMode('apps'); review.setSelected(id); };
 
