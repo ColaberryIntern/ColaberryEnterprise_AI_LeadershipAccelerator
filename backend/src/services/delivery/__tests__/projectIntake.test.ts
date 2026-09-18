@@ -320,13 +320,19 @@ describe('the mirror - both doors are the same function', () => {
     expect(adminDoor).toContain('await reconcileFlotationCall(callId)');
   });
 
-  it('both doors place the call through requestInstantCallback with the same brand', () => {
+  it('both doors place the call through the one requestInstantCallback; the admin door stamps the Colaberry brand', () => {
     // The public site places it via the request_callback routing action; the admin page
-    // via its own route. One function dials, scripts, gates and logs the call for both.
+    // via its own route. One function dials, scripts, gates and logs the call for both -
+    // that is the mirror. What the two doors do NOT share is the spoken business name: the
+    // public prospect hears AI Flotation (the default brand), the intern hears Colaberry,
+    // because the admin door stamps COLABERRY_BRAND on the call it places. Same plumbing,
+    // correct business name - the mirror is the function, not the brand.
     expect(publicCall).toContain('await requestInstantCallback({');
     expect(adminDoor).toContain('await requestInstantCallback(');
     expect(adminDoor).toContain("const FLOTATION_SOURCE = 'ai-flotation'");
-    expect(adminDoor).toContain("{ enrollmentId: enrollment.id, requestedBy: 'admin' }");
+    expect(adminDoor).toContain("{ enrollmentId: enrollment.id, requestedBy: 'admin', brand: COLABERRY_BRAND }");
+    // The public door carries no CallBrand override, so it keeps the AI Flotation default.
+    expect(publicCall).not.toContain('COLABERRY_BRAND');
     for (const door of [publicCall, adminDoor]) {
       expect(door).not.toContain('triggerVoiceCall');
     }

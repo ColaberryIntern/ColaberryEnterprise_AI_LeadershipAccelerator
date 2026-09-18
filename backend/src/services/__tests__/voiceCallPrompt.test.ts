@@ -1,4 +1,4 @@
-import { buildFlotationCallPrompt } from '../voiceCallPrompt';
+import { buildFlotationCallPrompt, COLABERRY_BRAND } from '../voiceCallPrompt';
 
 /**
  * What a stranger is told when their phone rings.
@@ -24,12 +24,33 @@ describe('buildFlotationCallPrompt', () => {
     expect(buildFlotationCallPrompt({ name: null, company: null, message: null }).length).toBeGreaterThan(200);
   });
 
-  it('discloses that it is an AI, in the first instruction', () => {
+  it('discloses that it is an AI once, then stops repeating it', () => {
     // Section 57: never present the AI as a human. This is a legal and ethical line, not
-    // a stylistic one, so it is asserted rather than trusted to prompt-writing.
+    // a stylistic one, so it is asserted rather than trusted to prompt-writing. The
+    // disclosure must happen once and NOT on repeat — testers heard "I am an AI
+    // assistant" over and over, which made the call feel robotic.
     const prompt = buildFlotationCallPrompt(facts);
-    expect(prompt).toMatch(/IDENTIFY YOURSELF AS AN AI IMMEDIATELY/);
+    expect(prompt).toMatch(/say plainly and naturally that you are an AI/);
     expect(prompt).toMatch(/Never imply you are a human/);
+    expect(prompt).toMatch(/do NOT keep repeating that you are an AI/);
+  });
+
+  describe('the business it names is a parameter, never a mix', () => {
+    it('defaults to AI Flotation', () => {
+      const prompt = buildFlotationCallPrompt(facts);
+      expect(prompt).toContain('WHAT AI FLOTATION DOES');
+      expect(prompt).toMatch(/someone from AI Flotation will email them/);
+      expect(prompt).not.toContain('Colaberry');
+    });
+
+    it('names Colaberry for a Colaberry intake, and never says AI Flotation', () => {
+      // The internship intake is run from the Colaberry side; the agent must not
+      // introduce itself as AI Flotation to a Colaberry intern.
+      const prompt = buildFlotationCallPrompt(facts, COLABERRY_BRAND);
+      expect(prompt).toContain('WHAT COLABERRY DOES');
+      expect(prompt).toMatch(/someone from Colaberry will email them/);
+      expect(prompt).not.toContain('AI Flotation');
+    });
   });
 
   it('leads with what they actually wrote, and treats it as already answered', () => {

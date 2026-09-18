@@ -43,6 +43,7 @@ jest.mock('../../../services/delivery/flotationCallCompletion', () => ({
 }));
 
 import flotationIntakeRoutes from '../flotationIntakeRoutes';
+import { COLABERRY_BRAND } from '../../../services/voiceCallPrompt';
 
 const app = express();
 app.use(express.json());
@@ -87,7 +88,9 @@ describe('POST /api/admin/flotation/intake/call', () => {
       consent_contact: true,
     });
     expect(correlationId).toBe(res.body.correlation_id);
-    expect(options).toEqual({ enrollmentId: ENR, requestedBy: 'admin' });
+    // Same plumbing as a public prospect call, but the agent NAMES Colaberry (this is
+    // an internship intake), so the brand is stamped on the options.
+    expect(options).toEqual({ enrollmentId: ENR, requestedBy: 'admin', brand: COLABERRY_BRAND });
   });
 
   it('a second request inside the window is one call, reported as such', async () => {

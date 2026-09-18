@@ -9,7 +9,7 @@ import {
   CALLBACK_CONSENT_TTL_DAYS,
 } from './consent/captureSignupConsent';
 import { triggerVoiceCall } from './synthflowService';
-import { buildFlotationCallPrompt } from './voiceCallPrompt';
+import { buildFlotationCallPrompt, CallBrand } from './voiceCallPrompt';
 import { buildScholarshipCallPrompt } from './cpn/scholarshipCallPrompt';
 import { logCommunication } from './communicationLogService';
 import { WRITTEN_BRIEF_MAX } from './delivery/interviewMethod';
@@ -35,14 +35,17 @@ function promptForSource(payload: {
   role?: string | null;
   message?: string | null;
   city_state?: string | null;
-}): string | undefined {
+}, brand?: CallBrand): string | undefined {
   if (payload.source === 'ai-flotation') {
+    // `brand` is what the agent NAMES on the call — Colaberry for an internship
+    // intake, AI Flotation for a public prospect. The plumbing (agent, webhook,
+    // dedup) stays on the ai-flotation source; only the spoken brand differs.
     return buildFlotationCallPrompt({
       name: payload.name,
       company: payload.company,
       role: payload.role,
       message: payload.message,
-    });
+    }, brand);
   }
 
   // OpportunityLift. A scholarship applicant is not a sales prospect, so this is a
@@ -101,6 +104,12 @@ export interface CallbackOptions {
    */
   enrollmentId?: string;
   requestedBy?: 'admin';
+  /**
+   * Which business the agent names on the call. An internship intake run from the
+   * Colaberry side passes the Colaberry brand so the agent never says "AI Flotation"
+   * to a Colaberry intern. Omitted for a public AI Flotation prospect (the default).
+   */
+  brand?: CallBrand;
 }
 
 export async function requestInstantCallback(
@@ -236,7 +245,7 @@ export async function requestInstantCallback(
     // brand at all. A source with no prompt here is now SKIPPED by synthflowService
     // rather than dialled unscripted, so adding a brand to voice means adding its
     // instructions in the same change.
-    prompt: promptForSource(payload),
+    prompt: promptForSource(payload, options.brand),
     context: {
       lead_name: payload.name,
       lead_company: payload.company || undefined,

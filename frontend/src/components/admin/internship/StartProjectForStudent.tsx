@@ -10,6 +10,7 @@ import {
 } from '../../../services/adminFlotationIntakeApi';
 import { getViewAsUrl } from '../../../services/adminOrgApi';
 import SpokenIntake from './SpokenIntake';
+import { readActiveIntake, clearActiveIntake } from './flotationIntakeSession';
 
 /**
  * The interview, from the management side.
@@ -42,12 +43,15 @@ const newSessionId = (): string =>
       });
 
 export default function StartProjectForStudent() {
-  const [phase, setPhase] = useState<Phase>('pick');
+  // If a phone call was in flight before a page refresh, re-open straight on the
+  // talk step for that student — SpokenIntake then re-attaches to the live call.
+  const [resume] = useState(() => readActiveIntake());
+  const [phase, setPhase] = useState<Phase>(resume ? 'talk' : 'pick');
   const [query, setQuery] = useState('');
   const [matches, setMatches] = useState<IntakeStudent[]>([]);
   const [searching, setSearching] = useState(false);
-  const [student, setStudent] = useState<IntakeStudent | null>(null);
-  const [mode, setMode] = useState<Mode>('typed');
+  const [student, setStudent] = useState<IntakeStudent | null>(resume ? resume.student : null);
+  const [mode, setMode] = useState<Mode>(resume ? 'spoken' : 'typed');
 
   const [sessionId, setSessionId] = useState(newSessionId);
   const [turns, setTurns] = useState<IntakeTurn[]>([]);
@@ -117,6 +121,7 @@ export default function StartProjectForStudent() {
   };
 
   const reset = () => {
+    clearActiveIntake();
     setPhase('pick');
     setStudent(null);
     setMode('typed');

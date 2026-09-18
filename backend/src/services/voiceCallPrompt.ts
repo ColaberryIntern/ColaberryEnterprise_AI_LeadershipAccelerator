@@ -61,12 +61,43 @@ const say = (v: string | null | undefined): string | null => {
 };
 
 /**
- * The instructions for one AI Flotation intake call.
- *
- * Deterministic: same facts in, same prompt out, so a call can be reproduced from the
- * lead row when someone asks what the agent was told.
+ * Which business the agent represents on the call, so the same shell agent can run an
+ * AI Flotation prospect intake OR a Colaberry internship intake without ever naming
+ * the wrong company. Parameterised deliberately: the business name is a function of
+ * the context the call was placed from, not a constant — an internship intake run
+ * from the Colaberry side must say Colaberry, never AI Flotation.
  */
-export function buildFlotationCallPrompt(facts: FlotationCallFacts): string {
+export interface CallBrand {
+  /** The business the agent represents (e.g. "AI Flotation", "Colaberry"). */
+  name: string;
+  /** Where the person came from, for the opening line (e.g. "the AI Flotation website"). */
+  origin: string;
+  /** One line on what the business does, for the "WHAT X DOES" block. */
+  blurb: string;
+}
+
+/** The public AI Flotation prospect intake (aiflotation.com "call me now"). */
+export const AI_FLOTATION_BRAND: CallBrand = {
+  name: 'AI Flotation',
+  origin: 'the AI Flotation website',
+  blurb: 'It turns a costly manual workflow into an operating system the business can see: decisions on the record, evidence before anything ships, and a named person holding every gate. AI does the building; authority stays with people.',
+};
+
+/** The Colaberry internship intake — an intern's project, run from the Colaberry side. */
+export const COLABERRY_BRAND: CallBrand = {
+  name: 'Colaberry',
+  origin: 'Colaberry',
+  blurb: 'Colaberry helps you turn a real workflow into a working AI system you build and own: the work on the record, evidence before anything ships, and a mentor on every step. AI does the building; authority stays with people.',
+};
+
+/**
+ * The instructions for one intake call.
+ *
+ * Deterministic: same facts + brand in, same prompt out, so a call can be reproduced
+ * from the lead row when someone asks what the agent was told. `brand` defaults to
+ * AI Flotation, so callers that do not pass one are unchanged.
+ */
+export function buildFlotationCallPrompt(facts: FlotationCallFacts, brand: CallBrand = AI_FLOTATION_BRAND): string {
   const name = say(facts.name);
   const company = say(facts.company);
   const role = say(facts.role);
@@ -79,9 +110,13 @@ export function buildFlotationCallPrompt(facts: FlotationCallFacts): string {
   ].filter(Boolean).join(' ');
 
   return [
-    'You are an AI assistant calling on behalf of AI Flotation, at the request of the person you are calling. They asked to be called now, from the AI Flotation website.',
+    `You are the AI interviewer for ${brand.name}, calling because this person asked to be called now, from ${brand.origin}.`,
     '',
-    'IDENTIFY YOURSELF AS AN AI IMMEDIATELY, in your first sentence, before anything else. Never imply you are a human. If you are asked whether you are a person, say plainly that you are an AI assistant.',
+    // Disclose ONCE, then stop. The earlier prompt told the agent to keep saying
+    // "I am an AI assistant" whenever asked, and testers heard it over and over,
+    // which made the call feel robotic. One honest, natural disclosure up front is
+    // the requirement; repeating it is not.
+    `DISCLOSE ONCE, THEN MOVE ON. In your opening sentence, say plainly and naturally that you are an AI (for example, "Hi, this is the AI from ${brand.name}, calling because you asked us to reach out"). After that, do NOT keep repeating that you are an AI or call yourself an "AI assistant" again. Never imply you are a human; if someone directly asks whether you are a person, confirm simply and once that you are an AI, then continue the conversation normally.`,
     '',
     'WHO YOU ARE CALLING',
     who,
@@ -90,11 +125,11 @@ export function buildFlotationCallPrompt(facts: FlotationCallFacts): string {
     // opened with "walk me through it, step by step" against a brief that already had.
     ...writtenBriefLines(message),
     '',
-    'WHAT AI FLOTATION DOES',
-    'It turns a costly manual workflow into an operating system the business can see: decisions on the record, evidence before anything ships, and a named person holding every gate. AI does the building; authority stays with people.',
+    `WHAT ${brand.name.toUpperCase()} DOES`,
+    brand.blurb,
     '',
     'YOUR GOAL FOR THIS CALL',
-    'Understand the work. You are not selling and you are not qualifying a budget. This is the same interview the AI Flotation website runs in writing, conducted by voice:',
+    `Understand the work. You are not selling and you are not qualifying a budget. This is the same interview ${brand.name} runs in writing, conducted by voice:`,
     '',
     // The method is shared with the typed interview, word for word - see delivery/interviewMethod.ts.
     ...interviewMethodLines(),
@@ -111,7 +146,7 @@ export function buildFlotationCallPrompt(facts: FlotationCallFacts): string {
     '',
     'HOW TO END',
     'Thank them and confirm the best email to reach them on, spelling it back so you have it right.',
-    'Then tell them: their project is being set up now, and someone from AI Flotation will email them once it is ready to get started on.',
+    `Then tell them: their project is being set up now, and someone from ${brand.name} will email them once it is ready to get started on.`,
     'Do not give a date or a number of days. Do not say an automated message or confirmation is coming. Then end the call.',
   ].join('\n');
 }
