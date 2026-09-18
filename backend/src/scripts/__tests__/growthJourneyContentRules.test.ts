@@ -76,7 +76,7 @@ describe('the reads', () => {
   });
 
   it('assets: only the columns the plan needs - never a body, never a URL - and a brand with no learner programme gets none', async () => {
-    query.mockResolvedValueOnce([{ id: 'a-1', asset_type: 'LESSON', title: 'Week 1', audience_tags: ['full_access'], active: true }]);
+    query.mockResolvedValueOnce([{ id: 'a-1', asset_type: 'LESSON', title: 'Week 1', audience_tags: ['full_access'], active: true, brand_id: 'b-cpn' }]);
     query.mockResolvedValueOnce([{ brand_slug: 'colaberry-training' }]);
     const byBrand = await loadAssetsByBrandSlug(BRANDS);
     const assetSql = sqlSent()[0];
@@ -84,6 +84,8 @@ describe('the reads', () => {
     expect(assetSql).toContain('SELECT a.id, a.asset_type, a.title, a.audience_tags, a.active, a.brand_id FROM explorer_content_assets a');
     expect(assetSql).not.toMatch(/a\.url|a\.summary|a\.metadata/);
     expect(byBrand['colaberry-training']).toHaveLength(1);
+    // The row's own brand reaches the planner - the another-brand guard depends on it (the T412 re-check's P9).
+    expect(byBrand['colaberry-training'][0]).toMatchObject({ id: 'a-1', brand_id: 'b-cpn' });
     expect(byBrand['ai-flotation']).toEqual([]);
     expect(sqlSent()[1]).toContain("WHERE p.kind = 'learner'");
   });
