@@ -457,10 +457,31 @@
     return orientation === 'horizontal' ? horizontal(safe, steps, options.maxWidth) : vertical(safe, steps, options.maxWidth);
   }
 
+  /* How much wider than its canvas a horizontal drawing may be before stacking
+     is the better answer. The SVG is `width: 100%; height: auto`, so a wider
+     viewBox is SCALED into the canvas, not clipped or scrolled: at 1.6 the 12px
+     node label renders at about 7.5px, the floor for reading it.
+
+     WHY A NARROW CANVAS NO LONGER STACKS THE FLOW. The rule used to fall back to
+     the vertical column whenever the horizontal layout could not fit at full
+     size, which reads as a different drawing rather than a smaller one: on
+     aiflotation.com, whose record column is 1024px against the training site's
+     1384, the same twelve-step panel came out as a stack with the lanes gone and
+     the edge labels overlapping while the other two sites drew lanes. Ali,
+     2026-09-17: "I'm not feeling the chart here. It's just not even close to the
+     same effect." Keeping the horizontal composition and letting it shrink holds
+     the lanes, the left-to-right reading and the step order at every desk width.
+     Kept identical to `storyWorkflowLayout.ts`; `storyVisualShellParity.test.ts`
+     compares them. */
+  var MAX_SCALE_DOWN = 1.6;
+
   function layoutWorkflowToFit(panel, viewportWidth, maxWidth) {
     if (orientationFor(viewportWidth) === 'horizontal') {
       var h = layoutWorkflow(panel, 'horizontal', { maxWidth: maxWidth });
       if (h.fits) return h;
+      /* A canvas of 0 or less has not been measured yet; the ratio would be
+         meaningless, so the unfitted horizontal layout stands. */
+      if (maxWidth <= 0 || h.width <= maxWidth * MAX_SCALE_DOWN) return h;
     }
     return layoutWorkflow(panel, 'vertical', { maxWidth: maxWidth });
   }

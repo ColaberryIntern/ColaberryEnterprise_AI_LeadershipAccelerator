@@ -234,14 +234,38 @@ export function layoutWorkflow(panel: PublicCaseStudyWorkflowPanel, orientation:
 }
 
 /**
+ * How much wider than its canvas a horizontal drawing may be before stacking is
+ * the better answer. The SVG is sized `width: 100%; height: auto`, so a wider
+ * viewBox is SCALED into the canvas rather than clipped or scrolled: at 1.6 the
+ * 12px node label renders at about 7.5px, which is the floor for reading it.
+ */
+const MAX_SCALE_DOWN = 1.6;
+
+/**
  * The layout for the width the page offers: horizontal when the viewport is a
- * desk and every box can be read at that width, otherwise one vertical column
- * that always fits. The page never scrolls sideways for the drawing.
+ * desk, vertical when it is a phone. The page never scrolls sideways for the
+ * drawing either way, because the SVG scales to its canvas.
+ *
+ * WHY A NARROW CANVAS NO LONGER STACKS THE FLOW. The rule used to fall back to
+ * the vertical column whenever the horizontal layout could not fit the canvas at
+ * full size. That reads as a different drawing, not a smaller one: on
+ * aiflotation.com, whose record column is 1024px against the training site's
+ * 1384, the same twelve-step panel came out as a stack of boxes with the lanes
+ * gone and the edge labels overlapping, while the other two sites drew lanes.
+ * Ali, 2026-09-17: "I'm not feeling the chart here. It's just not even close to
+ * the same effect." A viewBox wider than the canvas is scaled by the browser, so
+ * keeping the horizontal composition and letting it shrink preserves the lanes,
+ * the left-to-right reading and the step order at every desk width. Past
+ * `MAX_SCALE_DOWN` the type would be too small to read and the column is again
+ * the honest answer.
  */
 export function layoutWorkflowToFit(panel: PublicCaseStudyWorkflowPanel, viewportWidth: number, maxWidth: number): WorkflowLayout {
   if (orientationFor(viewportWidth) === 'horizontal') {
     const h = layoutWorkflow(panel, 'horizontal', { maxWidth });
     if (h.fits) return h;
+    // `maxWidth` of 0 or less is a canvas that has not been measured yet; the
+    // ratio would be meaningless, so the unfitted horizontal layout stands.
+    if (maxWidth <= 0 || h.width <= maxWidth * MAX_SCALE_DOWN) return h;
   }
   return layoutWorkflow(panel, 'vertical', { maxWidth });
 }

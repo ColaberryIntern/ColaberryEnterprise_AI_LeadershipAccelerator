@@ -49,6 +49,28 @@
 
 /* ------------------------------------------------------------------ band --- */
 
+/*
+ * THE DRAWING NEEDS ROOM THE ARTICLE COLUMN DOES NOT ALWAYS HAVE. On a site
+ * whose record column is narrow (aiflotation.com sets 1024px where the
+ * training site gives 1384), a twelve-step flow could not be drawn at a
+ * readable size and the layout fell back to a stack of boxes, so one site
+ * showed lanes and another showed a column of the same record. Ali,
+ * 2026-09-17: "I'm not feeling the chart here. It's just not even close to the
+ * same effect."
+ *
+ * `max(100%, ...)` is what keeps this from being a regression elsewhere: the
+ * band never becomes NARROWER than the column it was given, so a site that
+ * already offers more than 1280px is untouched and only a narrow one breaks
+ * out, symmetrically, and never past the viewport's own gutter.
+ */
+@media (min-width: 1200px) {
+  .cbv2-story-visual {
+    --cs-vs-wide: max(100%, min(1280px, calc(100vw - 3rem)));
+    width: var(--cs-vs-wide);
+    margin-inline: calc((100% - var(--cs-vs-wide)) / 2);
+  }
+}
+
 .cbv2-story-visual__body { display: grid; gap: 2.5rem; min-width: 0; }
 .cbv2-story-visual__head { display: grid; gap: .5rem; }
 .cbv2-story-visual__heading { margin: 0; line-height: 1.15; text-wrap: balance; overflow-wrap: anywhere; }

@@ -51,13 +51,24 @@ export function StoryArchitectureBand({
   if (!source) {
     return <CaseStudyArchitecture architecture={architecture} headingLevel={3} />;
   }
+  /* WHEN THE BAND ABOVE ALREADY DREW THE FLOW, the first paragraph stands and
+     the rest of the narrative folds with the drawing and the inventory. Ali,
+     2026-09-17, on the training page first: everything below the decisions
+     "needs to shrink drastically"; then on this one, it "doesn't have a
+     timeline and bottom format". Nothing is trimmed: the full text is one click
+     away. A record with no visual story keeps every paragraph standing. */
+  const lead = diagramFolded ? { ...architecture, narrative: architecture.narrative.slice(0, 1) } : architecture;
+  const rest = diagramFolded ? { ...architecture, narrative: architecture.narrative.slice(1) } : null;
   return (
     <>
-      <CaseStudyArchitectureProse architecture={architecture} />
+      <CaseStudyArchitectureProse architecture={lead} />
       {diagramFolded ? null : <StoryDiagram source={source} />}
       <details className="cbv2-story__proof" data-testid="story-technical-proof" data-diagram-folded={diagramFolded}>
-        <summary className="cbv2-story__proof-summary">View technical proof</summary>
+        <summary className="cbv2-story__proof-summary">
+          {rest && rest.narrative.length > 0 ? 'More on what was built' : 'View technical proof'}
+        </summary>
         <div className="cbv2-story__proof-body">
+          {rest ? <CaseStudyArchitectureProse architecture={rest} /> : null}
           {diagramFolded ? <StoryDiagram source={source} /> : null}
           <CaseStudyArchitectureInventory architecture={architecture} headingLevel={3} />
         </div>
