@@ -151,6 +151,16 @@ const InternshipInterview: React.FC<Props> = ({ onProgressed, onComplete }) => {
         };
 
       const res = await saveInterviewAnswers([payload]);
+
+      // The server NAMES any answer it would not accept (a stale question bank, or a
+      // value it could not validate) in `rejected` rather than silently dropping it.
+      // Surface that instead of advancing as if it saved — otherwise the answer is
+      // lost, progress never moves, and the interview can never be completed.
+      if (res.rejected.includes(question.question_key)) {
+        setError('That answer was not accepted. Please check it and try again, or refresh the page to reload the interview.');
+        return;
+      }
+
       onProgressed?.();
 
       if (res.progress.complete) { onComplete?.(); await load(); return; }
@@ -165,8 +175,19 @@ const InternshipInterview: React.FC<Props> = ({ onProgressed, onComplete }) => {
       } else {
         await load();
       }
-    } catch {
-      setError('We could not save that answer. Please try again.');
+    } catch (e: any) {
+      // A failed save is most often a timed-out session, not a bad answer — say so,
+      // so the applicant refreshes or signs in again rather than blaming their
+      // answer. Every answer saved before this one is safe on the server (autosave),
+      // so a refresh loses nothing.
+      const status = e?.response?.status;
+      if (status === 401) {
+        setError('Your session has timed out. Please refresh the page or sign in again, then continue — the answers you already saved are safe.');
+      } else if (status === 429) {
+        setError('That was a lot of requests in a short time. Wait a few seconds, then try again.');
+      } else {
+        setError('We could not save that answer. Please try again.');
+      }
     } finally {
       setBusy(false);
     }
