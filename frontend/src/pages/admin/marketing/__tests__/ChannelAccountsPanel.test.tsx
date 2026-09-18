@@ -2,7 +2,7 @@ import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
 import ChannelAccountsPanel from '../ChannelAccountsPanel';
-import type { ChannelAccount, VaultStatus } from '../../../../services/channelAccountApi';
+import type { ChannelAccount, ConnectorStatus, VaultStatus } from '../../../../services/channelAccountApi';
 
 /**
  * ChannelAccountsPanel — the honest-empty-state rule.
@@ -34,11 +34,18 @@ function account(over: Partial<ChannelAccount> = {}): ChannelAccount {
   };
 }
 
+const CONNECTORS: ConnectorStatus[] = [
+  { key: 'linkedin', label: 'LinkedIn (personal profile)', providers: ['linkedin_member'], configured: true, missing_env: [], redirect_uri: 'https://www.refactored.ai/api/marketing/linkedin/callback', requirements: 'Live. Tokens last 60 days and must be reconnected before they lapse.' },
+  { key: 'meta', label: 'Facebook & Instagram', providers: ['meta_facebook_page', 'meta_instagram'], configured: true, missing_env: [], redirect_uri: 'https://www.refactored.ai/api/marketing/oauth/meta/callback', requirements: 'Needs a Meta developer app; until Advanced Access, only app-role users can connect.' },
+  { key: 'tiktok', label: 'TikTok', providers: ['tiktok'], configured: false, missing_env: ['TIKTOK_CLIENT_KEY', 'TIKTOK_CLIENT_SECRET'], redirect_uri: 'https://www.refactored.ai/api/marketing/oauth/tiktok/callback', requirements: 'Until TikTok audits the app, everything it posts is private.' },
+];
+
 function render(props: Partial<React.ComponentProps<typeof ChannelAccountsPanel>> = {}) {
   act(() => {
     root.render(
       <ChannelAccountsPanel
         loading={false} error={null} vault={VAULT_OK} accounts={[]} brandId="b-1" busy={false}
+        connectors={CONNECTORS}
         onConnect={() => {}} onRevoke={() => {}} onRetry={() => {}}
         {...props}
       />,
@@ -61,7 +68,7 @@ describe('the three causes of an empty list are distinguishable', () => {
     expect(banner.textContent).toMatch(/SOCIAL_CREDENTIAL_MASTER_KEY/);
     // The operator is told what the product does instead, not left to infer it is broken.
     expect(banner.textContent).toMatch(/handoff mode/);
-    const button = container.querySelector('[data-testid="connect-account"]') as HTMLButtonElement;
+    const button = container.querySelector('[data-testid="connect-linkedin"]') as HTMLButtonElement;
     expect(button.disabled).toBe(true);
     expect(container.querySelector('[data-testid="no-accounts"]')!.textContent)
       .toMatch(/none can be until the credential store is configured/);
@@ -70,7 +77,7 @@ describe('the three causes of an empty list are distinguishable', () => {
   it('CAN connect, nothing connected yet: the button is real', () => {
     render();
     expect(container.querySelector('[data-testid="vault-unavailable"]')).toBeNull();
-    const button = container.querySelector('[data-testid="connect-account"]') as HTMLButtonElement;
+    const button = container.querySelector('[data-testid="connect-linkedin"]') as HTMLButtonElement;
     expect(button.disabled).toBe(false);
     expect(container.querySelector('[data-testid="no-accounts"]')!.textContent)
       .toMatch(/No accounts are connected for this brand yet/);
@@ -136,19 +143,60 @@ describe('rotation and interaction', () => {
   });
 
 
-  it('a THIRD reason - the sign-in flow is not built - reads differently from a missing vault', () => {
-    // Two different owners, two different fixes. Collapsing them would send an operator to
-    // configure a server when the real gap is a feature nobody has written yet.
-    render({ connectDisabledReason: 'Connecting needs the provider sign-in flow, which is not built yet.' });
+  it('a THIRD reason - one network is not set up yet - is told per network, with what it needs', () => {
+    // Different owner, different fix from a missing vault: the platform app does not exist yet.
+    // The row says so, offers no Connect button that would only fail, and names the exact
+    // variables and redirect URL - names, never values.
+    render();
     expect(container.querySelector('[data-testid="vault-unavailable"]')).toBeNull();
-    expect(container.querySelector('[data-testid="connect-disabled-reason"]')!.textContent)
-      .toMatch(/sign-in flow, which is not built yet/);
-    expect((container.querySelector('[data-testid="connect-account"]') as HTMLButtonElement).disabled).toBe(true);
+    const row = container.querySelector('[data-testid="connector-row-tiktok"]')!;
+    expect(row.textContent).toMatch(/Not set up yet/);
+    expect(container.querySelector('[data-testid="connect-tiktok"]')).toBeNull();
+    const setup = container.querySelector('[data-testid="connector-setup-tiktok"]')!;
+    expect(setup.textContent).toContain('TIKTOK_CLIENT_KEY');
+    expect(setup.textContent).toContain('https://www.refactored.ai/api/marketing/oauth/tiktok/callback');
+    expect(setup.textContent).toMatch(/private/);
   });
+
+  it('lists every network the server reports, and Connect names which one', () => {
+    const onConnect = jest.fn();
+    render({ onConnect });
+    expect(Array.from(container.querySelectorAll('[data-testid^="connector-row-"]')).map((r) => r.getAttribute('data-testid')))
+      .toEqual(['connector-row-linkedin', 'connector-row-meta', 'connector-row-tiktok']);
+    act(() => { (container.querySelector('[data-testid="connect-meta"]') as HTMLButtonElement).click(); });
+    expect(onConnect).toHaveBeenCalledWith('meta');
+  });
+
   it('tells the operator to pick a brand rather than silently disabling connect', () => {
     render({ brandId: null });
-    expect((container.querySelector('[data-testid="connect-account"]') as HTMLButtonElement).disabled).toBe(true);
+    expect((container.querySelector('[data-testid="connect-linkedin"]') as HTMLButtonElement).disabled).toBe(true);
     expect(container.textContent).toMatch(/Choose a brand first/);
+  });
+
+  it('says so when the list of networks could not be loaded, rather than showing none', () => {
+    render({ connectors: null, connectorsError: 'The list of networks could not be loaded.' });
+    expect(container.querySelector('[data-testid="connectors-error"]')!.textContent).toMatch(/could not be loaded/);
+  });
+
+  it('trusts the server verdict: an X account past its 2-hour access token is still Connected', () => {
+    render({
+      accounts: [account({
+        provider: 'x', health: 'ok', usable_until: null,
+        credentials: [
+          { credential_type: 'access_token', token_expires_at: '2026-09-18T12:00:00.000Z', rotated_at: null, key_id: 'k', expired: true },
+          { credential_type: 'refresh_token', token_expires_at: null, rotated_at: null, key_id: 'k', expired: false },
+        ],
+      })],
+    });
+    expect(container.textContent).toMatch(/Connected/);
+    expect(container.textContent).not.toMatch(/Token expired/);
+    expect(container.textContent).toMatch(/No expiry/);
+  });
+
+  it('an expiring account says so before it stops, not after', () => {
+    render({ accounts: [account({ health: 'expiring', usable_until: '2026-11-16T01:50:34.000Z' })] });
+    expect(container.textContent).toMatch(/Expiring soon/);
+    expect(container.textContent).toMatch(/Until Nov 15, 2026/);
   });
 
   it('offers a retry on error instead of an empty panel', () => {

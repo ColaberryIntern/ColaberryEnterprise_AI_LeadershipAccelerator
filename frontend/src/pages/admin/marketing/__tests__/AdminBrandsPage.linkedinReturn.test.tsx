@@ -28,6 +28,7 @@ jest.mock('../../../../services/adminBrandApi', () => ({ listBrands: jest.fn(), 
 jest.mock('../../../../services/channelAccountApi', () => ({
   getVaultStatus: jest.fn(), getLinkedInStatus: jest.fn(), listChannelAccounts: jest.fn(), revokeChannelAccount: jest.fn(),
   startLinkedInConnect: jest.fn(), errorMessageOf: jest.fn(),
+  listConnectors: jest.fn(), startConnect: jest.fn(),
 }));
 
 import * as brandApi from '../../../../services/adminBrandApi';
@@ -44,6 +45,8 @@ function primeMocks() {
   (accountApi.listChannelAccounts as jest.Mock).mockResolvedValue([]);
   (accountApi.startLinkedInConnect as jest.Mock).mockResolvedValue({ url: 'https://www.linkedin.com/oauth/v2/authorization?x=1' });
   (accountApi.errorMessageOf as jest.Mock).mockImplementation((_e: unknown, fallback: string) => fallback);
+  (accountApi.listConnectors as jest.Mock).mockResolvedValue([]);
+  (accountApi.startConnect as jest.Mock).mockResolvedValue({ url: 'https://www.linkedin.com/oauth/v2/authorization?x=1' });
 }
 
 /** The real admin route for the Brands page, as adminRoutes.tsx declares it. */

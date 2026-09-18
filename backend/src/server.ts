@@ -33,6 +33,7 @@ import trackedLinkRedirectRoutes from './routes/trackedLinkRedirectRoutes';
 import openclawShortLinkRoutes from './routes/openclawShortLinkRoutes';
 import mediaFetchRoutes from './routes/mediaFetchRoutes';
 import linkedInCallbackRoutes from './routes/linkedInCallbackRoutes';
+import marketingOAuthCallbackRoutes from './routes/marketingOAuthCallbackRoutes';
 import v1Routes from './routes/v1Routes';
 import advisorRoutes from './routes/advisorRoutes';
 import showcaseArtifactRoutes from './routes/showcaseArtifactRoutes';
@@ -221,6 +222,9 @@ app.use(openclawShortLinkRoutes);
 app.use(mediaFetchRoutes);
 // LinkedIn's browser redirect after consent: no JWT, trusts the signed state. Above adminRoutes, like /r/ /i/ /m/.
 app.use(linkedInCallbackRoutes);
+// Every other network's browser redirect after consent (Meta, YouTube, TikTok, X, LinkedIn Pages).
+// Same rule: no JWT on a top-level navigation, so above adminRoutes or it 401s.
+app.use(marketingOAuthCallbackRoutes);
 app.use(v1Routes);
 
 // PUBLIC API routes — MUST stay mounted BEFORE adminRoutes. adminRoutes is mounted

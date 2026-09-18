@@ -6,12 +6,14 @@ import BrandReadinessPanel from './BrandReadinessPanel';
 import ChannelAccountsPanel from './ChannelAccountsPanel';
 import {
   getVaultStatus,
-  getLinkedInStatus,
   listChannelAccounts,
+  listConnectors,
   revokeChannelAccount,
-  startLinkedInConnect,
+  startConnect,
   errorMessageOf,
   type ChannelAccount,
+  type ConnectorKey,
+  type ConnectorStatus,
   type VaultStatus,
 } from '../../../services/channelAccountApi';
 import {
@@ -48,7 +50,8 @@ function AdminBrandsPage() {
   const [accountsLoading, setAccountsLoading] = useState(true);
   const [accountsError, setAccountsError] = useState<string | null>(null);
   const [accountsBusy, setAccountsBusy] = useState(false);
-  const [linkedInConfigured, setLinkedInConfigured] = useState<boolean | null>(null);
+  const [connectors, setConnectors] = useState<ConnectorStatus[] | null>(null);
+  const [connectorsError, setConnectorsError] = useState<string | null>(null);
   const [connectNotice, setConnectNotice] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
   // LinkedIn sends the browser back here after consent with ?linkedin=connected|error. Read it
@@ -59,6 +62,15 @@ function AdminBrandsPage() {
   const navigate = useNavigate();
   useEffect(() => {
     const params = new URLSearchParams(location.search);
+    // Every other network returns ?connected=<network> or ?connect_error=<reason>.
+    const generic = genericConnectNotice(params);
+    if (generic) {
+      setConnectNotice(generic);
+      const brand = params.get('brand');
+      if (brand) setSelectedBrandId(brand);
+      navigate(location.pathname, { replace: true });
+      return;
+    }
     const outcome = params.get('linkedin');
     if (!outcome) return;
     if (outcome === 'connected') {
@@ -74,18 +86,20 @@ function AdminBrandsPage() {
   }, [location.search, location.pathname, navigate]);
 
   useEffect(() => {
-    getLinkedInStatus().then((s) => setLinkedInConfigured(s.configured)).catch(() => setLinkedInConfigured(false));
+    listConnectors()
+      .then((c) => { setConnectors(c); setConnectorsError(null); })
+      .catch(() => setConnectorsError('The list of networks could not be loaded. Reload the page to try again.'));
   }, []);
 
-  const handleConnect = useCallback(async () => {
+  const handleConnect = useCallback(async (connector: ConnectorKey) => {
     if (!selectedBrandId) return;
     setAccountsBusy(true);
     try {
-      const { url } = await startLinkedInConnect(selectedBrandId);
-      // The whole window goes to LinkedIn; it comes back to this page via the callback.
+      const { url } = await startConnect(connector, selectedBrandId);
+      // The whole window goes to the network; it comes back to this page via the callback.
       window.location.assign(url);
     } catch (err) {
-      setConnectNotice({ tone: 'danger', text: errorMessageOf(err, 'The LinkedIn connection could not be started.') });
+      setConnectNotice({ tone: 'danger', text: errorMessageOf(err, 'The connection could not be started.') });
       setAccountsBusy(false);
     }
   }, [selectedBrandId]);
@@ -219,11 +233,8 @@ function AdminBrandsPage() {
           vault={vault}
           accounts={accounts}
           brandId={selectedBrandId}
-          // The sign-in flow exists; what can still be missing is the LinkedIn app itself (the
-          // server has no client id/secret). Said in words rather than as a dead button.
-          connectDisabledReason={linkedInConfigured === false
-            ? 'LinkedIn is not configured on this server yet (LINKEDIN_CLIENT_ID / SECRET / REDIRECT_URI). Networks stay in handoff mode until it is.'
-            : null}
+          connectors={connectors}
+          connectorsError={connectorsError}
           busy={accountsBusy}
           onConnect={handleConnect}
           onRevoke={handleRevoke}
@@ -249,3 +260,55 @@ export function connectFailureText(reason: string | null): string {
 }
 
 export default AdminBrandsPage;
+
+/** Names for the networks' return messages; the Brands list itself comes from the server. */
+const NETWORK_NAMES: Record<string, string> = {
+  linkedin_org: 'LinkedIn Company Page',
+  meta: 'Facebook & Instagram',
+  youtube: 'YouTube',
+  tiktok: 'TikTok',
+  x: 'X',
+};
+
+/**
+ * What to say after any network other than LinkedIn personal profiles sends the browser back.
+ * Null when the query carries no outcome. Exported for the test: these sentences are what an
+ * operator reads at the exact moment they find out whether it worked.
+ */
+export function genericConnectNotice(params: URLSearchParams): { tone: 'success' | 'danger'; text: string } | null {
+  const connected = params.get('connected');
+  const failed = params.get('connect_error');
+  if (!connected && !failed) return null;
+  const name = NETWORK_NAMES[connected ?? params.get('connector') ?? ''];
+  // No known network (a hand-edited URL, or UnknownConnector): say it plainly without a name,
+  // rather than building "The The network connection failed" from a placeholder.
+  if (!name) {
+    return connected
+      ? { tone: 'success', text: 'Connected. The new accounts are listed below.' }
+      : { tone: 'danger', text: `The connection failed${failed ? ` (${failed})` : ''}. Start it again from this page.` };
+  }
+
+  if (connected) {
+    const n = Number(params.get('count') ?? '1');
+    const accounts = `${n} account${n === 1 ? '' : 's'}`;
+    return {
+      tone: 'success',
+      text: `${name} connected: ${accounts} added to this brand. Until direct publishing is switched on for ${name}, its posts are prepared for you to publish by hand.`,
+    };
+  }
+
+  switch (failed) {
+    case 'cancelled': return { tone: 'danger', text: `The ${name} connection was cancelled before finishing. Nothing was saved.` };
+    case 'StateExpired': return { tone: 'danger', text: `The ${name} sign-in took longer than ten minutes and expired. Start it again.` };
+    case 'StateInvalid':
+    case 'StateConnectorMismatch': return { tone: 'danger', text: `The ${name} sign-in could not be verified. Start it again from this page.` };
+    case 'NoAccountsFound': return { tone: 'danger', text: `${name} returned no accounts. In its sign-in window, choose the pages or accounts to connect, and check you are an admin of them.` };
+    case 'ProviderNotConfigured': return { tone: 'danger', text: `${name} is not set up on this server yet. Open "What it needs" under Connect a network.` };
+    case 'BrandNotFound': return { tone: 'danger', text: 'The brand this connection was started for no longer exists.' };
+    case 'ExchangeFailed': return { tone: 'danger', text: `${name} refused the sign-in code. Start the connection again.` };
+    case 'IdentityFailed': return { tone: 'danger', text: `${name} signed you in but would not say which account it was. Check the app permissions and try again.` };
+    case 'VaultUnavailable': return { tone: 'danger', text: 'The credential store is unavailable, so the account could not be saved securely. Nothing was connected.' };
+    case 'provider_refused': return { tone: 'danger', text: `${name} refused the connection. Check the app is approved for the permissions it asks for.` };
+    default: return { tone: 'danger', text: `The ${name} connection failed${failed ? ` (${failed})` : ''}. Start it again; if it repeats, check the server log.` };
+  }
+}
