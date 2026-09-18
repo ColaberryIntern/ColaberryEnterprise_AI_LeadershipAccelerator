@@ -5,7 +5,7 @@
  *
  *   docker cp apply-cover.js cover-caption.json accelerator-backend:/tmp/
  *   docker exec accelerator-backend node /tmp/apply-cover.js --id=<case study uuid> \
- *     --image=https://enterprise.colaberry.ai/site-v2/thumb-<name>.jpg \
+ *     --image=https://enterprise.colaberry.ai/site-v2/thumb-<name>.jpg?v=<first 8 of its md5> \
  *     --title="Illustration: <what the picture shows>" [--apply]
  *
  * WHAT IT WRITES, in one new snapshot:
@@ -22,13 +22,19 @@
  * with --apply. A record with no live publication stops at a DRAFT snapshot: making a
  * record public is its owner's decision, never a side effect of changing a picture.
  *
- * REFUSES, before writing anything, when: (--apply only) the image URL is not a live 200
- * image on enterprise.colaberry.ai/site-v2 (deploy the assets first, or every live page
- * gets a broken poster; a dry run only warns, so it can be checked before the deploy); the title does not start with the caption prefix; the title or the
+ * REFUSES, before writing anything, when: the URL has no `?v=<md5 8>`; (--apply only) the
+ * image URL is not a live 200 image on enterprise.colaberry.ai/site-v2 (deploy the assets
+ * first, or every live page gets a broken poster); the title does not start with the caption prefix; the title or the
  * description would be dropped by the atmosphere claim scan (describesDeliveredWork);
  * the composed content would not resolve to this cover or project this artifact; the
  * visual story fails validation after its hash is re-stamped; or any surface's gate
  * shows a blocker other than the two that approval itself clears.
+ *
+ * THE URL CARRIES THE FILE'S HASH, AND A DRY RUN NEVER FETCHES IT. Measured 2026-09-18:
+ * Cloudflare caches a 404 from site-v2 for four hours, and four covers requested before
+ * (or during) their deploy stayed 404 at the edge while the server had them. A `?v=<md5>`
+ * query is a cache key the edge has never seen, and a dry run that does not request the
+ * URL cannot poison it.
  *
  * IDEMPOTENT. The artifact row is found by (case_study_id, public_url). A record whose
  * latest snapshot already carries this cover and poster is not re-persisted; if that
@@ -54,6 +60,7 @@ function stop(msg, code = 2) { console.log(`STOP: ${msg}`); process.exit(code); 
 (async () => {
   if (!ID || !IMAGE || !TITLE) stop('usage: --id=<uuid> --image=<url> --title="Illustration: ..." [--apply]', 1);
   if (!IMAGE.startsWith(SITE)) stop(`image must be served from ${SITE}`);
+  if (!/\?v=[0-9a-f]{8}$/.test(IMAGE)) stop('name the image with its content hash: thumb-<name>.jpg?v=<first 8 of its md5>');
   if (!TITLE.startsWith(CAPTION.titlePrefix)) stop(`title must start with "${CAPTION.titlePrefix}"`);
 
   const presentation = require('/app/dist/services/caseStudy/caseStudyArtifactPresentation');
@@ -61,11 +68,12 @@ function stop(msg, code = 2) { console.log(`STOP: ${msg}`); process.exit(code); 
     stop('the caption uses a delivered-work word, so the projection would drop the picture (DELIVERED_WORK_CLAIMS)');
   }
 
-  const head = await fetch(IMAGE, { method: 'GET', signal: AbortSignal.timeout(20000) });
-  const type = head.headers.get('content-type') || '';
-  if (head.status !== 200 || !type.startsWith('image/')) {
-    if (APPLY) stop(`${IMAGE} answered ${head.status} ${type}: deploy the assets first`);
-    console.log(`WARNING (dry run only): ${IMAGE} answered ${head.status} ${type}; --apply refuses until it is live`);
+  if (APPLY) {
+    const head = await fetch(IMAGE, { method: 'GET', signal: AbortSignal.timeout(20000) });
+    const type = head.headers.get('content-type') || '';
+    if (head.status !== 200 || !type.startsWith('image/')) stop(`${IMAGE} answered ${head.status} ${type}: deploy the assets first`);
+  } else {
+    console.log('dry run: the image URL is not requested (a 404 fetched now is cached at the edge for 4 hours)');
   }
 
   const { sequelize } = require('/app/dist/config/database');

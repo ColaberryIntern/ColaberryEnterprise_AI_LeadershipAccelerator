@@ -122,6 +122,28 @@ export function carouselSlides(
 }
 
 /**
+ * The artifacts the page has not already drawn, for the list under the carousel.
+ *
+ * EVERY PICTURE ONCE. Ali, 2026-09-18, when each record's cover became a picked
+ * thumbnail that is also the video's poster: "do not use the picture a 3rd time
+ * inside the case study ... if the old picture was already being used, then
+ * only use it once." `shownHrefs` is everything already drawn: the masthead's
+ * picture, the figures between sections, and this band's own carousel. An open
+ * artifact whose `url` or `previewUrl` is among them is not listed again; a
+ * document without a picture, and every request-only row, still lists. The
+ * AI Flotation and training renderers already skip the cover and the placed
+ * figures in their equivalent band (`case-study-record.js`, `artifacts`).
+ */
+export function unshownArtifacts(
+  artifacts: readonly PublicCaseStudyArtifact[],
+  shownHrefs: readonly string[],
+): readonly PublicCaseStudyArtifact[] {
+  const shown = new Set<string>(shownHrefs);
+  return (artifacts ?? []).filter((a) => a.access !== 'open'
+    || !(shown.has(a.url) || (a.previewUrl != null && shown.has(a.previewUrl))));
+}
+
+/**
  * The human-authored mermaid source, or null.
  *
  * A one-line unwrap with a name, so the band's visibility is a value the page
