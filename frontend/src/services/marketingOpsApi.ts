@@ -26,3 +26,47 @@ export async function getNeedsAttention(params?: { brand_id?: string }): Promise
     scope_mode: res.data.scope_mode,
   };
 }
+/** How an account reads on the Overview. Mirrors backend `overviewHealth.AccountHealth`. */
+export type AccountHealth = 'revoked' | 'expired' | 'unhealthy' | 'expiring' | 'ok';
+
+export interface UpcomingPost {
+  id: string;
+  title: string;
+  brand_id: string | null;
+  brand_name: string | null;
+  scheduled_for: string;
+  status: string;
+  providers: string[];
+  late: boolean;
+}
+
+export interface OverviewAccount {
+  id: string;
+  brand_id: string | null;
+  brand_name: string | null;
+  provider: string;
+  display_name: string;
+  health: AccountHealth;
+  token_expires_at: string | null;
+  expires_in_days: number | null;
+}
+
+export interface MarketingOverview {
+  upcoming: UpcomingPost[];
+  upcoming_truncated: boolean;
+  accounts: OverviewAccount[];
+  handoff_providers: string[];
+  recent: { published: number; since: string; window_days: number };
+  scope_mode?: string;
+}
+
+/**
+ * The whole Overview in one request.
+ *
+ * One call rather than four, because the generic content list takes a single status and sorts
+ * by `updated_at`, which cannot express "the next five posts going out".
+ */
+export async function getMarketingOverview(params?: { brand_id?: string }): Promise<MarketingOverview> {
+  const res = await api.get('/api/admin/marketing/overview', { params });
+  return res.data;
+}

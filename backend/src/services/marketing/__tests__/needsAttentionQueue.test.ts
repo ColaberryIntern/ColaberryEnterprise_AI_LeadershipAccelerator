@@ -177,3 +177,42 @@ describe('trusted signals raise at their thresholds', () => {
     expect(q.items.find((i) => i.key === 'late_jobs')!.title).toMatch(/1 scheduled post is overdue/);
   });
 });
+describe('every item is a door OUT of the page the queue renders on', () => {
+  // The queue renders on the Marketing Overview at /admin/marketing. Until 2026-09-18 three
+  // items linked to that bare path, which was correct while it was the analytics dashboard and
+  // became a link to itself the day the Overview took the address. The fix points them at
+  // Performance, but the property worth pinning is the general one: no item may send the
+  // operator back to where they already are.
+  const EVERYTHING_RAISED: NeedsAttentionCounts = {
+    pendingApprovals: 1,
+    failedJobs: 1,
+    lateJobs: 1,
+    deadLetteredJobs: 1,
+    brokenLinks: 1,
+    unmappedSpendItems: 1,
+    unattributedVisitorShare: 1,
+  };
+  const items = buildNeedsAttentionQueue(EVERYTHING_RAISED, ALL_TRUSTED).items;
+
+  it('raises every candidate, so the assertions below cover all of them', () => {
+    // Exact, not "at least": a rule added later must show up here and be looked at, rather than
+    // ride along uncovered. Failed and dead-lettered jobs share one item, hence six from seven counts.
+    expect(items.map((i) => i.key).sort()).toEqual([
+      'broken_links', 'failed_jobs', 'late_jobs', 'pending_approvals',
+      'unattributed_traffic', 'unmapped_spend',
+    ]);
+  });
+
+  it.each(items.map((i) => [i.key, i.href]))('%s links somewhere other than the Overview (%s)', (_key, href) => {
+    const path = String(href).split(/[?#]/)[0];
+    expect(path).not.toBe('/admin/marketing');
+    expect(path).not.toBe('/admin/marketing/');
+  });
+
+  it('the analytics items open the tab they are about', () => {
+    const href = (key: string) => items.find((i) => i.key === key)!.href;
+    expect(href('broken_links')).toBe('/admin/marketing/performance?tab=registry');
+    expect(href('unmapped_spend')).toBe('/admin/marketing/performance?tab=revenue');
+    expect(href('unattributed_traffic')).toBe('/admin/marketing/performance?tab=revenue');
+  });
+});
