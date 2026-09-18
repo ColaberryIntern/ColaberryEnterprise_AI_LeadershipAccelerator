@@ -204,10 +204,11 @@ router.get('/api/admin/flotation/intake/enrollments', requireAdmin, async (req: 
  *      intake."  (Ali, 2026-09-16)
  *
  * This places the same call a prospect gets from "Call me now" on /start: the same
- * `requestInstantCallback`, the same AI Flotation script, the same consent, dedup and
- * safety gates, the same completion webhook - which then runs the same `finishIntake` the
- * typed interview ends with. The one difference is stamped on the call when it is placed:
- * which student the project is for.
+ * `requestInstantCallback`, the same consent, dedup and safety gates, the same completion
+ * webhook - which then runs the same `finishIntake` the typed interview ends with. Two
+ * things are stamped on the call when it is placed: which student the project is for, and
+ * the business the agent names - Colaberry here (COLABERRY_BRAND), not AI Flotation, since
+ * this door is run from the Colaberry side for an intern. The script is otherwise identical.
  *
  * The phone is whoever should be on the line. To test the experience, an admin gives
  * their own number and plays the customer; the project still lands in the student's

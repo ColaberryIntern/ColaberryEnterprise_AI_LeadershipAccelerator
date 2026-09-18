@@ -36,7 +36,13 @@ provider-capability spike (Phase 2).
   - Verification: `voiceCallPrompt.test.ts` updated (disclose-once + a brand block: default
     says AI Flotation and never Colaberry, Colaberry brand says Colaberry and never AI
     Flotation) — 53 pass with interviewMethod; `flotationIntakeCallRoutes.test.ts` updated
-    to expect the stamped brand — 20 pass. Backend `tsc` clean.
+    to expect the stamped brand — 20 pass; the `projectIntake.test.ts` **mirror test**
+    (which reads both door source files) updated — its old assertion pinned the admin
+    door's exact `requestInstantCallback` options and its title claimed both doors share a
+    brand, but the whole point is that they DON'T: the public door keeps the AI Flotation
+    default, the admin door stamps `COLABERRY_BRAND`. Retitled + asserts that split (27
+    pass). All three files together: 66 pass under `jest -c jest.ci.config.ts`. Backend
+    `tsc` clean (CI Backend typecheck).
 
 - [x] A page refresh mid-call no longer loses everything
   - Date: 2026-09-18
