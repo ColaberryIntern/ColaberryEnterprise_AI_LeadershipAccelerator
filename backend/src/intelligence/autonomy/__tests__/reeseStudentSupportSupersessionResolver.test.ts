@@ -9,6 +9,7 @@ import { Op } from 'sequelize';
 const mockTicketFindAll = jest.fn();
 const mockUpdateTicketStatus = jest.fn();
 const mockGetReeseAdminUserId = jest.fn();
+const mockEmitReeseLedgerEvent = jest.fn();
 
 jest.mock('../../../models', () => ({
   Ticket: { findAll: (...args: any[]) => mockTicketFindAll(...args) },
@@ -18,6 +19,9 @@ jest.mock('../../../services/company/ticketOrchestrator', () => ({
 }));
 jest.mock('../../../services/reese/reeseIdentitySeed', () => ({
   getReeseAdminUserId: (...args: any[]) => mockGetReeseAdminUserId(...args),
+}));
+jest.mock('../../../services/reese/reeseWorkLedgerEvents', () => ({
+  emitReeseLedgerEvent: (...args: any[]) => mockEmitReeseLedgerEvent(...args),
 }));
 
 import {
@@ -43,6 +47,7 @@ beforeEach(() => {
   mockTicketFindAll.mockResolvedValue([]);
   mockUpdateTicketStatus.mockResolvedValue({});
   mockGetReeseAdminUserId.mockResolvedValue(REESE_ADMIN_ID);
+  mockEmitReeseLedgerEvent.mockResolvedValue(undefined);
 });
 
 describe('fetchLiveResolvableStudentSupportTickets — query scope', () => {
@@ -122,6 +127,24 @@ describe('resolveReeseStudentSupportSupersession — writes (happy path)', () =>
     expect(report.closed).toBe(1);
     expect(report.breakdown.superseded).toEqual({ checked: 1, closed: 1 });
     expect(report.breakdown.current).toEqual({ checked: 1, closed: 0 });
+  });
+
+  // Phase 2 (2026-09-18) — R13's own finding: supersession closures never
+  // wrote to the real Work Ledger.
+  it('emits a real work-ledger event for the closure', async () => {
+    mockTicketFindAll.mockResolvedValue([
+      ticketRow({ id: 'old', entity_id: 'room-A', created_at: new Date('2026-08-09T00:00:00.000Z') }),
+      ticketRow({ id: 'new', entity_id: 'room-A', created_at: new Date('2026-08-11T00:00:00.000Z') }),
+    ]);
+
+    await resolveReeseStudentSupportSupersession();
+
+    expect(mockEmitReeseLedgerEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ticketId: 'old', actorId: REESE_ADMIN_ID, intent: 'reese.student_support_superseded',
+        actionClass: 'ticket_close', result: 'success', sourceRecordType: 'ticket', sourceRecordId: 'old',
+      }),
+    );
   });
 });
 

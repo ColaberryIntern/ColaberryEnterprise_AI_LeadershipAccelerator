@@ -21,8 +21,10 @@ jest.mock('../reeseAutonomousOutreachService', () => ({
   countAutonomousSendsToday: jest.fn(),
   DAILY_SEND_CAP: 12,
   FOLLOW_UP_DAYS: 7,
+  RISK_TIER: 'R3',
 }));
 jest.mock('../closureChecklist', () => ({ createClosureChecklistInstance: jest.fn() }));
+jest.mock('../reeseWorkLedgerEvents', () => ({ emitReeseLedgerEvent: jest.fn() }));
 
 import ReeseOutreach from '../../../models/ReeseOutreach';
 import RoomMessage from '../../../models/RoomMessage';
@@ -35,6 +37,7 @@ import { initiateDm } from '../reeseInitiateDmService';
 import { getReeseAdminUserId, getReeseEnrollmentId } from '../reeseIdentitySeed';
 import { countAutonomousSendsToday } from '../reeseAutonomousOutreachService';
 import { createClosureChecklistInstance } from '../closureChecklist';
+import { emitReeseLedgerEvent } from '../reeseWorkLedgerEvents';
 import { processDueReeseOutreachFollowUps } from '../reeseOutreachFollowUpService';
 
 const mockReeseOutreachFindAll = ReeseOutreach.findAll as unknown as jest.Mock;
@@ -51,6 +54,7 @@ const mockGetReeseAdminUserId = getReeseAdminUserId as unknown as jest.Mock;
 const mockGetReeseEnrollmentId = getReeseEnrollmentId as unknown as jest.Mock;
 const mockCountAutonomousSendsToday = countAutonomousSendsToday as unknown as jest.Mock;
 const mockCreateClosureChecklistInstance = createClosureChecklistInstance as unknown as jest.Mock;
+const mockEmitReeseLedgerEvent = emitReeseLedgerEvent as unknown as jest.Mock;
 
 function makeRow(overrides: Record<string, any> = {}) {
   return {
@@ -121,6 +125,21 @@ describe('processDueReeseOutreachFollowUps — branch: signal cleared', () => {
     expect(result.signalCleared).toBe(1);
     expect(mockUpdateTicketStatus).toHaveBeenCalled();
   });
+
+  it('emits a real work-ledger event for the closure', async () => {
+    const row = makeRow();
+    mockReeseOutreachFindAll.mockResolvedValue([row]);
+    mockEvaluateInactivity.mockResolvedValue(null);
+
+    await processDueReeseOutreachFollowUps(false);
+
+    expect(mockEmitReeseLedgerEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ticketId: 'ticket-1', actorId: 'reese-admin-1', intent: 'reese.outreach_signal_cleared',
+        actionClass: 'ticket_close', result: 'success', sourceRecordType: 'reese_outreach', sourceRecordId: 'outreach-1',
+      }),
+    );
+  });
 });
 
 describe('processDueReeseOutreachFollowUps — branch: reply detected (goal met)', () => {
@@ -169,6 +188,22 @@ describe('processDueReeseOutreachFollowUps — branch: reply detected (goal met)
       'ticket-1', 'Confirm re-engagement within 7 days.', row.created_at, expect.any(Date),
     );
   });
+
+  it('emits a real work-ledger event for the closure', async () => {
+    const row = makeRow();
+    mockReeseOutreachFindAll.mockResolvedValue([row]);
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 8, completionPct: 5 });
+    mockRoomMessageFindOne.mockResolvedValue({ id: 'reply-msg-1', created_at: new Date('2026-08-09T00:00:00Z') });
+
+    await processDueReeseOutreachFollowUps(false);
+
+    expect(mockEmitReeseLedgerEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ticketId: 'ticket-1', actorId: 'reese-admin-1', intent: 'reese.outreach_goal_met',
+        actionClass: 'ticket_close', result: 'success',
+      }),
+    );
+  });
 });
 
 describe('processDueReeseOutreachFollowUps — branch: under cap, sends one more follow-up', () => {
@@ -198,6 +233,21 @@ describe('processDueReeseOutreachFollowUps — branch: under cap, sends one more
       expect.objectContaining({ isFollowUp: true, attemptNumber: 3 }),
     );
   });
+
+  it('emits a real work-ledger event for the follow-up send', async () => {
+    const row = makeRow({ attempt_count: 1 });
+    mockReeseOutreachFindAll.mockResolvedValue([row]);
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 14, completionPct: 5 });
+
+    await processDueReeseOutreachFollowUps(false);
+
+    expect(mockEmitReeseLedgerEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ticketId: 'ticket-1', intent: 'reese.outreach_follow_up', actionClass: 'dm_message',
+        result: 'success', sourceRecordType: 'room_message', sourceRecordId: 'msg-2',
+      }),
+    );
+  });
 });
 
 describe('processDueReeseOutreachFollowUps — branch: at cap, escalates', () => {
@@ -215,6 +265,21 @@ describe('processDueReeseOutreachFollowUps — branch: at cap, escalates', () =>
       'ticket-1', expect.stringContaining('human review'), 'ai_staff', 'reese-admin-1',
     );
     expect(row.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'escalated', next_follow_up_due_at: null }));
+  });
+
+  it('emits a real work-ledger event for the escalation', async () => {
+    const row = makeRow({ attempt_count: 3 });
+    mockReeseOutreachFindAll.mockResolvedValue([row]);
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 28, completionPct: 5 });
+
+    await processDueReeseOutreachFollowUps(false);
+
+    expect(mockEmitReeseLedgerEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ticketId: 'ticket-1', intent: 'reese.outreach_escalated', actionClass: 'escalation',
+        result: 'success', sourceRecordType: 'reese_outreach', sourceRecordId: 'outreach-1',
+      }),
+    );
   });
 });
 

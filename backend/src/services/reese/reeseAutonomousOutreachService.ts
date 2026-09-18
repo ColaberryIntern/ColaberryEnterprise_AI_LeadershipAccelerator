@@ -16,6 +16,7 @@ import { generateOutreachMessage } from './reeseOutreachMessageService';
 import { initiateDm } from './reeseInitiateDmService';
 import { resolveStudentDisplayName } from './resolveStudentDisplayName';
 import { createOutreachChecklistInstance } from './outreachChecklist';
+import { emitReeseLedgerEvent } from './reeseWorkLedgerEvents';
 
 // Reese Phase 2 (Autonomous Outreach) — the decision + orchestration sweep.
 // Named, non-negotiable constants (see execution-contract.md — logged there as
@@ -160,7 +161,28 @@ async function sendNewOutreach(
     riskTier: RISK_TIER,
   });
 
-  await initiateDm(enrollmentId, message);
+  const dm = await initiateDm(enrollmentId, message);
+
+  // Phase 2 (2026-09-18) — R13's own finding: this send never wrote to the
+  // real Work Ledger her replies already use. Fail-open, after the real send
+  // (see reeseWorkLedgerEvents.ts's own header) — a ledger-write failure must
+  // never be mistaken for the send having failed.
+  await emitReeseLedgerEvent({
+    ticketId: ticket.id,
+    traceId: eventId,
+    actorType: 'ai_staff',
+    actorId: reeseAdminUserId,
+    intent: 'reese.autonomous_outreach',
+    domain: 'student_support',
+    actionClass: 'dm_message',
+    targetType: 'ticket',
+    targetId: ticket.id,
+    riskTier: RISK_TIER,
+    idempotencyKey: `reese-outreach-send:${dm.messageId}`,
+    result: 'success',
+    sourceRecordType: 'room_message',
+    sourceRecordId: dm.messageId,
+  });
 
   // GOALS scorecard fix (Ali: "improve the 3.8/5 Trust score for Reese") —
   // record this real send under Reese's OWN AiAgent.id so

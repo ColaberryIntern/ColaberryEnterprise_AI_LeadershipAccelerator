@@ -23,6 +23,7 @@ jest.mock('../reeseOutreachMessageService', () => ({ generateOutreachMessage: je
 jest.mock('../reeseInitiateDmService', () => ({ initiateDm: jest.fn() }));
 jest.mock('../resolveStudentDisplayName', () => ({ resolveStudentDisplayName: jest.fn() }));
 jest.mock('../outreachChecklist', () => ({ createOutreachChecklistInstance: jest.fn() }));
+jest.mock('../reeseWorkLedgerEvents', () => ({ emitReeseLedgerEvent: jest.fn() }));
 
 import ReeseOutreach from '../../../models/ReeseOutreach';
 import { createTicket } from '../../ticketService';
@@ -39,6 +40,7 @@ import { generateOutreachMessage } from '../reeseOutreachMessageService';
 import { initiateDm } from '../reeseInitiateDmService';
 import { resolveStudentDisplayName } from '../resolveStudentDisplayName';
 import { createOutreachChecklistInstance } from '../outreachChecklist';
+import { emitReeseLedgerEvent } from '../reeseWorkLedgerEvents';
 import { runReeseAutonomousOutreachSweep, countAutonomousSendsToday, DAILY_SEND_CAP } from '../reeseAutonomousOutreachService';
 
 const mockReeseOutreachCount = ReeseOutreach.count as unknown as jest.Mock;
@@ -57,6 +59,7 @@ const mockGenerateMessage = generateOutreachMessage as unknown as jest.Mock;
 const mockInitiateDm = initiateDm as unknown as jest.Mock;
 const mockResolveStudentDisplayName = resolveStudentDisplayName as unknown as jest.Mock;
 const mockCreateOutreachChecklistInstance = createOutreachChecklistInstance as unknown as jest.Mock;
+const mockEmitReeseLedgerEvent = emitReeseLedgerEvent as unknown as jest.Mock;
 
 const STUDENT_ID = 'd6a4b017-6716-4673-96b5-ab3074b70191'; // real-shaped UUID — the exact defect Ali flagged live
 const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
@@ -107,6 +110,32 @@ describe('runReeseAutonomousOutreachSweep — happy path', () => {
     expect(mockReeseOutreachCreate).toHaveBeenCalledWith(
       expect.objectContaining({ enrollment_id: STUDENT_ID, signal_type: 'inactivity', status: 'active', attempt_count: 1 }),
     );
+  });
+
+  // Phase 2 (2026-09-18) — R13's own finding: this send never wrote to the
+  // real Work Ledger her replies already use.
+  it('emits a real work-ledger event for the send, after the real DM went out', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['No activity in 9 days'] });
+
+    await runReeseAutonomousOutreachSweep(false);
+
+    expect(mockEmitReeseLedgerEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ticketId: 'ticket-1',
+        actorType: 'ai_staff',
+        actorId: 'reese-admin-1',
+        intent: 'reese.autonomous_outreach',
+        domain: 'student_support',
+        actionClass: 'dm_message',
+        riskTier: 'R3',
+        result: 'success',
+        sourceRecordType: 'room_message',
+        sourceRecordId: 'msg-1',
+      }),
+    );
+    const initiateDmOrder = mockInitiateDm.mock.invocationCallOrder[0];
+    const emitOrder = mockEmitReeseLedgerEvent.mock.invocationCallOrder[0];
+    expect(emitOrder).toBeGreaterThan(initiateDmOrder);
   });
 
   it('never sends a fixed/templated string — the message passed to initiateDm is whatever generateOutreachMessage produced', async () => {
