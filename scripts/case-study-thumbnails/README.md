@@ -50,7 +50,10 @@ five published records plus Case 03, picks in `prompts.example.json` under `pick
 5. **Crop to 16:9** (`python finalize.py crop <pick.png> frontend/public/site-v2/thumb-<name>.jpg --top N`),
    choosing `--top` so the hook words stay in frame, and check every crop on one sheet
    (`python finalize.py sheet sheet.jpg thumb-*.jpg`). Commit the JPEGs in the assets PR;
-   Ali merges; deploy nginx through `scripts/deploy-prod.sh`; confirm each URL answers 200.
+   Ali merges; deploy nginx through `scripts/deploy-prod.sh`. **Never request a thumbnail's
+   URL before its deploy finishes:** Cloudflare caches the 404 for four hours. Name each one
+   by its content hash, `thumb-<name>.jpg?v=<first 8 of md5>` (a key the edge has never
+   seen), and confirm that URL answers 200 with the file's md5.
 
 6. **Point the record at it** with `apply-cover.js` inside `accelerator-backend`: dry run
    first, then `--apply`. It writes the `photo` artifact (captioned from

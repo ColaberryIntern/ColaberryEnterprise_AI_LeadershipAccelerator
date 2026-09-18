@@ -109,5 +109,7 @@ describe('§8f names only tools that exist', () => {
     expect(src).toContain('deploy the assets first');
     expect(src).toContain("status='published'");
     expect(src).toContain('posterUrl: IMAGE');
+    expect(src).toContain('content hash');
+    expect(src).toContain('is not requested');
   });
 });

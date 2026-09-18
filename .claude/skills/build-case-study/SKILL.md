@@ -1256,9 +1256,17 @@ The tools and the step-by-step are `scripts/case-study-thumbnails/README.md`. Th
    work (`DELIVERED_WORK_CLAIMS`), so the caption says only what the picture shows. Never
    type it `screenshot` to promote it.
 7. **The old cover stays.** It is already an approved artifact; once it is not the cover,
-   both renderers place it in the body, because the cover is the only image they skip.
+   the renderers place it in the body, because the cover is the only image they skip.
    Nothing is deleted, from the record or from `site-v2`.
-8. **Only where the record is already live.** `apply-cover.js` republishes on the surfaces
+8. **Every picture once** (Ali, 2026-09-18: "do not use the picture a 3rd time inside the
+   case study ... if the old picture was already being used, then only use it once"). The
+   thumbnail appears exactly twice: the video's poster in the masthead and the thumbnail on
+   index and related cards. Never inside the article. Every other picture appears once on
+   the page: Enterprise counts a cover that is the poster as shown (`StoryDetailArticle`)
+   and its artifacts band lists only what the page has not drawn (`unshownArtifacts`); the
+   AI Flotation and training shell skips the cover and the placed figures in the same band.
+   Check it on the live page by counting each file name among `img` and `video[poster]`.
+9. **Only where the record is already live.** `apply-cover.js` republishes on the surfaces
    the record is published on and nowhere else; a record that is not live stops at a
    draft. Its dry run checks the cover resolves, the photo projects as atmosphere, the
    visual story re-validates after its hash is re-stamped, and every live surface's gate
@@ -1271,7 +1279,7 @@ The tools and the step-by-step are `scripts/case-study-thumbnails/README.md`. Th
 - [ ] `thumb-<name>.jpg` live with a 200 before `apply-cover.js --apply`
 - [ ] The live API's `heroImageUrl` and `walkthroughVideo.posterUrl` are the thumbnail
 - [ ] On all three surfaces the masthead poster is the thumbnail and the old cover is in
-      the body
+      the body, and no picture is drawn twice (the thumbnail not at all) inside the article
 
 ## 9. Record and snapshot must agree
 

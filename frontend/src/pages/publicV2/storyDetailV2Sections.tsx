@@ -16,7 +16,7 @@ import {
   formatPublishedDate,
   withheldRepositoryNote,
 } from './storyDetailV2Model';
-import { carouselSlides } from './storyMediaModel';
+import { carouselSlides, unshownArtifacts } from './storyMediaModel';
 import type {
   CaseStudySectionKey,
   PublicCaseStudyContributor,
@@ -267,24 +267,24 @@ export function StorySectionBody({
     case 'decisions': return <StoryDecisions decisions={record.decisions} />;
     case 'builder': return <StoryBuilder builder={record.builder} />;
     case 'closing': return <StoryClosing closing={record.closing} />;
-    case 'artifacts':
-      // The carousel is a second VIEW of the same approved artifacts, not a
-      // second set: it shows the ones that are images, and every artifact still
-      // appears in the list beneath it. Below two images `carouselSlides`
-      // returns nothing and only the list renders. Pictures the page already
-      // placed between sections are subtracted first, so nothing appears twice.
+    case 'artifacts': {
+      // Every picture once (`unshownArtifacts`); nothing left, no band.
+      const slides = carouselSlides(record.artifacts, placedHrefs);
+      const listed = unshownArtifacts(record.artifacts, [...placedHrefs, ...slides.map((s) => s.href)]);
+      if (slides.length === 0 && listed.length === 0) return null;
       return (
         <div data-story-zone="artifacts">
-          <StoryMediaCarousel slides={carouselSlides(record.artifacts, placedHrefs)} />
+          <StoryMediaCarousel slides={slides} />
           {/* `headingLevel={3}` closes the h2 -> h4 skip this band used to
               carry. The component's default is still 4 for every other caller. */}
           <CaseStudyArtifacts
-            artifacts={record.artifacts}
+            artifacts={listed}
             requestHref={record.cta.href}
             headingLevel={3}
           />
         </div>
       );
+    }
     case 'repositories':
       return (
         <StoryRepositories
