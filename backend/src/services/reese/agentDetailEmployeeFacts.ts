@@ -13,6 +13,12 @@ import {
   CRON_REGISTRY_NAMES,
   welcomeEnabledFromAgent,
 } from './reeseBehaviourMetadata';
+import {
+  type ReeseTriggerMode,
+  type ReeseBehaviourStatusFacts,
+  getTriggerMode,
+  computeStatusFacts,
+} from './reeseBehaviourTriggerMode';
 
 // R9 — re-exported so reeseBehaviourSwitchService.ts's existing import path
 // (`from './agentDetailEmployeeFacts'`) keeps working unchanged after the
@@ -336,6 +342,15 @@ export interface EmployeeFactsBehaviourRow {
    * behaviour that structurally never produces a ticket (welcome_dms,
    * presence_heartbeat, health_assessment) or genuinely has none yet. */
   last_ticket: LastTicketRef | null;
+  /** Phase 1 workspace mission, R11 — whether this behaviour's execution is
+   * decided by the model, a fixed rule, or a human. See
+   * reeseBehaviourTriggerMode.ts for the real, hand-verified classification. */
+  trigger_mode: ReeseTriggerMode;
+  /** Phase 1 workspace mission, R11 — callable/configured/authorized/enabled/
+   * healthy as distinct facts, instead of collapsing them into `enabled`
+   * above. See reeseBehaviourTriggerMode.ts for what each one honestly
+   * means today. */
+  status: ReeseBehaviourStatusFacts;
 }
 
 export interface EmployeeFacts {
@@ -375,8 +390,11 @@ export async function getReeseEmployeeFacts(
      * while computing live_status — reused here rather than a second lookup. */
     reeseEnrollmentId: string | null;
     /** Sibling AiAgent rows sharing Reese's `module` — the same
-     * `relatedTaskRows` agentDetailService.ts already queries once. */
-    relatedTasks: Array<{ agent_name: string; enabled: boolean }>;
+     * `relatedTaskRows` agentDetailService.ts already queries once.
+     * `run_count`/`error_count` (R11) were already fetched by that same
+     * query and are reused here for the `healthy` status fact — no new
+     * query. */
+    relatedTasks: Array<{ agent_name: string; enabled: boolean; run_count: number; error_count: number }>;
     /** R9 — the real most-recent ticket per behaviour, computed once by
      * agentDetailService.ts (computeLastTicketPerBehaviour(), zero extra
      * queries) and passed through rather than re-derived here. */
@@ -388,6 +406,7 @@ export async function getReeseEmployeeFacts(
   const reeseEnabled = agent.enabled;
 
   const cronEnabled = new Map(ctx.relatedTasks.map((r) => [r.agent_name, r.enabled]));
+  const cronRunStats = new Map(ctx.relatedTasks.map((r) => [r.agent_name, { runCount: r.run_count, errorCount: r.error_count }]));
 
   const behaviours: EmployeeFactsBehaviourRow[] = REESE_BEHAVIOURS.map((b) => {
     const cronRegistryName = CRON_REGISTRY_NAMES[b.name];
@@ -402,6 +421,11 @@ export async function getReeseEmployeeFacts(
     } else {
       enabled = false;
     }
+    const runStats = cronRegistryName ? cronRunStats.get(cronRegistryName) : undefined;
+    // "Configured" (R11): a real cron schedule for the 4 registry behaviours
+    // (their sibling row exists in relatedTasks at all), or a real,
+    // non-empty tool list for the other 3 -- never a bare `true`.
+    const configured = cronRegistryName ? cronEnabled.has(cronRegistryName) : BEHAVIOUR_TOOLS[key].length > 0;
     return {
       key,
       name: b.name,
@@ -411,6 +435,13 @@ export async function getReeseEmployeeFacts(
       tools: BEHAVIOUR_TOOLS[key],
       scheduled_work_ref: cronRegistryName ?? null,
       last_ticket: ctx.lastTicketByBehaviour[key] ?? null,
+      trigger_mode: getTriggerMode(key),
+      status: computeStatusFacts(key, {
+        enabled,
+        configured,
+        cronRunCount: runStats?.runCount ?? null,
+        cronErrorCount: runStats?.errorCount ?? null,
+      }),
     };
   });
 

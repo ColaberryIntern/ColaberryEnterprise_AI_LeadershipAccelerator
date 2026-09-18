@@ -934,6 +934,30 @@ describe('getAgentDetail', () => {
         const sweepTask = result!.related_tasks.find((t) => t.agent_name === 'ReeseAutonomousOutreachSweep');
         expect(sweepTask!.last_ticket).toEqual({ id: 'outreach-1', ticket_number: 7, title: 'Outreach signal', at: new Date('2026-09-05T00:00:00Z') });
       });
+
+      // Phase 1 workspace mission, R11 (2026-09-18) — "Show whether each
+      // action is model-selected, rule-triggered, or human-directed. Show
+      // callable, configured, authorized, enabled, and healthy as distinct
+      // facts."
+      it('trigger_mode and status facts: real per-behaviour classification, and healthy is honestly null for non-cron-tracked behaviours', async () => {
+        mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, module: 'reese' });
+        mockAgentFindAll.mockResolvedValue([
+          { id: 'sweep-row', agent_name: 'ReeseAutonomousOutreachSweep', enabled: true, run_count: 20, error_count: 0 },
+          { id: 'heartbeat-row', agent_name: 'ReesePresenceHeartbeat', enabled: true, run_count: 500, error_count: 4 },
+        ]);
+
+        const result = await getAgentDetail('agent-1');
+        const byKey = Object.fromEntries(result!.employee_facts!.behaviours.map((b) => [b.key, b]));
+
+        expect(byKey.reactive_dm_reply.trigger_mode).toBe('model_selected');
+        expect(byKey.autonomous_outreach_sweep.trigger_mode).toBe('rule_triggered');
+        expect(byKey.autonomous_outreach_sweep.status.healthy).toBe(true);
+        expect(byKey.presence_heartbeat.status.healthy).toBe(false);
+        // reactive_dm_reply has no per-behaviour run tracking -- honest null,
+        // never a fabricated true/false.
+        expect(byKey.reactive_dm_reply.status.healthy).toBeNull();
+        expect(byKey.reactive_dm_reply.status.callable).toBe(true);
+      });
     });
   });
 });

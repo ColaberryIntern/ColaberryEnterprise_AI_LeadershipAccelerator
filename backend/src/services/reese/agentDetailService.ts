@@ -234,7 +234,12 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
           openTicketCount,
           reportsTo,
           reeseEnrollmentId: enrollmentId,
-          relatedTasks: relatedTaskRows.map((t: any) => ({ agent_name: t.agent_name, enabled: t.enabled })),
+          relatedTasks: relatedTaskRows.map((t: any) => ({
+            agent_name: t.agent_name,
+            enabled: t.enabled,
+            run_count: t.run_count ?? 0,
+            error_count: t.error_count ?? 0,
+          })),
           lastTicketByBehaviour,
         })
       : null;

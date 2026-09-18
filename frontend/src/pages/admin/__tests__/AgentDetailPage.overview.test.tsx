@@ -192,8 +192,8 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
         charter_effective_at: '2026-09-18T00:00:00Z',
         manager_chain_note: 'Reports to: Ali Muwwakkil',
         behaviours: [
-          { key: 'reactive_dm_reply', name: 'Reactive DM reply', enabled: true, population: 'Whoever messages her.', kill_switch: "Reese's own ai_agents.enabled.", tools: ['respond_to_dm'], scheduled_work_ref: null },
-          { key: 'autonomous_outreach_sweep', name: 'Autonomous outreach sweep', enabled: true, population: 'Pilot cohort.', kill_switch: 'Registry row enabled.', tools: [], scheduled_work_ref: 'ReeseAutonomousOutreachSweep' },
+          { key: 'reactive_dm_reply', name: 'Reactive DM reply', enabled: true, population: 'Whoever messages her.', kill_switch: "Reese's own ai_agents.enabled.", tools: ['respond_to_dm'], scheduled_work_ref: null, last_ticket: null, trigger_mode: 'model_selected', status: { callable: true, configured: true, authorized: true, enabled: true, healthy: null } },
+          { key: 'autonomous_outreach_sweep', name: 'Autonomous outreach sweep', enabled: true, population: 'Pilot cohort.', kill_switch: 'Registry row enabled.', tools: [], scheduled_work_ref: 'ReeseAutonomousOutreachSweep', last_ticket: null, trigger_mode: 'rule_triggered', status: { callable: true, configured: true, authorized: true, enabled: true, healthy: true } },
         ],
       },
     });
@@ -227,9 +227,9 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
         charter_effective_at: '2026-09-18T00:00:00Z',
         manager_chain_note: 'Reports to: Ali Muwwakkil',
         behaviours: [
-          { key: 'reactive_dm_reply', name: 'Reactive DM reply', enabled: true, population: 'Whoever messages her.', kill_switch: "Reese's own ai_agents.enabled.", tools: ['respond_to_dm'], scheduled_work_ref: null },
-          { key: 'health_assessment', name: 'Health assessment', enabled: true, population: 'Whoever gets a reply.', kill_switch: 'Shares the reply switch.', tools: ['assess_student_health'], scheduled_work_ref: null },
-          { key: 'autonomous_outreach_sweep', name: 'Autonomous outreach sweep', enabled: true, population: 'Pilot cohort.', kill_switch: 'Registry row enabled.', tools: [], scheduled_work_ref: 'ReeseAutonomousOutreachSweep' },
+          { key: 'reactive_dm_reply', name: 'Reactive DM reply', enabled: true, population: 'Whoever messages her.', kill_switch: "Reese's own ai_agents.enabled.", tools: ['respond_to_dm'], scheduled_work_ref: null, last_ticket: null, trigger_mode: 'model_selected', status: { callable: true, configured: true, authorized: true, enabled: true, healthy: null } },
+          { key: 'health_assessment', name: 'Health assessment', enabled: true, population: 'Whoever gets a reply.', kill_switch: 'Shares the reply switch.', tools: ['assess_student_health'], scheduled_work_ref: null, last_ticket: null, trigger_mode: 'model_selected', status: { callable: true, configured: true, authorized: true, enabled: true, healthy: null } },
+          { key: 'autonomous_outreach_sweep', name: 'Autonomous outreach sweep', enabled: true, population: 'Pilot cohort.', kill_switch: 'Registry row enabled.', tools: [], scheduled_work_ref: 'ReeseAutonomousOutreachSweep', last_ticket: null, trigger_mode: 'rule_triggered', status: { callable: true, configured: true, authorized: true, enabled: true, healthy: true } },
         ],
       },
     };
@@ -252,6 +252,21 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
       expect(container.textContent).toContain('uses: respond_to_dm');
       expect(container.textContent).toContain('uses: assess_student_health');
       expect(container.querySelector('a[href="#task-ReeseAutonomousOutreachSweep"]')).not.toBeNull();
+    });
+
+    // Phase 1 workspace mission, R11 (2026-09-18) — Ali's new mission doc:
+    // "Show whether each action is model-selected, rule-triggered, or
+    // human-directed. Show callable, configured, authorized, enabled, and
+    // healthy as distinct facts."
+    it('shows trigger mode and decomposed status facts per behaviour, with an honest dash when healthy is unknown', async () => {
+      getAgentDetail.mockResolvedValue(EMPLOYEE_FACTS_DETAIL);
+      await renderAgentPage();
+      await openOverviewTab();
+
+      expect(container.textContent).toContain('Model-selected');
+      expect(container.textContent).toContain('Rule-triggered');
+      expect(container.textContent).toContain('Healthy: yes');
+      expect(container.textContent).toContain('Healthy: —');
     });
 
     // Reese Product Phase 1 follow-up (2026-09-18) — Ali, live: "I'd also
