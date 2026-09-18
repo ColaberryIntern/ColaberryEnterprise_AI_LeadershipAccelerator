@@ -77,7 +77,7 @@ describe('the AI Flotation renderer draws the approved lower half', () => {
 
   it('prints no dash in anything a reader sees in the lower half', () => {
     for (const band of ['build', 'roadmap', 'architecture']) {
-      expect(root.querySelector(`[data-band="${band}"]`)?.textContent).not.toMatch(/[–—]/);
+      expect(root.querySelector(`[data-band="${band}"]`)?.textContent).not.toMatch(/[\u2013\u2014]/);
     }
   });
 });
