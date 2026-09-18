@@ -28,7 +28,9 @@ import {
  * `linkIdentity('admin_user')` (keyed on the admin id; an admin already linked
  * to ANOTHER identity is a conflict it reports and never reassigns, and that
  * person's memberships are then skipped, since the admin's token resolves to
- * the other identity) and `grantTenantMembership({ status: 'active' })` (keyed
+ * the other identity - and a conflict the plan already knows skips the identity
+ * step too, so no stray `platform_identities` row is minted) and
+ * `grantTenantMembership({ status: 'active' })` (keyed
  * on identity, tenant, brand, role). None takes a transaction, so a run that
  * fails midway is completed by running it again. Platform super-admins are
  * granted FIRST, so a run that dies after the first row never leaves the
@@ -165,7 +167,12 @@ export function writeOrder(people: readonly PlannedPerson[]): PlannedPerson[] {
 
 export async function applyPlan(plan: MembershipPlan): Promise<SeedResult> {
   const r: SeedResult = { identities_created: 0, identities_existing: 0, links_created: 0, links_existing: 0, link_conflicts: 0, memberships_created: 0, memberships_existing: 0 };
+  const knownConflicts = new Set(plan.link_conflict_admin_ids);
   for (const person of writeOrder(plan.people)) {
+    if (knownConflicts.has(person.admin_id)) {
+      r.link_conflicts += 1; // known at plan time: no identity row is minted for an address that would hold nothing
+      continue;
+    }
     const { identity, created } = await ensurePlatformIdentity({ email: person.email });
     if (created) r.identities_created += 1;
     else r.identities_existing += 1;

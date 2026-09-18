@@ -243,12 +243,17 @@ describe('the reads and the source', () => {
     expect(m.ensurePlatformIdentity).not.toHaveBeenCalled();
     expect(m.linkIdentity).not.toHaveBeenCalled();
     expect(m.grantTenantMembership).not.toHaveBeenCalled();
-    // A conflicted NON-super-admin does not refuse: the write proceeds and the service reports the conflict.
+    // A conflicted NON-super-admin does not refuse: the write proceeds, the conflict is counted, and - known at plan
+    // time - that person gets no identity row, no link call and no membership; the other two are written in full.
     m.linkFindAll.mockResolvedValue([{ platform_identity_id: 'pid-z', linked_entity_id: 'u-3' }]);
-    m.linkIdentity.mockImplementation(async ({ linkedEntityId }: { linkedEntityId: string }) => (linkedEntityId === 'u-3' ? { created: false, conflictWithIdentityId: 'pid-z' } : { created: true }));
     const lines: string[] = [];
     expect(await run(parseArgs(['--roster', 'r.json', '--confirm-production', '--acknowledge-lockout', '5']), (l) => lines.push(l), readRoster)).toBe(0);
     expect(lines.join('\n')).toContain('conflicts=1');
+    expect(m.ensurePlatformIdentity).toHaveBeenCalledTimes(2);
+    expect(m.ensurePlatformIdentity.mock.calls.some((c) => c[0].email === 'viewer@colaberry.com')).toBe(false);
+    expect(m.linkIdentity).toHaveBeenCalledTimes(2);
+    expect(m.grantTenantMembership).toHaveBeenCalledTimes(3);
+    expect(lines.join('\n')).toContain('written: identities created=2 existing=0; links created=2 existing=0 conflicts=1; memberships created=3 existing=0');
   });
 
   it('imports only the identity service\'s three functions, the models, fs and the planner - and writes through nothing else', () => {
