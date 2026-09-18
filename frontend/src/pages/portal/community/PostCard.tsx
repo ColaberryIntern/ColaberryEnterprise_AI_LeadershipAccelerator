@@ -182,7 +182,7 @@ const PostCard: React.FC<{
         <div style={{ minWidth: 0, flex: 1 }}>
           <div className="ttl" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
             <button type="button" className="cm-author-link" onClick={openAuthor}>{post.member.display_name}</button>
-            <LevelBadge level={post.member.level} size="sm" />
+            <LevelBadge level={post.member.level} rungName={post.member.rung_name ?? undefined} size="sm" />
           </div>
           <div className="sub">
             {post.category && <span className="src" style={{ color: 'var(--berry)' }}>{post.category}</span>}

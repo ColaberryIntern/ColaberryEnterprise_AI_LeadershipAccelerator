@@ -32,6 +32,8 @@ import qrRedirectRoutes from './routes/qrRedirectRoutes';
 import trackedLinkRedirectRoutes from './routes/trackedLinkRedirectRoutes';
 import openclawShortLinkRoutes from './routes/openclawShortLinkRoutes';
 import mediaFetchRoutes from './routes/mediaFetchRoutes';
+import linkedInCallbackRoutes from './routes/linkedInCallbackRoutes';
+import marketingOAuthCallbackRoutes from './routes/marketingOAuthCallbackRoutes';
 import v1Routes from './routes/v1Routes';
 import advisorRoutes from './routes/advisorRoutes';
 import showcaseArtifactRoutes from './routes/showcaseArtifactRoutes';
@@ -70,6 +72,7 @@ import { ensureCertPrepSchema } from './db/ensureCertPrepSchema';
 import { ensureProjectArchiveSchema } from './db/ensureProjectArchiveSchema';
 import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
 import { ensureInternshipSchema } from './db/ensureInternshipSchema';
+import { ensureMilestoneLadderSchema } from './db/ensureMilestoneLadderSchema';
 import { ensureOauthTokenVaultSchema } from './db/ensureOauthTokenVaultSchema';
 import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
 import { ensureAgentAttachmentSchema } from './db/ensureAgentAttachmentSchema';
@@ -80,6 +83,7 @@ import { ensureAiAgentReportsToSchema } from './db/ensureAiAgentReportsToSchema'
 import { ensureAiAgentHierarchySchema } from './db/ensureAiAgentHierarchySchema';
 import { ensureAiAgentAutonomyLevelSchema } from './db/ensureAiAgentAutonomyLevelSchema';
 import { ensureAiAgentAutonomySourceSchema } from './db/ensureAiAgentAutonomySourceSchema';
+import { ensureAiAgentConsolidationSchema } from './db/ensureAiAgentConsolidationSchema';
 import { ensureAgentPersonaVersionHistorySchema } from './db/ensureAgentPersonaVersionHistorySchema';
 import { ensureAgentRoleCharterSchema } from './db/ensureAgentRoleCharterSchema';
 import { ensureManagerDirectiveSchema } from './db/ensureManagerDirectiveSchema';
@@ -216,6 +220,11 @@ app.use(openclawShortLinkRoutes);
 // Signed media fetch (/m/...) - public, a provider fetches it at publish time with no session.
 // Same rule as /r/ and /i/: above adminRoutes or the guard 401s it. Pinned by its own test.
 app.use(mediaFetchRoutes);
+// LinkedIn's browser redirect after consent: no JWT, trusts the signed state. Above adminRoutes, like /r/ /i/ /m/.
+app.use(linkedInCallbackRoutes);
+// Every other network's browser redirect after consent (Meta, YouTube, TikTok, X, LinkedIn Pages).
+// Same rule: no JWT on a top-level navigation, so above adminRoutes or it 401s.
+app.use(marketingOAuthCallbackRoutes);
 app.use(v1Routes);
 
 // PUBLIC API routes — MUST stay mounted BEFORE adminRoutes. adminRoutes is mounted
@@ -2667,6 +2676,18 @@ async function start(): Promise<void> {
   // Sponsor portal magic-link audit trail (STORY-001) — sponsor_portal_audit_log.
   await ensureSponsorPortalAuditSchema();
   await ensureSbpSchema();
+  // Builds the last process left mid-generation. The queue that owned them died with it;
+  // the rows did not. Before listen, so nothing can race a resumed run - and a failure here
+  // is a log line, never a boot that does not happen.
+  try {
+    const { recoverStrandedBuilds } = await import('./services/sbp/sbpOrchestrator');
+    const swept = await recoverStrandedBuilds();
+    if (swept.resumed.length || swept.abandoned.length) {
+      console.log(`[SBP] resumed ${swept.resumed.length} stranded build(s), abandoned ${swept.abandoned.length}`);
+    }
+  } catch (err: any) {
+    console.warn('[SBP] stranded-build sweep failed:', err?.message);
+  }
   // Cert Prep (Claude Certified Architect readiness) — eight additive tables.
   // Ensured at boot like its siblings, and NOT gated on CERT_PREP_ENABLED: the
   // flag decides whether the feature answers requests, not whether its tables
@@ -2698,6 +2719,11 @@ async function start(): Promise<void> {
   // enrollments.cohort_id (docs/AI_INTERNSHIP_DISCOVERY.md §3.2). Ensured after
   // enrollments/cohorts exist, since every table here hangs off one of them.
   await ensureInternshipSchema();
+  // Milestone ladder: `student_milestones` (latched curriculum / project /
+  // certification milestones the promotion engine counts) and
+  // `student_certifications` (student-uploaded, staff-approved). Additive;
+  // the engine reads them only when MILESTONE_LADDER_ENABLED is on.
+  await ensureMilestoneLadderSchema();
   // Durable store for provider-rotated OAuth refresh tokens (MS Graph/Hotmail).
   // Without it every rotation is discarded and the deployment drifts toward a
   // dead credential that only an interactive re-consent can recover.
@@ -2787,6 +2813,10 @@ async function start(): Promise<void> {
   // ('auto'|'manual'|null), distinguishing a classifier-set level from a real human
   // decision. Additive, idempotent, no flag.
   await ensureAiAgentAutonomySourceSchema();
+  // AI Employee Consolidation Program, Phase 4 — record_kind/parent_agent_id/
+  // migration_status, the program's legacy-item-to-employee ownership fields.
+  // Additive, idempotent, no flag.
+  await ensureAiAgentConsolidationSchema();
   // Trust Contract Phase 1 — real history behind AiAgent.persona_version,
   // written by seedAgentRegistry() (below) whenever a registry entry's
   // version genuinely changes. Additive, idempotent, no flag. Must run
@@ -3293,6 +3323,18 @@ async function start(): Promise<void> {
         .catch((err) => console.warn('[CommunityRoomsReminders] sweep failed:', err?.message));
     });
   }
+
+  // AI Flotation calls the completion webhook missed. Every call now carries our webhook
+  // URL, but a delivery we do not control is not a guarantee, and a prospect has no page
+  // polling on their behalf. Reads each `sent` call back from Synthflow and completes it
+  // the way the webhook would. Bounded, idempotent, one failure never stops the sweep.
+  // Not gated on any feature flag: the calls are placed whether or not anything else is on.
+  cron.schedule('*/5 * * * *', () => {
+    import('./services/delivery/flotationCallCompletion')
+      .then(({ reconcileOpenFlotationCalls }) => reconcileOpenFlotationCalls())
+      .then((out) => { if (out.reconciled.length) console.log(`[FlotationCalls] sweep completed ${out.reconciled.length} of ${out.checked} open call(s)`); })
+      .catch((err) => console.warn('[FlotationCalls] sweep failed:', err?.message));
+  });
 
   // Start follow-up email scheduler if enabled
   if (env.enableFollowUpScheduler) {

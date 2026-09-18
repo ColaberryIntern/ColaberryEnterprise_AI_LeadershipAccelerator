@@ -1,5 +1,6 @@
 import sharp from 'sharp';
 import { looksLikeMp4, probeMp4, Mp4ParseError, type Mp4Facts } from './mp4Probe';
+import { looksLikePdf, probePdf, PdfParseError, type PdfFacts } from './pdfProbe';
 import { ContentItem, ContentItemMedia, MediaAsset } from '../../models';
 import { WorkflowError, assertWritable } from '../content/contentWorkflowService';
 import { MediaStoreError, assertAcceptable, put } from './mediaStore';
@@ -45,6 +46,8 @@ export interface AttachedMedia {
   width: number | null;
   height: number | null;
   durationMs: number | null;
+  /** Documents only, when the file states it plainly. */
+  pages: number | null;
   altText: string;
   position: number;
   /** True when the exact bytes were already in this brand's library and were reused. */
@@ -96,6 +99,19 @@ function probeVideo(bytes: Buffer): Mp4Facts {
   }
 }
 
+/** A document is stored as-is; what we read is whether it IS a PDF and, when stated plainly, its page count. */
+function probeDocument(bytes: Buffer): PdfFacts {
+  if (!looksLikePdf(bytes)) {
+    throw new WorkflowError('That file is not a PDF. Export it as PDF and attach it again.', 415, 'UnreadableDocument');
+  }
+  try {
+    return probePdf(bytes);
+  } catch (err) {
+    if (err instanceof PdfParseError) throw new WorkflowError(err.message, 415, 'UnreadableDocument');
+    throw err;
+  }
+}
+
 export async function attachMedia(input: AttachInput): Promise<AttachedMedia> {
   const altText = input.altText.trim();
   if (altText.length < 3) {
@@ -127,17 +143,20 @@ export async function attachMedia(input: AttachInput): Promise<AttachedMedia> {
   let height: number | null = null;
   let durationMs: number | null = null;
   let video: Mp4Facts | null = null;
+  let document: PdfFacts | null = null;
   if (entry.kind === 'image') {
     const normalised = await normaliseImage(input.bytes, input.claimedMimeType);
     bytes = normalised.bytes;
     mimeType = normalised.mimeType;
     width = normalised.width;
     height = normalised.height;
-  } else {
+  } else if (entry.kind === 'video') {
     video = probeVideo(input.bytes);
     width = video.width;
     height = video.height;
     durationMs = video.durationMs;
+  } else {
+    document = probeDocument(input.bytes);
   }
 
   const stored = await put(item.brand_id, mimeType, bytes);
@@ -164,6 +183,7 @@ export async function attachMedia(input: AttachInput): Promise<AttachedMedia> {
         exif_stripped: entry.kind === 'image',
         claimed_mime: input.claimedMimeType,
         ...(video ? { video: { codec: video.codec, codec_family: video.codecFamily, has_audio: video.hasAudio, rotation: video.rotation, major_brand: video.majorBrand } } : {}),
+        ...(document ? { document: { pages: document.pages, pdf_version: document.version } } : {}),
       },
     } as any);
   } else if (!asset.alt_text) {
@@ -190,10 +210,17 @@ export async function attachMedia(input: AttachInput): Promise<AttachedMedia> {
     width,
     height,
     durationMs,
+    pages: document?.pages ?? pagesOf(asset.metadata),
     altText: asset.alt_text ?? altText,
     position,
     reused,
   };
+}
+
+/** The page count the upload recorded, if any. */
+export function pagesOf(metadata: unknown): number | null {
+  const pages = (metadata as { document?: { pages?: unknown } } | null)?.document?.pages;
+  return typeof pages === 'number' ? pages : null;
 }
 
 export interface ItemMediaView {
@@ -206,6 +233,7 @@ export interface ItemMediaView {
   position: number;
   originalFilename: string | null;
   durationMs: number | null;
+  pages: number | null;
 }
 
 export async function listItemMedia(contentItemId: string): Promise<ItemMediaView[]> {
@@ -220,6 +248,7 @@ export async function listItemMedia(contentItemId: string): Promise<ItemMediaVie
       // BIGINT arrives from Postgres as a string; the view promises a number.
       mediaAssetId: a.id, mimeType: a.mime_type, byteSize: a.byte_size == null ? null : Number(a.byte_size), width: a.width, height: a.height,
       altText: a.alt_text, position: l.position, originalFilename: a.original_filename, durationMs: a.duration_ms,
+      pages: pagesOf(a.metadata),
     }];
   });
 }

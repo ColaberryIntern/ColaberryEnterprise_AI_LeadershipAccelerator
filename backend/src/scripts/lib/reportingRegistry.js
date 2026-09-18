@@ -97,19 +97,11 @@ const REPORTS = [
     sendHourUTC: 20,  // 3 PM CT
     description: 'Client project. Per-list cards with DRAFTED BY CB pattern.',
   },
-  {
-    name: 'Anthropic Partner Network',
-    scriptPath: 'backend/src/scripts/dailyAnthropicPartnerCountdown.js',
-    args: [],
-    projectId: 47477101,
-    needsOpenai: false,
-    recipients: STANDARD_RECIPIENTS,
-    cbRunnerState: null,
-    skipFlag: '--skip-anthropic',
-    cadence: 'daily',
-    sendHourUTC: 16,  // 11 AM CT
-    description: 'Daily countdown + per-employee progress on the 4 Anthropic courses.',
-  },
+  // ---- Anthropic Partner Network daily countdown: RETIRED 2026-09-16 ----
+  // Ali: "let's remove this auto email and archive the project - it is no
+  // longer relevant." The entry that fired dailyAnthropicPartnerCountdown.js at
+  // 16 UTC daily is gone from here; both dispatcher crontab lines on prod carry
+  // --skip-anthropic until this merges; Basecamp project 47477101 is archived.
   // ---- Personal decisions report ----
   {
     name: 'Ali Personal Decisions',
@@ -178,20 +170,12 @@ const REPORTS = [
     sendCT: '05:30',  // right after the report; NO-OP in preview (report carries the plan), sends students when mode=live
     description: 'Student-facing interview-prep nudges. Sends ONE combined email per person (de-duplicated across all their interviews + IPBC accounts). PREVIEW = sends nothing (the report shows the plan). LIVE (mode file = "live") = emails students only; no separate Ali confirmation (the report carries the plan; failures surface via the reporting audit). Mode: tmp/ops-engine/interview-prep-nudge-mode.txt.',
   },
-  // ---- Cohort training report ----
-  {
-    name: 'Weekly Cohort Performance Report',
-    scriptPath: 'backend/src/scripts/weeklyCohortReport.js',
-    args: [],
-    projectId: null, // CCPP-based, not a single BC project
-    needsOpenai: true,
-    recipients: STANDARD_RECIPIENTS,
-    cbRunnerState: null,
-    skipFlag: '--skip-cohort',
-    cadence: { dayOfWeek: 3 }, // Wednesday (matches Taiwo's existing cadence)
-    sendHourUTC: 13,  // 8 AM CT on Wednesday — coexists with Ali Personal Decisions (different topics, fine in same hour)
-    description: 'Active class cohorts performance + IPBC signups for completed cohorts. CCPP-driven, interactive HTML.',
-  },
+  // ---- Cohort training report: RETIRED 2026-09-16 ----
+  // Ali: "Get rid of this email / automated report - I don't want it sent out
+  // anymore." The entry that fired weeklyCohortReport.js every Wednesday at 13 UTC
+  // is gone from here, the dedicated crontab line on prod was removed the same
+  // day, and automated_reports.enabled is false for it. The script itself stays
+  // runnable by hand. Do not re-add without asking.
 ];
 
 // Determine if a report should fire today based on cadence

@@ -1,46 +1,30 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchPointsDrilldown, fetchPoints, DrilldownView, Band, levelFor, bandHudNext } from '../../../services/onboardingApi';
+import { fetchPointsDrilldown, fetchPoints, DrilldownView, Band, levelFor, bandHudNext, buildRungForSlug, showJoinToBuildCard, rungTone } from '../../../services/onboardingApi';
 import { fmtCentralDate } from '../today/shellUtils';
 import LevelJourney from './LevelJourney';
+import MilestoneChecklist from './MilestoneChecklist';
 import './PointsPage.css';
-
-/** Turn a readiness ladder slug (e.g. "junior_builder") into a label. */
-function humanizeLevel(s: string | null | undefined): string {
-  if (!s) return '';
-  return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
+import '../../../styles/rungTones.css';
 
 // The competency promotion ranks map onto the canonical BUILD bands (AI Builder I…
-// → AI Architect). Mirrors backend bandLadder — the ladder is the SAME thing the
-// journey shows, so the Readiness card speaks the band language instead of raw
-// internal slugs like "junior_builder". Rank-0 "builder" is the entry default
-// (not a promotion), so it has no band name — the learner simply isn't building yet.
-const READINESS_BAND: Record<string, string> = {
-  junior_builder: 'AI Builder I',
-  practitioner: 'AI Builder II',
-  developer: 'AI Builder III',
-  senior_developer: 'AI Builder IV',
-  engineer: 'AI Builder V',
-  senior_engineer: 'AI Builder VI',
-  architect_candidate: 'AI Architect',
-  architect: 'Senior AI Architect',
-};
-function bandForReadiness(slug: string | null | undefined): string {
-  if (!slug) return '';
-  return READINESS_BAND[slug] || humanizeLevel(slug);
-}
+// → AI Architect). The map itself lives in services/bandLadder (one frontend copy
+// of the backend's RANK_TO_BAND) so this card and the company drill-down cannot
+// drift apart. Rank-0 "builder" is the entry default (not a promotion), so it has
+// no band name — the learner simply isn't building yet.
+const bandForReadiness = buildRungForSlug;
 /** "Evidence: 0 < 3" → "Evidence — 0 of 3". Leaves anything else untouched. */
 // The server states a gap as its GATE KEY ("attendance: 0 < 1"). A gate key
 // names the column it was checked against, not the thing a student would go
 // and do, so it is translated here rather than shown raw.
+// `attendance` is deliberately absent: it stopped gating the ladder on
+// 2026-09-10 (min_attendance 0 at every rank), so the server never emits it.
 const GAP_LABELS: Record<string, string> = {
   evidence: 'Pieces of verified evidence',
   artifacts: 'Artifacts published',
   github: 'GitHub commits or pull requests',
   evaluations: 'Instructor or peer reviews',
   implementation: 'Implementations delivered',
-  attendance: 'Live classes attended',
 };
 
 export function formatGap(g: string): string {
@@ -108,6 +92,9 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
   // the drill-down is unchanged whether the flag is on or off.
   const [band, setBand] = useState<Band | null>(null);
   const [fiveBand, setFiveBand] = useState(false);
+  // undefined until the points payload arrives; the join card needs a CONFIRMED
+  // `false` (a free Explorer) before it will show, never a missing value.
+  const [buildEntitled, setBuildEntitled] = useState<boolean | undefined>(undefined);
 
   useEffect(() => {
     let alive = true;
@@ -116,29 +103,33 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
       .catch(() => { /* keep null → empty state */ })
       .finally(() => { if (alive) setLoading(false); });
     fetchPoints()
-      .then((p) => { if (alive) { setBand(p.band ?? null); setFiveBand(!!p.fiveBandUiEnabled); } })
+      .then((p) => { if (alive) { setBand(p.band ?? null); setFiveBand(!!p.fiveBandUiEnabled); setBuildEntitled(p.buildEntitled); } })
       .catch(() => { /* card stays hidden on error */ });
     return () => { alive = false; };
   }, []);
 
-  // Locked-door conversion card: shown only to a free account that has reached the
-  // AI Enabled band on points alone (its ceiling). Advancing past it needs paid
-  // build evidence, so this is the one honest place to invite the upgrade.
-  const showUpgrade = fiveBand && !!band && band.cappedByPointsOnly && band.bandSlug === 'enabled';
-
   const total = data?.engagement.total ?? 0;
+  // Locked-door conversion card: shown only to a CONFIRMED free account that has
+  // reached the points ceiling (AI Enabled II) with no build promotion. Anyone
+  // entitled to build is already in the program and is told to ship instead —
+  // before 2026-09-16 this card told paying cohort students to "join".
+  const showUpgrade = fiveBand && showJoinToBuildCard(band, total, buildEntitled);
+
   const lvl = levelFor(total);
   // 5-band identity: when the flag is on, the level name + "what's next" come from
-  // the canonical band (AI Aware I …) so this page matches the HUD exactly. When
-  // off, the legacy Apprentice/…/Principal identity is unchanged.
+  // the canonical band (AI Aware I …) so this page matches the HUD exactly.
   const useBand = fiveBand && !!band;
   const idName = useBand ? band!.rungName : lvl.name;
   const headed = useBand
-    ? bandHudNext(band!, total)
+    ? bandHudNext(band!, total, buildEntitled ?? true)
     : (lvl.next ? `${(lvl.next.min - total).toLocaleString()} pts to ${lvl.next.name}` : 'Top level reached');
   const xp = data?.skill_xp ?? null;
   const xpMax = xp ? Math.max(xp.learning, xp.builder, xp.community, 1) : 1;
   const readiness = data?.readiness ?? null;
+  // The milestone ladder (docs/POINTS_LADDER_DECISIONS.md). When the server sends
+  // the checklist, it takes lens 2 and Skill XP moves below it (D7); when it does
+  // not (flag off), the page is byte-identical to before.
+  const milestones = data?.milestones ?? null;
 
   if (loading) return <div className="points-root"><div className="pts-empty">Loading your progress…</div></div>;
 
@@ -175,7 +166,7 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
       </div>
 
       {/* The whole level ladder, visual — AI Aware I → AI Architect */}
-      <LevelJourney points={total} currentName={useBand ? band!.rungName : lvl.name} />
+      <LevelJourney points={total} currentName={useBand ? band!.rungName : lvl.name} milestoneLadder={!!milestones} />
 
       <div className="pts-lenses">
         {/* Lens 1 — Engagement */}
@@ -183,7 +174,7 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
           <div className="pts-lens-h"><span className="tag">1 · Engagement</span><h3>Your points</h3></div>
           <div className="pts-big">{total.toLocaleString()}<span> pts</span></div>
           <div className="pts-levelrow">
-            <span className="pts-chip">{idName}</span>
+            <span className={`pts-chip rung-pill rung-${rungTone(idName)}`}>{idName}</span>
             <span className="pts-mut">{headed}</span>
           </div>
           <div className="pts-track"><i style={{ width: `${lvl.pct}%`, background: '#FB2832' }} /></div>
@@ -194,7 +185,13 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
           </div>
         </div>
 
-        {/* Lens 2 — Skill XP */}
+        {/* Lens 2 — Program milestones when the ladder is on; Skill XP otherwise */}
+        {milestones ? (
+          <div className="pts-lens accent-blue">
+            <div className="pts-lens-h"><span className="tag">2 · Milestones</span><h3>Your path to Program Graduate</h3></div>
+            <MilestoneChecklist milestones={milestones} />
+          </div>
+        ) : (
         <div className="pts-lens accent-blue">
           <div className="pts-lens-h"><span className="tag">2 · Skill XP</span><h3>Skill you're building</h3></div>
           {xp ? (
@@ -215,6 +212,7 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
             </div>
           )}
         </div>
+        )}
 
         {/* Lens 3 — Architect Readiness. This is the BUILD track (a different axis
             from points): you earn the AI Builder → AI Architect bands by shipping
@@ -251,6 +249,19 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
             <div className="pts-mut">Readiness is the build track — you earn AI Builder → AI Architect by shipping evidence in the program. It fills in as you complete graded build work.</div>
           )}
         </div>
+
+        {/* Skill XP, demoted below the checklist once the milestone ladder is on (D7). */}
+        {milestones && xp && (
+          <div className="pts-xp-demoted">
+            <div className="pts-xp-inline">
+              <span>Skill XP <b>{xp.total.toLocaleString()}</b></span>
+              <span>Learning <b>{xp.learning.toLocaleString()}</b></span>
+              <span>Builder <b>{xp.builder.toLocaleString()}</b></span>
+              <span>Community <b>{xp.community.toLocaleString()}</b></span>
+              <span className="pts-mut">Earned by finishing lessons, shipping builds, and helping peers. XP does not decide your rung; milestones do.</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Recent activity */}

@@ -109,6 +109,8 @@
   font-size: 12px; font-weight: 800; color: #C20E1E; background: rgba(251,40,50,.1);
   border-radius: 999px; padding: 3px 10px;
 }
+/* A chip that names a rung wears that rung's colour (rungTones.css .rung-pill). */
+.points-root .pts-chip.rung-pill { color: var(--rung-fg); background: var(--rung-bg); border: 1px solid var(--rung-line); }
 .points-root .pts-mut { color: var(--pr-mut); font-size: 12px; }
 
 .points-root .pts-track { height: 8px; background: var(--pr-sunken); border-radius: 999px; overflow: hidden; }
@@ -131,13 +133,13 @@
 
 /* Readiness */
 .points-root .pts-readi { display: flex; align-items: center; gap: 16px; margin: 6px 0 12px; }
-.points-root .pts-readi-meta .lvl { font-size: 16px; font-weight: 800; color: var(--pr-ink); text-transform: capitalize; }
+.points-root .pts-readi-meta .lvl { font-size: 16px; font-weight: 800; color: var(--pr-ink); }
 .points-root .pts-gaps { border-top: 1px solid var(--pr-line); padding-top: 12px; margin-top: auto; }
 .points-root .pts-gaps-h { display: block; font-size: 12px; font-weight: 800; color: var(--pr-ink); margin-bottom: 8px; }
 .points-root .pts-gaps ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
 .points-root .pts-gaps li {
   font-size: 12.5px; color: #3C7A26; background: rgba(91,166,60,.1);
-  border-radius: 8px; padding: 6px 10px; text-transform: capitalize;
+  border-radius: 8px; padding: 6px 10px;
 }
 
 /* Recent activity */
@@ -190,8 +192,10 @@
   content: ''; position: absolute; top: 18px; left: -52%; width: 100%; height: 3px;
   background: var(--pr-line); z-index: 0; border-radius: 3px;
 }
+/* The connector into a reached rung wears that rung's own colour, so the track
+   reads as the ladder's palette left to right (rungTones.css). */
 .points-root .pts-jnode.done::before,
-.points-root .pts-jnode.current::before { background: #5BA63C; }
+.points-root .pts-jnode.current::before { background: var(--rung-solid, #5BA63C); }
 
 .points-root .pts-jdot {
   position: relative; z-index: 1;
@@ -201,16 +205,20 @@
   border: 2px solid var(--pr-line); font-weight: 800; font-size: 14px;
 }
 .points-root .pts-jdot svg { width: 18px; height: 18px; }
-.points-root .pts-jnode.done .pts-jdot { background: #5BA63C; border-color: #5BA63C; color: #fff; }
-.points-root .pts-jnode.current .pts-jdot { background: #FB2832; border-color: #FB2832; color: #fff; box-shadow: 0 0 0 4px rgba(251,40,50,.16); }
+/* Every node wears its rung's colour (rungTones.css) — done and current are
+   filled solid, a rung not yet reached shows the same colour as a tinted
+   outline, so the whole ladder's palette is visible before it is earned. */
+.points-root .pts-jnode.done .pts-jdot { background: var(--rung-solid, #5BA63C); border-color: var(--rung-solid, #5BA63C); color: #fff; }
+.points-root .pts-jnode.current .pts-jdot { background: var(--rung-solid, #FB2832); border-color: var(--rung-solid, #FB2832); color: #fff; box-shadow: 0 0 0 4px var(--rung-bg, rgba(251,40,50,.16)); }
+.points-root .pts-jnode.todo .pts-jdot { background: var(--rung-bg, var(--pr-sunken)); border-color: var(--rung-line, var(--pr-line)); color: var(--rung-fg, var(--pr-mut)); }
 .points-root .pts-jnode.build.todo .pts-jdot { border-style: dashed; }
 
-.points-root .pts-jname { margin-top: 9px; font-size: 12.5px; font-weight: 700; color: var(--pr-ink); line-height: 1.2; }
-.points-root .pts-jnode.todo .pts-jname { color: var(--pr-mut); }
+.points-root .pts-jname { margin-top: 9px; font-size: 12.5px; font-weight: 700; color: var(--rung-fg, var(--pr-ink)); line-height: 1.2; }
+.points-root .pts-jnode.todo .pts-jname { color: var(--rung-fg, var(--pr-mut)); opacity: .85; }
 .points-root .pts-jdetail { font-size: 11px; color: var(--pr-mut); margin-top: 3px; }
 .points-root .pts-jhere {
   margin-top: 6px; font-size: 9.5px; font-weight: 800; letter-spacing: .05em;
-  text-transform: uppercase; color: #FB2832;
+  text-transform: uppercase; color: var(--rung-fg, #FB2832);
 }
 
 /* ── sticky rail ─────────────────────────────────────────────────────────────
@@ -234,3 +242,25 @@
 .pts-rail-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--leaf, #2F7A46); }
 .pts-rail-next { margin: 0; font-size: 13px; color: var(--muted, #6B6B6B); }
 .pts-rail-note { margin: 0; font-size: 13px; color: var(--muted, #6B6B6B); }
+
+/* Program milestones (lens 2 once the milestone ladder is on) */
+.points-root .pts-ms-list { list-style: none; margin: 10px 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.points-root .pts-ms-row { border-top: 1px solid var(--pr-line); }
+.points-root .pts-ms-row:first-child { border-top: none; }
+.points-root .pts-ms-link { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start; padding: 8px 0; color: inherit; text-decoration: none; border-radius: 8px; }
+.points-root a.pts-ms-link:hover .pts-ms-label, .points-root a.pts-ms-link:focus-visible .pts-ms-label { text-decoration: underline; }
+.points-root a.pts-ms-link:focus-visible { outline: 2px solid #367895; outline-offset: 2px; }
+.points-root .pts-ms-mark { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; margin-top: 1px; }
+.points-root .pts-ms-mark svg { width: 20px; height: 20px; }
+.points-root .pts-ms-mark.is-done { color: #3D8A38; }
+.points-root .pts-ms-mark.is-progress { color: #E8920C; }
+.points-root .pts-ms-mark.is-todo { color: #B9B7B2; }
+.points-root .pts-ms-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.points-root .pts-ms-label { font-size: 13.5px; font-weight: 700; color: var(--pr-ink); }
+.points-root .pts-ms-row.is-done .pts-ms-label { color: var(--pr-mut); font-weight: 600; }
+.points-root .pts-ms-detail { font-size: 12.5px; color: var(--pr-mut); line-height: 1.4; }
+
+/* Skill XP, demoted below the milestone checklist (D7) */
+.points-root .pts-xp-demoted { grid-column: 1 / -1; border-top: 1px solid var(--pr-line); padding-top: 12px; margin-top: 4px; }
+.points-root .pts-xp-demoted .pts-xp-inline { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--pr-mut); }
+.points-root .pts-xp-demoted .pts-xp-inline b { color: var(--pr-ink); font-family: 'Roboto Mono', monospace; font-weight: 800; }

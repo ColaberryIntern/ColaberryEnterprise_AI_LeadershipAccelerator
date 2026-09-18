@@ -52,7 +52,7 @@ function PortfolioPreview({ metadata, portfolio, readme, executiveSummary, weekl
               <div className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
                 {readinessScore != null ? `${readinessScore}/100` : '—'}
               </div>
-              <div className="small text-muted">AI Architect Readiness Score</div>
+              <div className="small text-muted">Portfolio score</div>
             </div>
           </div>
           <div className="col-sm-6">

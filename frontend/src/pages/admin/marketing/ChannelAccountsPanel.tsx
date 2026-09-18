@@ -1,5 +1,7 @@
 import React from 'react';
-import type { ChannelAccount, VaultStatus } from '../../../services/channelAccountApi';
+import type { ChannelAccount, ConnectorKey, ConnectorStatus, VaultStatus } from '../../../services/channelAccountApi';
+import ConnectNetworks from './ConnectNetworks';
+import { formatCentralDate } from './centralTime';
 
 /**
  * ChannelAccountsPanel — which social accounts a brand has connected, and why it cannot connect
@@ -28,14 +30,14 @@ export interface ChannelAccountsPanelProps {
   /** Null while no brand is selected; connecting needs one. */
   brandId: string | null;
   /**
-   * Why connecting is unavailable for a reason OTHER than the vault or a missing brand - today,
-   * that the OAuth sign-in flow is not built. Kept separate from `vault` because the two have
-   * different owners and different fixes, and collapsing them would tell an operator to go and
-   * configure a server when the actual gap is a feature nobody has written.
+   * Every network, configured or not, from GET /connectors. Null while loading. Replaces the old
+   * single `connectDisabledReason`: whether a network can be connected is now per network, and
+   * "not set up yet" comes with the exact variables and redirect URL it needs.
    */
-  connectDisabledReason?: string | null;
+  connectors: ConnectorStatus[] | null;
+  connectorsError?: string | null;
   busy: boolean;
-  onConnect: () => void;
+  onConnect: (connector: ConnectorKey) => void;
   onRevoke: (accountId: string) => void;
   onRetry: () => void;
 }
@@ -71,25 +73,36 @@ function statusBadge(account: ChannelAccount): { text: string; className: string
   if (account.status === 'disabled') {
     return { text: 'Disabled', className: 'text-bg-secondary', hint: 'Switched off here; the credential is still stored.' };
   }
-  const expired = account.credentials.find((c) => c.credential_type === 'access_token' && c.expired);
+  // The server's verdict when it sent one: it knows which networks have a publishing adapter, and
+  // an X account whose two-hour access token has lapsed is not "expired" - its refresh token keeps
+  // the connection alive. Older backends send no verdict; then the access token decides.
+  const expired = account.health
+    ? account.health === 'expired'
+    : account.credentials.some((c) => c.credential_type === 'access_token' && c.expired);
   if (expired) {
     return { text: 'Token expired', className: 'text-bg-warning', hint: 'Publishing will fail until this account is reconnected.' };
+  }
+  if (account.health === 'expiring') {
+    return { text: 'Expiring soon', className: 'text-bg-warning', hint: 'Reconnect before the date shown so publishing does not stop.' };
   }
   return { text: 'Connected', className: 'text-bg-success', hint: 'Ready to publish once the provider is enabled.' };
 }
 
 function expiryText(account: ChannelAccount): string {
+  if (account.usable_until !== undefined) {
+    if (account.usable_until === null) return 'No expiry';
+    return `${account.health === 'expired' ? 'Expired' : 'Until'} ${formatCentralDate(account.usable_until)}`;
+  }
   const access = account.credentials.find((c) => c.credential_type === 'access_token');
   if (!access) return 'No token stored';
   if (!access.token_expires_at) return 'No expiry recorded';
   const when = new Date(access.token_expires_at);
   if (Number.isNaN(when.getTime())) return 'No expiry recorded';
-  return `${access.expired ? 'Expired' : 'Expires'} ${when.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}`;
+  return `${access.expired ? 'Expired' : 'Expires'} ${formatCentralDate(access.token_expires_at)}`;
 }
 
 export default function ChannelAccountsPanel(props: ChannelAccountsPanelProps) {
   const { loading, error, vault, accounts, brandId, busy, onConnect, onRevoke, onRetry } = props;
-  const connectDisabledReason = props.connectDisabledReason ?? null;
 
   if (loading) {
     return <div className="p-4 text-muted">Loading connected accounts…</div>;
@@ -193,24 +206,18 @@ export default function ChannelAccountsPanel(props: ChannelAccountsPanelProps) {
         </div>
       )}
 
-      <div className="mt-3 d-flex align-items-center gap-2">
-        <button
-          type="button"
-          className="btn btn-sm btn-primary"
+      <div className="mt-3">
+        <ConnectNetworks
+          connectors={props.connectors}
+          error={props.connectorsError ?? null}
           // Disabled for a reason the operator can read, rather than absent (which looks like a
           // missing feature) or enabled (which fails).
-          disabled={busy || vaultUnavailable || !brandId || connectDisabledReason !== null}
-          onClick={onConnect}
-          data-testid="connect-account"
-        >
-          Connect an account
-        </button>
-        {connectDisabledReason && !vaultUnavailable && (
-          <span className="small text-muted" data-testid="connect-disabled-reason">{connectDisabledReason}</span>
-        )}
-        {!brandId && !vaultUnavailable && !connectDisabledReason && (
-          <span className="small text-muted">Choose a brand first.</span>
-        )}
+          blockedReason={vaultUnavailable
+            ? 'The credential store is not configured, so no network can be connected yet.'
+            : !brandId ? 'Choose a brand first - accounts connect to one brand.' : null}
+          busy={busy}
+          onConnect={onConnect}
+        />
       </div>
     </div>
   );

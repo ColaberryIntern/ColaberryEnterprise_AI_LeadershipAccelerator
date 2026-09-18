@@ -12,7 +12,7 @@
 export type AgentToolName = 'read_attachments';
 
 /** Every agent that can hold a tool grant. */
-export type AgentKey = 'cory' | 'reese';
+export type AgentKey = 'cory' | 'reese' | 'dara';
 
 /**
  * A client-side reference to an uploaded attachment. The client never sends

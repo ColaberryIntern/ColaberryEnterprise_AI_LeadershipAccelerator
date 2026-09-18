@@ -21,6 +21,7 @@
  *   · `caseStudyPublic.ts`     — the only shapes the public API may return
  *   · `caseStudyFilters.ts`    — surface profiles and the canonical filter engine
  *   · `caseStudyGuards.ts`     — runtime narrowing plus the exhaustiveness proofs
+ *   · `caseStudyVisual.ts`     — runtime lists and size limits for the visual story section
  */
 
 /* ────────────────────────────────────────────── verification vocabulary ──── */
@@ -266,17 +267,26 @@ export type CaseStudyRoadmapStatus =
   | 'not_pursued'
   | 'unknown';
 
-/** The renderable sections of a detail page, in spec §23's order. */
+/**
+ * The renderable sections of a detail page, in spec §23's order, plus the
+ * three the storytelling format added on 2026-09-17: `decisions` (the cards),
+ * `builder` (Meet the builder) and `closing` (What this project shows). Each
+ * surface profile says where they go; a renderer that predates them ignores
+ * keys it does not draw, so an old page is unchanged by their presence.
+ */
 export type CaseStudySectionKey =
   | 'hero'
   | 'situation'
+  | 'decisions'
   | 'build'
   | 'architecture'
   | 'measurement'
   | 'roadmap'
+  | 'builder'
   | 'contributors'
   | 'artifacts'
   | 'repositories'
+  | 'closing'
   | 'cta';
 
 /** Where a timeline entry came from. AI may summarise chronology, never invent it. */
@@ -678,6 +688,316 @@ export interface CaseStudySnapshotContent {
   readonly repositories?: readonly CaseStudyRepositoryRef[];
   readonly taxonomy: CaseStudyTaxonomy;
   readonly walkthroughVideo?: CaseStudyWalkthroughVideo;
+  /** The before/after workflow illustration, outcome cards and charts. See `caseStudyVisual.ts`. Absent means the record renders as it did before the section existed. */
+  readonly visualStory?: CaseStudyVisualStorySection;
+  /** Meet the builder, canonical for every surface. Absent means no card. See `CaseStudyBuilderProfile`. */
+  readonly builder?: CaseStudyBuilderProfile;
+  /** Decisions that made the difference, canonical for every surface. Absent or empty means no cards. */
+  readonly decisions?: readonly CaseStudyDecision[];
+  /**
+   * The closing paragraph: what the work shows, in one short paragraph after
+   * the evidence and before the related records. Canonical for every surface;
+   * absent means the page ends on its last band, as before. Same claim
+   * discipline as the standfirst: every statement in it must be on the record.
+   */
+  readonly closing?: string;
+  /**
+   * Per-surface narrative variants, keyed by publishable surface. A variant is
+   * applied by the public projection for THAT surface only, on top of the
+   * canonical content, so one record can address a learner audience on
+   * training.colaberry.com and a buyer on enterprise.colaberry.ai without two
+   * records. Absent means every surface reads the canonical content. See
+   * `CaseStudySurfaceVariant`.
+   */
+  readonly surfaceVariants?: Partial<Readonly<Record<CaseStudySurfaceKey, CaseStudySurfaceVariant>>>;
+}
+
+/* ─────────────────────────────────── the builder, the decisions, the variants ─ */
+
+/**
+ * The person (or team) the reader meets. A profile carries two kinds of fact
+ * and keeps them apart: the REUSABLE biography (`intro`, `progression`, role
+ * title, organisation), which is user-confirmed and belongs to the person, and
+ * the PROJECT-SPECIFIC contribution and skills, which are tied to this record's
+ * evidence. The public projection releases the name and the biography only
+ * when `displayName` matches a named, consented contributor of the same
+ * content; the contribution and the skills are project facts and stand on
+ * their own under the role title. There is no person table: the profile is
+ * authored per record and carried by the override machinery like every other
+ * section, which is the smallest extension that keeps consent where it is.
+ */
+export interface CaseStudyBuilderProfile {
+  /** Must equal a named contributor's `displayName` for the name to be shown. */
+  readonly displayName: string;
+  readonly roleTitle: string;
+  readonly organization?: string;
+  /** One or two letters for the avatar treatment when no approved photo exists. */
+  readonly initials?: string;
+  /** Person-focused introduction, one or two short paragraphs; biography, consent-gated. */
+  readonly intro: readonly string[];
+  /** Career progression as supplied, oldest first, e.g. Intern, Hired by Colaberry, AI Systems Architect; consent-gated. */
+  readonly progression?: readonly string[];
+  /** What this person did on THIS project, from the repository or an approved record. */
+  readonly contribution: string;
+  /** Each skill names the artifact or decision that demonstrates it. */
+  readonly skills: readonly { readonly label: string; readonly evidence: string }[];
+  /** Only an already-approved, permitted profile page or photo; never a fabricated headshot. */
+  readonly profileUrl?: string;
+  readonly photoUrl?: string;
+  /** Where the biography came from. The note is internal and never projected. */
+  readonly provenance: {
+    readonly source: 'user_confirmed' | 'approved_profile' | 'repository';
+    readonly confirmedAt: IsoDate;
+    readonly note?: string;
+  };
+}
+
+/**
+ * One decision card: the problem, the decision, the evidence, the consequence,
+ * in ordinary language. `stage` pins the card to the step of the workflow
+ * illustration where the decision lives ("02 Detect"), so a reader can find it
+ * in the drawing; `figure` is the one number or date the card closes on, with
+ * the consequence as its caption. Both optional: a card without them reads as
+ * four labelled parts.
+ */
+export interface CaseStudyDecision {
+  readonly key: string;
+  readonly title: string;
+  readonly problem: string;
+  readonly decision: string;
+  readonly evidence: string;
+  readonly consequence: string;
+  /** Optional: the evidence row the card leans on. */
+  readonly evidenceId?: string;
+  /** Optional: the workflow step the decision lives at, as a short label. */
+  readonly stage?: string;
+  /** Optional: the figure the card closes on, as displayed ("28 Apr", "0", "97%"). */
+  readonly figure?: string;
+}
+
+/**
+ * What one surface may say differently. Every field is optional and REPLACES
+ * its canonical counterpart whole (the situation section, the measurement
+ * narrative, the contributor list), except `metricNotes`, which overlays the
+ * named prose fields of the metric with that key. Figures are never here: a
+ * variant carries words, and the publish gate's claim scan reads all of them.
+ */
+export interface CaseStudySurfaceVariant {
+  readonly standfirst?: string;
+  readonly situation?: CaseStudySituationSection;
+  readonly measurementNarrative?: readonly string[];
+  /** Prose overlays by metric key, for a note that reads wrongly on one audience's page. */
+  readonly metricNotes?: Readonly<Record<string, {
+    readonly baseline?: string;
+    readonly sample?: string;
+  }>>;
+  readonly contributors?: readonly CaseStudyContributor[];
+  readonly builder?: CaseStudyBuilderProfile;
+  readonly decisions?: readonly CaseStudyDecision[];
+  readonly closing?: string;
+}
+
+/* ──────────────────────────────────────────────── the visual story ──────── */
+
+/**
+ * The visual story: the typed illustration a Case Study record may carry:
+ * a before/after (or single-state) workflow illustration, up to three outcome
+ * cards, and evidence-backed charts. Rendered below the hero on the public
+ * story page and edited in the Studio.
+ *
+ * WHY A SECTION AND NOT A DRAWING. The first record under the V2 format was
+ * reviewed as "capabilities, stack, integrations, data stores, components and
+ * twelve connection sentences before a picture", and the picture was a mermaid
+ * diagram the platform could not render on two of its three surfaces. A visual
+ * story is DATA: nodes, edges, statuses and metric references that code-owned
+ * templates draw. Nothing here is markup, SVG or CSS, and nothing here is a
+ * number - every figure a chart or card shows is resolved at projection time
+ * from a verified metric on the same record by `metricKey`. A chart part may
+ * carry a literal `value` only when it also names the `evidenceId` on this
+ * record that supports it, and the validator checks it against the referenced
+ * metric's denominator.
+ *
+ * ILLUSTRATIVE, BY CONTRACT. Motion on the workflow represents the shape of a
+ * flow, never live activity or rates; `motionNote` is printed beside it. The
+ * before-state is never inferred: the generator only ever proposes a
+ * `single_state` workflow from the architecture diagram, and a `before_after`
+ * pair exists only when a person authored the before panel from evidence.
+ *
+ * NAMING RULE. No field is called `id`, `notes`, `metadata` or `sourceRef`:
+ * those are forbidden at any depth of the public payload
+ * (`FORBIDDEN_PUBLIC_KEYS`). Graph nodes use `key`, like the architecture
+ * diagram.
+ */
+
+export const CASE_STUDY_VISUAL_SCHEMA_VERSION = 1 as const;
+export type CaseStudyVisualSchemaVersion = typeof CASE_STUDY_VISUAL_SCHEMA_VERSION;
+
+/** Which page template draws the story. `v2` is the only one; a later redesign adds a value. */
+export const CASE_STUDY_VISUAL_PRESENTATION_VERSIONS = ['v2'] as const;
+export type CaseStudyVisualPresentationVersion = typeof CASE_STUDY_VISUAL_PRESENTATION_VERSIONS[number];
+
+/** Who or what a stage is. Drives the node glyph, nothing else. */
+export const CASE_STUDY_WORKFLOW_ROLES = ['human', 'system', 'external', 'data'] as const;
+export type CaseStudyWorkflowRole = typeof CASE_STUDY_WORKFLOW_ROLES[number];
+
+/**
+ * Semantic status, with one colour meaning each on every surface:
+ * processing = blue (information, the normal path); resolved = teal (positive);
+ * attention = amber (pending, a missing event, needs a look); failure = red (an
+ * actual failure); unknown = grey. Colour is never the only carrier: the
+ * renderer prints the word or a glyph beside it.
+ */
+export const CASE_STUDY_WORKFLOW_STATUSES = ['processing', 'resolved', 'attention', 'failure', 'unknown'] as const;
+export type CaseStudyWorkflowStatus = typeof CASE_STUDY_WORKFLOW_STATUSES[number];
+
+/** A horizontal band of the illustration. Labels are per panel (`laneLabels`). */
+export const CASE_STUDY_WORKFLOW_LANES = ['primary', 'recovery', 'manual'] as const;
+export type CaseStudyWorkflowLane = typeof CASE_STUDY_WORKFLOW_LANES[number];
+
+export const CASE_STUDY_WORKFLOW_TYPES = ['before_after', 'single_state'] as const;
+export type CaseStudyWorkflowType = typeof CASE_STUDY_WORKFLOW_TYPES[number];
+
+export const CASE_STUDY_WORKFLOW_PANEL_KEYS = ['before', 'after', 'single'] as const;
+export type CaseStudyWorkflowPanelKey = typeof CASE_STUDY_WORKFLOW_PANEL_KEYS[number];
+
+export interface CaseStudyWorkflowNode {
+  /** Local graph label, `[a-z0-9_-]{1,40}`, unique within its panel. */
+  readonly key: string;
+  readonly label: string;
+  readonly sublabel?: string;
+  /** The stage's purpose, printed in the detail panel. */
+  readonly detail?: string;
+  /** "Stage 1 of the live path". */
+  readonly kicker?: string;
+  readonly role: CaseStudyWorkflowRole;
+  readonly status?: CaseStudyWorkflowStatus;
+  readonly lane?: CaseStudyWorkflowLane;
+  /** "Where the proof lives", in words. Never a URL. */
+  readonly evidence?: string;
+  /** A `case_study_evidence` row on this record. Never projected. */
+  readonly evidenceId?: string;
+  /** A metric on this record whose figure the detail panel shows as the tally. */
+  readonly metricKey?: string;
+}
+
+export interface CaseStudyWorkflowEdge {
+  readonly from: string;
+  readonly to: string;
+  readonly label?: string;
+  readonly status?: CaseStudyWorkflowStatus;
+  /** A branch condition, "source call unavailable". */
+  readonly condition?: string;
+  /** Whether illustrative particles travel this edge. Default true. */
+  readonly motion?: boolean;
+}
+
+export interface CaseStudyWorkflowPanel {
+  readonly key: CaseStudyWorkflowPanelKey;
+  readonly label: string;
+  /** One sentence shown under the toggle while this panel is active. */
+  readonly summary?: string;
+  readonly laneLabels?: Partial<Record<CaseStudyWorkflowLane, string>>;
+  readonly nodes: readonly CaseStudyWorkflowNode[];
+  readonly edges: readonly CaseStudyWorkflowEdge[];
+  readonly initialNodeKey?: string;
+}
+
+export interface CaseStudyWorkflowVisual {
+  readonly key: string;
+  readonly type: CaseStudyWorkflowType;
+  readonly title: string;
+  readonly caption?: string;
+  /** Accessible text describing the whole flow; printed when motion is off and read by assistive technology. */
+  readonly description: string;
+  /** `before_after` carries exactly `before` then `after`; `single_state` carries `single`. */
+  readonly panels: readonly CaseStudyWorkflowPanel[];
+  /** Printed beside the illustration. Defaults to the platform's standard note. */
+  readonly motionNote?: string;
+}
+
+/**
+ * Chart kinds, one per evidence shape the brief allows, each with its guardrail:
+ * composition = a whole split into exclusive parts that sum to the metric's
+ * denominator; comparison = two or more ratios with a visible caveat about
+ * their windows; share = one ratio or share metric as a bar with its
+ * denominator; two_value = two summary statistics (median and p90) that are
+ * never a distribution or a trend; zero_card = a numerator of zero over a real
+ * denominator, because zero is valid and missing is not zero.
+ */
+export const CASE_STUDY_VISUAL_CHART_KINDS = ['composition', 'comparison', 'share', 'two_value', 'zero_card'] as const;
+export type CaseStudyVisualChartKind = typeof CASE_STUDY_VISUAL_CHART_KINDS[number];
+
+export interface CaseStudyVisualChartPart {
+  readonly label: string;
+  /** Resolved from this metric's payload when set; the anchoring metric otherwise. */
+  readonly metricKey?: string;
+  /** Literal count, allowed only with `evidenceId`; checked against the denominator. */
+  readonly value?: number;
+  /** For `comparison` bars: a literal denominator, allowed only with `evidenceId`. */
+  readonly denominator?: number;
+  readonly evidenceId?: string;
+  readonly status?: CaseStudyWorkflowStatus;
+  /** A short qualifier printed with the part, "Apr 27 to 29". */
+  readonly caveat?: string;
+}
+
+export interface CaseStudyVisualChart {
+  readonly key: string;
+  readonly kind: CaseStudyVisualChartKind;
+  readonly title: string;
+  /** Units and time window, printed under the title. */
+  readonly caption?: string;
+  /** The metric that anchors the chart: its denominator is the cohort. */
+  readonly metricKey: string;
+  readonly parts?: readonly CaseStudyVisualChartPart[];
+  readonly unit?: string;
+  /** `two_value` only: the axis maximum in `unit`. */
+  readonly axisMax?: number;
+  /** The interpretive caveat that must stay visible, not folded away. */
+  readonly caveat?: string;
+  readonly limitations?: readonly string[];
+}
+
+export interface CaseStudyVisualOutcomeCard {
+  readonly metricKey: string;
+  /** The one card drawn on the accent ground. At most one. */
+  readonly emphasis?: boolean;
+}
+
+export const CASE_STUDY_VISUAL_GENERATORS = ['evidence', 'human'] as const;
+export type CaseStudyVisualGenerator = typeof CASE_STUDY_VISUAL_GENERATORS[number];
+
+export const CASE_STUDY_VISUAL_STATES = ['draft', 'approved', 'stale'] as const;
+export type CaseStudyVisualState = typeof CASE_STUDY_VISUAL_STATES[number];
+
+export interface CaseStudyVisualProvenance {
+  readonly generator: CaseStudyVisualGenerator;
+  readonly generatedAt: IsoDateTime;
+  /** Snapshot the draft was generated from, when known. */
+  readonly sourceSnapshotId?: string;
+  /** sha256 over the source sections; a mismatch with the current snapshot marks the story stale. */
+  readonly sourceContentHash: string;
+  readonly state: CaseStudyVisualState;
+  /** True once a person changed anything the generator wrote. Sync never overwrites a human-edited story. */
+  readonly humanEdited: boolean;
+}
+
+export const CASE_STUDY_VISUAL_MOTION = ['auto', 'off'] as const;
+export type CaseStudyVisualMotion = typeof CASE_STUDY_VISUAL_MOTION[number];
+
+export interface CaseStudyVisualStorySection {
+  readonly schemaVersion: CaseStudyVisualSchemaVersion;
+  readonly presentationVersion: CaseStudyVisualPresentationVersion;
+  /** The per-record switch. Off means the record renders exactly as it did before the section existed. */
+  readonly enabled: boolean;
+  /** Surfaces the story renders on. The projection drops it everywhere else. */
+  readonly surfaces: readonly CaseStudySurfaceKey[];
+  /** Default motion preference; `prefers-reduced-motion` always wins. */
+  readonly motion: CaseStudyVisualMotion;
+  readonly workflow?: CaseStudyWorkflowVisual;
+  readonly outcomeCards: readonly CaseStudyVisualOutcomeCard[];
+  readonly charts: readonly CaseStudyVisualChart[];
+  readonly provenance: CaseStudyVisualProvenance;
 }
 
 /**

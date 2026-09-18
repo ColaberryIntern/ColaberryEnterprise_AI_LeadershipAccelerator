@@ -24,9 +24,13 @@ import { useEffect, useRef, useState } from 'react';
  * a callback writing into an unmounted component.
  */
 
-/** Splits "2,500+ certified" into 2500, "" and "+ certified". */
+/**
+ * Splits "2,500+ certified" into 2500, "" and "+ certified". The number ends
+ * on its last digit, so the space in "34 minutes" belongs to the suffix and
+ * every frame reads "21 minutes", not "21minutes".
+ */
 function parseFigure(text: string): { value: number; prefix: string; suffix: string } | null {
-  const match = text.match(/^(\D*?)([\d][\d,\s]*)(.*)$/s);
+  const match = text.match(/^(\D*?)(\d(?:[\d,\s]*\d)?)(.*)$/s);
   if (!match) return null;
   const digits = match[2].replace(/[,\s]/g, '');
   const value = Number(digits);
@@ -48,12 +52,19 @@ export interface CountUp {
   settled: boolean;
 }
 
-export default function useCountUp(text: string, durationMs = 1100): CountUp {
+/**
+ * `restAtFinal`: show the TRUE wording until the count actually starts, and
+ * count up from zero only once the figure is in view. The default rests at
+ * zero, which is right for a band that is always scrolled to; a figure that
+ * may be captured, printed or crawled before anyone scrolls (the visual story's
+ * outcome cards) must never be photographed reading "0%".
+ */
+export default function useCountUp(text: string, durationMs = 1100, restAtFinal = false): CountUp {
   const ref = useRef<HTMLElement>(null);
   const parsed = parseFigure(text);
   // With nothing numeric to animate, settle immediately -- the caller then
   // renders plain text and never marks anything aria-hidden.
-  const [display, setDisplay] = useState<string>(parsed ? `${parsed.prefix}0${parsed.suffix}` : text);
+  const [display, setDisplay] = useState<string>(parsed && !restAtFinal ? `${parsed.prefix}0${parsed.suffix}` : text);
   const [settled, setSettled] = useState<boolean>(!parsed);
 
   useEffect(() => {

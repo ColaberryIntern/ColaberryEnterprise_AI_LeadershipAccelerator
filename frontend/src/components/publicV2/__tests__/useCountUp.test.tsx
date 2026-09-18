@@ -146,6 +146,14 @@ describe('useCountUp', () => {
     expect(latest?.settled).toBe(false);
   });
 
+  it('keeps the space between a count and its unit on every frame', () => {
+    setRect(false);
+    mount('34 minutes');
+
+    expect(latest?.display).toBe('0 minutes');
+    expect(latest?.settled).toBe(false);
+  });
+
   it('ends on the registry wording exactly, prefix and suffix intact', () => {
     setRect(true);
     mount('Consulting and Training 12+ years');

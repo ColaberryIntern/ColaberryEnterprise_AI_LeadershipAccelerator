@@ -3,6 +3,7 @@ import { requireAdmin } from '../../middlewares/authMiddleware';
 import { handleGetCampaignMetrics, handleGetCampaignMetricsByJourney } from '../../controllers/adminMarketingController';
 import { getChannelROIAggregation, flagUnregisteredTraffic } from '../../services/campaignLinkService';
 import { getNeedsAttentionQueue } from '../../services/marketing/needsAttentionService';
+import { getMarketingOverview } from '../../services/marketing/overviewSummary';
 import { adminTenantScope } from '../../modules/tenancy/adminScopeBridge';
 import { z } from 'zod';
 
@@ -34,6 +35,54 @@ router.get('/api/admin/marketing/unregistered-traffic', requireAdmin, async (_re
 
 const NeedsAttentionQuerySchema = z.object({
   brand_id: z.string().uuid().optional(),
+});
+
+const OverviewQuerySchema = z.object({
+  brand_id: z.string().uuid().optional(),
+});
+
+/**
+ * Everything the Marketing Overview shows, in one request.
+ *
+ * Deliberately one endpoint rather than the four the browser would otherwise make. The generic
+ * /api/admin/content list takes a single status and sorts by `updated_at DESC`, so "the next
+ * five posts going out" cannot be asked of it at all - a post scheduled for Friday and last
+ * edited a month ago sorts below one scheduled for never and edited this morning. Assembling
+ * the panels server-side is what lets each one be ordered by the thing it is actually about.
+ *
+ * Scoped like needs-attention, and `denied` returns an EMPTY summary rather than a 403, for
+ * the same reason: the page renders "nothing in your scope", which is true, instead of an
+ * error, which would suggest the Overview itself is broken.
+ */
+router.get('/api/admin/marketing/overview', requireAdmin, async (req: Request, res: Response) => {
+  const parsed = OverviewQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Validation failed', error_class: 'ValidationError', details: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const scope = await adminTenantScope(req.admin);
+    if (scope.mode === 'denied') {
+      res.json({
+        upcoming: [], upcoming_truncated: false, accounts: [], handoff_providers: [],
+        recent: { published: 0, since: new Date().toISOString(), window_days: 30 },
+        scope_mode: scope.mode,
+      });
+      return;
+    }
+    const summary = await getMarketingOverview({
+      tenantIds: scope.mode === 'scoped' ? scope.tenantIds : null,
+      brandId: parsed.data.brand_id ?? null,
+    });
+    res.json({ ...summary, scope_mode: scope.mode });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'marketing',
+      event: 'marketing_overview_failed', outcome: 'failure',
+      error_class: err?.name ?? 'Error', context: { message: String(err?.message ?? err).slice(0, 200) },
+    }));
+    res.status(500).json({ error: 'Failed to build the marketing overview', error_class: 'InternalError' });
+  }
 });
 
 /**

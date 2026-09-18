@@ -31,6 +31,23 @@ export type TicketType = 'task' | 'bug' | 'feature' | 'curriculum' | 'agent_acti
   // applyConfirmedReliabilityChange(). Distinct from every other type so
   // reliability-incident history stays queryable on its own.
   | 'data_reliability_incident'
+  // Dara v2 (Curriculum AI Employee) Phase 3 (2026-09-17) — a real student DM
+  // conversation with Dara, ProofDesk-linked. Mirrors 'student_support'
+  // exactly in shape but kept as its own type deliberately: 'student_support'
+  // is Reese's own reactive-mentoring conversation type, and reusing it for a
+  // different AI employee's DMs would conflate two distinct relationships in
+  // any filter/dedup/evidence query keyed on type. See
+  // backend/src/services/curriculum/daraTicketLinkService.ts.
+  | 'curriculum_support'
+  // Dara v2 Phase 4 (2026-09-17) — a mandatory, standalone handoff: Dara
+  // determined a student question is outside her real scope and is handing
+  // it off (today: always to her own reports_to human, Swati — no other AI
+  // employee has a matching capability yet, per Phase 1's discovery). "Never
+  // off-ledger": every real escalation gets its OWN ticket here, not just a
+  // comment on the ongoing 'curriculum_support' conversation ticket, so it is
+  // independently visible/trackable/assignable regardless of what happens to
+  // the conversation itself. See backend/src/services/curriculum/daraHandoffService.ts.
+  | 'agent_handoff'
   // Growth Journey OS Phase 4 (T404) - the human task behind a
   // growth_journey_handoffs row: created only by the flag-gated assignment
   // step with a policy assignee, deduped by createTicket() on

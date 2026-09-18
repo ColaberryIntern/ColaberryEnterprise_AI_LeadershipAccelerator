@@ -1,6 +1,8 @@
 import { DryRunAdapter } from './dryRunAdapter';
 import { HandoffAdapter } from './handoffAdapter';
 import { LinkedInAdapter } from './linkedInAdapter';
+import { MetaAdapter } from './metaAdapter';
+import { makeMetaHttp } from './metaHttp';
 import { makeLinkedInHttp } from './linkedInHttp';
 import { decidePublishMode, getProviderCapabilities, PROVIDER_KEYS, type ProviderKey } from './providerCapabilities';
 import { ProviderPublishError, type SocialProviderAdapter } from './socialProviderAdapter';
@@ -19,10 +21,12 @@ import { ProviderPublishError, type SocialProviderAdapter } from './socialProvid
  *
  * WHERE A REAL ADAPTER PLUGS IN. `LIVE_ADAPTERS` below maps a provider to its implementation.
  * A provider reaches it only when `decidePublishMode` says `direct`, which requires it to be in
- * `LIVE_CONNECTORS` - so today the LinkedIn entry is present and unreachable, and flipping that
- * one constant (once credentials exist) is the entire activation. Anything marked direct with
- * no entry here still raises `NoLiveAdapterError`: loud and permanent, dead-lettered with a
- * reason, rather than publishing nothing silently.
+ * `LIVE_CONNECTORS` - read from the environment variable of the same name at boot, so once the
+ * credentials exist the entire activation is `LIVE_CONNECTORS=linkedin_member` plus a restart.
+ * The env reader only accepts providers listed in `IMPLEMENTED_CONNECTORS`, which a test holds
+ * equal to the keys here. Anything marked direct with no entry here still raises
+ * `NoLiveAdapterError`: loud and permanent, dead-lettered with a reason, rather than publishing
+ * nothing silently.
  *
  * DEPENDENCIES ARE INJECTED, not imported at module load. `channelAccountService` reaches the
  * models and the credential vault, and importing it here directly would both create a cycle
@@ -59,6 +63,30 @@ export interface LiveAdapterDeps {
   getAuthorUrn: (accountId: string) => Promise<string>;
   /** Bytes of an attachment by storage key. Verified against the key's hash on read. */
   readMedia: (ref: string) => Promise<Buffer>;
+  /** The provider's own id for the account: a Facebook Page id, an Instagram account id. */
+  getTargetId: (accountId: string) => Promise<string>;
+  /**
+   * A short-lived public URL for one attachment. Meta FETCHES media rather than taking bytes,
+   * so an adapter for it needs a URL where LinkedIn needs a Buffer.
+   */
+  signedUrlFor: (ref: string) => Promise<string>;
+}
+
+/**
+ * Where Meta is told to fetch media from. It must be a host reachable from the public internet
+ * and serving `/m/...`; `MEDIA_PUBLIC_BASE_URL` overrides, otherwise the OAuth base (itself
+ * derived from the live LinkedIn redirect) is the same public host.
+ */
+export function mediaPublicBaseUrl(env: NodeJS.ProcessEnv = process.env): string | null {
+  const explicit = env.MEDIA_PUBLIC_BASE_URL?.trim() || env.MARKETING_OAUTH_BASE_URL?.trim();
+  if (explicit) return explicit.replace(/\/+$/, '');
+  const linkedIn = env.LINKEDIN_REDIRECT_URI?.trim();
+  if (!linkedIn) return null;
+  try {
+    return new URL(linkedIn).origin;
+  } catch {
+    return null;
+  }
 }
 
 /** Lazily resolved so a dry-run factory never loads the models or the vault. */
@@ -75,6 +103,25 @@ function defaultLiveDeps(): LiveAdapterDeps {
     readMedia: async (ref) => {
       const { read } = await import('../media/mediaStore');
       return read(ref);
+    },
+    getTargetId: async (accountId) => {
+      const { getProviderAccountId } = await import('../marketing/channelAccountService');
+      return getProviderAccountId(accountId);
+    },
+    signedUrlFor: async (ref) => {
+      const base = mediaPublicBaseUrl();
+      if (!base) {
+        // Permanent: without a public host there is no URL Meta could fetch, and retrying
+        // cannot invent one. Named so the dead-letter row says which variable to set.
+        throw new ProviderPublishError(
+          'No public base URL is configured for media (MEDIA_PUBLIC_BASE_URL), so Meta cannot fetch the attachment.',
+          true,
+          'media_base_url_missing',
+          null,
+        );
+      }
+      const { signedUrl } = await import('../media/mediaStore');
+      return signedUrl(ref, base).url;
     },
   };
 }
@@ -94,7 +141,18 @@ const LIVE_ADAPTERS: Partial<Record<ProviderKey, (deps: LiveAdapterDeps, clock: 
     provider: 'linkedin_organization', getToken: deps.getToken, getAuthorUrn: deps.getAuthorUrn, readMedia: deps.readMedia,
     http: makeLinkedInHttp(), clock,
   }),
+  meta_facebook_page: (deps, clock) => new MetaAdapter({
+    provider: 'meta_facebook_page', getToken: deps.getToken, getTargetId: deps.getTargetId,
+    signedUrlFor: deps.signedUrlFor, http: makeMetaHttp(), clock,
+  }),
+  meta_instagram: (deps, clock) => new MetaAdapter({
+    provider: 'meta_instagram', getToken: deps.getToken, getTargetId: deps.getTargetId,
+    signedUrlFor: deps.signedUrlFor, http: makeMetaHttp(), clock,
+  }),
 };
+
+/** The providers a live adapter exists for; held equal to IMPLEMENTED_CONNECTORS by a test. */
+export const LIVE_ADAPTER_KEYS: readonly ProviderKey[] = Object.keys(LIVE_ADAPTERS) as ProviderKey[];
 
 /** A factory with one adapter instance per provider, so dry-run receipts stay idempotent within a run. */
 export function makeAdapterFactory(

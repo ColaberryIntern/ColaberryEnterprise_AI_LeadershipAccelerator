@@ -1,10 +1,10 @@
 import React from 'react';
+import { StoryBuildRail, StoryRoadmapBoard } from './StoryLowerV2';
+import { StoryBuilder, StoryClosing, StoryDecisions, builderCoversContributors } from './storyPeopleV2';
 import { Metric } from '../../components/publicV2/Claim';
 import StoryArchitectureBand from './StoryArchitectureBand';
 import CaseStudyArtifacts from '../../components/caseStudy/CaseStudyArtifacts';
-import CaseStudyMeasurement from '../../components/caseStudy/CaseStudyMeasurement';
-import CaseStudyRoadmap from '../../components/caseStudy/CaseStudyRoadmap';
-import CaseStudyTimeline from '../../components/caseStudy/CaseStudyTimeline';
+import StoryMeasurementBand from './StoryMeasurementBand';
 import CaseStudyVerificationBadge from '../../components/caseStudy/CaseStudyVerificationBadge';
 import { BUILT_BY_LABELS, REPO_ROLE_LABELS } from '../../config/caseStudySurfaces';
 import StoryMediaCarousel from './StoryMediaCarousel';
@@ -16,7 +16,7 @@ import {
   formatPublishedDate,
   withheldRepositoryNote,
 } from './storyDetailV2Model';
-import { carouselSlides } from './storyMediaModel';
+import { carouselSlides, unshownArtifacts } from './storyMediaModel';
 import type {
   CaseStudySectionKey,
   PublicCaseStudyContributor,
@@ -242,42 +242,49 @@ export function StorySectionBody({
       // the same reason everything here is.
       return <StorySituation situation={record.situation} />;
     case 'build':
-      return <CaseStudyTimeline entries={record.timeline} />;
+      // The rail, not the Studio's dated list: same steps, a tenth of the height.
+      return <StoryBuildRail entries={record.timeline} />;
     case 'architecture':
       // Prose, drawing, then the verified inventory folded; the reasoning
       // lives with the markup in `StoryArchitectureBand`.
-      return <StoryArchitectureBand architecture={record.architecture} />;
-    case 'measurement':
-      return record.measurement ? (
-        <CaseStudyMeasurement measurement={record.measurement} />
-      ) : null;
-    case 'roadmap':
-      return <CaseStudyRoadmap items={record.roadmap} />;
-    case 'contributors':
       return (
-        <StoryContributors
-          contributors={record.contributors}
-          anonymousCount={record.anonymousContributorCount}
+        <StoryArchitectureBand
+          architecture={record.architecture}
+          diagramFolded={Boolean(record.visualStory?.workflow)}
         />
       );
-    case 'artifacts':
-      // The carousel is a second VIEW of the same approved artifacts, not a
-      // second set: it shows the ones that are images, and every artifact still
-      // appears in the list beneath it. Below two images `carouselSlides`
-      // returns nothing and only the list renders. Pictures the page already
-      // placed between sections are subtracted first, so nothing appears twice.
+    case 'measurement':
+      // Prose, then the metric cards, folded when the visual story band already
+      // shows the figures; the reasoning lives with the markup in `StoryMeasurementBand`.
+      return <StoryMeasurementBand measurement={record.measurement} visualStory={record.visualStory} />;
+    case 'roadmap':
+      // The status board, not the Studio's list; the details fold under it.
+      return <StoryRoadmapBoard items={record.roadmap} />;
+    case 'contributors':
+      // Stands down when the builder card is already the credit (storyPeopleV2).
+      if (builderCoversContributors(record)) return null;
+      return <StoryContributors contributors={record.contributors} anonymousCount={record.anonymousContributorCount} />;
+    case 'decisions': return <StoryDecisions decisions={record.decisions} />;
+    case 'builder': return <StoryBuilder builder={record.builder} />;
+    case 'closing': return <StoryClosing closing={record.closing} />;
+    case 'artifacts': {
+      // Every picture once (`unshownArtifacts`); nothing left, no band.
+      const slides = carouselSlides(record.artifacts, placedHrefs);
+      const listed = unshownArtifacts(record.artifacts, [...placedHrefs, ...slides.map((s) => s.href)]);
+      if (slides.length === 0 && listed.length === 0) return null;
       return (
         <div data-story-zone="artifacts">
-          <StoryMediaCarousel slides={carouselSlides(record.artifacts, placedHrefs)} />
+          <StoryMediaCarousel slides={slides} />
           {/* `headingLevel={3}` closes the h2 -> h4 skip this band used to
               carry. The component's default is still 4 for every other caller. */}
           <CaseStudyArtifacts
-            artifacts={record.artifacts}
+            artifacts={listed}
             requestHref={record.cta.href}
             headingLevel={3}
           />
         </div>
       );
+    }
     case 'repositories':
       return (
         <StoryRepositories

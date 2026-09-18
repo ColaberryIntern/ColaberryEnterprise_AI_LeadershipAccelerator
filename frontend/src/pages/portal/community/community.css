@@ -312,3 +312,9 @@ img.cm-avatar-btn{background:var(--sunken,#F1F1F0)}
   .cm-event-join{padding:8px 14px}
   .cm-people-grid{grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
 }
+
+/* Rung colours come from the ONE palette in styles/rungTones.css (the same
+   variables the Points-tab journey and the HUD use); LevelBadge adds the tone
+   class, this rule only reads the variables. */
+.cm-lvl-badge[class*="rung-"]{background:var(--rung-bg);color:var(--rung-fg);border-color:var(--rung-line)}
+.cm-profile-stat b.cm-profile-rung{font-family:inherit;font-size:13px;line-height:1.3;font-weight:800}

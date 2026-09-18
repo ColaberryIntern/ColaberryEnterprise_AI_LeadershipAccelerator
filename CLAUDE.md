@@ -60,6 +60,26 @@ Use the `short` mode from the `brief-me` skill. Full detail lives in `.claude/sk
 
 Only when a reply is a single clarifying question and there is genuinely no state to report. When in doubt, include it.
 
+## Times are Central, never UTC
+
+Every time Claude states, in a reply, a brief, a session log, a commit message, an email, a Basecamp post, or any content that ships to a page, is **Central time (CST/CDT), with the zone written out** (`8:14 PM CDT on 2026-09-15`). Never UTC, never a bare `Z` suffix, never a raw ISO timestamp in prose. Convert before writing; a timestamp read from a log or a database is input, not output.
+
+**Why:** Ali and every reader of this platform's pages work in Central, and a UTC time in a sentence is a small arithmetic problem handed to the reader every time it appears. It also produced a published case-study metric whose window read "2026-04-30 00:00 UTC" for what was the evening of April 29 in Dallas.
+
+The exception is machine-facing fields that the code defines as UTC (ISO-8601 columns, API payloads, cron expressions): those stay as the code requires, and are converted the moment they are written for a person.
+
+## Emails sent as Ali: a little less formal
+
+Every email that goes out under Ali's name reads like Ali typing to a colleague, not like a memo. Ram's feedback on 2026-09-17: the tone had drifted formal. So:
+
+- Short sentences, contractions where a person would use them ("I'll", "that's", "we're"), first names, one idea per paragraph.
+- Say the thing, then stop. No throat-clearing openers ("I hope this finds you well"), no "please be advised", no "kindly", no "per my earlier".
+- Warm where warmth is real: a thank-you is one plain sentence, not a paragraph.
+- Numbered lists only when the reader has to act on each item; otherwise prose.
+- Internal notes to the team can be looser than notes to a client or a vendor, but neither should read as drafted by a lawyer.
+
+The hard rules do not change: no em dashes anywhere, the real signature exactly once, no trailing sign-off or name before it, and every send goes through the guarded sender (`sendAsAli.js`). The memory file `feedback_email_style.md` carries the mechanics; this section carries the voice.
+
 ---
 
 # Telemetry Synchronization Contract
@@ -724,7 +744,7 @@ Claude may assume:
 - Git is present
 - CI runs automated tests where they exist (manual testing is the current default for most surfaces)
 - Production VPS access over SSH is available to the operator. **This repository is public: the host address, SSH account, and stack directory are deliberately NOT recorded here.** Read them from the operator's private ops notes or the deployment vault, never from a tracked file.
-- **Deploy procedure: use `scripts/deploy-prod.sh` from the stack directory on the production host.** It takes an exclusive lock, refuses a dirty tree, confirms `HEAD` matches `origin/main`, runs the build unpiped so the real exit code survives, and then **verifies the containers are actually running**.
+- **Deploy procedure: use `scripts/deploy-prod.sh` from the stack directory on the production host.** It takes an exclusive lock, refuses a dirty tree, confirms `HEAD` matches `origin/main`, runs the build unpiped so the real exit code survives, and then **verifies the containers are actually running**. Since 2026-09-16 it also waits for any raw `compose up` started outside it, waits for the backend to answer on 3001, and, given `EXPECT_MARKER=<string> EXPECT_IN=<svc:path>`, fails unless that marker is in the running container; `DEPLOY_MODE=registry` pulls the CI-built image once it exists, and `DRY_RUN=1` rehearses every guard without touching Docker.
 
   Do not run `docker compose ... up -d --build` directly. Multiple Claude sessions deploy to this box concurrently: on 2026-08-28 two deploys raced, one exited 1 on a container-naming collision, and `accelerator-backend` sat in `created` state for about four minutes while the site kept returning 200 - nginx serves the static frontend without the backend, so the outage was invisible from outside. Checking for a running deploy first does not help; a check is a snapshot and the other deploy can start immediately after it. That was the sixth collision in a single session.
 

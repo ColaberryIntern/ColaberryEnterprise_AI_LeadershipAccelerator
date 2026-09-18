@@ -134,6 +134,110 @@ export function collectNarrative(content: CaseStudySnapshotContent): readonly Te
     `architecture.dataStores[${i}]`, 'a stated data store', s,
   ));
 
+  /* ── added 2026-09-16 with the visual story: every string it draws ──
+   *
+   * The illustration's labels, the detail panel's prose, the chart titles and
+   * their caveats are read at display size beside real figures, which is the
+   * one place a bare "97%" nobody verified would borrow the most credibility.
+   * The figures themselves never appear here: a chart part carries a metricKey
+   * (resolved at projection) or a literal `value` (a number, not text, and only
+   * beside an evidenceId the validator checks). So, like `valueDisplay` above,
+   * the numbers are governed elsewhere and only the words are scanned.
+   */
+  const vs = (content as any)?.visualStory;
+  if (vs && typeof vs === 'object') {
+    const wf = vs.workflow;
+    push('visualStory.workflow.title', 'the workflow title', wf?.title);
+    push('visualStory.workflow.caption', 'the workflow caption', wf?.caption);
+    push('visualStory.workflow.description', 'the workflow description', wf?.description);
+    push('visualStory.workflow.motionNote', 'the workflow motion note', wf?.motionNote);
+    arr(wf?.panels).forEach((p: any, i: number) => {
+      const pp = `visualStory.workflow.panels[${i}]`;
+      push(`${pp}.label`, 'a workflow panel label', p?.label);
+      push(`${pp}.summary`, 'a workflow panel summary', p?.summary);
+      arr(p?.nodes).forEach((n: any, j: number) => {
+        push(`${pp}.nodes[${j}].label`, 'a workflow stage label', n?.label);
+        push(`${pp}.nodes[${j}].sublabel`, 'a workflow stage label', n?.sublabel);
+        push(`${pp}.nodes[${j}].kicker`, 'a workflow stage kicker', n?.kicker);
+        push(`${pp}.nodes[${j}].detail`, 'a workflow stage explanation', n?.detail);
+        push(`${pp}.nodes[${j}].evidence`, 'a workflow stage evidence line', n?.evidence);
+      });
+      arr(p?.edges).forEach((e: any, j: number) => {
+        push(`${pp}.edges[${j}].label`, 'a workflow edge label', e?.label);
+        push(`${pp}.edges[${j}].condition`, 'a workflow branch condition', e?.condition);
+      });
+    });
+    arr(vs.charts).forEach((c: any, i: number) => {
+      const cp = `visualStory.charts[${i}]`;
+      push(`${cp}.title`, 'a chart title', c?.title);
+      push(`${cp}.caption`, 'a chart caption', c?.caption);
+      push(`${cp}.caveat`, 'a chart caveat', c?.caveat);
+      arr(c?.limitations).forEach((l: unknown, j: number) => push(`${cp}.limitations[${j}]`, 'a stated chart limitation', l));
+      arr(c?.parts).forEach((part: any, j: number) => {
+        push(`${cp}.parts[${j}].label`, 'a chart part label', part?.label);
+        push(`${cp}.parts[${j}].caveat`, 'a chart part caveat', part?.caveat);
+      });
+    });
+  }
+
+  /* ── added 2026-09-16 with the storytelling rollout: the builder, the
+   * decisions and every per-surface variant ──
+   *
+   * A variant is the same prose said to a different audience, so it is scanned
+   * exactly as the canonical field would be, under its own path so a finding
+   * names the surface. The builder card and the decision cards are words a
+   * reader takes as narrative; their figures ("0 duplicate call records in 339")
+   * must already be metrics on the record or they are caught here.
+   */
+  const builderText = (prefix: string, b: any): void => {
+    if (!b || typeof b !== 'object') return;
+    push(`${prefix}.roleTitle`, 'the builder role title', b.roleTitle);
+    push(`${prefix}.organization`, 'the builder organisation', b.organization);
+    arr(b.intro).forEach((t: unknown, i: number) => push(`${prefix}.intro[${i}]`, 'the builder introduction', t));
+    arr(b.progression).forEach((t: unknown, i: number) => push(`${prefix}.progression[${i}]`, 'a career progression step', t));
+    push(`${prefix}.contribution`, 'the builder contribution', b.contribution);
+    arr(b.skills).forEach((sk: any, i: number) => {
+      push(`${prefix}.skills[${i}].label`, 'a demonstrated skill', sk?.label);
+      push(`${prefix}.skills[${i}].evidence`, 'a demonstrated skill evidence line', sk?.evidence);
+    });
+  };
+  const decisionText = (prefix: string, list: unknown): void => {
+    arr(list as readonly unknown[]).forEach((d: any, i: number) => {
+      push(`${prefix}[${i}].title`, 'a decision card title', d?.title);
+      push(`${prefix}[${i}].problem`, 'a decision card', d?.problem);
+      push(`${prefix}[${i}].decision`, 'a decision card', d?.decision);
+      push(`${prefix}[${i}].evidence`, 'a decision card evidence line', d?.evidence);
+      push(`${prefix}[${i}].consequence`, 'a decision card', d?.consequence);
+      push(`${prefix}[${i}].stage`, 'a decision card stage pin', d?.stage);
+      push(`${prefix}[${i}].figure`, 'a decision card figure', d?.figure);
+    });
+  };
+  builderText('builder', (content as any)?.builder);
+  decisionText('decisions', (content as any)?.decisions);
+  push('closing', 'the closing paragraph', (content as any)?.closing);
+  const variants = (content as any)?.surfaceVariants;
+  if (variants && typeof variants === 'object') {
+    for (const [surface, v] of Object.entries(variants as Record<string, any>)) {
+      if (!v || typeof v !== 'object') continue;
+      const vp = `surfaceVariants.${surface}`;
+      push(`${vp}.standfirst`, 'the standfirst', v.standfirst);
+      arr(v.situation?.narrative).forEach((t: unknown, i: number) => push(`${vp}.situation.narrative[${i}]`, 'the situation narrative', t));
+      arr(v.situation?.constraints).forEach((t: unknown, i: number) => push(`${vp}.situation.constraints[${i}]`, 'a stated constraint', t));
+      arr(v.situation?.goals).forEach((t: unknown, i: number) => push(`${vp}.situation.goals[${i}]`, 'a stated goal', t));
+      arr(v.measurementNarrative).forEach((t: unknown, i: number) => push(`${vp}.measurementNarrative[${i}]`, 'the measurement narrative', t));
+      if (v.metricNotes && typeof v.metricNotes === 'object') {
+        for (const [key, note] of Object.entries(v.metricNotes as Record<string, any>)) {
+          push(`${vp}.metricNotes.${key}.baseline`, 'a metric baseline', note?.baseline);
+          push(`${vp}.metricNotes.${key}.sample`, 'a metric sample description', note?.sample);
+        }
+      }
+      arr(v.contributors).forEach((c: any, i: number) => push(`${vp}.contributors[${i}].role`, 'a contributor role', c?.role));
+      builderText(`${vp}.builder`, v.builder);
+      decisionText(`${vp}.decisions`, v.decisions);
+      push(`${vp}.closing`, 'the closing paragraph', v.closing);
+    }
+  }
+
   return out;
 }
 

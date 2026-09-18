@@ -83,6 +83,10 @@ const detail = (over: Partial<PublicCaseStudyDetail> = {}): PublicCaseStudyDetai
   productionStatus: null,
   heroMetrics: [metric()],
   walkthroughVideo: null,
+  visualStory: null,
+  builder: null,
+  decisions: [],
+  closing: null,
   situation: null,
   timeline: [],
   architecture: architecture(),
@@ -283,6 +287,35 @@ describe('the cover opens the body when the masthead shows the player instead', 
     const inline = all('.cbv2-story-figure').map((fig) => fig.textContent ?? '');
     expect(inline.some((text) => text.includes('The panel'))).toBe(true);
     expect(inline).toHaveLength(2);
+  });
+
+  /**
+   * Ali, 2026-09-18: the picked thumbnail is the cover AND the video's poster; it
+   * must not appear a third time inside the article, and every other picture
+   * appears once.
+   * MUTATION: drop `coverIsPoster` from `mastheadHref` in `StoryDetailArticle`.
+   *   FAILS: the cover is placed inline and listed again in the artifacts band.
+   * MUTATION: pass `record.artifacts` to `CaseStudyArtifacts` unfiltered.
+   *   FAILS: the placed screenshots are listed a second time.
+   */
+  it('when the poster IS the cover, the cover stays out of the body and every picture appears once', () => {
+    const thumbUrl = 'https://example.test/thumb.jpg';
+    const thumb = { ...screenshotArtifact({ title: 'Illustration: a lever', url: thumbUrl }), artifactType: 'photo', presentation: 'atmosphere' };
+    mount(
+      <MemoryRouter>
+        <StoryDetailArticle
+          record={detail({ ...base, heroImageUrl: thumbUrl, artifacts: [cover, other, thumb], walkthroughVideo: { ...video, posterUrl: thumbUrl } } as unknown as Partial<PublicCaseStudyDetail>)}
+          surface={surface}
+        />
+      </MemoryRouter>,
+    );
+    const inline = all('.cbv2-story-figure').map((fig) => fig.textContent ?? '');
+    expect(inline.some((text) => text.includes('Illustration'))).toBe(false);
+    expect(inline).toHaveLength(2);
+    const band = q('[data-story-zone="artifacts"]');
+    expect(band?.textContent ?? '').not.toContain('Illustration');
+    expect(band?.textContent ?? '').not.toContain('The panel');
+    expect(band?.textContent ?? '').not.toContain('The cards');
   });
 
   it('still keeps the cover out of the body when the masthead drew it', () => {

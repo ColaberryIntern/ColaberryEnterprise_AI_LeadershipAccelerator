@@ -12,9 +12,23 @@ a discovery report. The order below is the order that avoids repeating them.
 
 **This skill does not publish.** Publishing is a separate, explicit instruction.
 
-**Start section 8 (images) FIRST.** Dispatch an agent to find or produce the cover
-image before anything else begins — it takes longer than the rest and a case study
-without a cover reads as unfinished however good its evidence is.
+**Every record carries a visual story, and the gate refuses one that does not.** Since
+2026-09-16 (Ali, on approving the CORA pilot: "harden the skill so every case study moving
+forward follows this format") publish-gate rule 21, `visual_story_missing`, refuses any
+snapshot with no `visualStory` that draws a workflow. §8d is therefore a required step,
+not an option: author it after the evidence and the metrics, from the record only. It
+draws the flow and charts the figures the record already verifies; it introduces no
+number. A record with no verified outcome still draws how its system works and shows no
+figures; the band says so in words.
+
+**Start section 8 (images) FIRST.** Dispatch an agent to find or produce the real
+images before anything else begins — it takes longer than the rest and a case study
+without pictures reads as unfinished however good its evidence is.
+
+**The cover is a picked thumbnail, not a screenshot (§8f).** Since 2026-09-18 (Ali: "harden
+this process so we always find thumbnail pictures for each project like this") every record
+gets three YouTube-style concepts from the image model, Ali picks one, and it becomes the
+cover and the video poster. The real captures stay on the record as evidence in the body.
 
 ---
 
@@ -367,6 +381,9 @@ Use ` - ` instead of `<br/>`. After saving, **verify the projection returns it**
 p.projection.architecture.diagramSource ? 'renders' : 'SANITISER DROPPED IT'
 ```
 
+The same no-angle-bracket rule binds every label in the visual story (§8d); when the
+story draws the flow, the Mermaid drawing folds under "View technical proof".
+
 ---
 
 ## 8. Images — start this FIRST, in parallel, and do not finish without them
@@ -393,6 +410,12 @@ Do not block on it. Author the record in parallel and attach when it reports.
 
 A record without a cover opens on text and reads as unfinished no matter how good the
 evidence is.
+
+**Since 2026-09-18 the cover is the §8f thumbnail.** Everything in this section still
+governs the REAL images: at least two captures of the work, which appear in the body, and
+which stand as the cover only until Ali has picked a thumbnail. Never skip the search for
+real captures because a thumbnail is coming: the thumbnail is atmosphere and proves
+nothing; the captures are the evidence.
 
 `identity.heroImageUrl` **now names the cover, and it is gated.** It did not always: it
 was set correctly on a snapshot, the page showed a different image, and the reason was
@@ -554,6 +577,8 @@ alone does not put it on the page — **and set `identity.heroImageUrl` to the c
 - [ ] Artifacts lifted into the snapshot, not just created as rows
 - [ ] Images verified live with an HTTP 200 before the record is called finished
 - [ ] **The rendered page was opened and looked at** — see section 8b
+- [ ] The cover and the video poster are the §8f picked thumbnail, and every real capture
+      is in the body (the old cover included)
 
 ---
 
@@ -686,7 +711,12 @@ risk is horizontal overflow.
 - [ ] **The headline metric is the one that answers "did this work?"** (§5c)
 - [ ] `pageScrollW === viewportW` at 1440 **and** 390
 - [ ] Diagrams are in the architecture section, not standing in for a picture
+- [ ] If the record carries a visual story (§8d): the band sits under the context strip,
+      the strip prints no duplicate headline figure, and the band renders at 768 too
 - [ ] `problems[]` is empty
+- [ ] **On all three surfaces, not the one you previewed:** the rail, the status board, the
+      folds and no empty "Who built it" (the §8e marker table), and the flow in lanes at 1440.
+      A format checked on one site is a format shipped on one site.
 
 ---
 
@@ -766,7 +796,9 @@ rather than from your notes.
 3. **Its own architecture diagram**, rendered from `diagramSource`.
 4. **Typographic slides** carrying the record's own sentences.
 
-Nothing is generated, staged or restaged. There is no fifth option.
+Nothing is generated, staged or restaged. There is no fifth option. The visual story's
+workflow illustration (§8d) is NOT slide material: it is an illustration drawn by the
+team, and a film that shows it as if it were the product is exactly the fault §8 forbids.
 
 ### CHECK EVERY FRAME FOR PEOPLE
 
@@ -849,6 +881,405 @@ status code: two different videos both return 200.
 - [ ] The file was verified live by md5, after an nginx rebuild
 
 ---
+
+## 8d. The visual story (required): the flow drawn, the figures charted, from the record only
+
+Every record carries a `visualStory` section on its snapshot: a **workflow illustration**
+(single-state, or Before/After when the before-state is evidenced), up to **three outcome
+cards**, and up to **six charts**. The public page renders it as one band directly under
+the context strip, above the first prose section; when the band shows cards, the strip
+prints no headline figure, the measurement section folds its metric cards under "Full
+notes on all N metrics" (the figures are already on the page once), and the Mermaid
+drawing folds under "View technical proof". **The gate refuses a snapshot without one**
+(`visual_story_missing`, rule 21): presence and a workflow are required, figures are not.
+Every record published before 2026-09-16 was migrated the same day; a record with no
+verified outcome carries a workflow-only story and the band says it shows no figures.
+§8d is the whole rule set; the rest of this file still applies to every word and figure.
+
+**The drawing fits its width.** The layout sizes the flow to the canvas it is given and
+falls back to one column when a step would be unreadable; the page never scrolls sideways
+for it. Keep labels short (40 characters) and steps few (a panel over about eight columns
+becomes a column on a laptop); a connection label the drawing has no room for is said in
+the step panel under "Reached from", so nothing is lost, but a flow that reads only from
+the panel is a flow with too many steps.
+
+### What it is not
+
+- **Not a new section key.** It carries no `data-section`; the surface profiles, the
+  section vocabulary and `sectionOrder` are untouched. Presence of the section is the
+  flag; `enabled` plus the `surfaces` list inside it decides which sites show it.
+  **`surfaces` lists every surface the record is published on.** Ali, 2026-09-16: "They
+  need to be done for all the published sites." Every site draws the same band:
+  Enterprise in React, aiflotation.com and training.colaberry.com through the
+  framework-free port in `packages/case-study-shell` (`case-study-visual-*.js`, kept
+  equal to the React geometry by `storyVisualShellParity.test.ts`; the training site
+  vendors those files verbatim under `src/vendor/case-study-shell`). A story on one
+  surface only is the exception, and needs a reason in the record.
+- **Not a place for a number.** Every card is a **metric key**; every chart anchors on a
+  metric key; a chart part is a metric key or a literal that carries its own denominator
+  **and** an `evidenceId` the record already holds. The projection resolves each figure
+  from the verified metric at request time, so the story can never disagree with the
+  metrics beneath it. If a cited metric loses verification, the whole story drops, not
+  one card.
+- **Not telemetry.** The particles are illustrative, fixed cadence, and the band says so
+  in words. The motion note is part of the section and is claim-scanned like prose.
+
+### Where it lives, and the one way to write it
+
+Snapshot content, key `visualStory`, schema version 1 (`backend/src/types/caseStudy.ts`,
+limits in `caseStudyVisual.ts`). Authored as a **whole section** through the override
+path, like everything else in §3: `applyHumanOverride` with `path: 'visualStory'`
+validates it (`caseStudyVisualStoryValidate.ts`) before any write and refuses with
+`{path, code, message}` per field. It survives sync as a human override; a sync that
+changes the sections it was drawn from marks it **stale** (the Studio shows the badge)
+and never regenerates over a person's work.
+
+The Studio's **Visuals tab, Visual Story panel** is the only authoring surface:
+`Generate from evidence` (`POST /api/admin/case-studies/:id/visual-story/generate`,
+reads only) draws a single-state workflow from the architecture diagram, picks the
+headline and comparative metrics as cards, and proposes one chart per ratio or share
+metric by its guardrail. Edit the words in the row editors, `Preview changes`, then
+`Save`. A generated draft is `enabled: false` on no surface: turning it on is your act.
+
+### Chart mapping: the metric's shape decides the chart, never the other way round
+
+| Metric shape on the record | Chart kind | What it needs | What it refuses |
+|---|---|---|---|
+| ratio or share, parts of one whole | `composition` | parts that sum to the denominator (the remainder is named in the table) | a part with no figure |
+| ratio, with a "N of M" baseline in the measurement notes | `comparison` | both windows as parts, a visible `caveat` naming the windows | anything read as a trend; a bar without a denominator |
+| ratio or share | `share` | the anchoring metric | a literal part without evidence |
+| two summary statistics (median and p90, say) | `two_value` | exactly two parts, a `unit`, an `axisMax` | a third part; a value over the axis |
+| a zero over a real denominator | `zero_card` | the anchoring metric at 0 of N | a non-zero anchor; a missing denominator |
+
+No line, no dates on an axis, no kind that reads as a trend: a title containing
+"trend", "over time", "per week" or "growth" is refused unless the kind is comparison.
+
+### Workflow guardrails
+
+- Every node key unique; every edge joins two known nodes; no self-loop; every node
+  reachable from the initial step (`node_unreachable`); at most 16 nodes and 24 edges
+  per panel. Labels 40 characters, sublabels 48, kicker 60, detail 280, evidence 240.
+- A **before panel exists only when the before-state is evidenced.** The generator
+  never invents one; it draws `single_state`. Author a Before/After pair by hand and
+  cite where each before-step's proof lives in its `evidence` text.
+- Roles (`human`, `system`, `external`, `data`), statuses (`processing`, `resolved`,
+  `attention`, `failure`, `unknown`) and lanes (`primary`, `recovery`, `manual`) are
+  closed lists and render as words as well as colour.
+- No `<`, `>`, `@`, URL or control character in any text (§7 applies here too).
+- A node's `metricKey` shows that metric's verified value beside the step as a tally,
+  with the same verification badge as every other figure.
+
+### The gate and the scanner
+
+Blocker `visual_story_invalid` (rule 20) runs the same validator on every publish and
+names up to eight refusals by path. The claim scanner reads the workflow title, caption,
+description, motion note, every panel label and summary, every node label, sublabel,
+kicker, detail and evidence, every edge label and condition, and every chart title,
+caption, caveat, limitation and part label. **A percentage in any of those must be
+carried by a verified metric on the record** (§6), the same rule that forced a
+`missing_event_rate` metric onto the CORA record on 2026-09-15 when "4.2%" appeared in
+its prose; a caveat on a chart is prose to the scanner.
+
+### Previews
+
+`scripts/previewStoryLayout.js` renders the band with the rest of the page; pass the
+`{surface, caseStudy}` envelope with the projected `visualStory` in it. Check 1440,
+768 and 390 (`pageScrollW === viewportW` at all three; the graph is one 360-wide
+column below 768 and scrolls inside its canvas at natural size above), and once with
+`prefers-reduced-motion` on: no `.cbv2-story-visual__particle`, and the pause control
+reads "Reduced motion". Every figure is visible as text before any animation: the
+cards rest at the final figure until they scroll into view, so a capture taken before
+the count-up shows the true wording, never "0%".
+
+### Done means
+
+- [ ] Every card and chart anchor is a verified, publishable metric on the same record
+- [ ] Every literal chart part carries a denominator and an `evidenceId` the record holds
+- [ ] The before panel, if any, cites evidence in its own words
+- [ ] `readVisualStoryState` reports `validation.ok: true` and `stale: false`
+- [ ] The gate passes with no `visual_story_invalid`
+- [ ] `enabled: true` with `surfaces` equal to the record's published surfaces (every
+      site draws the band); fewer only with a reason recorded
+- [ ] The rendered band checked at 1440, 768, 390 and under reduced motion
+- [ ] The hero and the walkthrough video are unchanged
+
+---
+
+## 8e. The story: a person, three decisions, a closing, written per surface
+
+Piloted on the CORA record for training.colaberry.com on 2026-09-17, revised twice on Ali's
+review, then approved as the format for every record ("Let's harden this format"). The
+visual story (§8d) shows the system; this section is what a reader remembers: who did it,
+what they chose, what it cost, what it showed.
+
+### The arc, in the order the page tells it
+
+person (once) → concrete stakes → the first attempt → the decisions → the complication →
+the outcome → what it demonstrates. Greenfield work has no earlier failure; never
+manufacture one. A demonstration stays a demonstration: no prose upgrade to measured
+impact, and no figure on a card that is not on the record.
+
+### Where each part lives, and who orders it
+
+The **surface profile** places three section keys, `decisions`, `builder` and `closing`
+(`caseStudySurfaceProfiles.ts`; keys in `CaseStudySectionKey`). Every renderer draws bands
+in `surface.sectionOrder`; a renderer that predates a key ignores it. The placements:
+
+| Surface | decisions | builder | closing |
+|---|---|---|---|
+| enterprise | right after `situation` | after `roadmap` | after `repositories`, before `cta` |
+| training | right after `situation` | after `roadmap` | after `builder`, before `repositories` |
+| ai-flotation | right after `architecture` | before `contributors` | before `cta` |
+
+Do not move a section by editing a page. Move it in the profile, and every site follows
+(`caseStudySurfaceLens.test.ts` pins the placements).
+
+The **words** live on the snapshot, per surface, in `content.surfaceVariants.<surface>`
+(`CaseStudySurfaceVariant`: `standfirst`, `situation`, `measurementNarrative`,
+`metricNotes`, `contributors`, `builder`, `decisions`, `closing`). `resolveSurfaceContent` lays the surface's variant over the canonical content
+(`caseStudySurfaceVariant.ts`). A surface with no
+variant reads the canonical words; a record with no variants projects byte-for-byte as
+before variants existed (`caseStudySurfaceVariant.test.ts`). A variant never carries a
+figure: `valueDisplay` and `payload` are not in the type, so the numbers are the same on
+every surface and the metric rules still hold.
+
+### Publishing one surface without touching the others
+
+`applyHumanOverride` republishes EVERY live surface of the record. When one surface must
+stay pinned (a pilot, a revision under review), compose the same services by hand, inside
+the backend container:
+
+1. `applyOverrides(content, [{ path: 'surfaceVariants', value, actor, recordedAt, note }])`
+   with the WHOLE map (merge the other surfaces' variants in unchanged);
+2. `persistCaseStudySnapshot({ status: 'draft', draft: { ..., generatedBy: 'human_edit',
+   contentHash: hashCanonical({ content, sourceCommitMap }) } })`;
+3. `approveSnapshot`; 4. `publishCaseStudy({ surfaceKey })` for each surface you mean.
+
+The committed script does all four, and refuses to write until it has shown you the
+result: `backend/src/scripts/publishCaseStudyVariants.ts` (inside the container,
+`node dist/scripts/publishCaseStudyVariants.js <slug> <variants.json> --surfaces a,b [--apply]`).
+Without `--apply` it is a dry run: the gate for every surface over the composed content, the
+projection diff of every surface NOT named (must be empty), the story review per named
+surface, and each named surface's current `published_snapshot_id`, which is the rollback
+(`approveSnapshot(previous)` then `publishCaseStudy(surface, previous)`). It stops if a named
+variant names a contributor the record has not consented to, and never writes consent.
+`--remove <surface>` returns one surface to the canonical words, which is the rollback when
+the record's identity has changed since the previous snapshot and rule 5 would refuse it.
+Record the ids the dry run prints in `deployment-log.md` before you apply.
+
+### The person: facts by class, consent by the record
+
+Four classes of fact, never mixed and never upgraded by generation:
+
+| Class | Example | Where it may appear |
+|---|---|---|
+| user-confirmed biography | "joined as an intern; hired; now an AI Systems Architect" | `builder.intro`, `builder.progression`, standfirst; ONLY with the person's name released by consent |
+| repository-supported contribution | "built the detection query, the panel, the replay job" | `builder.contribution`, `builder.skills[].evidence`; stands under the role title without a name |
+| internally measured outcome | "586 of 604 resolved" | metrics, cards, decision figures |
+| personal reflection, quotation | anything the person felt or said | NOT on the record until the person supplies it and permits it; there is no field for it |
+
+Consent is a **record fact** (`builder_identity_mode`, `builder_naming_consent`, the
+contributor's `consentRecordedAt`). The author never writes it and never implies it. The
+projection releases the name and the biography only when `builder.displayName` equals a
+contributor the consent gate projected as named for that same content; rule 5 refuses a
+profile whose name is not such a contributor. Everything else on the card (role title,
+organisation, contribution, skills) is a project fact and crosses without a name.
+
+**Sparse author.** No consented person: the card credits the role. `displayName` is the
+EMPTY STRING (rule 5 refuses any non-empty name that is not a consented contributor, even
+though the projection would withhold it; the rollout hit this on three records at once),
+`intro` and `progression` empty, `initials` one letter for the role so the mark is not a
+blank circle ("L" for a learner, "C" for the Colaberry team), contribution and skills from
+the record. That is a valid story: the review prints `story_biography_unavailable` as a
+note, not a warning. Write the gap in the handoff ("no consented author; role credit"); do
+not invent a person, a placeholder or a team name the record does not carry. Do not
+interrupt Ali for an optional interview.
+
+**Names.** "Kes" only, never expanded; verify any full name against an approved profile
+before it appears anywhere, including links. (The verifier found the repository owner's
+GitHub handle inside evidence `href`s of the CORA payload: pre-existing, and on Ali's list.)
+
+### The decisions: three cards, each pinned and each closing on a figure
+
+`CaseStudyDecision`: `title`, `problem`, `decision`, `evidence`, `consequence` (all
+required; a card missing one is not drawn), `stage` (the label of a node in the workflow
+drawing, e.g. "Detection query"; the card reads "At Detection query"), `figure` (what the
+card closes on, as displayed: "28 Apr", "0", "97%"; the consequence is its caption).
+
+- Three is the number. One choice is a feature; five is a list.
+- `stage` names a node of the drawing the reader has just scrolled past, in the node's
+  own words shortened, so the two can be found together.
+- `figure` is a value that is on the record: a metric's display value, a date on the
+  timeline, a count in the evidence. A demonstration's cards may close without a figure;
+  the review notes it and moves on.
+- `evidence` is one line naming where the claim lives (build timeline, architecture
+  narrative, measurement notes, the two screenshots).
+- No card repeats the situation. The problem line is the specific fork, not the backstory.
+
+### The closing
+
+One paragraph, `closing` (variant or canonical): what the work shows about the role, the
+one or two figures that carry it, and the gaps stated as gaps. Every statement on the
+record. Do not write "the gaps made the next priorities clear" when the roadmap marks
+them "not pursued". No CTA language; the profile's CTA follows it.
+
+### One introduction
+
+The standfirst introduces the person once (name, the shortest true progression). The
+situation opens on the problem, not the biography. The builder card is the one place the
+progression is drawn. `story_situation_opens_on_biography` and
+`story_progression_repeated` (the review, below) catch the repeats the pilot shipped with.
+
+### The compact ending: a THREE-SURFACE contract (approved 2026-09-17)
+
+From "Who built it" down the training page shrank from 4,227 px to 1,871 px at 1440 with
+nothing leaving the record: the build as a horizontal rail with staggered labels (compact
+rows under 900 px, never a horizontal scroll), the roadmap as a status board, the
+architecture's first paragraph and stack with the rest folded, the measurement narrative
+in one paragraph (two columns at 1100 px and up), "Who built it" standing down when the
+builder card names the only contributor. Every fold reads "Notes on N of the M ..." so the
+reader knows what is behind it.
+
+**It shipped on one surface and was published on three.** The format was built for the
+training site and the note here said to port it "when the format reaches" the other two.
+Nothing made that happen, so Case Study #2 went live on Enterprise with a 1,274 px dated
+list, a 1,034 px roadmap and an empty "Who built it" heading, and on aiflotation.com with
+the same lists and the workflow drawn as a stack of boxes. Ali, looking at them: "the
+timeline is not on the aiflotation side and I'm not feeling the chart here. It's just not
+even close to the same effect. Same thing with enterprise." All three renderers now draw
+it (training `RecordBands.tsx`, Enterprise `StoryLowerV2.tsx` and `StoryArchitectureBand`,
+AI Flotation `packages/case-study-shell/case-study-record.js`), and the rule is:
+
+**A change to how a story reads is not done until all three surfaces draw it.** A page
+format is a contract across the training site, `enterprise.colaberry.ai` and
+`aiflotation.com`, not a feature of whichever one was looked at first. Before calling any
+record or format change done, open the rendered page on each of the three and find, by
+eye and by selector:
+
+| Marker | Training | Enterprise | AI Flotation |
+|---|---|---|---|
+| The build as a rail | `.cs-rail` | `[data-testid="story-build-rail"]` | `.cs-rail` |
+| The roadmap as a board | `.cs-next` | `[data-testid="story-roadmap-board"]` | `.cs-next` |
+| The long text folded | `details.cs-measure-fold` | `[data-testid="story-technical-proof"]` | `details.cs-measure-fold` |
+| No empty "Who built it" | band absent | band absent | band absent |
+| The flow in lanes at 1440 | horizontal | horizontal | horizontal |
+
+The flow rule behind the last row: `layoutWorkflowToFit` keeps the horizontal composition
+on any desk-width viewport and lets the SVG scale into a narrow canvas, up to 1.6 times
+the canvas width, rather than falling back to a column (aiflotation.com's record column is
+1,024 px against training's 1,384, which is what stacked it); the shell also lets the band
+break out to 1,280 px where the column is narrower. A column at 1440 on any site is a bug.
+
+`shellLowerHalf.test.ts` runs the AI Flotation renderer against a real projected envelope
+and fails without the rail, the board or the fold; `storyLowerV2.test.tsx` does the same
+for Enterprise; the training repository's `lowerHalf.test.ts` for training. A new band
+that changes the format needs a line in all three, in the same PR set.
+
+### Vocabulary
+
+No em-dash or en-dash anywhere a reader sees (Ali's rule, all published copy). No
+editorial bookkeeping in the story: "this revision", "first revision", "review notes",
+"candidates from the brief" belong in the handoff. No "n/a" in a metric note: say what is
+true or leave it out. Dates read "28 Apr 2026"; times, when any, Central with the zone
+written out.
+
+A variant cannot fix a dash in the CANONICAL prose (the situation, the architecture, the
+measurement narrative of a record written before the rule). The review names the path
+(`story_dash @ architecture.narrative[4]` on the training-system record, found during the
+rollout); the fix is a whole-section override of that section through the same
+persist-approve-publish path, republishing only the surfaces the record is on
+(`publishCaseStudyVariants.ts --canonical <section>=<file>` carries it beside the variants).
+Scan every record before you call a rollout done: `reviewCaseStudyStory` per surface prints
+the dash paths for the sections it reads.
+
+### The review, before Ali reads it
+
+`npx ts-node -T src/scripts/reviewCaseStudyStory.ts <slug> [surface]` (or
+`--file <composed content.json>`) prints `reviewCaseStudyStory`'s findings and rubric for
+the latest approved snapshot. It is advisory and exits 0. Warnings: no builder card, no
+decisions, an unpinned card, no closing, bookkeeping, a dash, "n/a" in a note, the
+situation opening on the biography, the progression repeated. Notes: role-only credit
+(biography unavailable), a card without a figure. The rubric scores six dimensions 0 to 2
+with the passage or gap cited (`references/story-rubric.md`); the ones marked
+"editorial" are settled by a person, and no score ever substitutes for a gate.
+
+### Done means, per surface
+
+- The dry run's gate is CLEAN for that surface and the other surfaces' projections did not
+  move; the review prints no warning you did not accept in writing.
+- The live API for `?surface=<key>` carries the builder (name only if consented), three
+  decisions with `stage` and `figure` as authored, the closing, the standfirst.
+- The live page at 1440, 768 and 390 draws the sections where the profile places them, the
+  hero and the video untouched, no horizontal scroll, no page error, no "n/a", no dash; a
+  capture of each new section in the run directory. training.colaberry.com revalidates a
+  page 60 seconds after a publish: the first request after that serves the old page and
+  triggers the rebuild (`x-nextjs-cache: STALE`), the next serves the new one. Read it
+  twice before calling it wrong.
+- The handoff names the previous snapshot id per surface, the editorial gaps, and what was
+  not done.
+
+## 8f. The cover and the video thumbnail: three concepts, Ali picks one
+
+Ali, 2026-09-18, after picking from eighteen concepts for six records: *"Replace them as
+the image for the case studies and the thumbnail for the videos. The old picture can be
+used as an artifact inside the case study, don't throw it away. Then harden this process
+so we always find thumbnail pictures for each project like this."* He asked for them to
+look like the thumbnails on videos with millions of views, and to be "very custom and
+relatable and really pop".
+
+The tools and the step-by-step are `scripts/case-study-thumbnails/README.md`. The rules:
+
+1. **Every record gets three concepts before its checkpoint**, generated with the newest
+   OpenAI image model by `generate.js` inside `accelerator-backend` (the key never leaves
+   the container). Three different ideas, not three crops of one: a person reacting, an
+   object or metaphor with no words, a before and after. One face or one object filling
+   the frame, complementary colours, a hook of at most four words.
+2. **The hook is a feeling, never a claim.** No figure, date, client name, product
+   interface or result in the picture; nothing a reader could take as a measurement. The
+   words come from the record's own tension ("LOST CALLS, FOUND.", "NOT YET."), or the
+   picture carries none.
+3. **Look at every image before Ali does**, word by word. The model invents text on
+   props (a card, a screen, a sign): flag it on the review page (`build_review.py`
+   `notes`), and if Ali picks it, repaint only that region with `edit.js` and paste only
+   that polygon back with `finalize.py composite`. The model does not respect the mask on
+   its own.
+4. **Ali picks.** Nothing reaches a record until he has named the concept. The review page
+   shows every concept at YouTube feed size beside the current covers.
+5. **One 16:9 file serves everything** (`finalize.py crop`, 1536x864, the top offset
+   chosen so the hook stays in frame): the cover, the index card and the video poster.
+   `frontend/public/site-v2/thumb-<name>.jpg`, served by an nginx deploy like any asset.
+6. **It is a `photo`, so it is atmosphere.** `apply-cover.js` writes it as
+   `artifact_type: 'photo'`, `source_type: 'generated'`, titled `Illustration: <what it
+   shows>` (the alt text), described from `cover-caption.json`, and sets
+   `identity.heroImageUrl` and `walkthroughVideo.posterUrl` to it in one snapshot. The
+   projection stamps a photo `atmosphere` and drops one whose caption claims delivered
+   work (`DELIVERED_WORK_CLAIMS`), so the caption says only what the picture shows. Never
+   type it `screenshot` to promote it.
+7. **The old cover stays.** It is already an approved artifact; once it is not the cover,
+   the renderers place it in the body, because the cover is the only image they skip.
+   Nothing is deleted, from the record or from `site-v2`.
+8. **Every picture once** (Ali, 2026-09-18: "do not use the picture a 3rd time inside the
+   case study ... if the old picture was already being used, then only use it once"). The
+   thumbnail appears exactly twice: the video's poster in the masthead and the thumbnail on
+   index and related cards. Never inside the article. Every other picture appears once on
+   the page: Enterprise counts a cover that is the poster as shown (`StoryDetailArticle`)
+   and its artifacts band lists only what the page has not drawn (`unshownArtifacts`); the
+   AI Flotation and training shell skips the cover and the placed figures in the same band.
+   Check it on the live page by counting each file name among `img` and `video[poster]`.
+9. **Only where the record is already live.** `apply-cover.js` republishes on the surfaces
+   the record is published on and nowhere else; a record that is not live stops at a
+   draft. Its dry run checks the cover resolves, the photo projects as atmosphere, the
+   visual story re-validates after its hash is re-stamped, and every live surface's gate
+   is clean. `--apply` refuses until the image URL answers 200.
+
+### Done means
+
+- [ ] Three concepts generated, looked at, flagged where the model invented words
+- [ ] Ali's pick recorded in the run directory, in his words
+- [ ] `thumb-<name>.jpg` live with a 200 before `apply-cover.js --apply`
+- [ ] The live API's `heroImageUrl` and `walkthroughVideo.posterUrl` are the thumbnail
+- [ ] On all three surfaces the masthead poster is the thumbnail and the old cover is in
+      the body, and no picture is drawn twice (the thumbnail not at all) inside the article
 
 ## 9. Record and snapshot must agree
 
@@ -955,7 +1386,7 @@ dimensions came from a person, never from a commit.
 
 ## Hardening — what is prevented, and what is only remembered
 
-Audited 2026-09-13 against the source, not from memory. **19 blocker codes** run on
+Audited 2026-09-13 against the source and extended 2026-09-16. **21 blocker codes** run on
 every publish, and every path to a live page goes through them: `publishCaseStudy` is
 called from exactly two places, `caseStudyAdminRoutes` and `caseStudyAdminReview`, and
 nothing writes `case_study_publications` directly. The gate runs on a repeat publish of
@@ -983,6 +1414,12 @@ an already-live record too, so consent withdrawn between two clicks is caught.
 | A new blocker ships with nothing that triggers it | The coverage sweep in `caseStudyPublicationService.test.ts` asserts every declared code is emitted by some fixture, and fails CI otherwise |
 | A blocker an admin cannot act on | Every blocker must carry a field, a remedy, and a message that is not the code restated. Also a test |
 | A high readiness score authorising a publish | Readiness is advisory and reported beside the decision, never consulted by it. There is a test named for it |
+| A record with no visual story reaches a reader | `visual_story_missing` (rule 21, since 2026-09-16): a snapshot with no story, or a story that draws no workflow, is refused with the Studio's Generate-from-evidence remedy. Figures are not required; presence and a flow are |
+| A visual story that stopped being true | `visual_story_invalid` (rule 20): the same validator the save runs, so a metric that lost its verification after the story cited it refuses the publish and names the field |
+| A builder profile names a person the record has not released | rule 5 (`builder_consent`, extended 2026-09-16): a profile whose `displayName` is not a named, consented contributor of the same content is refused; the projection withholds the name and the biography on the same condition (`projectBuilder`) |
+| A variant says something on a surface it should not | rule 5 refuses a variant keyed on a non-publishable surface; `resolveSurfaceContent` applies a variant to its own surface only, and a record with none projects byte-identically (`caseStudySurfaceVariant.test.ts`) |
+| An unbacked figure hides inside a variant, a card or the closing | the claim scan (`collectNarrative`) reads every variant string, every decision card string (`stage` and `figure` included) and the closing, canonical and per surface |
+| A story section drawn in a different place on each site | the surface profile places `decisions`, `builder` and `closing`; renderers follow `sectionOrder` (`caseStudySurfaceLens.test.ts` pins the placements) |
 
 ### Prevented only by someone remembering — the useful half
 
@@ -1009,6 +1446,37 @@ an already-live record too, so consent withdrawn between two clicks is caught.
    **working the entire candidate list** (§5). All three are prose.
 6. **That a record with no figures says why.** Removing a bad card is enforced; writing
    the sentence that explains the silence is not.
+7. **That the visual story tells the truth about the flow.** The validator (§8d) proves
+   the graph is connected and every figure is a verified metric; it cannot tell whether
+   the arrows run the way the system does, or whether a "before" ever happened. That is
+   read off the evidence, by a person, before `enabled` is set.
+8. **That the story reads as a story.** `reviewCaseStudyStory` (§8e) warns about the
+   shape (no person, no decisions, an unpinned card, no closing, bookkeeping, a dash,
+   the biography repeated) and scores six dimensions; it cannot tell whether the stakes
+   are real to the reader or the complication honest. Those are read by a person, with
+   `references/story-rubric.md` open, before Ali reads it.
+9. **That the compact ending stays compact.** Nothing measures the height of the page.
+   The rail, the board and the folds are code; the discipline to keep the narrative to
+   one paragraph is not.
+10. **That the skill and the gate agree.** §8e once said a role-only card's `displayName`
+    "may be anything"; rule 5 said otherwise and blocked three records in one dry run. The
+    gate was right. `skillStoryRules.test.ts` proves the checks §8e names exist; it cannot
+    prove the prose describes them correctly. When a dry run contradicts this file, the
+    dry run wins, and this file changes the same day.
+11. **That a format reaches every surface.** The rail, the board and the folds are now
+    tested on the two renderers this repository holds (`shellLowerHalf.test.ts`,
+    `storyLowerV2.test.tsx`) and the third lives in the training repository. No test can
+    see across the two repositories, so a NEW band still has to be added three times by a
+    person who remembers to. The §8e marker table and the §8b checklist line are that
+    memory; the live render on all three sites before calling it done is the check.
+12. **That every record gets a picked thumbnail.** §8f is a step in this skill, and
+    `apply-cover.js` refuses the ways a cover goes wrong (a dead URL, a caption the
+    projection would drop, a cover that does not resolve, a gate that is not clean).
+    Nothing refuses a record published WITHOUT one: the gate still accepts a screenshot
+    cover, on purpose, so a record is never blocked on a picture. The checklist in §8 is
+    what remembers it. `caseStudyCoverThumbnail.test.ts` pins the parts that can drift:
+    the caption against the claim list, the explicit cover winning over a screenshot, and
+    the tools this section names.
 
 **When you add a rule here, decide which half it belongs in before you write it.** A rule
 in the second half is a rule with a half-life.
@@ -1017,6 +1485,9 @@ in the second half is a rule with a half-life.
 
 ## 11. Verify, then report with denominators
 
+- **The visual story is on the snapshot and validates** (§8d): `readVisualStoryState`
+  reports `validation.ok: true`, `stale: false`; the gate lists neither
+  `visual_story_missing` nor `visual_story_invalid`. Without this the record cannot publish.
 - Override survival: re-sync and confirm each section held. Should report `unchanged`.
 - `backend/node_modules/.bin/tsc --noEmit` — never bare `npx tsc` (resolves 4.9.5).
 - `npx jest src/services/caseStudy src/types src/routes/admin src/scripts`.
@@ -1041,7 +1512,8 @@ in the second half is a rule with a half-life.
 sections authored X of X · candidates investigated X of X · metrics verified X of X ·
 **metrics that compare X of X (§5a)** · metrics computed by a collector X of X ·
 shaped metrics with plain language X of X · artifacts X · images X · timeline entries X ·
-prefixes X · walkthrough video X seconds, cues loading on X of 3 surfaces.
+prefixes X · walkthrough video X seconds, cues loading on X of 3 surfaces ·
+**visual story: cards X, charts X, steps X, enabled on X surfaces, gate rule 20 clean (§8d)**.
 
 **Never say complete, production-ready or published without evidence for each claim.**
 
@@ -1059,6 +1531,7 @@ prefixes X · walkthrough video X seconds, cues loading on X of 3 surfaces.
 | **images** | **3** | **0** ← the live gap |
 | **walkthrough video** | added later | added later |
 | metrics with methodology + limitations | 4 of 4 | 6 of 6 |
+| **visual story (§8d)** | workflow only, no verified outcome | workflow only, no verified outcome (pilot with figures: CORA, 2026-09-16) |
 
 The tickets record scores higher on rigour and lower on pictures. Both patterns are
 worth copying in one direction only.

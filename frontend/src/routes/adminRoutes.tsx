@@ -1,5 +1,5 @@
 import React, { lazy } from 'react';
-import { Route, Navigate, useParams } from 'react-router-dom';
+import { Route, Navigate, useParams, useLocation } from 'react-router-dom';
 import ProtectedRoute from '../components/ProtectedRoute';
 import AdminLayout from '../components/Layout/AdminLayout';
 const AdminChangePasswordPage = lazy(() => import('../pages/admin/AdminChangePasswordPage'));
@@ -46,7 +46,8 @@ const IntelligenceDiscoveryPage = lazy(() => import('../pages/admin/intelligence
 const IntelligenceSettingsPage = lazy(() => import('../pages/admin/intelligence/IntelligenceSettingsPage'));
 const MissedOpportunitiesPage = lazy(() => import('../pages/admin/MissedOpportunitiesPage'));
 const AgentOrphansPage = lazy(() => import('../pages/admin/AgentOrphansPage'));
-const AdminMarketingDashboardPage = lazy(() => import('../pages/admin/marketing/AdminMarketingDashboardPage'));
+const AdminMarketingOverviewPage = lazy(() => import('../pages/admin/marketing/AdminMarketingOverviewPage'));
+const AdminMarketingPerformancePage = lazy(() => import('../pages/admin/marketing/AdminMarketingPerformancePage'));
 const AdminBrandsPage = lazy(() => import('../pages/admin/marketing/AdminBrandsPage'));
 const AdminMarketingCalendarPage = lazy(() => import('../pages/admin/marketing/AdminMarketingCalendarPage'));
 const AdminContentComposerPage = lazy(() => import('../pages/admin/marketing/composer/AdminContentComposerPage'));
@@ -91,6 +92,20 @@ const AdminPortalEnterPage = lazy(() => import('../pages/admin/AdminPortalEnterP
 function LeadDetailRedirect() {
   const { id } = useParams<{ id: string }>();
   return <Navigate to={`/admin/people/${encodeURIComponent(`lead:${id}`)}`} replace />;
+}
+
+/**
+ * Redirect that CARRIES THE QUERY STRING.
+ *
+ * A bare `<Navigate to="/new/path" />` drops `?a=b`, which is fine for a page that takes no
+ * parameters and silently destructive for one that does. `/admin/brands` is the second kind:
+ * LinkedIn's OAuth callback returns the browser to it with `?linkedin=connected&brand=…`, and
+ * a redirect that ate those would connect the account and then show the operator a page with
+ * nothing on it to say so.
+ */
+export function RedirectKeepingQuery({ to }: { to: string }) {
+  const { search, hash } = useLocation();
+  return <Navigate to={`${to}${search}${hash}`} replace />;
 }
 
 const adminRoutes = (
@@ -194,10 +209,14 @@ const adminRoutes = (
         <Route path="/admin/intelligence/settings" element={<IntelligenceSettingsPage />} />
         <Route path="/admin/agent-orphans" element={<AgentOrphansPage />} />
         <Route path="/admin/communications" element={<AdminCommunicationsPage />} />
-        <Route path="/admin/marketing" element={<AdminMarketingDashboardPage />} />
-        {/* Classified in T012 as section `campaigns` before this page existed - see
-            adminNav UNLISTED_PATH_SECTIONS. */}
-        <Route path="/admin/brands" element={<AdminBrandsPage />} />
+        <Route path="/admin/marketing" element={<AdminMarketingOverviewPage />} />
+        <Route path="/admin/marketing/performance" element={<AdminMarketingPerformancePage />} />
+        {/* Brands is a marketing surface and now lives under the marketing prefix with its
+            siblings. `/admin/brands` stays as a redirect rather than a deletion: it is in
+            bookmarks, it is where the LinkedIn OAuth callback returns the browser, and the
+            redirect preserves that callback's query string. */}
+        <Route path="/admin/marketing/brands" element={<AdminBrandsPage />} />
+        <Route path="/admin/brands" element={<RedirectKeepingQuery to="/admin/marketing/brands" />} />
         {/* Campaign 360 (spec section 4). Deliberately the SAME component as /admin/campaigns/:id -
             the detail page already carries the tabs the spec describes, and a second page would
             be the duplicate destination the spec forbids. The marketing path exists so the IA

@@ -95,6 +95,12 @@ export interface CaseStudyDeskState {
   provenanceVersions: ProvenanceVersionOption[];
   load: () => Promise<void>;
   override: (path: string, value: unknown, note?: string) => void;
+  /**
+   * The same override, for a panel that needs the server's structured refusal.
+   * Reports and reloads exactly as `override` does, then rethrows so the caller
+   * can read `response.data.errors` and print each one beside its field.
+   */
+  overrideOrThrow: (path: string, value: unknown, note?: string) => Promise<void>;
   setRawPanelOpen: (open: boolean) => void;
   onSync: () => Promise<void>;
   onPublish: (surfaceKey?: CaseStudySurfaceKey) => Promise<void>;
@@ -178,6 +184,8 @@ export function useCaseStudyDesk(id: string): CaseStudyDeskState {
     /** A fixed sentence, or one derived from the result — an action that reports what it
      *  actually did beats one that reports what it usually does. */
     note: string | ((result: unknown) => string),
+    /** Rethrow after reporting, for a caller that reads the server's structured refusal. */
+    rethrow = false,
   ): Promise<void> => {
     setBusy(true);
     setActionError(null);
@@ -188,6 +196,7 @@ export function useCaseStudyDesk(id: string): CaseStudyDeskState {
       await load();
     } catch (err) {
       setActionError(describeApiError(err, subject));
+      if (rethrow) throw err;
     } finally {
       setBusy(false);
     }
@@ -198,41 +207,49 @@ export function useCaseStudyDesk(id: string): CaseStudyDeskState {
    * path deliberately: an override is the same operation whichever field it
    * touches, and it always produces a NEW snapshot version that has to be
    * approved before it counts, so no panel gets to write directly.
+   *
+   * The note reports what the server DID, not what it used to require. An admin edit is now
+   * approved in the same act and the live surfaces are repointed at it, so the old
+   * "approve it before it counts" sentence would be telling the operator to go and do
+   * something that has already happened. A surface the publish gate refused is named
+   * here, because that is the one case where the edit is saved and the page has not
+   * changed. Shared by `override` and `overrideOrThrow`.
    */
+  const overrideNote = useCallback((path: string) => (result: unknown): string => {
+    const r = result as {
+      approved?: boolean;
+      republished?: string[];
+      republishBlocked?: { surfaceKey: string; reason: string }[];
+    } | undefined;
+    const live = r?.republished ?? [];
+    const blocked = r?.republishBlocked ?? [];
+    const parts = [`Saved to ${path}`];
+    if (r?.approved) parts.push('approved');
+    if (live.length) parts.push(`live on ${live.join(', ')}`);
+    let message = `${parts.join(' and ')}.`;
+    if (blocked.length) {
+      message += ` The publish gate refused ${blocked
+        .map((x) => `${x.surfaceKey} (${x.reason})`).join('; ')}.`;
+    } else if (!live.length) {
+      message += ' This record is not published to any surface yet, so nothing changed publicly.';
+    }
+    return message;
+  }, []);
+
+  const overrideOrThrow = useCallback((path: string, value: unknown, note?: string): Promise<void> => act(
+    'this override',
+    () => applyCaseStudyOverride(id, { path, value, ...(note ? { note } : {}) }),
+    overrideNote(path),
+    true,
+  ), [act, id, overrideNote]);
+
   const override = useCallback((path: string, value: unknown, note?: string): void => {
     void act(
       'this override',
       () => applyCaseStudyOverride(id, { path, value, ...(note ? { note } : {}) }),
-      /**
-       * Reports what the server DID, not what it used to require. An admin edit is now
-       * approved in the same act and the live surfaces are repointed at it, so the old
-       * "approve it before it counts" sentence would be telling the operator to go and do
-       * something that has already happened. A surface the publish gate refused is named
-       * here, because that is the one case where the edit is saved and the page has not
-       * changed.
-       */
-      (result) => {
-        const r = result as {
-          approved?: boolean;
-          republished?: string[];
-          republishBlocked?: { surfaceKey: string; reason: string }[];
-        } | undefined;
-        const live = r?.republished ?? [];
-        const blocked = r?.republishBlocked ?? [];
-        const parts = [`Saved to ${path}`];
-        if (r?.approved) parts.push('approved');
-        if (live.length) parts.push(`live on ${live.join(', ')}`);
-        let message = `${parts.join(' and ')}.`;
-        if (blocked.length) {
-          message += ` The publish gate refused ${blocked
-            .map((x) => `${x.surfaceKey} (${x.reason})`).join('; ')}.`;
-        } else if (!live.length) {
-          message += ' This record is not published to any surface yet, so nothing changed publicly.';
-        }
-        return message;
-      },
+      overrideNote(path),
     );
-  }, [act, id]);
+  }, [act, id, overrideNote]);
 
   const onSync = useCallback(async () => {
     setSyncing(true);
@@ -442,7 +459,7 @@ export function useCaseStudyDesk(id: string): CaseStudyDeskState {
     provenanceId, provenanceSnapshot, provenanceLoading, provenanceError,
     publishedSnapshot, diffLoading, diffError, publishedSnapshotId,
     view, metrics, provenanceVersions,
-    load, override, setRawPanelOpen, onSync, onPublish, onSelectLens, runPreview,
+    load, override, overrideOrThrow, setRawPanelOpen, onSync, onPublish, onSelectLens, runPreview,
     onLoadRuns, onDiff, onSelectProvenanceVersion,
     onApprove, onUnpublish, onArchive, onSaveConsent,
     onAttachRepo, onSetRepoRole, onRemoveRepo,

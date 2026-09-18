@@ -56,6 +56,22 @@ This skill is that human loop, made fast: one screen, one item at a time, one de
    about its candidate before handing it over. The console never presents an item without that
    check, and says plainly how many items are still unverified (`overview.liveness`,
    `focus.liveness`). Unknown is shown as unknown, never as gone and never as confirmed.
+9. **All three inboxes, or say which one is dark.** (Ali, 2026-09-16: "you should be checking
+   hotmail and alimuwwakkil@gmail.com as well.") `ali@colaberry.com`, `ali_muwwakkil@hotmail.com`
+   and `alimuwwakkil@gmail.com` (read only, never a sender) are the inbox. A mailbox that cannot be
+   read is reported as unreadable, never as clean.
+10. **Only what needs tackling stays.** (Ali, 2026-09-15: "If they are just acknowledgements, let's
+   clear them out as well. I only want things that need to be tackled.") Acknowledgements, FYIs,
+   reports already read and notices of Ali's own actions are archived on sight, each one verified
+   by re-fetch. Two things are never among them. Slack mail stays visible (gate-1 rule `slack_0f`),
+   and a Slack message found archived is restored. The BCC copy of any email sent as Ali stays in
+   his inbox: it is his receipt of what went out under his name (Ali, 2026-09-17: "always bcc me
+   on everything you send out on my behalf"), and he clears it himself.
+11. **Mail leaves as Ali only through the guarded sender** (`scripts/send.sh` → `sendAsAli.js`):
+   real signature exactly once, no em or en dash, no trailing sign-off, Ali BCC'd, threaded when
+   replying, and in his voice, a little less formal (Ram, 2026-09-17). `references/direct-ops.md`
+   is the operating manual for this mode and for everything else Ali asks for by name rather than
+   by command.
 
 ## Commands
 
@@ -160,10 +176,27 @@ you're doing well"; 3-5 sentence paragraphs; specific dates, never "ASAP". When 
 chosen, restate the draft to that standard; `payload.style.soft` lists what the linter would still
 flag.
 
+## Direct operations: the scripts
+
+When Ali names an item rather than a command ("address Kes's emails", "put that back", "leave me a
+note", "look at Obi's email"), the work is done directly against the mailboxes and Basecamp with
+these, each run inside the prod backend container (invocation in `references/direct-ops.md`):
+
+| Script | Does |
+|---|---|
+| `scripts/gmailInbox.js` | List what is in `ali@colaberry.com` right now, with ids |
+| `scripts/gmailRead.js` | Plain text of given messages, footers trimmed, Basecamp links resolved through the tracking wrapper |
+| `scripts/gmailArchive.js` | Archive whole threads with a subject guard, re-fetch, report `still_in_inbox` |
+| `scripts/gmailRestore.js` | Put messages back in the inbox, verified |
+| `scripts/hotmail.js` | Hotmail over Graph: inbox, folders, read (with attachments), move to a named folder, recent across folders |
+| `scripts/bcComment.js` | Comment on a Basecamp recording as Ali, mention by sgid, idempotent on `MARK`, optional complete |
+| `scripts/send.sh` + `scripts/sendAsAli.js` | The only send path; signature kit in `assets/` |
+
 ## References
 
 | File | Contents |
 |---|---|
+| `references/direct-ops.md` | Ali's standing rules verbatim, what they mean in practice, the note pattern, sending as Ali, invocation and idempotency |
 | `references/commands.md` | Full command grammar, argument parsing, refresh contract |
 | `references/templates.md` | Overview, focus, zoom-out, refresh-line, closeout templates |
 | `references/approval-policy.md` | What always needs Ali, what may auto-run, destination verification |

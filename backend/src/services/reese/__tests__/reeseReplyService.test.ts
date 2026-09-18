@@ -8,7 +8,12 @@
  */
 jest.mock('../../../models/RoomMembership', () => ({ findOne: jest.fn() }));
 jest.mock('../../../models/RoomMessage', () => ({ findAll: jest.fn() }));
-jest.mock('../reeseIdentitySeed', () => ({ getReeseEnrollmentId: jest.fn(), getReeseAdminUserId: jest.fn(), getReeseAgentId: jest.fn() }));
+jest.mock('../reeseIdentitySeed', () => ({
+  getReeseEnrollmentId: jest.fn(),
+  getReeseAdminUserId: jest.fn(),
+  getReeseAgentId: jest.fn(),
+  isReeseEnabled: jest.fn(),
+}));
 jest.mock('../reeseSystemPrompt', () => ({ buildReeseSystemPrompt: jest.fn() }));
 jest.mock('../../openaiInstrumented', () => ({ getInstrumentedOpenAI: jest.fn() }));
 jest.mock('../../communityRooms/dmService', () => ({ sendDmMessage: jest.fn() }));
@@ -25,7 +30,7 @@ jest.mock('../../agentBlueprint/agentActivityLogService', () => ({ logAgentActiv
 
 import RoomMembership from '../../../models/RoomMembership';
 import RoomMessage from '../../../models/RoomMessage';
-import { getReeseEnrollmentId, getReeseAdminUserId, getReeseAgentId } from '../reeseIdentitySeed';
+import { getReeseEnrollmentId, getReeseAdminUserId, getReeseAgentId, isReeseEnabled } from '../reeseIdentitySeed';
 import { buildReeseSystemPrompt } from '../reeseSystemPrompt';
 import { getInstrumentedOpenAI } from '../../openaiInstrumented';
 import { sendDmMessage } from '../../communityRooms/dmService';
@@ -40,6 +45,7 @@ const mockMessageFindAll = RoomMessage.findAll as unknown as jest.Mock;
 const mockGetReeseEnrollmentId = getReeseEnrollmentId as unknown as jest.Mock;
 const mockGetReeseAdminUserId = getReeseAdminUserId as unknown as jest.Mock;
 const mockGetReeseAgentId = getReeseAgentId as unknown as jest.Mock;
+const mockIsReeseEnabled = isReeseEnabled as unknown as jest.Mock;
 const mockBuildReeseSystemPrompt = buildReeseSystemPrompt as unknown as jest.Mock;
 const mockGetInstrumentedOpenAI = getInstrumentedOpenAI as unknown as jest.Mock;
 const mockSendDmMessage = sendDmMessage as unknown as jest.Mock;
@@ -67,6 +73,7 @@ const mockCreateCompletion = jest.fn();
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockIsReeseEnabled.mockResolvedValue(true);
   mockGetReeseEnrollmentId.mockResolvedValue(REESE_ID);
   mockGetReeseAdminUserId.mockResolvedValue(REESE_ADMIN_ID);
   mockGetReeseAgentId.mockResolvedValue(REESE_AGENT_ID);
@@ -158,6 +165,29 @@ describe('maybeTriggerReeseReply', () => {
 
     await expect(maybeTriggerReeseReply(ROOM_ID, STUDENT_ID)).resolves.toBeUndefined();
     expect(mockCreateCompletion).not.toHaveBeenCalled();
+  });
+
+  it('Product Phase 1, R2 kill switch: Reese disabled (ai_agents.enabled=false) stops the reply before any DB/LLM work', async () => {
+    mockIsReeseEnabled.mockResolvedValue(false);
+    mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+
+    await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+    expect(mockGetReeseEnrollmentId).not.toHaveBeenCalled();
+    expect(mockCreateCompletion).not.toHaveBeenCalled();
+    expect(mockSendDmMessage).not.toHaveBeenCalled();
+    // The health-assessment behaviour has no independent switch of its own —
+    // it only ever fires after a reply, so disabling Reese also stops it.
+    expect(mockMaybeRefreshAssessment).not.toHaveBeenCalled();
+  });
+
+  it('Product Phase 1, R2 kill switch: Reese enabled (ai_agents.enabled=true) leaves the reply path unchanged', async () => {
+    mockIsReeseEnabled.mockResolvedValue(true);
+    mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+
+    await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+    expect(mockSendDmMessage).toHaveBeenCalledTimes(1);
   });
 
   it('boundary/failure: an LLM error is caught and logged, never thrown into the caller (the student\'s own send must still succeed)', async () => {

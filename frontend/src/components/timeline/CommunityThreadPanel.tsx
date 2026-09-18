@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { bandRungForLevel } from '../../services/bandLadder';
 import {
   fetchPost, fetchComments, createComment, togglePostLike, toggleCommentLike,
   CommunityPost, CommunityComment,
@@ -42,7 +43,6 @@ interface Props {
   variant?: 'drawer' | 'standalone';
 }
 
-const LEVEL_NAMES: Record<number, string> = { 1: 'Apprentice', 2: 'Builder', 3: 'Architect', 4: 'Principal' };
 /** Mirrors POINTS_PER_COMMENT in backend/src/services/communityService.ts. The
  *  button advertises this; the CELEBRATION always uses the server's actual
  *  award, which can be lower once the daily community cap clamps it. */
@@ -343,7 +343,7 @@ const CommunityThreadPanel: React.FC<Props> = ({ postId, fallbackLabel, preview,
           <div>
             <div className="ct-name">{post.member.display_name}</div>
             <div className="ct-sub">
-              Level {post.member.level} · {LEVEL_NAMES[post.member.level] || 'Builder'}
+              {bandRungForLevel(post.member.level)}
               {variant === 'drawer' && parsed.week != null && <> · Week {parsed.week}</>}
               {' · '}{timeAgo(post.created_at)}
             </div>

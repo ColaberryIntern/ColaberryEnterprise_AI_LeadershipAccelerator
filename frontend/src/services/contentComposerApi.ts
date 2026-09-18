@@ -17,7 +17,7 @@ export type ProviderKey =
   | 'meta_facebook_page' | 'meta_instagram' | 'linkedin_organization' | 'linkedin_member'
   | 'youtube' | 'tiktok' | 'x';
 
-export type ContentType = 'text' | 'image' | 'video' | 'carousel' | 'thread' | 'link' | 'poll';
+export type ContentType = 'text' | 'image' | 'video' | 'carousel' | 'thread' | 'link' | 'poll' | 'document';
 
 /** Mirrors backend content/pollSpec.ts. Stored as `metadata.poll` on the item. */
 export interface Poll {
@@ -112,7 +112,11 @@ export interface ConfirmationSummary {
   item: { id: string; title: string; status: ContentItemStatus; contentType: string; revision: number; poll: Poll | null };
   brand: { id: string; name: string; timezone: string; timezoneSource: 'brand' | 'default' } | null;
   campaign: { id: string; name: string; slug: string | null } | null;
-  accounts: Array<{ provider: ProviderKey; displayName: string; mode: PublishMode; reasons: string[]; account: null }>;
+  accounts: Array<{
+    provider: ProviderKey; displayName: string; mode: PublishMode; reasons: string[];
+    /** The brand's connected account this post publishes FROM; null when there is none. */
+    account: { id: string; provider: string; displayName: string; handle: string | null; status: string } | null;
+  }>;
   schedule: { utc: string; utcLabel: string; local: LocalTime; timezone: string; differsFromUtc: boolean } | null;
   copy: Array<{ provider: ProviderKey; text: string; source: 'generated' | 'edited'; stale: boolean; chars: number }>;
   assets: Array<{ id: string; filename: string | null; mimeType: string; altText: string | null; position: number }>;
@@ -252,6 +256,8 @@ export interface ItemMedia {
   originalFilename: string | null;
   /** Videos only; what the container's own header says. */
   durationMs: number | null;
+  /** PDFs only, when the file states its page count plainly. */
+  pages: number | null;
 }
 
 export async function listItemMedia(id: string): Promise<ItemMedia[]> {

@@ -278,6 +278,20 @@ export interface MembershipCheck {
   ok: boolean;
 }
 
+export interface RequiredMeeting {
+  day: string;
+  kind: string;
+  time?: string;
+  timezone?: string;
+  audience?: 'interns_only' | 'public';
+  title?: string;
+  join_url?: string | null;
+  room_slug?: string | null;
+  room_id?: string | null;
+  room_name?: string | null;
+  registration_url?: string | null;
+}
+
 export interface OnboardingView {
   state: string;
   is_active: boolean;
@@ -286,7 +300,7 @@ export interface OnboardingView {
   week: number | null;
   minimum_weekly_hours: number;
   max_active_projects: number;
-  required_meetings: Array<{ day: string; kind: string }>;
+  required_meetings: RequiredMeeting[];
   checklist: ChecklistStep[];
   progress: { done: number; total: number };
   next_action: ChecklistStep | null;
@@ -301,6 +315,160 @@ export type AcknowledgementState =
 
 export async function fetchInternshipOnboarding(): Promise<OnboardingView> {
   const { data } = await portalApi.get<OnboardingView>('/api/portal/internship/onboarding');
+  return data;
+}
+
+/**
+ * Record that the intern joined a required meeting today (fire-and-forget on the
+ * "Open in Rooms" click). Idempotent per day on the server, so a second click
+ * changes nothing. `meetingKey` is the meeting's day.
+ */
+export async function recordInternshipMeetingJoin(meetingKey: string): Promise<void> {
+  await portalApi.post('/api/portal/internship/meetings/join', { meeting_key: meetingKey });
+}
+
+// ── My Internship dashboard ──────────────────────────────────────────────────
+
+export interface DashboardActivity {
+  enrollment_id: string;
+  training: {
+    weeks: Array<{ week: number; published: number; completed: number; completed_pct: number; done: boolean }>;
+    first_three_weeks: { done: number; total: number; ready: boolean };
+  } | null;
+  project: {
+    name: string; stage: string | null; requirements_pct: number | null;
+    repo_connected: boolean; total_stories: number; verified_stories: number;
+  } | null;
+  cert_prep: { state: string; overall_scaled: number | null; evidence_coverage_pct: number | null; computed_at: string | null } | null;
+  case_studies: Array<{ id: string; title: string; status: string; slug: string }>;
+  attendance: { total: number; by_meeting: Record<string, number>; last_attended_at: string | null };
+}
+
+export interface AttentionItem { key: string; label: string; detail: string; waiting_on: string | null; blocking: boolean }
+export interface AttentionQueue { your_turn: AttentionItem[]; waiting_on_colaberry: AttentionItem[] }
+
+export type HandoffPhase = 'unknown' | 'before_week_3' | 'awaiting_assignment' | 'access_pending' | 'in_progress';
+export interface Week3Handoff {
+  phase: HandoffPhase;
+  owner: 'colaberry' | 'intern';
+  title: string;
+  detail: string;
+  project_name: string | null;
+  actionable: boolean;
+}
+
+export interface InternDashboard extends OnboardingView {
+  activity: DashboardActivity;
+  attention: AttentionQueue;
+  handoff: Week3Handoff;
+}
+
+export async function fetchInternshipDashboard(): Promise<InternDashboard> {
+  const { data } = await portalApi.get<InternDashboard>('/api/portal/internship/dashboard');
+  return data;
+}
+
+// ── Project portfolio ────────────────────────────────────────────────────────
+
+export interface ProjectReadinessComponent { key: string; label: string; score: number; weight: number; gap?: string }
+export interface ProjectReadiness { score: number; ready: boolean; components: ProjectReadinessComponent[]; gaps: string[] }
+
+export interface InternProjectStories {
+  total: number;
+  /** Self-reported completion — the readiness denominator. A claim, not a check. */
+  self_reported_complete: number;
+  /** Platform-confirmed (verified_at). Shown alongside, never swapped in. */
+  verified: number;
+  awaiting_verification: number;
+}
+
+export interface InternProject {
+  project_id: string;
+  name: string | null;
+  role: 'active' | 'owned' | 'archived';
+  stage: string;
+  has_repo: boolean;
+  repo_url: string | null;
+  command_center_url: string | null;
+  readiness: ProjectReadiness;
+  stories: InternProjectStories;
+  artifacts: number;
+  already_case_study: boolean;
+  risk_state: string;
+  risk_reason: string;
+}
+
+export interface InternProjectPortfolio {
+  state: string;
+  enrollment_id: string;
+  projects: InternProject[];
+  active_count: number;
+  has_live_project: boolean;
+}
+
+export async function fetchInternshipProjects(): Promise<InternProjectPortfolio> {
+  const { data } = await portalApi.get<InternProjectPortfolio>('/api/portal/internship/projects');
+  return data;
+}
+
+// ── Released mentor feedback ─────────────────────────────────────────────────
+
+export interface StudentFeedbackItem {
+  review_id: string;
+  submission_id: string;
+  /** AI-generated guidance. `human_reviewed` says whether a mentor then vetted it. */
+  ai_feedback: string;
+  review_status: 'auto_approved' | 'approved';
+  human_reviewed: boolean;
+  /** Present only on a mentor-approved item. */
+  reviewer_notes: string | null;
+  reviewed_at: string | null;
+  created_at: string | null;
+  submission: {
+    title: string;
+    assignment_type: string;
+    version_number: number;
+    status: string;
+    submitted_at: string | null;
+  } | null;
+}
+
+export interface InternshipFeedbackView {
+  state: string;
+  feedback: StudentFeedbackItem[];
+}
+
+export async function fetchInternshipFeedback(): Promise<InternshipFeedbackView> {
+  const { data } = await portalApi.get<InternshipFeedbackView>('/api/portal/internship/feedback');
+  return data;
+}
+
+// ── Certification (headline: practice readiness + official claim, kept separate) ──
+
+export interface InternCertReadiness {
+  state: string;
+  /** Colaberry estimate (100-1000), NOT an Anthropic exam score. */
+  overall_scaled: number | null;
+  knowledge_scaled: number | null;
+  evidence_coverage_pct: number | null;
+  /** When false, the estimate is a coverage figure, not exam-weighted. */
+  weights_available: boolean;
+  computed_at: string | null;
+}
+export interface InternOfficialCert {
+  status: 'none' | 'pending' | 'approved' | 'rejected';
+  passed_on: string | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+}
+export interface InternshipCertificationView {
+  state: string;
+  readiness: InternCertReadiness;
+  official: InternOfficialCert;
+}
+
+export async function fetchInternshipCertification(): Promise<InternshipCertificationView> {
+  const { data } = await portalApi.get<InternshipCertificationView>('/api/portal/internship/certification');
   return data;
 }
 

@@ -35,7 +35,7 @@ export type ProviderKey =
   | 'tiktok'
   | 'x';
 
-export type ContentType = 'text' | 'image' | 'video' | 'carousel' | 'thread' | 'link' | 'poll';
+export type ContentType = 'text' | 'image' | 'video' | 'carousel' | 'thread' | 'link' | 'poll' | 'document';
 
 export type PublishAction =
   | 'publish'
@@ -62,6 +62,8 @@ export interface ProviderCapabilities {
   video: { maxSizeMb: number; maxDurationSec: number; codecs: readonly string[]; aspectRatios: readonly string[] } | null;
   /** Null when the network has no poll post. Shape shared with content/pollSpec.ts. */
   poll: { minOptions: number; maxOptions: number; maxOptionChars: number; maxQuestionChars: number; durationsDays: readonly number[] } | null;
+  /** Null when the network has no document (PDF) post. */
+  document: { maxSizeMb: number; maxPages: number; formats: readonly string[] } | null;
   supports: Record<PublishAction, boolean> & { draftHandoff: boolean };
   /** OAuth scopes the action set above requires. Displayed as granted/missing after connect. */
   requiredScopes: readonly string[];
@@ -95,6 +97,7 @@ export const PROVIDER_CAPABILITIES: Record<ProviderKey, ProviderCapabilities> = 
     image: { maxSizeMb: 4, minWidthPx: 600, aspectRatios: ['1.91:1', '1:1', '4:5'], maxPerPost: 10 },
     video: { maxSizeMb: 1024, maxDurationSec: 14400, codecs: ['h264'], aspectRatios: ['16:9', '1:1', '4:5', '9:16'] },
     poll: null,
+    document: null,
     supports: { ...ALL_FALSE, publish: true, firstComment: true, reply: true, edit: true, delete: true, analytics: true, ads: true, webhooks: true },
     requiredScopes: ['pages_manage_posts', 'pages_read_engagement', 'pages_show_list', 'pages_manage_engagement'],
     accountType: 'Facebook Page administered by the connected user',
@@ -118,6 +121,7 @@ export const PROVIDER_CAPABILITIES: Record<ProviderKey, ProviderCapabilities> = 
     image: { maxSizeMb: 8, minWidthPx: 320, aspectRatios: ['4:5', '1:1', '1.91:1'], maxPerPost: 10 },
     video: { maxSizeMb: 1024, maxDurationSec: 900, codecs: ['h264'], aspectRatios: ['9:16', '1:1', '4:5'] },
     poll: null,
+    document: null,
     supports: { ...ALL_FALSE, publish: true, firstComment: true, reply: true, delete: true, analytics: true, ads: true, webhooks: true },
     requiredScopes: ['instagram_basic', 'instagram_content_publish', 'instagram_manage_comments', 'instagram_manage_insights', 'pages_show_list'],
     accountType: 'Instagram Business or Creator account linked to a Facebook Page',
@@ -126,7 +130,7 @@ export const PROVIDER_CAPABILITIES: Record<ProviderKey, ProviderCapabilities> = 
       reviewedAt: null,
       note: 'Shares the Meta App Review package. Instagram has NO text-only post type: a text draft cannot be published here at all.',
     },
-    rateLimits: { postsPerDay: 50, note: 'Content Publishing API: 50 posts per 24 hours per account.' },
+    rateLimits: { postsPerDay: 100, note: 'Content Publishing API: 100 posts per rolling 24 hours per account (checked 2026-09-18); a carousel counts as one.' },
     requirements: { altText: 'recommended', disclosureForPaid: true },
     linkBehavior: 'no_clickable_links',
   },
@@ -136,12 +140,14 @@ export const PROVIDER_CAPABILITIES: Record<ProviderKey, ProviderCapabilities> = 
     displayName: 'LinkedIn Page (organization)',
     version: '2026.09.2',
     asOf: '2026-09-15',
-    contentTypes: ['text', 'image', 'video', 'carousel', 'link', 'poll'],
+    contentTypes: ['text', 'image', 'video', 'carousel', 'link', 'poll', 'document'],
     text: { maxChars: 3000, maxHashtags: null, maxMentions: null },
     image: { maxSizeMb: 8, minWidthPx: 552, aspectRatios: ['1.91:1', '1:1', '4:5'], maxPerPost: 20 },
     video: { maxSizeMb: 200, maxDurationSec: 600, codecs: ['h264'], aspectRatios: ['16:9', '1:1', '9:16'] },
     // Posts API `content.poll`: 2-4 options of 30 characters, question 140, 1/3/7/14 days.
     poll: { minOptions: 2, maxOptions: 4, maxOptionChars: 30, maxQuestionChars: 140, durationsDays: [1, 3, 7, 14] },
+    // Documents API: one PDF per post, 100 MB, 300 pages, shown as a swipeable carousel.
+    document: { maxSizeMb: 100, maxPages: 300, formats: ['application/pdf'] },
     supports: { ...ALL_FALSE, publish: true, reply: true, delete: true, analytics: true, ads: true },
     requiredScopes: ['w_organization_social', 'r_organization_social', 'rw_organization_admin', 'r_organization_admin'],
     accountType: 'LinkedIn Page where the connected member is an admin',
@@ -160,12 +166,14 @@ export const PROVIDER_CAPABILITIES: Record<ProviderKey, ProviderCapabilities> = 
     displayName: 'LinkedIn (personal profile)',
     version: '2026.09.2',
     asOf: '2026-09-15',
-    contentTypes: ['text', 'image', 'video', 'link', 'poll'],
+    contentTypes: ['text', 'image', 'video', 'link', 'poll', 'document'],
     text: { maxChars: 3000, maxHashtags: null, maxMentions: null },
     image: { maxSizeMb: 8, minWidthPx: 552, aspectRatios: ['1.91:1', '1:1', '4:5'], maxPerPost: 1 },
     video: { maxSizeMb: 200, maxDurationSec: 600, codecs: ['h264'], aspectRatios: ['16:9', '1:1', '9:16'] },
     // Posts API `content.poll`: 2-4 options of 30 characters, question 140, 1/3/7/14 days.
     poll: { minOptions: 2, maxOptions: 4, maxOptionChars: 30, maxQuestionChars: 140, durationsDays: [1, 3, 7, 14] },
+    // Documents API: one PDF per post, 100 MB, 300 pages, shown as a swipeable carousel.
+    document: { maxSizeMb: 100, maxPages: 300, formats: ['application/pdf'] },
     // No edit and no analytics on member posts through the API. Delete is available.
     supports: { ...ALL_FALSE, publish: true, delete: true },
     requiredScopes: ['w_member_social', 'openid', 'profile'],
@@ -190,6 +198,7 @@ export const PROVIDER_CAPABILITIES: Record<ProviderKey, ProviderCapabilities> = 
     image: null,
     video: { maxSizeMb: 262144, maxDurationSec: 43200, codecs: ['h264', 'vp9', 'av1'], aspectRatios: ['16:9', '9:16'] },
     poll: null,
+    document: null,
     supports: { ...ALL_FALSE, publish: true, edit: true, delete: true, analytics: true, reply: true },
     requiredScopes: ['https://www.googleapis.com/auth/youtube.upload', 'https://www.googleapis.com/auth/youtube.readonly', 'https://www.googleapis.com/auth/yt-analytics.readonly'],
     accountType: 'YouTube channel owned by the connected Google account',
@@ -213,6 +222,7 @@ export const PROVIDER_CAPABILITIES: Record<ProviderKey, ProviderCapabilities> = 
     image: { maxSizeMb: 20, minWidthPx: 360, aspectRatios: ['9:16', '1:1'], maxPerPost: 35 },
     video: { maxSizeMb: 4096, maxDurationSec: 600, codecs: ['h264', 'h265'], aspectRatios: ['9:16'] },
     poll: null,
+    document: null,
     // Unaudited apps may only post as PRIVATE. That is not publishing in any useful sense, so
     // publish is false until the audit passes rather than true with a footnote.
     supports: { ...ALL_FALSE, analytics: false },
@@ -239,6 +249,7 @@ export const PROVIDER_CAPABILITIES: Record<ProviderKey, ProviderCapabilities> = 
     video: { maxSizeMb: 512, maxDurationSec: 140, codecs: ['h264'], aspectRatios: ['16:9', '1:1', '9:16'] },
     // v2 tweets `poll`: 2-4 options of 25 characters, the tweet text is the question, 5 minutes to 7 days.
     poll: { minOptions: 2, maxOptions: 4, maxOptionChars: 25, maxQuestionChars: 280, durationsDays: [1, 2, 3, 4, 5, 6, 7] },
+    document: null,
     // Discovery first, per spec section 9 item 5. Nothing is supported until access and cost
     // are approved - the paid API tiers are a cost decision, not an engineering one.
     supports: { ...ALL_FALSE },
@@ -274,16 +285,49 @@ export type PublishMode =
   | { mode: 'handoff'; reasons: string[] };
 
 /**
- * Providers with a LIVE connector implemented in this codebase - an adapter that actually
- * calls the network. Empty today: ESC-001 blocks account connection and no provider adapter
- * exists beyond DryRun and Handoff. A provider the registry marks approved/self-serve but
- * that is not in this set still resolves to handoff, because "the platform could publish
- * this directly" is only true when something can carry the request. The first dev deploy
- * showed LinkedIn (personal profile) as "Direct publish" for exactly this gap: its jobs would
- * have dead-lettered as no_live_adapter instead of giving the operator a handoff package.
- * Add a key here in the same commit that adds its adapter to adapterRegistry.
+ * Providers with a live adapter IMPLEMENTED in this codebase - something that can carry a
+ * request to the network. Add a key here in the same commit that adds its adapter to
+ * adapterRegistry's LIVE_ADAPTERS; a test holds the two lists equal. Being implemented is not
+ * being ON: see LIVE_CONNECTORS.
  */
-export const LIVE_CONNECTORS: ReadonlySet<ProviderKey> = new Set<ProviderKey>([]);
+export const IMPLEMENTED_CONNECTORS: ReadonlySet<ProviderKey> = new Set<ProviderKey>(['linkedin_member', 'linkedin_organization', 'meta_facebook_page', 'meta_instagram']);
+
+/**
+ * Read the ON switch from the environment: `LIVE_CONNECTORS="linkedin_member,linkedin_organization"`.
+ *
+ * Environment, not code, so that go-live is "set the variables, restart" rather than a PR and
+ * a deploy at the moment the credentials arrive. Two safeguards keep the env from doing damage:
+ *   - A key that is not a provider, or a provider with NO implemented adapter, is dropped with a
+ *     warning rather than switched on. Turning on a provider the registry cannot carry is the
+ *     exact failure the first dev deploy showed (jobs dead-lettering as no_live_adapter instead
+ *     of handing off); a typo in a `.env` must not reproduce it.
+ *   - Unset or empty means OFF. There is no default-on.
+ */
+export function liveConnectorsFromEnv(env: NodeJS.ProcessEnv = process.env): ReadonlySet<ProviderKey> {
+  const raw = (env.LIVE_CONNECTORS ?? '').split(',').map((s) => s.trim()).filter((s) => s !== '');
+  const on = new Set<ProviderKey>();
+  for (const key of raw) {
+    if (!(PROVIDER_KEYS as readonly string[]).includes(key)) {
+      console.warn(JSON.stringify({ timestamp: new Date().toISOString(), level: 'warn', service: 'publishing', event: 'live_connector_unknown', outcome: 'partial', context: { key } }));
+      continue;
+    }
+    if (!IMPLEMENTED_CONNECTORS.has(key as ProviderKey)) {
+      console.warn(JSON.stringify({ timestamp: new Date().toISOString(), level: 'warn', service: 'publishing', event: 'live_connector_not_implemented', outcome: 'partial', context: { key } }));
+      continue;
+    }
+    on.add(key as ProviderKey);
+  }
+  return on;
+}
+
+/**
+ * Providers that publish DIRECTLY to the network in this process. A provider the registry marks
+ * approved/self-serve but that is not in this set still resolves to handoff, because "the
+ * platform could publish this directly" is only true when something can carry the request AND
+ * the operator has turned it on. Evaluated once at boot from the environment; changing it is a
+ * restart, like every other config.
+ */
+export const LIVE_CONNECTORS: ReadonlySet<ProviderKey> = liveConnectorsFromEnv();
 
 /**
  * May this action run directly against the network, or must it be handed off?
@@ -313,7 +357,12 @@ export function decidePublishMode(
   }
 
   if (!liveConnectors.has(caps.provider)) {
-    reasons.push(`No live connector is implemented for ${caps.displayName} yet; the platform produces a handoff package to post by hand.`);
+    // Two different situations, two different fixes: nothing built (engineering) versus built
+    // and switched off (an env variable). Saying "not implemented" for the second sent the
+    // team looking for work that was already done.
+    reasons.push(IMPLEMENTED_CONNECTORS.has(caps.provider)
+      ? `Direct publishing to ${caps.displayName} is built but switched off on this server (LIVE_CONNECTORS); the platform produces a handoff package to post by hand.`
+      : `No live connector is implemented for ${caps.displayName} yet; the platform produces a handoff package to post by hand.`);
   }
 
   return reasons.length === 0 ? { mode: 'direct' } : { mode: 'handoff', reasons };

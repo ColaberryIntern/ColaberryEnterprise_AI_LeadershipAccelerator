@@ -56,6 +56,21 @@ export interface AgentDetailRelatedTask {
   error_count: number;
 }
 
+/** AI Employee Consolidation Program (2026-09-15/16) — "Capabilities &
+ * Automations": the real legacy behaviors/tools this employee OWNS via the
+ * program's real parent_agent_id ownership column, distinct from
+ * AgentDetailRelatedTask's same-module inference above. */
+export interface AgentDetailOwnedBehavior {
+  id: string;
+  agent_name: string;
+  record_kind: 'employee' | 'behavior' | 'tool' | null;
+  description: string | null;
+  trigger_type: string | null;
+  schedule: string | null;
+  enabled: boolean;
+  migration_status: 'legacy' | 'absorbed' | 'archived' | null;
+}
+
 /** One tool's own reads/produces, so the UI can show a per-tool drill-down
  * instead of only the flattened union below. */
 export interface AgentDetailToolCapability {
@@ -196,6 +211,7 @@ export interface AgentDetail {
   tickets: AgentDetailTicket[];
   ticket_breakdown: AgentDetailTicketTypeBreakdown[];
   related_tasks: AgentDetailRelatedTask[];
+  owned_behaviors: AgentDetailOwnedBehavior[];
   persona_version_history: AgentDetailPersonaVersionHistoryRow[];
   cost_summary: AgentDetailCostSummary | null;
   authorization_summary: AgentDetailAuthorizationSummary;
@@ -213,6 +229,43 @@ export interface AgentDetail {
   trust_contract: AgentDetailTrustContract;
   goals: AgentGoalsDimension[];
   goals_overall: number;
+  /** Reese Product Phase 1, R7 — truthful employee facts. `null` for every
+   * agent except Reese: no fabricated availability/work-state for an agent
+   * this phase never reviewed. */
+  employee_facts: AgentDetailEmployeeFacts | null;
+}
+
+export type ReeseBehaviourKey =
+  | 'reactive_dm_reply'
+  | 'autonomous_outreach_sweep'
+  | 'outreach_follow_ups'
+  | 'welcome_dms'
+  | 'student_support_supersession_resolver'
+  | 'presence_heartbeat'
+  | 'health_assessment';
+
+export interface AgentDetailEmployeeFactsBehaviour {
+  key: ReeseBehaviourKey;
+  name: string;
+  enabled: boolean;
+  population: string;
+  kill_switch: string;
+  /** Real tool/side-effect names from Capabilities this behaviour uses. */
+  tools: string[];
+  /** The matching "Scheduled work" row's agent_name, for a same-page link —
+   * `null` for the 3 behaviours controlled on this card directly. */
+  scheduled_work_ref: string | null;
+}
+
+export interface AgentDetailEmployeeFacts {
+  availability: 'available' | 'unavailable';
+  work_state: 'idle' | 'working_on_ticket' | 'blocked' | 'waiting_on_person';
+  work_state_detail: string | null;
+  last_meaningful_action: { at: string; description: string } | null;
+  charter_version: number | null;
+  charter_effective_at: string | null;
+  manager_chain_note: string;
+  behaviours: AgentDetailEmployeeFactsBehaviour[];
 }
 
 /** AI Workforce Management, Checkpoint E (Trust Before Intelligence
@@ -234,5 +287,20 @@ export interface AgentGoalsDimension {
 
 export async function getAgentDetail(agentId: string): Promise<AgentDetail> {
   const res = await api.get<AgentDetail>(`/api/admin/agents/${agentId}`);
+  return res.data;
+}
+
+export interface SetReeseBehaviourSwitchResult {
+  key: ReeseBehaviourKey;
+  enabled: boolean;
+  alsoChanged: ReeseBehaviourKey[];
+}
+
+export async function setReeseBehaviourSwitch(
+  agentId: string,
+  key: ReeseBehaviourKey,
+  enabled: boolean,
+): Promise<SetReeseBehaviourSwitchResult> {
+  const res = await api.patch<SetReeseBehaviourSwitchResult>(`/api/admin/agents/${agentId}/behaviours/${key}`, { enabled });
   return res.data;
 }

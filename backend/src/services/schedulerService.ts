@@ -46,6 +46,7 @@ import { attachClassNotesForSession } from './sessionClassNotesService';
 import { extractZoomMeetingId, findRecordingInstancesByMeetingId } from './zoomService';
 import { instrumentCronJob } from './cronInstrumentation';
 import { runScheduledRecompute } from './explorerGrowth/explorerProfileService';
+import { recomputeAllMilestonePromotions } from './progression/milestoneSweep';
 import { runScheduledGovernor } from './explorerGrowth/governor/runGovernor';
 import { runScheduledShadowDecisions } from './growthJourney/runShadowDecisionsNightly';
 import { runContentSync } from './explorerGrowth/content/runContentSync';
@@ -1722,6 +1723,18 @@ export function startScheduler(): void {
     });
   });
 
+  // AI Employee Consolidation Program, Employee #1 (Curriculum/Dara), Phase 4
+  // — Dara's own real, tracked always-online cron, same generic mechanism as
+  // Reese's own heartbeat above (agentBlueprint/agentPresenceHeartbeat.ts).
+  cron.schedule('*/1 * * * *', () => {
+    instrumentCronJob('DaraPresenceHeartbeat', async () => {
+      const { runDaraPresenceHeartbeat } = await import('./curriculum/daraPresenceHeartbeat');
+      await runDaraPresenceHeartbeat();
+    }).catch((err) => {
+      console.error('[Scheduler] Dara presence heartbeat error:', err);
+    });
+  });
+
   // Process pending actions every 5 minutes
   cron.schedule('*/5 * * * *', () => {
     instrumentCronJob('ScheduledActionsProcessor', () => processScheduledActions()).catch((err) => {
@@ -1803,6 +1816,19 @@ export function startScheduler(): void {
       await runContentSync();
     }).catch((err) => {
       console.error('[Scheduler] ExplorerContentSync failed:', err);
+    });
+  });
+
+  // Build-ladder sweep (progression/milestoneSweep.ts): re-evaluates every
+  // scored student so a milestone that became true without a trigger firing
+  // (a back-published week, a push whose evaluator call failed, an approval
+  // whose promotion hiccuped) is reflected by morning. Idempotent; one student
+  // at a time; per-student failures are logged and never stop the pass.
+  cron.schedule('40 3 * * *', () => {
+    instrumentCronJob('ProgressionLadderSweep', async () => {
+      await recomputeAllMilestonePromotions({ triggeredBy: 'scheduler' });
+    }).catch((err) => {
+      console.error('[Scheduler] ProgressionLadderSweep failed:', err);
     });
   });
 
@@ -1895,6 +1921,25 @@ export function startScheduler(): void {
   // invitation — a PATCH on an expired invite returns a lying 204 and destroys
   // the evidence the student ever invited us — and never trusts a status code,
   // re-reading `permissions.push` to settle whether access was actually gained.
+  // Ask GitHub, once a day, what access we actually hold on every connected
+  // repo, and record it. `platform_can_push` is otherwise written only at
+  // connect time and by the invitation sweep (as of 2026-09-17); a grant made
+  // through any other path (a student adding us by hand and never pressing
+  // Reconnect, a revocation, a repo rename) is invisible until something asks.
+  // The script has existed since 2026-08-23 and was only ever run by hand;
+  // three stale rows were found on 2026-09-17. ~25 GitHub reads a day.
+  cron.schedule('23 6 * * *', () => {
+    instrumentCronJob('GithubWriteAccessReconcile', async () => {
+      const { reconcile } = await import('../scripts/reconcileRepoWriteAccess');
+      const rows = await reconcile(true);
+      const flipped = rows.filter((r) => r.now !== null && r.was !== 'unrecorded' && String(r.was) !== String(r.now));
+      if (flipped.length) console.log('[Scheduler] GitHub write-access reconcile flipped:', flipped.map((r) => `${r.owner}/${r.repo} ${r.was}->${r.now}`));
+      else console.log('[Scheduler] GitHub write-access reconcile: no changes across', rows.length, 'connections');
+    }).catch((err) => {
+      console.error('[Scheduler] GitHub write-access reconcile error:', err);
+    });
+  });
+
   cron.schedule('7 * * * *', () => {
     instrumentCronJob('GithubInvitationSweep', async () => {
       const { sweepPendingInvitations } = await import('./sbp/repoConnect/repoInvitations');
@@ -2232,18 +2277,27 @@ export function startScheduler(): void {
   // holding two active rows, three members lapsing into permanent silence, a card
   // that expired the month before its renewal. None of those announced themselves.
   //
-  // Unlike the reminder job this needs no feature flag: it cannot touch a customer
-  // and it cannot move money. The worst it does is email Ali.
-  cron.schedule('0 8 * * *', () => {
-    instrumentCronJob('BillingWatch', async () => {
-      const { runBillingWatch } = await import('./billing/billingHealthReport');
-      const r = await runBillingWatch({ send: true });
-      console.log(`[Scheduler] BillingWatch: needsAttention=${r.needsAttention} sent=${r.sent}`);
-    }).catch((err) => {
-      console.error('[Scheduler] Billing watch error:', err);
-    });
-  }, { timezone: 'America/Chicago' });
-  console.log('[Scheduler] BillingWatch scheduled (0 8 * * * America/Chicago)');
+  // It cannot touch a customer and it cannot move money, but "the worst it does
+  // is email Ali" turned out to matter: the dev instance shares this scheduler
+  // and its database has no reminders table and no schedule ids, so every
+  // morning it mailed a false ACT NOW ("21 schedules not in our book", "check
+  // could not run") next to the real report. Only the instance that owns the
+  // renewal reminders owns the watch that precedes them, so it rides the same
+  // switch (RENEWAL_REMINDERS_ENABLED on the production host, nowhere else).
+  if (env.renewalRemindersEnabled) {
+    cron.schedule('0 8 * * *', () => {
+      instrumentCronJob('BillingWatch', async () => {
+        const { runBillingWatch } = await import('./billing/billingHealthReport');
+        const r = await runBillingWatch({ send: true });
+        console.log(`[Scheduler] BillingWatch: needsAttention=${r.needsAttention} sent=${r.sent}`);
+      }).catch((err) => {
+        console.error('[Scheduler] Billing watch error:', err);
+      });
+    }, { timezone: 'America/Chicago' });
+    console.log('[Scheduler] BillingWatch scheduled (0 8 * * * America/Chicago)');
+  } else {
+    console.log('[Scheduler] BillingWatch not scheduled (RENEWAL_REMINDERS_ENABLED is off on this instance)');
+  }
 
   // Reap idle preview stacks every 5 minutes (stops stacks untouched for 30 min).
   cron.schedule('*/5 * * * *', () => {

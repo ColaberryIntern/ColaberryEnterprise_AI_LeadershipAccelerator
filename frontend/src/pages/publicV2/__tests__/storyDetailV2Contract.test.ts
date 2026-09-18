@@ -98,6 +98,28 @@ const MEDIA_SOURCES = [
          was never listed, which is the exact gap the comments above describe. */
   path.join(PAGE_DIR, 'StoryHeroFigure.tsx'),
   path.join(PAGE_DIR, 'StoryRelated.tsx'),
+  /* The visual story band: the workflow illustration, its step panel and motion
+     hook, the outcome cards, the charts and their primitives, the band that
+     composes them, and the three pure models beneath (view models, graph
+     geometry, edge routing). Ten files, listed for the reason every entry
+     above is. The
+     hook assigns its particle class through `setAttribute`, which the
+     className rule below cannot see; the graph test asserts the namespace on
+     the rendered DOM instead. */
+  path.join(PAGE_DIR, 'StoryVisualStory.tsx'),
+  path.join(PAGE_DIR, 'StoryWorkflowGraph.tsx'),
+  path.join(PAGE_DIR, 'StoryWorkflowPanel.tsx'),
+  path.join(PAGE_DIR, 'StoryOutcomeCards.tsx'),
+  path.join(PAGE_DIR, 'StoryCharts.tsx'),
+  path.join(PAGE_DIR, 'StoryChartPrimitives.tsx'),
+  path.join(PAGE_DIR, 'storyVisualModel.ts'),
+  path.join(PAGE_DIR, 'storyWorkflowLayout.ts'),
+  path.join(PAGE_DIR, 'storyWorkflowEdges.ts'),
+  path.join(PAGE_DIR, 'useWorkflowMotion.ts'),
+  /* The measurement band: the section's prose, with its metric cards folded
+     when the visual story already shows the figures. Split out of the sections
+     module when that file crossed the 300-line budget below. */
+  path.join(PAGE_DIR, 'StoryMeasurementBand.tsx'),
 ];
 
 /** The page-local file the article moved into. Read wherever PAGE is read. */
@@ -120,7 +142,14 @@ const MEDIA_CSS = path.join(PAGE_DIR, 'storyMediaV2.css');
  * not a way out of the checks.
  */
 const RELATED_CSS = path.join(PAGE_DIR, 'storyRelatedV2.css');
-const STYLESHEETS = [path.join(PAGE_DIR, 'storyDetailV2.css'), MEDIA_CSS, RELATED_CSS];
+/**
+ * The visual story band's sheet. Owned and imported by `StoryVisualStory.tsx`,
+ * the component that draws every `cbv2-story-visual` class, so the public page
+ * and the admin preview both get it through the article. Listed so the split
+ * is not a way out of the checks.
+ */
+const VISUAL_CSS = path.join(PAGE_DIR, 'storyVisualV2.css');
+const STYLESHEETS = [path.join(PAGE_DIR, 'storyDetailV2.css'), MEDIA_CSS, RELATED_CSS, VISUAL_CSS];
 const APP = path.join(SRC, 'App.tsx');
 const LEGACY_TOKENS = path.join(SRC, 'styles', 'tokens.css');
 const V2_TOKEN_DIR = path.join(SRC, 'colaberry', 'tokens');
@@ -222,12 +251,34 @@ describe('the case-study component directory is untouched', () => {
     const source = stripComments(read(PAGE))
       + stripComments(read(ARTICLE))
       + stripComments(read(SECTIONS))
-      + stripComments(read(path.join(PAGE_DIR, 'StoryArchitectureBand.tsx')));
-    for (const component of ['CaseStudyTimeline', 'CaseStudyArchitecture',
-      'CaseStudyMeasurement', 'CaseStudyRoadmap', 'CaseStudyArtifacts', 'CaseStudyCTA',
+      + stripComments(read(path.join(PAGE_DIR, 'StoryArchitectureBand.tsx')))
+      // ...and the measurement band, for the same reason.
+      + stripComments(read(path.join(PAGE_DIR, 'StoryMeasurementBand.tsx')));
+    for (const component of ['CaseStudyArchitecture',
+      'CaseStudyMeasurement', 'CaseStudyArtifacts', 'CaseStudyCTA',
       'CaseStudyVerificationBadge']) {
       expect(source).toContain(`components/caseStudy/${component}`);
     }
+  });
+
+  /*
+   * THE TWO THE PAGE DRAWS ITSELF, and why that is not a breach of the rule
+   * above. `CaseStudyTimeline` and `CaseStudyRoadmap` print every field of
+   * every entry, which is right where an editor is checking a record and wrong
+   * on a page a reader scrolls: on the CORA record they ran 1,274px and 1,034px
+   * against 261 and 329 for the same content in the format Ali approved on
+   * 2026-09-17. The page draws a rail and a status board instead, in its own
+   * components, and the originals keep their behaviour for every other caller.
+   * The rule is "do not reimplement a shipped component in the page file"; a
+   * named component with its own tests is the sanctioned way to differ.
+   */
+  it('draws the build and the roadmap through its own rail and board', () => {
+    const source = stripComments(read(SECTIONS));
+    expect(source).toContain('./StoryLowerV2');
+    expect(source).toContain('StoryBuildRail');
+    expect(source).toContain('StoryRoadmapBoard');
+    expect(source).not.toContain('components/caseStudy/CaseStudyTimeline');
+    expect(source).not.toContain('components/caseStudy/CaseStudyRoadmap');
   });
 });
 
@@ -528,6 +579,10 @@ describe('the story stylesheets name only tokens that exist', () => {
     // preview - which mounts the article - never renders it.
     expect(stripComments(read(path.join(PAGE_DIR, 'StoryRelated.tsx'))))
       .toContain("import './storyRelatedV2.css';");
+    // The fourth sheet follows the same rule: imported where its markup lives,
+    // which the article mounts for both the public page and the admin preview.
+    expect(stripComments(read(path.join(PAGE_DIR, 'StoryVisualStory.tsx'))))
+      .toContain("import './storyVisualV2.css';");
   });
 
   it('keeps every stylesheet under the 500-line ceiling that forced the splits', () => {

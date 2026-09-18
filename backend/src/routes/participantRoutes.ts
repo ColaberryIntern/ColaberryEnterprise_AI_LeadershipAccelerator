@@ -25,7 +25,9 @@ import {
   handleGetInternshipDocuments, handleDownloadInternshipDocument, handleUploadSignedDocument,
 } from '../controllers/internshipDocumentController';
 import {
-  handleGetInternshipOnboarding, handleRecordAcknowledgement,
+  handleGetInternshipOnboarding, handleRecordAcknowledgement, handleRecordMeetingJoin,
+  handleGetInternshipDashboard, handleGetInternshipProjects, handleGetInternshipFeedback,
+  handleGetInternshipCertification,
 } from '../controllers/internshipActivationController';
 import { requireBuildEntitlement } from '../middlewares/requireBuildEntitlement';
 import { requireContentEntitlement } from '../middlewares/requireContentEntitlement';
@@ -95,6 +97,7 @@ import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
 import projectsPortalRoutes from './projectsPortalRoutes';
 import certPrepRoutes from './certPrepRoutes';
+import certificationRoutes from './certificationRoutes';
 import sbpRoutes from './sbpRoutes';
 import workspaceRoutes from './workspaceRoutes';
 
@@ -355,7 +358,12 @@ router.get('/api/portal/internship/documents', requireParticipant, handleGetInte
 // anyone — activation is reviewer/system only, so a student cannot put themselves
 // in the cohort by calling an endpoint.
 router.get('/api/portal/internship/onboarding', requireParticipant, handleGetInternshipOnboarding);
+router.get('/api/portal/internship/dashboard', requireParticipant, handleGetInternshipDashboard);
+router.get('/api/portal/internship/projects', requireParticipant, handleGetInternshipProjects);
+router.get('/api/portal/internship/feedback', requireParticipant, handleGetInternshipFeedback);
+router.get('/api/portal/internship/certification', requireParticipant, handleGetInternshipCertification);
 router.post('/api/portal/internship/acknowledgements', internshipWriteRateLimiter, requireParticipant, handleRecordAcknowledgement);
+router.post('/api/portal/internship/meetings/join', internshipWriteRateLimiter, requireParticipant, handleRecordMeetingJoin);
 
 router.get('/api/portal/internship/documents/:documentId/download', requireParticipant, handleDownloadInternshipDocument);
 router.post(
@@ -639,6 +647,10 @@ router.use(sbpRoutes);
 // A paying student in Week 3 passes 1 and 2 and is still refused by 3.
 router.use('/api/portal/cert-prep', requireParticipant, requireContentEntitlement('cert-prep'));
 router.use(certPrepRoutes);
+// Certification claims (upload + review status) — its own prefix, requireParticipant
+// only, independent of CERT_PREP_ENABLED and the Week-7 fence: a certificate
+// already earned must be uploadable by any enrolled student.
+router.use(certificationRoutes);
 
 // Mentor endpoints
 router.post('/api/portal/mentor/chat', requireParticipant, handleSendMentorMessage);

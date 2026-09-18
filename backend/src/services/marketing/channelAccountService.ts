@@ -5,6 +5,8 @@ import type { CredentialType } from '../../models/ConnectorCredential';
 import { WorkflowError } from '../content/contentWorkflowService';
 import { isVaultAvailable, seal, open, activeKeyId, CredentialVaultError } from '../security/credentialVault';
 import { redactedJson } from '../security/secretRedaction';
+import { accountHealth, accessTokenExpiry, connectionExpiry, type AccountHealth } from './overviewHealth';
+import { IMPLEMENTED_CONNECTORS, type ProviderKey } from '../publishing/providerCapabilities';
 
 /**
  * channelAccountService — connect, read, refresh and revoke social accounts.
@@ -37,6 +39,11 @@ export interface ConnectInput {
   refreshToken?: string | null;
   /** When the access token stops working, if the provider said. */
   tokenExpiresAt?: Date | null;
+  /**
+   * When the refresh token itself stops working, if the provider said (TikTok: 365 days; Google
+   * and X do not say). The connection lives as long as this does, so the Overview reads it.
+   */
+  refreshTokenExpiresAt?: Date | null;
   connectedBy?: string | null;
   metadata?: Record<string, unknown>;
 }
@@ -68,6 +75,15 @@ export interface AccountView {
     key_id: string;
     expired: boolean;
   }>;
+  /**
+   * The same verdict the Overview shows, computed once here so every screen agrees. A network
+   * with a publishing adapter is judged by its access token (what the adapter uses, and nothing
+   * renews it); one without, by whether the connection is alive - so an X account does not read
+   * "expired" two hours after it was connected. See overviewHealth.connectionExpiry.
+   */
+  health: AccountHealth;
+  /** When this account stops being usable, by the same rule. Null: no stated end. */
+  usable_until: Date | null;
 }
 
 function log(level: 'info' | 'warn' | 'error', event: string, context: Record<string, unknown>, outcome = 'success'): void {
@@ -85,6 +101,9 @@ function log(level: 'info' | 'warn' | 'error', event: string, context: Record<st
 
 function toView(account: ChannelAccount, credentials: ConnectorCredential[]): AccountView {
   const now = Date.now();
+  const lifecycle = credentials.map((c) => ({ credential_type: c.credential_type, token_expires_at: c.token_expires_at }));
+  const judged = { status: account.status, revoked_at: account.revoked_at, last_health_ok: account.last_health_ok, credentials: lifecycle };
+  const byConnection = !IMPLEMENTED_CONNECTORS.has(account.provider as ProviderKey);
   return {
     id: account.id,
     tenant_id: account.tenant_id,
@@ -110,6 +129,8 @@ function toView(account: ChannelAccount, credentials: ConnectorCredential[]): Ac
       key_id: c.key_id,
       expired: c.token_expires_at ? c.token_expires_at.getTime() <= now : false,
     })),
+    health: accountHealth(judged, new Date(now), byConnection),
+    usable_until: byConnection ? connectionExpiry(judged) : accessTokenExpiry(judged),
   };
 }
 
@@ -185,7 +206,7 @@ export async function connectAccount(input: ConnectInput): Promise<AccountView> 
   if (input.refreshToken) {
     // Refresh tokens have their own lifetime, which is why they are a separate row rather than
     // a second column: an expired access token beside a live refresh token is the normal state.
-    await writeCredential(account, 'refresh_token', input.refreshToken, null);
+    await writeCredential(account, 'refresh_token', input.refreshToken, input.refreshTokenExpiresAt ?? null);
   }
 
   log('info', existing ? 'account_reconnected' : 'account_connected', {
@@ -392,6 +413,19 @@ export async function revokeAccount(accountId: string, revokedBy: string | null)
  * adapter. `provider_account_id` holds the OIDC `sub` for a member and the organization id for
  * a page; the URN shape is the provider's, not ours.
  */
+/**
+ * The provider's own id for an account: a Facebook Page id, an Instagram account id, a LinkedIn
+ * organization number. What an adapter addresses when the network does not use a URN.
+ */
+export async function getProviderAccountId(accountId: string): Promise<string> {
+  const account = await ChannelAccount.findByPk(accountId);
+  if (!account) throw new WorkflowError('Channel account not found', 404, 'NotFound');
+  if (account.status === 'revoked' || account.revoked_at) {
+    throw new WorkflowError('This account was disconnected.', 409, 'AccountRevoked');
+  }
+  return account.provider_account_id;
+}
+
 export async function getAuthorUrn(accountId: string): Promise<string> {
   const account = await ChannelAccount.findByPk(accountId);
   if (!account) throw new WorkflowError('Channel account not found', 404, 'NotFound');

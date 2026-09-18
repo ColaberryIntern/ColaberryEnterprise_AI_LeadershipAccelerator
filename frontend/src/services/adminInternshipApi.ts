@@ -131,6 +131,27 @@ export async function decideInternshipApplication(id: string, body: {
   return data;
 }
 
+/** One outstanding reason an applicant cannot be activated yet. */
+export interface ActivationBlocker { key: string; label: string; waiting_on: string | null }
+
+/**
+ * Put an approved, documents-verified applicant into the internship cohort — the
+ * only action that does so. A refusal comes back NOT as a thrown error but as
+ * `{ ok:false, blockers }`, because the reviewer needs to see WHY (an unverified
+ * document, an inactive membership), not just that it failed.
+ */
+export async function activateInternshipApplication(id: string): Promise<
+  { ok: true; state: string | null } | { ok: false; blockers: ActivationBlocker[]; error: string }
+> {
+  try {
+    const { data } = await api.post(`/api/admin/internship/applications/${id}/activate`, {});
+    return { ok: true, state: (data?.state ?? data?.application?.state) ?? null };
+  } catch (err: any) {
+    const d = err?.response?.data;
+    return { ok: false, blockers: (d?.blockers as ActivationBlocker[]) ?? [], error: d?.error ?? 'Could not activate.' };
+  }
+}
+
 // ── AI assessment ─────────────────────────────────────────────────────────────
 
 export type RequirementStatus = 'met' | 'not_met' | 'unclear';
@@ -172,6 +193,7 @@ export interface InternWeekProgress {
 }
 
 export interface InternActivity {
+  enrollment_id: string;
   training: {
     weeks: InternWeekProgress[];
     first_three_weeks: { done: number; total: number; ready: boolean };
@@ -191,6 +213,7 @@ export interface InternActivity {
     computed_at: string | null;
   } | null;
   case_studies: Array<{ id: string; title: string; status: string; slug: string }>;
+  attendance: { total: number; by_meeting: Record<string, number>; last_attended_at: string | null };
 }
 
 export async function fetchInternshipActivity(applicationId: string): Promise<InternActivity> {
@@ -222,6 +245,64 @@ export async function reviewInternshipProject(applicationId: string, question?: 
   const { data } = await api.post<ProjectReview>(
     `/api/admin/internship/applications/${applicationId}/project-review`,
     question ? { question } : {},
+  );
+  return data;
+}
+
+// ── Project readiness roster (who's ready for a project) ─────────────────────
+
+export interface ProjectReadinessRow {
+  application_id: string;
+  enrollment_id: string;
+  full_name: string | null;
+  email: string | null;
+  weeks_done: number;
+  weeks_total: number;
+  training_ready: boolean;
+  sessions_attended: number;
+  has_project: boolean;
+  project_name: string | null;
+  ready_for_project: boolean;
+}
+
+export async function fetchInternshipProjectReadiness(): Promise<{ interns: ProjectReadinessRow[] }> {
+  const { data } = await api.get('/api/admin/internship/project-readiness');
+  return data;
+}
+
+// ── Author & assign a project (manager's delivery surface) ───────────────────
+
+export interface AuthoredStoryInput {
+  title: string;
+  narrative?: string | null;
+  acceptance?: string[] | null;
+  build?: string | null;
+  blocked_by?: string[];
+}
+export interface AuthoredReleaseInput {
+  key: string;
+  name: string;
+  stories: AuthoredStoryInput[];
+}
+export interface AuthoredProjectInput {
+  name: string;
+  industry?: string | null;
+  releases: AuthoredReleaseInput[];
+}
+export interface AuthoredProjectResult {
+  project_id: string;
+  name: string;
+  releases: number;
+  stories: number;
+}
+
+export async function authorInternshipProject(
+  applicationId: string,
+  project: AuthoredProjectInput,
+): Promise<AuthoredProjectResult> {
+  const { data } = await api.post<AuthoredProjectResult>(
+    `/api/admin/internship/applications/${applicationId}/author-project`,
+    project,
   );
   return data;
 }

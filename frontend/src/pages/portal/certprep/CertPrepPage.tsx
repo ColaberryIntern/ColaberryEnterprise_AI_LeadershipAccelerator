@@ -6,6 +6,7 @@ import CertProgressRail from './CertProgressRail';
 import CertDomainMap from './CertDomainMap';
 import CertEvidencePanel from './CertEvidencePanel';
 import CertSessionRunner from './CertSessionRunner';
+import CertificationClaimPanel from './CertificationClaimPanel';
 import {
   CertAvailability,
   CertReadiness,
@@ -39,13 +40,17 @@ import './certPrep.css';
  * where it stays in view while the working area scrolls — the same shape every
  * other main portal page uses.
  */
-type TabKey = 'domains' | 'practice' | 'mocks' | 'evidence';
+type TabKey = 'domains' | 'practice' | 'mocks' | 'evidence' | 'certificate';
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'domains', label: 'Domain Map' },
   { key: 'practice', label: 'Practice' },
   { key: 'mocks', label: 'Mock Exams' },
   { key: 'evidence', label: 'Build Evidence' },
+  // Where the passed certificate is uploaded for staff approval (ladder D4).
+  // Also rendered in the locked and feature-off states below, because a
+  // certificate already earned must be uploadable whatever practice is doing.
+  { key: 'certificate', label: 'Your Certificate' },
 ];
 
 type LoadState = 'loading' | 'ready' | 'locked' | 'error';
@@ -174,6 +179,7 @@ const CertPrepPage: React.FC = () => {
               Back to this week's work
             </a>
           </section>
+          <CertificationClaimPanel />
         </div>
       </PortalShell>
     );
@@ -194,6 +200,7 @@ const CertPrepPage: React.FC = () => {
               Try again
             </button>
           </section>
+          <CertificationClaimPanel />
         </div>
       </PortalShell>
     );
@@ -362,6 +369,8 @@ const CertPrepPage: React.FC = () => {
               )}
 
               {tab === 'evidence' && <CertEvidencePanel />}
+
+              {tab === 'certificate' && <CertificationClaimPanel />}
             </div>
             </div>
 

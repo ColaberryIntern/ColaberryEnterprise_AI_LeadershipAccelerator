@@ -247,6 +247,13 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
     name: params.name,
   };
 
+  // Tell Synthflow where to post completion, per call. Relying on the agent's dashboard
+  // setting left every AI Flotation call at `sent` forever - three out of three, no
+  // transcript, no completion, nothing extracted - because nobody had set it there.
+  if (env.synthflowWebhookUrl) {
+    requestBody.external_webhook_url = env.synthflowWebhookUrl;
+  }
+
   if (params.prompt) {
     // Sent BOTH ways on purpose. The agent's saved prompt embeds `{prompt}`, which
     // Synthflow fills from custom_variables - so the variable is what actually reaches the

@@ -219,6 +219,15 @@ export interface BuildIntake {
   status?: string;
   /** Adaptive intake interview Q&A. Null on rows captured before it existed. */
   answers?: Array<{ id: string; question: string; answer: string }> | null;
+  /** Why the last generation failed; null while generating and after a success. */
+  last_error?: BuildIntakeError | null;
+}
+
+export interface BuildIntakeError {
+  error_class: string;
+  message: string;
+  /** ISO-8601. */
+  at: string;
 }
 
 /**
@@ -229,14 +238,15 @@ export interface BuildIntake {
 export async function saveIntake(intake: BuildIntake): Promise<{ project_id: string; status: string }> {
   const rows = await sequelize.query<{ project_id: string; status: string }>(
     `INSERT INTO build_intake
-       (project_id, enrollment_id, idea, name, size, users, data_sources, done_definition, target_weeks, correlation_id, status, answers)
-     VALUES (:project_id, :enrollment_id, :idea, :name, :size, :users, :data_sources, :done_definition, :target_weeks, :correlation_id, :status, CAST(:answers AS JSONB))
+       (project_id, enrollment_id, idea, name, size, users, data_sources, done_definition, target_weeks, correlation_id, status, answers, last_error)
+     VALUES (:project_id, :enrollment_id, :idea, :name, :size, :users, :data_sources, :done_definition, :target_weeks, :correlation_id, :status, CAST(:answers AS JSONB), CAST(:last_error AS JSONB))
      ON CONFLICT (project_id) DO UPDATE SET
        idea = EXCLUDED.idea, name = EXCLUDED.name, size = EXCLUDED.size,
        users = EXCLUDED.users, data_sources = EXCLUDED.data_sources,
        done_definition = EXCLUDED.done_definition, target_weeks = EXCLUDED.target_weeks,
        correlation_id = EXCLUDED.correlation_id, status = EXCLUDED.status,
-       answers = COALESCE(EXCLUDED.answers, build_intake.answers), updated_at = NOW()
+       answers = COALESCE(EXCLUDED.answers, build_intake.answers),
+       last_error = EXCLUDED.last_error, updated_at = NOW()
      RETURNING project_id, status`,
     {
       type: QueryTypes.SELECT,
@@ -253,10 +263,23 @@ export async function saveIntake(intake: BuildIntake): Promise<{ project_id: str
         answers: intake.answers ? JSON.stringify(intake.answers) : null,
         correlation_id: intake.correlation_id ?? null,
         status: intake.status ?? 'captured',
+        last_error: intake.last_error ? JSON.stringify(intake.last_error) : null,
       },
     },
   );
   return rows[0];
+}
+
+/**
+ * Every intake in a given state, oldest first. Exists for the one reader that needs the
+ * whole set rather than one project: boot-time recovery of builds stranded at `generating`
+ * when the process that was generating them went away.
+ */
+export async function listIntakesByStatus(status: string, limit = 100): Promise<BuildIntake[]> {
+  return sequelize.query<BuildIntake>(
+    `SELECT * FROM build_intake WHERE status = :status ORDER BY updated_at ASC LIMIT :limit`,
+    { type: QueryTypes.SELECT, replacements: { status, limit } },
+  );
 }
 
 /** Read the intake so a failed generation can be replayed from it. */

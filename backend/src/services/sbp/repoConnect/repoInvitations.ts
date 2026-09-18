@@ -260,6 +260,42 @@ export interface SweepResult {
  * Run it on a schedule or by hand; it is safe either way, and an empty queue
  * costs one request.
  */
+/**
+ * Write the permission an accepted invitation just gave us onto the connection.
+ *
+ * Until 2026-09-17 the sweep accepted the invitation, read `permissions.push`,
+ * returned it in its result, and nobody persisted it. `platform_can_push` was
+ * only ever written by the connect flow, so a student who granted access
+ * AFTER connecting stayed `blocked` on every screen, with a banner telling
+ * them to do the thing they had done. Found on a learner who had done it on
+ * both her repos and checked GitHub herself before writing in; three
+ * connections on production carried the same stale `false`.
+ *
+ * Best-effort: a failure here is logged and never fails the sweep, which has
+ * already accepted the invitation. The daily reconcile is the second chance.
+ * Dynamic import because repoConnectService imports this module.
+ */
+async function recordAcceptedAccess(owner: string, repo: string, canPush: boolean, opts: GitHubReadOptions): Promise<void> {
+  try {
+    const { sequelize } = await import('../../../config/database');
+    const { QueryTypes } = await import('sequelize');
+    const rows = await sequelize.query<{ project_id: string | null }>(
+      `SELECT project_id FROM github_connections WHERE lower(repo_owner) = lower(:owner) AND lower(repo_name) = lower(:repo)`,
+      { type: QueryTypes.SELECT, replacements: { owner, repo } },
+    );
+    const projectId = rows.find((r) => r.project_id)?.project_id;
+    if (!projectId) {
+      log('sbp_invitation_access_unrecorded', opts.correlationId, 'partial', { full_name: `${owner}/${repo}`, error_class: 'NoProjectBoundConnection' });
+      return;
+    }
+    const { recordWriteAccess } = await import('./repoConnectService');
+    const changed = await recordWriteAccess(projectId, canPush);
+    log('sbp_invitation_access_recorded', opts.correlationId, 'success', { full_name: `${owner}/${repo}`, can_push: canPush, count: changed ? 1 : 0 });
+  } catch (err: any) {
+    log('sbp_invitation_access_record_failed', opts.correlationId, 'failure', { full_name: `${owner}/${repo}`, error_class: err?.error_class ?? err?.name ?? 'Error' });
+  }
+}
+
 export async function sweepPendingInvitations(opts: GitHubReadOptions = {}): Promise<SweepResult> {
   const pending = await listPendingInvitations(opts);
   const out: SweepResult = { accepted: [], expired: [], failed: [] };
@@ -268,7 +304,10 @@ export async function sweepPendingInvitations(opts: GitHubReadOptions = {}): Pro
   for (const invitation of pending) {
     if (invitation.expired) { out.expired.push(invitation); continue; }
     const result = await acceptInvitationFor(invitation.owner, invitation.repo, opts);
-    if (result.outcome === 'accepted' || result.outcome === 'accepted_no_push') out.accepted.push(result);
+    if (result.outcome === 'accepted' || result.outcome === 'accepted_no_push') {
+      out.accepted.push(result);
+      await recordAcceptedAccess(invitation.owner, invitation.repo, result.can_push === true, opts);
+    }
     else if (result.outcome === 'expired') out.expired.push(invitation);
     else if (result.outcome === 'failed') out.failed.push(result);
   }

@@ -24,6 +24,13 @@ const ChatDock: React.FC<{ target: DmTarget; onClose: () => void }> = ({ target,
   const [messages, setMessages] = useState<DmMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [minimized, setMinimized] = useState(false);
+  // Real incident, 2026-09-17: sendDmMessage() is synchronous end-to-end on
+  // the backend — when the other side is an AI agent, this same in-flight
+  // window IS the agent composing its reply (see daraReplyService.ts /
+  // reeseReplyService.ts), not a generic network wait. Without this, a
+  // multi-second reply looked identical to a dead one — no signal at all
+  // that anything was happening.
+  const [sending, setSending] = useState(false);
   const sinceRef = useRef<string | undefined>(undefined);
   const endRef = useRef<HTMLDivElement | null>(null);
   const meRef = useRef<string | null>(myEnrollmentId());
@@ -76,6 +83,7 @@ const ChatDock: React.FC<{ target: DmTarget; onClose: () => void }> = ({ target,
     setDraft('');
     attach.clear(false);
     setLocalAttachments((prev) => ({ ...prev, [PENDING_KEY]: shown }));
+    setSending(true);
     sendDmMessage(target.roomId, text, attachments)
       .then((m) => {
         setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
@@ -96,7 +104,8 @@ const ChatDock: React.FC<{ target: DmTarget; onClose: () => void }> = ({ target,
           const { [PENDING_KEY]: _pending, ...rest } = prev;
           return rest;
         });
-      });
+      })
+      .finally(() => setSending(false));
   };
 
   return (
@@ -126,6 +135,12 @@ const ChatDock: React.FC<{ target: DmTarget; onClose: () => void }> = ({ target,
                 } />
               </div>
             ))}
+            {sending && (
+              <div className="te-dm-msg te-dm-typing" aria-live="polite">
+                <span className="te-dm-typing-name">{target.name} is typing</span>
+                <span className="te-dm-typing-dots"><span>.</span><span>.</span><span>.</span></span>
+              </div>
+            )}
             <div ref={endRef} />
           </div>
           <AttachmentTray items={attach.items} notice={attach.notice} onRemove={attach.remove} />
@@ -138,9 +153,10 @@ const ChatDock: React.FC<{ target: DmTarget; onClose: () => void }> = ({ target,
               placeholder="Message, or paste a screenshot…"
               maxLength={4000}
               aria-label={`Message ${target.name}`}
+              disabled={sending}
               {...attach.pasteProps}
             />
-            <button type="button" onClick={send} disabled={(!draft.trim() && attach.refs().length === 0) || attach.busy}>Send</button>
+            <button type="button" onClick={send} disabled={sending || (!draft.trim() && attach.refs().length === 0) || attach.busy}>Send</button>
           </div>
         </>
       )}

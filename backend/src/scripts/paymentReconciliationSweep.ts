@@ -64,25 +64,55 @@ ${rows('Errors', errors, ['paymentId', 'message'])}
   return { html, text };
 }
 
+/**
+ * Split one sweep result into the report each reader should get.
+ *
+ * Until 2026-09-17 everything went to Ali. In practice every daily report was
+ * 8 to 15 `prospect_only` flags: school-side ISA and bootcamp drafts ($149/$250
+ * ACH schedules) on the shared PaySimple account whose only match is a free
+ * Open House row. They are correctly not applied, they repeat for the whole
+ * 14-day window, and they are the school's ledger, not the Accelerator's. Ali
+ * now hears only about Accelerator money (auto-reconciliations, ambiguous or
+ * unsettled matches) and errors; the school-side flags go to the school's
+ * payments owner. A run with nothing for a reader sends that reader nothing.
+ */
+export const OWNER_RECIPIENT = 'ali@colaberry.com';
+export const SCHOOL_PAYMENTS_RECIPIENT = process.env.SCHOOL_PAYMENTS_RECIPIENT || 'taiwo@colaberry.com';
+
+export function routeReport(result: ReconciliationResult): Array<{ to: string; result: ReconciliationResult }> {
+  const schoolSide = result.flagged.filter((f) => f.category === 'prospect_only');
+  const accelerator = result.flagged.filter((f) => f.category !== 'prospect_only');
+  const out: Array<{ to: string; result: ReconciliationResult }> = [];
+  if (result.autoReconciled.length || accelerator.length || result.errors.length) {
+    out.push({ to: OWNER_RECIPIENT, result: { ...result, flagged: accelerator } });
+  }
+  if (schoolSide.length) {
+    out.push({ to: SCHOOL_PAYMENTS_RECIPIENT, result: { ...result, autoReconciled: [], errors: [], flagged: schoolSide } });
+  }
+  return out;
+}
+
 async function sendReport(result: ReconciliationResult): Promise<void> {
   if (!env.mandrillApiKey) {
     console.warn('[paymentReconciliationSweep] MANDRILL_API_KEY not set, skipping email report');
     return;
   }
-  const { html, text } = renderReport(result);
   const transport = nodemailer.createTransport({
     host: 'smtp.mandrillapp.com',
     port: 587,
     auth: { user: 'ali@colaberry.com', pass: env.mandrillApiKey },
   });
-  await transport.sendMail({
-    from: '"Colaberry Enterprise AI" <ali@colaberry.com>',
-    to: 'ali@colaberry.com',
-    subject: `[Payment Reconciliation] ${result.autoReconciled.length} reconciled, ${result.flagged.length} need review${DRY ? ' (DRY RUN)' : ''}`,
-    html,
-    text,
-    headers: { 'X-MC-Track': 'none' },
-  });
+  for (const { to, result: slice } of routeReport(result)) {
+    const { html, text } = renderReport(slice);
+    await transport.sendMail({
+      from: '"Colaberry Enterprise AI" <ali@colaberry.com>',
+      to,
+      subject: `[Payment Reconciliation] ${slice.autoReconciled.length} reconciled, ${slice.flagged.length} need review${DRY ? ' (DRY RUN)' : ''}`,
+      html,
+      text,
+      headers: { 'X-MC-Track': 'none' },
+    });
+  }
 }
 
 async function main(): Promise<void> {
@@ -105,10 +135,14 @@ async function main(): Promise<void> {
   }
 }
 
-main()
-  .then(async () => { await sequelize.close(); process.exit(0); })
-  .catch(async (err: unknown) => {
-    console.error('FATAL:', err instanceof Error ? err.message : err);
-    try { await sequelize.close(); } catch { /* connection may already be gone */ }
-    process.exit(1);
-  });
+// Guarded so the routing rule above can be unit-tested without opening a
+// database connection or touching PaySimple.
+if (require.main === module) {
+  main()
+    .then(async () => { await sequelize.close(); process.exit(0); })
+    .catch(async (err: unknown) => {
+      console.error('FATAL:', err instanceof Error ? err.message : err);
+      try { await sequelize.close(); } catch { /* connection may already be gone */ }
+      process.exit(1);
+    });
+}

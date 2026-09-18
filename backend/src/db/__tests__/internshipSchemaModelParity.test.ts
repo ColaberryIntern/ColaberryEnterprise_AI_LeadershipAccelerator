@@ -48,6 +48,7 @@ import InternshipInterviewResponse from '../../models/InternshipInterviewRespons
 import InternshipDecision from '../../models/InternshipDecision';
 import InternshipDocument from '../../models/InternshipDocument';
 import InternshipRequirementAcknowledgement from '../../models/InternshipRequirementAcknowledgement';
+import InternshipMeetingAttendance from '../../models/InternshipMeetingAttendance';
 
 const mockQuery = (sequelize as any).query as jest.Mock;
 
@@ -63,6 +64,7 @@ const MODELS: Record<string, any> = {
   internship_decisions: InternshipDecision,
   internship_documents: InternshipDocument,
   internship_requirement_acknowledgements: InternshipRequirementAcknowledgement,
+  internship_meeting_attendance: InternshipMeetingAttendance,
 };
 
 interface DdlColumn { name: string; notNull: boolean; hasDefault: boolean; }

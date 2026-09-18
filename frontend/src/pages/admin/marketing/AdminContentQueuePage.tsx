@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { PageHeader, SectionCard, StatusBadge } from '../../../components/admin/shell';
 import { errorMessage, listItems, type ContentItem, type ContentItemStatus } from '../../../services/contentComposerApi';
+import { formatCentral } from './centralTime';
 
 /**
  * The content review queue: every item, filtered by lifecycle status, each opening in the
@@ -90,15 +91,15 @@ export default function AdminContentQueuePage() {
         )}
         {!error && !loading && items.length > 0 && (
           <table className="table table-sm align-middle mb-0">
-            <thead><tr><th>Title</th><th>Status</th><th>Rev</th><th>Scheduled (UTC)</th><th>Updated</th><th /></tr></thead>
+            <thead><tr><th>Title</th><th>Status</th><th>Rev</th><th>Scheduled (Central)</th><th>Updated (Central)</th><th /></tr></thead>
             <tbody>
               {items.map((it) => (
                 <tr key={it.id} data-testid={`item-${it.id}`}>
                   <td>{it.title}</td>
                   <td><StatusBadge label={it.status.replace(/_/g, ' ')} tone={tone(it.status)} /></td>
                   <td className="small">{it.revision}</td>
-                  <td className="small">{it.scheduled_for ? it.scheduled_for.replace('T', ' ').slice(0, 16) : '-'}</td>
-                  <td className="small">{it.updated_at ? it.updated_at.replace('T', ' ').slice(0, 16) : '-'}</td>
+                  <td className="small">{formatCentral(it.scheduled_for) ?? '-'}</td>
+                  <td className="small">{formatCentral(it.updated_at) ?? '-'}</td>
                   <td className="text-end"><Link className="btn btn-sm btn-outline-primary" to={`/admin/marketing/composer/${it.id}`}>Open</Link></td>
                 </tr>
               ))}

@@ -729,7 +729,9 @@ export async function listCohortEnrollments(cohortId: string) {
       page_url: lead?.page_url ?? null,
       // Paid-subscription visibility for the admin roster.
       subscription: sub
-        ? { plan: sub.plan, status: sub.status, amount_cents: sub.amount_cents, current_period_end: sub.current_period_end }
+        // created_at is when the checkout was started; with a pending status and
+        // no payment it is the abandoned-checkout date the roster shows.
+        ? { plan: sub.plan, status: sub.status, amount_cents: sub.amount_cents, current_period_end: sub.current_period_end, created_at: sub.created_at }
         : null,
       // Deep link to the payer's record in PaySimple (best-effort; base is overridable).
       paysimple_url: psCustomerId ? `${PAYSIMPLE_DASHBOARD_BASE}/#/customer/${psCustomerId}` : null,

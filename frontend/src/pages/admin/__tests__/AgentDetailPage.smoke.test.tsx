@@ -145,6 +145,7 @@ const DETAIL: AgentDetail = {
   // populated cases.
   ticket_breakdown: [],
   related_tasks: [],
+  owned_behaviors: [],
   // Trust Contract Phase 1 (2026-08-26) — base fixture: honest-empty, same
   // pattern as ticket_breakdown/related_tasks above. Individual tests below
   // override to cover the populated cases.
@@ -196,6 +197,7 @@ const DETAIL: AgentDetail = {
   },
   goals: [],
   goals_overall: 0,
+  employee_facts: null,
 };
 
 let container: HTMLDivElement;

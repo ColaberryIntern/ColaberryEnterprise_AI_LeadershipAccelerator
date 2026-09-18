@@ -11,6 +11,7 @@ import NextSessionStrip from './NextSessionStrip';
 import {
   resolveBackendProjectId, startBuild as startServerBuild, pollBuild,
   isDelivered, blockingReasons, requestDiscoveryCall, getIntakeReview,
+  retryBuild,
 } from '../../../services/sbpApi';
 import { describeCallOutcome, type CallNotice } from './describeCallOutcome';
 import { PipelineBanner, CallBanner, type PipelineState, type HandoffCounts } from './ProjectBanners';
@@ -418,6 +419,22 @@ const ProjectsPage: React.FC = () => {
    * student can actually see, and success is defined as `delivered` — the plan
    * is in `student_tasks` — not merely as "the poll stopped".
    */
+  /** Retry a failed generation from the answers already on the server. */
+  const retryFailedBuild = useCallback(async (projectId: string) => {
+    setPipeline({ state: 'generating', projectId });
+    const started = await retryBuild(projectId);
+    if (!started.ok) { setPipeline({ state: 'local', error: started.error }); return; }
+    const result = await pollBuild(projectId, { onUpdate: (st) => setPipeline({ state: 'generating', projectId, status: st.status }) });
+    if (!result.ok) { setPipeline({ state: 'local', error: result.error }); return; }
+    if (result.state.status === 'failed') {
+      setPipeline({ state: 'failed', projectId, errorClass: result.state.error?.error_class ?? 'Error', message: result.state.error?.message ?? '' });
+      return;
+    }
+    if (!isDelivered(result.state)) { setPipeline({ state: 'stalled', projectId }); return; }
+    await refreshProjectsFromBackend();
+    setPipeline({ state: 'delivered', projectId });
+  }, []);
+
   const runCreate = useCallback(async (raw: NewBuildAnswers) => {
     // The interview is generated now, so the three legacy scoping fields are
     // derived from it rather than asked directly. Both the local fallback and
@@ -483,6 +500,19 @@ const ProjectsPage: React.FC = () => {
         reasons: blocking.length
           ? blocking.slice(0, 3).map((v) => v.message)
           : ['The plan could not be verified against your requirements.'],
+      });
+      return;
+    }
+
+    if (result.state.status === 'failed') {
+      // Generation itself failed. Say why (the server now records it) and offer
+      // the retry that needs no retyping, instead of the `stalled` wording that
+      // tells a student their plan is fine when there is no plan.
+      setPipeline({
+        state: 'failed',
+        projectId: resolved.projectId,
+        errorClass: result.state.error?.error_class ?? 'Error',
+        message: result.state.error?.message ?? '',
       });
       return;
     }
@@ -653,7 +683,7 @@ const ProjectsPage: React.FC = () => {
         {/* The screen the student is actually on after creating a build. The
             banner used to render only in the wizard branch they had already
             left, so every degraded path arrived here saying nothing at all. */}
-        <PipelineBanner pipeline={pipeline} handoff={handoff} onOpenStory000={pipeline.state === 'delivered' ? () => openStory000(pipeline.projectId) : null} />
+        <PipelineBanner pipeline={pipeline} handoff={handoff} onRetry={retryFailedBuild} onOpenStory000={pipeline.state === 'delivered' ? () => openStory000(pipeline.projectId) : null} />
         <CallBanner notice={callNotice} />
         <ProjectPreview project={active} onOpen={() => openInterior(active.id)} onExplore={() => { setView({ kind: 'overview' }); window.scrollTo(0, 0); }} />
       </div></PortalShell>
@@ -665,7 +695,7 @@ const ProjectsPage: React.FC = () => {
       <PortalShell><div className="pj-root">
         <div className="page-h"><div className="crumbs0">Where work happens</div><h1>Start a new build</h1><div className="sub">Turn a raw idea into a scheduled build with lists and tasks — created in the background, right here in your portal.</div></div>
         <button className="pj-back" onClick={() => setView({ kind: 'overview' })}><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Back to projects</button>
-        <PipelineBanner pipeline={pipeline} handoff={handoff} onOpenStory000={pipeline.state === 'delivered' ? () => openStory000(pipeline.projectId) : null} />
+        <PipelineBanner pipeline={pipeline} handoff={handoff} onRetry={retryFailedBuild} onOpenStory000={pipeline.state === 'delivered' ? () => openStory000(pipeline.projectId) : null} />
         <CallBanner notice={callNotice} />
         <ProjectWizard onCreate={handleCreate} />
       </div></PortalShell>
@@ -698,7 +728,7 @@ const ProjectsPage: React.FC = () => {
       {/* Also here: a student who navigates back to the overview while their
           build is generating (or after it degraded) must not lose the only
           explanation they were given. */}
-      <PipelineBanner pipeline={pipeline} handoff={handoff} onOpenStory000={pipeline.state === 'delivered' ? () => openStory000(pipeline.projectId) : null} />
+      <PipelineBanner pipeline={pipeline} handoff={handoff} onRetry={retryFailedBuild} onOpenStory000={pipeline.state === 'delivered' ? () => openStory000(pipeline.projectId) : null} />
       <CallBanner notice={callNotice} />
 
       {demo && (

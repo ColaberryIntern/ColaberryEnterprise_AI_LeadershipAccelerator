@@ -84,11 +84,13 @@ describe('an unapproved app yields Handoff even for a supported action', () => {
     const mode = decidePublishMode(caps, 'publish');
     expect(mode.mode).toBe('handoff');
     if (mode.mode === 'handoff') {
-      // Two problems with two fixes: submit the app, and build the connector.
+      // Two problems with two fixes: submit the app, and switch the connector on. The second
+      // reason changed wording on 2026-09-18, when the Meta adapter landed: it is no longer
+      // "not built" but "built and switched off", which is a different thing to go and do.
       expect(mode.reasons).toHaveLength(2);
       expect(mode.reasons[0]).toMatch(/not approved/);
       expect(mode.reasons[0]).toMatch(/not_submitted/);
-      expect(mode.reasons[1]).toMatch(/No live connector/);
+      expect(mode.reasons[1]).toMatch(/built but switched off/);
     }
   });
 
@@ -106,14 +108,16 @@ describe('an unapproved app yields Handoff even for a supported action', () => {
 
   it('LinkedIn member posting is self-serve, and STILL a handoff until a live connector exists', () => {
     // Share on LinkedIn needs no app review, so the registry alone would call it direct.
-    // But nothing in this codebase can carry the request yet (LIVE_CONNECTORS is empty), and
-    // "Direct publish" over no connector is the fake Publish button spec 8.2 forbids. The
-    // first dev deploy showed exactly that label; this pins the fix.
+    // But the switch is off in this process (LIVE_CONNECTORS unset), and "Direct publish"
+    // over a switched-off connector is the fake Publish button spec 8.2 forbids. The first dev
+    // deploy showed exactly that label; this pins the fix - and, since the adapter now exists,
+    // the reason says "built but switched off", not "not implemented".
     const mode = decidePublishMode(getProviderCapabilities('linkedin_member'), 'publish');
     expect(mode.mode).toBe('handoff');
     if (mode.mode === 'handoff') {
       expect(mode.reasons).toHaveLength(1);
-      expect(mode.reasons[0]).toMatch(/No live connector is implemented/);
+      expect(mode.reasons[0]).toMatch(/built but switched off on this server \(LIVE_CONNECTORS\)/);
+      expect(mode.reasons[0]).not.toMatch(/not implemented/);
     }
     expect(publishButtonFor(mode).label).toBe('Handoff required');
     // With a connector registered it becomes the one direct path.
@@ -136,10 +140,10 @@ describe('an unapproved app yields Handoff even for a supported action', () => {
     };
     const live = new Set<ProviderKey>(['meta_facebook_page']);
     expect(decidePublishMode(caps, 'publish', live)).toEqual({ mode: 'direct' });
-    // Approved but no connector: handoff, with only that reason.
+    // Approved but switched off: handoff, with only that reason.
     const noConnector = decidePublishMode(caps, 'publish');
     expect(noConnector.mode).toBe('handoff');
-    if (noConnector.mode === 'handoff') expect(noConnector.reasons).toEqual([expect.stringMatching(/No live connector/)]);
+    if (noConnector.mode === 'handoff') expect(noConnector.reasons).toEqual([expect.stringMatching(/built but switched off/)]);
     // But not for an action the provider still does not support.
     expect(decidePublishMode({ ...caps, supports: { ...caps.supports, edit: false } }, 'edit', live).mode).toBe('handoff');
   });
@@ -172,6 +176,8 @@ describe('the registry is the single source', () => {
   });
 
   it('Instagram carries the one hard published daily cap', () => {
-    expect(PROVIDER_CAPABILITIES.meta_instagram.rateLimits.postsPerDay).toBe(50);
+    // Raised from 50 on 2026-09-18 against Meta's current Content Publishing documentation:
+    // "100 API-published posts within a 24-hour moving period", a carousel counting as one.
+    expect(PROVIDER_CAPABILITIES.meta_instagram.rateLimits.postsPerDay).toBe(100);
   });
 });

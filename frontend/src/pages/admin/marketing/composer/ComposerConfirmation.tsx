@@ -1,16 +1,22 @@
 import React from 'react';
 import { StatusBadge } from '../../../../components/admin/shell';
 import type { ComposerAction, ConfirmationSummary } from '../../../../services/contentComposerApi';
+import { formatCentral } from '../centralTime';
 
 /**
  * The final confirmation (spec 8.1 step 10). Pure: renders exactly what the server built.
  *
- * Every field the spec names has its own labelled block - brand, accounts, time (local AND
- * UTC, as two separate cells), copy, assets, links, approval status - so the test can find
+ * Every field the spec names has its own labelled block - brand, accounts, time, copy, assets,
+ * links, approval status - so the test can find
  * each by its label and assert its VALUE. A block is never omitted when empty; it says what
  * is missing ("No tracked links", "No assets attached"), because an operator skimming a
  * confirmation reads absence as "nothing to worry about" and that is the one thing a missing
  * link or asset is not.
+ *
+ * TIME IS CENTRAL ONLY (Ali, 2026-09-18). The spec asked for the brand's local time beside UTC;
+ * the operators work in Central and a UTC cell was one more clock to misread. It is rendered from
+ * the instant (`schedule.utc`), not from the server's brand-local reading, so a brand configured
+ * in another zone still shows Central here.
  *
  * The action buttons are enabled by the server's readiness verdict, and the reasons for any
  * refusal are printed next to them. A disabled button with no reason is a support ticket.
@@ -63,7 +69,9 @@ export default function ComposerConfirmation({ summary, busy, onAction }: Compos
               <li key={a.provider} className="d-flex align-items-center gap-2 mb-1" data-testid={`confirm-account-${a.provider}`}>
                 <span>{a.displayName}</span>
                 <StatusBadge label={a.mode === 'direct' ? 'Direct publish' : 'Handoff required'} tone={a.mode === 'direct' ? 'success' : 'warning'} />
-                <span className="small text-muted">Account: not connected</span>
+                {a.account
+                  ? <span className="small text-muted" data-testid={`confirm-account-name-${a.provider}`}>Account: {a.account.displayName}{a.account.handle ? ` (${a.account.handle})` : ''}</span>
+                  : <span className={`small ${a.mode === 'direct' ? 'text-danger' : 'text-muted'}`} data-testid={`confirm-account-name-${a.provider}`}>{a.mode === 'direct' ? 'Account: none connected - connect one on the Brands page' : 'Account: not needed (handoff)'}</span>}
                 {a.reasons.length > 0 && <span className="small text-muted">- {a.reasons[0]}</span>}
               </li>
             ))}
@@ -71,21 +79,10 @@ export default function ComposerConfirmation({ summary, busy, onAction }: Compos
         )}
       </Field>
 
-      <Field label="Time" testId="confirm-time">
-        {schedule ? (
-          <div className="d-flex flex-wrap gap-4">
-            <div data-testid="confirm-time-local">
-              <div className="small text-muted">Brand local ({schedule.timezone})</div>
-              <strong>{schedule.local.dayLabel}, {schedule.local.time} {schedule.local.zone}</strong>
-              <span className="small text-muted ms-1">({schedule.local.offset})</span>
-            </div>
-            <div data-testid="confirm-time-utc">
-              <div className="small text-muted">UTC</div>
-              <strong>{schedule.utcLabel}</strong>
-            </div>
-            {!schedule.differsFromUtc && <div className="small text-muted align-self-end">This brand publishes in UTC.</div>}
-          </div>
-        ) : <span>No time set - this will publish now or stay a draft, depending on the action.</span>}
+      <Field label="Time (Central)" testId="confirm-time">
+        {schedule
+          ? <strong data-testid="confirm-time-central">{formatCentral(schedule.utc) ?? 'Unreadable time - set it again'}</strong>
+          : <span>No time set - this will publish now or stay a draft, depending on the action.</span>}
       </Field>
 
       <Field label="Copy" testId="confirm-copy">

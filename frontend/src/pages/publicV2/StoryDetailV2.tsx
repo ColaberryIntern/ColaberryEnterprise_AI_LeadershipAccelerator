@@ -12,6 +12,7 @@ import {
   trackCaseStudyRepoClick,
   trackCaseStudyShare,
   trackCaseStudyView,
+  trackCaseStudyVisualInteraction,
 } from '../../utils/caseStudyTracking';
 import { NOT_FOUND_BODY, NOT_FOUND_HEADING } from './storyDetailV2Model';
 import type { DetailState } from './storyDetailV2Model';
@@ -151,10 +152,6 @@ function StoryDetailV2(): React.ReactElement {
     (event: React.MouseEvent<HTMLElement>): void => {
       const target = event.target as HTMLElement | null;
       if (!record || !target || typeof target.closest !== 'function') return;
-      const anchor = target.closest('a[href]');
-      if (!anchor) return;
-      const zone = anchor.closest('[data-story-zone]')?.getAttribute('data-story-zone');
-      if (!zone) return;
       const ref = {
         slug: record.slug,
         surface: surfaceKey,
@@ -163,6 +160,24 @@ function StoryDetailV2(): React.ReactElement {
         verification,
         source: 'stories-detail',
       };
+
+      // The visual story band's controls are buttons and SVG nodes, not
+      // links: Before/After, a step, Previous/Next, pause. Each carries the
+      // piece and the action as slugs the band assigned; nothing typed.
+      const control = target.closest('[data-story-zone="visual"] [data-visual-action]');
+      if (control) {
+        trackCaseStudyVisualInteraction({
+          ...ref,
+          visual: control.getAttribute('data-visual') ?? 'workflow',
+          action: control.getAttribute('data-visual-action') ?? 'unknown',
+        });
+        return;
+      }
+
+      const anchor = target.closest('a[href]');
+      if (!anchor) return;
+      const zone = anchor.closest('[data-story-zone]')?.getAttribute('data-story-zone');
+      if (!zone) return;
 
       if (zone === 'repositories') {
         const role = anchor.closest('[data-repo-role]')?.getAttribute('data-repo-role');

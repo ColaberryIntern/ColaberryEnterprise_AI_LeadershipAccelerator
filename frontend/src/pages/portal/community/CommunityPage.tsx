@@ -10,6 +10,7 @@ import PostCard from './PostCard';
 import Composer, { ComposerSubmit } from './Composer';
 import EventStrip from './EventStrip';
 import MemberProfileDrawer from './MemberProfileDrawer';
+import { bandRungForLevel } from '../../../services/onboardingApi';
 import {
   fetchPosts, createPost, fetchMyProfile, fetchMembers, pingPresence,
   fetchLeaderboard, fetchCalendar, levelProgress,
@@ -171,7 +172,7 @@ const CommunityPage: React.FC = () => {
           <aside className="cm-side">
             <div className="te-card cm-identity">
               <div className="cm-identity-name">Colaberry · AI Systems Architect Accelerator</div>
-              <p className="cm-identity-about">Where your cohort builds AI that ships — share work, get unblocked, and climb from Apprentice to Principal Architect.</p>
+              <p className="cm-identity-about">Where your cohort builds AI that ships — share work, get unblocked, and climb from AI Aware to AI Architect.</p>
               <div className="cm-identity-links">
                 <a href="/portal/path">Start here · Week guide</a>
                 <a href="/portal/rooms">Live build rooms</a>
@@ -198,7 +199,7 @@ const CommunityPage: React.FC = () => {
                   <Avatar name={myProfile.display_name} src={myProfile.avatar_url} size="lg" />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div className="cm-profile-name">{myProfile.display_name}</div>
-                    <LevelBadge level={myProfile.level} size="sm" />
+                    <LevelBadge level={myProfile.level} rungName={myProfile.rung_name ?? undefined} size="sm" />
                   </div>
                 </div>
                 {(() => {
@@ -206,7 +207,7 @@ const CommunityPage: React.FC = () => {
                   return (
                     <div className="cm-lvl-progress">
                       <div className="cm-lvl-progress-row">
-                        <span>{next ? `${next.min - myProfile.points} pts to Level ${next.level} · ${next.name}` : 'Max level reached'}</span>
+                        <span>{next ? `${next.min - myProfile.points} pts to ${next.name}` : 'Top of the free rungs — build to go further'}</span>
                         <b>{myProfile.points}{next ? ` / ${next.min}` : ''}</b>
                       </div>
                       <div className="cm-lvl-track"><i style={{ width: `${pctToNext}%` }} /></div>
@@ -215,7 +216,7 @@ const CommunityPage: React.FC = () => {
                 })()}
                 <div className="cm-profile-stats">
                   <div className="cm-profile-stat"><b>{myProfile.points}</b><span>Points</span></div>
-                  <div className="cm-profile-stat"><b>{myProfile.level}</b><span>Level</span></div>
+                  <div className="cm-profile-stat"><b className="cm-profile-rung">{myProfile.rung_name ?? bandRungForLevel(myProfile.level)}</b><span>Rung</span></div>
                 </div>
               </div>
             )}
@@ -246,7 +247,9 @@ const CommunityPage: React.FC = () => {
                       {mem && <span className={`cm-dot ${mem.presence}`} title={mem.presence} />}
                     </span>
                     <span className="cm-leader-name">{m.display_name}</span>
-                    {mem && <LevelBadge level={mem.level} size="sm" />}
+                    {/* Every row wears a badge: the rung rides the leaderboard payload, so
+                        it no longer depends on whether this member is in the loaded roster. */}
+                    <LevelBadge level={mem?.level ?? 1} rungName={m.rung_name ?? mem?.rung_name ?? undefined} size="sm" />
                     <span className="cm-leader-pts">{m.points} pts</span>
                   </div>
                 );

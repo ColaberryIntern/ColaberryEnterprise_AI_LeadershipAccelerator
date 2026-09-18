@@ -35,7 +35,7 @@ import {
   placeStoryFigures,
 } from '../storyFigurePlacement';
 import { SECTION_COUNT_NOUNS, sectionCount, storyIndicators } from '../storyIndicatorModel';
-import { carouselSlides, imageSlides } from '../storyMediaModel';
+import { carouselSlides, imageSlides, unshownArtifacts } from '../storyMediaModel';
 import {
   architecture,
   cta,
@@ -123,6 +123,10 @@ const detail = (over: Partial<PublicCaseStudyDetail> = {}): PublicCaseStudyDetai
   productionStatus: null,
   heroMetrics: [metric()],
   walkthroughVideo: null,
+  visualStory: null,
+  builder: null,
+  decisions: [],
+  closing: null,
   situation: null,
   timeline: [],
   architecture: architecture(),
@@ -321,8 +325,18 @@ describe('no reader meets the same picture twice on one page', () => {
       <StorySectionBody sectionKey="artifacts" record={record} placedHrefs={placement.placedHrefs} />,
     );
     expect(q('[data-testid="story-carousel"]')).toBeNull();
-    // ...and both artifacts are still listed, which is what keeps the record complete.
-    expect(all('.cbv2-cs-artifact')).toHaveLength(2);
+    // ...and neither is listed again: both were drawn once, as figures, and a
+    // band with nothing left stands down (Ali, 2026-09-18: "only use it once").
+    expect(all('.cbv2-cs-artifact')).toHaveLength(0);
+  });
+
+  it('still lists a document and a request-only row after every picture was placed', () => {
+    const artifacts = [shot(1), photo(1)];
+    const doc = { access: 'open', artifactType: 'document', presentation: 'evidence', title: 'The runbook', description: null, url: 'https://example.test/runbook.pdf', previewUrl: null };
+    const ask = { access: 'request', artifactType: 'report', presentation: 'evidence', title: 'The audit export', description: null };
+    const placement = placeStoryFigures(artifacts, ALL_SECTIONS);
+    const listed = unshownArtifacts([...artifacts, doc, ask] as never, placement.placedHrefs);
+    expect(listed.map((a) => a.title)).toEqual(['The runbook', 'The audit export']);
   });
 });
 

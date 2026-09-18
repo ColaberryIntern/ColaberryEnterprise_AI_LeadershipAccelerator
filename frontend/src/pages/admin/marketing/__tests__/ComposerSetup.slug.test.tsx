@@ -112,6 +112,7 @@ describe('ComposerSetup content type', () => {
     render();
     const options = Array.from(container.querySelectorAll('#composer-type option')).map((o) => o.textContent);
     expect(options).toContain('image (attach a file under Channels)');
+    expect(options).toContain('document (a PDF carousel, LinkedIn only - attach it under Channels)');
     expect(options).toContain('text');
   });
 });

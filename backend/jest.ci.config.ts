@@ -64,7 +64,6 @@ const ciConfig: Config = {
     // Community surface — same cause, grouped because they move together.
     'src/__tests__/services/communityCalendarService\\.test\\.ts',
     'src/__tests__/services/communityCommentsLikesProfiles\\.test\\.ts',
-    'src/__tests__/services/communityLeaderboardService\\.test\\.ts',
     'src/__tests__/services/communityModeration\\.test\\.ts',
     'src/__tests__/services/communityNotificationService\\.test\\.ts',
     'src/__tests__/services/communityService\\.test\\.ts',

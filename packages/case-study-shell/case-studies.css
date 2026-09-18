@@ -521,3 +521,139 @@
 .cs-related-link img { border: 0; border-radius: 0; border-bottom: 1px solid var(--cs-line); }
 .cs-related-body { padding: 1.1rem 1.25rem 1.25rem; }
 .cs-related-note { -webkit-line-clamp: 4; }
+
+/* ------------------------------------------------------- the story sections --- */
+/* The decision cards, Meet the builder and the closing (case-study-record.js),
+   placed by the surface profile. The same structure training.colaberry.com
+   draws; every colour is a --cs-* token this site answers. */
+.cs-builder-mark { display: inline-grid; place-items: center; width: 3.5rem; height: 3.5rem; border-radius: 999px; background: var(--cs-accent); color: var(--cs-accent-contrast, #fff); font-family: var(--cs-font-display, inherit); font-size: 1.5rem; font-weight: 700; }
+.cs-builder-photo { width: 3.5rem; height: 3.5rem; border-radius: 999px; object-fit: cover; }
+.cs-builder__card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.5rem; padding: 1.5rem; background: var(--cs-surface); border: 1px solid var(--cs-line); border-radius: var(--cs-radius, 10px); }
+@media (min-width: 900px) {
+  .cs-builder__card { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 2rem; }
+  .cs-builder__did { border-left: 1px solid var(--cs-line); padding-left: 2rem; }
+}
+.cs-builder__who, .cs-builder__did { display: grid; gap: .9rem; align-content: start; min-width: 0; }
+.cs-builder__head { display: flex; align-items: center; gap: 1rem; }
+.cs-builder__name { margin: 0; font-size: 1.25rem; font-weight: 700; line-height: 1.2; }
+.cs-builder__role { margin: 0; color: var(--cs-fg-muted); }
+.cs-builder__progression { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: .5rem; margin: .25rem 0 0; padding: 0; list-style: none; }
+.cs-builder__progression li { position: relative; padding-top: 1.1rem; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--cs-fg-muted); }
+.cs-builder__progression li::before { content: ""; position: absolute; top: .25rem; left: 0; width: .7rem; height: .7rem; border-radius: 999px; border: 2px solid var(--cs-accent); background: var(--cs-surface); }
+.cs-builder__progression li::after { content: ""; position: absolute; top: .55rem; left: .9rem; right: .25rem; height: 1px; background: var(--cs-line); }
+.cs-builder__progression li:last-child::after { display: none; }
+.cs-builder__progression li[data-current="true"] { color: var(--cs-fg); }
+.cs-builder__progression li[data-current="true"]::before { background: var(--cs-accent); }
+.cs-builder__contribution { margin: 0; line-height: 1.55; }
+.cs-builder__skills { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr)); gap: .75rem; margin: 0; padding: 0; list-style: none; }
+.cs-builder__skill { display: grid; gap: .35rem; padding: .9rem 1rem; border: 1px solid var(--cs-line); border-radius: var(--cs-radius, 10px); font-size: .92rem; line-height: 1.5; }
+.cs-builder__skill span { color: var(--cs-fg-muted); }
+.cs-builder__provenance { margin: 0; font-size: .8rem; color: var(--cs-fg-muted); }
+.cs-decisions__lead { margin: -.5rem 0 .25rem; max-width: 68ch; color: var(--cs-fg-muted); line-height: 1.55; }
+.cs-decisions__list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 1rem; margin: 0; padding: 0; list-style: none; }
+.cs-decision { display: grid; gap: .75rem; align-content: start; min-width: 0; padding: 1.5rem; background: var(--cs-surface); border: 1px solid var(--cs-line); border-radius: var(--cs-radius, 10px); }
+.cs-decision__top { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; }
+.cs-decision__index { font-family: var(--cs-font-display, inherit); font-size: 2rem; font-weight: 700; line-height: 1; color: var(--cs-accent); }
+.cs-decision__stage { padding: .2rem .6rem; border: 1px solid var(--cs-line); border-radius: 999px; font-family: var(--cs-font-mono, ui-monospace, monospace); font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--cs-fg-muted); white-space: nowrap; }
+.cs-decision__title { margin: 0; font-size: 1.1rem; line-height: 1.3; }
+.cs-decision__text { margin: 0; line-height: 1.55; }
+.cs-decision__evidence { margin: 0; font-size: .88rem; line-height: 1.5; color: var(--cs-fg-muted); }
+.cs-decision__evidence .cs-term { display: inline; margin-right: .35rem; }
+.cs-decision__outcome { display: flex; align-items: baseline; gap: .75rem; margin: .25rem 0 0; padding-top: .9rem; border-top: 1px solid var(--cs-line); font-size: .88rem; line-height: 1.45; color: var(--cs-fg-muted); }
+.cs-decision__figure { flex: none; font-family: var(--cs-font-display, inherit); font-size: 1.6rem; font-weight: 700; line-height: 1; color: var(--cs-fg); }
+.cs-closing__text { max-width: 68ch; font-size: 1.05rem; }
+
+/* ------------------------------------------------ the compact ending ------ *
+ * The format Ali approved on training.colaberry.com, ported to the sites this
+ * shell draws. Structure, not pixels: the same rail, board and folds, dressed
+ * in this stylesheet's tokens. Ali, 2026-09-17, looking at aiflotation.com:
+ * "the timeline is not on the aiflotation side ... it doesn't have a timeline
+ * and bottom format."
+ */
+
+/* The build: one dot per step, labels staggered above and below so neighbours
+   can each take two columns and still be read. */
+.cs-rail {
+  --cs-rail-n: 1;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(calc(var(--cs-rail-n) + 1), minmax(0, 1fr));
+  grid-template-rows: auto 1.25rem auto;
+  column-gap: .5rem;
+  margin: .5rem 0 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+.cs-rail::before {
+  content: "";
+  grid-row: 2;
+  grid-column: 1 / -1;
+  align-self: center;
+  height: 2px;
+  background: var(--cs-line);
+}
+.cs-rail__item { display: contents; }
+.cs-rail__dot {
+  grid-row: 2;
+  grid-column: var(--cs-rail-i);
+  justify-self: start;
+  align-self: center;
+  width: .8rem;
+  height: .8rem;
+  border-radius: 999px;
+  background: var(--cs-accent);
+  box-shadow: 0 0 0 3px var(--cs-bg, #fff);
+}
+.cs-rail__label {
+  grid-column: var(--cs-rail-i) / span 2;
+  display: grid;
+  gap: .15rem;
+  min-width: 0;
+  padding-right: 1rem;
+  font-size: .86rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.cs-rail__item[data-side="up"] .cs-rail__label { grid-row: 1; align-self: end; padding-bottom: .6rem; }
+.cs-rail__item[data-side="down"] .cs-rail__label { grid-row: 3; padding-top: .6rem; }
+.cs-rail__label time { font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--cs-accent); }
+.cs-rail__notes { display: grid; gap: .45rem; margin: .75rem 0 0; padding-left: 1.1rem; max-width: 72ch; color: var(--cs-fg-muted); }
+.cs-rail__notes strong { color: var(--cs-fg); }
+
+/* Narrow: the same steps as compact rows; no rail, nothing to overflow. */
+@media (max-width: 899px) {
+  .cs-rail { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-auto-rows: auto; gap: .6rem; }
+  .cs-rail::before { display: none; }
+  .cs-rail__item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .6rem; align-items: start; }
+  .cs-rail__dot { grid-column: 1; grid-row: 1; align-self: start; margin-top: .35rem; }
+  .cs-rail__label,
+  .cs-rail__item[data-side="up"] .cs-rail__label,
+  .cs-rail__item[data-side="down"] .cs-rail__label { grid-column: 2; grid-row: 1; padding: 0; align-self: start; }
+}
+
+/* What happened next: a status board, one column per status. */
+.cs-next { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 1rem 2rem; }
+.cs-next__group { display: grid; gap: .4rem; align-content: start; }
+.cs-next__group .cs-term { margin: 0; }
+.cs-next__list { display: grid; gap: .35rem; margin: 0; padding: 0; list-style: none; font-size: .92rem; line-height: 1.45; }
+.cs-next__list li { position: relative; padding-left: 1.1rem; }
+.cs-next__list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: .5em;
+  width: .55rem;
+  height: .55rem;
+  border-radius: 999px;
+  border: 2px solid var(--cs-accent);
+}
+.cs-next__group[data-status="shipped"] .cs-next__list li::before { background: var(--cs-accent); }
+
+.cs-fold-body { display: grid; gap: .75rem; margin-top: .75rem; }
+
+/* The measurement narrative reads across two columns on a wide screen, so one
+   paragraph does not stand a screen tall beside empty space. */
+@media (min-width: 1100px) {
+  [data-band="measurement"] > .cs-prose-group { max-width: none; column-count: 2; column-gap: 2.5rem; }
+}

@@ -11,7 +11,7 @@ jest.mock('../../../models/InboxVip', () => ({ findOne: jest.fn() }));
 jest.mock('../../../models/InboxRule', () => ({ findAll: jest.fn() }));
 jest.mock('../senderHistory', () => ({ countPriorEmailsFromSender: jest.fn() }));
 
-import { isBasecampDirectMention, isBasecampDirectComment, isBasecampSender, evaluateHardRules } from '../hardRuleEngine';
+import { isBasecampDirectMention, isBasecampDirectComment, isBasecampSender, isSlackSender, evaluateHardRules } from '../hardRuleEngine';
 import InboxVip from '../../../models/InboxVip';
 import InboxRule from '../../../models/InboxRule';
 
@@ -147,6 +147,63 @@ describe('isBasecampDirectMention', () => {
 
   it('handles an empty from_address', () => {
     expect(isBasecampDirectMention({ from_address: '', subject: 'X @mentioned you' })).toBe(false);
+  });
+});
+
+describe('isSlackSender', () => {
+  it('matches Slack notification and rotating no-reply senders', () => {
+    expect(isSlackSender('notification@slack.com')).toBe(true);
+    expect(isSlackSender('no-reply@slack.com')).toBe(true);
+    expect(isSlackSender('no-reply-xv3wusjxsaolsvvjgtkszvpq@slack.com')).toBe(true);
+    expect(isSlackSender('feedback@mail.slack.com')).toBe(true);
+  });
+
+  it('does not match a slack.com look-alike domain', () => {
+    expect(isSlackSender('x@notslack.com')).toBe(false);
+    expect(isSlackSender('x@slack.com.evil.io')).toBe(false);
+    expect(isSlackSender('x@slackcommunity.org')).toBe(false);
+  });
+
+  it('handles null/empty input', () => {
+    expect(isSlackSender(null)).toBe(false);
+    expect(isSlackSender('')).toBe(false);
+  });
+});
+
+describe('evaluateHardRules — Slack workspace mail (slack_0f)', () => {
+  const slackEmail = (overrides: Record<string, any> = {}) => ({
+    id: 'email-slack',
+    from_address: 'notification@slack.com',
+    from_name: 'Slack',
+    to_addresses: ['ali@colaberry.com'],
+    cc_addresses: [],
+    subject: 'New messages from Shilpa and Luda Kopeikina in NuOrg',
+    body_text: 'You have new messages in NuOrg.',
+    headers: { 'List-Unsubscribe': '<https://slack.com/unsubscribe/x>' },
+    ...overrides,
+  });
+
+  it('routes a "new messages" digest to the inbox despite the List-Unsubscribe header (the archived case)', async () => {
+    const result = await evaluateHardRules(slackEmail());
+    expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'slack_0f', classified_by: 'hard_rule' });
+  });
+
+  it('routes a workspace invite from a rotating no-reply address to the inbox', async () => {
+    const result = await evaluateHardRules(
+      slackEmail({ from_address: 'no-reply-1ejsdzyijtn4l6zctcrzamml@slack.com', subject: 'Ram Dhan Yadav Katamaraja has invited you to work with them in NuOrg' })
+    );
+    expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'slack_0f' });
+  });
+
+  it('does not consult the VIP table for Slack mail, so no VIP alert can fire', async () => {
+    await evaluateHardRules(slackEmail());
+    expect(findOneVip).not.toHaveBeenCalled();
+  });
+
+  it('is idempotent: the same email evaluates to the same result twice', async () => {
+    const a = await evaluateHardRules(slackEmail());
+    const b = await evaluateHardRules(slackEmail());
+    expect(a).toEqual(b);
   });
 });
 

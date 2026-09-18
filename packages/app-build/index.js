@@ -33,9 +33,16 @@ const TRACKER_SOURCE = path.join(__dirname, '..', 'tracking-sdk', 'track-v2.js')
  * colour comes from CSS custom properties the host app maps to its own palette,
  * so each page looks like its brand without the logic being rewritten.
  */
-const SHELL_JS = path.join(__dirname, '..', 'case-study-shell', 'case-studies.js');
-const SHELL_RECORD = path.join(__dirname, '..', 'case-study-shell', 'case-study-record.js');
-const SHELL_CSS = path.join(__dirname, '..', 'case-study-shell', 'case-studies.css');
+const SHELL_DIR = path.join(__dirname, '..', 'case-study-shell');
+/*
+ * The visual story band (2026-09-16): three scripts, loaded in this order, and
+ * a sheet. Framework-free so the same band draws on every brand app; the
+ * record renderer mounts it when a record carries a story.
+ */
+const SHELL_FILES = [
+  'case-studies.js', 'case-study-record.js', 'case-studies.css',
+  'case-study-visual-model.js', 'case-study-visual-graph.js', 'case-study-visual-story.js', 'case-study-visual-story.css',
+];
 
 function copyTree(from, to, transform) {
   fs.mkdirSync(to, { recursive: true });
@@ -149,7 +156,8 @@ function buildApp(options) {
 
   // Same reasoning as the tracker: it ships WITH the app, so an app that stops
   // sharing a host with the platform keeps working.
-  for (const [source, name] of [[SHELL_JS, 'case-studies.js'], [SHELL_RECORD, 'case-study-record.js'], [SHELL_CSS, 'case-studies.css']]) {
+  for (const name of SHELL_FILES) {
+    const source = path.join(SHELL_DIR, name);
     if (fs.existsSync(source)) fs.copyFileSync(source, path.join(distDir, 'assets', name));
   }
 

@@ -54,6 +54,8 @@ export interface BuildState {
    */
   delivered?: boolean;
   plan: BuildPlanSummary | null;
+  /** Present when status is 'failed': why generation stopped. */
+  error?: { error_class: string; message: string };
 }
 
 /**
@@ -365,6 +367,16 @@ export async function startBuild(answers: StartBuildAnswers): Promise<
   try {
     const res = await portalApi.post('/api/portal/sbp/builds', answers);
     return { ok: true, correlationId: res.data?.correlationId };
+  } catch (err) {
+    return { ok: false, error: toError(err) };
+  }
+}
+
+/** Re-run a failed generation from the answers already on the server. */
+export async function retryBuild(projectId: string): Promise<{ ok: true } | { ok: false; error: SbpError }> {
+  try {
+    await portalApi.post(`/api/portal/sbp/builds/${encodeURIComponent(projectId)}/retry`, {});
+    return { ok: true };
   } catch (err) {
     return { ok: false, error: toError(err) };
   }

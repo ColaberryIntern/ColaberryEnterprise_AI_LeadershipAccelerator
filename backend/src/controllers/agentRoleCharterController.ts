@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
-import { agentRoleCharterInputSchema } from '../schemas/agentRoleCharterSchema';
+import { agentRoleCharterInputSchema, ADMIN_ONLY_CHARTER_FIELDS } from '../schemas/agentRoleCharterSchema';
 import { getRoleCharter, upsertRoleCharter, AgentNotFoundError } from '../services/agentRoleCharterService';
 
 // AI Workforce Management, Checkpoint B — requireAgentManagerOrAdmin-gated
@@ -37,8 +37,21 @@ export async function handleUpsertRoleCharter(req: Request, res: Response) {
     }
 
     const input = agentRoleCharterInputSchema.parse(req.body || {});
+
+    // Reese Product Phase 1, R4 — version/boundaries/authority/escalation are
+    // admin-only (platform super_admin), not an agent manager and not the
+    // agent itself, matching agentManagerAuthMiddleware.ts's own
+    // PLATFORM_SUPERADMIN_ROLES definition of "admin" in this codebase.
     // req.admin is guaranteed set here — requireAgentManagerOrAdmin (the
     // route's own middleware) never calls next() without it.
+    const attemptedAdminFields = ADMIN_ONLY_CHARTER_FIELDS.filter((f) => req.body?.[f] !== undefined);
+    if (attemptedAdminFields.length > 0 && req.admin!.role !== 'super_admin') {
+      res.status(403).json({
+        error: `Only a platform admin may set: ${attemptedAdminFields.join(', ')}`,
+      });
+      return;
+    }
+
     const view = await upsertRoleCharter(id, input, req.admin!.email);
     res.json(view);
   } catch (err: any) {

@@ -113,6 +113,10 @@ const detail = (artifacts: readonly PublicCaseStudyArtifact[]): PublicCaseStudyD
   productionStatus: null,
   heroMetrics: [metric()],
   walkthroughVideo: null,
+  visualStory: null,
+  builder: null,
+  decisions: [],
+  closing: null,
   situation: null,
   timeline: [],
   architecture: architecture(),
@@ -378,14 +382,30 @@ describe('a photograph never renders in an evidence position', () => {
   const ARTIFACT_ROW = '.cbv2-cs-artifact[data-artifact-kind="photo"]';
   const SLIDE = '.cbv2-story-carousel__slide[data-artifact-kind="photo"]';
 
+  /*
+   * The list lists what the page has not already drawn (every picture once,
+   * Ali 2026-09-18), so with two pictures both sit in the carousel and neither
+   * is listed again. A LISTED photograph is one with no carousel to sit in:
+   * a single picture beside a document.
+   */
   it('renders in the artifacts band, marked as atmosphere rather than evidence', () => {
-    mount(<StorySectionBody sectionKey="artifacts" record={record} />);
+    mount(<StorySectionBody sectionKey="artifacts" record={detail([PHOTO, openArtifact()])} />);
     const row = q(ARTIFACT_ROW);
     expect(row).not.toBeNull();
     expect(row?.getAttribute('data-presentation')).toBe('atmosphere');
-    // And the screenshot beside it is not.
+  });
+
+  it('lists a lone screenshot as evidence', () => {
+    mount(<StorySectionBody sectionKey="artifacts" record={detail([SHOT, openArtifact()])} />);
     expect(q('.cbv2-cs-artifact[data-artifact-kind="screenshot"]')
       ?.getAttribute('data-presentation')).toBe('evidence');
+  });
+
+  it('does not list a picture again that its own carousel already shows', () => {
+    mount(<StorySectionBody sectionKey="artifacts" record={record} />);
+    expect(q(SLIDE)).not.toBeNull();
+    expect(q(ARTIFACT_ROW)).toBeNull();
+    expect(q('.cbv2-cs-artifact[data-artifact-kind="screenshot"]')).toBeNull();
   });
 
   it('is marked as atmosphere in the carousel too, not only in the list', () => {
@@ -396,7 +416,7 @@ describe('a photograph never renders in an evidence position', () => {
   });
 
   it('is captioned by its neutral type label and never as a product image', () => {
-    mount(<StorySectionBody sectionKey="artifacts" record={record} />);
+    mount(<StorySectionBody sectionKey="artifacts" record={detail([PHOTO, openArtifact()])} />);
     const row = q(ARTIFACT_ROW);
     expect(row?.textContent).toContain('Photograph');
     expect(row?.textContent).toContain('Open photograph');
@@ -408,16 +428,18 @@ describe('a photograph never renders in an evidence position', () => {
 
 describe('every artifact carries a control that says what it does', () => {
   it('names the kind of thing each open artifact opens', () => {
-    mount(<StorySectionBody sectionKey="artifacts" record={detail([SHOT, PHOTO, openArtifact()])} />);
+    // One picture per mount: two would sit in the carousel and not be listed.
+    mount(<StorySectionBody sectionKey="artifacts" record={detail([SHOT, openArtifact()])} />);
     const labels = all('.cbv2-cs-artifact__link').map((n) => (n.textContent ?? '').trim());
     expect(labels[0]).toContain('Open screenshot');
-    expect(labels[1]).toContain('Open photograph');
-    expect(labels[2]).toContain('Open deck');
+    expect(labels[1]).toContain('Open deck');
+    mount(<StorySectionBody sectionKey="artifacts" record={detail([PHOTO])} />);
+    expect(q('.cbv2-cs-artifact__link')?.textContent).toContain('Open photograph');
   });
 
   it('gives each one an accessible name saying WHICH artifact opens', () => {
     // A list of links all reading "Open screenshot" is unusable out of context.
-    mount(<StorySectionBody sectionKey="artifacts" record={detail([SHOT, PHOTO])} />);
+    mount(<StorySectionBody sectionKey="artifacts" record={detail([SHOT])} />);
     const first = q('.cbv2-cs-artifact__link');
     expect(first?.textContent).toContain('The planner console');
     expect(first?.textContent).toContain('opens in a new tab');

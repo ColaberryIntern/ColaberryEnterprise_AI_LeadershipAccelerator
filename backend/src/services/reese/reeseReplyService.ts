@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import RoomMembership from '../../models/RoomMembership';
 import RoomMessage from '../../models/RoomMessage';
-import { getReeseEnrollmentId, getReeseAdminUserId, getReeseAgentId } from './reeseIdentitySeed';
+import { getReeseEnrollmentId, getReeseAdminUserId, getReeseAgentId, isReeseEnabled } from './reeseIdentitySeed';
 import { buildReeseSystemPrompt } from './reeseSystemPrompt';
 import { ensureReeseTicketForRoom, logReeseExchangeActivity } from './reeseTicketLinkService';
 import { logAgentActivity } from '../agentBlueprint/agentActivityLogService';
@@ -69,6 +69,12 @@ function attachmentRefsOf(message: RoomMessage): AttachmentRef[] {
  */
 export async function maybeTriggerReeseReply(roomId: string, senderEnrollmentId: string): Promise<void> {
   try {
+    // Product Phase 1, R2 — the parent row's own kill switch. Previously the
+    // only thing that stopped a reply was Reese's identity not existing at
+    // all; an admin disabling Reese in Admin > Agents had no effect on this
+    // path. Checked before any DB/network work beyond the flag read itself.
+    if (!(await isReeseEnabled())) return;
+
     const reeseEnrollmentId = await getReeseEnrollmentId();
     if (!reeseEnrollmentId) return; // identity not seeded yet — nothing to reply as
 

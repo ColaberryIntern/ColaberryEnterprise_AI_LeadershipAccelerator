@@ -1,4 +1,5 @@
 import api from '../utils/api';
+import type { CaseStudyVisualStoryDraft, CaseStudyVisualStoryState } from './caseStudyAdminTypes';
 
 /**
  * Story Studio admin API client.
@@ -117,6 +118,23 @@ export interface CaseStudyQuote {
   readonly reviewedBy: string | null;
   readonly reviewedAt: string | null;
   readonly createdAt: string;
+}
+
+/* ------------------------------------------------- the visual story ------ */
+
+/** What is stored for the visual story and whether it is still valid and current. */
+export async function readVisualStoryState(caseStudyId: string): Promise<CaseStudyVisualStoryState> {
+  const { data } = await api.get<CaseStudyVisualStoryState>(`${BASE}/${caseStudyId}/visual-story`);
+  return data;
+}
+
+/**
+ * A draft drawn from the record's own evidence. Nothing is written: the draft
+ * comes back to the panel, and a person saves it through the override path.
+ */
+export async function generateVisualStory(caseStudyId: string): Promise<CaseStudyVisualStoryDraft> {
+  const { data } = await api.post<CaseStudyVisualStoryDraft>(`${BASE}/${caseStudyId}/visual-story/generate`);
+  return data;
 }
 
 /* ──────────────────────────────────────────────── step 1 — storyline ──── */

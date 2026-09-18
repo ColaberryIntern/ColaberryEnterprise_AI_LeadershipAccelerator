@@ -81,6 +81,15 @@ export interface FlaggedEntry {
   status: string;
   paymentDate: string | undefined;
   reason: string;
+  /**
+   * Who should look at this. `prospect_only` is a payment whose only match is a
+   * free Open House row: in practice a school-side ISA/bootcamp draft on the
+   * shared PaySimple account, never an Accelerator purchase, and it repeats for
+   * the whole 14-day window. `ambiguous` and `unsettled` are real Accelerator
+   * money that needs the owner. The sweep routes the report on this, not on
+   * the wording of `reason`.
+   */
+  category: 'prospect_only' | 'ambiguous' | 'unsettled';
 }
 
 export interface ReconciliationErrorEntry {
@@ -247,6 +256,7 @@ export async function runPaymentReconciliationSweep(
           paymentId: payment.Id, customerId, name, email: customer.Email,
           amount: payment.Amount, status: payment.Status, paymentDate: payment.PaymentDate,
           reason: `${match.candidates.length} open, unpaid enrollments share this email -- pick the right one manually`,
+          category: 'ambiguous',
         });
         continue;
       }
@@ -256,6 +266,7 @@ export async function runPaymentReconciliationSweep(
           paymentId: payment.Id, customerId, name, email: customer.Email,
           amount: payment.Amount, status: payment.Status, paymentDate: payment.PaymentDate,
           reason: `Only match is a free Open House / prospects enrollment (${match.candidates[0]?.id}), which is not a purchase. Most likely a legacy bootcamp payment on a shared PaySimple account. Confirm what this payment is FOR before applying it.`,
+          category: 'prospect_only',
         });
         continue;
       }
@@ -268,6 +279,7 @@ export async function runPaymentReconciliationSweep(
           paymentId: payment.Id, customerId, name, email: customer.Email,
           amount: payment.Amount, status: payment.Status, paymentDate: payment.PaymentDate,
           reason: `New email match (enrollment ${match.enrollment.id}) on a payment that has not fully settled yet (status: ${payment.Status})`,
+          category: 'unsettled',
         });
         continue;
       }

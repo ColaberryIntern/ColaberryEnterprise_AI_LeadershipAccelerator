@@ -45,6 +45,13 @@ export interface ChannelAccount {
   last_health_error_class: string | null;
   revoked_at: string | null;
   credentials: CredentialSummary[];
+  /**
+   * The server's verdict, the same one the Overview shows. Optional only so an older backend
+   * still renders; the panel falls back to reading the access token itself when it is absent.
+   */
+  health?: 'revoked' | 'expired' | 'unhealthy' | 'expiring' | 'ok';
+  /** When the account stops being usable, by the same rule as `health`. */
+  usable_until?: string | null;
 }
 
 /**
@@ -88,6 +95,53 @@ export interface ConnectAccountInput {
 export async function connectChannelAccount(input: ConnectAccountInput): Promise<ChannelAccount> {
   const res = await api.post('/api/admin/channel-accounts', input);
   return res.data.account;
+}
+
+/** Whether the server has LinkedIn app credentials at all. False means the Connect button explains, not fails. */
+export async function getLinkedInStatus(): Promise<{ configured: boolean }> {
+  const res = await api.get('/api/admin/marketing/linkedin/status');
+  return res.data;
+}
+
+/**
+ * Start connecting a LinkedIn profile to a brand. Returns the LinkedIn consent URL; the page
+ * navigates the whole window there (a popup would lose the redirect), and LinkedIn sends the
+ * browser back to /admin/brands?linkedin=connected|error (the Brands page's real route).
+ */
+export async function startLinkedInConnect(brandId: string): Promise<{ url: string }> {
+  const res = await api.post('/api/admin/marketing/linkedin/connect', { brand_id: brandId });
+  return res.data;
+}
+
+export type ConnectorKey = 'linkedin' | 'linkedin_org' | 'meta' | 'youtube' | 'tiktok' | 'x';
+
+/** One network the Brands page offers to connect, and whether this server is set up for it. */
+export interface ConnectorStatus {
+  key: ConnectorKey;
+  label: string;
+  providers: string[];
+  configured: boolean;
+  /** Env var NAMES still unset on the server. Never values. */
+  missing_env: string[];
+  /** The exact redirect URL to register with the platform. */
+  redirect_uri: string | null;
+  /** What the platform itself requires - review, audits, cost. */
+  requirements: string;
+}
+
+export async function listConnectors(): Promise<ConnectorStatus[]> {
+  const res = await api.get('/api/admin/marketing/connectors');
+  return res.data.connectors ?? [];
+}
+
+/**
+ * Start connecting any network to a brand. Returns the network's consent URL; the page navigates
+ * the whole window there, and the network sends the browser back to the Brands page with
+ * `?connected=<network>` or `?connect_error=<reason>` (LinkedIn personal profiles: `?linkedin=`).
+ */
+export async function startConnect(connector: ConnectorKey, brandId: string): Promise<{ url: string }> {
+  const res = await api.post(`/api/admin/marketing/connect/${connector}`, { brand_id: brandId });
+  return res.data;
 }
 
 export async function revokeChannelAccount(accountId: string): Promise<ChannelAccount> {

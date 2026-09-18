@@ -387,6 +387,8 @@ import EvidenceRecord from './EvidenceRecord';
 import XpEvent from './XpEvent';
 import BuilderLevel from './BuilderLevel';
 import StudentLevel from './StudentLevel';
+import StudentMilestone from './StudentMilestone';         // Milestone ladder (2026-09-16)
+import StudentCertification from './StudentCertification'; // Milestone ladder (2026-09-16)
 import ComponentVersion from './ComponentVersion';   // Experience Builder (Phase 1)
 import ComponentAnalytics from './ComponentAnalytics';
 
@@ -1574,6 +1576,8 @@ export {
   // Timeline Engine (Classroom rebuild)
   TimelineCard, TimelineCardProgress, TimelineEvent, PointsConfig,
   CompetencyDomain, StudentCompetency, EvidenceRecord, XpEvent, BuilderLevel, StudentLevel,
+  // Milestone ladder (docs/POINTS_LADDER_DECISIONS.md)
+  StudentMilestone, StudentCertification,
   // Experience Builder (Phase 1)
   ComponentVersion,
   ComponentAnalytics,

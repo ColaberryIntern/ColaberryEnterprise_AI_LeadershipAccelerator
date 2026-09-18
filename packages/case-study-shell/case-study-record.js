@@ -95,6 +95,18 @@
     return [lead].concat(said.slice(1)).join(' ');
   }
 
+  /* "2026-04-28" as "28 Apr 2026", read out of the string and never through
+     `new Date()`, which parses a bare date as UTC midnight and so prints the
+     day before in any negative-offset timezone. Anything unparseable prints
+     as sent. Same rule as the other two renderers. */
+  var RAIL_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function shortDate(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso == null ? '' : iso));
+    if (!m) return String(iso == null ? '' : iso);
+    var month = RAIL_MONTHS[Number(m[2]) - 1];
+    return month ? Number(m[3]) + ' ' + month + ' ' + m[1] : iso;
+  }
+
   function appendAll(parent, children) {
     children.filter(Boolean).forEach(function (c) { parent.appendChild(c); });
     return parent;
@@ -266,16 +278,53 @@
       ]);
     },
 
+    /*
+     * THE BUILD AS A HORIZONTAL RAIL, not a vertical list. Ali, 2026-09-17,
+     * on the training page first and then on this one: the dated list took a
+     * screen and a half ("the timeline is not on the aiflotation side ... it
+     * doesn't have a timeline and bottom format"). One dot per entry with the
+     * labels staggered above and below, the details folded underneath, and the
+     * same steps as plain rows under 900px so nothing ever overflows. Same
+     * structure as the training site's `Rail`; this stylesheet's tokens.
+     */
     build: function (c) {
-      return section('build', 'The build', [
-        list(c.timeline, function (t) {
-          var li = el('li', 'cs-timeline-item');
-          li.appendChild(el('span', 'cs-timeline-date', t.date || ''));
-          li.appendChild(el('span', 'cs-timeline-label', t.label));
-          if (t.detail) li.appendChild(el('p', 'cs-timeline-detail', t.detail));
-          return li;
-        }, 'cs-timeline'),
-      ]);
+      var entries = c.timeline || [];
+      if (!entries.length) return null;
+      var ol = el('ol', 'cs-rail');
+      ol.style.setProperty('--cs-rail-n', String(entries.length));
+      entries.forEach(function (t, i) {
+        var li = el('li', 'cs-rail__item');
+        li.setAttribute('data-side', i % 2 === 0 ? 'up' : 'down');
+        li.style.setProperty('--cs-rail-i', String(i + 1));
+        var dot = el('span', 'cs-rail__dot');
+        dot.setAttribute('aria-hidden', 'true');
+        li.appendChild(dot);
+        var label = el('div', 'cs-rail__label');
+        if (t.date) {
+          var time = el('time', null, shortDate(t.date));
+          time.setAttribute('datetime', t.date);
+          label.appendChild(time);
+        }
+        label.appendChild(el('span', null, t.label));
+        li.appendChild(label);
+        ol.appendChild(li);
+      });
+      var detailed = entries.filter(function (t) { return t.detail; });
+      var notes = null;
+      if (detailed.length) {
+        notes = el('details', 'cs-measure-fold');
+        notes.setAttribute('data-testid', 'story-build-notes');
+        notes.appendChild(el('summary', null, 'Notes on ' + detailed.length + ' of the ' + entries.length + ' steps'));
+        var ul = el('ul', 'cs-rail__notes');
+        detailed.forEach(function (t) {
+          var li2 = el('li');
+          li2.appendChild(el('strong', null, t.label + '.'));
+          li2.appendChild(document.createTextNode(' ' + t.detail));
+          ul.appendChild(li2);
+        });
+        notes.appendChild(ul);
+      }
+      return section('build', 'The build', [ol, notes]);
     },
 
     architecture: function (c) {
@@ -326,12 +375,25 @@
         return fig;
       }
 
+      /* The first paragraph and the stack stand; the rest folds. Everything
+         below the decisions had to shrink, and nothing may be trimmed to do
+         it: the full text is one click away, never cut. */
+      var narrative = (a.narrative || []).filter(Boolean);
+      var rest = narrative.slice(1);
+      var extra = [prose(rest), chips('Capabilities', a.capabilities), chips('Integrations', a.integrations), chips('Data stores', a.dataStores)].filter(Boolean);
+      var more = null;
+      if (extra.length) {
+        more = el('details', 'cs-measure-fold');
+        more.setAttribute('data-testid', 'story-architecture-more');
+        more.appendChild(el('summary', null, 'More on what was built'));
+        var body = el('div', 'cs-fold-body');
+        extra.forEach(function (node) { body.appendChild(node); });
+        more.appendChild(body);
+      }
       return section('architecture', 'What was built', [
-        prose(a.narrative),
+        prose(narrative.slice(0, 1)),
         chips('Stack', a.stack),
-        chips('Capabilities', a.capabilities),
-        chips('Integrations', a.integrations),
-        chips('Data stores', a.dataStores),
+        more,
         diagram(a.diagramImageUrl, a.diagramSource),
       ]);
     },
@@ -339,32 +401,196 @@
     measurement: function (c) {
       var m = c.measurement;
       var metrics = (m && m.metrics) || [];
-      return section('measurement', 'The measurement', [
-        m ? prose(m.narrative) : null,
-        metrics.length ? appendAll(el('ul', 'cs-metrics'), metrics.map(metricCard)) : null,
-      ]);
+      var cards = metrics.length ? appendAll(el('ul', 'cs-metrics'), metrics.map(metricCard)) : null;
+      /* WHEN THE VISUAL STORY ALREADY SHOWS THE FIGURES, the cards fold. Ali,
+         2026-09-16, on the Enterprise pilot: "Shouldn't the new cards replace
+         the old cards? I don't think they both need to be there." The full
+         notes (baseline, sample, methodology, limitations) stay one click
+         away; the same figures are not printed twice on one page. */
+      if (cards && storyShowsFigures(c)) {
+        var fold = el('details', 'cs-measure-fold');
+        fold.setAttribute('data-testid', 'story-measurement-notes');
+        fold.appendChild(el('summary', null, 'Full notes on all ' + metrics.length + ' metric' + (metrics.length === 1 ? '' : 's')));
+        fold.appendChild(cards);
+        cards = fold;
+      }
+      return section('measurement', 'The measurement', [m ? prose(m.narrative) : null, cards]);
     },
 
+    /*
+     * WHAT HAPPENED NEXT AS A STATUS BOARD: one column per status in the order
+     * the record lists them, labels only, the details folded. The list form
+     * printed a status word, a label and a paragraph per item and ran a
+     * thousand pixels; the board says the same thing in a glance. `not_pursued`
+     * is how the taxonomy stores it, never how a reader says it, so the heading
+     * is humanised.
+     */
     roadmap: function (c) {
-      return section('roadmap', 'What happened next', [
-        list(c.roadmap, function (r) {
-          var li = el('li', 'cs-roadmap-item');
-          li.appendChild(el('span', 'cs-roadmap-status', r.status));
-          li.appendChild(el('span', 'cs-roadmap-label', r.label));
-          if (r.detail) li.appendChild(el('p', 'cs-roadmap-detail', r.detail));
-          return li;
-        }, 'cs-roadmap'),
-      ]);
+      var items = c.roadmap || [];
+      if (!items.length) return null;
+      var statuses = [];
+      items.forEach(function (r) {
+        var s = r.status || 'other';
+        if (statuses.indexOf(s) < 0) statuses.push(s);
+      });
+      var board = el('div', 'cs-next');
+      statuses.forEach(function (status) {
+        var group = el('div', 'cs-next__group');
+        group.setAttribute('data-status', status);
+        group.appendChild(el('h3', 'cs-term', status === 'other' ? 'Other' : humanize(status)));
+        var ul = el('ul', 'cs-next__list');
+        items.filter(function (r) { return (r.status || 'other') === status; })
+          .forEach(function (r) { ul.appendChild(el('li', null, r.label)); });
+        group.appendChild(ul);
+        board.appendChild(group);
+      });
+      var detailed = items.filter(function (r) { return r.detail; });
+      var notes = null;
+      if (detailed.length) {
+        notes = el('details', 'cs-measure-fold');
+        notes.setAttribute('data-testid', 'story-roadmap-notes');
+        notes.appendChild(el('summary', null, 'Notes on ' + detailed.length + ' of the ' + items.length + ' items'));
+        var ul2 = el('ul', 'cs-rail__notes');
+        detailed.forEach(function (r) {
+          var li = el('li');
+          li.appendChild(el('strong', null, r.label + '.'));
+          li.appendChild(document.createTextNode(' ' + r.detail));
+          ul2.appendChild(li);
+        });
+        notes.appendChild(ul2);
+      }
+      return section('roadmap', 'What happened next', [board, notes]);
+    },
+
+    /* The story sections (2026-09-17): the decision cards, Meet the builder
+       and the closing, placed by the surface profile. Everything printed is
+       the projection's word: a null builder name credits the role, and no
+       biography or link is invented for it. Same parts, same order as the
+       other sites; this stylesheet's tokens. */
+    decisions: function (c) {
+      var cards = (c.decisions || []).filter(function (d) {
+        return d && d.title && d.problem && d.decision && d.evidence && d.consequence;
+      });
+      if (!cards.length) return null;
+      var pinned = cards.every(function (d) { return d.stage; });
+      var count = { 2: 'Two', 3: 'Three', 4: 'Four', 5: 'Five' }[cards.length] || String(cards.length);
+      var lead = el('p', 'cs-decisions__lead', (cards.length === 1 ? 'One choice shaped the system.' : count + ' choices shaped the system.')
+        + (pinned ? (cards.length === 1 ? ' It lives at a specific point in the drawing above.' : ' Each one lives at a specific point in the drawing above.') : ''));
+      var ol = el('ol', 'cs-decisions__list');
+      cards.forEach(function (d, i) {
+        var li = el('li', 'cs-decision');
+        var top = el('div', 'cs-decision__top');
+        var index = el('span', 'cs-decision__index', String(i + 1));
+        index.setAttribute('aria-hidden', 'true');
+        top.appendChild(index);
+        if (d.stage) top.appendChild(el('span', 'cs-decision__stage', 'At ' + d.stage));
+        li.appendChild(top);
+        li.appendChild(el('h3', 'cs-decision__title', d.title));
+        li.appendChild(el('p', 'cs-decision__text', d.problem));
+        li.appendChild(el('p', 'cs-decision__text', d.decision));
+        var ev = el('p', 'cs-decision__evidence');
+        ev.appendChild(el('span', 'cs-term', 'Evidence'));
+        ev.appendChild(document.createTextNode(' ' + d.evidence));
+        li.appendChild(ev);
+        var out = el('p', 'cs-decision__outcome');
+        if (d.figure) out.appendChild(el('strong', 'cs-decision__figure', d.figure));
+        out.appendChild(el('span', null, d.consequence));
+        li.appendChild(out);
+        ol.appendChild(li);
+      });
+      var s = section('decisions', 'Decisions that made the difference', [lead, ol]);
+      if (s) { s.classList.add('cs-decisions'); s.setAttribute('data-testid', 'story-decisions'); }
+      return s;
+    },
+
+    builder: function (c) {
+      var b = c.builder;
+      if (!b || !b.roleTitle || !b.contribution) return null;
+      var card = el('div', 'cs-builder__card');
+      var who = el('div', 'cs-builder__who');
+      var head = el('div', 'cs-builder__head');
+      if (b.photoUrl) {
+        var img = el('img', 'cs-builder-photo');
+        img.src = b.photoUrl;
+        img.alt = b.name || b.roleTitle;
+        head.appendChild(img);
+      } else {
+        var mark = el('span', 'cs-builder-mark', b.initials || (b.name ? b.name.charAt(0) : ''));
+        mark.setAttribute('aria-hidden', 'true');
+        head.appendChild(mark);
+      }
+      var names = el('div');
+      names.appendChild(el('p', 'cs-builder__name', b.name || b.roleTitle));
+      if (b.name) names.appendChild(el('p', 'cs-builder__role', b.organization ? b.roleTitle + ', ' + b.organization : b.roleTitle));
+      head.appendChild(names);
+      who.appendChild(head);
+      var steps = b.progression || [];
+      if (steps.length) {
+        var rail = el('ol', 'cs-builder__progression');
+        rail.setAttribute('aria-label', 'Career progression');
+        steps.forEach(function (step, i) {
+          var li = el('li', null, step);
+          li.setAttribute('data-current', i === steps.length - 1 ? 'true' : 'false');
+          rail.appendChild(li);
+        });
+        who.appendChild(rail);
+      }
+      who.appendChild(el('p', 'cs-term', 'Project contribution'));
+      who.appendChild(el('p', 'cs-builder__contribution', b.contribution));
+      if (b.profileUrl) {
+        var link = el('a', 'cs-back', 'Approved profile');
+        link.href = b.profileUrl;
+        link.rel = 'noopener';
+        who.appendChild(link);
+      }
+      card.appendChild(who);
+      var skills = (b.skills || []).filter(function (sk) { return sk && sk.label && sk.evidence; });
+      if (skills.length) {
+        var did = el('div', 'cs-builder__did');
+        did.appendChild(el('p', 'cs-term', 'Skills demonstrated'));
+        var ul = el('ul', 'cs-builder__skills');
+        skills.forEach(function (sk) {
+          var li = el('li', 'cs-builder__skill');
+          li.appendChild(el('strong', null, sk.label));
+          li.appendChild(el('span', null, sk.evidence));
+          ul.appendChild(li);
+        });
+        did.appendChild(ul);
+        card.appendChild(did);
+      }
+      var source = b.provenance && b.provenance.source;
+      var line = source === 'approved_profile'
+        ? 'From an approved profile; project contribution from the repository record.'
+        : source === 'repository' ? 'From the repository record.'
+          : 'Career facts as confirmed to Colaberry; project contribution from the repository record.';
+      var s = section('builder', 'Meet the builder', [card, el('p', 'cs-builder__provenance', line)]);
+      if (s) { s.classList.add('cs-builder'); s.setAttribute('data-testid', 'story-builder'); }
+      return s;
+    },
+
+    closing: function (c) {
+      if (!c.closing) return null;
+      var s = section('closing', 'What this project shows', [el('p', 'cs-prose cs-closing__text', c.closing)]);
+      if (s) { s.classList.add('cs-closing'); s.setAttribute('data-testid', 'story-closing'); }
+      return s;
     },
 
     contributors: function (c) {
+      // Stands down when the builder card already names the only contributor:
+      // the card is the credit.
+      var only = (c.contributors || []).length === 1 ? c.contributors[0] : null;
+      if (c.builder && c.builder.name && only && only.displayMode === 'named' && only.displayName === c.builder.name && !(c.anonymousContributorCount > 0)) return null;
       return section('contributors', 'Who built it', [
         list(c.contributors, function (p) {
           // `displayMode` is the server's consent decision, already made. A
-          // role-only contributor has no name in the payload to print.
-          return el('li', 'cs-person', p.displayMode === 'named'
-            ? p.displayName + ' — ' + p.role
-            : p.role);
+          // role-only contributor has no name in the payload to print. A named
+          // one reads "Kes, AI Systems Architect ...": the name in bold, then
+          // the role, joined by a comma (published copy carries no dashes).
+          if (p.displayMode !== 'named') return el('li', 'cs-person', p.role);
+          var li = el('li', 'cs-person');
+          li.appendChild(el('strong', 'cs-person__name', p.displayName));
+          li.appendChild(document.createTextNode(', ' + p.role));
+          return li;
         }, 'cs-people'),
       ]);
     },
@@ -455,6 +681,37 @@
       head.appendChild(fig);
     }
     return head;
+  }
+
+  /* ============================ THE VISUAL STORY =============================
+     Ali, 2026-09-16, on the Enterprise pilot: "They need to be done for all the
+     published sites." The band (workflow drawing, outcome cards with their
+     count-up, charts) is `case-study-visual-story.js`, framework-free and
+     loaded before this file; it mounts under the facts, above the first band,
+     exactly where the Enterprise page puts it. A page that did not load the
+     band's scripts renders the record as before: the story is an extra on the
+     wire, never a dependency of the record.
+     ======================================================================== */
+
+  function visualStoryModule() {
+    return typeof window !== 'undefined' && window.CaseStudyVisualStory ? window.CaseStudyVisualStory : null;
+  }
+
+  function storyShowsFigures(c) {
+    var mod = visualStoryModule();
+    return Boolean(mod && c.visualStory && mod.showsFigures(c.visualStory));
+  }
+
+  /* Mounted AFTER `host` is in the document, so the drawing can measure the
+     width it is given and fit it rather than guess from the viewport. */
+  function mountVisualStory(host, c) {
+    var mod = visualStoryModule();
+    var mounted = mod.mount(host, c.visualStory, {
+      onInteraction: function (visual, action) {
+        if (typeof window.rfxTrack === 'function') window.rfxTrack('case_study_visual_interaction', { slug: c.slug, visual: visual, action: action });
+      },
+    });
+    if (!mounted && host.parentNode) host.parentNode.removeChild(host);
   }
 
   function facts(c) {
@@ -700,6 +957,11 @@
       root.appendChild(hero(c, surface));
       var f = facts(c);
       if (f) root.appendChild(f);
+      if (visualStoryModule() && c.visualStory) {
+        var storyHost = el('div', 'cs-visual-story-host');
+        root.appendChild(storyHost);
+        mountVisualStory(storyHost, c);
+      }
 
       var order = (surface && surface.sectionOrder) || [];
       /* Placed against the order this page will actually render, so a figure

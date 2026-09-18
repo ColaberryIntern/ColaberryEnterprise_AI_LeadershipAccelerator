@@ -116,13 +116,16 @@ export type CaseStudyTimelineSourceKind = 'repository' | 'delivery' | 'artifact'
 export type CaseStudySectionKey =
   | 'hero'
   | 'situation'
+  | 'decisions'
   | 'build'
   | 'architecture'
   | 'measurement'
   | 'roadmap'
+  | 'builder'
   | 'contributors'
   | 'artifacts'
   | 'repositories'
+  | 'closing'
   | 'cta';
 
 /** Deterministic and named. Nothing decides what is featured at render time. */
@@ -348,6 +351,126 @@ export interface PublicCaseStudyRepository {
   readonly lastCommitDate: string | null;
 }
 
+/**
+ * The visual story: the before/after workflow illustration, outcome cards and
+ * charts a record may carry below its hero. Mirrors `PublicCaseStudyVisualStory`
+ * in `backend/src/types/caseStudyPublic.ts`; every chart part arrives with its
+ * value already resolved from a verified metric, so nothing here computes a
+ * figure. Null when the record has none, or none for this surface.
+ */
+export type CaseStudyWorkflowRole = 'human' | 'system' | 'external' | 'data';
+export type CaseStudyWorkflowStatus = 'processing' | 'resolved' | 'attention' | 'failure' | 'unknown';
+export type CaseStudyWorkflowLane = 'primary' | 'recovery' | 'manual';
+export type CaseStudyWorkflowPanelKey = 'before' | 'after' | 'single';
+export type CaseStudyVisualChartKind = 'composition' | 'comparison' | 'share' | 'two_value' | 'zero_card';
+
+export interface PublicCaseStudyWorkflowNode {
+  readonly key: string;
+  readonly label: string;
+  readonly sublabel: string | null;
+  readonly detail: string | null;
+  readonly kicker: string | null;
+  readonly role: CaseStudyWorkflowRole;
+  readonly status: CaseStudyWorkflowStatus;
+  readonly lane: CaseStudyWorkflowLane;
+  readonly evidence: string | null;
+  readonly tally: PublicCaseStudyMetric | null;
+}
+
+export interface PublicCaseStudyWorkflowEdge {
+  readonly from: string;
+  readonly to: string;
+  readonly label: string | null;
+  readonly status: CaseStudyWorkflowStatus;
+  readonly condition: string | null;
+  readonly motion: boolean;
+}
+
+export interface PublicCaseStudyWorkflowPanel {
+  readonly key: CaseStudyWorkflowPanelKey;
+  readonly label: string;
+  readonly summary: string | null;
+  readonly laneLabels: Readonly<Record<CaseStudyWorkflowLane, string>>;
+  readonly nodes: readonly PublicCaseStudyWorkflowNode[];
+  readonly edges: readonly PublicCaseStudyWorkflowEdge[];
+  readonly initialNodeKey: string;
+}
+
+export interface PublicCaseStudyWorkflow {
+  readonly key: string;
+  readonly type: 'before_after' | 'single_state';
+  readonly title: string;
+  readonly caption: string | null;
+  readonly description: string;
+  readonly panels: readonly PublicCaseStudyWorkflowPanel[];
+  readonly motionNote: string;
+}
+
+export interface PublicCaseStudyVisualChartPart {
+  readonly label: string;
+  readonly value: number;
+  readonly denominator: number;
+  readonly status: CaseStudyWorkflowStatus;
+  readonly caveat: string | null;
+}
+
+export interface PublicCaseStudyVisualChart {
+  readonly key: string;
+  readonly kind: CaseStudyVisualChartKind;
+  readonly title: string;
+  readonly caption: string | null;
+  readonly metric: PublicCaseStudyMetric;
+  readonly denominator: number;
+  readonly parts: readonly PublicCaseStudyVisualChartPart[];
+  readonly unit: string | null;
+  readonly axisMax: number | null;
+  readonly caveat: string | null;
+  readonly limitations: readonly string[];
+}
+
+/**
+ * Meet the builder, as the page shows it. The biography fields (`name`,
+ * `intro`, `progression`, `profileUrl`, `photoUrl`) are null or empty unless
+ * the server matched the profile to a named, consented contributor; the role
+ * title, contribution and skills are project facts and always come through.
+ */
+export interface PublicCaseStudyBuilder {
+  readonly name: string | null;
+  readonly roleTitle: string;
+  readonly organization: string | null;
+  readonly initials: string | null;
+  readonly intro: readonly string[];
+  readonly progression: readonly string[];
+  readonly contribution: string;
+  readonly skills: readonly { readonly label: string; readonly evidence: string }[];
+  readonly profileUrl: string | null;
+  readonly photoUrl: string | null;
+  readonly provenance: { readonly source: 'user_confirmed' | 'approved_profile' | 'repository'; readonly confirmedAt: string };
+}
+
+/** One "decision that made the difference": problem, decision, evidence, consequence. */
+export interface PublicCaseStudyDecision {
+  readonly key: string;
+  readonly title: string;
+  readonly problem: string;
+  readonly decision: string;
+  readonly evidence: string;
+  readonly consequence: string;
+  /** The workflow step the decision lives at ("02 Detect"), or null. */
+  readonly stage: string | null;
+  /** The figure the card closes on, as displayed, or null; the consequence is its caption. */
+  readonly figure: string | null;
+}
+
+export interface PublicCaseStudyVisualStory {
+  readonly schemaVersion: 1;
+  readonly presentationVersion: 'v2';
+  readonly motion: 'auto' | 'off';
+  readonly workflow: PublicCaseStudyWorkflow | null;
+  readonly outcomeCards: readonly PublicCaseStudyMetric[];
+  readonly charts: readonly PublicCaseStudyVisualChart[];
+}
+
 export interface PublicCaseStudyCta {
   readonly eyebrow: string;
   readonly heading: string;
@@ -433,6 +556,14 @@ export interface PublicCaseStudyDetail {
     readonly provider: 'youtube' | 'vimeo' | null;
     readonly watchUrl: string | null;
   } | null;
+  /** Null unless the record carries a visual story enabled for this surface. */
+  readonly visualStory: PublicCaseStudyVisualStory | null;
+  /** Meet the builder, or null; the biography inside is consent-gated server-side. */
+  readonly builder: PublicCaseStudyBuilder | null;
+  /** Decisions that made the difference; empty means no cards. */
+  readonly decisions: readonly PublicCaseStudyDecision[];
+  /** The closing paragraph, or null when the record has none for this surface. */
+  readonly closing: string | null;
   readonly situation: PublicCaseStudySituation | null;
   readonly timeline: readonly PublicCaseStudyTimelineEntry[];
   readonly architecture: PublicCaseStudyArchitecture | null;

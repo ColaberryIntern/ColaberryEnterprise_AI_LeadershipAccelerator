@@ -153,16 +153,42 @@ export async function provisionWorkspaceRepo(
 }
 
 /**
+ * A blob request that fails carries its error body AS A BLOB, so
+ * `connectErrorOf` finds no `error` string and the student gets the generic
+ * fallback. The server had written the real sentence: a student with no
+ * published plan was answered 409 "This build has no plan yet, so there are no
+ * documents to download. Finish the build wizard first." and was shown
+ * "Could not build your document bundle just now." for five days. This reads
+ * the JSON out of the blob and puts it where the rest of the client looks.
+ */
+export async function withReadableError<T>(fetchBlob: () => Promise<T>): Promise<T> {
+  try {
+    return await fetchBlob();
+  } catch (err: any) {
+    const data = err?.response?.data;
+    if (data && typeof data === 'object' && typeof (data as Blob).text === 'function') {
+      try {
+        const parsed = JSON.parse(await (data as Blob).text());
+        if (parsed && typeof parsed.error === 'string') err.response.data = parsed;
+      } catch {
+        // Not JSON: leave the blob alone and let the fallback sentence stand.
+      }
+    }
+    throw err;
+  }
+}
+
+/**
  * The no-git fallback — the same documents as a zip.
  *
  * Deliberately a blob fetch rather than a plain link: the endpoint is
  * participant-authed, and an `<a href>` carries no Authorization header.
  */
 export async function downloadDocsBundle(projectId: string): Promise<{ blob: Blob; filename: string }> {
-  const res = await workspaceApi.get('/api/portal/workspace/docs/bundle', {
+  const res = await withReadableError(() => workspaceApi.get('/api/portal/workspace/docs/bundle', {
     params: { project_id: projectId },
     responseType: 'blob',
-  });
+  }));
   const disposition = String(res.headers?.['content-disposition'] ?? '');
   const match = /filename="?([^"';]+)"?/.exec(disposition);
   return { blob: res.data as Blob, filename: match?.[1] ?? 'build-docs.zip' };
@@ -194,10 +220,10 @@ export type ProgressMergeState = 'absent' | 'merged' | 'unreadable';
 export async function downloadProgressFile(
   projectId: string,
 ): Promise<{ blob: Blob; filename: string; existing: ProgressMergeState | null }> {
-  const res = await workspaceApi.get('/api/portal/workspace/progress-file', {
+  const res = await withReadableError(() => workspaceApi.get('/api/portal/workspace/progress-file', {
     params: { project_id: projectId },
     responseType: 'blob',
-  });
+  }));
   const disposition = String(res.headers?.['content-disposition'] ?? '');
   const match = /filename="?([^"';]+)"?/.exec(disposition);
   const state = String(res.headers?.['x-colaberry-progress-existing'] ?? '');

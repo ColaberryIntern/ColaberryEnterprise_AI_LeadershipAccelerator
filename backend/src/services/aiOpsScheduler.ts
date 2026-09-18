@@ -114,6 +114,17 @@ import { instrumentCronJob } from './cronInstrumentation';
 const UNINSTRUMENTED_AGENTS = new Set([
   'AutonomousRequirementExpansion',
   'ProposalCleanupService',
+  // AI Employee Consolidation Program, Employee #1 (Curriculum/Dara), Phase 4,
+  // Risk R6 fix — confirmed via BASELINE_2026-09-15.md and a direct read of
+  // workforce/directorActions.ts's runDomainFlag(): neither Director's runner
+  // touches its own AiAgent row (no self-tracking, no other wrapper), so both
+  // ran bare — a silent failure looked identical to "nothing to flag" because
+  // NEITHER recorded anything either way. Both director behaviors are now
+  // owned by Dara's own identity end to end (directorActions.ts passes
+  // agentName: 'Dara' to the inner write gate) — a single 'Dara' entry here
+  // closes the matching gap on the OUTER cron-tracking gate, so run/error
+  // counts land on her real AiAgent row too, not the retired legacy names.
+  'Dara',
 ]);
 
 // ─── Live Task Registry ─────────────────────────────────────────────────────
@@ -339,9 +350,18 @@ export const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   // workforceAgentRuntime gate until turned on. Marketing is deliberately NOT
   // here — it is manual-trigger only, invoked from the admin dashboard.
   { agentName: 'WorkforceStudentSuccessDirector', hardcodedSchedule: '0 6 * * *', runner: async () => { const { runStudentSuccessDirector } = await import('./workforce/directorActions'); return runStudentSuccessDirector(); }, label: 'AI Workforce: Student Success director' },
-  { agentName: 'WorkforceCurriculumDirector', hardcodedSchedule: '10 6 * * *', runner: async () => { const { runCurriculumDirector } = await import('./workforce/directorActions'); return runCurriculumDirector(); }, label: 'AI Workforce: Curriculum director' },
+  // Both owned by Dara's own identity end to end (see the UNINSTRUMENTED_AGENTS
+  // comment above) — agentName here is what instrumentCronJob() tracks
+  // run/error counts against, so it must match directorActions.ts's inner gate.
+  { agentName: 'Dara', hardcodedSchedule: '10 6 * * *', runner: async () => { const { runCurriculumDirector } = await import('./workforce/directorActions'); return runCurriculumDirector(); }, label: 'AI Workforce: Curriculum director (Dara)' },
   { agentName: 'WorkforceCareerDirector', hardcodedSchedule: '20 6 * * *', runner: async () => { const { runCareerDirector } = await import('./workforce/directorActions'); return runCareerDirector(); }, label: 'AI Workforce: Career director' },
-  { agentName: 'WorkforceCertificationDirector', hardcodedSchedule: '30 6 * * *', runner: async () => { const { runCertificationDirector } = await import('./workforce/directorActions'); return runCertificationDirector(); }, label: 'AI Workforce: Certification director' },
+  { agentName: 'Dara', hardcodedSchedule: '30 6 * * *', runner: async () => { const { runCertificationDirector } = await import('./workforce/directorActions'); return runCertificationDirector(); }, label: 'AI Workforce: Certification director (Dara)' },
+  // Dara v2 Phase 5/7 — targeted student research sweep (certification-
+  // readiness at-risk flagging). Real activation: Ali, 2026-09-17 ("sure why
+  // not" on the pilot cohort; "confirm" on the MAX_FLAGGED_PER_SWEEP default).
+  // Fail-closed regardless of this schedule existing: daraEligibilityService's
+  // pilot-cohort gate is what actually decides whether this does anything.
+  { agentName: 'Dara', hardcodedSchedule: '15 6 * * *', runner: async () => { const { runDaraTargetedResearchSweep } = await import('./curriculum/daraResearchService'); return runDaraTargetedResearchSweep(); }, label: 'AI Workforce: Dara targeted research sweep' },
   { agentName: 'WorkforceFinanceDirector', hardcodedSchedule: '40 6 * * *', runner: async () => { const { runFinanceDirector } = await import('./workforce/directorActions'); return runFinanceDirector(); }, label: 'AI Workforce: Finance director' },
   { agentName: 'WorkforceOperationsDirector', hardcodedSchedule: '*/15 * * * *', runner: async () => { const { runOperationsDirector } = await import('./workforce/directorActions'); return runOperationsDirector(); }, label: 'AI Workforce: Operations director' },
   { agentName: 'WorkforceCommunityDirector', hardcodedSchedule: '50 6 * * *', runner: async () => { const { runCommunityDirector } = await import('./workforce/directorActions'); return runCommunityDirector(); }, label: 'AI Workforce: Community director' },

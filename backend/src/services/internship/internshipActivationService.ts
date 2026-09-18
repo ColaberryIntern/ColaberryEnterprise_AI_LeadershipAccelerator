@@ -10,9 +10,10 @@ import { activeCompEnrollmentIds, getSubscription } from '../subscriptionService
 import { transition } from './internshipApplicationService';
 import { stateAfterDocumentsVerified } from './internshipStateMachine';
 import { outstandingRequirements } from './internshipDocumentService';
-import { ensureInternshipCohort, internshipSettings } from './internshipCohortService';
+import { ensureInternshipCohort, internshipSettings, type RequiredMeeting } from './internshipCohortService';
 import { getProjectByEnrollment } from '../projectService';
 import { getStudentWeekBreakdown } from '../curriculumCompletionService';
+import { ensureInternInStandupRoom } from './internshipMeetingRooms';
 import {
   activationBlockers, checklistProgress, nextStudentAction, resolveChecklist,
   type ChecklistEvidence, type ChecklistStepStatus,
@@ -217,6 +218,39 @@ export async function activate(params: {
     }
   }
 
+  // Give the now-active intern access to the interns-only standup room. Best-effort:
+  // a failure here must never block activation, and the room-provisioning run also
+  // seeds current interns, so a miss is recovered there.
+  try {
+    await ensureInternInStandupRoom(application.enrollment_id);
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'intern_standup_room_grant_failed', outcome: 'partial',
+      error_class: err?.constructor?.name ?? 'Error', context: { enrollment_id: application.enrollment_id },
+    }));
+  }
+
+  // Placement into the dedicated internship cohort. An intern with NO class cohort
+  // — an external applicant who converted — is placed into the internship cohort so
+  // their weeks-1-3 curriculum progress is tracked (getStudentWeekBreakdown keys off
+  // enrollment.cohort_id). An existing student KEEPS their class cohort untouched:
+  // they train against it, so we only ever fill an empty pointer, never overwrite a
+  // real one. Best-effort — a failure leaves them where they were (cohort-less), and
+  // never blocks activation.
+  try {
+    const enr = await Enrollment.findByPk(application.enrollment_id, { attributes: ['id', 'cohort_id'] });
+    if (enr && !(enr as any).cohort_id) {
+      await (enr as any).update({ cohort_id: cohort.id });
+    }
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'intern_cohort_placement_failed', outcome: 'partial',
+      error_class: err?.constructor?.name ?? 'Error', context: { enrollment_id: application.enrollment_id },
+    }));
+  }
+
   await application.reload();
   return {
     ok: true,
@@ -349,7 +383,7 @@ export interface ActiveInternView {
   week: number | null;
   minimum_weekly_hours: number;
   max_active_projects: number;
-  required_meetings: readonly { day: string; kind: string }[];
+  required_meetings: readonly RequiredMeeting[];
   checklist: ChecklistStepStatus[];
   progress: { done: number; total: number };
   next_action: ChecklistStepStatus | null;

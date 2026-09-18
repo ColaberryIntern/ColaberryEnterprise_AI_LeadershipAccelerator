@@ -7,7 +7,7 @@
  * and whether a token can escape into a receipt or a log.
  */
 
-import { LinkedInAdapter, LINKEDIN_API_VERSION, type LinkedInHttp } from '../linkedInAdapter';
+import { LinkedInAdapter, LINKEDIN_API_VERSION, assembleCommentary, type LinkedInHttp } from '../linkedInAdapter';
 import { ProviderPublishError, AdapterUnsupportedError, type PublishPayload } from '../socialProviderAdapter';
 
 const TOKEN = ['AQV', 'x1y2z3A4B5C6D7E8F9G0', 'hIjKlMnOpQrStUvWxYz'].join('');
@@ -36,6 +36,42 @@ function adapter(http: LinkedInHttp, author = 'urn:li:person:abc123') {
 
 const ok = (headers: Record<string, string> = { 'x-restli-id': POST_URN }): LinkedInHttp =>
   jest.fn(async () => ({ status: 201, headers, body: {} }));
+
+describe('the tracked link reaches the post', () => {
+  const LINK = 'https://www.refactored.ai/r/7KQ4MZ';
+  const BLANK_LINE = String.fromCharCode(10, 10); // "\n\n", spelled out so no tool rewrites it
+
+  it('is appended on its own line after the text, before any disclosure', async () => {
+    const http = ok();
+    await adapter(http).publish(payload({ text: 'Join the free class.', linkUrl: LINK, disclosureText: 'Paid partnership' }), 'idem-1');
+    const body = (http as jest.Mock).mock.calls[0][0].body;
+    expect(body.commentary).toBe(['Join the free class.', LINK, 'Paid partnership'].join(BLANK_LINE));
+  });
+
+  it('is not added twice when the operator already typed it into the copy', async () => {
+    const http = ok();
+    await adapter(http).publish(payload({ text: `Details: ${LINK}`, linkUrl: LINK }), 'idem-1');
+    expect((http as jest.Mock).mock.calls[0][0].body.commentary).toBe(`Details: ${LINK}`);
+  });
+
+  it('survives little-text escaping: the short-code alphabet has no reserved characters', async () => {
+    const http = ok();
+    await adapter(http).publish(payload({ text: 'Go', linkUrl: LINK }), 'idem-1');
+    expect((http as jest.Mock).mock.calls[0][0].body.commentary).toContain(LINK);
+  });
+
+  it('counts toward the 3,000-character limit at validate time', async () => {
+    const r = await adapter(ok()).validate(payload({ text: 'a'.repeat(2990), linkUrl: LINK }));
+    expect((r as { reasons: string[] }).reasons.join(' ')).toMatch(/3000 characters including the tracked link and any disclosure; this post is longer/);
+    await expect(adapter(ok()).validate(payload({ text: 'a'.repeat(2990) }))).resolves.toEqual({ ok: true });
+  });
+
+  it('assembleCommentary is what both validate and publish measure', () => {
+    expect(assembleCommentary({ text: 'T', linkUrl: null, disclosureText: null })).toBe('T');
+    expect(assembleCommentary({ text: 'T', linkUrl: LINK, disclosureText: null })).toBe(['T', LINK].join(BLANK_LINE));
+    expect(assembleCommentary({ text: 'T', linkUrl: null, disclosureText: 'D' })).toBe(['T', 'D'].join(BLANK_LINE));
+  });
+});
 
 describe('publish', () => {
   it('sends the required version header, the escaped commentary and the author URN', async () => {
@@ -160,9 +196,15 @@ describe('validate - failing in the composer instead of at 6am', () => {
     expect(r).toEqual({ ok: true });
   });
 
-  it('says video posting is not implemented rather than publishing text and dropping the video', async () => {
-    const r = await adapter(ok()).validate(payload({ media: [{ ref: 'media/b/clip.mp4', mimeType: 'video/mp4', altText: 'Clip', byteSize: 9_000_000 }] }));
-    expect((r as { reasons: string[] }).reasons.join(' ')).toMatch(/video posting is not implemented/);
+  it('accepts one MP4 within the network limits, and refuses over-size, over-length, non-MP4, two videos, or video with an image', async () => {
+    const clip = { ref: 'media/b/clip.mp4', mimeType: 'video/mp4', altText: 'Clip', byteSize: 90_000_000, durationMs: 45_000 };
+    await expect(adapter(ok()).validate(payload({ media: [clip] }))).resolves.toEqual({ ok: true });
+    const reasons = async (media: NonNullable<Partial<PublishPayload>['media']>) => ((await adapter(ok()).validate(payload({ media }))) as { reasons: string[] }).reasons.join(' ');
+    expect(await reasons([{ ...clip, byteSize: 201 * 1024 * 1024 }])).toMatch(/201\.0 MB; LinkedIn's video limit is 200 MB/);
+    expect(await reasons([{ ...clip, durationMs: 601_000 }])).toMatch(/runs 601 s; LinkedIn's limit is 600 s/);
+    expect(await reasons([{ ...clip, mimeType: 'video/quicktime' }])).toMatch(/MP4 video only, not video\/quicktime/);
+    expect(await reasons([clip, clip])).toMatch(/one video per post; this post has 2/);
+    expect(await reasons([clip, { ref: 'media/b/hero.png', mimeType: 'image/png', altText: 'Hero', byteSize: 1000 }])).toMatch(/cannot also carry images or a document/);
   });
 
   it('refuses more images than the network allows on this kind of post, and an oversize one', async () => {

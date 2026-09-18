@@ -7,6 +7,8 @@ export interface CommunityPostMember {
   display_name: string;
   avatar_url: string | null;
   level: number;
+  /** Canonical rung ("AI Builder II"); the badge prefers it over the points level. Absent on an older backend. */
+  rung_name?: string | null;
 }
 
 export interface CommunityCommenter {
@@ -69,6 +71,8 @@ export interface CommunityMemberProfile {
   avatar_url: string | null;
   bio: string | null;
   level: number;
+  /** Canonical rung ("AI Builder II"); the badge prefers it over the points level. Absent on an older backend. */
+  rung_name?: string | null;
   points: number;
   role: CommunityMemberRole;
   badges: MemberBadge[];
@@ -94,16 +98,18 @@ export interface LeaderboardEntry {
   display_name: string;
   points: number;
   rank: number;
+  /** Canonical rung, resolved server-side for every row; absent on an older backend. */
+  rung_name?: string | null;
 }
 
 // ONE canonical level ladder (mirrors backend pointsService.LEVELS / frontend
 // onboardingApi.LEVELS). The community profile/leaderboard now report the same
 // canonical points + level as the top-right HUD — a single system everywhere.
 export const LEVEL_TIERS = [
-  { level: 1, min: 0, name: 'Apprentice' },
-  { level: 2, min: 150, name: 'Builder' },
-  { level: 3, min: 400, name: 'Architect' },
-  { level: 4, min: 900, name: 'Principal' },
+  { level: 1, min: 0, name: 'AI Aware I' },
+  { level: 2, min: 150, name: 'AI Aware II' },
+  { level: 3, min: 400, name: 'AI Enabled I' },
+  { level: 4, min: 900, name: 'AI Enabled II' },
 ] as const;
 
 export function levelName(level: number): string {

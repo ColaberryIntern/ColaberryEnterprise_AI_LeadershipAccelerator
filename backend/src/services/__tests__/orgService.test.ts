@@ -143,6 +143,8 @@ describe('orgService', () => {
         team: 'Finance',
         level: 'developer',
         rank: 3,
+        // The rung the student's own HUD shows for rank 3 — never the raw slug.
+        band_rung: 'AI Builder III',
         readiness: 44,
         builder_xp_week: 160,
         streak: 6,
@@ -167,6 +169,28 @@ describe('orgService', () => {
       expect(roster[0].readiness).toBe(58);   // not 1
     });
 
+    // Managers read "Junior Builder · rank 1/8" off /portal/company until
+    // 2026-09-16 — the internal competency slug, a vocabulary no student surface
+    // uses. The roster now carries the same rung name the student sees.
+    it('names each member by the canonical band rung, from points when unpromoted', async () => {
+      (OrgMember.findAll as jest.Mock).mockResolvedValue([
+        { enrollment_id: 'enr-a', email: 'a@acme.com', team: null, enrollment: { full_name: 'Unpromoted, 948 pts' } },
+        { enrollment_id: 'enr-b', email: 'b@acme.com', team: null, enrollment: { full_name: 'Rank 1' } },
+      ]);
+      (sequelize.query as jest.Mock).mockImplementation(async (sql: string) => {
+        if (sql.includes('student_level')) return [
+          { enrollment_id: 'enr-a', level_slug: 'builder', rank: 0, architect_readiness: 0 },
+          { enrollment_id: 'enr-b', level_slug: 'junior_builder', rank: 1, architect_readiness: 0.2 },
+        ];
+        if (sql.includes('student_points_events')) return [{ enrollment_id: 'enr-a', total: 948 }, { enrollment_id: 'enr-b', total: 40 }];
+        return [];
+      });
+
+      const roster = await getRoster('org-1');
+
+      expect(roster.map((r) => r.band_rung)).toEqual(['AI Enabled II', 'AI Builder I']);
+    });
+
     it('defaults total_points to 0 for members with no enrollment yet', async () => {
       (OrgMember.findAll as jest.Mock).mockResolvedValue([
         { enrollment_id: null, email: 'pending@acme.com', team: null, enrollment: null },
@@ -180,6 +204,7 @@ describe('orgService', () => {
         team: null,
         level: 'builder',
         rank: 0,
+        band_rung: 'AI Aware I',
         readiness: 0,
         builder_xp_week: 0,
         streak: 0,

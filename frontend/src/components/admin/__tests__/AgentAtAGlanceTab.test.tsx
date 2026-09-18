@@ -58,6 +58,7 @@ const DETAIL: AgentDetail = {
   tickets: [],
   ticket_breakdown: [],
   related_tasks: [],
+  owned_behaviors: [],
   persona_version_history: [],
   cost_summary: null,
   authorization_summary: { window_days: 30, total: 0, allow: 0, approval: 0, block: 0, enforced_count: 0 },
@@ -76,6 +77,7 @@ const DETAIL: AgentDetail = {
     { key: 'solid', label: 'Solid', score: 5, source: 'live', evidence: '0/0 failed.' },
   ],
   goals_overall: 4.4,
+  employee_facts: null,
 };
 
 const PENDING_ITEM: ManagerInboxItem = {

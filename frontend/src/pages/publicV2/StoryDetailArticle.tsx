@@ -5,12 +5,14 @@ import CaseStudyVerificationBadge from '../../components/caseStudy/CaseStudyVeri
 import { heroFacts, heroMetricsFor, visibleSections } from './storyDetailV2Model';
 import StoryHeroActions from './StoryHeroActions';
 import StoryContextStrip from './StoryContextStrip';
+import StoryVisualStory from './StoryVisualStory';
 import { StoryHeroFigure } from './StoryHeroFigure';
 import StorySectionList from './StorySectionList';
 import { storyIndicators } from './storyIndicatorModel';
 import { evidenceMaturity } from './storyMaturityModel';
 import { placeStoryFigures } from './storyFigurePlacement';
 import { coverFor } from './storyCover';
+import { visualStoryFor } from './storyVisualModel';
 import type {
   PublicCaseStudyDetail,
   PublicSurfaceView,
@@ -95,14 +97,32 @@ export function StoryDetailArticle({
      drawn; subtracting it anyway sent the record's strongest picture to a small
      card at the foot of the page while the weaker one opened the body. That
      was reviewed as "the screenshots arrive too late". The poster fallback
-     case still counts as shown, because then the cover IS the poster. */
+     case still counts as shown, because then the cover IS the poster.
+
+     AND WHEN THE POSTER IS THE COVER, IT IS SHOWN. Ali, 2026-09-18, once every
+     record's cover became a picked thumbnail that is also the video's poster:
+     "do not use the picture a 3rd time inside the case study ... if the old
+     picture was already being used, then only use it once." So a cover that is
+     the poster counts as the masthead's, and whatever the masthead showed joins
+     `placedHrefs`, which the artifacts band subtracts: every picture once. */
   const cover = coverFor(record);
   const video = record.walkthroughVideo;
-  const coverShownInMasthead = !(video?.url && video.posterUrl);
-  const figures = placeStoryFigures(
-    record.artifacts, sections, cover && coverShownInMasthead ? cover.src : null,
-  );
+  const hasPlayer = Boolean(video?.url && video.posterUrl);
+  const coverIsPoster = Boolean(cover && hasPlayer && video?.posterUrl === cover.src);
+  const mastheadHref = cover && (!hasPlayer || coverIsPoster) ? cover.src : null;
+  const placed = placeStoryFigures(record.artifacts, sections, mastheadHref);
+  const figures = mastheadHref
+    ? { ...placed, placedHrefs: [...placed.placedHrefs, mastheadHref] }
+    : placed;
   const maturity = evidenceMaturity(record);
+  /* The visual story, when the server sent one for this surface. Its outcome
+     cards are the same headline metrics the strip would print, at display
+     size with baseline and badge; printing them twice within one screen would
+     read as a rendering fault, so the strip gets none when the band has some.
+     `maturity` is untouched: it is non-null only when there are no metrics at
+     all, and a record with cards has metrics. */
+  const visual = visualStoryFor(record);
+  const stripMetrics = visual && visual.outcomeCards.length > 0 ? [] : metrics;
 
   return (
     /* The click handler is an observer on a container, the pattern
@@ -191,9 +211,11 @@ export function StoryDetailArticle({
       <StoryContextStrip
         indicators={indicators}
         facts={facts}
-        metrics={metrics}
+        metrics={stripMetrics}
         maturity={maturity}
       />
+
+      {visual ? <StoryVisualStory story={visual} /> : null}
 
       <StorySectionList record={record} sections={sections} figures={figures} />
 

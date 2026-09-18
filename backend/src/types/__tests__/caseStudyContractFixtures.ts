@@ -78,6 +78,11 @@ export const DETAIL_FIXTURE: PublicCaseStudyDetail = {
   heroMetrics: [HEADLINE_METRIC],
   // The ordinary record carries no walkthrough; null keeps the fixture a complete detail.
   walkthroughVideo: null,
+  visualStory: null,
+  // The ordinary record carries no builder card and no decision cards either.
+  builder: null,
+  decisions: [],
+  closing: null,
   situation: {
     heading: 'The situation',
     body: ['Replenishment planners were reconciling three systems by hand.'],

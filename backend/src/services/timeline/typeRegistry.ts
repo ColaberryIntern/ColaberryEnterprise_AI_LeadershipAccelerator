@@ -68,6 +68,15 @@ export interface CardTypeDef {
   system?: boolean;
   /** event types DELIVER cards; they award no XP themselves */
   event?: boolean;
+  /**
+   * Ladder decision D8 (Ali, 2026-09-16): a graded type ADDED LATE counts
+   * toward "curriculum complete" only for cohorts that started on or after
+   * this ISO date. Absent = required for everyone. The July 2026 cohort was
+   * mid-programme when Claude Studio landed, so it is not required of them;
+   * November 2026 onward, it is. Any future late-added type gets its own date
+   * here rather than a one-off exemption.
+   */
+  curriculum_required_from?: string;
 }
 
 const D = (o: Partial<CardTypeDef> & Pick<CardTypeDef, 'slug' | 'label' | 'student_label' | 'bucket' | 'render_band'>): CardTypeDef => ({
@@ -112,7 +121,7 @@ export const CARD_TYPES: CardTypeDef[] = [
   // constants/competencySkillCrosswalk.ts. CAPE's type→skill seed throws on an
   // unknown id, so descriptive-but-invented ids ("problem_framing",
   // "executive_communication") break the build rather than being ignored.
-  D({ slug: 'claude_studio', label: 'Claude Studio', student_label: 'Claude Studio', bucket: 'practice', render_band: 'claude_studio', est_minutes: 85, learning_xp: 30, builder_xp: 45, difficulty: 'core', competencies: ['systems_thinking', 'decision_making', 'communication', 'ai_governance', 'context_engineering'], evidence_required: true, ai_evaluation: true, instructor_review: true, portfolio_eligible: true, prompt_pairs: ['concept', 'reflection'] }),
+  D({ slug: 'claude_studio', label: 'Claude Studio', student_label: 'Claude Studio', bucket: 'practice', render_band: 'claude_studio', est_minutes: 85, learning_xp: 30, builder_xp: 45, difficulty: 'core', competencies: ['systems_thinking', 'decision_making', 'communication', 'ai_governance', 'context_engineering'], evidence_required: true, ai_evaluation: true, instructor_review: true, portfolio_eligible: true, prompt_pairs: ['concept', 'reflection'], curriculum_required_from: '2026-11-01' }), // D8: published 2026-09-08, after July 2026 was mid-programme; required from the November 2026 cohort
   D({ slug: 'artifact_submission', label: 'Artifact Submission', student_label: 'Build Artifact(s) Lab', bucket: 'build', render_band: 'build_artifacts', est_minutes: 60, builder_xp: 60, difficulty: 'core', competencies: ['documentation', 'architecture'], evidence_required: true, github_required: true, instructor_review: true, portfolio_eligible: true, prompt_pairs: ['mentor'], home_surface: 'project' }),
   D({ slug: 'ai_video_feedback', label: 'AI Video Feedback', student_label: 'AI Video Feedback', bucket: 'reflect', render_band: 'video_feedback', est_minutes: 15, learning_xp: 5, builder_xp: 30, difficulty: 'core', competencies: ['communication'], evidence_required: true, ai_evaluation: true, portfolio_eligible: true, prompt_pairs: ['reflection'] }),
   D({ slug: 'mock_interview', label: 'Mock Interview', student_label: 'Mock Interview', bucket: 'advance', render_band: 'interview', est_minutes: 45, builder_xp: 60, difficulty: 'stretch', competencies: ['communication', 'leadership'], evidence_required: true, ai_evaluation: true, instructor_review: true, portfolio_eligible: true, prompt_pairs: ['mentor'] }),
@@ -192,6 +201,42 @@ export function register(def: CardTypeDef): void {
 
 export function resolve(slug: string): CardTypeDef | undefined {
   return REGISTRY.get(slug);
+}
+
+/**
+ * Is a card of this type GRADED — does completing it produce evidence or an
+ * assessment result, as opposed to being consumed? Labs, build tasks, knowledge
+ * checks, evaluations, demos and presentations are graded; videos, blogs, deep
+ * dives, warm-ups, surveys, live classes and the ambient intel feed are not.
+ *
+ * This is the "graded card" of decision D3 (docs/POINTS_LADDER_DECISIONS.md):
+ * "curriculum complete" means every graded card in all 12 weeks, so the
+ * definition lives here beside the registry that decides it. Weeks carry ~32
+ * published cards on average, most of them consumption; requiring every one
+ * would make the milestone unreachable, and requiring any one would make it
+ * meaningless.
+ */
+export function isGradedCardType(slug: string): boolean {
+  const def = REGISTRY.get(slug);
+  return !!def && (def.evidence_required === true || def.ai_evaluation === true);
+}
+
+/**
+ * Does a graded card of this type count toward "curriculum complete" for a
+ * student whose cohort started on `cohortStart`? Decision D8: a type carrying
+ * `curriculum_required_from` is required only from cohorts starting on or
+ * after that date. A student with no cohort start (an Explorer, a guest) is
+ * held to everything — they cannot reach a build band anyway, and "unknown"
+ * must not read as "exempt".
+ */
+export function isCurriculumRequired(slug: string, cohortStart: Date | string | null | undefined): boolean {
+  if (!isGradedCardType(slug)) return false;
+  const from = REGISTRY.get(slug)?.curriculum_required_from;
+  if (!from) return true;
+  if (!cohortStart) return true;
+  const start = new Date(cohortStart);
+  if (Number.isNaN(start.getTime())) return true;
+  return start.toISOString().slice(0, 10) >= from;
 }
 
 /** Fail-loud resolver — unknown types throw rather than silently skip. */

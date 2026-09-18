@@ -1,5 +1,7 @@
 # Implementation Status
 
+> **Correction, 2026-09-15 (session CC-20260915-a1x7).** The table below is the 2026-08-27 Checkpoint A view and is stale. Checkpoints B through F have shipped on `main`: `AgentRoleCharter`, `ManagerDirective`, `AgentManagerConversation` (Talk tab), `AgentGoal`, `AgentOneOnOne`, `AgentReportSubscription`/`Run`, `AgentMemoryProposal` with a runtime reader that only injects approved memory, `requireAgentManagerOrAdmin` on 27 routes, `OrgMember.timezone`, explainability, and the 8-tab Agent Detail page. What is real today, with file:line evidence, is `PLATFORM_STATE_2026-09-15.md`. The consolidation program that now governs this area is `../../../CLAUDE_CODE_AI_EMPLOYEE_CONSOLIDATION_LOOP_PROMPT.md`; its Phase 0 outputs are `AI_EMPLOYEE_ROSTER.md`, `HUMAN_OWNERSHIP_MAP.md`, `LEGACY_AGENT_CLASSIFICATION.csv`, `MIGRATION_MATRIX.md`, `REESE_STANDARD_AUDIT.md`, `FLEET_RECONCILIATION_2026-09-15.md`. The rows below are kept as history.
+
 | Checkpoint | Status | Notes |
 |---|---|---|
 | A — Discovery | **COMPLETE** | This document set. No code, no migrations, no routes, no UI changed. |

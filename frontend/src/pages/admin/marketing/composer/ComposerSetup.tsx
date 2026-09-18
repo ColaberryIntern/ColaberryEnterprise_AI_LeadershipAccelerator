@@ -48,9 +48,9 @@ export interface ComposerSetupProps {
   draftNotes?: { placeholders: string[]; unverifiedClaims: string[] } | null;
 }
 
-const CONTENT_TYPES: ContentType[] = ['text', 'image', 'video', 'carousel', 'thread', 'link', 'poll'];
+const CONTENT_TYPES: ContentType[] = ['text', 'image', 'video', 'carousel', 'thread', 'link', 'poll', 'document'];
 /** Types the validator refuses without at least one media item; attach one under Channels. */
-const MEDIA_TYPES: ReadonlySet<ContentType> = new Set<ContentType>(['image', 'video', 'carousel']);
+const MEDIA_TYPES: ReadonlySet<ContentType> = new Set<ContentType>(['image', 'video', 'carousel', 'document']);
 
 export default function ComposerSetup({
   values, brands, campaigns, locked, busy, onChange, onSubmit, onAssignSlug, onDraftMessage, draftNotes,
@@ -92,7 +92,7 @@ export default function ComposerSetup({
           <label className="form-label small mb-1" htmlFor="composer-type">Content type</label>
           <select id="composer-type" className="form-select form-select-sm" value={values.content_type} disabled={busy} onChange={(e) => set('content_type', e.target.value as ContentType)}>
             {CONTENT_TYPES.map((t) => (
-              <option key={t} value={t}>{MEDIA_TYPES.has(t) ? `${t} (attach a file under Channels)` : t}</option>
+              <option key={t} value={t}>{t === 'document' ? 'document (a PDF carousel, LinkedIn only - attach it under Channels)' : MEDIA_TYPES.has(t) ? `${t} (attach a file under Channels)` : t}</option>
             ))}
           </select>
           {MEDIA_TYPES.has(values.content_type) && (

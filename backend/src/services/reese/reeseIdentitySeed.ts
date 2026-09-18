@@ -6,6 +6,8 @@ import {
   __resetAgentIdentityCacheForTests,
   type AgentIdentityIds,
 } from '../agentBlueprint/agentIdentitySeed';
+import AiAgent from '../../models/AiAgent';
+import { ORG_MEMBER } from '../agentBlueprint/ticketCreatorIdentitySeed';
 
 // Reese Phase 1 — idempotent creation of Reese's real staff identity, mirroring
 // the findOrCreate pattern in agentRegistrySeed.ts's seedAgentRegistry(). Called
@@ -65,6 +67,24 @@ export function __resetReeseAgentIdCacheForTests(): void {
   __resetAgentIdentityCacheForTests(REESE_EMAIL);
 }
 
+/**
+ * Reese Product Phase 1, R2 — the parent AiAgent row's own `enabled` flag stops
+ * nothing today: reeseReplyService.ts's maybeTriggerReeseReply() and
+ * reeseWelcomeService.ts's maybeSendWelcomes() never read it (only the four
+ * scheduler-registered behaviour rows honour `enabled` via instrumentCronJob).
+ * Read fresh on every call, never cached — an admin flipping the switch must
+ * take effect without a restart, same contract as reeseWelcomeService.ts's own
+ * env-var enabled(). Reese-only: this queries by REESE_AGENT_NAME, not a
+ * generic agentBlueprint helper, so no other agent's behaviour changes.
+ */
+export async function isReeseEnabled(): Promise<boolean> {
+  const agent = await AiAgent.findOne({ where: { agent_name: REESE_AGENT_NAME }, attributes: ['enabled'] });
+  // No row yet means identity isn't seeded — every other guard in the reply
+  // and welcome paths already no-ops on that case before this would run, so
+  // failing open here is unreachable in practice, not a real safety gap.
+  return agent ? agent.enabled : true;
+}
+
 export async function seedReeseIdentity(): Promise<ReeseIdentityIds> {
   return seedAgentIdentity({
     agentName: REESE_AGENT_NAME,
@@ -83,10 +103,17 @@ export async function seedReeseIdentity(): Promise<ReeseIdentityIds> {
     // Reese Phase 1 — pilot-cohort allowlist DATA ONLY (T013). Phase 2's
     // reeseEligibilityService.ts is what actually reads/enforces this.
     pilotCohortGate: true,
-    // AI Leadership / AI Staff hierarchy (Ali, live, 2026-08-19). Was a direct
-    // reportsToOrgMemberId to Taiwo (session CC-20260818-x4nk); Reese is now
-    // AI Staff, reporting through workforce_intelligence_engine (AI
-    // Leadership), which itself still reports to Kes.
-    reportsToAgentName: 'workforce_intelligence_engine',
+    // Reese Product Phase 1, R6 (2026-09-18) — Ali's own 2026-09-15 decision
+    // ("Reese reports to Ali for now, to be reassigned to Kes later",
+    // HUMAN_OWNERSHIP_MAP.md answer 4, commit 072d7afd), implemented here.
+    // Was AI Staff reporting through workforce_intelligence_engine (AI
+    // Leadership, itself enabled=false in production) to Kes, since
+    // 2026-08-19. This self-heals a fresh database correctly; at boot it
+    // stays inert for the existing production row, because
+    // agentIdentitySeed.ts's own self-heal (line ~320) writes
+    // reports_to_type/reports_to_id only when they are currently null. The
+    // production row itself is changed by the one-off
+    // reassignReeseToAli20260918.ts script, not by this seed running again.
+    reportsToOrgMemberId: ORG_MEMBER.ALI,
   });
 }

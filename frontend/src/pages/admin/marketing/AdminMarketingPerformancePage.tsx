@@ -2,6 +2,8 @@ import React, { useEffect, useState, useCallback, useMemo, lazy, Suspense } from
 import {
   FunnelChart, Funnel, Tooltip, ResponsiveContainer, LabelList, Cell,
 } from 'recharts';
+import { useLocation } from 'react-router-dom';
+import { tabFromSearch, type PerformanceTab } from './performanceTabs';
 import api from '../../../utils/api';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../../components/admin/shell';
 import { TrustSignal } from '../../../components/admin/shell/trust';
@@ -11,9 +13,6 @@ import MarketingScopeStrip from './MarketingScopeStrip';
 import CampaignTableControls from './CampaignTableControls';
 import { defaultScope, scopeToQuery, type MarketingScope, type ScopeComparison } from './marketingScope';
 import { listBrands, type Brand as ScopeBrand } from '../../../services/adminBrandApi';
-import NeedsAttentionQueue, { type AttentionItem, type ExcludedSignal } from './NeedsAttentionQueue';
-import { getNeedsAttention } from '../../../services/marketingOpsApi';
-import { ALL_BRANDS } from './marketingScope';
 import {
   ALL_COLUMNS, DEFAULT_COLUMNS, OBJECTIVE_LABELS, rankCampaigns,
   type ResolvedRanking,
@@ -1303,8 +1302,12 @@ function RevenueIntelligenceTab(
 
 // ─── Main Page ──────────────────────────────────────────────────────────────
 
-function AdminMarketingDashboardPage() {
-  const [activeTab, setActiveTab] = useState<'funnel' | 'revenue' | 'registry' | 'outreach'>('funnel');
+function AdminMarketingPerformancePage() {
+  const { search } = useLocation();
+  const [activeTab, setActiveTab] = useState<PerformanceTab>(() => tabFromSearch(search));
+  // A second attention link followed while already on this page changes only the query; the
+  // component stays mounted, so the initial-state read above would not see it.
+  useEffect(() => { setActiveTab(tabFromSearch(search)); }, [search]);
 
   /* ---------- per-page trust signal ----------
    * Derived from the data the page actually received. This was previously a literal
@@ -1323,34 +1326,6 @@ function AdminMarketingDashboardPage() {
     defaultScope(new Date().toISOString().slice(0, 10)));
   const [scopeBrands, setScopeBrands] = useState<ScopeBrand[]>([]);
 
-  /* ---------- Needs-Attention queue ----------
-   * Refetched whenever the brand scope changes. The queue is the one thing on this page that
-   * tells the operator what to DO, so it follows the same scope as the numbers - a queue for
-   * all brands sitting above a table filtered to one would be two views disagreeing. */
-  const [attentionItems, setAttentionItems] = useState<AttentionItem[]>([]);
-  const [attentionExcluded, setAttentionExcluded] = useState<ExcludedSignal[]>([]);
-  const [attentionLoading, setAttentionLoading] = useState(true);
-  const [attentionError, setAttentionError] = useState<string | null>(null);
-
-  const fetchAttention = useCallback(async (brand: string) => {
-    setAttentionLoading(true);
-    setAttentionError(null);
-    try {
-      const q = await getNeedsAttention(brand === ALL_BRANDS ? undefined : { brand_id: brand });
-      setAttentionItems(q.items);
-      setAttentionExcluded(q.excluded);
-    } catch {
-      // Cleared rather than left stale: a queue from the previous brand shown under a failed
-      // fetch for the new one would be the wrong brand's to-do list wearing the new label.
-      setAttentionItems([]);
-      setAttentionExcluded([]);
-      setAttentionError('The attention queue could not be loaded.');
-    } finally {
-      setAttentionLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchAttention(scope.brand); }, [fetchAttention, scope.brand]);
   const [brandsLoading, setBrandsLoading] = useState(true);
 
   useEffect(() => {
@@ -1371,10 +1346,14 @@ function AdminMarketingDashboardPage() {
   return (
     <>
       <PageHeader
-        title="Marketing"
-        icon="broadcast-line"
+        title="Performance"
+        icon="line-chart-line"
         subtitle="Funnel performance, revenue intelligence, campaign tracking links, and AI outreach."
-        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Marketing' }]}
+        breadcrumb={[
+          { label: 'Admin', to: '/admin/dashboard' },
+          { label: 'Marketing', to: '/admin/marketing' },
+          { label: 'Performance' },
+        ]}
         trust={trust}
       >
         {/* Tab Navigation */}
@@ -1424,18 +1403,6 @@ function AdminMarketingDashboardPage() {
         onScopeChange={setScope}
       />
 
-      <div className="px-3 pt-3">
-        <SectionCard title="Needs attention" icon="alarm-warning-line" padded={false}>
-          <NeedsAttentionQueue
-            loading={attentionLoading}
-            error={attentionError}
-            items={attentionItems}
-            excluded={attentionExcluded}
-            onRetry={() => fetchAttention(scope.brand)}
-          />
-        </SectionCard>
-      </div>
-
       {activeTab === 'funnel' && (
         <div style={{ height: 'calc(100vh - 170px)', minHeight: 400 }}>
           <Suspense fallback={
@@ -1466,4 +1433,4 @@ function AdminMarketingDashboardPage() {
   );
 }
 
-export default AdminMarketingDashboardPage;
+export default AdminMarketingPerformancePage;
