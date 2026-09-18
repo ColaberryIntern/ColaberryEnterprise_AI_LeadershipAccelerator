@@ -701,6 +701,9 @@ risk is horizontal overflow.
 - [ ] If the record carries a visual story (§8d): the band sits under the context strip,
       the strip prints no duplicate headline figure, and the band renders at 768 too
 - [ ] `problems[]` is empty
+- [ ] **On all three surfaces, not the one you previewed:** the rail, the status board, the
+      folds and no empty "Who built it" (the §8e marker table), and the flow in lanes at 1440.
+      A format checked on one site is a format shipped on one site.
 
 ---
 
@@ -1114,16 +1117,50 @@ situation opens on the problem, not the biography. The builder card is the one p
 progression is drawn. `story_situation_opens_on_biography` and
 `story_progression_repeated` (the review, below) catch the repeats the pilot shipped with.
 
-### The compact ending (training, approved 2026-09-17; other surfaces keep their own bands)
+### The compact ending: a THREE-SURFACE contract (approved 2026-09-17)
 
 From "Who built it" down the training page shrank from 4,227 px to 1,871 px at 1440 with
 nothing leaving the record: the build as a horizontal rail with staggered labels (compact
 rows under 900 px, never a horizontal scroll), the roadmap as a status board, the
 architecture's first paragraph and stack with the rest folded, the measurement narrative
-in one paragraph, "Who built it" standing down when the builder card names the only
-contributor. Every fold reads "Notes on N of the M ..." so the reader knows what is behind
-it. When the format reaches Enterprise and AI Flotation, port the structure, not the
-pixels: each site's tokens dress it.
+in one paragraph (two columns at 1100 px and up), "Who built it" standing down when the
+builder card names the only contributor. Every fold reads "Notes on N of the M ..." so the
+reader knows what is behind it.
+
+**It shipped on one surface and was published on three.** The format was built for the
+training site and the note here said to port it "when the format reaches" the other two.
+Nothing made that happen, so Case Study #2 went live on Enterprise with a 1,274 px dated
+list, a 1,034 px roadmap and an empty "Who built it" heading, and on aiflotation.com with
+the same lists and the workflow drawn as a stack of boxes. Ali, looking at them: "the
+timeline is not on the aiflotation side and I'm not feeling the chart here. It's just not
+even close to the same effect. Same thing with enterprise." All three renderers now draw
+it (training `RecordBands.tsx`, Enterprise `StoryLowerV2.tsx` and `StoryArchitectureBand`,
+AI Flotation `packages/case-study-shell/case-study-record.js`), and the rule is:
+
+**A change to how a story reads is not done until all three surfaces draw it.** A page
+format is a contract across the training site, `enterprise.colaberry.ai` and
+`aiflotation.com`, not a feature of whichever one was looked at first. Before calling any
+record or format change done, open the rendered page on each of the three and find, by
+eye and by selector:
+
+| Marker | Training | Enterprise | AI Flotation |
+|---|---|---|---|
+| The build as a rail | `.cs-rail` | `[data-testid="story-build-rail"]` | `.cs-rail` |
+| The roadmap as a board | `.cs-next` | `[data-testid="story-roadmap-board"]` | `.cs-next` |
+| The long text folded | `details.cs-measure-fold` | `[data-testid="story-technical-proof"]` | `details.cs-measure-fold` |
+| No empty "Who built it" | band absent | band absent | band absent |
+| The flow in lanes at 1440 | horizontal | horizontal | horizontal |
+
+The flow rule behind the last row: `layoutWorkflowToFit` keeps the horizontal composition
+on any desk-width viewport and lets the SVG scale into a narrow canvas, up to 1.6 times
+the canvas width, rather than falling back to a column (aiflotation.com's record column is
+1,024 px against training's 1,384, which is what stacked it); the shell also lets the band
+break out to 1,280 px where the column is narrower. A column at 1440 on any site is a bug.
+
+`shellLowerHalf.test.ts` runs the AI Flotation renderer against a real projected envelope
+and fails without the rail, the board or the fold; `storyLowerV2.test.tsx` does the same
+for Enterprise; the training repository's `lowerHalf.test.ts` for training. A new band
+that changes the format needs a line in all three, in the same PR set.
 
 ### Vocabulary
 
@@ -1350,6 +1387,12 @@ an already-live record too, so consent withdrawn between two clicks is caught.
     gate was right. `skillStoryRules.test.ts` proves the checks §8e names exist; it cannot
     prove the prose describes them correctly. When a dry run contradicts this file, the
     dry run wins, and this file changes the same day.
+11. **That a format reaches every surface.** The rail, the board and the folds are now
+    tested on the two renderers this repository holds (`shellLowerHalf.test.ts`,
+    `storyLowerV2.test.tsx`) and the third lives in the training repository. No test can
+    see across the two repositories, so a NEW band still has to be added three times by a
+    person who remembers to. The §8e marker table and the §8b checklist line are that
+    memory; the live render on all three sites before calling it done is the check.
 
 **When you add a rule here, decide which half it belongs in before you write it.** A rule
 in the second half is a rule with a half-life.

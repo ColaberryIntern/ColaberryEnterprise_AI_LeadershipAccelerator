@@ -254,11 +254,31 @@ describe('the case-study component directory is untouched', () => {
       + stripComments(read(path.join(PAGE_DIR, 'StoryArchitectureBand.tsx')))
       // ...and the measurement band, for the same reason.
       + stripComments(read(path.join(PAGE_DIR, 'StoryMeasurementBand.tsx')));
-    for (const component of ['CaseStudyTimeline', 'CaseStudyArchitecture',
-      'CaseStudyMeasurement', 'CaseStudyRoadmap', 'CaseStudyArtifacts', 'CaseStudyCTA',
+    for (const component of ['CaseStudyArchitecture',
+      'CaseStudyMeasurement', 'CaseStudyArtifacts', 'CaseStudyCTA',
       'CaseStudyVerificationBadge']) {
       expect(source).toContain(`components/caseStudy/${component}`);
     }
+  });
+
+  /*
+   * THE TWO THE PAGE DRAWS ITSELF, and why that is not a breach of the rule
+   * above. `CaseStudyTimeline` and `CaseStudyRoadmap` print every field of
+   * every entry, which is right where an editor is checking a record and wrong
+   * on a page a reader scrolls: on the CORA record they ran 1,274px and 1,034px
+   * against 261 and 329 for the same content in the format Ali approved on
+   * 2026-09-17. The page draws a rail and a status board instead, in its own
+   * components, and the originals keep their behaviour for every other caller.
+   * The rule is "do not reimplement a shipped component in the page file"; a
+   * named component with its own tests is the sanctioned way to differ.
+   */
+  it('draws the build and the roadmap through its own rail and board', () => {
+    const source = stripComments(read(SECTIONS));
+    expect(source).toContain('./StoryLowerV2');
+    expect(source).toContain('StoryBuildRail');
+    expect(source).toContain('StoryRoadmapBoard');
+    expect(source).not.toContain('components/caseStudy/CaseStudyTimeline');
+    expect(source).not.toContain('components/caseStudy/CaseStudyRoadmap');
   });
 });
 

@@ -175,12 +175,32 @@ describe('fitting the width the page offers', () => {
     for (const n of phone.nodes) expect(n.x + n.width).toBeLessThanOrEqual(342);
   });
 
-  it('layoutWorkflowToFit takes horizontal only when it fits, and the column otherwise', () => {
+  it('layoutWorkflowToFit keeps the horizontal composition on a desk and takes the column on a phone', () => {
     expect(layoutWorkflowToFit(after, 1440, 1268).orientation).toBe('horizontal');
-    expect(layoutWorkflowToFit(after, 768, 688).orientation).toBe('vertical');
     expect(layoutWorkflowToFit(after, 390, 342).orientation).toBe('vertical');
     // A six-step panel fits a narrower desk.
     const before = { ...after, nodes: after.nodes.slice(0, 4), edges: after.edges.slice(0, 3) };
     expect(layoutWorkflowToFit(before, 1024, 900).orientation).toBe('horizontal');
+  });
+
+  /**
+   * The narrow-canvas rule, which is the whole reason aiflotation.com drew a
+   * stack where the other two sites drew lanes: a canvas narrower than the
+   * drawing scales it (the SVG is `width: 100%`), so the composition is kept
+   * until the type would be too small to read.
+   */
+  it('scales a horizontal drawing into a narrow canvas rather than stacking it, up to 1.6x', () => {
+    // The narrowest this panel can be drawn horizontally: boxes at their floor.
+    const tightest = layoutWorkflow(after, 'horizontal', { maxWidth: 1 }).width;
+    // A canvas just under it, which is AI Flotation's case: kept, and scaled.
+    const narrow = tightest - 60;
+    const flotation = layoutWorkflowToFit(after, 1440, narrow);
+    expect(flotation.orientation).toBe('horizontal');
+    expect(flotation.width).toBeGreaterThan(narrow);
+    expect(layoutWorkflowToFit(after, 768, 688).orientation).toBe('horizontal');
+    // Past the cap the column is the honest answer: the boxes would be unreadable.
+    expect(layoutWorkflowToFit(after, 1440, Math.floor(tightest / 1.8)).orientation).toBe('vertical');
+    // An unmeasured canvas keeps the drawing rather than guessing a ratio.
+    expect(layoutWorkflowToFit(after, 1440, 0).orientation).toBe('horizontal');
   });
 });

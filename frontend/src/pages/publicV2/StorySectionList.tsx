@@ -80,7 +80,26 @@ export function StorySectionList({
     <>
       {sections
         .filter((key) => key !== 'hero' && key !== 'cta')
-        .map((key) => (
+        .map((key) => {
+          /* A BAND WITH NO BODY PRINTS NOTHING, not a heading over a void.
+             `StorySectionBody` returns null for a section the record has
+             nothing to say in, and for `contributors` when the builder card is
+             already the credit; the wrapper used to draw the heading and the
+             count chip anyway, so the CORA record published a "Who built it"
+             band reading "1 named contributors" with no people under it. The
+             figure band still runs: a picture is placed AFTER a section, and
+             the section standing down does not move the picture. */
+          const body = (
+            <StorySectionBody sectionKey={key} record={record} placedHrefs={figures.placedHrefs} />
+          );
+          if (!StorySectionBody({ sectionKey: key, record, placedHrefs: figures.placedHrefs })) {
+            return (
+              <React.Fragment key={key}>
+                <StoryFigureBand figures={figuresAfter(figures, key)} />
+              </React.Fragment>
+            );
+          }
+          return (
           <React.Fragment key={key}>
             <section
               className={`cbv2-rv cbv2-section cbv2-story__section${
@@ -106,16 +125,13 @@ export function StorySectionList({
                     noun={sectionCountNoun(record, key)}
                   />
                 </div>
-                <StorySectionBody
-                  sectionKey={key}
-                  record={record}
-                  placedHrefs={figures.placedHrefs}
-                />
+                {body}
               </div>
             </section>
             <StoryFigureBand figures={figuresAfter(figures, key)} />
           </React.Fragment>
-        ))}
+          );
+        })}
     </>
   );
 }

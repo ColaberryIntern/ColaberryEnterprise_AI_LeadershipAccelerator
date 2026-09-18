@@ -63,6 +63,36 @@ describe('SKILL.md §8e names only checks that exist', () => {
     }
   });
 
+  /*
+   * THE COMPACT ENDING IS A THREE-SURFACE CONTRACT, and every marker the table
+   * names must be one a renderer in this repository actually emits. The format
+   * first shipped on the training site alone and Case Study #2 went live on the
+   * other two without it; the table is what a person checks, and this is what
+   * stops the table from naming a selector nobody draws.
+   */
+  it('the compact-ending markers it names are emitted by the renderers it names', () => {
+    expect(sec).toContain('THREE-SURFACE contract');
+    const shell = fs.readFileSync(path.join(ROOT, 'packages', 'case-study-shell', 'case-study-record.js'), 'utf8');
+    const lower = fs.readFileSync(path.join(ROOT, 'frontend', 'src', 'pages', 'publicV2', 'StoryLowerV2.tsx'), 'utf8');
+    const arch = fs.readFileSync(path.join(ROOT, 'frontend', 'src', 'pages', 'publicV2', 'StoryArchitectureBand.tsx'), 'utf8');
+    for (const marker of ['story-build-rail', 'story-roadmap-board']) {
+      expect(sec).toContain(marker);
+      expect(lower).toContain(marker);
+    }
+    for (const cls of ["'cs-rail'", "'cs-next'", "'cs-measure-fold'"]) expect(shell).toContain(cls);
+    expect(arch).toContain('More on what was built');
+    for (const t of ['shellLowerHalf.test.ts', 'storyLowerV2.test.tsx']) {
+      expect(sec).toContain(t);
+      expect(fs.existsSync(path.join(ROOT, 'frontend', 'src', 'pages', 'publicV2', '__tests__', t))).toBe(true);
+    }
+    // The flow rule it states is the rule both copies of the layout carry.
+    expect(sec).toContain('1.6 times');
+    const layout = fs.readFileSync(path.join(ROOT, 'frontend', 'src', 'pages', 'publicV2', 'storyWorkflowLayout.ts'), 'utf8');
+    const model = fs.readFileSync(path.join(ROOT, 'packages', 'case-study-shell', 'case-study-visual-model.js'), 'utf8');
+    expect(layout).toContain('MAX_SCALE_DOWN = 1.6');
+    expect(model).toContain('MAX_SCALE_DOWN = 1.6');
+  });
+
   it('the three section keys it places are keys the profiles order', () => {
     const keys = read('types/caseStudy.ts');
     const profiles = read('services/caseStudy/caseStudySurfaceProfiles.ts');

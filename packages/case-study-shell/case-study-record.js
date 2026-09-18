@@ -95,6 +95,18 @@
     return [lead].concat(said.slice(1)).join(' ');
   }
 
+  /* "2026-04-28" as "28 Apr 2026", read out of the string and never through
+     `new Date()`, which parses a bare date as UTC midnight and so prints the
+     day before in any negative-offset timezone. Anything unparseable prints
+     as sent. Same rule as the other two renderers. */
+  var RAIL_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function shortDate(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso == null ? '' : iso));
+    if (!m) return String(iso == null ? '' : iso);
+    var month = RAIL_MONTHS[Number(m[2]) - 1];
+    return month ? Number(m[3]) + ' ' + month + ' ' + m[1] : iso;
+  }
+
   function appendAll(parent, children) {
     children.filter(Boolean).forEach(function (c) { parent.appendChild(c); });
     return parent;
@@ -266,16 +278,53 @@
       ]);
     },
 
+    /*
+     * THE BUILD AS A HORIZONTAL RAIL, not a vertical list. Ali, 2026-09-17,
+     * on the training page first and then on this one: the dated list took a
+     * screen and a half ("the timeline is not on the aiflotation side ... it
+     * doesn't have a timeline and bottom format"). One dot per entry with the
+     * labels staggered above and below, the details folded underneath, and the
+     * same steps as plain rows under 900px so nothing ever overflows. Same
+     * structure as the training site's `Rail`; this stylesheet's tokens.
+     */
     build: function (c) {
-      return section('build', 'The build', [
-        list(c.timeline, function (t) {
-          var li = el('li', 'cs-timeline-item');
-          li.appendChild(el('span', 'cs-timeline-date', t.date || ''));
-          li.appendChild(el('span', 'cs-timeline-label', t.label));
-          if (t.detail) li.appendChild(el('p', 'cs-timeline-detail', t.detail));
-          return li;
-        }, 'cs-timeline'),
-      ]);
+      var entries = c.timeline || [];
+      if (!entries.length) return null;
+      var ol = el('ol', 'cs-rail');
+      ol.style.setProperty('--cs-rail-n', String(entries.length));
+      entries.forEach(function (t, i) {
+        var li = el('li', 'cs-rail__item');
+        li.setAttribute('data-side', i % 2 === 0 ? 'up' : 'down');
+        li.style.setProperty('--cs-rail-i', String(i + 1));
+        var dot = el('span', 'cs-rail__dot');
+        dot.setAttribute('aria-hidden', 'true');
+        li.appendChild(dot);
+        var label = el('div', 'cs-rail__label');
+        if (t.date) {
+          var time = el('time', null, shortDate(t.date));
+          time.setAttribute('datetime', t.date);
+          label.appendChild(time);
+        }
+        label.appendChild(el('span', null, t.label));
+        li.appendChild(label);
+        ol.appendChild(li);
+      });
+      var detailed = entries.filter(function (t) { return t.detail; });
+      var notes = null;
+      if (detailed.length) {
+        notes = el('details', 'cs-measure-fold');
+        notes.setAttribute('data-testid', 'story-build-notes');
+        notes.appendChild(el('summary', null, 'Notes on ' + detailed.length + ' of the ' + entries.length + ' steps'));
+        var ul = el('ul', 'cs-rail__notes');
+        detailed.forEach(function (t) {
+          var li2 = el('li');
+          li2.appendChild(el('strong', null, t.label + '.'));
+          li2.appendChild(document.createTextNode(' ' + t.detail));
+          ul.appendChild(li2);
+        });
+        notes.appendChild(ul);
+      }
+      return section('build', 'The build', [ol, notes]);
     },
 
     architecture: function (c) {
@@ -326,12 +375,25 @@
         return fig;
       }
 
+      /* The first paragraph and the stack stand; the rest folds. Everything
+         below the decisions had to shrink, and nothing may be trimmed to do
+         it: the full text is one click away, never cut. */
+      var narrative = (a.narrative || []).filter(Boolean);
+      var rest = narrative.slice(1);
+      var extra = [prose(rest), chips('Capabilities', a.capabilities), chips('Integrations', a.integrations), chips('Data stores', a.dataStores)].filter(Boolean);
+      var more = null;
+      if (extra.length) {
+        more = el('details', 'cs-measure-fold');
+        more.setAttribute('data-testid', 'story-architecture-more');
+        more.appendChild(el('summary', null, 'More on what was built'));
+        var body = el('div', 'cs-fold-body');
+        extra.forEach(function (node) { body.appendChild(node); });
+        more.appendChild(body);
+      }
       return section('architecture', 'What was built', [
-        prose(a.narrative),
+        prose(narrative.slice(0, 1)),
         chips('Stack', a.stack),
-        chips('Capabilities', a.capabilities),
-        chips('Integrations', a.integrations),
-        chips('Data stores', a.dataStores),
+        more,
         diagram(a.diagramImageUrl, a.diagramSource),
       ]);
     },
@@ -355,16 +417,49 @@
       return section('measurement', 'The measurement', [m ? prose(m.narrative) : null, cards]);
     },
 
+    /*
+     * WHAT HAPPENED NEXT AS A STATUS BOARD: one column per status in the order
+     * the record lists them, labels only, the details folded. The list form
+     * printed a status word, a label and a paragraph per item and ran a
+     * thousand pixels; the board says the same thing in a glance. `not_pursued`
+     * is how the taxonomy stores it, never how a reader says it, so the heading
+     * is humanised.
+     */
     roadmap: function (c) {
-      return section('roadmap', 'What happened next', [
-        list(c.roadmap, function (r) {
-          var li = el('li', 'cs-roadmap-item');
-          li.appendChild(el('span', 'cs-roadmap-status', r.status));
-          li.appendChild(el('span', 'cs-roadmap-label', r.label));
-          if (r.detail) li.appendChild(el('p', 'cs-roadmap-detail', r.detail));
-          return li;
-        }, 'cs-roadmap'),
-      ]);
+      var items = c.roadmap || [];
+      if (!items.length) return null;
+      var statuses = [];
+      items.forEach(function (r) {
+        var s = r.status || 'other';
+        if (statuses.indexOf(s) < 0) statuses.push(s);
+      });
+      var board = el('div', 'cs-next');
+      statuses.forEach(function (status) {
+        var group = el('div', 'cs-next__group');
+        group.setAttribute('data-status', status);
+        group.appendChild(el('h3', 'cs-term', status === 'other' ? 'Other' : humanize(status)));
+        var ul = el('ul', 'cs-next__list');
+        items.filter(function (r) { return (r.status || 'other') === status; })
+          .forEach(function (r) { ul.appendChild(el('li', null, r.label)); });
+        group.appendChild(ul);
+        board.appendChild(group);
+      });
+      var detailed = items.filter(function (r) { return r.detail; });
+      var notes = null;
+      if (detailed.length) {
+        notes = el('details', 'cs-measure-fold');
+        notes.setAttribute('data-testid', 'story-roadmap-notes');
+        notes.appendChild(el('summary', null, 'Notes on ' + detailed.length + ' of the ' + items.length + ' items'));
+        var ul2 = el('ul', 'cs-rail__notes');
+        detailed.forEach(function (r) {
+          var li = el('li');
+          li.appendChild(el('strong', null, r.label + '.'));
+          li.appendChild(document.createTextNode(' ' + r.detail));
+          ul2.appendChild(li);
+        });
+        notes.appendChild(ul2);
+      }
+      return section('roadmap', 'What happened next', [board, notes]);
     },
 
     /* The story sections (2026-09-17): the decision cards, Meet the builder

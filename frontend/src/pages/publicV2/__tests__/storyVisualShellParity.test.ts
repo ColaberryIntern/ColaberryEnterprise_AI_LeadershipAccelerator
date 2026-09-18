@@ -1,4 +1,4 @@
-import { layoutWorkflow, workflowSteps } from '../storyWorkflowLayout';
+import { layoutWorkflow, layoutWorkflowToFit, workflowSteps } from '../storyWorkflowLayout';
 import { cardFigure, chartsFor, countUpEligible, outcomeCardsFor, panelSelectionOrder, wrapLabel } from '../storyVisualModel';
 import type {
   PublicCaseStudyMetric,
@@ -14,6 +14,7 @@ import type {
 // script, so it is required rather than imported; it exports under CommonJS.
 const shell = require('../../../../../packages/case-study-shell/case-study-visual-model.js') as {
   layoutWorkflow: typeof layoutWorkflow;
+  layoutWorkflowToFit: typeof layoutWorkflowToFit;
   workflowSteps: (panel: PublicCaseStudyWorkflowPanel) => Record<string, number>;
   panelSelectionOrder: typeof panelSelectionOrder;
   wrapLabel: typeof wrapLabel;
@@ -133,6 +134,23 @@ describe('the shell port draws what the page draws', () => {
   it.each([[after, 688], [after, 342], [proposes, 360]])('lays out %s vertically at %i px identically', (panel, width) => {
     const ours = layoutWorkflow(panel, 'vertical', { maxWidth: width });
     const theirs = shell.layoutWorkflow(panel, 'vertical', { maxWidth: width });
+    expect(JSON.parse(JSON.stringify(theirs))).toEqual(JSON.parse(JSON.stringify(ours)));
+  });
+
+  /*
+   * THE CHOICE BETWEEN THE TWO LAYOUTS, not only the layouts themselves. The
+   * pair above compares `layoutWorkflow`, which is given an orientation; the
+   * rule that PICKS one from the viewport and the canvas is what decided that
+   * aiflotation.com drew a stack where the other two sites drew lanes, so it
+   * has to be identical in both copies too.
+   */
+  it.each([
+    [after, 1440, 1268], [after, 1440, 700], [after, 1440, 300], [after, 768, 688],
+    [after, 390, 342], [after, 1440, 0], [proposes, 1440, 900], [proposes, 1200, 560],
+  ])('picks the same orientation for %s at viewport %i and canvas %i', (panel, viewport, canvas) => {
+    const ours = layoutWorkflowToFit(panel, viewport, canvas);
+    const theirs = shell.layoutWorkflowToFit(panel, viewport, canvas);
+    expect(theirs.orientation).toBe(ours.orientation);
     expect(JSON.parse(JSON.stringify(theirs))).toEqual(JSON.parse(JSON.stringify(ours)));
   });
 
