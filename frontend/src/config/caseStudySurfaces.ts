@@ -2,6 +2,7 @@ import type {
   CaseStudyArtifactAccess,
   CaseStudyArtifactType,
   CaseStudyBuiltByType,
+  CaseStudyDeliveryContext,
   CaseStudyRepoRole,
   CaseStudyRoadmapStatus,
   CaseStudyTimelineSourceKind,
@@ -230,6 +231,19 @@ export const BUILT_BY_LABELS: Readonly<Record<CaseStudyBuiltByType, string>> = O
   ai_flotation_team: 'AI Flotation team',
   joint_team: 'Joint team',
 });
+
+/**
+ * The card's word for how the work reached the world. Printed on the card
+ * whenever the record carries one, and NOT only inside the Government chapter:
+ * a demonstration labelled on one page and unlabelled on another is the exact
+ * ambiguity the field exists to remove.
+ */
+export const DELIVERY_CONTEXT_LABELS: Readonly<Record<CaseStudyDeliveryContext, string>> =
+  Object.freeze({
+    client_delivery: 'Client delivery',
+    internal_platform: 'Internal platform',
+    capability_demonstration: 'Capability demonstration',
+  });
 
 export const ROADMAP_STATUS_LABELS: Readonly<Record<CaseStudyRoadmapStatus, string>> =
   Object.freeze({

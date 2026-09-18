@@ -125,6 +125,37 @@ Set the complete object: `identity`, `taxonomy`, `situation`, `architecture`,
 **`heroMetrics` is its own section.** Marking a metric `isHeadline: true` inside
 `measurement` does **not** populate it once measurement has been overridden. Set both.
 
+### The Government chapter on `/proof`: two fields on `taxonomy`, both human-set
+
+A record appears on the Government chapter only when its `taxonomy` carries **both**
+of these. Neither is inferred by any sync, and a model may never set them.
+
+```js
+taxonomy: {
+  ...existingTaxonomy,
+  govCapabilities: ['ai-workforce-enablement'],   // 1+ of the seven, see below
+  deliveryContext: 'capability_demonstration',    // exactly one of three
+}
+```
+
+`govCapabilities` — what a contracting officer would buy the work as. Members:
+`ai-strategy-readiness`, `agentic-multi-agent-ai`, `rag-document-intelligence`,
+`data-engineering-modernization`, `decision-intelligence-forecasting`,
+`ai-workforce-enablement`, `ai-governance-assurance`. Unknown values are dropped
+silently by the reader, so check the projection after publishing.
+
+`deliveryContext` — how the work reached the world, and the field that keeps the
+chapter honest. `client_delivery` (delivered under an engagement), `internal_platform`
+(our own system in our own production), or `capability_demonstration` (real work
+against real requirements, **not** delivered under a contract). Ali, 2026-09-17: a
+demonstration goes on the chapter **clearly labeled, never cited as past
+performance**. The card prints the label wherever it appears. If you are not sure
+which one applies, leave it unset: an unset context keeps the record **off** the
+chapter, which is the correct answer to "unknown".
+
+Retagging a published record is a `taxonomy` override, then re-approve, then
+republish on every surface it is on; the gate runs again each time.
+
 ### Re-authoring an existing record: replace the body, not just the head
 
 A published case study once carried a new title over the previous case study's
