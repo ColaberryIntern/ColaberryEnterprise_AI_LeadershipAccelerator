@@ -13,7 +13,7 @@ import { tierZeroStopsFromContact } from '../governor/contactEvidence';
 import { LEARNER_OFFER_FAMILIES } from '../../../models/OfferFamily';
 import { JOURNEY_PROGRAMS } from '../../../seeds/growthJourney/journeyProgramDefinitions';
 import { EXPLORER_PROGRAM } from '../explorerProgramBridge';
-import type { JourneyCandidate, JourneyStrategy, JourneySubjectContext, LearnerFacts } from '../governor/types';
+import type { JourneyCandidate, JourneyDeferral, JourneyStrategy, JourneySubjectContext, LearnerFacts } from '../governor/types';
 
 /**
  * The learner strategy — CPN and Colaberry Training over Explorer's own logic
@@ -220,6 +220,30 @@ export function classificationNurture(ctx: JourneySubjectContext): JourneyCandid
   };
 }
 
+/**
+ * T402: the pause. While a human owns the thread, the AI's outreach to the
+ * learner is withheld - the email and the lesson recommendation, the two
+ * candidates that would put a second voice in the conversation. Recorded as
+ * not emitted with this reason, which is a different fact from ran-and-found-
+ * nothing. 'no' and 'unknown' change nothing here; 'unknown' is step 4b's.
+ */
+const HUMAN_IN_CONVERSATION = 'human_in_conversation';
+const PAUSED_ACTIONS: ReadonlySet<string> = new Set(['SEND_EMAIL', 'RECOMMEND_LESSON']);
+function pausedForHuman(ctx: JourneySubjectContext, c: JourneyCandidate | Candidate): boolean {
+  return ctx.contact.human_conversation === 'yes' && PAUSED_ACTIONS.has(c.action_type);
+}
+
+/**
+ * T405: a human sent this learner back with a cooldown (`not_ready` / `nurture`).
+ * The loader carries it as the `RETURNED_TO_AI` overlay while `cooldown_until`
+ * is ahead of the clock. EVERY candidate is withheld - not only the two that put
+ * a second voice in a conversation, because here there is no conversation: the
+ * human looked and said not yet. Time lifts it; nothing here does.
+ */
+const RETURNED_TO_AI = 'RETURNED_TO_AI';
+const RETURNED_TO_AI_COOLDOWN = 'returned_to_ai_cooldown';
+const onReturnCooldown = (ctx: JourneySubjectContext) => ctx.overlays.includes(RETURNED_TO_AI);
+
 /** Why no candidate could be grounded, for the refusal to name. */
 function classificationGap(ctx: JourneySubjectContext): string {
   const family = ctx.classification?.primary_path ?? null;
@@ -263,20 +287,59 @@ export function generateLearnerCandidates(ctx: JourneySubjectContext): LearnerGe
     const not_emitted: NotEmitted[] = [];
     for (const g of EXPLORER_GENERATORS) {
       const c = g.run(governorCtx);
-      if (c) candidates.push(withholdForeignCampaign(c, ctx.brand_slug));
-      else not_emitted.push({ generator: g.name, reason: 'predicate_false' });
+      if (!c) not_emitted.push({ generator: g.name, reason: 'predicate_false' });
+      else if (onReturnCooldown(ctx)) not_emitted.push({ generator: g.name, reason: RETURNED_TO_AI_COOLDOWN });
+      else if (pausedForHuman(ctx, c)) not_emitted.push({ generator: g.name, reason: HUMAN_IN_CONVERSATION });
+      else candidates.push(withholdForeignCampaign(c, ctx.brand_slug));
     }
     return { basis: 'explorer_profile', candidates, not_emitted };
   }
 
   const not_emitted = EXPLORER_GENERATORS.map((g) => ({ generator: g.name, reason: NO_LEARNER_PROFILE }));
   const grounded = classificationNurture(ctx);
+  if (grounded && onReturnCooldown(ctx)) {
+    return { basis: 'none', candidates: [], not_emitted: [...not_emitted, { generator: 'classificationNurture', reason: RETURNED_TO_AI_COOLDOWN }] };
+  }
+  if (grounded && pausedForHuman(ctx, grounded)) {
+    return { basis: 'none', candidates: [], not_emitted: [...not_emitted, { generator: 'classificationNurture', reason: HUMAN_IN_CONVERSATION }] };
+  }
   if (grounded) return { basis: 'classification_only', candidates: [grounded], not_emitted };
   return {
     basis: 'none',
     candidates: [],
     not_emitted: [...not_emitted, { generator: 'classificationNurture', reason: classificationGap(ctx) }],
   };
+}
+
+/* ── what the strategy WOULD do beyond Layer 1: the learner queues' producer (T404) ── */
+
+/** Explorer's own friction line (`frictionRecovery.ts`): F at or above it suppresses commercial action and starts recovery. */
+const FRICTION_THRESHOLD = 25;
+
+/**
+ * The two learner handoffs, read from what Explorer already knows and nothing
+ * invented: an enrolment-ready learner with HIGH_INTENT who is IN_CONVERSATION
+ * goes to admissions; a learner in friction (the overlay, the score, or
+ * NEEDS_SUPPORT - the same predicate `frictionRecovery` uses) whose email is
+ * ineligible goes to support, because a recovery message into a void is not
+ * recovery. Deferred, never emitted: Phase 4's writer materialises them.
+ */
+export function learnerDeferrals(ctx: JourneySubjectContext): JourneyDeferral[] {
+  const facts = ctx.learner;
+  if (!facts || ctx.program_kind !== 'learner') return [];
+  // A learner a human just sent back is not queued for a human again until the cooldown ends.
+  if (onReturnCooldown(ctx)) return [];
+  const out: JourneyDeferral[] = [];
+  const base = { brand: ctx.brand_slug, state: facts.primary_state, path: ctx.classification?.primary_path ?? null, layer: 4 };
+  const has = (o: string) => (facts.overlays as readonly string[]).includes(o);
+  if (facts.primary_state === 'ENROLLMENT_READY' && has('HIGH_INTENT') && has('IN_CONVERSATION')) {
+    out.push({ would: 'create_handoff', reason: 'enrollment_ready_in_conversation', payload: { ...base, owner: 'admissions' } });
+  }
+  const friction = has('FRICTION') || has('NEEDS_SUPPORT') || facts.scores.f >= FRICTION_THRESHOLD;
+  if (friction && ctx.contact.channels.email.eligible !== true) {
+    out.push({ would: 'create_handoff', reason: `friction_email_ineligible:${ctx.contact.channels.email.reason}`, payload: { ...base, owner: 'support' } });
+  }
+  return out;
 }
 
 /* ── the strategy ──────────────────────────────────────────────────────────── */
@@ -297,6 +360,7 @@ export const learnerStrategy: LearnerStrategy = Object.freeze({
   hardStops: learnerHardStops,
   generate: (ctx: JourneySubjectContext): JourneyCandidate[] => generateLearnerCandidates(ctx).candidates,
   generateWithReport: (ctx: JourneySubjectContext): LearnerGeneration => generateLearnerCandidates(ctx),
+  defer: learnerDeferrals,
   emptyReason: (ctx: JourneySubjectContext): string | null => learnerEmptyReason(generateLearnerCandidates(ctx)),
 });
 
@@ -305,14 +369,19 @@ export const learnerStrategy: LearnerStrategy = Object.freeze({
  * generation record so it is testable without re-running the generators.
  *
  *   * Explorer ran and every predicate was false: nothing to add — the bare
- *     `no_candidate` is Explorer's own "no candidate applies".
+ *     `no_candidate` is Explorer's own "no candidate applies". Unless what
+ *     silenced it was the T402 pause, which is named: a human owns the thread.
  *   * No profile: `no_learner_profile:<why the classification could not
  *     ground one either>` — the eight identical entries first, then the one
  *     specific gap, which is the reason worth reading.
  *   * Wrong programme kind or brand: that reason, verbatim.
  */
 export function learnerEmptyReason(g: LearnerGeneration): string | null {
-  if (g.candidates.length > 0 || g.basis === 'explorer_profile') return null;
+  if (g.candidates.length > 0) return null;
+  if (g.basis === 'explorer_profile') {
+    if (g.not_emitted.some((n) => n.reason === RETURNED_TO_AI_COOLDOWN)) return RETURNED_TO_AI_COOLDOWN;
+    return g.not_emitted.some((n) => n.reason === HUMAN_IN_CONVERSATION) ? HUMAN_IN_CONVERSATION : null;
+  }
   const first = g.not_emitted[0];
   const last = g.not_emitted[g.not_emitted.length - 1];
   if (!first || !last) return null;

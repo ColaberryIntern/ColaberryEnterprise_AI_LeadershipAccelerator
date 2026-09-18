@@ -26,6 +26,7 @@ const flags = (): GrowthJourneyFlags =>
     journeySignalIngest: false,
     journeyClassification: false,
     journeyDecisions: true,
+    journeyHandoffs: false,
     journeyExecution: false,
   });
 

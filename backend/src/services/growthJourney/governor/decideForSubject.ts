@@ -53,11 +53,18 @@ const WAIT = 'WAIT';
  */
 const HUMAN_IN_THE_LOOP: ReadonlySet<string> = new Set(['CREATE_HUMAN_TASK', 'SEND_ALI_OUTREACH']);
 
-/** Which of the two inputs a human action needs are unknown right now. */
-function unknownHumanInputs(ctx: JourneySubjectContext): string[] {
+/**
+ * Why a human action cannot fire right now: which of its two inputs is
+ * unknown, and (T403) whether the queue it would hand to is full. Capacity
+ * governs the TASK - `CREATE_HUMAN_TASK` is what lands in a queue; Ali's own
+ * outreach keeps its own caps in `evaluateAliOutreachEligibility`, so a full
+ * sales queue is not a reason to suppress it.
+ */
+function humanInputBlocks(ctx: JourneySubjectContext, actionType: string): string[] {
   const out: string[] = [];
   if (ctx.contact.human_conversation === 'unknown') out.push('human_conversation_unknown');
   if (ctx.contact.sales_capacity === 'unknown') out.push('sales_capacity_unknown');
+  if (ctx.contact.sales_capacity === 'full' && actionType === 'CREATE_HUMAN_TASK') out.push('sales_capacity_full');
   return out;
 }
 
@@ -169,20 +176,23 @@ export async function decideForSubject(
   }
 
   // 4b. An UNKNOWN IS NOT PERMISSION, and this is where that is enforced.
-  //     `human_conversation` and `sales_capacity` are `'unknown'` for every
-  //     subject in this codebase - nothing ties an inbox thread or a ticket to a
-  //     lead, and there is no capacity table at all (T304) - so a candidate that
-  //     would put a person in the loop is suppressed BY NAME rather than emitted
-  //     and hoped about. Before arbitration, deliberately: a blocked human action
-  //     must not win a tier and hide a legitimate lower-tier action behind itself.
+  //     `human_conversation` and `sales_capacity` were `'unknown'` for every
+  //     subject until Phase 4 gave each a source (T402 conversation ownership,
+  //     T403 queue capacity); a subject the sources cannot answer for is still
+  //     unknown, and a candidate that would put a person in the loop is then
+  //     suppressed BY NAME rather than emitted and hoped about. A FULL queue
+  //     suppresses the task the same way (`sales_capacity_full`). Before
+  //     arbitration, deliberately: a blocked human action must not win a tier
+  //     and hide a legitimate lower-tier action behind itself.
   //
   //     NOT handled here, and named rather than implied: `human_conversation:
-  //     'yes'` should also stop a duplicate outreach. That is a judgement about
-  //     WHICH action to propose and it belongs to the generators (T310). This step
-  //     enforces only that an unknown never unlocks a human action.
+  //     'yes'` stops a duplicate outreach in the GENERATORS (T402's pause) -
+  //     a judgement about WHICH action to propose. This step enforces only
+  //     that an unknown never unlocks a human action, and a full queue never
+  //     takes one.
   const withKnownInputs: JourneyCandidate[] = [];
   for (const c of allowed) {
-    const unknowns = HUMAN_IN_THE_LOOP.has(c.action_type) ? unknownHumanInputs(ctx) : [];
+    const unknowns = HUMAN_IN_THE_LOOP.has(c.action_type) ? humanInputBlocks(ctx, c.action_type) : [];
     if (unknowns.length > 0) suppressed.push(suppression(c, unknowns.join(',')));
     else withKnownInputs.push(c);
   }

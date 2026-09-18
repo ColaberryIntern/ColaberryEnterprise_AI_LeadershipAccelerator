@@ -6,13 +6,16 @@ import { redactForLogs } from '../../utils/piiRedaction';
 import { isUniqueViolation } from '../../utils/uniqueViolation';
 import { computeIdempotencyKey } from '../inboxCase/textNormalization';
 import { stableJson } from './classificationService';
+import { recordJourneyEvent } from './ledger';
 import { loadDecisionContext, type LoadedDecisionContext } from './decision/loadDecisionContext';
 import { evaluateFreshness } from '../explorerGrowth/governor/freshness';
 import { decideForSubject } from './governor/decideForSubject';
 import type { DecideDeps, JourneyCandidate, JourneyDecision, JourneySubjectContext } from './governor/types';
 import { resolveJourneyContent } from './journeyContent';
-import { assertOfferAllowed } from './offerEligibility';
+import { assertOfferAllowed, resolveOfferEligibility } from './offerEligibility';
 import { upsertProfile, type UpsertProfileResult } from './profileService';
+import { materializeHandoffs, type MaterializeResult } from './handoffs/handoffService';
+import type { DecisionRowView } from './handoffs/types';
 import type { SubjectAnchor, UnresolvedReason } from './subjectResolver';
 
 /**
@@ -76,6 +79,8 @@ export interface DecideAndRecordArgs {
   trigger: DecisionTrigger;
   flags: GrowthJourneyFlags;
   asOf?: Date;
+  /** T414: `'ranked_pass'` leaves the handoffs for the caller's pass over the whole queue (the batch runner's mode). */
+  handoffAssignment?: 'now' | 'ranked_pass';
 }
 
 export type DecideAndRecordResult =
@@ -89,6 +94,8 @@ export type DecideAndRecordResult =
       decision: JourneyDecision;
       profile: UpsertProfileResult | null;
       unavailable: string[];
+      /** T404: what the handoff writer did with the row - `disabled` while the flag is off. */
+      handoffs: MaterializeResult;
     };
 
 export const SHADOW_MODE = 'shadow' as const;
@@ -223,12 +230,69 @@ export function decisionRow(
 /** Append the row; a replay of the same key lands on the existing row. Never an update. */
 async function persistDecision(row: GrowthJourneyDecisionAttributes): Promise<{ row: GrowthJourneyDecision; replayed: boolean }> {
   try {
-    return { row: await GrowthJourneyDecision.create(row), replayed: false };
+    const created = await GrowthJourneyDecision.create(row);
+    // T410: one ledger row per decision written - the summary (what was chosen and why), never the candidate blob.
+    await recordJourneyEvent('growth_journey.decision.recorded', 'growth_journey_decision', created.id, { tenant_id: row.tenant_id, brand_id: row.brand_id }, {
+      subject_ref: row.subject_ref, lead_id: row.lead_id, enrollment_id: row.enrollment_id, program_id: row.program_id, classification_id: row.classification_id,
+      trigger: row.trigger, decision_date: row.decision_date, mode: row.mode, selected_action: row.selected_action, selected_path: row.selected_path, selected_channel: row.selected_channel,
+      state_at_decision: row.state_at_decision, requires_human_review: row.requires_human_review, ai_involved: row.ai_involved, executed: row.executed,
+    }, row.decided_by);
+    return { row: created, replayed: false };
   } catch (err: unknown) {
     if (!isUniqueViolation(err)) throw err;
     const existing = await GrowthJourneyDecision.findOne({ where: { idempotency_key: row.idempotency_key } });
     if (!existing) throw err;
     return { row: existing, replayed: true };
+  }
+}
+
+/**
+ * T404: hand the PERSISTED row to the handoff writer as plain data. The writer
+ * never imports the decision model (it updates the mutable handoff row and the
+ * append-only guard would refuse the pair), so the view is built here. Gated on
+ * `journeyHandoffs` inside the writer; a failure is logged, never fatal - the
+ * decision is already recorded and a handoff that did not materialise is a
+ * replay away.
+ */
+/**
+ * T414: the packet's path is a family the BRAND may offer, or nothing. The selected path passed the
+ * pipeline's offer gate with its candidate; the classification's family, the fallback, had not - an AI
+ * Flotation subject whose classification named business_training (a data defect, or an override)
+ * reached the solution architect with business-training talking points in its packet. The same gate
+ * the pipeline asks decides here; a refused family becomes a named gap, never the path.
+ */
+async function packetPathFor(row: GrowthJourneyDecision, loaded: LoadedDecisionContext, asOf: Date): Promise<{ path: string | null; path_refused: string | null }> {
+  if (row.selected_path) return { path: row.selected_path, path_refused: null };
+  const family = loaded.ctx.classification?.primary_path ?? null;
+  if (!family) return { path: null, path_refused: null };
+  const gate = await resolveOfferEligibility({ brandId: loaded.ctx.brand_id, offerFamily: family, at: asOf });
+  return gate.allowed ? { path: family, path_refused: null } : { path: null, path_refused: `${family}:${gate.reason}` };
+}
+
+async function handoffsFor(row: GrowthJourneyDecision, loaded: LoadedDecisionContext, flags: GrowthJourneyFlags, asOf: Date, assignment?: 'now' | 'ranked_pass'): Promise<MaterializeResult> {
+  const view: DecisionRowView = {
+    id: row.id, tenant_id: row.tenant_id, brand_id: row.brand_id, program_id: row.program_id, subject_ref: row.subject_ref,
+    lead_id: row.lead_id, enrollment_id: row.enrollment_id, classification_id: row.classification_id, decision_date: row.decision_date,
+    selected_action: row.selected_action, selected_path: row.selected_path, state_at_decision: row.state_at_decision,
+    overlays_at_decision: row.overlays_at_decision ?? [], scores: row.scores, score_gaps: row.score_gaps ?? [],
+    contact_evidence: row.contact_evidence, human_conversation: row.human_conversation, sales_capacity: row.sales_capacity,
+    deferred_actions: row.deferred_actions ?? [], requires_human_review: row.requires_human_review, reason: row.reason,
+    ruleset_version: row.ruleset_version, created_at: row.created_at,
+  };
+  const refs = {
+    tenant_id: loaded.ctx.tenant_id, brand_id: loaded.ctx.brand_id, brand_slug: loaded.ctx.brand_slug,
+    program: loaded.ctx.program_id ? { id: loaded.ctx.program_id, slug: loaded.ctx.program_slug ?? '', kind: loaded.ctx.program_kind } : null,
+    subject_ref: loaded.ctx.subject_ref, lead_id: loaded.ctx.lead_id, enrollment_id: loaded.ctx.enrollment_id,
+  };
+  try {
+    // The gate is asked only when a handoff will actually be written. If this predicate ever misses a
+    // trigger the writer knows, the packet goes out with NO path - the safe side, never a refused family.
+    const asks = view.requires_human_review || view.deferred_actions.some((d) => (d as { would?: unknown }).would === 'create_handoff');
+    const { path, path_refused } = asks && isGrowthJourneyCapabilityEnabled('journeyHandoffs', flags) ? await packetPathFor(row, loaded, asOf) : { path: null, path_refused: null };
+    return await materializeHandoffs({ decision: view, refs: { ...refs, path, path_refused }, flags, asOf, assignment });
+  } catch (err: unknown) {
+    log('growth_journey.handoff.materialize_failed', { decision_id: row.id, subject_ref: row.subject_ref, brand_id: row.brand_id, error_class: classifyError(err) });
+    return { status: 'none', reason: `materialize_failed:${classifyError(err)}` };
   }
 }
 
@@ -279,7 +343,8 @@ export async function decideForSubjectAndRecord(args: DecideAndRecordArgs): Prom
 
   const row = decisionRow(loaded, outcome.decision, args.trigger, notEmittedOf(loaded));
   const persisted = await persistDecision(row);
-  return { status: 'recorded', row: persisted.row, replayed: persisted.replayed, decision: outcome.decision, profile, unavailable: loaded.unavailable };
+  const handoffs = await handoffsFor(persisted.row, loaded, args.flags, asOf, args.handoffAssignment);
+  return { status: 'recorded', row: persisted.row, replayed: persisted.replayed, decision: outcome.decision, profile, unavailable: loaded.unavailable, handoffs };
 }
 
 /* ── the batch runner ──────────────────────────────────────────────────────── */
@@ -300,6 +365,13 @@ export interface RunShadowDecisionsResult {
   replayed: number;
   skipped: Array<{ subject_ref: string; status: string }>;
   errors: Array<{ subject_ref: string; error_class: string }>;
+  /**
+   * T408: what T404's writer did with the recorded decisions, as counts - disabled (flag off), none (no
+   * trigger), rows materialised, and of those assigned / left queued. Since T414 the batch leaves every
+   * row for the caller's ranked pass, so `assigned` is 0 here by construction and `queued` counts every
+   * row it materialised; the nightly's `assignment` block reports what the pass assigned.
+   */
+  handoffs: { disabled: number; none: number; materialized: number; assigned: number; queued: number };
 }
 
 /** `lead:<id>` / `enrollment:<id>` back to an anchor. Null for a ref this runner cannot decide for. */
@@ -317,7 +389,7 @@ export function anchorFromSubjectRef(ref: string): SubjectAnchor | null {
  */
 export async function runShadowDecisions(args: RunShadowDecisionsArgs): Promise<RunShadowDecisionsResult> {
   if (!isGrowthJourneyCapabilityEnabled('journeyDecisions', args.flags)) {
-    return { status: 'disabled', subjects: 0, recorded: 0, replayed: 0, skipped: [], errors: [] };
+    return { status: 'disabled', subjects: 0, recorded: 0, replayed: 0, skipped: [], errors: [], handoffs: { disabled: 0, none: 0, materialized: 0, assigned: 0, queued: 0 } };
   }
   const limit = args.limit ?? 500;
   const rows = await GrowthJourneyClassification.findAll({
@@ -326,7 +398,7 @@ export async function runShadowDecisions(args: RunShadowDecisionsArgs): Promise<
     group: ['subject_ref'],
     limit,
   });
-  const result: RunShadowDecisionsResult = { status: 'ran', subjects: rows.length, recorded: 0, replayed: 0, skipped: [], errors: [] };
+  const result: RunShadowDecisionsResult = { status: 'ran', subjects: rows.length, recorded: 0, replayed: 0, skipped: [], errors: [], handoffs: { disabled: 0, none: 0, materialized: 0, assigned: 0, queued: 0 } };
   for (const r of rows) {
     const ref = String(r.get('subject_ref'));
     const anchor = anchorFromSubjectRef(ref);
@@ -335,10 +407,23 @@ export async function runShadowDecisions(args: RunShadowDecisionsArgs): Promise<
       continue;
     }
     try {
-      const out = await decideForSubjectAndRecord({ anchor, brandId: args.brandId, trigger: args.trigger, flags: args.flags, asOf: args.asOf });
+      // A batch never assigns first-come: its handoffs wait for the caller's ranked pass over the whole
+      // queue (the nightly runs it after every subject of the brand), so a one-slot queue goes to the
+      // subject the ranking puts first - urgent, then value - not the one this loop reached first (T414).
+      const out = await decideForSubjectAndRecord({ anchor, brandId: args.brandId, trigger: args.trigger, flags: args.flags, asOf: args.asOf, handoffAssignment: 'ranked_pass' });
       if (out.status === 'recorded') {
         if (out.replayed) result.replayed += 1;
         else result.recorded += 1;
+        const h = out.handoffs;
+        if (h.status === 'disabled') result.handoffs.disabled += 1;
+        else if (h.status === 'none') result.handoffs.none += 1;
+        else {
+          result.handoffs.materialized += h.handoffs.length;
+          for (const x of h.handoffs) {
+            if (x.assignment.status === 'assigned') result.handoffs.assigned += 1;
+            else result.handoffs.queued += 1;
+          }
+        }
       } else {
         result.skipped.push({ subject_ref: ref, status: out.status });
       }

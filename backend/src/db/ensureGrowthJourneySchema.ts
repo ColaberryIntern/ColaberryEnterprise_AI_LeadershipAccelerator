@@ -1,4 +1,5 @@
 import { sequelize } from '../config/database';
+import { GROWTH_JOURNEY_PHASE4_STATEMENTS } from './growthJourneyPhase4Statements';
 
 /**
  * Growth Journey OS — shared foundation schema (Phase 1, T201).
@@ -470,6 +471,10 @@ export const GROWTH_JOURNEY_STATEMENTS: readonly string[] = [
   // same asset would make "which rule applies" a question with two answers.
   `CREATE UNIQUE INDEX IF NOT EXISTS growth_journey_content_rules_asset_unique ON growth_journey_content_rules (brand_id, asset_id, version) WHERE asset_id IS NOT NULL`,
   `CREATE INDEX IF NOT EXISTS idx_gj_content_rules_brand_status ON growth_journey_content_rules (brand_id, approval_status)`,
+
+  // Phase 4 (T401): handoffs, outcomes, policies - twelve statements in a sibling
+  // module (this file hit the 500-line ceiling), spread in before the brands ALTER.
+  ...GROWTH_JOURNEY_PHASE4_STATEMENTS,
 
   // Placed last so `journey_programs` exists before the foreign key names it.
   `ALTER TABLE brands

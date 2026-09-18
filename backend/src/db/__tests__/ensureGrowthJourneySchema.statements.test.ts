@@ -36,6 +36,7 @@ const SCHEMA_TEST_FAMILY = [
   path.join(__dirname, 'helpers', 'growthJourneyDdl.ts'),
   path.join(__dirname, 'helpers', 'bootCalls.ts'),
   path.join(__dirname, '..', 'ensureGrowthJourneySchema.ts'),
+  path.join(__dirname, '..', 'growthJourneyPhase4Statements.ts'),
 ];
 
 describe('the schema is additive, and provably so', () => {
@@ -140,8 +141,12 @@ describe('the schema is additive, and provably so', () => {
       'brand_offer_policies',
       'growth_journey_classifications',
       'growth_journey_content_rules',
+      'growth_journey_conversation_ownership',
       'growth_journey_decisions',
       'growth_journey_enrollments',
+      'growth_journey_handoffs',
+      'growth_journey_outcomes',
+      'growth_journey_policies',
       'growth_journey_profiles',
       'growth_journey_score_snapshots',
       'growth_journey_transitions',
@@ -222,19 +227,23 @@ describe('the schema is additive, and provably so', () => {
     expect(SQL).not.toMatch(/explorer_/i);
   });
 
-  it('creates exactly the ten tables the run owns so far (five from Phase 1, two from Phase 2, three from Phase 3)', () => {
+  it('creates exactly the fifteen tables the run owns so far (five from Phase 1, two from Phase 2, four from Phase 3, four from Phase 4)', () => {
     // An explicit list rather than a count. The assertion exists to catch a
     // table nobody meant to add, and a count would not distinguish the two.
     // Phase 2 (T222) added classifications and transitions; Phase 3 (T301) added
-    // decisions, profiles and score_snapshots. `handoffs` is Phase 4's, so its
-    // absence here is still deliberate.
+    // decisions, profiles and score_snapshots and (T305) content_rules; Phase 4
+    // (T401) added handoffs, outcomes and policies, and (T402) conversation ownership.
     const tables = [...SQL.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/gi)].map((m) => m[1]);
     expect(tables.sort()).toEqual([
       'brand_offer_policies',
       'growth_journey_classifications',
       'growth_journey_content_rules',
+      'growth_journey_conversation_ownership',
       'growth_journey_decisions',
       'growth_journey_enrollments',
+      'growth_journey_handoffs',
+      'growth_journey_outcomes',
+      'growth_journey_policies',
       'growth_journey_profiles',
       'growth_journey_score_snapshots',
       'growth_journey_transitions',
@@ -366,6 +375,20 @@ describe('boot ordering — the criterion that would fail silently', () => {
     expect(programs).toBeGreaterThan(-1);
     expect(programs).toBeGreaterThan(ensure);
     expect(programs).toBeGreaterThan(policy);
+  });
+
+  it('seeds the queue policies AFTER the programmes (T403), and after the tables they need', () => {
+    // The rows are per programme brand; the order is not a database dependency
+    // (the brands exist either way) but it is asserted so the boot reads as
+    // the queues following the programmes. The table dependency IS hard:
+    // `growth_journey_policies` must exist, and the seed's per-row catch would
+    // otherwise turn its absence into 24 warnings and an empty table.
+    const ensure = activeBootCall('await ensureGrowthJourneySchema()');
+    const programs = activeBootCall('await seedJourneyPrograms()');
+    const policies = activeBootCall('await seedGrowthJourneyPolicies()');
+    expect(policies).toBeGreaterThan(-1);
+    expect(policies).toBeGreaterThan(programs);
+    expect(policies).toBeGreaterThan(ensure);
   });
 
   it('registers it after the Explorer ensure step too, not beside it', () => {

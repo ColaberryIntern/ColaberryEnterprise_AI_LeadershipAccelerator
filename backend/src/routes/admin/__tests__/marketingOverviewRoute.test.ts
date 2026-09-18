@@ -14,7 +14,7 @@ import jwt from 'jsonwebtoken';
 jest.mock('../../../config/env', () => ({ env: { jwtSecret: 'test-secret', nodeEnv: 'test' } }));
 
 // Everything the route file imports that would otherwise boot Sequelize.
-jest.mock('../../../controllers/adminMarketingController', () => ({ handleGetCampaignMetrics: jest.fn() }));
+jest.mock('../../../controllers/adminMarketingController', () => ({ handleGetCampaignMetrics: jest.fn(), handleGetCampaignMetricsByJourney: jest.fn() }));
 jest.mock('../../../services/campaignLinkService', () => ({
   getChannelROIAggregation: jest.fn(), flagUnregisteredTraffic: jest.fn(),
 }));

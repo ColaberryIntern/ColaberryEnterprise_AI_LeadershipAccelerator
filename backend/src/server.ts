@@ -3193,6 +3193,26 @@ async function start(): Promise<void> {
     console.warn('[GrowthJourney] journey program seed failed (non-fatal):', err?.message);
   }
 
+  // Growth Journey OS T403: the 24 queue policy rows (six queues x four brands),
+  // created ONCE with daily_capacity NULL and a default SLA per queue, and
+  // never touched again - every number is the operator's from then on. The
+  // capacity reader answers `unknown` until a human writes a number, which
+  // unlocks nothing; nothing here assigns, notifies or sends.
+  //
+  // AFTER the programme seed: the rows are per programme BRAND, and reading
+  // the steps in this order shows the queues following the programmes.
+  try {
+    const { seedGrowthJourneyPolicies } = await import('./seeds/growthJourney/seedGrowthJourneyPolicies');
+    const policies = await seedGrowthJourneyPolicies();
+    console.log(
+      `[GrowthJourney] queue policies seeded: ${policies.created} created, ${policies.existing} left as they are` +
+        (policies.skipped_brands.length ? `, brands absent: ${policies.skipped_brands.join(',')}` : '') +
+        (policies.failed.length ? `, failed: ${policies.failed.length}` : ''),
+    );
+  } catch (err: any) {
+    console.warn('[GrowthJourney] queue policy seed failed (non-fatal):', err?.message);
+  }
+
   // Intelligence OS: ensure tables exist and start autonomous discovery
   try { await ensureIntelligenceTables(); } catch (err: any) { console.warn('[Intelligence] ensure tables failed (non-fatal):', err?.message); }
   setTimeout(() => {

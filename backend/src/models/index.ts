@@ -448,7 +448,11 @@ import GrowthJourneyEnrollment from './GrowthJourneyEnrollment';
 import GrowthJourneyClassification from './GrowthJourneyClassification';
 import GrowthJourneyTransition from './GrowthJourneyTransition';
 import GrowthJourneyContentRule from './GrowthJourneyContentRule';
+import GrowthJourneyConversationOwnership from './GrowthJourneyConversationOwnership';
 import GrowthJourneyDecision from './GrowthJourneyDecision';
+import GrowthJourneyHandoff from './GrowthJourneyHandoff';
+import GrowthJourneyOutcome from './GrowthJourneyOutcome';
+import GrowthJourneyPolicy from './GrowthJourneyPolicy';
 import GrowthJourneyProfile from './GrowthJourneyProfile';
 import GrowthJourneyScoreSnapshot from './GrowthJourneyScoreSnapshot';
 import SenderProfile from './SenderProfile';
@@ -1623,7 +1627,11 @@ export {
   GrowthJourneyClassification,
   GrowthJourneyTransition,
   GrowthJourneyContentRule,
+  GrowthJourneyConversationOwnership,
   GrowthJourneyDecision,
+  GrowthJourneyHandoff,
+  GrowthJourneyOutcome,
+  GrowthJourneyPolicy,
   GrowthJourneyProfile,
   GrowthJourneyScoreSnapshot,
   SenderProfile,

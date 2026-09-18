@@ -36,7 +36,7 @@ const opts: ClassifyOptions = {
 function loadedFor(message: string) {
   return {
     status: 'loaded',
-    subject: { lead_id: 501, enrollment_id: null, visitor_id: null, org_member_id: null, email_normalized: 'person@example.com', brand_relationships: [] },
+    subject: { lead_id: 501, enrollment_id: null, visitor_id: null, org_member_id: null, email_normalized: 'person@example.com', brand_relationships: [], customer: { paid: false, basis: 'none' } },
     brand: FLOTATION,
     unavailable: ['behaviour'],
     input: {

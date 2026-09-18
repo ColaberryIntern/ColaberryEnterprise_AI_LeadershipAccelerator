@@ -15,6 +15,14 @@ import {
   getDecisionWhyHandler,
   listDecisionsHandler,
 } from '../../controllers/growthJourneyDecisionController';
+import {
+  acceptHandoffHandler,
+  dispositionHandoffHandler,
+  getHandoffHandler,
+  listHandoffsHandler,
+  releaseHandoffHandler,
+} from '../../controllers/growthJourneyHandoffController';
+import { getPersonJourneyHandler } from '../../controllers/growthJourneyPersonController';
 
 /**
  * Growth Journey admin read routes (T207).
@@ -42,13 +50,15 @@ import {
  * AFTER `requireAdmin`, so an unauthenticated caller still sees 401 and learns
  * nothing about the flag either way.
  *
- * ─── READS, AND ONE AUDITED WRITE ───────────────────────────────────────────
+ * ─── READS, AND THE AUDITED WRITES ──────────────────────────────────────────
  *
- * Six GETs and one POST. The participation and decision routes perform no
- * write at all; the classification override is the one write, audited and
- * append-only. The scope every read enforces comes from the caller's
- * memberships, never from a header the client controls — see each controller's
- * header for the full status matrix and the refuse-never-widen rule.
+ * Nine GETs and four POSTs. The participation, decision and person routes
+ * perform no write at all; the classification override and the three handoff moves
+ * (accept, disposition, release - Phase 4) are the writes, each audited through
+ * `requireBrandAccessAudited` before the row changes. The scope every read
+ * enforces comes from the caller's memberships, never from a header the client
+ * controls — see each controller's header for the full status matrix and the
+ * refuse-never-widen rule.
  */
 
 const router = Router();
@@ -80,5 +90,19 @@ router.post(`${BASE}/classifications/:id/override`, overrideClassificationHandle
 // row only. Two GETs, no write. Same guards, same master-flag 404, same matrix.
 router.get(`${BASE}/decisions`, listDecisionsHandler);
 router.get(`${BASE}/decisions/:id/why`, getDecisionWhyHandler);
+
+// Phase 4 (T405): the human's handoff queue and their three moves. Two GETs,
+// three audited POSTs through the state machine in dispositionService. Same
+// guards, same master-flag 404, same matrix; an illegal transition is a 409.
+router.get(`${BASE}/handoffs`, listHandoffsHandler);
+router.get(`${BASE}/handoffs/:id`, getHandoffHandler);
+router.post(`${BASE}/handoffs/:id/accept`, acceptHandoffHandler);
+router.post(`${BASE}/handoffs/:id/disposition`, dispositionHandoffHandler);
+router.post(`${BASE}/handoffs/:id/release`, releaseHandoffHandler);
+
+// Phase 4 (T410): Person 360 - one lead's journey across the brands the caller
+// may see, stored rows only, scoped collection by collection. A lead the caller
+// can see nothing of is the byte-identical 404.
+router.get(`${BASE}/people/:leadId`, getPersonJourneyHandler);
 
 export default router;

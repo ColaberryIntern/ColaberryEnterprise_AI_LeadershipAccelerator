@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
-import { handleGetCampaignMetrics } from '../../controllers/adminMarketingController';
+import { handleGetCampaignMetrics, handleGetCampaignMetricsByJourney } from '../../controllers/adminMarketingController';
 import { getChannelROIAggregation, flagUnregisteredTraffic } from '../../services/campaignLinkService';
 import { getNeedsAttentionQueue } from '../../services/marketing/needsAttentionService';
 import { getMarketingOverview } from '../../services/marketing/overviewSummary';
@@ -10,6 +10,10 @@ import { z } from 'zod';
 const router = Router();
 
 router.get('/api/admin/marketing/campaigns', requireAdmin, handleGetCampaignMetrics);
+
+// T411: the same table one dimension over - brand x programme x path. Same guard, same brand
+// scoping (a brand the caller may not see reads as no such brand), same date range.
+router.get('/api/admin/marketing/campaigns/by-journey', requireAdmin, handleGetCampaignMetricsByJourney);
 
 router.get('/api/admin/marketing/channel-roi', requireAdmin, async (_req: Request, res: Response) => {
   try {

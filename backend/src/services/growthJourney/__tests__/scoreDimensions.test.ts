@@ -43,15 +43,19 @@ describe('the registry declares §5.3 and §5.4 by name', () => {
     ]);
   });
 
-  it('THE COUNT OF SOURCELESS DIMENSIONS IS PINNED: 7 of 10 and 6 of 9', () => {
-    // This is the number the Phase 3 discovery found, and pinning it is what
-    // makes a later invented source visible: a dimension that quietly acquires a
-    // "source" nobody built fails here rather than shipping a number.
+  it('THE COUNT OF SOURCELESS DIMENSIONS IS PINNED: 4 of 10 and 6 of 9', () => {
+    // Seven of ten is the number the Phase 3 discovery found. T407 moved it to
+    // FOUR, deliberately - the plan: "the pinned counts move 7-of-10 -> 4-of-10 in
+    // that one file, deliberately, with the plan's sentence quoted; consulting
+    // stays 6-of-9 - all three deferred dimensions are programs: ['business'] and
+    // this task wires no consulting dimension". Pinning it is still what makes a
+    // later invented source visible: a dimension that quietly acquires a "source"
+    // nobody built fails here rather than shipping a number.
     const business = dimensionsFor('business');
     const consulting = dimensionsFor('consulting');
-    expect([business.length, business.filter((d) => d.source === 'none').length]).toEqual([10, 7]);
+    expect([business.length, business.filter((d) => d.source === 'none').length]).toEqual([10, 4]);
     expect([consulting.length, consulting.filter((d) => d.source === 'none').length]).toEqual([9, 6]);
-    expect(sourcedKeys('business').sort()).toEqual(['fit', 'intent', 'urgency']);
+    expect(sourcedKeys('business').sort()).toEqual(['authority_stakeholder_readiness', 'fit', 'friction_risk', 'intent', 'relationship_engagement', 'urgency']);
     expect(sourcedKeys('consulting').sort()).toEqual(['solution_fit', 'technical_feasibility', 'urgency']);
   });
 
@@ -81,31 +85,23 @@ describe('the registry declares §5.3 and §5.4 by name', () => {
     expect(SCORE_DIMENSIONS[0].source).toBe('none');
   });
 
-  it('a source that EXISTS but is not wired is declared, not hidden', () => {
-    // The verifier's finding: `relationship_engagement` was declared sourceless
-    // while `interaction_outcomes.outcome` and `appointments.status` already
-    // power an engagement score in `opportunityScoringService`. A reason that
-    // omits an existing source is a false reason, so those entries now carry a
-    // `deferred_source` naming it — and the pinned count stays until the plan
-    // says otherwise.
-    // THREE, not two. `authority_stakeholder_readiness` joined them in the
-    // close-out: `leads.title` is populated and `leadScoringEngine`'s C-suite
-    // regex is a deterministic function of exactly that string, so it is
-    // "exists, deliberately not wired" on the same footing as the other two.
-    // Naming two of three with the same standing and staying silent on the third
-    // would be misleading, which is why this list is asserted BY NAME.
-    const deferred = SCORE_DIMENSIONS.filter((d) => d.deferred_source);
-    expect(deferred.map((d) => d.key).sort()).toEqual([
-      'authority_stakeholder_readiness',
-      'friction_risk',
-      'relationship_engagement',
-    ]);
-    for (const d of deferred) {
-      expect(d.source).toBe('none');
-      expect((d.deferred_source ?? '').length).toBeGreaterThan(60);
-      // Each names the real thing it would read, not a vague promise.
-      expect(d.deferred_source).toMatch(/interaction_outcomes|leads\.title/);
+  it('T407: the three sources that existed all along are wired, by the name of the thing that holds the data, and nothing is deferred any more', () => {
+    const byKey = (k: string) => SCORE_DIMENSIONS.find((d) => d.key === k)!;
+    expect(byKey('relationship_engagement').source).toBe('interaction_outcomes');
+    expect(byKey('friction_risk').source).toBe('interaction_outcomes');
+    expect(byKey('friction_risk').inverse).toBe(true);
+    expect(byKey('authority_stakeholder_readiness').source).toBe('lead_title');
+    for (const k of ['relationship_engagement', 'friction_risk', 'authority_stakeholder_readiness']) {
+      expect(byKey(k).programs).toEqual(['business']);
+      expect(byKey(k).weight).toBeGreaterThan(0);
+      expect('deferred_source' in byKey(k)).toBe(false);
     }
+    // The six business weights sum to 1, and the three consulting ones still do (urgency is shared).
+    const sum = (program: 'business' | 'consulting') => Math.round(dimensionsFor(program).reduce((t, d) => t + d.weight, 0) * 100) / 100;
+    expect(sum('business')).toBe(1);
+    expect(sum('consulting')).toBe(1);
+    // No entry anywhere carries a deferral note: the field itself is gone from the spec.
+    expect(SCORE_DIMENSIONS.some((d) => 'deferred_source' in d)).toBe(false);
   });
 
   it('the AI-derived source is named as AI-derived, not as declared', () => {

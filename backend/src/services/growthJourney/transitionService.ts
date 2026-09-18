@@ -2,6 +2,7 @@ import { GrowthJourneyTransition } from '../../models';
 import type { GrowthJourneyTransitionAttributes, GrowthJourneyTransitionType } from '../../models/GrowthJourneyTransition';
 import { computeIdempotencyKey } from '../inboxCase/textNormalization';
 import { isUniqueViolation } from '../../utils/uniqueViolation';
+import { recordJourneyEvent } from './ledger';
 
 /**
  * The one writer of programme/path transitions (Phase 2, T227). Append-only:
@@ -70,7 +71,13 @@ export async function recordTransition(args: TransitionArgs): Promise<{ row: Gro
     ]),
   };
   try {
-    return { row: await GrowthJourneyTransition.create(row), replayed: false };
+    const created = await GrowthJourneyTransition.create(row);
+    // T410: one ledger row per transition written; the from/to values are state literals, never text.
+    await recordJourneyEvent('growth_journey.transition.recorded', 'growth_journey_transition', created.id, { tenant_id: row.tenant_id, brand_id: row.brand_id }, {
+      subject_ref: row.subject_ref, lead_id: row.lead_id, enrollment_id: row.enrollment_id, program_id: row.program_id, transition_type: row.transition_type,
+      from_value: row.from_value, to_value: row.to_value, reason: row.reason, requested_by: row.requested_by,
+    });
+    return { row: created, replayed: false };
   } catch (err: unknown) {
     if (!isUniqueViolation(err)) throw err;
     const existing = await GrowthJourneyTransition.findOne({ where: { idempotency_key: row.idempotency_key } });

@@ -9,6 +9,9 @@ import { OfferNotEligibleError, assertOfferAllowed } from '../growthJourney/offe
 import { resolveDefaultJourneyProgramId } from '../growthJourney/journeyDefaults';
 import { recordTransition } from '../growthJourney/transitionService';
 import { requestBrandReferral } from '../growthJourney/referralRequestService';
+import { isGrowthJourneyCapabilityEnabled } from '../../config/growthJourneyFlags';
+import { OWNER_QUEUES, type GrowthJourneyOwnerQueue } from '../../models/GrowthJourneyHandoff';
+import { assignHandoff, createHandoff } from '../growthJourney/handoffs/handoffService';
 
 /**
  * The Phase 2 routing actions (spec §7.2), registered as keys of the EXISTING
@@ -182,6 +185,40 @@ const deferred = (would: string): ActionHandler => async (action) => {
   return { ok: 'deferred', detail: { would, payload, deferred_reason: 'phase2_no_execution' } };
 };
 
+/**
+ * T404: `create_handoff` becomes real under the `journeyHandoffs` flag - the
+ * same row shape the decision writer produces, from a rule author's request
+ * (`source: 'manual'`, the queue the rule names or `human_review`). Under no
+ * flag it stays exactly the deferral it was. The other three Layer 3/4 actions
+ * stay deferred: nothing here enrols, creates an account or schedules.
+ */
+const isQueue = (v: unknown): v is GrowthJourneyOwnerQueue => typeof v === 'string' && (OWNER_QUEUES as readonly string[]).includes(v);
+const createHandoffAction = (flags: Flags): ActionHandler => async (action, ctx) => {
+  if (!isGrowthJourneyCapabilityEnabled('journeyHandoffs', flags())) return deferred('create_handoff')(action, ctx);
+  if (!ctx.brand_id || !ctx.tenant_id) return { ok: false, error: 'unresolved_context' };
+  const ref = subjectRef({ leadId: Number(ctx.lead.id) });
+  if (!ref) return { ok: false, error: 'no_subject_anchor' };
+  const owner_queue = isQueue(action.owner_queue) ? action.owner_queue : 'human_review';
+  const program = typeof action.program_slug === 'string' && action.program_slug
+    ? await JourneyProgram.findOne({ where: { brand_id: ctx.brand_id, slug: action.program_slug } })
+    : null;
+  const asOf = new Date();
+  const { row, replayed } = await createHandoff({
+    refs: {
+      tenant_id: ctx.tenant_id, brand_id: ctx.brand_id, brand_slug: ctx.brand_slug ?? ctx.brand_id,
+      program: program ? { id: program.id, slug: program.slug, kind: program.kind } : null,
+      subject_ref: ref, lead_id: Number(ctx.lead.id), enrollment_id: null,
+      path: typeof action.offer_family === 'string' && action.offer_family ? action.offer_family : null,
+    },
+    // Keyed on this FIRING (the raw payload id): the same rule on a later lead event is a new handoff once the first is closed.
+    trigger: { source: 'manual', owner_queue, reason: typeof action.reason === 'string' && action.reason ? action.reason : requestedBy(ctx), urgent_hint: action.urgent === true, event_ref: requestedBy(ctx) },
+    decision: null,
+    asOf,
+  });
+  const assignment = await assignHandoff(row, flags(), asOf);
+  return { ok: true, detail: { handoff_id: row.id, replayed, owner_queue, assignment: assignment.status, ...(assignment.status === 'queued' ? { blocked_reason: assignment.reason } : {}) } };
+};
+
 /** Builds the nine handlers. `flags` is injected so tests never touch the environment. */
 export function makeGrowthJourneyActions(flags: Flags = () => env.growthJourney): Record<string, ActionHandler> {
   const gated = (fn: ActionHandler): ActionHandler => async (action, ctx) => (flags().growthJourneyEnabled ? fn(action, ctx) : DISABLED);
@@ -194,7 +231,7 @@ export function makeGrowthJourneyActions(flags: Flags = () => env.growthJourney)
     create_business_account: gated(deferred('create_business_account')),
     enter_governed_campaign: gated(deferred('enter_governed_campaign')),
     schedule_ai_qualification: gated(deferred('schedule_ai_qualification')),
-    create_handoff: gated(deferred('create_handoff')),
+    create_handoff: gated(createHandoffAction(flags)),
   };
 }
 

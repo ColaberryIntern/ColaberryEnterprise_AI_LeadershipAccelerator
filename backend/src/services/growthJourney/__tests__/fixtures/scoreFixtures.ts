@@ -19,12 +19,22 @@ export const AT = new Date('2026-09-14T12:00:00Z');
 export const signals = (over: Partial<SubjectSignals> = {}): SubjectSignals => ({
   lead: null,
   observed: null,
+  // T407: the counts are a gap unless a test states them - `zeroCounts` is the measured-nothing case.
+  inbound: null,
+  appointments: null,
   computed_at: AT,
   ...over,
 });
 
+/** T407: counts that were READ and are zero - a measurement, not a gap. */
+export const zeroCounts = {
+  inbound: { replied: 0, booked_meeting: 0, answered: 0, declined: 0, no_response: 0 },
+  appointments: { scheduled: 0, completed: 0, no_show: 0, cancelled: 0 },
+};
+
 /** A lead with every sourced input answered, for both programmes. */
 export const fullLead = {
+  title: 'VP Operations',
   industry: 'Manufacturing',
   annual_revenue: 25_000_000,
   employee_count: 400,

@@ -11,6 +11,11 @@ const orgMemberFindByPk = jest.fn();
 const orgMemberCreate = jest.fn();
 const orgMemberUpdate = jest.fn();
 
+const profileFindOne = jest.fn();
+const enrollmentLeadFindOne = jest.fn();
+const enrollmentFindAll = jest.fn();
+const subscriptionFindOne = jest.fn();
+
 const resolveExplorerLead = jest.fn();
 const getLeadContexts = jest.fn();
 
@@ -23,6 +28,7 @@ jest.mock('../../../models', () => ({
   },
   Enrollment: {
     findByPk: (...a: unknown[]) => enrollmentFindByPk(...a),
+    findAll: (...a: unknown[]) => enrollmentFindAll(...a),
     create: (...a: unknown[]) => enrollmentCreate(...a),
     update: (...a: unknown[]) => enrollmentUpdate(...a),
     upsert: (...a: unknown[]) => enrollmentCreate(...a),
@@ -39,6 +45,11 @@ jest.mock('../../../models', () => ({
     update: (...a: unknown[]) => orgMemberUpdate(...a),
     upsert: (...a: unknown[]) => orgMemberCreate(...a),
   },
+  // T407: the lead -> enrolment walk and the customer fact. Reads only; no writer is mocked because none may exist.
+  ExplorerJourneyProfile: { findOne: (...a: unknown[]) => profileFindOne(...a) },
+  EnrollmentLead: { findOne: (...a: unknown[]) => enrollmentLeadFindOne(...a) },
+  Subscription: { findOne: (...a: unknown[]) => subscriptionFindOne(...a) },
+  CommunityMember: {},
 }));
 
 jest.mock('../../explorerGrowth/explorerIdentityBridge', () => ({
@@ -115,6 +126,10 @@ beforeEach(() => {
   orgMemberFindByPk.mockReset().mockResolvedValue({ id: 'om-1', enrollment_id: 'enr-1' });
   resolveExplorerLead.mockReset().mockResolvedValue(bridged());
   getLeadContexts.mockReset().mockResolvedValue([]);
+  profileFindOne.mockReset().mockResolvedValue(null);
+  enrollmentLeadFindOne.mockReset().mockResolvedValue(null);
+  enrollmentFindAll.mockReset().mockResolvedValue([]);
+  subscriptionFindOne.mockReset().mockResolvedValue(null);
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
 });
 
@@ -389,8 +404,10 @@ describe('the relationship half — §15 calls it a subject AND relationship ser
     expect(code).toContain('getLeadContexts');
     expect(code).not.toMatch(/LeadTenantContext/);
     expect(code).not.toMatch(/lead_tenant_contexts/);
-    // Nor any other model reaching for the same data.
-    expect(code).not.toMatch(/\.findAll\s*\(/);
+    // Nor any other model reaching for the same data: the ONE findAll in the module is
+    // T407's step 3 over `enrollments` (an identity table, not a relationship one).
+    expect(code.match(/\.findAll\s*\(/g)).toHaveLength(1);
+    expect(code).toMatch(/Enrollment\.findAll\s*\(/);
   });
 
   it('does not look for relationships without a lead', async () => {
@@ -421,6 +438,130 @@ describe('the relationship half — §15 calls it a subject AND relationship ser
   });
 });
 
+describe('T407: the lead -> enrolment walk, and what a customer is', () => {
+  const NONE = { paid: false, basis: 'none' };
+
+  it('a lead anchor with no profile link, no enrollment_leads row and no enrolment by email reports no enrolment and no customer - three reads, in that order, and the bridge is not called', async () => {
+    const r = await resolveSubject({ leadId: 42 });
+    expect(r.status).toBe('resolved');
+    if (r.status !== 'resolved') return;
+    expect(r.subject.enrollment_id).toBeNull();
+    expect(r.subject.customer).toEqual(NONE);
+    expect(r.sources).toEqual(['lead']);
+    expect(profileFindOne).toHaveBeenCalledWith({ where: { lead_id: 42 }, attributes: ['enrollment_id'] });
+    expect(enrollmentLeadFindOne).toHaveBeenCalledTimes(1);
+    expect(enrollmentFindAll).toHaveBeenCalledTimes(1);
+    expect(resolveExplorerLead).not.toHaveBeenCalled();
+    expect(subscriptionFindOne).not.toHaveBeenCalled();
+  });
+
+  it('step 1: the profile link wins, and the later steps are not read', async () => {
+    profileFindOne.mockResolvedValue({ enrollment_id: 'enr-p' });
+    enrollmentFindByPk.mockResolvedValue({ id: 'enr-p', payment_status: 'paid', tier: 'member' });
+    const r = await resolveSubject({ leadId: 42 });
+    if (r.status !== 'resolved') throw new Error(r.status);
+    expect(r.subject.enrollment_id).toBe('enr-p');
+    expect(r.sources).toEqual(['lead', 'enrollment', 'explorer_profile']);
+    expect(enrollmentLeadFindOne).not.toHaveBeenCalled();
+    expect(enrollmentFindAll).not.toHaveBeenCalled();
+    expect(r.subject.customer).toEqual({ paid: true, basis: 'payment_status' });
+  });
+
+  it('step 2: an enrollment_leads row that carries an enrolment; one that does not (a prospect) falls through to step 3', async () => {
+    enrollmentLeadFindOne.mockResolvedValue({ enrollment_id: 'enr-el' });
+    enrollmentFindByPk.mockResolvedValue({ id: 'enr-el', payment_status: 'pending', tier: 'member' });
+    const r = await resolveSubject({ leadId: 42 });
+    if (r.status !== 'resolved') throw new Error(r.status);
+    expect(r.subject.enrollment_id).toBe('enr-el');
+    expect(r.sources).toEqual(['lead', 'enrollment', 'enrollment_lead']);
+    expect(enrollmentFindAll).not.toHaveBeenCalled();
+    expect(r.subject.customer).toEqual(NONE);
+    enrollmentLeadFindOne.mockResolvedValue({ enrollment_id: null });
+    enrollmentFindAll.mockResolvedValue([{ id: 'enr-e', email: 'A@Example.test', enrollment_type: 'explorer', payment_status: 'pending', created_at: new Date('2026-01-01') }]);
+    const r2 = await resolveSubject({ leadId: 42 });
+    if (r2.status !== 'resolved') throw new Error(r2.status);
+    expect(r2.subject.enrollment_id).toBe('enr-e');
+    expect(r2.sources).toEqual(['lead', 'enrollment', 'enrollment_email']);
+  });
+
+  it("step 3: several enrolments on one address are deduped by the bridge's rule - mgmt_role > non-explorer > paid > newest - never by recency alone", async () => {
+    enrollmentFindAll.mockResolvedValue([
+      { id: 'newest-explorer', enrollment_type: 'explorer', payment_status: 'pending', created_at: new Date('2026-09-01') },
+      { id: 'older-paid-seat', enrollment_type: 'standard', payment_status: 'paid', created_at: new Date('2026-03-01') },
+      { id: 'staff', enrollment_type: 'standard', payment_status: 'pending', created_at: new Date('2025-01-01'), communityMember: { mgmt_role: 'admin' } },
+    ]);
+    enrollmentFindByPk.mockImplementation(async (id: string) => ({ id, payment_status: id === 'older-paid-seat' ? 'paid' : 'pending', tier: 'member' }));
+    const r = await resolveSubject({ leadId: 42 });
+    if (r.status !== 'resolved') throw new Error(r.status);
+    expect(r.subject.enrollment_id).toBe('staff');
+    // The email match is on the NORMALISED address through LOWER(email), not the raw column.
+    const call = enrollmentFindAll.mock.calls[0][0] as { where: unknown; include: Array<{ as: string; required: boolean }> };
+    expect(JSON.stringify(call.where)).toContain('a@example.test');
+    expect(call.include[0]).toMatchObject({ as: 'communityMember', required: false });
+  });
+
+  it('the walk needs an address for steps 2 and 3: a lead with no email stops after the profile step', async () => {
+    leadFindByPk.mockResolvedValue({ id: 42, email: null });
+    const r = await resolveSubject({ leadId: 42 });
+    if (r.status !== 'resolved') throw new Error(r.status);
+    expect(r.subject.enrollment_id).toBeNull();
+    expect(profileFindOne).toHaveBeenCalledTimes(1);
+    expect(enrollmentLeadFindOne).not.toHaveBeenCalled();
+    expect(enrollmentFindAll).not.toHaveBeenCalled();
+  });
+
+  it('a caller-supplied enrolment id is never overwritten by the walk, and the walk does not run', async () => {
+    profileFindOne.mockResolvedValue({ enrollment_id: 'enr-other' });
+    const r = await resolveSubject({ leadId: 42, enrollmentId: 'enr-1' });
+    if (r.status !== 'resolved') throw new Error(r.status);
+    expect(r.subject.enrollment_id).toBe('enr-1');
+    expect(profileFindOne).not.toHaveBeenCalled();
+  });
+
+  describe('customer is a PAID relationship, never "an enrolment exists"', () => {
+    it('a paid, member-tier enrolment: paid, basis payment_status', async () => {
+      enrollmentFindByPk.mockResolvedValue({ id: 'enr-1', email: 'a@example.test', payment_status: 'paid', tier: 'member' });
+      const r = await resolveSubject({ enrollmentId: 'enr-1' });
+      if (r.status !== 'resolved') throw new Error(r.status);
+      expect(r.subject.customer).toEqual({ paid: true, basis: 'payment_status' });
+      expect(subscriptionFindOne).not.toHaveBeenCalled();
+    });
+
+    it('a GUEST-tier enrolment is not a customer even with payment_status paid (every AI Flotation submit mints one); an unpaid member is not either', async () => {
+      enrollmentFindByPk.mockResolvedValue({ id: 'enr-1', email: 'a@example.test', payment_status: 'paid', tier: 'guest' });
+      const guest = await resolveSubject({ enrollmentId: 'enr-1' });
+      if (guest.status !== 'resolved') throw new Error(guest.status);
+      expect(guest.subject.enrollment_id).toBe('enr-1');
+      expect(guest.subject.customer).toEqual(NONE);
+      enrollmentFindByPk.mockResolvedValue({ id: 'enr-1', email: 'a@example.test', payment_status: 'pending', tier: 'member' });
+      const pending = await resolveSubject({ enrollmentId: 'enr-1' });
+      if (pending.status !== 'resolved') throw new Error(pending.status);
+      expect(pending.subject.customer).toEqual(NONE);
+      expect(subscriptionFindOne).toHaveBeenCalledTimes(2);
+    });
+
+    it('an ACTIVE subscription on the enrolment is the other basis; a canceled or past_due one is not asked for', async () => {
+      enrollmentFindByPk.mockResolvedValue({ id: 'enr-1', email: 'a@example.test', payment_status: 'pending', tier: 'guest' });
+      subscriptionFindOne.mockResolvedValue({ id: 'sub-1' });
+      const r = await resolveSubject({ enrollmentId: 'enr-1' });
+      if (r.status !== 'resolved') throw new Error(r.status);
+      expect(r.subject.customer).toEqual({ paid: true, basis: 'subscription' });
+      expect(subscriptionFindOne).toHaveBeenCalledWith({ where: { enrollment_id: 'enr-1', status: 'active' }, attributes: ['id'] });
+    });
+
+    it('no enrolment at all: not a customer, and nothing is asked', async () => {
+      const r = await resolveSubject({ visitorId: 'vis-1' });
+      if (r.status !== 'resolved') throw new Error(r.status);
+      expect(r.subject.customer).toEqual(NONE);
+      expect(subscriptionFindOne).not.toHaveBeenCalled();
+    });
+  });
+
+  it('a walk step that throws is lookup_failed, never a resolved subject with a guessed enrolment', async () => {
+    enrollmentLeadFindOne.mockRejectedValue(new Error('db down'));
+    expect(await resolveSubject({ leadId: 42 })).toEqual({ status: 'unresolved', reason: 'lookup_failed' });
+  });
+});
 describe('subjectHasBrandRelationship', () => {
   it('is true only for a brand the subject actually has', async () => {
     getLeadContexts.mockResolvedValue([context({ brand_id: 'brand-cpn' })]);

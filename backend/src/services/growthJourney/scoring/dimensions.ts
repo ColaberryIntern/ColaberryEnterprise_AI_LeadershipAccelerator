@@ -6,10 +6,12 @@ import type { JourneyProgramKind } from '../governor/types';
  * ─── THE POINT OF THIS FILE IS THE `source: 'none'` ENTRIES ─────────────────
  *
  * §5.3 names ten dimensions for a business journey and §5.4 names nine for a
- * consulting one. **Seven of those ten and six of those nine have no source in
- * this codebase** — a finding from the Phase 3 discovery, not an implementation
- * shortcut. This registry states which, so the absence is a declared fact that a
- * test can pin rather than a silence a reader has to notice.
+ * consulting one. **Four of those ten and six of those nine have no source in
+ * this codebase** — seven of ten at the Phase 3 discovery, until T407 wired the
+ * three that had a source all along (`interaction_outcomes` + `appointments` for
+ * engagement and friction, `leads.title` for authority). This registry states
+ * which, so the absence is a declared fact that a test can pin rather than a
+ * silence a reader has to notice.
  *
  * A `source: 'none'` dimension scores `null`, contributes nothing to the summary
  * and appears in `ScoreVector.gaps` with its reason. It is never defaulted to a
@@ -19,7 +21,7 @@ import type { JourneyProgramKind } from '../governor/types';
  * ─── WHY THE SOURCED ONES ARE THE ONES THEY ARE ─────────────────────────────
  *
  * Only fields that are POPULATED for real leads today are treated as sources.
- * Three per programme qualify. Everything else either does not exist, or exists
+ * Six for business and three for consulting qualify. Everything else either does not exist, or exists
  * and measures something else — and the `reason` on each sourceless entry says
  * which, because "no source" is a much weaker statement than "the nearest
  * candidate measures our own outbound activity".
@@ -60,6 +62,10 @@ export type SignalSource =
    */
   | 'advisory_ai_maturity'
   | 'observed_visitor_signals'
+  /** T407: `interaction_outcomes.outcome` and `appointments.status`, counted per lead - the counterparty's side of the relationship. */
+  | 'interaction_outcomes'
+  /** T407: `leads.title` through `normalizeTitleCategory` - the one deterministic authority signal in the repo. */
+  | 'lead_title'
   | 'none';
 
 export interface ScoreDimensionSpec {
@@ -78,18 +84,11 @@ export interface ScoreDimensionSpec {
    */
   reason?: string;
   /**
-   * A source that EXISTS and is deliberately not wired here.
-   *
-   * Explorer's `DEFERRED_RULES` precedent. T306's verifier found
-   * `relationship_engagement` declared sourceless while
-   * `interaction_outcomes.outcome` and `appointments.status` already power a
-   * per-lead engagement score in `opportunityScoringService` — a hidden
-   * capability, and a false reason. This field records the conflict in the
-   * registry instead of in a comment: the plan's acceptance pins the sourceless
-   * count at 7 of 10 and 6 of 9, so wiring these is a declared follow-up rather
-   * than something to smuggle in against a stated criterion.
+   * A higher value is WORSE (friction and risk). The dimension keeps its own
+   * meaning on the vector; the summary counts `cap - value` for it, so a subject
+   * with more friction ranks lower, not higher.
    */
-  deferred_source?: string;
+  inverse?: boolean;
 }
 
 /**
@@ -134,12 +133,15 @@ const ENTRIES: ScoreDimensionSpec[] = [
   },
 
   /* ── §5.3, the business journey ────────────────────────────────────────── */
+  // The six sourced business weights sum to 1: fit 0.2, intent 0.15, urgency 0.3
+  // (shared with consulting, where 0.4 + 0.3 + 0.3 also sum to 1), engagement
+  // 0.15, friction 0.1 (inverse), authority 0.1. Rebalanced in T407.
   {
     key: 'fit',
     label: 'Fit',
     programs: ['business'],
     source: 'lead_firmographics',
-    weight: 0.4,
+    weight: 0.2,
     cap: 100,
   },
   {
@@ -147,20 +149,16 @@ const ENTRIES: ScoreDimensionSpec[] = [
     label: 'Intent',
     programs: ['business'],
     source: 'observed_visitor_signals',
-    weight: 0.3,
+    weight: 0.15,
     cap: 100,
   },
   {
     key: 'authority_stakeholder_readiness',
     label: 'Authority and stakeholder readiness',
     programs: ['business'],
-    source: 'none',
-    weight: 0,
+    source: 'lead_title',
+    weight: 0.1,
     cap: 100,
-    reason:
-      'the only authority signal in the repo is a title regex inside `leadScoringEngine`, which scores an Apollo person before import and never a journey subject; `departments_impacted` is a self-declared list with no role data',
-    deferred_source:
-      '`leads.title` IS populated, and `leadScoringEngine`\u2019s C-suite/VP/Director regex is a deterministic function of exactly that string, so this is "exists, deliberately not wired" on the same footing as relationship engagement rather than a true absence. Deferred for the same pinned-count reason, and declared here because naming two of the three and staying silent on the third would be misleading.',
   },
   {
     key: 'solution_alignment',
@@ -175,13 +173,9 @@ const ENTRIES: ScoreDimensionSpec[] = [
     key: 'relationship_engagement',
     label: 'Relationship engagement',
     programs: ['business'],
-    source: 'none',
-    weight: 0,
+    source: 'interaction_outcomes',
+    weight: 0.15,
     cap: 100,
-    reason:
-      'the outbound-side candidates (`communication_logs`, `activities`, `leads.pipeline_stage`, which advances on a send) record what WE did rather than where the relationship stands — but a counterparty-side source does exist, so this entry is deferred rather than absent',
-    deferred_source:
-      '`interaction_outcomes.outcome` (`replied`, `booked_meeting`, `answered`, `declined`, keyed on `lead_id`, written live by the Mandrill, GHL and Synthflow webhooks) and `appointments.status`; `opportunityScoringService` already computes an engagement score from exactly those. Wiring it changes the sourceless count this task pins at 7 of 10, so it is T310 with the count amended deliberately.',
   },
   {
     key: 'delivery_feasibility',
@@ -197,13 +191,10 @@ const ENTRIES: ScoreDimensionSpec[] = [
     key: 'friction_risk',
     label: 'Friction and risk',
     programs: ['business'],
-    source: 'none',
-    weight: 0,
+    source: 'interaction_outcomes',
+    weight: 0.1,
     cap: 100,
-    reason:
-      'no deal-risk model exists: nothing records a stalled decision, a competing vendor or a lost deal, and `leads.pipeline_stage` cannot express "lost" at all (`advancePipelineStage` refuses it)',
-    deferred_source:
-      '`interaction_outcomes.outcome` also carries `declined` and `no_response`, which ARE deal risk and need none of the opt-out status literals T304 bans. Deferred for the same pinned-count reason as relationship engagement, not because the data is missing.',
+    inverse: true,
   },
 
   /* ── §5.4, the consulting journey ──────────────────────────────────────── */

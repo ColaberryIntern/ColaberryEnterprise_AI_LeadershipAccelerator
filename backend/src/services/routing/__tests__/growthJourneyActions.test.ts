@@ -21,6 +21,7 @@ const m = {
   org: jest.fn(),
 };
 
+jest.mock('../../growthJourney/ledger', () => ({ recordJourneyEvent: jest.fn(async () => ({ recorded: true })) }));  // T410: the ledger adapter, at its boundary
 jest.mock('../../../models', () => ({
   GrowthJourneyEnrollment: { create: (...a: unknown[]) => m.enrollmentCreate(...a), findOne: (...a: unknown[]) => m.enrollmentFindOne(...a) },
   JourneyPath: { findOne: (...a: unknown[]) => m.pathFindOne(...a) },
@@ -45,12 +46,15 @@ jest.mock('../../growthJourney/offerEligibility', () => {
 jest.mock('../../growthJourney/journeyDefaults', () => ({ resolveDefaultJourneyProgramId: (...a: unknown[]) => m.resolveDefaultJourneyProgramId(...a) }));
 jest.mock('../../growthJourney/transitionService', () => ({ recordTransition: (...a: unknown[]) => m.recordTransition(...a) }));
 jest.mock('../../growthJourney/referralRequestService', () => ({ requestBrandReferral: (...a: unknown[]) => m.requestBrandReferral(...a) }));
+// T404: the handoff writer is mocked at its boundary; its own suite drives the rows.
+const handoff = { createHandoff: jest.fn(), assignHandoff: jest.fn() };
+jest.mock('../../growthJourney/handoffs/handoffService', () => ({ createHandoff: (...a: unknown[]) => handoff.createHandoff(...a), assignHandoff: (...a: unknown[]) => handoff.assignHandoff(...a) }));
 
 import { GROWTH_JOURNEY_ACTION_TYPES, makeGrowthJourneyActions } from '../growthJourneyActions';
 import { OfferNotEligibleError } from '../../growthJourney/offerEligibility';
 import type { GrowthJourneyFlags } from '../../../config/growthJourneyFlags';
 
-const ON: GrowthJourneyFlags = { growthJourneyEnabled: true, journeySignalIngest: false, journeyClassification: false, journeyExecution: false };
+const ON: GrowthJourneyFlags = { growthJourneyEnabled: true, journeySignalIngest: false, journeyClassification: false, journeyDecisions: false, journeyHandoffs: false, journeyExecution: false };
 const OFF: GrowthJourneyFlags = { ...ON, growthJourneyEnabled: false };
 const actions = (flags: GrowthJourneyFlags = ON) => makeGrowthJourneyActions(() => flags);
 
@@ -263,4 +267,48 @@ describe('recorded, not applied', () => {
       for (const fn of [m.enrollmentCreate, m.classifySubject, m.leadContext, m.campaign, m.org, m.recordTransition]) expect(fn).not.toHaveBeenCalled();
     });
   }
+});
+
+/* ── T404: create_handoff becomes real under the handoffs flag ───────────────── */
+
+describe('T404 — create_handoff', () => {
+  const HANDOFFS_ON: GrowthJourneyFlags = { ...ON, journeyHandoffs: true };
+
+  beforeEach(() => {
+    handoff.createHandoff.mockReset().mockResolvedValue({ row: { id: 'h-1' }, replayed: false });
+    handoff.assignHandoff.mockReset().mockResolvedValue({ status: 'queued', reason: 'no_assignee_policy' });
+  });
+
+  it('under the flag creates the same row shape from the rule (source manual, the queue the rule names) and runs the assignment gates', async () => {
+    const r = await actions(HANDOFFS_ON).create_handoff({ type: 'create_handoff', owner_queue: 'sales', offer_family: 'ai_consulting', reason: 'rule: enterprise inbound' }, ctx());
+    expect(r).toEqual({ ok: true, detail: { handoff_id: 'h-1', replayed: false, owner_queue: 'sales', assignment: 'queued', blocked_reason: 'no_assignee_policy' } });
+    expect(handoff.createHandoff).toHaveBeenCalledTimes(1);
+    const args = handoff.createHandoff.mock.calls[0][0];
+    expect(args.refs).toEqual({ tenant_id: 't-af', brand_id: 'b-af', brand_slug: 'ai-flotation', subject_ref: 'lead:501', lead_id: 501, enrollment_id: null, path: 'ai_consulting', program: null });
+    expect(args.trigger).toEqual({ source: 'manual', owner_queue: 'sales', reason: 'rule: enterprise inbound', urgent_hint: false, event_ref: 'routing_rule:raw-9' });
+    expect(args.decision).toBeNull();
+    expect(handoff.assignHandoff).toHaveBeenCalledWith({ id: 'h-1' }, HANDOFFS_ON, args.asOf);
+  });
+
+  it('an unknown queue falls back to human_review; no reason falls back to the rule id; urgent is honoured', async () => {
+    await actions(HANDOFFS_ON).create_handoff({ type: 'create_handoff', owner_queue: 'not_a_queue', urgent: true }, ctx());
+    expect(handoff.createHandoff.mock.calls[0][0].trigger).toEqual({ source: 'manual', owner_queue: 'human_review', reason: 'routing_rule:raw-9', urgent_hint: true, event_ref: 'routing_rule:raw-9' });
+  });
+
+  it('under no handoffs flag it stays exactly the deferral it was, touching nothing', async () => {
+    const r = await actions(ON).create_handoff({ type: 'create_handoff', owner_queue: 'sales' }, ctx());
+    expect(r).toEqual({ ok: 'deferred', detail: { would: 'create_handoff', payload: { owner_queue: 'sales' }, deferred_reason: 'phase2_no_execution' } });
+    expect(handoff.createHandoff).not.toHaveBeenCalled();
+  });
+
+  it('with the master off it is disabled like every other action', async () => {
+    const r = await actions({ ...HANDOFFS_ON, growthJourneyEnabled: false }).create_handoff({ type: 'create_handoff' }, ctx());
+    expect(r).toEqual({ ok: false, error: 'growth_journey_disabled' });
+  });
+
+  it('without a resolved brand or tenant it refuses rather than guessing', async () => {
+    const r = await actions(HANDOFFS_ON).create_handoff({ type: 'create_handoff' }, ctx({ brand_id: null }));
+    expect(r).toEqual({ ok: false, error: 'unresolved_context' });
+    expect(handoff.createHandoff).not.toHaveBeenCalled();
+  });
 });

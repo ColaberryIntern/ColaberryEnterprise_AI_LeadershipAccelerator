@@ -4,6 +4,7 @@ const m = { policyFindOne: jest.fn() };
 // `../../../models` left the real model in place and every lookup came back
 // `SequelizeConnectionRefusedError` -> `lookup_failed`, which is the resolver
 // failing closed correctly and the test proving nothing.
+jest.mock('../ledger', () => ({ recordJourneyEvent: jest.fn(async () => ({ recorded: true })) }));  // T410: the ledger adapter, at its boundary
 jest.mock('../../../models/BrandOfferPolicy', () => ({
   BrandOfferPolicy: { findOne: (...a: unknown[]) => m.policyFindOne(...a) },
 }));
@@ -86,6 +87,7 @@ const flags = (): GrowthJourneyFlags =>
     journeySignalIngest: false,
     journeyClassification: false,
     journeyDecisions: true,
+    journeyHandoffs: false,
     journeyExecution: false,
   });
 

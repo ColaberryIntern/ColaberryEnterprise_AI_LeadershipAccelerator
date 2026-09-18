@@ -12,6 +12,7 @@ import ScheduledEmail from '../models/ScheduledEmail';
 import { handleTicketReplyEmail } from '../services/workforce/ticketReplyService';
 import { resolveExplorerReplyRouting } from '../services/explorerGrowth/explorerInboundRouter';
 import { recordReplyClassification } from '../services/growthJourney/replyClassificationHook';
+import { recordReplyHandoff } from '../services/growthJourney/replyHandoffHook';
 import { redactForLogs } from '../utils/piiRedaction';
 
 /** Map Mandrill event types to our outcome types */
@@ -480,6 +481,10 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
               source: routing.classification?.source ?? null,
             }),
           );
+          // Growth Journey OS (Phase 4, T404): a HUMAN_TASK route becomes a handoff row
+          // in the queue the class names. Fire-and-forget, flag-gated inside, never
+          // throws; it changes nothing above or below - the route was already logged.
+          void recordReplyHandoff({ leadId: lead.id, replyClass: routing.classification?.class ?? null, providerMessageId: msg.headers?.['Message-Id'] ?? null });
         }
       } catch (routeErr: any) {
         // FAIL CLOSED. If we cannot tell whether this is an Explorer, we must

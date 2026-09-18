@@ -7,6 +7,7 @@ const m = {
   leadFindByPk: jest.fn(),
   profileFindOne: jest.fn(),
   explorerProfileFindByPk: jest.fn(),
+  handoffFindOne: jest.fn(),
   resolveSubject: jest.fn(),
   latestClassification: jest.fn(),
   resolveContactEvidence: jest.fn(),
@@ -20,6 +21,7 @@ jest.mock('../../../../models', () => ({
   Lead: { findByPk: (...a: unknown[]) => m.leadFindByPk(...a) },
   GrowthJourneyProfile: { findOne: (...a: unknown[]) => m.profileFindOne(...a) },
   ExplorerJourneyProfile: { findByPk: (...a: unknown[]) => m.explorerProfileFindByPk(...a) },
+  GrowthJourneyHandoff: { findOne: (...a: unknown[]) => m.handoffFindOne(...a) },
 }));
 jest.mock('../../subjectResolver', () => ({ resolveSubject: (...a: unknown[]) => m.resolveSubject(...a) }));
 jest.mock('../../classificationService', () => ({ latestClassification: (...a: unknown[]) => m.latestClassification(...a) }));
@@ -52,10 +54,10 @@ const LEAD_CREATED = new Date('2026-08-01T00:00:00Z');
 
 const subject = (over: Record<string, unknown> = {}) => ({
   status: 'resolved',
-  subject: { lead_id: 501, enrollment_id: null, visitor_id: null, org_member_id: null, email_normalized: 'x@example.com', brand_relationships: [], ...over },
+  subject: { lead_id: 501, enrollment_id: null, visitor_id: null, org_member_id: null, email_normalized: 'x@example.com', brand_relationships: [], customer: { paid: false, basis: 'none' }, ...over },
 });
 
-const NONE = { inbound: { replied: 0, booked_meeting: 0, answered: 0, declined: 0 }, appointments: { scheduled: 0, completed: 0, no_show: 0, cancelled: 0 }, hasDeliveryEngagement: false };
+const NONE = { inbound: { replied: 0, booked_meeting: 0, answered: 0, declined: 0, no_response: 0 }, appointments: { scheduled: 0, completed: 0, no_show: 0, cancelled: 0 }, hasDeliveryEngagement: false };
 
 function arrange(over: Partial<Record<keyof typeof m, unknown>> = {}) {
   for (const fn of Object.values(m)) fn.mockReset();
@@ -65,6 +67,7 @@ function arrange(over: Partial<Record<keyof typeof m, unknown>> = {}) {
   m.leadFindByPk.mockResolvedValue({ id: 501, email: 'x@example.com', phone: null, idea_input: 'automate invoicing', selected_systems: ['salesforce'], pipeline_stage: null, industry: 'logistics', created_at: LEAD_CREATED });
   m.profileFindOne.mockResolvedValue(null);
   m.explorerProfileFindByPk.mockResolvedValue(null);
+  m.handoffFindOne.mockResolvedValue(null);
   m.latestClassification.mockResolvedValue({ id: 'c-1', brand_relationship: 'colaberry-enterprise', primary_path: 'workflow_automation', secondary_paths: [], intent: 'automation_request', requires_human_review: false, source_step: 3 });
   m.resolveContactEvidence.mockResolvedValue(contact());
   m.loadLifecycleSourceCounts.mockResolvedValue(NONE);
@@ -124,18 +127,54 @@ describe('a business subject', () => {
     expect(r.ctx.overlays).not.toContain('NO_RESPONSE');
   });
 
-  it('an enrolment is a customer', async () => {
-    arrange({ resolveSubject: subject({ enrollment_id: 'enr-9' }) });
-    const r = await load();
-    if (r.status !== 'loaded') throw new Error(r.status);
-    expect(r.ctx.state).toBe('CUSTOMER');
-    expect(r.ctx.enrollment_id).toBe('enr-9');
+  it('T407: a PAID enrolment is a customer and the lifecycle reaches CUSTOMER without a pipeline stage; a guest, unpaid enrolment is not', async () => {
+    arrange({ resolveSubject: subject({ enrollment_id: 'enr-9', customer: { paid: true, basis: 'payment_status' } }) });
+    const paid = await load();
+    if (paid.status !== 'loaded') throw new Error(paid.status);
+    expect(paid.ctx.state).toBe('CUSTOMER');
+    expect(paid.ctx.enrollment_id).toBe('enr-9');
+    expect(paid.lifecycle.evidence).toContain('enrolment or payment exists');
+    // The same subject with the same enrolment id, unpaid (every AI Flotation submit mints a guest one): not a customer.
+    arrange({ resolveSubject: subject({ enrollment_id: 'enr-9', customer: { paid: false, basis: 'none' } }) });
+    const guest = await load();
+    if (guest.status !== 'loaded') throw new Error(guest.status);
+    expect(guest.ctx.state).not.toBe('CUSTOMER');
+    expect(guest.ctx.enrollment_id).toBe('enr-9');
+    // An active subscription is the other basis.
+    arrange({ resolveSubject: subject({ enrollment_id: 'enr-9', customer: { paid: true, basis: 'subscription' } }) });
+    const subscribed = await load();
+    if (subscribed.status !== 'loaded') throw new Error(subscribed.status);
+    expect(subscribed.ctx.state).toBe('CUSTOMER');
   });
 
-  it('hands the contact resolver the tenant from the brand and the subject\'s own address', async () => {
+  it('T407: the counted rows reach the scorer as a measurement - zero counts score 0 - and the title scores authority', async () => {
+    arrange({ leadFindByPk: { id: 501, email: 'x@example.com', phone: null, title: 'VP Engineering', idea_input: 'automate invoicing', selected_systems: ['salesforce'], pipeline_stage: null, industry: 'logistics', created_at: LEAD_CREATED } });
+    const r = await load();
+    if (r.status !== 'loaded') throw new Error(r.status);
+    const dim = (k: string) => r.ctx.scores.dimensions.find((d) => d.key === k);
+    expect(dim('relationship_engagement')?.value).toBe(0);
+    expect(dim('friction_risk')?.value).toBe(0);
+    expect(dim('authority_stakeholder_readiness')?.value).toBe(80);
+    expect(r.ctx.scores.gaps.some((g) => g.startsWith('relationship_engagement') || g.startsWith('friction_risk') || g.startsWith('authority'))).toBe(false);
+    arrange({ loadLifecycleSourceCounts: { ...NONE, inbound: { ...NONE.inbound, replied: 2, no_response: 1 } } });
+    const counted = await load();
+    if (counted.status !== 'loaded') throw new Error(counted.status);
+    expect(counted.ctx.scores.dimensions.find((d) => d.key === 'relationship_engagement')?.value).toBe(50);
+    expect(counted.ctx.scores.dimensions.find((d) => d.key === 'friction_risk')?.value).toBe(15);
+  });
+
+  it('T407: with no lead there is nothing to count for, and the counted dimensions are a named gap, never 0', async () => {
+    arrange({ resolveSubject: subject({ lead_id: null, enrollment_id: 'enr-9', email_normalized: null }), programFindOne: { id: 'p-ent', slug: 'business-growth', kind: 'business', status: 'draft' } });
+    const r = await load();
+    if (r.status !== 'loaded') throw new Error(r.status);
+    expect(r.ctx.scores.gaps).toEqual(expect.arrayContaining(['relationship_engagement:counts_unavailable', 'friction_risk:counts_unavailable']));
+    expect(r.ctx.scores.dimensions.find((d) => d.key === 'relationship_engagement')?.value).toBeNull();
+  });
+
+  it('hands the contact resolver the tenant from the brand, the subject\'s own address, and (T403) the programme kind its queue follows from', async () => {
     arrange();
     await load();
-    expect(m.resolveContactEvidence).toHaveBeenCalledWith({ subject: { lead_id: 501, email: 'x@example.com', phone: null }, brandId: 'b-ent', tenantId: 't-col', asOf: AS_OF });
+    expect(m.resolveContactEvidence).toHaveBeenCalledWith({ subject: { lead_id: 501, email: 'x@example.com', phone: null }, brandId: 'b-ent', tenantId: 't-col', asOf: AS_OF, programKind: 'business' });
   });
 });
 
@@ -228,13 +267,17 @@ describe('a failing lookup is named, and the context is still built', () => {
     const r = await load();
     if (r.status !== 'loaded') throw new Error(r.status);
     expect(r.unavailable).toEqual(['lead']);
-    expect(r.ctx.scores.available).toBe(false);
+    // Every LEAD-derived dimension is a gap; the counted ones are keyed on the lead id and were read, so they measure (T407).
+    for (const k of ['fit', 'intent', 'urgency', 'authority_stakeholder_readiness']) expect(r.ctx.scores.dimensions.find((d) => d.key === k)?.value).toBeNull();
+    expect(r.ctx.scores.dimensions.find((d) => d.key === 'relationship_engagement')?.value).toBe(0);
+    expect(r.ctx.scores.summary).toBeNull();
     expect(r.ctx.freshness.created_at).toBeNull();
   });
 
-  it('the counts throw: the lifecycle runs on zero counts, and says so', async () => {
+  it('the counts throw: the lifecycle runs on zero counts, and says so; the counted dimensions are a gap, not 0 (T407)', async () => {
     arrange({ loadLifecycleSourceCounts: () => Promise.reject(new Error('db down')) });
     const r = await load();
+    if (r.status === 'loaded') expect(r.ctx.scores.gaps).toContain('relationship_engagement:counts_unavailable');
     if (r.status !== 'loaded') throw new Error(r.status);
     expect(r.unavailable).toEqual(['lifecycle_sources']);
     expect(r.ctx.state).toBe('EXPLORING_SOLUTIONS');
@@ -248,6 +291,45 @@ describe('the builder\'s tier-0 flags', () => {
     if (r.status !== 'loaded') throw new Error(r.status);
     expect(r.ctx.hardStop).toEqual({ converted: false, unsubscribed: false, dnc: false, consentRevoked: false, killSwitch: false, campaignInactive: false });
     expect(r.ctx.program_status).toBe('draft');
+  });
+});
+
+describe("T405 - the human's cooldown as an overlay", () => {
+  const DAY = 86_400_000;
+  const returned = (until: Date) => ({ id: 'h-1', return_to_ai: { program_slug: 'business-growth', cooldown_until: until.toISOString(), reason: 'not_ready:q1' } });
+
+  it("an open returned_to_ai row puts RETURNED_TO_AI on the context on top of the lifecycle's overlays - and NOT on the lifecycle projection the profile row is written from", async () => {
+    const until = new Date(AS_OF.getTime() + 10 * DAY);
+    arrange({ handoffFindOne: returned(until) });
+    const r = await load();
+    if (r.status !== 'loaded') throw new Error(r.status);
+    expect(r.ctx.overlays).toEqual(['NO_RESPONSE', 'RETURNED_TO_AI']);
+    expect(r.lifecycle.overlays).toEqual(['NO_RESPONSE']);
+    expect(r.returnToAi).toEqual({ active: true, handoff_id: 'h-1', cooldown_until: until, reason: 'not_ready:q1' });
+    expect(r.unavailable).toEqual([]);
+    expect(m.handoffFindOne).toHaveBeenCalledWith({ where: { subject_ref: 'lead:501', brand_id: 'b-ent', status: 'returned_to_ai' }, order: [['updated_at', 'DESC']] });
+  });
+
+  it('past cooldown_until the overlay is gone; with no returned row there never was one', async () => {
+    arrange({ handoffFindOne: returned(new Date(AS_OF.getTime() - DAY)) });
+    const expired = await load();
+    if (expired.status !== 'loaded') throw new Error(expired.status);
+    expect(expired.ctx.overlays).toEqual(['NO_RESPONSE']);
+    expect(expired.returnToAi.active).toBe(false);
+    arrange();
+    const none = await load();
+    if (none.status !== 'loaded') throw new Error(none.status);
+    expect(none.ctx.overlays).toEqual(['NO_RESPONSE']);
+    expect(none.returnToAi).toEqual({ active: false, handoff_id: null, cooldown_until: null, reason: null });
+  });
+
+  it('a failing lookup is named return_to_ai in unavailable and the context is still built, without the overlay', async () => {
+    arrange({ handoffFindOne: () => Promise.reject(new Error('db down')) });
+    const r = await load();
+    if (r.status !== 'loaded') throw new Error(r.status);
+    expect(r.unavailable).toEqual(['return_to_ai']);
+    expect(r.ctx.overlays).toEqual(['NO_RESPONSE']);
+    expect(r.returnToAi.active).toBe(false);
   });
 });
 

@@ -12,6 +12,7 @@ const getLearnerDecisions = jest.fn();
 const getEligibility = jest.fn();
 const getExplorerWhy = jest.fn();
 
+jest.mock('../ledger', () => ({ recordJourneyEvent: jest.fn(async () => ({ recorded: true })) }));  // T410: the ledger adapter, at its boundary
 jest.mock('../subjectResolver', () => ({
   resolveSubject: (...a: unknown[]) => resolveSubject(...a),
 }));
@@ -69,6 +70,7 @@ const resolved = (over: Record<string, unknown> = {}) => ({
     org_member_id: null,
     email_normalized: 'a@example.test',
     brand_relationships: [],
+    customer: { paid: false, basis: 'none' },
     ...over,
   },
 });

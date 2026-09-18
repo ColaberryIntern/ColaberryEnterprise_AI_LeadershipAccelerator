@@ -4,6 +4,7 @@ import { redactForLogs } from '../../../utils/piiRedaction';
 import { latestClassification } from '../classificationService';
 import { subjectRefOf } from '../classification/inputs';
 import { resolveContactEvidence } from '../governor/contactEvidence';
+import { NO_RETURN, resolveReturnToAi, RETURNED_TO_AI_OVERLAY, type ReturnToAiState } from '../handoffs/returnToAi';
 import type { ContactEvidence, JourneyClassificationRef, JourneyProgramKind, JourneyStrategy, JourneySubjectContext, LearnerFacts, ScoreVector } from '../governor/types';
 import { classifyBusinessState } from '../lifecycle/businessLifecycle';
 import { classifyFlotationState } from '../lifecycle/aiFlotationLifecycle';
@@ -13,7 +14,7 @@ import { businessStrategy } from '../strategies/businessCandidates';
 import { loadLearnerFacts } from '../strategies/learnerFacts';
 import { learnerStrategy } from '../strategies/learnerStrategy';
 import { resolveSubject, type SubjectAnchor, type SubjectView, type UnresolvedReason } from '../subjectResolver';
-import { loadLifecycleSourceCounts, type LeadSignalColumns } from './lifecycleInputs';
+import { loadLifecycleSourceCounts, type LeadSignalColumns, type LifecycleSourceCounts } from './lifecycleInputs';
 
 /**
  * Load everything one shadow decision needs, for one subject in one brand
@@ -55,6 +56,16 @@ import { loadLifecycleSourceCounts, type LeadSignalColumns } from './lifecycleIn
  * is `asOf`, and `created_at` is when the subject was first seen: the
  * projection's own `created_at` if one exists, else the lead's. A subject with
  * neither is `missing_timestamps`, which the pipeline refuses by name.
+ *
+ * ─── RETURNED_TO_AI, THE HUMAN'S COOLDOWN (Phase 4, T405) ───────────────────
+ *
+ * A `not_ready` / `nurture` disposition leaves a `returned_to_ai` handoff row
+ * with `cooldown_until`. While that is ahead of the clock the subject carries
+ * the `RETURNED_TO_AI` overlay on top of whatever the lifecycle projected, and
+ * every generator declines `returned_to_ai_cooldown`. Read through `guarded`
+ * like every other input: a failed lookup is named in `unavailable` and the
+ * overlay is absent, the same posture as a failed classification read - the
+ * decision's Why shows the gap rather than inventing a cooldown nobody set.
  */
 
 export interface LoadDecisionContextArgs {
@@ -81,6 +92,8 @@ export interface LoadedDecisionContext {
   brand: { id: string; slug: string; tenant_id: string };
   lifecycle: LifecycleProjection;
   previousProfile: { state: string | null; state_entered_at: Date | null; created_at: Date | null };
+  /** The human's cooldown, when one is open at `asOf`; `NO_RETURN` otherwise (or when the lookup failed). */
+  returnToAi: ReturnToAiState;
   unavailable: string[];
 }
 
@@ -129,12 +142,21 @@ function classificationRef(row: Awaited<ReturnType<typeof latestClassification>>
   };
 }
 
-/** T306's vector for the programme, over the lead columns as signals. `asked` is left undefined: nothing records the asking. */
-function scoresFor(lead: LeadSignalColumns | null, kind: JourneyProgramKind, asOf: Date): ScoreVector {
+/**
+ * T306's vector for the programme, over the lead columns and the counted rows as
+ * signals. `asked` is left undefined: nothing records the asking.
+ *
+ * The counts reach the scorer as `null` when there is no lead to count for or
+ * the tables could not be read - a GAP - and as the counted numbers otherwise,
+ * zeros included: a lead nobody replied to has a measured engagement of 0, not
+ * an unknown one (T407).
+ */
+function scoresFor(lead: LeadSignalColumns | null, counts: LifecycleSourceCounts | null, kind: JourneyProgramKind, asOf: Date): ScoreVector {
   return scoreSubject(
     {
       lead: lead
         ? {
+            title: lead.title,
             industry: lead.industry,
             annual_revenue: lead.annual_revenue,
             employee_count: lead.employee_count,
@@ -148,6 +170,8 @@ function scoresFor(lead: LeadSignalColumns | null, kind: JourneyProgramKind, asO
           }
         : null,
       observed: null,
+      inbound: counts ? { ...counts.inbound } : null,
+      appointments: counts ? { ...counts.appointments } : null,
       labels: { lead_temperature: lead?.lead_temperature ?? null },
       computed_at: asOf,
     },
@@ -203,20 +227,23 @@ export async function loadDecisionContext(args: LoadDecisionContextArgs): Promis
   const brand = { id: String(brandRow.id), slug: String(brandRow.slug), tenant_id: String(brandRow.tenant_id) };
   const program = { id: String(programRow.id), slug: String(programRow.slug), kind: programRow.kind as JourneyProgramKind, status: String(programRow.status ?? 'draft') };
 
-  const [leadRaw, classificationRaw, profileRaw, countsRaw, learnerRaw] = await Promise.all([
+  const [leadRaw, classificationRaw, profileRaw, countsRaw, learnerRaw, returnRaw] = await Promise.all([
     guarded('lead', unavailable, async () => (subject.lead_id === null ? null : Lead.findByPk(subject.lead_id))),
     guarded('classification', unavailable, () => latestClassification(subjectRef, brandId)),
     guarded('profile', unavailable, () => GrowthJourneyProfile.findOne({ where: { subject_ref: subjectRef, brand_id: brandId } })),
     guarded('lifecycle_sources', unavailable, () => loadLifecycleSourceCounts(subject.lead_id)),
     program.kind === 'learner' ? guarded('learner_facts', unavailable, () => loadLearnerFacts(anchor, asOf)) : Promise.resolve(null),
+    guarded('return_to_ai', unavailable, () => resolveReturnToAi({ subjectRef, brandId, asOf })),
   ]);
 
   const lead = orNull(leadRaw) as LeadSignalColumns | null;
   const classification = classificationRef(orNull(classificationRaw));
   const profile = orNull(profileRaw);
-  const counts = orNull(countsRaw) ?? { inbound: { replied: 0, booked_meeting: 0, answered: 0, declined: 0 }, appointments: { scheduled: 0, completed: 0, no_show: 0, cancelled: 0 }, hasDeliveryEngagement: false };
+  const countsRead = orNull(countsRaw);
+  const counts = countsRead ?? { inbound: { replied: 0, booked_meeting: 0, answered: 0, declined: 0, no_response: 0 }, appointments: { scheduled: 0, completed: 0, no_show: 0, cancelled: 0 }, hasDeliveryEngagement: false };
   const learnerResult = learnerRaw === null || learnerRaw === UNAVAILABLE ? null : learnerRaw;
   const learner: LearnerFacts | null = learnerResult && learnerResult.status === 'learner' ? learnerResult.facts : null;
+  const returnToAi = orNull(returnRaw) ?? NO_RETURN;
 
   const previousProfile = {
     state: profile ? String(profile.state) : null,
@@ -230,11 +257,16 @@ export async function loadDecisionContext(args: LoadDecisionContextArgs): Promis
     brandId,
     tenantId: brand.tenant_id,
     asOf,
+    programKind: program.kind,
   });
 
-  const isCustomer = subject.enrollment_id !== null;
+  // A customer is a PAID one: the resolver's answer (a paid, non-guest enrolment or an
+  // active subscription), never "an enrolment exists" - every AI Flotation submit
+  // mints a guest enrolment (T407).
+  const isCustomer = subject.customer.paid;
   const lifecycle = projectLifecycle(program.kind, previousProfile, lead, classification, counts, isCustomer, learner, asOf);
-  const scores = scoresFor(lead, program.kind, asOf);
+  // Counts are a measurement only for a subject with a lead whose tables were read.
+  const scores = scoresFor(lead, subject.lead_id !== null && countsRead !== null ? countsRead : null, program.kind, asOf);
   const freshness = await freshnessFor(program.kind, learner, previousProfile.created_at, lead?.created_at ?? null, asOf, unavailable);
 
   const ctx: JourneySubjectContext = {
@@ -251,7 +283,8 @@ export async function loadDecisionContext(args: LoadDecisionContextArgs): Promis
     classification,
     state: lifecycle.state,
     state_entered_at: lifecycle.stateEnteredAt,
-    overlays: lifecycle.overlays,
+    // The lifecycle's overlays, plus the human's cooldown while it is open.
+    overlays: returnToAi.active ? [...lifecycle.overlays, RETURNED_TO_AI_OVERLAY] : lifecycle.overlays,
     scores,
     contact,
     // The builder's tier-0 flags. `killSwitch` is the capability gate, checked
@@ -272,7 +305,7 @@ export async function loadDecisionContext(args: LoadDecisionContextArgs): Promis
     learner,
   };
 
-  return { status: 'loaded', ctx, strategy: STRATEGY_BY_KIND[program.kind], subject, program, brand, lifecycle, previousProfile, unavailable };
+  return { status: 'loaded', ctx, strategy: STRATEGY_BY_KIND[program.kind], subject, program, brand, lifecycle, previousProfile, returnToAi, unavailable };
 }
 
 /** The freshness pair, per subject kind. See the header. */

@@ -15,6 +15,13 @@ import {
   type BrandSummary,
   type CampaignBrandMap,
 } from './campaignBrandAttribution';
+import {
+  hasJourneyScope,
+  journeyMatches,
+  loadLeadJourneyMap,
+  type JourneyScopeTerms,
+  type LeadJourneyFacts,
+} from './campaignJourneyDimension';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -147,6 +154,12 @@ export interface LeadPathRecord {
     first_seen_at: Date | null;
     last_seen_at: Date | null;
   } | null;
+  /**
+   * T411: the Growth Journey dimension - the latest classification's programme and path and the
+   * newest profile's state, read once per build. `null` for a lead Phase 2 has not classified,
+   * and such a lead is KEPT in every unfiltered count.
+   */
+  journey: LeadJourneyFacts | null;
   created_at: Date;
 }
 
@@ -478,6 +491,9 @@ async function buildLeadPaths(): Promise<LeadPathRecord[]> {
   }
 
   // Build LeadPathRecords
+  // T411: the journey dimension, ONE read for the whole population (never per node, never per lead).
+  const journeyByLead = await loadLeadJourneyMap(allLeads.map((l) => l.id));
+
   const leadPaths: LeadPathRecord[] = [];
 
   for (const lead of allLeads) {
@@ -572,6 +588,7 @@ async function buildLeadPaths(): Promise<LeadPathRecord[]> {
       was_contacted: wasContacted,
       has_visitor_record: !!visitorData,
       visitor_stats: visitorData || null,
+      journey: journeyByLead.get(lead.id) ?? null,
       created_at: new Date(lead.created_at),
     });
   }
@@ -1360,10 +1377,35 @@ export function filterPathsByCampaign(paths: LeadPathRecord[], campaignId: strin
   return paths.filter((lead) => lead.campaign_enrollments.some((e) => e.campaign_id === campaignId));
 }
 
+/**
+ * Sibling of `filterPathsByCampaign`, on the journey dimension (T411): the leads whose
+ * latest classification names this programme / path, or whose profile is in this state.
+ *
+ * Applied to the PATH LIST, exactly like the brand and campaign filters, so the cohort is
+ * chosen once and `buildGraphFromPaths` still counts the same way for every view. Filtering
+ * inside the builder instead would make node-users, edge-users and slice - which all measure
+ * themselves against `graphCache.leadPaths` - disagree with the picture on the screen.
+ *
+ * A lead with no journey is not in a journey-filtered cohort (see `journeyMatches`), and the
+ * whole path is kept for the leads that are, so the journey still shows where they came from.
+ */
+export function filterPathsByJourney(paths: LeadPathRecord[], terms: JourneyScopeTerms): LeadPathRecord[] {
+  return paths.filter((lead) => journeyMatches(lead.journey, terms));
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** A slug the journey rows use: lower-case, digits, dash or underscore; a state is upper-case with underscores. */
+const JOURNEY_TERM_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 export type GraphScope =
-  | { ok: true; timeWindow: string | undefined; brandId: string | undefined; campaignId: string | undefined }
+  | {
+      ok: true;
+      timeWindow: string | undefined;
+      brandId: string | undefined;
+      campaignId: string | undefined;
+      /** T411: the journey terms, empty when none was asked for. */
+      journey: JourneyScopeTerms;
+    }
   | { ok: false; error: string };
 
 /**
@@ -1378,14 +1420,49 @@ export function parseGraphScope(query: Record<string, unknown>): GraphScope {
   const brandId = str('brandId') || undefined;
   const rawCampaign = str('campaignId');
   if (rawCampaign && !UUID_RE.test(rawCampaign)) return { ok: false, error: 'campaignId must be a UUID' };
-  return { ok: true, timeWindow, brandId, campaignId: rawCampaign || undefined };
+  // T411: the journey terms are refused when malformed, for the campaign id's reason - a term that
+  // matches no row would render an empty journey that looks like a programme nobody is on.
+  const journey: JourneyScopeTerms = {};
+  for (const [key, field] of [['programSlug', 'programSlug'], ['pathSlug', 'pathSlug'], ['state', 'state']] as const) {
+    const raw = str(key);
+    if (!raw) continue;
+    if (!JOURNEY_TERM_RE.test(raw)) return { ok: false, error: `${field} must be a slug` };
+    journey[field] = raw;
+  }
+  return { ok: true, timeWindow, brandId, campaignId: rawCampaign || undefined, journey };
 }
 
 export async function getCampaignGraphData(
   timeWindow?: string,
   brandId?: string | null,
   campaignId?: string | null,
+  journey?: JourneyScopeTerms | null,
 ): Promise<CampaignGraphData> {
+  // T411: the journey dimension narrows the same way brand and campaign do - the cohort is chosen
+  // from the UNFILTERED paths for this window and the cache is never overwritten, so node-users,
+  // edge-users and slice keep measuring against the same population. Applied first so it COMPOSES
+  // with a campaign or brand term: the cohort is the intersection, and every term the answer claims
+  // to be filtered by is a term it really applied. (The T411 verifier caught the first draft
+  // labelling an all-brand cohort with `brand_filter`, which is the kind of number nobody can check.)
+  if (hasJourneyScope(journey)) {
+    const base = await getCampaignGraphData(timeWindow, brandId, campaignId);
+    const allPaths = graphCache?.leadPaths ?? [];
+    let cohort = filterPathsByJourney(allPaths, journey as JourneyScopeTerms);
+    if (campaignId) cohort = filterPathsByCampaign(cohort, campaignId);
+    if (brandId && !campaignId) {
+      // The brand map is built from the WHOLE population's campaigns, as the brand branch does,
+      // so a cohort that entered no campaign of this brand is empty rather than unfiltered.
+      const campaignIds = Array.from(new Set(allPaths.flatMap((p) => p.campaign_enrollments.map((e) => e.campaign_id))));
+      const { map } = await loadCampaignBrandMap(campaignIds);
+      cohort = filterPathsByBrand(cohort, brandId, map);
+    }
+    const data = await buildGraphFromPaths(cohort);
+    data.time_window = timeWindow || 'all';
+    data.brands = base.brands;
+    data.brand_filter = brandId ?? null;
+    return data;
+  }
+
   // Campaign scope takes precedence over brand scope: a campaign belongs to exactly one brand,
   // so a brand filter on top of it is redundant at best and contradictory at worst.
   // Derived from the unfiltered graph and never written back to the cache, for the same

@@ -32,6 +32,9 @@ const FORBIDDEN_MODULES = [
   'prospectAccount',
   'aliPersonalOutreachService',
   'unsubscribeEnforcementService',
+  // T407: it imports the mailer for magic links; its one pure rule the resolver
+  // needs, `pickBestEnrollment`, lives in `services/enrollmentPick.ts`.
+  'participantService',
   // NOT `leadContextService`: Phase 1's subjectResolver imports its READ half
   // (`getLeadContexts`). The writer, `ensureLeadTenantContext`, is banned by
   // name in FORBIDDEN_CALLS below, which is the property that matters.
@@ -55,6 +58,26 @@ const FORBIDDEN_CALLS = [
 ];
 
 const basename = (spec: string) => spec.split('/').pop()!.replace(/\.(ts|js)$/, '');
+
+/**
+ * T406: the ONE file that may create an account and widen a brand relationship,
+ * and the ONLY two literals it may use for it. It is reachable from a human's
+ * disposition alone (`integrationIsolation.test.ts` proves the nightly path
+ * never imports `integration/`). Per file and per literal: the same literal in
+ * any other file of the tree still fails, and a third literal in this file
+ * still fails.
+ */
+export const ALLOWED_CALLS_BY_FILE: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  'services/growthJourney/integration/accountRollup.ts': ['Organization.create', 'ensureLeadTenantContext'],
+});
+
+const rel = (f: string) => path.relative(ROOT, f).replace(/\\/g, '/');
+
+/** The forbidden calls a file contains, minus the ones it is allowlisted for. */
+export function forbiddenCallsIn(relPath: string, src: string): string[] {
+  const allowed = ALLOWED_CALLS_BY_FILE[relPath] ?? [];
+  return FORBIDDEN_CALLS.filter((c) => src.includes(c) && !allowed.includes(c));
+}
 
 describe('the scanner itself', () => {
   it('finds the Phase 2 sources (non-vacuous)', () => {
@@ -91,12 +114,39 @@ describe('Phase 2 code cannot reach a send, enrol, account or relationship path'
     }
   });
 
-  it('contains none of the forbidden calls', () => {
+  it('contains none of the forbidden calls (outside the one allowlisted file and its two literals)', () => {
     for (const f of files) {
-      const src = fs.readFileSync(f, 'utf8');
-      const bad = FORBIDDEN_CALLS.filter((c) => src.includes(c));
-      expect({ file: path.relative(ROOT, f), bad }).toEqual({ file: path.relative(ROOT, f), bad: [] });
+      const bad = forbiddenCallsIn(rel(f), fs.readFileSync(f, 'utf8'));
+      expect({ file: rel(f), bad }).toEqual({ file: rel(f), bad: [] });
     }
+  });
+
+  describe('the T406 allowlist', () => {
+    const ROLLUP = 'services/growthJourney/integration/accountRollup.ts';
+
+    it('names exactly one file and exactly the two literals the account roll-up needs', () => {
+      expect(Object.keys(ALLOWED_CALLS_BY_FILE)).toEqual([ROLLUP]);
+      expect([...ALLOWED_CALLS_BY_FILE[ROLLUP]]).toEqual(['Organization.create', 'ensureLeadTenantContext']);
+    });
+
+    it('the allowlisted file is scanned, really uses both literals (non-vacuous), and nothing else forbidden', () => {
+      const f = files.find((x) => rel(x) === ROLLUP);
+      expect(f).toBeDefined();
+      const src = fs.readFileSync(f!, 'utf8');
+      expect(src).toContain('Organization.create');
+      expect(src).toContain('ensureLeadTenantContext');
+      expect(FORBIDDEN_CALLS.filter((c) => src.includes(c))).toEqual(['ensureLeadTenantContext', 'Organization.create']);
+      expect(forbiddenCallsIn(ROLLUP, src)).toEqual([]);
+    });
+
+    it('the control: the same literal planted in any other file of the tree still fails, and a third literal in the allowlisted file fails too', () => {
+      const planted = 'const org = await Organization.create({ lead_id: 1 }); await ensureLeadTenantContext({});';
+      for (const other of files.map(rel).filter((r) => r !== ROLLUP)) {
+        expect({ other, bad: forbiddenCallsIn(other, planted) }).toEqual({ other, bad: ['ensureLeadTenantContext', 'Organization.create'] });
+      }
+      expect(forbiddenCallsIn(ROLLUP, planted + ' await OrgMember.create({});')).toEqual(['OrgMember.create']);
+      expect(forbiddenCallsIn(ROLLUP, planted + ' sendNewLeadAlert(lead);')).toEqual(['sendNewLeadAlert']);
+    });
   });
 
   it('reads the Explorer opt-out detector rather than defining another', () => {

@@ -48,6 +48,7 @@ export type GrowthJourneyCapability =
   | 'journeySignalIngest'
   | 'journeyClassification'
   | 'journeyDecisions'
+  | 'journeyHandoffs'
   | 'journeyExecution';
 
 export interface GrowthJourneyFlags {
@@ -66,6 +67,14 @@ export interface GrowthJourneyFlags {
    */
   readonly journeyDecisions: boolean;
   /**
+   * Materialise a human handoff from a deferred decision (§9, §11; Phase 4):
+   * write the ranked, evidence-complete `growth_journey_handoffs` row and,
+   * where a policy names an assignee, the `tickets` row a human reads. A row
+   * in a queue — NOT a notification (Phase 5) and NOT a contact. Off, the
+   * deferral stays on the decision row and no handoff exists.
+   */
+  readonly journeyHandoffs: boolean;
+  /**
    * Execute a decided action — enrol, schedule, hand off. THE ONLY FLAG THAT
    * CAN CAUSE A PERSON TO BE CONTACTED. Off until specifically approved.
    */
@@ -78,6 +87,7 @@ export const GROWTH_JOURNEY_ENV_KEYS = {
   journeySignalIngest: 'GROWTH_JOURNEY_SIGNAL_INGEST_ENABLED',
   journeyClassification: 'GROWTH_JOURNEY_CLASSIFICATION_ENABLED',
   journeyDecisions: 'GROWTH_JOURNEY_DECISIONS_ENABLED',
+  journeyHandoffs: 'GROWTH_JOURNEY_HANDOFFS_ENABLED',
   journeyExecution: 'GROWTH_JOURNEY_EXECUTION_ENABLED',
 } as const satisfies Record<keyof GrowthJourneyFlags, string>;
 
@@ -85,6 +95,7 @@ const CAPABILITY_FLAG: Record<GrowthJourneyCapability, keyof GrowthJourneyFlags>
   journeySignalIngest: 'journeySignalIngest',
   journeyClassification: 'journeyClassification',
   journeyDecisions: 'journeyDecisions',
+  journeyHandoffs: 'journeyHandoffs',
   journeyExecution: 'journeyExecution',
 };
 
@@ -107,6 +118,7 @@ export function resolveGrowthJourneyFlags(
     journeySignalIngest: isOn(source[GROWTH_JOURNEY_ENV_KEYS.journeySignalIngest]),
     journeyClassification: isOn(source[GROWTH_JOURNEY_ENV_KEYS.journeyClassification]),
     journeyDecisions: isOn(source[GROWTH_JOURNEY_ENV_KEYS.journeyDecisions]),
+    journeyHandoffs: isOn(source[GROWTH_JOURNEY_ENV_KEYS.journeyHandoffs]),
     journeyExecution: isOn(source[GROWTH_JOURNEY_ENV_KEYS.journeyExecution]),
   });
 }

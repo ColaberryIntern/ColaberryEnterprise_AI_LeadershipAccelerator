@@ -9,6 +9,7 @@ const m = {
   upsertProfile: jest.fn(),
 };
 
+jest.mock('../ledger', () => ({ recordJourneyEvent: jest.fn(async () => ({ recorded: true })) }));  // T410: the ledger adapter, at its boundary
 jest.mock('../../../models', () => ({
   GrowthJourneyDecision: {
     create: (...a: unknown[]) => m.decisionCreate(...a),
@@ -22,13 +23,18 @@ jest.mock('../decision/loadDecisionContext', () => ({
 }));
 jest.mock('../profileService', () => ({ upsertProfile: (...a: unknown[]) => m.upsertProfile(...a) }));
 // The pipeline's real offer gate reads a model; the tests state their own policy.
+// T414: `resolveOfferEligibility` is the gate the handoff's packet path passes; a test may refuse a family.
+const offerGate = { resolve: jest.fn() };
 jest.mock('../offerEligibility', () => ({
   assertOfferAllowed: async () => ({ allowed: true, reason: 'test', rule_id: null }),
-  resolveOfferEligibility: async () => ({ allowed: true, reason: 'test', rule_id: null }),
+  resolveOfferEligibility: (...a: unknown[]) => offerGate.resolve(...a),
   OfferNotEligibleError: class extends Error {},
 }));
 // T305's gate is the writer's seam, not its subject: it answers with the gap
 // every journey purpose is today. The gate's own behaviour is T310's suite.
+// T404: the handoff writer is mocked at its boundary - its own suite drives the rows; this one owns the hand-over.
+const handoffs = { materializeHandoffs: jest.fn() };
+jest.mock('../handoffs/handoffService', () => ({ materializeHandoffs: (...a: unknown[]) => handoffs.materializeHandoffs(...a) }));
 jest.mock('../journeyContent', () => ({
   resolveJourneyContent: async (c: { required_assets: Array<{ asset_type: string }> }) => ({
     assets: [],
@@ -69,11 +75,12 @@ function loaded(over: Partial<LoadedDecisionContext> = {}): LoadedDecisionContex
     status: 'loaded',
     ctx: c,
     strategy: businessStrategy,
-    subject: { lead_id: 501, enrollment_id: null, visitor_id: null, org_member_id: null, email_normalized: 'x@example.com', brand_relationships: [] },
+    subject: { lead_id: 501, enrollment_id: null, visitor_id: null, org_member_id: null, email_normalized: 'x@example.com', brand_relationships: [], customer: { paid: false, basis: 'none' } },
     program: { id: 'p-ent', slug: 'business-growth', kind: 'business', status: 'draft' },
     brand: { id: 'b-ent', slug: 'colaberry-enterprise', tenant_id: 't-col' },
     lifecycle: { state: c.state, stateEnteredAt: c.state_entered_at as Date, overlays: c.overlays, evidence: ['test'], projected: true },
     previousProfile: { state: null, state_entered_at: null, created_at: null },
+    returnToAi: { active: false, handoff_id: null, cooldown_until: null, reason: null },
     unavailable: [],
     ...over,
   };
@@ -85,6 +92,9 @@ function arrange(ld: LoadedDecisionContext = loaded()) {
   m.upsertProfile.mockResolvedValue({ profileId: 'gp-1', previousState: null, stateChanged: true, transitionId: 't-1', transitionReplayed: false });
   let seq = 0;
   m.decisionCreate.mockImplementation(async (row: Record<string, unknown>) => ({ id: `d-${++seq}`, ...row }));
+  // The writer's real answer with the flag off; a test that wants rows sets its own.
+  handoffs.materializeHandoffs.mockReset().mockResolvedValue({ status: 'disabled' });
+  offerGate.resolve.mockReset().mockResolvedValue({ allowed: true, reason: 'allowed', rule_id: null });
 }
 
 const record = (over: Partial<Parameters<typeof decideForSubjectAndRecord>[0]> = {}) =>
@@ -386,6 +396,8 @@ describe('the batch runner', () => {
       replayed: 0,
       skipped: [{ subject_ref: 'visitor:abc', status: 'unanchored_ref' }, { subject_ref: 'lead:3', status: 'unresolved' }],
       errors: [{ subject_ref: 'lead:2', error_class: expect.any(String) }],
+      // T408: the writer's counts ride along; with journeyHandoffs off every recorded decision is `disabled`.
+      handoffs: { disabled: 1, none: 0, materialized: 0, assigned: 0, queued: 0 },
     });
     expect(calls).toBe(3);
     expect(m.classificationFindAll).toHaveBeenCalledWith(expect.objectContaining({ where: { brand_id: 'b-ent' }, limit: 500 }));
@@ -434,5 +446,94 @@ describe('the writer appends and the loader reads - pinned on the source', () =>
     const code = strip(read('decisionService.ts'));
     expect(code).toContain('mode: SHADOW_MODE');
     expect(code).not.toMatch(/mode:\s*['"]shadow['"]/);
+  });
+});
+
+/* ── T404: the persisted row goes to the handoff writer, as plain data ─────── */
+
+describe('T404 — after persistDecision, the row is handed to the handoff writer', () => {
+  beforeEach(() => {
+    handoffs.materializeHandoffs.mockReset().mockResolvedValue({ status: 'disabled' });
+  });
+
+  it('is called once, after the create, with the PERSISTED row as a view (its id, its deferred actions), the refs from the context, the flags and the clock', async () => {
+    arrange();
+    const out = await record();
+    if (out.status !== 'recorded') throw new Error(out.status);
+    expect(handoffs.materializeHandoffs).toHaveBeenCalledTimes(1);
+    expect(handoffs.materializeHandoffs.mock.invocationCallOrder[0]).toBeGreaterThan(m.decisionCreate.mock.invocationCallOrder[0]);
+    const args = handoffs.materializeHandoffs.mock.calls[0][0];
+    expect(args.decision).toMatchObject({ id: out.row.id, subject_ref: 'lead:501', brand_id: 'b-ent', deferred_actions: out.row.deferred_actions, requires_human_review: out.row.requires_human_review, reason: out.row.reason });
+    expect(args.refs).toMatchObject({ tenant_id: 't-col', brand_id: 'b-ent', brand_slug: 'colaberry-enterprise', subject_ref: 'lead:501', lead_id: 501, program: expect.objectContaining({ kind: 'business' }) });
+    expect(args.flags).toEqual(onFlags());
+    expect(args.asOf).toEqual(bizCtx().asOf);
+    expect(out.handoffs).toEqual({ status: 'disabled' });
+  });
+
+  it('the view is plain data - not the model instance - and the writer\'s answer rides on the result', async () => {
+    arrange();
+    handoffs.materializeHandoffs.mockResolvedValue({ status: 'materialized', handoffs: [{ trigger: { source: 'decision_deferral', owner_queue: 'sales', reason: 'r' }, handoff_id: 'h-1', replayed: false, assignment: { status: 'queued', reason: 'no_assignee_policy' } }] });
+    const out = await record();
+    if (out.status !== 'recorded') throw new Error(out.status);
+    const view = handoffs.materializeHandoffs.mock.calls[0][0].decision;
+    expect(Object.getPrototypeOf(view)).toBe(Object.prototype);
+    expect(out.handoffs.status).toBe('materialized');
+  });
+
+  it('a writer that throws is logged and the decision is still recorded - never fatal', async () => {
+    arrange();
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    handoffs.materializeHandoffs.mockRejectedValue(Object.assign(new Error('down'), { name: 'SequelizeConnectionError' }));
+    const out = await record();
+    expect(out.status).toBe('recorded');
+    expect(out.status === 'recorded' && out.handoffs).toEqual({ status: 'none', reason: expect.stringMatching(/^materialize_failed:/) });
+    const lines = warn.mock.calls.map((c) => String(c[0])).join('|');
+    expect(lines).toContain('growth_journey.handoff.materialize_failed');
+    warn.mockRestore();
+  });
+
+  it('with the decisions flag off nothing is decided, so the writer is never asked', async () => {
+    arrange();
+    await record({ flags: { ...onFlags(), journeyDecisions: false } });
+    expect(handoffs.materializeHandoffs).not.toHaveBeenCalled();
+  });
+});
+
+describe('T414 — what the fixtures found: the batch leaves assignment to the ranked pass; the packet path passes the offer gate', () => {
+  const HANDOFFS_ON = (): GrowthJourneyFlags => ({ ...onFlags(), journeyHandoffs: true });
+  // A commercial state: WAIT with no selected path, and a create_handoff deferral - the case the fallback path served.
+  const commercial = () => loaded({ ctx: bizCtx({ state: 'DISCOVERY_READY', overlays: [] }) });
+
+  it('the batch runner hands every decision to the writer in ranked_pass mode; a single decision keeps the default (assign now)', async () => {
+    arrange(commercial());
+    m.classificationFindAll.mockResolvedValue([{ get: () => 'lead:501' }]);
+    await runShadowDecisions({ brandId: 'b-ent', trigger: 'nightly', flags: HANDOFFS_ON(), asOf: bizCtx().asOf });
+    expect(handoffs.materializeHandoffs.mock.calls[0][0].assignment).toBe('ranked_pass');
+    handoffs.materializeHandoffs.mockClear();
+    await record({ flags: HANDOFFS_ON() });
+    expect(handoffs.materializeHandoffs.mock.calls[0][0].assignment).toBeUndefined();
+  });
+
+  it('a classification family the brand may offer is the packet path; one its policy refuses is NOT the path - it rides as path_refused, with the gate\'s reason', async () => {
+    arrange(commercial());
+    await record({ flags: HANDOFFS_ON() });
+    expect(offerGate.resolve).toHaveBeenCalledWith({ brandId: 'b-ent', offerFamily: 'workflow_automation', at: bizCtx().asOf });
+    expect(handoffs.materializeHandoffs.mock.calls[0][0].refs).toMatchObject({ path: 'workflow_automation', path_refused: null });
+
+    arrange(commercial());
+    offerGate.resolve.mockResolvedValue({ allowed: false, reason: 'explicit_deny', rule_id: null });
+    await record({ flags: HANDOFFS_ON() });
+    expect(handoffs.materializeHandoffs.mock.calls[0][0].refs).toMatchObject({ path: null, path_refused: 'workflow_automation:explicit_deny' });
+  });
+
+  it('the gate is not asked when no handoff will be written: the handoffs flag off, or a decision that asks for none', async () => {
+    arrange(commercial());
+    await record({ flags: onFlags() });
+    expect(offerGate.resolve).not.toHaveBeenCalled();
+    arrange();
+    await record({ flags: HANDOFFS_ON() });
+    expect(handoffs.materializeHandoffs.mock.calls[0][0].decision.deferred_actions.some((d: { would: string }) => d.would === 'create_handoff')).toBe(false);
+    expect(offerGate.resolve).not.toHaveBeenCalled();
+    expect(handoffs.materializeHandoffs.mock.calls[0][0].refs).toMatchObject({ path: null, path_refused: null });
   });
 });

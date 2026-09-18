@@ -1,3 +1,4 @@
+jest.mock('../ledger', () => ({ recordJourneyEvent: jest.fn(async () => ({ recorded: true })) }));  // T410: the ledger adapter, at its boundary
 import * as fs from 'fs';
 import * as path from 'path';
 import { activationRescue } from '../../explorerGrowth/governor/candidates/activationRescue';
@@ -18,6 +19,7 @@ import {
   EXPLORER_GENERATORS,
   generateLearnerCandidates,
   LEARNER_BRAND_SLUGS,
+  learnerDeferrals,
   learnerEmptyReason,
   learnerStrategy,
   NO_LEARNER_PROFILE,
@@ -267,5 +269,162 @@ describe('what the refusal says when nothing was generated', () => {
   it('is null when there ARE candidates', () => {
     expect(learnerEmptyReason(generateLearnerCandidates(ctx()))).toBeNull();
     expect(learnerStrategy.emptyReason?.(ctx())).toBeNull();
+  });
+});
+
+/* ── T402: the pause ───────────────────────────────────────────────────────── */
+
+describe('T402 — a human owns the thread: the learner\'s email and lesson candidates are withheld', () => {
+  const explorer = [frictionRecovery, inConversation, highIntent, activationRescue, personalisedLearning, community, generalNurture, referral];
+  const runExplorer = (g: GovernorContext): Candidate[] => explorer.map((f) => f(g)).filter((c): c is Candidate => c !== null);
+  const PAUSED = new Set(['SEND_EMAIL', 'RECOMMEND_LESSON']);
+  const owned = (over: Partial<JourneySubjectContext['contact']> = {}): JourneySubjectContext['contact'] => ({
+    ...contact(),
+    human_conversation: 'yes',
+    human_conversation_reason: 'open_human_conversation:handoff_accepted',
+    ...over,
+  });
+
+  it('with a profile: exactly the SEND_EMAIL / RECOMMEND_LESSON candidates Explorer produced are withheld, named human_in_conversation', () => {
+    const c = ctx({ learner: facts({ primary_state: 'ENGAGED_LEARNER', affinities: [{ tag: 'sql', confidence: 0.8 }] }), contact: owned() });
+    const theirs = runExplorer(toGovernorContext(c, c.learner as LearnerFacts));
+    expect(theirs.some((x) => PAUSED.has(x.action_type))).toBe(true); // non-vacuity
+    const mine = generateLearnerCandidates(c);
+    expect(mine.basis).toBe('explorer_profile');
+    expect(mine.candidates).toEqual(theirs.filter((x) => !PAUSED.has(x.action_type)));
+    const withheld = mine.not_emitted.filter((n) => n.reason === 'human_in_conversation');
+    expect(withheld).toHaveLength(theirs.filter((x) => PAUSED.has(x.action_type)).length);
+    expect(mine.candidates.length + mine.not_emitted.length).toBe(explorer.length);
+  });
+
+  it("'no' and 'unknown' withhold nothing — the profile case is Explorer's set exactly", () => {
+    for (const value of ['no', 'unknown'] as const) {
+      const c = ctx({ learner: facts({ primary_state: 'ENGAGED_LEARNER' }), contact: { ...contact(), human_conversation: value } });
+      const mine = generateLearnerCandidates(c);
+      expect(mine.candidates).toEqual(runExplorer(toGovernorContext(c, c.learner as LearnerFacts)));
+      expect(mine.not_emitted.some((n) => n.reason === 'human_in_conversation')).toBe(false);
+    }
+  });
+
+  it('with no profile: the classification-grounded email is withheld too, and the refusal says so', () => {
+    const c = cpn({ contact: owned() });
+    const g = generateLearnerCandidates(c);
+    expect(g.basis).toBe('none');
+    expect(g.candidates).toEqual([]);
+    expect(g.not_emitted.find((n) => n.generator === 'classificationNurture')?.reason).toBe('human_in_conversation');
+    expect(learnerEmptyReason(g)).toBe(`${NO_LEARNER_PROFILE}:human_in_conversation`);
+    // The same subject with the human gone gets the grounded email — the pause is the only difference.
+    expect(generateLearnerCandidates(cpn()).candidates.map((x) => x.action_type)).toEqual(['SEND_EMAIL']);
+  });
+
+  it('when the pause silenced every profiled candidate, the refusal names it rather than the bare class', () => {
+    const c = ctx({ learner: facts({ primary_state: 'ENGAGED_LEARNER' }), contact: owned({ channels: { ...contact().channels, in_app: channel(false, 'no_app_account', 'none') } }) });
+    const g = generateLearnerCandidates(c);
+    if (g.candidates.length === 0) {
+      expect(learnerEmptyReason(g)).toBe('human_in_conversation');
+    } else {
+      // Something non-commercial survived (a WAIT or a suppression): then there is no refusal to name.
+      expect(g.candidates.every((x) => !PAUSED.has(x.action_type))).toBe(true);
+      expect(learnerEmptyReason(g)).toBeNull();
+    }
+  });
+});
+
+/* ── T404: the learner queues' producer ─────────────────────────────────────── */
+
+describe("T404 — what the learner strategy WOULD hand to a human, read from Explorer's own facts", () => {
+  const withOverlays = (primary_state: LearnerFacts['primary_state'], overlays: LearnerFacts['overlays'], over: Partial<JourneySubjectContext> = {}) =>
+    ctx({ learner: facts({ primary_state, overlays }), ...over });
+
+  it('ENROLLMENT_READY with HIGH_INTENT and IN_CONVERSATION → one admissions handoff, and the strategy exposes it as defer', () => {
+    const c = withOverlays('ENROLLMENT_READY', ['HIGH_INTENT', 'IN_CONVERSATION']);
+    expect(learnerDeferrals(c)).toEqual([
+      { would: 'create_handoff', reason: 'enrollment_ready_in_conversation', payload: { brand: 'colaberry-training', state: 'ENROLLMENT_READY', path: 'learner_free_training', layer: 4, owner: 'admissions' } },
+    ]);
+    expect(learnerStrategy.defer?.(c)).toEqual(learnerDeferrals(c));
+  });
+
+  it('ENROLLMENT_READY needs BOTH overlays; ACTIVATING with both yields none — the state is read, not guessed', () => {
+    expect(learnerDeferrals(withOverlays('ENROLLMENT_READY', ['HIGH_INTENT']))).toEqual([]);
+    expect(learnerDeferrals(withOverlays('ENROLLMENT_READY', ['IN_CONVERSATION']))).toEqual([]);
+    expect(learnerDeferrals(withOverlays('ACTIVATING', ['HIGH_INTENT', 'IN_CONVERSATION']))).toEqual([]);
+  });
+
+  it("FRICTION / NEEDS_SUPPORT / f >= 25 with email ineligible → one support handoff naming the evidence's reason; email reachable → none (Explorer's own predicate)", () => {
+    const bounced = contact({ email: channel(false, 'lead_bounced', 'lead_status') });
+    for (const c of [
+      withOverlays('ACTIVE_LEARNER', ['FRICTION'], { contact: bounced }),
+      withOverlays('ACTIVE_LEARNER', ['NEEDS_SUPPORT'], { contact: bounced }),
+      ctx({ learner: facts({ primary_state: 'ACTIVE_LEARNER', overlays: [], scores: { e: 30, i: 5, f: 60 } }), contact: bounced }),
+    ]) {
+      expect(learnerDeferrals(c)).toEqual([
+        { would: 'create_handoff', reason: 'friction_email_ineligible:lead_bounced', payload: { brand: 'colaberry-training', state: 'ACTIVE_LEARNER', path: 'learner_free_training', layer: 4, owner: 'support' } },
+      ]);
+    }
+    expect(learnerDeferrals(withOverlays('ACTIVE_LEARNER', ['FRICTION']))).toEqual([]);
+    expect(learnerDeferrals(ctx({ learner: facts({ primary_state: 'ACTIVE_LEARNER', overlays: [], scores: { e: 30, i: 5, f: 24 } }), contact: bounced }))).toEqual([]);
+  });
+
+  it('the friction line is Explorer\'s own, 25, read from frictionRecovery.ts', () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', '..', 'explorerGrowth', 'governor', 'candidates', 'frictionRecovery.ts'), 'utf8');
+    expect(src).toContain('const FRICTION_THRESHOLD = 25;');
+    const mine = fs.readFileSync(path.join(__dirname, '..', 'strategies', 'learnerStrategy.ts'), 'utf8');
+    expect(mine).toContain('const FRICTION_THRESHOLD = 25;');
+  });
+
+  it('no profile, or a non-learner programme, defers nothing', () => {
+    expect(learnerDeferrals(cpn())).toEqual([]);
+    expect(learnerDeferrals(withOverlays('ENROLLMENT_READY', ['HIGH_INTENT', 'IN_CONVERSATION'], { program_kind: 'business' }))).toEqual([]);
+  });
+});
+
+/* ── T405: the cooldown ────────────────────────────────────────────────────── */
+
+describe('T405 — a human sent the learner back: EVERY candidate is withheld while the RETURNED_TO_AI overlay is on', () => {
+  const explorer = [frictionRecovery, inConversation, highIntent, activationRescue, personalisedLearning, community, generalNurture, referral];
+  const runExplorer = (g: GovernorContext): Candidate[] => explorer.map((f) => f(g)).filter((c): c is Candidate => c !== null);
+  const COOLDOWN = 'RETURNED_TO_AI';
+  const REASON = 'returned_to_ai_cooldown';
+
+  it('with a profile: every candidate Explorer produced is withheld, each named returned_to_ai_cooldown; the predicate-false generators still say so', () => {
+    const c = ctx({ learner: facts({ primary_state: 'ENGAGED_LEARNER', affinities: [{ tag: 'sql', confidence: 0.8 }] }), overlays: [COOLDOWN] });
+    const theirs = runExplorer(toGovernorContext(c, c.learner as LearnerFacts));
+    expect(theirs.length).toBeGreaterThanOrEqual(2); // non-vacuity: more than the two the T402 pause withholds
+    const mine = generateLearnerCandidates(c);
+    expect(mine.basis).toBe('explorer_profile');
+    expect(mine.candidates).toEqual([]);
+    expect(mine.not_emitted.filter((n) => n.reason === REASON)).toHaveLength(theirs.length);
+    expect(mine.not_emitted.filter((n) => n.reason === 'predicate_false')).toHaveLength(explorer.length - theirs.length);
+    expect(learnerEmptyReason(mine)).toBe(REASON);
+  });
+
+  it("the overlay is on the CONTEXT, not on Explorer's facts: the same profile without it is Explorer's set exactly", () => {
+    const c = ctx({ learner: facts({ primary_state: 'ENGAGED_LEARNER' }), overlays: [] });
+    const mine = generateLearnerCandidates(c);
+    expect(mine.candidates).toEqual(runExplorer(toGovernorContext(c, c.learner as LearnerFacts)));
+    expect(mine.not_emitted.some((n) => n.reason === REASON)).toBe(false);
+  });
+
+  it("the cooldown outranks the human pause in the record: a profiled subject with both carries the cooldown's name", () => {
+    const c = ctx({ learner: facts({ primary_state: 'ENGAGED_LEARNER' }), overlays: [COOLDOWN], contact: { ...contact(), human_conversation: 'yes' } });
+    const mine = generateLearnerCandidates(c);
+    expect(mine.candidates).toEqual([]);
+    expect(mine.not_emitted.some((n) => n.reason === 'human_in_conversation')).toBe(false);
+    expect(learnerEmptyReason(mine)).toBe(REASON);
+  });
+
+  it('with no profile: the classification-grounded email is withheld too, and the refusal says so', () => {
+    const g = generateLearnerCandidates(cpn({ overlays: [COOLDOWN] }));
+    expect(g.basis).toBe('none');
+    expect(g.candidates).toEqual([]);
+    expect(g.not_emitted.find((n) => n.generator === 'classificationNurture')?.reason).toBe(REASON);
+    expect(learnerEmptyReason(g)).toBe(`${NO_LEARNER_PROFILE}:${REASON}`);
+    expect(generateLearnerCandidates(cpn()).candidates.map((x) => x.action_type)).toEqual(['SEND_EMAIL']);
+  });
+
+  it('nothing is deferred either: the admissions and support handoffs wait out the cooldown', () => {
+    const c = ctx({ learner: facts({ primary_state: 'ENROLLMENT_READY', overlays: ['HIGH_INTENT', 'IN_CONVERSATION'] }) });
+    expect(learnerDeferrals(c)).toHaveLength(1); // non-vacuity
+    expect(learnerDeferrals({ ...c, overlays: [COOLDOWN] })).toEqual([]);
   });
 });

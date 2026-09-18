@@ -15,6 +15,9 @@ jest.mock('../../../config/env', () => ({
 jest.mock('../../../services/aiEventService', () => ({
   emitAiEvent: jest.fn().mockResolvedValue(undefined),
 }));
+// The handoff controller (same router, Phase 4) reaches the ledger at load; mocked at its boundary like the siblings below.
+jest.mock('../../../services/ledgerService', () => ({ logEvent: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../../../services/growthJourney/integration/integrateDisposition', () => ({ integrateDisposition: jest.fn() }));
 
 const findByPk = jest.fn();
 const findAndCountAll = jest.fn();

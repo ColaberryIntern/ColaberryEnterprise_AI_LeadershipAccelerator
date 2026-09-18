@@ -1,5 +1,7 @@
 import type { JourneyProgramKind, ScoreDimension, ScoreFactor, ScoreVector } from '../governor/types';
+import { AUTHORITY_POINTS, scoreAuthority, scoreFrictionRisk, scoreRelationshipEngagement } from './countedScorers';
 import { dimensionsFor, type ScoreDimensionSpec } from './dimensions';
+import { clamp, type Scored } from './scored';
 
 /**
  * Score one subject against its programme's dimensions (§5.3, §5.4; T306).
@@ -23,11 +25,14 @@ import { dimensionsFor, type ScoreDimensionSpec } from './dimensions';
  * ─── THE SUMMARY IS NULL FAR MORE OFTEN THAN IT IS A NUMBER ─────────────────
  *
  * It is the weighted mean over the dimensions that HAVE a source, and it is
- * `null` if any one of them came back null. With three sourced dimensions per
- * programme, a subject missing a declared timeline has no summary at all. That
+ * `null` if any one of them came back null. With six sourced business dimensions
+ * (three consulting), a subject missing a declared timeline has no summary at all. That
  * is the specified behaviour: a partial summary would be a number whose meaning
  * changed per subject, which is worse than no number.
  */
+
+/** The T407 ladder lives with its scorer; re-exported so the vector's surface names every table it scores by. */
+export { AUTHORITY_POINTS };
 
 /** What the caller must read for a subject. Nothing here is invented. */
 export interface SubjectSignals {
@@ -37,6 +42,8 @@ export interface SubjectSignals {
    * absence rather than as a substituted value.
    */
   lead: {
+    /** T407: seniority through `normalizeTitleCategory`; absent is `unknown`, the floor. */
+    title?: string | null;
     industry?: string | null;
     annual_revenue?: number | string | null;
     employee_count?: number | string | null;
@@ -50,6 +57,13 @@ export interface SubjectSignals {
   } | null;
   /** Counted inbound signals. `null` when the caller did not read them at all. */
   observed: { page_events: number; behavioral_signals: number } | null;
+  /**
+   * T407: the counterparty's recorded outcomes and appointments, per lead. `null`
+   * when there is no lead to count for or the tables could not be read (a gap);
+   * zeros when they were read and are zero (a measurement).
+   */
+  inbound: { replied: number; booked_meeting: number; answered: number; declined: number; no_response: number } | null;
+  appointments: { scheduled: number; completed: number; no_show: number; cancelled: number } | null;
   /**
    * Which questions were actually PUT to this subject.
    *
@@ -75,14 +89,6 @@ export interface SubjectSignals {
   computed_at: Date | null;
 }
 
-type Scored = {
-  value: number | null;
-  factors: ScoreFactor[];
-  /** Why the value is null, when "the caller read nothing" is not the reason. */
-  nullReason?: string;
-};
-
-const clamp = (n: number, cap: number): number => Math.max(0, Math.min(cap, Math.round(n)));
 
 /**
  * A number from a column that may arrive as a string, or not at all.
@@ -329,6 +335,9 @@ const SCORERS: Record<string, (s: SubjectSignals, spec: ScoreDimensionSpec) => S
   fit: scoreFit,
   intent: scoreIntent,
   urgency: scoreUrgency,
+  relationship_engagement: scoreRelationshipEngagement,
+  friction_risk: scoreFrictionRisk,
+  authority_stakeholder_readiness: scoreAuthority,
   solution_fit: scoreSolutionFit,
   technical_feasibility: scoreTechnicalFeasibility,
 };
@@ -431,7 +440,8 @@ export function scoreSubject(signals: SubjectSignals, program: JourneyProgramKin
     let total = 0;
     contributing.forEach((s, i) => {
       const value = values[i];
-      if (value !== null) total += value * s.weight;
+      // An inverse dimension (friction) counts as its distance from the cap: more friction, lower summary.
+      if (value !== null) total += (s.inverse ? s.cap - value : value) * s.weight;
     });
     summary = Math.round(total / weight);
   }

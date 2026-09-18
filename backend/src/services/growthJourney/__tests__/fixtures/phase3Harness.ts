@@ -34,6 +34,7 @@ export const m = {
   leadFindByPk: jest.fn(),
   profileFindOne: jest.fn(),
   explorerProfileFindByPk: jest.fn(),
+  handoffFindOne: jest.fn(),
   decisionCreate: jest.fn(),
   decisionFindOne: jest.fn(),
   classificationFindOne: jest.fn(),
@@ -41,12 +42,18 @@ export const m = {
   contentAssetFindAll: jest.fn(),
   leadTenantContextFindAll: jest.fn(),
   enrollmentFindByPk: jest.fn(),
+  enrollmentFindAll: jest.fn(),
+  explorerProfileFindOne: jest.fn(),
+  enrollmentLeadFindOne: jest.fn(),
+  subscriptionFindOne: jest.fn(),
   policyFindOne: jest.fn(),
   resolveSubject: jest.fn(),
   resolveContactEvidence: jest.fn(),
   loadLifecycleSourceCounts: jest.fn(),
   loadLearnerFacts: jest.fn(),
   upsertProfile: jest.fn(),
+  /** T410: `EventLedger.create` behind the real ledger adapter, for the suites that assert the decision's ledger row. */
+  ledgerCreate: jest.fn(),
 };
 
 /** The `../../../models` index, as the loader, the writer, the gates and the resolver see it. */
@@ -54,10 +61,15 @@ export const modelsMock = {
   Brand: { findByPk: (...a: unknown[]) => m.brandFindByPk(...a) },
   JourneyProgram: { findOne: (...a: unknown[]) => m.programFindOne(...a) },
   Lead: { findByPk: (...a: unknown[]) => m.leadFindByPk(...a) },
-  Enrollment: { findByPk: (...a: unknown[]) => m.enrollmentFindByPk(...a) },
+  Enrollment: { findByPk: (...a: unknown[]) => m.enrollmentFindByPk(...a), findAll: (...a: unknown[]) => m.enrollmentFindAll(...a) },
+  // T407: the real resolver's lead -> enrolment walk and customer fact, when a test requires the actual module.
+  EnrollmentLead: { findOne: (...a: unknown[]) => m.enrollmentLeadFindOne(...a) },
+  Subscription: { findOne: (...a: unknown[]) => m.subscriptionFindOne(...a) },
+  CommunityMember: {},
   LeadTenantContext: { findAll: (...a: unknown[]) => m.leadTenantContextFindAll(...a) },
   GrowthJourneyProfile: { findOne: (...a: unknown[]) => m.profileFindOne(...a) },
-  ExplorerJourneyProfile: { findByPk: (...a: unknown[]) => m.explorerProfileFindByPk(...a) },
+  ExplorerJourneyProfile: { findByPk: (...a: unknown[]) => m.explorerProfileFindByPk(...a), findOne: (...a: unknown[]) => m.explorerProfileFindOne(...a) },
+  GrowthJourneyHandoff: { findOne: (...a: unknown[]) => m.handoffFindOne(...a) },
   GrowthJourneyDecision: {
     create: (...a: unknown[]) => m.decisionCreate(...a),
     findOne: (...a: unknown[]) => m.decisionFindOne(...a),
@@ -74,6 +86,7 @@ export const flags = (): GrowthJourneyFlags => ({
   journeySignalIngest: false,
   journeyClassification: false,
   journeyDecisions: true,
+  journeyHandoffs: false,
   journeyExecution: false,
 });
 
@@ -103,6 +116,8 @@ export function arrange(f: ShadowFixture, opts: ArrangeOptions = {}): void {
       org_member_id: null,
       email_normalized: f.subject.email,
       brand_relationships: [],
+      // T407: a customer is a PAID one; a fixture states it, and none of Phase 3's do.
+      customer: f.subject.customer ?? { paid: false, basis: 'none' },
     },
   }));
   m.brandFindByPk.mockImplementation(async (id: string) => (id === brand.id ? { ...brand } : null));
@@ -119,6 +134,11 @@ export function arrange(f: ShadowFixture, opts: ArrangeOptions = {}): void {
   m.policyFindOne.mockImplementation(async (q: { where: { brand_id: string; offer_family: string } }) =>
     policyRowFor(q.where.brand_id, q.where.offer_family, opts.contentReady ?? new Set()),
   );
+  m.handoffFindOne.mockResolvedValue(null);
+  m.enrollmentFindAll.mockResolvedValue([]);
+  m.explorerProfileFindOne.mockResolvedValue(null);
+  m.enrollmentLeadFindOne.mockResolvedValue(null);
+  m.subscriptionFindOne.mockResolvedValue(null);
   m.contentRuleFindAll.mockResolvedValue([]);
   m.contentAssetFindAll.mockResolvedValue([]);
   m.leadTenantContextFindAll.mockResolvedValue([]);

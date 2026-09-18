@@ -2776,6 +2776,52 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     ],
   },
   {
+    agent_name: 'GrowthJourneyShadowDecisions',
+    agent_type: 'scheduled_processor',
+    module: 'growthJourney',
+    source_file: 'backend/src/services/growthJourney/runShadowDecisionsNightly.ts',
+    trigger_type: 'cron',
+    schedule: '20 4 * * *',
+    // 'behavioral', like the Explorer Governor it follows: it decides on
+    // observed behaviour; AiAgentCategory is a closed union.
+    category: 'behavioral',
+    description:
+      'Growth Journey OS nightly shadow decisions (Phase 4, T408). For every ' +
+      'journey programme - all four brands, draft included - decides one shadow ' +
+      'action per classified subject (growth_journey_decisions, executed:false), ' +
+      'materialises the handoff rows of each decision through the T404 writer when ' +
+      'GROWTH_JOURNEY_HANDOFFS_ENABLED is on, and runs the queue assignment pass ' +
+      'once per brand. DECIDES AND RECORDS ONLY - sends nothing, enqueues nothing, ' +
+      'notifies nobody. 04:20 UTC, after the three Explorer jobs. SHIPPED PAUSED: ' +
+      'enabled:false here, and dark until GROWTH_JOURNEY_ENABLED and ' +
+      'GROWTH_JOURNEY_DECISIONS_ENABLED are both true.',
+    // Honoured on first creation only: the row ships paused and stays whatever
+    // an operator sets it to afterwards.
+    enabled: false,
+  },
+  {
+    agent_name: 'GrowthJourneyHandoffs',
+    agent_type: 'ticket_creator_identity',
+    module: 'growthJourney',
+    source_file: 'backend/src/services/growthJourney/handoffs/handoffService.ts',
+    trigger_type: 'on_demand',
+    schedule: '',
+    category: 'operations',
+    description:
+      'Ticket-creator identity for the Growth Journey OS handoff writer ' +
+      '(Phase 4, T404). A deferred decision becomes a ranked, evidence-complete ' +
+      'growth_journey_handoffs row; when the journeyHandoffs flag is on, a ' +
+      'queue_assignee policy names a person, the kill switch is off and the ' +
+      'queue has capacity, the assignment step creates the human task as a ' +
+      "tickets row stamped created_by_type='ai_staff' with this identity's " +
+      'admin user. Event-driven (a decision, a reply route, a routing rule), ' +
+      'never cron. Notifies nobody: a ticket is a row on a board.',
+    // The file's real exports: materializeHandoffs() (decision -> rows, one
+    // open per subject per brand), rankQueue() (urgent first, then expected
+    // value, then age), assignHandoff() (the gated tickets write).
+    tools_granted: ['materializeHandoffs', 'rankQueue', 'assignHandoff'],
+  },
+  {
     agent_name: 'workforce_intelligence_engine',
     agent_type: 'ticket_creator_identity',
     module: 'company',

@@ -440,15 +440,17 @@ describe('Phase 2 source', () => {
     expect(ce.split('\n').filter((l) => HARD_STOP_KEY.test(l))).toHaveLength(1);
   });
 
-  it('never updates or destroys an append-only row (classifications, transitions, decisions, snapshots)', () => {
-    // §6.4. FOUR models now declare no updated_at — classifications and
-    // transitions (T222) plus decisions and score snapshots (T301) — and this is
-    // the behavioural half: any source file that imports one of them contains no
-    // `.update(` and no `.destroy(` at all. Strict on purpose — a file that needs
-    // to update an enrolment or a PROFILE keeps the append-only models out of its
-    // imports. `GrowthJourneyProfile` is deliberately NOT in this pattern: it is
-    // the one mutable table this run owns, and updating it is the point.
-    const APPEND_ONLY = /GrowthJourney(Classification|Transition|Decision|ScoreSnapshot)\b/;
+  it('never updates or destroys an append-only row (classifications, transitions, decisions, snapshots, outcomes)', () => {
+    // §6.4. FIVE models now declare no updated_at — classifications and
+    // transitions (T222), decisions and score snapshots (T301), outcomes (T401)
+    // — and this is the behavioural half: any source file that imports one of
+    // them contains no `.update(` and no `.destroy(` at all. Strict on purpose —
+    // a file that needs to update an enrolment, a PROFILE, a HANDOFF or a POLICY
+    // keeps the append-only models out of its imports. Those three mutable
+    // models are deliberately NOT in this pattern: updating them is the point,
+    // which is why Phase 4's handoff services take the decision row as an
+    // argument rather than importing `GrowthJourneyDecision`.
+    const APPEND_ONLY = /GrowthJourney(Classification|Transition|Decision|ScoreSnapshot|Outcome)\b/;
     let scanned = 0;
     for (const f of files) {
       const src = fs.readFileSync(f, 'utf8');
@@ -473,14 +475,22 @@ describe('Phase 2 source', () => {
       "import { GrowthJourneyTransition } from '../../models'; await row.update({ status: 'applied' });",
       "import GrowthJourneyDecision from '../../models/GrowthJourneyDecision'; await row.update({ executed: true });",
       "import GrowthJourneyScoreSnapshot from '../../models/GrowthJourneyScoreSnapshot'; await row.destroy();",
+      "import { GrowthJourneyOutcome } from '../../../models'; await row.update({ value: 0 });",
     ]) {
       expect(APPEND_ONLY.test(control) && /\.update\(|\.destroy\(/.test(control)).toBe(true);
     }
 
-    // The mutable one must NOT be caught, or T307's profile writer could not work.
-    expect(
-      APPEND_ONLY.test("import GrowthJourneyProfile from '../../models/GrowthJourneyProfile'; await row.update({ state: 'CUSTOMER' });"),
-    ).toBe(false);
+    // The mutable ones must NOT be caught, or T307's profile writer and Phase 4's
+    // handoff and policy writers could not work.
+    for (const mutable of [
+      "import GrowthJourneyProfile from '../../models/GrowthJourneyProfile'; await row.update({ state: 'CUSTOMER' });",
+      "import { GrowthJourneyHandoff } from '../../../models'; await row.update({ status: 'accepted' });",
+      "import { GrowthJourneyPolicy } from '../../../models'; await row.update({ daily_capacity: 5 });",
+    ]) {
+      expect(APPEND_ONLY.test(mutable)).toBe(false);
+    }
+    // And T401's recorder — the first production file to name the Outcome model — is in the scan.
+    expect(files.map(rel)).toContain('services/growthJourney/outcomes/outcomeRecorder.ts');
   });
 
   it('carries no literal control byte (heredoc tripwire)', () => {

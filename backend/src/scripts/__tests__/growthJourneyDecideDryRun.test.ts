@@ -8,6 +8,7 @@ const m = {
   upsertProfile: jest.fn(),
 };
 
+jest.mock('../../services/growthJourney/ledger', () => ({ recordJourneyEvent: jest.fn(async () => ({ recorded: true })) }));  // T410: the ledger adapter, at its boundary
 jest.mock('../../models', () => ({
   GrowthJourneyDecision: { create: (...a: unknown[]) => m.decisionCreate(...a), count: (...a: unknown[]) => m.decisionCount(...a) },
   GrowthJourneyClassification: { findAll: jest.fn() },
@@ -48,11 +49,12 @@ function loaded() {
     status: 'loaded',
     ctx: c,
     strategy: businessStrategy,
-    subject: { lead_id: 501, enrollment_id: null, visitor_id: null, org_member_id: null, email_normalized: 'x@example.com', brand_relationships: [] },
+    subject: { lead_id: 501, enrollment_id: null, visitor_id: null, org_member_id: null, email_normalized: 'x@example.com', brand_relationships: [], customer: { paid: false, basis: 'none' } },
     program: { id: 'p-ent', slug: 'business-growth', kind: 'business', status: 'draft' },
     brand: { id: 'b-ent', slug: 'colaberry-enterprise', tenant_id: 't-col' },
     lifecycle: { state: c.state, stateEnteredAt: c.asOf, overlays: c.overlays, evidence: [], projected: true },
     previousProfile: { state: null, state_entered_at: null, created_at: null },
+    returnToAi: { active: false, handoff_id: null, cooldown_until: null, reason: null },
     unavailable: [],
   };
 }
@@ -80,6 +82,7 @@ describe('parseArgs', () => {
       journeySignalIngest: false,
       journeyClassification: false,
       journeyDecisions: true,
+      journeyHandoffs: false,
       journeyExecution: false,
     });
     expect(Object.isFrozen(DRY_RUN_FLAGS)).toBe(true);

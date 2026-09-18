@@ -255,6 +255,7 @@ const FLAGS_ON = {
   journeySignalIngest: false,
   journeyClassification: false,
   journeyDecisions: true,
+  journeyHandoffs: false,
   journeyExecution: false,
 } as const;
 

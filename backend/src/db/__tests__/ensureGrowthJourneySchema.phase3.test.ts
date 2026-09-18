@@ -269,8 +269,11 @@ describe('growth_journey_score_snapshots', () => {
 });
 
 describe('the three tables sit where the foreign keys and the boot order allow', () => {
-  it('the run now owns eleven tables', () => {
-    expect(tablesCreated()).toHaveLength(11);
+  it('the run now owns fifteen tables', () => {
+    // Eleven when Phase 3 wrote this; Phase 4 (T401) added handoffs, outcomes
+    // and policies; T402 added conversation ownership. Their columns are pinned
+    // in order in the phase4 file.
+    expect(tablesCreated()).toHaveLength(15);
     expect(tablesCreated()).toEqual(
       expect.arrayContaining([
         'growth_journey_content_rules',

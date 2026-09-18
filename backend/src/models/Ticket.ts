@@ -47,7 +47,12 @@ export type TicketType = 'task' | 'bug' | 'feature' | 'curriculum' | 'agent_acti
   // comment on the ongoing 'curriculum_support' conversation ticket, so it is
   // independently visible/trackable/assignable regardless of what happens to
   // the conversation itself. See backend/src/services/curriculum/daraHandoffService.ts.
-  | 'agent_handoff';
+  | 'agent_handoff'
+  // Growth Journey OS Phase 4 (T404) - the human task behind a
+  // growth_journey_handoffs row: created only by the flag-gated assignment
+  // step with a policy assignee, deduped by createTicket() on
+  // (entity_type='growth_journey_handoff', entity_id=<handoff id>, type).
+  | 'growth_journey_handoff';
 export type TicketActorType = 'human' | 'cory' | 'agent'
   // Reese Phase 1 — a real AI staff-mentor identity, distinct from generic
   // autonomous background agents ('agent') so ticket activity attributed to Reese
