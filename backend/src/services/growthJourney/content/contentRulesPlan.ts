@@ -65,6 +65,13 @@ export interface PlanAsset {
   title: string;
   audience_tags: string[];
   active: boolean;
+  /**
+   * The brand the asset row itself names, if any. `syncTimelineCards` writes NULL; a
+   * non-null value means some other writer claimed the asset for a brand, and an asset
+   * claimed for ANOTHER brand is not declared here - an approved rule supersedes
+   * `contentEligibility`'s `asset_other_brand` check, so this is the place to refuse it.
+   */
+  brand_id?: string | null;
 }
 
 export interface PlanBrand {
@@ -94,7 +101,7 @@ export interface PlannedPolicyPage {
 
 export interface SkippedAsset {
   asset_id: string;
-  reason: 'not_a_lesson' | 'retired' | 'no_audience_tag' | 'family_not_offered';
+  reason: 'not_a_lesson' | 'retired' | 'no_audience_tag' | 'family_not_offered' | 'another_brands_asset';
   /** For `family_not_offered`: which brand declined it, so the count is readable. */
   brand_slug?: string;
 }
@@ -173,6 +180,11 @@ export function buildContentRulesPlan(args: BuildPlanArgs): ContentRulesPlan {
     const offered = FAMILIES_BY_BRAND_SLUG[brand.brand_slug] ?? [];
     const families = new Set<string>();
     for (const asset of assets) {
+      if (asset.brand_id && asset.brand_id !== brand.brand_id) {
+        // Claimed for another brand: never declared under this one.
+        plan.skipped.push({ asset_id: asset.id, reason: 'another_brands_asset', brand_slug: brand.brand_slug });
+        continue;
+      }
       const verdict = familyFor(asset);
       if ('skip' in verdict) {
         plan.skipped.push({ asset_id: asset.id, reason: verdict.skip });
@@ -213,9 +225,13 @@ export function buildContentRulesPlan(args: BuildPlanArgs): ContentRulesPlan {
   return plan;
 }
 
-/** The dry run's whole output: counts, never a title, a URL of an asset, or a body. */
-export function renderPlanSummary(plan: ContentRulesPlan): string[] {
-  const lines: string[] = ['content rules plan (dry run — nothing written)'];
+/**
+ * The plan as an operator reads it: counts, never a title, an asset URL or a body.
+ * The title says what the run IS - a production run no longer announces itself as
+ * a dry run above the counts it just wrote (the T412 verifier).
+ */
+export function renderPlanSummary(plan: ContentRulesPlan, mode: 'dry-run' | 'write' = 'dry-run'): string[] {
+  const lines: string[] = [mode === 'dry-run' ? 'content rules plan (dry run — nothing written)' : 'content rules plan (writing — one transaction)'];
   for (const [brandSlug, byFamily] of Object.entries(plan.counts).sort()) {
     const total = Object.values(byFamily).reduce((a, b) => a + b, 0);
     lines.push(`  ${brandSlug}: ${total} rule(s)`);

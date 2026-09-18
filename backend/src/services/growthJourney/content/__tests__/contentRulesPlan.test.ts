@@ -130,6 +130,18 @@ describe('the brands that get nothing', () => {
   });
 });
 
+describe('an asset another brand claimed (the T412 verifier)', () => {
+  it('an asset whose own brand_id names ANOTHER brand is skipped by name - an approved rule would override the gate\'s asset_other_brand check' , () => {
+    const claimed = registry().map((a) => (a.id === 'a-free-1' ? { ...a, brand_id: 'b-cpn' } : a));
+    const p = plan({ assetsByBrandSlug: { 'colaberry-training': claimed, cpn: claimed } });
+    expect(p.rules.some((r) => r.brand_slug === 'colaberry-training' && r.asset_id === 'a-free-1')).toBe(false);
+    expect(p.skipped).toContainEqual({ asset_id: 'a-free-1', reason: 'another_brands_asset', brand_slug: 'colaberry-training' });
+    // Its own brand still declares it; a NULL brand_id (what the sync writes) is anyone's to declare.
+    expect(p.rules.some((r) => r.brand_slug === 'cpn' && r.asset_id === 'a-free-1')).toBe(true);
+    expect(p.rules.filter((r) => r.brand_slug === 'colaberry-training')).toHaveLength(10);
+  });
+});
+
 describe('the policy entries', () => {
   it('one per brand x family that actually got rules, carrying the operator\'s URL', () => {
     const p = plan();
@@ -180,6 +192,12 @@ describe('never a stamp, never a body', () => {
     expect(json).not.toContain('Week 0 card');
     expect(json).not.toContain('Week 1 lesson');
     expect(json).not.toContain('@');
+  });
+
+  it('the summary\'s title says what the run IS: a dry run, or a write in one transaction', () => {
+    expect(renderPlanSummary(plan())[0]).toBe('content rules plan (dry run — nothing written)');
+    expect(renderPlanSummary(plan(), 'dry-run')[0]).toBe('content rules plan (dry run — nothing written)');
+    expect(renderPlanSummary(plan(), 'write')[0]).toBe('content rules plan (writing — one transaction)');
   });
 
   it('the dry-run summary is counts only: no title, no asset URL, no address, and it states the zero explicitly', () => {

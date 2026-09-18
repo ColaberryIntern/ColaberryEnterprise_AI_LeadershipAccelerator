@@ -46,7 +46,10 @@ describe('the guard and the flags', () => {
   it('no flag at all is a DRY RUN - the tool cannot write by being invoked', () => {
     expect(parseArgs([])).toEqual({ dryRun: true, confirmProduction: false, brandSlug: null, landingPage: null, version: 1 });
     expect(parseArgs(['--brand', 'cpn', '--landing-page', PAGE])).toMatchObject({ dryRun: true, brandSlug: 'cpn', landingPage: PAGE });
-    expect(parseArgs(['--confirm-production'])).toMatchObject({ dryRun: false, confirmProduction: true });
+    expect(parseArgs(['--confirm-production', '--brand', 'cpn'])).toMatchObject({ dryRun: false, confirmProduction: true, brandSlug: 'cpn' });
+    // A write names its brand: one approved landing page belongs to one brand, never to every learner brand at once.
+    expect(() => parseArgs(['--confirm-production'])).toThrow(/requires --brand/);
+    expect(() => parseArgs(['--confirm-production', '--landing-page', PAGE])).toThrow(/requires --brand/);
     expect(() => parseArgs(['--wat'])).toThrow(/unknown flag/);
     expect(() => parseArgs(['positional'])).toThrow(/unexpected argument/);
     expect(() => parseArgs(['--version', '0'])).toThrow(/positive integer/);
@@ -77,7 +80,8 @@ describe('the reads', () => {
     query.mockResolvedValueOnce([{ brand_slug: 'colaberry-training' }]);
     const byBrand = await loadAssetsByBrandSlug(BRANDS);
     const assetSql = sqlSent()[0];
-    expect(assetSql).toContain('SELECT a.id, a.asset_type, a.title, a.audience_tags, a.active FROM explorer_content_assets a');
+    // `a.brand_id` is read so an asset another brand claimed is never declared here; still no body and no URL.
+    expect(assetSql).toContain('SELECT a.id, a.asset_type, a.title, a.audience_tags, a.active, a.brand_id FROM explorer_content_assets a');
     expect(assetSql).not.toMatch(/a\.url|a\.summary|a\.metadata/);
     expect(byBrand['colaberry-training']).toHaveLength(1);
     expect(byBrand['ai-flotation']).toEqual([]);
@@ -119,6 +123,71 @@ describe('the write', () => {
     expect(policySql).toContain("status = 'active'");
     expect(sqlSent().some((s) => s.startsWith('INSERT INTO brand_offer_policies'))).toBe(false);
     expect(result.policy_rows_missing).toEqual(['colaberry-training/learner_free_training', 'colaberry-training/learner_paid_training']);
+  });
+});
+
+describe('the write path Ali will run: --confirm-production through run() (the T412 verifier)', () => {
+  /** A world where the first run writes everything and the second finds everything already there. */
+  function world(existing: boolean) {
+    query.mockImplementation(async (sql: string) => {
+      const s = String(sql).replace(/ +/g, ' ').trim();
+      if (s.includes('FROM brands b')) return [{ tenant_id: 't-colaberry', brand_id: 'b-training', brand_slug: 'colaberry-training' }];
+      if (s.includes('FROM explorer_content_assets')) return [asset({ id: 'a-1' }), asset({ id: 'a-2', audience_tags: ['free_preview', 'full_access'] }), asset({ id: 'a-3', active: false })];
+      if (s.includes('FROM journey_programs')) return [{ brand_slug: 'colaberry-training' }];
+      if (s.startsWith('INSERT INTO growth_journey_content_rules')) return existing ? [] : [{ id: 'r-new' }];
+      if (s.startsWith('UPDATE brand_offer_policies')) return existing ? [] : [{ id: 'p-1' }];
+      if (s.startsWith('SELECT id FROM brand_offer_policies')) return [{ id: 'p-1' }];
+      return [];
+    });
+  }
+  const write = () => parseArgs(['--brand', 'colaberry-training', '--landing-page', PAGE, '--confirm-production']);
+
+  it('a first run writes the rules and the policy pages in one transaction and says so - never announcing itself as a dry run', async () => {
+    world(false);
+    const lines: string[] = [];
+    expect(await run(write(), (l) => lines.push(l))).toBe(0);
+    const text = lines.join('\n');
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(lines[0]).toBe('content rules plan (writing — one transaction)');
+    expect(text).not.toContain('dry run');
+    expect(text).toContain('written: rules_created=2 rules_existing=0 policy_pages_added=2');
+    expect(text).not.toContain('no active policy row');
+    expect(text).toContain('explorer_content_assets touched: 0');
+  });
+
+  it('a SECOND run creates nothing and reports everything as existing: 0 rules, 0 policy pages, no missing-row line', async () => {
+    world(true);
+    const lines: string[] = [];
+    expect(await run(write(), (l) => lines.push(l))).toBe(0);
+    const text = lines.join('\n');
+    expect(text).toContain('written: rules_created=0 rules_existing=2 policy_pages_added=0');
+    // The policy row exists and already carries the URL: that is "already there", not "missing".
+    expect(text).not.toContain('no active policy row');
+    expect(sqlSent().some((s) => s.includes('explorer_content_assets') && !s.startsWith('SELECT'))).toBe(false);
+  });
+
+  it('a brand with NO active policy row is named in the output, and nothing is created for it', async () => {
+    world(false);
+    const base = query.getMockImplementation() as (sql: string) => Promise<unknown>;
+    query.mockImplementation(async (sql: string) => {
+      const s = String(sql).replace(/ +/g, ' ').trim();
+      if (s.startsWith('UPDATE brand_offer_policies') || s.startsWith('SELECT id FROM brand_offer_policies')) return [];
+      return base(sql);
+    });
+    const lines: string[] = [];
+    await run(write(), (l) => lines.push(l));
+    const text = lines.join('\n');
+    expect(text).toContain('policy_pages_added=0');
+    expect(text).toContain('no active policy row for: colaberry-training/learner_free_training, colaberry-training/learner_paid_training');
+    expect(sqlSent().some((s) => s.startsWith('INSERT INTO brand_offer_policies'))).toBe(false);
+  });
+
+  it('the policy UPDATE only touches a row that does NOT already carry the URL - the containment guard is in the WHERE, not only in the SET', async () => {
+    world(false);
+    await run(write(), () => undefined);
+    const policySql = sqlSent().find((s) => s.startsWith('UPDATE brand_offer_policies')) as string;
+    expect(policySql).toContain('AND NOT (approved_landing_pages @> CAST(:page_json AS jsonb))');
+    expect(policySql).toContain('WHEN approved_landing_pages @> CAST(:page_json AS jsonb) THEN approved_landing_pages');
   });
 });
 

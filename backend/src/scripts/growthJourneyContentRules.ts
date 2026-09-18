@@ -32,8 +32,9 @@ import {
  * this file, and `growthJourneyContentRules.test.ts` scans the source to keep
  * it that way. Nothing here sends, enqueues or notifies.
  *
- * Usage:
- *   node dist/scripts/growthJourneyContentRules.js --dry-run
+ * Usage (every run needs the `--landing-page` it would approve; a write also needs
+ * `--brand`, so one URL is never approved for every learner brand at once):
+ *   node dist/scripts/growthJourneyContentRules.js --landing-page https://... --dry-run
  *   node dist/scripts/growthJourneyContentRules.js --brand colaberry-training --landing-page https://... --dry-run
  *   node dist/scripts/growthJourneyContentRules.js --brand colaberry-training --landing-page https://... --confirm-production
  */
@@ -59,6 +60,9 @@ export function parseArgs(argv: string[]): Args {
     else throw new Error(`unexpected argument: ${a}`);
   }
   if (!out.dryRun && !out.confirmProduction) out.dryRun = true;
+  // A write names its brand: without it one --landing-page URL would be approved for EVERY learner
+  // brand in a single run - a training.colaberry.com page on CPN's policy (the T412 verifier).
+  if (out.confirmProduction && !out.dryRun && !out.brandSlug) throw new Error('--confirm-production requires --brand: one approved landing page belongs to one brand');
   if (!Number.isInteger(out.version) || out.version < 1) throw new Error('--version must be a positive integer');
   return out;
 }
@@ -105,8 +109,8 @@ export async function loadBrands(brandSlug: string | null): Promise<PlanBrand[]>
  */
 export async function loadAssetsByBrandSlug(brands: readonly PlanBrand[]): Promise<Record<string, PlanAsset[]>> {
   if (brands.length === 0) return {};
-  const assets = await sequelize.query<{ id: string; asset_type: string; title: string; audience_tags: string[] | null; active: boolean }>(
-    `SELECT a.id, a.asset_type, a.title, a.audience_tags, a.active
+  const assets = await sequelize.query<{ id: string; asset_type: string; title: string; audience_tags: string[] | null; active: boolean; brand_id: string | null }>(
+    `SELECT a.id, a.asset_type, a.title, a.audience_tags, a.active, a.brand_id
        FROM explorer_content_assets a
       ORDER BY a.id ASC`,
     { type: QueryTypes.SELECT },
@@ -122,7 +126,7 @@ export async function loadAssetsByBrandSlug(brands: readonly PlanBrand[]): Promi
   const out: Record<string, PlanAsset[]> = {};
   for (const brand of brands) {
     out[brand.brand_slug] = learner.has(brand.brand_slug)
-      ? assets.map((a) => ({ id: a.id, asset_type: a.asset_type, title: a.title, audience_tags: a.audience_tags ?? [], active: a.active }))
+      ? assets.map((a) => ({ id: a.id, asset_type: a.asset_type, title: a.title, audience_tags: a.audience_tags ?? [], active: a.active, brand_id: a.brand_id ?? null }))
       : [];
   }
   return out;
@@ -214,7 +218,7 @@ export async function run(args: Args, out: (line: string) => void = (l) => conso
   }
 
   const plan = buildContentRulesPlan({ brands, assetsByBrandSlug, landingPageByBrandSlug, version: args.version });
-  for (const line of renderPlanSummary(plan)) out(line);
+  for (const line of renderPlanSummary(plan, args.dryRun ? 'dry-run' : 'write')) out(line);
 
   if (args.dryRun) {
     out('[dry-run] nothing written. Re-run with --confirm-production to write the rules.');
