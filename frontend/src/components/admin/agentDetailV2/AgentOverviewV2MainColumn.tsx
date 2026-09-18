@@ -171,7 +171,12 @@ export default function AgentOverviewV2MainColumn({ detail }: Props) {
         {related_tasks.length === 0 ? (
           <p className="adv2-muted" style={{ padding: '16px 18px', margin: 0 }}>No other scheduled tasks are registered for this agent.</p>
         ) : related_tasks.map((task) => (
-          <div className="adv2-task" key={task.id}>
+          // Reese Product Phase 1 follow-up (2026-09-18) — a purely additive
+          // anchor id (real for every agent, not just Reese) so the Employee
+          // facts card's "Scheduled work" links land on the exact matching
+          // row instead of just the top of the section. Zero behaviour or
+          // visual change for any agent.
+          <div className="adv2-task" id={`task-${task.agent_name}`} key={task.id}>
             <div>
               <h3>{task.agent_name} <span className={`adv2-pill ${task.enabled ? 'adv2-trust' : 'adv2-neutral'}`}>{task.enabled ? 'Enabled' : 'Disabled'}</span></h3>
               {task.description && <p>{task.description}</p>}
