@@ -130,7 +130,7 @@ export const PROVIDER_CAPABILITIES: Record<ProviderKey, ProviderCapabilities> = 
       reviewedAt: null,
       note: 'Shares the Meta App Review package. Instagram has NO text-only post type: a text draft cannot be published here at all.',
     },
-    rateLimits: { postsPerDay: 50, note: 'Content Publishing API: 50 posts per 24 hours per account.' },
+    rateLimits: { postsPerDay: 100, note: 'Content Publishing API: 100 posts per rolling 24 hours per account (checked 2026-09-18); a carousel counts as one.' },
     requirements: { altText: 'recommended', disclosureForPaid: true },
     linkBehavior: 'no_clickable_links',
   },
@@ -290,7 +290,7 @@ export type PublishMode =
  * adapterRegistry's LIVE_ADAPTERS; a test holds the two lists equal. Being implemented is not
  * being ON: see LIVE_CONNECTORS.
  */
-export const IMPLEMENTED_CONNECTORS: ReadonlySet<ProviderKey> = new Set<ProviderKey>(['linkedin_member', 'linkedin_organization']);
+export const IMPLEMENTED_CONNECTORS: ReadonlySet<ProviderKey> = new Set<ProviderKey>(['linkedin_member', 'linkedin_organization', 'meta_facebook_page', 'meta_instagram']);
 
 /**
  * Read the ON switch from the environment: `LIVE_CONNECTORS="linkedin_member,linkedin_organization"`.

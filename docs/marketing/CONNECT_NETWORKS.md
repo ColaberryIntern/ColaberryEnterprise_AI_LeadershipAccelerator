@@ -10,9 +10,10 @@ this document is the checklist for doing it.
 shows up on the Overview and the Brands page. Posts to that network are still **handed off**:
 the platform prepares the exact post and a person publishes it. That continues until the
 network's publishing adapter is built and switched on in `LIVE_CONNECTORS`. As of 2026-09-18,
-direct posting exists for LinkedIn personal profiles (live) and LinkedIn Company Pages
-(adapter built, needs the connection below). The Overview's "Posted by hand" line always shows
-which networks are still handoff.
+direct posting is BUILT for LinkedIn personal profiles (live in production), LinkedIn Company
+Pages, Facebook Pages and Instagram; it is switched ON only for `linkedin_member`. YouTube, TikTok
+and X connect but still hand off. The Overview's "Posted by hand" line always shows which
+networks are still handoff.
 
 All times Central.
 
@@ -85,6 +86,13 @@ existing app (which also serves a Bubble app) cannot be reused and must not be t
 6. **Instagram** must be a **Business or Creator** account, linked to a Facebook Page you
    administer. In the Facebook sign-in window, tick the Pages to connect; each one's linked
    Instagram account connects with it.
+7. To post directly once connected, add `meta_facebook_page` and/or `meta_instagram` to
+   `LIVE_CONNECTORS` and restart. Facebook also needs its App Review submitted before the
+   platform will treat it as direct - the Composer says so on the post itself.
+
+What Facebook and Instagram accept once switched on: text, one photo, up to 10 photos as a
+carousel, or one MP4. Instagram has no text-only post. Meta FETCHES each attachment from a
+short-lived signed URL on `www.refactored.ai`, so that host must stay reachable at publish time.
 
 Limits: Instagram allows 100 API-published posts per account per 24 hours. Instagram has no
 text-only posts; every post needs an image or video.
