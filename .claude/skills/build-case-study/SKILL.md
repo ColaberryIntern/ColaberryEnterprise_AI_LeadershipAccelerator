@@ -21,9 +21,14 @@ draws the flow and charts the figures the record already verifies; it introduces
 number. A record with no verified outcome still draws how its system works and shows no
 figures; the band says so in words.
 
-**Start section 8 (images) FIRST.** Dispatch an agent to find or produce the cover
-image before anything else begins — it takes longer than the rest and a case study
-without a cover reads as unfinished however good its evidence is.
+**Start section 8 (images) FIRST.** Dispatch an agent to find or produce the real
+images before anything else begins — it takes longer than the rest and a case study
+without pictures reads as unfinished however good its evidence is.
+
+**The cover is a picked thumbnail, not a screenshot (§8f).** Since 2026-09-18 (Ali: "harden
+this process so we always find thumbnail pictures for each project like this") every record
+gets three YouTube-style concepts from the image model, Ali picks one, and it becomes the
+cover and the video poster. The real captures stay on the record as evidence in the body.
 
 ---
 
@@ -406,6 +411,12 @@ Do not block on it. Author the record in parallel and attach when it reports.
 A record without a cover opens on text and reads as unfinished no matter how good the
 evidence is.
 
+**Since 2026-09-18 the cover is the §8f thumbnail.** Everything in this section still
+governs the REAL images: at least two captures of the work, which appear in the body, and
+which stand as the cover only until Ali has picked a thumbnail. Never skip the search for
+real captures because a thumbnail is coming: the thumbnail is atmosphere and proves
+nothing; the captures are the evidence.
+
 `identity.heroImageUrl` **now names the cover, and it is gated.** It did not always: it
 was set correctly on a snapshot, the page showed a different image, and the reason was
 that nothing read the field — it was not even on the domain type. It is real now, and the
@@ -566,6 +577,8 @@ alone does not put it on the page — **and set `identity.heroImageUrl` to the c
 - [ ] Artifacts lifted into the snapshot, not just created as rows
 - [ ] Images verified live with an HTTP 200 before the record is called finished
 - [ ] **The rendered page was opened and looked at** — see section 8b
+- [ ] The cover and the video poster are the §8f picked thumbnail, and every real capture
+      is in the body (the old cover included)
 
 ---
 
@@ -1205,6 +1218,61 @@ with the passage or gap cited (`references/story-rubric.md`); the ones marked
 - The handoff names the previous snapshot id per surface, the editorial gaps, and what was
   not done.
 
+## 8f. The cover and the video thumbnail: three concepts, Ali picks one
+
+Ali, 2026-09-18, after picking from eighteen concepts for six records: *"Replace them as
+the image for the case studies and the thumbnail for the videos. The old picture can be
+used as an artifact inside the case study, don't throw it away. Then harden this process
+so we always find thumbnail pictures for each project like this."* He asked for them to
+look like the thumbnails on videos with millions of views, and to be "very custom and
+relatable and really pop".
+
+The tools and the step-by-step are `scripts/case-study-thumbnails/README.md`. The rules:
+
+1. **Every record gets three concepts before its checkpoint**, generated with the newest
+   OpenAI image model by `generate.js` inside `accelerator-backend` (the key never leaves
+   the container). Three different ideas, not three crops of one: a person reacting, an
+   object or metaphor with no words, a before and after. One face or one object filling
+   the frame, complementary colours, a hook of at most four words.
+2. **The hook is a feeling, never a claim.** No figure, date, client name, product
+   interface or result in the picture; nothing a reader could take as a measurement. The
+   words come from the record's own tension ("LOST CALLS, FOUND.", "NOT YET."), or the
+   picture carries none.
+3. **Look at every image before Ali does**, word by word. The model invents text on
+   props (a card, a screen, a sign): flag it on the review page (`build_review.py`
+   `notes`), and if Ali picks it, repaint only that region with `edit.js` and paste only
+   that polygon back with `finalize.py composite`. The model does not respect the mask on
+   its own.
+4. **Ali picks.** Nothing reaches a record until he has named the concept. The review page
+   shows every concept at YouTube feed size beside the current covers.
+5. **One 16:9 file serves everything** (`finalize.py crop`, 1536x864, the top offset
+   chosen so the hook stays in frame): the cover, the index card and the video poster.
+   `frontend/public/site-v2/thumb-<name>.jpg`, served by an nginx deploy like any asset.
+6. **It is a `photo`, so it is atmosphere.** `apply-cover.js` writes it as
+   `artifact_type: 'photo'`, `source_type: 'generated'`, titled `Illustration: <what it
+   shows>` (the alt text), described from `cover-caption.json`, and sets
+   `identity.heroImageUrl` and `walkthroughVideo.posterUrl` to it in one snapshot. The
+   projection stamps a photo `atmosphere` and drops one whose caption claims delivered
+   work (`DELIVERED_WORK_CLAIMS`), so the caption says only what the picture shows. Never
+   type it `screenshot` to promote it.
+7. **The old cover stays.** It is already an approved artifact; once it is not the cover,
+   both renderers place it in the body, because the cover is the only image they skip.
+   Nothing is deleted, from the record or from `site-v2`.
+8. **Only where the record is already live.** `apply-cover.js` republishes on the surfaces
+   the record is published on and nowhere else; a record that is not live stops at a
+   draft. Its dry run checks the cover resolves, the photo projects as atmosphere, the
+   visual story re-validates after its hash is re-stamped, and every live surface's gate
+   is clean. `--apply` refuses until the image URL answers 200.
+
+### Done means
+
+- [ ] Three concepts generated, looked at, flagged where the model invented words
+- [ ] Ali's pick recorded in the run directory, in his words
+- [ ] `thumb-<name>.jpg` live with a 200 before `apply-cover.js --apply`
+- [ ] The live API's `heroImageUrl` and `walkthroughVideo.posterUrl` are the thumbnail
+- [ ] On all three surfaces the masthead poster is the thumbnail and the old cover is in
+      the body
+
 ## 9. Record and snapshot must agree
 
 Overriding `identity.title` in the snapshot does **not** update `case_studies.title`.
@@ -1393,6 +1461,14 @@ an already-live record too, so consent withdrawn between two clicks is caught.
     see across the two repositories, so a NEW band still has to be added three times by a
     person who remembers to. The §8e marker table and the §8b checklist line are that
     memory; the live render on all three sites before calling it done is the check.
+12. **That every record gets a picked thumbnail.** §8f is a step in this skill, and
+    `apply-cover.js` refuses the ways a cover goes wrong (a dead URL, a caption the
+    projection would drop, a cover that does not resolve, a gate that is not clean).
+    Nothing refuses a record published WITHOUT one: the gate still accepts a screenshot
+    cover, on purpose, so a record is never blocked on a picture. The checklist in §8 is
+    what remembers it. `caseStudyCoverThumbnail.test.ts` pins the parts that can drift:
+    the caption against the claim list, the explicit cover winning over a screenshot, and
+    the tools this section names.
 
 **When you add a rule here, decide which half it belongs in before you write it.** A rule
 in the second half is a rule with a half-life.
