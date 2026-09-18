@@ -104,11 +104,16 @@ export interface CalendarDay {
  * and each item additionally carries its BRAND-local rendering so the operator sees both -
  * where it sits on their grid, and what time it goes out where the audience is.
  */
-export function groupByDay(items: readonly CalendarItem[], viewerTimeZone: string): CalendarDay[] {
+export function groupByDay(
+  items: readonly CalendarItem[],
+  viewerTimeZone: string,
+  /** When set, every item's time is shown in this zone instead of its brand's. */
+  displayTimeZone?: string,
+): CalendarDay[] {
   const byDay = new Map<string, CalendarDay['items']>();
 
   for (const item of items) {
-    const local = brandLocal(item.scheduledFor, item.brandTimeZone ?? DEFAULT_BRAND_TIMEZONE);
+    const local = brandLocal(item.scheduledFor, displayTimeZone ?? item.brandTimeZone ?? DEFAULT_BRAND_TIMEZONE);
     const viewer = brandLocal(item.scheduledFor, viewerTimeZone);
     // An unparseable schedule has no day. Dropping it silently would hide a broken item; it is
     // filed under a sentinel day the UI renders as "unscheduled / invalid" instead.

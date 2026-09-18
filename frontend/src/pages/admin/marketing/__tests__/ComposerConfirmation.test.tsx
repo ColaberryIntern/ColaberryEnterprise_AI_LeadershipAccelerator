@@ -5,15 +5,15 @@ import ComposerConfirmation from '../composer/ComposerConfirmation';
 import type { ComposerAction, ConfirmationSummary } from '../../../../services/contentComposerApi';
 
 /**
- * Spec 8.1 step 10: the final confirmation shows brand, accounts, local AND UTC time, copy,
- * assets, links and approval status. Each is located by its own block and asserted by the
+ * Spec 8.1 step 10: the final confirmation shows brand, accounts, time, copy, assets, links and
+ * approval status. (The spec said "local AND UTC time"; on 2026-09-18 Ali ruled that marketing
+ * times show only Central, so the UTC cell is gone and its absence is asserted below.) Each is located by its own block and asserted by the
  * VALUE inside it, because a block that renders with nothing in it is precisely the failure
  * a confirmation screen exists to prevent.
  *
- * The time assertion is the one that matters most: for a brand in America/Chicago the local
- * and UTC cells must show DIFFERENT clock readings of the same instant. A surface that printed
- * the UTC string twice under two labels would pass a "both labels exist" check and mislead
- * the operator about when the audience will see the post.
+ * The time assertion is the one that matters most: it checks the Central CLOCK READING, not
+ * just a label, because a surface that printed the UTC string under a "Central" heading would
+ * pass a "label exists" check and mislead the operator about when the post goes out.
  */
 
 let container: HTMLDivElement;
@@ -87,17 +87,15 @@ describe('the confirmation surface renders every field the spec names', () => {
     expect(ig).toContain('Instagram app review is pending.');
   });
 
-  it('local and UTC time, as two cells with DIFFERENT readings for a Chicago brand', () => {
+  it('shows the time in Central only - the Central clock reading, and no UTC anywhere', () => {
     render(SUMMARY);
-    const local = block('confirm-time-local').textContent ?? '';
-    const utc = block('confirm-time-utc').textContent ?? '';
-    expect(local).toContain('Tue, Nov 3, 9:00 AM CST');
-    expect(local).toContain('-06:00');
-    expect(local).toContain('America/Chicago');
-    expect(utc).toContain('2026-11-03 15:00 UTC');
-    // The two cells must not carry the same clock reading.
-    expect(local).not.toContain('15:00');
-    expect(utc).not.toContain('9:00 AM');
+    const t = block('confirm-time').textContent ?? '';
+    // 15:00Z on Nov 3 is 9:00 AM CST (after the Nov 1 fall-back).
+    expect(block('confirm-time-central').textContent).toBe('Tue, Nov 3, 9:00 AM CST');
+    expect(t).toContain('Central');
+    expect(t).not.toContain('UTC');
+    expect(t).not.toContain('15:00');
+    expect(container.querySelector('[data-testid="confirm-time-utc"]')).toBeNull();
   });
 
   it('copy per provider, with provenance and staleness', () => {
@@ -148,13 +146,16 @@ describe('absence is stated, never blank', () => {
     expect(container.querySelector('[data-testid="confirm-time-utc"]')).toBeNull();
   });
 
-  it('a UTC brand shows matching readings and explains it', () => {
+  it('a brand configured in another zone still shows Central, read from the instant', () => {
+    // The server's brand-local reading says 3:00 PM UTC; the screen must ignore it and render
+    // the instant itself in Central.
     render({
       ...SUMMARY,
       brand: { id: 'b-2', name: 'UTC brand', timezone: 'UTC', timezoneSource: 'brand' },
       schedule: { ...SUMMARY.schedule!, local: { day: '2026-11-03', time: '3:00 PM', zone: 'UTC', offset: '+00:00', dayLabel: 'Tue, Nov 3' }, timezone: 'UTC', differsFromUtc: false },
     });
-    expect(block('confirm-time').textContent).toContain('This brand publishes in UTC.');
+    expect(block('confirm-time-central').textContent).toBe('Tue, Nov 3, 9:00 AM CST');
+    expect(block('confirm-time').textContent).not.toContain('UTC');
   });
 
   it('a validation that has not run is labelled as not run, not as passed', () => {

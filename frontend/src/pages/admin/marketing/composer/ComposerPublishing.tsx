@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { StatusBadge } from '../../../../components/admin/shell';
 import type { ExternalPublication, PublishingJob } from '../../../../services/contentComposerApi';
+import { formatCentral } from '../centralTime';
 
 /**
  * What happened after the operator clicked Schedule / Publish now: the queue, per network.
@@ -88,7 +89,7 @@ export default function ComposerPublishing({ jobs, publications, busy, onRetry, 
       ))}
 
       <table className="table table-sm align-middle mb-0">
-        <thead><tr><th>Network</th><th>State</th><th>Due</th><th>Attempts</th><th>Receipt</th><th /></tr></thead>
+        <thead><tr><th>Network</th><th>State</th><th>Due (Central)</th><th>Attempts</th><th>Receipt</th><th /></tr></thead>
         <tbody>
           {jobs.map((j) => {
             const pub = publications.find((p) => p.publishing_job_id === j.id);
@@ -102,7 +103,7 @@ export default function ComposerPublishing({ jobs, publications, busy, onRetry, 
                   {j.last_error && <div className="small text-danger">{j.last_error_class}: {j.last_error}</div>}
                   {j.dead_letter_reason && <div className="small text-muted">{j.dead_letter_reason}</div>}
                 </td>
-                <td className="small">{new Date(j.publish_at).toISOString().replace('T', ' ').slice(0, 16)} UTC</td>
+                <td className="small">{formatCentral(j.publish_at) ?? '-'}</td>
                 <td className="small">{j.attempts}/{j.max_attempts}</td>
                 <td className="small">
                   {pub ? (

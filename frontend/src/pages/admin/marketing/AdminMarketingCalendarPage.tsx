@@ -3,29 +3,28 @@ import { Link } from 'react-router-dom';
 import { PageHeader, SectionCard } from '../../../components/admin/shell';
 import { TrustSignal } from '../../../components/admin/shell/trust';
 import api from '../../../utils/api';
-import { DEFAULT_BRAND_TIMEZONE, groupByDay, type CalendarItem } from './calendarTime';
+import { groupByDay, type CalendarItem } from './calendarTime';
+import { CENTRAL, toCentralInput } from './centralTime';
 
 /**
  * The cross-brand, cross-channel calendar.
  *
- * Two zones on one screen, deliberately. The GRID is laid out in the viewer's zone, because a
- * calendar needs one set of columns and "Tuesday" cannot mean two different days. Each ITEM
- * additionally shows brand-local time with its offset, because that is when the post actually
- * goes out where the audience is - and across a DST change the two readings of the same
- * instant differ by an hour that the grid alone would hide.
+ * ONE ZONE: CENTRAL (Ali, 2026-09-18 - "times should only show CST"). This page used to lay the
+ * grid out in a zone the viewer picked (Central, New York, LA, London or UTC) and show each item
+ * in its BRAND's zone beside that, so one post could read as two different times on one screen.
+ * Grid and items are now both Central. The zone abbreviation stays on each item (CDT until
+ * Nov 1, CST after) because on the fall-back night 1:30 AM happens twice.
  *
  * The server returns UTC instants and each brand's zone; every conversion happens here, at
  * render time, through the platform's timezone database. No wall-clock arithmetic anywhere.
  */
 
-const VIEWER_ZONES = [DEFAULT_BRAND_TIMEZONE, 'America/New_York', 'America/Los_Angeles', 'Europe/London', 'UTC'];
-
+/** Today's date in Central. `toISOString()` gives the UTC date, which is tomorrow after 7 PM CDT. */
 function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return toCentralInput(d.toISOString()).slice(0, 10);
 }
 
 function AdminMarketingCalendarPage() {
-  const [viewerZone, setViewerZone] = useState<string>(DEFAULT_BRAND_TIMEZONE);
   const [start, setStart] = useState(() => isoDate(new Date()));
   const [end, setEnd] = useState(() => isoDate(new Date(Date.now() + 13 * 86_400_000)));
   const [items, setItems] = useState<CalendarItem[]>([]);
@@ -54,7 +53,7 @@ function AdminMarketingCalendarPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const days = useMemo(() => groupByDay(items, viewerZone), [items, viewerZone]);
+  const days = useMemo(() => groupByDay(items, CENTRAL, CENTRAL), [items]);
 
   const trust: TrustSignal = useMemo(() => ({
     level: error ? 'error' : loading || !fetchedAt ? 'unverified' : 'live',
@@ -69,7 +68,7 @@ function AdminMarketingCalendarPage() {
       <PageHeader
         title="Calendar"
         icon="calendar-2-line"
-        subtitle="Every scheduled item across brands and channels, shown in your zone and in each brand's."
+        subtitle="Every scheduled item across brands and channels, in Central time."
         breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Marketing', to: '/admin/marketing' }, { label: 'Calendar' }]}
         trust={trust}
         actions={<Link to="/admin/marketing/composer" className="btn btn-sm btn-primary">New post</Link>}
@@ -84,15 +83,7 @@ function AdminMarketingCalendarPage() {
           <label className="form-label small text-muted mb-1" htmlFor="cal-end">To</label>
           <input id="cal-end" type="date" className="form-control form-control-sm" value={end} min={start} onChange={(e) => setEnd(e.target.value)} />
         </div>
-        <div>
-          <label className="form-label small text-muted mb-1" htmlFor="cal-zone">Grid shown in</label>
-          <select id="cal-zone" className="form-select form-select-sm" value={viewerZone} onChange={(e) => setViewerZone(e.target.value)}>
-            {VIEWER_ZONES.map((z) => <option key={z} value={z}>{z}</option>)}
-          </select>
-        </div>
-        <div className="ms-auto small text-muted">
-          Each item also shows its brand's local time and offset.
-        </div>
+        <div className="ms-auto small text-muted">All times Central.</div>
       </div>
 
       <div className="px-3 pt-3">
@@ -122,8 +113,8 @@ function AdminMarketingCalendarPage() {
                       {/* Brand-local time WITH offset. Across a DST change two items can read
                           the same wall-clock time an hour apart; the offset is what tells them
                           apart, so it is never omitted. */}
-                      <div className="fw-medium">{item.local.time} <span className="text-muted">{item.local.zone} ({item.local.offset})</span></div>
-                      <div className="text-muted">{item.local.dayLabel} · {item.brandTimeZone ?? DEFAULT_BRAND_TIMEZONE}</div>
+                      <div className="fw-medium">{item.local.time} <span className="text-muted">{item.local.zone}</span></div>
+                      <div className="text-muted">{item.local.dayLabel}</div>
                     </div>
                   </li>
                 ))}
