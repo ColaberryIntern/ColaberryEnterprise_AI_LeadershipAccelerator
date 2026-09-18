@@ -8,7 +8,10 @@
  */
 jest.mock('../../../models/RoomMembership', () => ({ findOne: jest.fn() }));
 jest.mock('../../../models/RoomMessage', () => ({ findAll: jest.fn() }));
-jest.mock('../reeseIdentitySeed', () => ({ getReeseEnrollmentId: jest.fn(), getReeseAdminUserId: jest.fn(), getReeseAgentId: jest.fn() }));
+jest.mock('../reeseIdentitySeed', () => ({
+  getReeseEnrollmentId: jest.fn(), getReeseAdminUserId: jest.fn(), getReeseAgentId: jest.fn(),
+  REESE_AGENT_NAME: 'Reese',
+}));
 jest.mock('../reeseSystemPrompt', () => ({ buildReeseSystemPrompt: jest.fn() }));
 jest.mock('../../openaiInstrumented', () => ({ getInstrumentedOpenAI: jest.fn() }));
 jest.mock('../../communityRooms/dmService', () => ({ sendDmMessage: jest.fn() }));
@@ -22,6 +25,7 @@ jest.mock('../reeseTools', () => ({
   executeReeseTool: jest.fn(),
 }));
 jest.mock('../../agentBlueprint/agentActivityLogService', () => ({ logAgentActivity: jest.fn() }));
+jest.mock('../../workLedger/agentActionAuthorizationBridge', () => ({ authorizeTicketDispatch: jest.fn() }));
 
 import RoomMembership from '../../../models/RoomMembership';
 import RoomMessage from '../../../models/RoomMessage';
@@ -30,6 +34,7 @@ import { buildReeseSystemPrompt } from '../reeseSystemPrompt';
 import { getInstrumentedOpenAI } from '../../openaiInstrumented';
 import { sendDmMessage } from '../../communityRooms/dmService';
 import { ensureReeseTicketForRoom, logReeseExchangeActivity } from '../reeseTicketLinkService';
+import { authorizeTicketDispatch } from '../../workLedger/agentActionAuthorizationBridge';
 import { maybeRefreshStudentAssessment } from '../../studentHealthAssessment';
 import { executeReeseTool } from '../reeseTools';
 import { logAgentActivity } from '../../agentBlueprint/agentActivityLogService';
@@ -48,6 +53,7 @@ const mockLogExchange = logReeseExchangeActivity as unknown as jest.Mock;
 const mockMaybeRefreshAssessment = maybeRefreshStudentAssessment as unknown as jest.Mock;
 const mockExecuteReeseTool = executeReeseTool as unknown as jest.Mock;
 const mockLogAgentActivity = logAgentActivity as unknown as jest.Mock;
+const mockAuthorizeTicketDispatch = authorizeTicketDispatch as unknown as jest.Mock;
 
 const REESE_ADMIN_ID = 'reese-admin-1';
 const REESE_AGENT_ID = 'reese-agent-1';
@@ -87,6 +93,7 @@ beforeEach(() => {
   mockMaybeRefreshAssessment.mockResolvedValue(undefined);
   mockExecuteReeseTool.mockResolvedValue('{}');
   mockLogAgentActivity.mockResolvedValue(undefined);
+  mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_allow', reason: 'ok' });
 });
 
 describe('maybeTriggerReeseReply', () => {
@@ -307,6 +314,51 @@ describe('maybeTriggerReeseReply', () => {
       await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
 
       expect(mockLogAgentActivity).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('authorization audit coverage (Ali: "shouldn\'t Reese not be audited with everything we\'re tracking?")', () => {
+    it('happy path: a real reply runs the real ABAC chokepoint, ticket-scoped, before the send', async () => {
+      mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+
+      await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+      expect(mockAuthorizeTicketDispatch).toHaveBeenCalledWith(
+        expect.objectContaining({ ticketId: 'ticket-1', agentName: 'Reese', action: 'reese_dm_reply' }),
+      );
+      // Ordering: authorized before the real send, mirroring the outreach
+      // path's own ordering fix — never logged after the fact.
+      const authorizeOrder = mockAuthorizeTicketDispatch.mock.invocationCallOrder[0];
+      const sendOrder = mockSendDmMessage.mock.invocationCallOrder[0];
+      expect(authorizeOrder).toBeLessThan(sendOrder);
+    });
+
+    it('boundary: no resolvable ticket (ticket-ensure failed) skips the check rather than throwing — it is ticket-scoped', async () => {
+      mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+      mockEnsureTicket.mockRejectedValue(new Error('ticket service down'));
+
+      await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+      expect(mockAuthorizeTicketDispatch).not.toHaveBeenCalled();
+      expect(mockSendDmMessage).toHaveBeenCalledTimes(1); // reply still sent — never gates
+    });
+
+    it('boundary: no messages sent (e.g. empty completion) never runs an authorization check for an action that never happened', async () => {
+      mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+      mockCreateCompletion.mockResolvedValue({ choices: [{ message: { content: '   ' } }] });
+
+      await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+      expect(mockAuthorizeTicketDispatch).not.toHaveBeenCalled();
+    });
+
+    it('never gates: a "would_block" verdict still lets the real reply send (shadow mode, advisory only)', async () => {
+      mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+      mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_block', reason: 'would_block_in_enforce' });
+
+      await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+      expect(mockSendDmMessage).toHaveBeenCalledTimes(1);
     });
   });
 });
