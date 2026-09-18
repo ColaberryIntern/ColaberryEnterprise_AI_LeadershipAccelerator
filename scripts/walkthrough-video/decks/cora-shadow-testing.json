@@ -1,0 +1,77 @@
+{
+  "slug": "testing-ai-actions-before-they-reach-customers",
+  "output": "cora-shadow-testing-walkthrough.mp4",
+  "slides": [
+    {
+      "kind": "title",
+      "seconds": 7,
+      "title": "Test the Action. Before It Reaches a Customer.",
+      "subtitle": "Cora Recap Engine  \u00b7  an operational AI system",
+      "caption": "A system calls an admissions team's leads, texts and emails them, and writes what happened into their record."
+    },
+    {
+      "kind": "title",
+      "seconds": 8,
+      "title": "Each of those actions has a consequence.",
+      "subtitle": "A call reaches a person. A text lands on a phone. A changed field changes what the team does next.",
+      "caption": "A model that writes a convincing message can still attach it to the wrong lead, the wrong campaign or the wrong moment."
+    },
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "Two gates, at the boundary.",
+      "subtitle": "One for calls, texts and emails. A separate one for writes to the CRM.",
+      "caption": "Every job still runs and every message is still written. Only the last step is held, and what is held is written down."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 10,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/frontend/public/site-v2/shot-cora-shadow-system-controls.png",
+      "caption": "Both gates reading shadow, with every change to them listed underneath. This copy runs on this machine with no keys, which is why the pre-flight list shows errors."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 10,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/frontend/public/site-v2/shot-cora-shadow-contact-lookup.png",
+      "caption": "One lead's held run: four actions recorded, two messages stored, and no call events at all, because a held call is never placed. Every row here is a placeholder."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 9,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/frontend/public/site-v2/shot-cora-shadow-pipeline-trace.png",
+      "caption": "Each step of that run is marked shadow, and the text the model wrote is there to read in full."
+    },
+    {
+      "kind": "cards",
+      "seconds": 10,
+      "rows": [
+        ["4,267", "intended actions recorded instead of performed in five days"],
+        ["3,204 of 4,267", "kept the exact words or fields they would have sent"],
+        ["13", "mode changes, each with its old value, new value and source"]
+      ],
+      "accent_index": 0,
+      "caption": "Read from the system's own tables: in five days of rehearsal, 4,267 intended actions for 722 leads were held, and 3,204 of them kept their words or fields."
+    },
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "The rehearsal ran beside the old workflow.",
+      "subtitle": "717 of the 721 leads it would have called were being called by the workflow it was replacing.",
+      "caption": "Nothing pairs a real call with the one it shadowed. The overlap and the go-live runbook are what the record rests on."
+    },
+    {
+      "kind": "title",
+      "seconds": 10,
+      "title": "What a rehearsal cannot prove.",
+      "subtitle": "No completion event. No recorded review. No evaluation of the words.",
+      "caption": "A held call produces no completion, so nothing after it happens. Nothing records that a person read a held action. And none of the six evaluations of the model's call summaries ran with a fixture."
+    },
+    {
+      "kind": "title",
+      "seconds": 8,
+      "title": "Going live was two audited changes, six seconds apart.",
+      "subtitle": "18 April 2026, 12:41 AM Central.",
+      "caption": "Both gates opened from that one page, each change recorded with its old value, its new value and where it came from."
+    }
+  ]
+}
