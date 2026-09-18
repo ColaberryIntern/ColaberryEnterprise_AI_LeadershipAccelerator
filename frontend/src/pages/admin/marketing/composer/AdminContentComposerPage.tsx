@@ -11,6 +11,7 @@ import ComposerVariants from './ComposerVariants';
 import ComposerPreview from './ComposerPreview';
 import ComposerConfirmation from './ComposerConfirmation';
 import ComposerPublishing from './ComposerPublishing';
+import { fromCentralInput, toCentralInput } from '../centralTime';
 
 /**
  * The marketing composer (spec 8.1). One page, five sections, in the order the work happens:
@@ -87,7 +88,8 @@ export default function AdminContentComposerPage() {
       has_offer: Boolean(it.metadata?.hasOffer),
       poll: (it.metadata?.poll as SetupValues['poll']) ?? null,
     }));
-    if (it.scheduled_for) setScheduledFor(it.scheduled_for.slice(0, 16));
+    // Central wall clock, not the UTC reading: see centralTime.ts for the drift this caused.
+    if (it.scheduled_for) setScheduledFor(toCentralInput(it.scheduled_for));
     const problemMap: Record<string, VariantProblem[]> = {};
     for (const v of vs) problemMap[v.provider] = Array.isArray(v.validation_errors) ? v.validation_errors : [];
     setProblems(problemMap);
@@ -233,12 +235,12 @@ export default function AdminContentComposerPage() {
 
   // ── Steps 9-10 ──────────────────────────────────────────────────────────────────────────
   const setTime = withItem(async (id) => {
-    await composer.updateItem(id, { scheduled_for: scheduledFor ? new Date(scheduledFor).toISOString() : null });
+    await composer.updateItem(id, { scheduled_for: scheduledFor ? fromCentralInput(scheduledFor) : null });
     await reload(id);
   }, 'The time could not be saved.');
 
   const act = (action: ComposerAction) => withItem(async (id) => {
-    const r = await composer.runAction(id, action, action === 'schedule' && scheduledFor ? new Date(scheduledFor).toISOString() : undefined);
+    const r = await composer.runAction(id, action, action === 'schedule' && scheduledFor ? (fromCentralInput(scheduledFor) ?? undefined) : undefined);
     await reload(id);
     const jobs = r.jobs.length ? ` ${r.jobs.filter((j) => j.created).length} job(s) queued.` : '';
     say('success', `${action.replace(/_/g, ' ')}: item is now ${r.item.status.replace(/_/g, ' ')}.${jobs}`);
@@ -307,11 +309,11 @@ export default function AdminContentComposerPage() {
         <ComposerPreview variants={variants} providers={providers} links={links} mediaCount={confirmation?.assets.length ?? 0} brandName={brand?.name ?? 'Brand'} poll={setup.content_type === 'poll' ? setup.poll : null} />
       </SectionCard>
 
-      <SectionCard title="4. Confirm" subtitle="What will go out, where, and when - in the brand's time and in UTC." icon="checkbox-circle-line">
+      <SectionCard title="4. Confirm" subtitle="What will go out, where, and when (Central time)." icon="checkbox-circle-line">
         {item && (
           <div className="d-flex flex-wrap gap-2 align-items-end mb-3">
             <div>
-              <label className="form-label small mb-1" htmlFor="composer-scheduled-for">Scheduled time (your local clock; shown below in brand time and UTC)</label>
+              <label className="form-label small mb-1" htmlFor="composer-scheduled-for">Scheduled time (Central)</label>
               <input id="composer-scheduled-for" type="datetime-local" className="form-control form-control-sm" value={scheduledFor} disabled={busy} onChange={(e) => setScheduledFor(e.target.value)} />
             </div>
             <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={setTime}>Set time</button>

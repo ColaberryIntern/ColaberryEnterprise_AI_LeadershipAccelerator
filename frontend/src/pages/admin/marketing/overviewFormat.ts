@@ -1,4 +1,5 @@
 import type { AccountHealth } from '../../../services/marketingOpsApi';
+import { formatCentral, toCentralInput } from './centralTime';
 
 /**
  * overviewFormat - how the Overview says things. Pure, so the wording is testable.
@@ -64,21 +65,21 @@ export function expiryPhrase(days: number | null): string | null {
 }
 
 /**
- * When a post goes out, in the reader's own timezone.
+ * When a post goes out, in Central (never the viewer's laptop zone - Ali, 2026-09-18).
  *
  * Always carries the weekday. "2:00 PM" alone forces the reader to work out which day they are
  * looking at from the row above, and the whole point of the panel is to be readable at a glance.
  */
 export function scheduleLabel(iso: string, now: Date = new Date()): string {
-  const when = new Date(iso);
-  if (Number.isNaN(when.getTime())) return 'Unscheduled';
-  const time = when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-  const sameDay = when.toDateString() === now.toDateString();
-  if (sameDay) return `Today ${time}`;
-  const tomorrow = new Date(now.getTime() + 86_400_000);
-  if (when.toDateString() === tomorrow.toDateString()) return `Tomorrow ${time}`;
-  const day = when.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-  return `${day} ${time}`;
+  const full = formatCentral(iso); // "Fri, Sep 18, 9:45 AM CDT"
+  if (!full) return 'Unscheduled';
+  const time = full.split(', ').slice(-1)[0]; // "9:45 AM CDT"
+  // "Today" and "Tomorrow" are Central days too - otherwise a post at 8 PM CDT reads as
+  // "Tomorrow" to a browser running on UTC.
+  const dayOf = (d: string) => toCentralInput(d).slice(0, 10);
+  if (dayOf(iso) === dayOf(now.toISOString())) return `Today ${time}`;
+  if (dayOf(iso) === dayOf(new Date(now.getTime() + 86_400_000).toISOString())) return `Tomorrow ${time}`;
+  return full;
 }
 
 /** "3 posts" / "1 post". Counting is not the place to be clever, but it is a place to be right. */

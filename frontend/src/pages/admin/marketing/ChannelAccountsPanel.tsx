@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ChannelAccount, VaultStatus } from '../../../services/channelAccountApi';
+import { formatCentralDate } from './centralTime';
 
 /**
  * ChannelAccountsPanel — which social accounts a brand has connected, and why it cannot connect
@@ -84,7 +85,7 @@ function expiryText(account: ChannelAccount): string {
   if (!access.token_expires_at) return 'No expiry recorded';
   const when = new Date(access.token_expires_at);
   if (Number.isNaN(when.getTime())) return 'No expiry recorded';
-  return `${access.expired ? 'Expired' : 'Expires'} ${when.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}`;
+  return `${access.expired ? 'Expired' : 'Expires'} ${formatCentralDate(access.token_expires_at)}`;
 }
 
 export default function ChannelAccountsPanel(props: ChannelAccountsPanelProps) {

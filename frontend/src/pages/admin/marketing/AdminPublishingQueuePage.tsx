@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { PageHeader, SectionCard, StatusBadge } from '../../../components/admin/shell';
 import api from '../../../utils/api';
 import { cancelJob, errorMessage, retryJob, runQueueNow, type PublishingJob } from '../../../services/contentComposerApi';
+import { formatCentral } from './centralTime';
 
 /**
  * The publishing queue across every item: what is due, what is retrying, what dead-lettered
@@ -94,7 +95,7 @@ export default function AdminPublishingQueuePage() {
         {!error && !loading && jobs.length === 0 && <p className="text-muted mb-0" data-testid="queue-empty">Nothing here: {filterLabel.toLowerCase()} is empty.</p>}
         {!error && !loading && jobs.length > 0 && (
           <table className="table table-sm align-middle mb-0">
-            <thead><tr><th>Network</th><th>State</th><th>Due (UTC)</th><th>Attempts</th><th>Reason</th><th /></tr></thead>
+            <thead><tr><th>Network</th><th>State</th><th>Due (Central)</th><th>Attempts</th><th>Reason</th><th /></tr></thead>
             <tbody>
               {jobs.map((j) => {
                 const retryable = j.state === 'failed' || j.state === 'dead_lettered';
@@ -103,7 +104,7 @@ export default function AdminPublishingQueuePage() {
                   <tr key={j.id} data-testid={`job-${j.id}`}>
                     <td>{j.provider}</td>
                     <td><StatusBadge label={j.state.replace(/_/g, ' ')} tone={tone(j.state)} /></td>
-                    <td className="small">{new Date(j.publish_at).toISOString().replace('T', ' ').slice(0, 16)}</td>
+                    <td className="small">{formatCentral(j.publish_at) ?? '-'}</td>
                     <td className="small">{j.attempts}/{j.max_attempts}</td>
                     <td className="small">
                       {j.dead_letter_reason && <div className="text-muted">{j.dead_letter_reason}</div>}
