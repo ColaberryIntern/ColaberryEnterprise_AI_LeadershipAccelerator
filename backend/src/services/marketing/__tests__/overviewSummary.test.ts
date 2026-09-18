@@ -25,7 +25,10 @@ const mockListAccounts = jest.fn();
 jest.mock('../channelAccountService', () => ({ listAccounts: (...a: unknown[]) => mockListAccounts(...a) }));
 
 jest.mock('../../publishing/providerCapabilities', () => ({
-  PROVIDER_KEYS: ['linkedin_member', 'linkedin_organization', 'x'],
+  PROVIDER_KEYS: ['linkedin_member', 'linkedin_organization', 'x', 'meta_facebook_page'],
+  IMPLEMENTED_CONNECTORS: new Set(['linkedin_member', 'linkedin_organization']),
+  // What production has on: LinkedIn personal profiles only.
+  LIVE_CONNECTORS: new Set(['linkedin_member']),
 }));
 
 import { getMarketingOverview, UPCOMING_LIMIT, UPCOMING_WINDOW_DAYS, RECENT_WINDOW_DAYS } from '../overviewSummary';
@@ -146,7 +149,51 @@ describe('accounts and the hand-posted list', () => {
     mockListAccounts.mockResolvedValue([account('a1', 'linkedin_member', 40)]);
     const out = await getMarketingOverview({ tenantIds: null }, NOW);
     expect(out.accounts[0].health).toBe('ok');
-    expect(out.handoff_providers).toEqual(['linkedin_organization', 'x']);
+    expect(out.handoff_providers).toEqual(['linkedin_organization', 'x', 'meta_facebook_page']);
+  });
+
+  it('a CONNECTED Facebook Page is still hand-posted - connecting is not the same as publishing', async () => {
+    // No Facebook adapter exists and LIVE_CONNECTORS does not name it, so every Facebook post is
+    // still a handoff. The list must say so however healthy the account is.
+    mockListAccounts.mockResolvedValue([
+      { ...account('fb1', 'meta_facebook_page', 0), credentials: [{ credential_type: 'access_token', token_expires_at: null }] },
+    ]);
+    const out = await getMarketingOverview({ tenantIds: null }, NOW);
+    expect(out.accounts[0].health).toBe('ok');
+    expect(out.handoff_providers).toContain('meta_facebook_page');
+  });
+
+  it('switching direct publishing on for a network is what takes it off the hand-posted list', async () => {
+    mockListAccounts.mockResolvedValue([account('o1', 'linkedin_organization', 40)]);
+    const off = await getMarketingOverview({ tenantIds: null }, NOW);
+    expect(off.handoff_providers).toContain('linkedin_organization');
+    const on = await getMarketingOverview({ tenantIds: null }, NOW, { liveProviders: new Set(['linkedin_member', 'linkedin_organization'] as any) });
+    expect(on.handoff_providers).not.toContain('linkedin_organization');
+  });
+
+  it('an X account two hours after connecting is not "expired" - its refresh token keeps the connection alive', async () => {
+    mockListAccounts.mockResolvedValue([{
+      ...account('x1', 'x', 0),
+      credentials: [
+        { credential_type: 'access_token', token_expires_at: new Date(NOW.getTime() - 60_000) },
+        { credential_type: 'refresh_token', token_expires_at: null },
+      ],
+    }]);
+    const out = await getMarketingOverview({ tenantIds: null }, NOW);
+    expect(out.accounts[0].health).toBe('ok');
+    expect(out.accounts[0].expires_in_days).toBeNull();
+  });
+
+  it('but a network WITH an adapter is judged by its access token, because nothing renews it', async () => {
+    mockListAccounts.mockResolvedValue([{
+      ...account('o1', 'linkedin_organization', 0),
+      credentials: [
+        { credential_type: 'access_token', token_expires_at: new Date(NOW.getTime() - DAY) },
+        { credential_type: 'refresh_token', token_expires_at: new Date(NOW.getTime() + 300 * DAY) },
+      ],
+    }]);
+    const out = await getMarketingOverview({ tenantIds: null }, NOW);
+    expect(out.accounts[0].health).toBe('expired');
   });
 
   it('an expiring token still publishes, so it is not hand-posted', async () => {

@@ -71,6 +71,25 @@ export function accessTokenExpiry(account: AccountLike): Date | null {
   return access ? asDate(access.token_expires_at) : null;
 }
 
+/**
+ * When the CONNECTION dies, for a network nothing publishes to yet.
+ *
+ * X access tokens live two hours, Google's one, TikTok's a day; each comes with a long-lived
+ * refresh token. Judged by the access token, such an account reads "Token expired" two hours
+ * after it was connected, which is alarming and says nothing useful. For a network with no live
+ * adapter, no post uses any token yet, so the question is only whether the connection is still
+ * alive - and that is the refresh token's lifetime (null: the provider states none, so it lives
+ * until revoked). With no refresh token at all, the access token is all there is.
+ *
+ * NOT for a network with a live adapter: adapters read the access token as stored and nothing
+ * renews it (see accessTokenExpiry), so there the access token IS the truth. The adapter PR that
+ * brings X, YouTube or TikTok live must build renewal; this function assumes that it will.
+ */
+export function connectionExpiry(account: AccountLike): Date | null {
+  const refresh = account.credentials.find((c) => c.credential_type === 'refresh_token');
+  return refresh ? asDate(refresh.token_expires_at) : accessTokenExpiry(account);
+}
+
 /** Whole days from `now` until `when`, rounded down. Negative once past. Null if never expires. */
 export function daysUntil(when: Date | null, now: Date): number | null {
   if (!when) return null;
@@ -85,10 +104,15 @@ export function daysUntil(when: Date | null, now: Date): number | null {
  * expired token is fatal whatever the last health check said, since that check may predate the
  * expiry entirely.
  */
-export function accountHealth(account: AccountLike, now: Date): AccountHealth {
+export function accountHealth(
+  account: AccountLike,
+  now: Date,
+  /** True for a network with no live adapter - see connectionExpiry. Default: access token. */
+  judgeByConnection = false,
+): AccountHealth {
   if (account.status === 'revoked' || asDate(account.revoked_at)) return 'revoked';
 
-  const expiry = accessTokenExpiry(account);
+  const expiry = judgeByConnection ? connectionExpiry(account) : accessTokenExpiry(account);
   const days = daysUntil(expiry, now);
   if (days !== null && days < 0) return 'expired';
 

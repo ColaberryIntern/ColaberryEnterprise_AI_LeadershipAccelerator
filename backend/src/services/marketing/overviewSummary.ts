@@ -1,9 +1,9 @@
 import { Op } from 'sequelize';
 import { Brand, ContentItem, ContentVariant, ExternalPublication } from '../../models';
 import { listAccounts } from './channelAccountService';
-import { PROVIDER_KEYS, type ProviderKey } from '../publishing/providerCapabilities';
+import { IMPLEMENTED_CONNECTORS, LIVE_CONNECTORS, PROVIDER_KEYS, type ProviderKey } from '../publishing/providerCapabilities';
 import {
-  accountHealth, accessTokenExpiry, canPublish, daysUntil, handoffProviders, isLate,
+  accountHealth, accessTokenExpiry, canPublish, connectionExpiry, daysUntil, handoffProviders, isLate,
   type AccountHealth,
 } from './overviewHealth';
 
@@ -31,6 +31,15 @@ export interface OverviewScope {
   tenantIds: string[] | null;
   brandId?: string | null;
 }
+
+/**
+ * Which providers publish directly in this process. Injectable for tests; production reads the
+ * boot-time LIVE_CONNECTORS switch.
+ */
+export interface OverviewDeps {
+  liveProviders: ReadonlySet<ProviderKey>;
+}
+const DEFAULT_DEPS: OverviewDeps = { liveProviders: LIVE_CONNECTORS };
 
 export interface UpcomingPost {
   id: string;
@@ -145,14 +154,17 @@ async function accountRows(scope: OverviewScope, now: Date): Promise<AccountRow[
   });
   const names = await brandNames(accounts.map((a) => a.brand_id ?? '').filter(Boolean));
   return accounts.map((a) => {
-    const expiry = accessTokenExpiry(a);
+    // A network with an adapter is judged by the token the adapter uses; one without, by whether
+    // the connection is still alive. See overviewHealth.connectionExpiry.
+    const byConnection = !IMPLEMENTED_CONNECTORS.has(a.provider as ProviderKey);
+    const expiry = byConnection ? connectionExpiry(a) : accessTokenExpiry(a);
     return {
       id: a.id,
       brand_id: a.brand_id,
       brand_name: a.brand_id ? names.get(a.brand_id) ?? null : null,
       provider: a.provider,
       display_name: a.display_name,
-      health: accountHealth(a, now),
+      health: accountHealth(a, now, byConnection),
       token_expires_at: expiry ? expiry.toISOString() : null,
       expires_in_days: daysUntil(expiry, now),
     };
@@ -173,6 +185,7 @@ async function publishedCount(scope: OverviewScope, since: Date): Promise<number
 export async function getMarketingOverview(
   scope: OverviewScope,
   now: Date = new Date(),
+  deps: OverviewDeps = DEFAULT_DEPS,
 ): Promise<OverviewSummary> {
   const since = new Date(now.getTime() - RECENT_WINDOW_DAYS * DAY_MS);
   const [upcoming, accounts, published] = await Promise.all([
@@ -181,7 +194,13 @@ export async function getMarketingOverview(
     publishedCount(scope, since),
   ]);
 
-  const usable = accounts.filter((a) => canPublish(a.health)).map((a) => a.provider);
+  // Posted by hand unless an account can publish AND direct publishing is switched on for that
+  // network. Connecting a Facebook Page does not make Facebook a direct channel; until its
+  // adapter exists and LIVE_CONNECTORS names it, every Facebook post is still a handoff, and
+  // this list saying otherwise would be the exact reassurance it exists to withhold.
+  const usable = accounts
+    .filter((a) => canPublish(a.health) && deps.liveProviders.has(a.provider as ProviderKey))
+    .map((a) => a.provider);
   return {
     upcoming: upcoming.rows,
     upcoming_truncated: upcoming.truncated,
