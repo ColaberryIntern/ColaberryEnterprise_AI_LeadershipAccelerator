@@ -15,17 +15,28 @@ Deliberately excludes a live word-by-word transcript: the phone system (Synthflo
 only hands over the transcript when the call ends, so live words need a separate
 provider-capability spike (Phase 2).
 
-- [x] The AI interviewer discloses ONCE, then stops repeating "I'm an AI"
+- [x] The AI discloses ONCE (not on repeat), and NAMES the right business (brand parameterised)
   - Date: 2026-09-18
   - Session: CC-20260909-q7m2
   - What changed: `backend/src/services/voiceCallPrompt.ts` `buildFlotationCallPrompt`.
-    The old prompt ordered the agent to announce it was an AI in the first sentence
-    AND to say "I am an AI assistant" whenever asked — testers heard it over and over
-    ("she keeps saying I'm an AI assistant too much"). Rewrote it to disclose **once**,
-    naturally, in the opening, then not repeat; still honest (never implies human,
-    confirms once if directly asked). The disclosure requirement is kept; the robotic
-    repetition is gone.
-  - Verification: backend `tsc` (string-only edit; via CI). Prompt is injected per call.
+    Two things. (a) **Disclose once:** the old prompt ordered the agent to announce it
+    was an AI in the first sentence AND to say "I am an AI assistant" whenever asked —
+    testers heard it over and over. Rewrote it to disclose once, naturally, in the
+    opening, then not repeat; still honest (never implies human, confirms once if
+    directly asked). (b) **Brand parameterised (Ali, mid-review):** the prompt hardcoded
+    "AI Flotation" throughout, so a Colaberry internship intake was naming the wrong
+    business. Added a `CallBrand` param (name/origin/blurb) with `AI_FLOTATION_BRAND`
+    (default) and `COLABERRY_BRAND` presets; every business-name reference now comes
+    from `brand`. `callbackRequestService.promptForSource` takes the brand and
+    `CallbackOptions.brand` carries it; the internship route
+    (`flotationIntakeRoutes` POST /intake/call) passes `COLABERRY_BRAND`, so the agent
+    says Colaberry to an intern while a public prospect still gets AI Flotation. The
+    ai-flotation *source* (agent, webhook, dedup plumbing) is unchanged; only the spoken
+    brand differs.
+  - Verification: `voiceCallPrompt.test.ts` updated (disclose-once + a brand block: default
+    says AI Flotation and never Colaberry, Colaberry brand says Colaberry and never AI
+    Flotation) — 53 pass with interviewMethod; `flotationIntakeCallRoutes.test.ts` updated
+    to expect the stamped brand — 20 pass. Backend `tsc` clean.
 
 - [x] A page refresh mid-call no longer loses everything
   - Date: 2026-09-18

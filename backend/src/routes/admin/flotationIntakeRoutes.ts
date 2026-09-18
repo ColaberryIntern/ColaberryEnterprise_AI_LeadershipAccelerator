@@ -25,6 +25,7 @@ import { CommunicationLog, Enrollment, Lead } from '../../models';
 import { startBuildFromUnderstanding } from '../../services/delivery/buildFromUnderstanding';
 import { runIntakeTurn } from '../../services/delivery/projectIntake';
 import { requestInstantCallback } from '../../services/callbackRequestService';
+import { COLABERRY_BRAND } from '../../services/voiceCallPrompt';
 import { reconcileFlotationCall } from '../../services/delivery/flotationCallCompletion';
 
 /** The brand whose intake this is. The call is scripted and routed by this slug. */
@@ -239,7 +240,9 @@ router.post('/api/admin/flotation/intake/call', requireAdmin, async (req: Reques
         consent_contact: true,
       },
       correlationId,
-      { enrollmentId: enrollment.id, requestedBy: 'admin' },
+      // This intake is run from the Colaberry side for an intern, so the agent
+      // names Colaberry, not AI Flotation — same plumbing, correct business name.
+      { enrollmentId: enrollment.id, requestedBy: 'admin', brand: COLABERRY_BRAND },
     );
 
     // The honesty contract from the routing action: a call was placed, or here is why not.
