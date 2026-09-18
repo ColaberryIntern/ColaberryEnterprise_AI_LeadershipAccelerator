@@ -87,19 +87,29 @@ const InternshipInterview: React.FC<Props> = ({ onProgressed, onComplete }) => {
   // Stop polling if the component goes away mid-call.
   useEffect(() => stopPolling, [stopPolling]);
 
+  // Held in refs, not read as dependencies: the parent passes these as props, and a
+  // prop identity change must never be able to re-run the loader below. It did:
+  // the portal shell re-renders once a minute on its presence ping, the arrows were
+  // re-created, load() re-ran, and the answer being typed was wiped to an empty draft
+  // with the interview reset to question one. That read as "the Save button does
+  // nothing" (it is disabled while the draft is empty) rather than as a reload.
+  const onCompleteRef = useRef(onComplete);
+  const onProgressedRef = useRef(onProgressed);
+  useEffect(() => { onCompleteRef.current = onComplete; onProgressedRef.current = onProgressed; });
+
   const load = useCallback(async () => {
     try {
       const v = await fetchInterview();
       setView(v);
       setIndex(0);
       setDraft(emptyDraft());
-      if (v.progress.complete) onComplete?.();
+      if (v.progress.complete) onCompleteRef.current?.();
     } catch {
       setError('We could not load your interview. Please refresh.');
     } finally {
       setLoading(false);
     }
-  }, [onComplete]);
+  }, []);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -161,9 +171,9 @@ const InternshipInterview: React.FC<Props> = ({ onProgressed, onComplete }) => {
         return;
       }
 
-      onProgressed?.();
+      onProgressedRef.current?.();
 
-      if (res.progress.complete) { onComplete?.(); await load(); return; }
+      if (res.progress.complete) { onCompleteRef.current?.(); await load(); return; }
 
       // Advance locally rather than re-fetching per answer: the server already
       // told us what remains, and a full reload between every question would make
@@ -191,7 +201,7 @@ const InternshipInterview: React.FC<Props> = ({ onProgressed, onComplete }) => {
     } finally {
       setBusy(false);
     }
-  }, [question, busy, draft, index, view, load, onProgressed, onComplete]);
+  }, [question, busy, draft, index, view, load]);
 
   // Resolve the overlay once a placed call has left the live state. Called from the
   // poll and from the initial placement (a call can fail fast, before the first poll).
@@ -200,7 +210,7 @@ const InternshipInterview: React.FC<Props> = ({ onProgressed, onComplete }) => {
     if (v.progress.complete) {
       setCallPhase('complete');
       // Let the acknowledgement land, then hand off to review-and-submit.
-      window.setTimeout(() => onComplete?.(), 1600);
+      window.setTimeout(() => onCompleteRef.current?.(), 1600);
       return;
     }
     // A phone call's answers land as `needs_followup` (captured, not yet
@@ -218,7 +228,7 @@ const InternshipInterview: React.FC<Props> = ({ onProgressed, onComplete }) => {
       return;
     }
     setCallPhase('none');
-  }, [onComplete]);
+  }, []);
 
   const pollCall = useCallback(async () => {
     if (!polling.current) return;
