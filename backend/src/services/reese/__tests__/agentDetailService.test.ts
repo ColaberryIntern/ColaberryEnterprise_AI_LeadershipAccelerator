@@ -28,6 +28,12 @@ jest.mock('../../trustMetricsService', () => ({ agentCostRows: jest.fn() }));
 jest.mock('../../agentAuthorizationService', () => ({ getAgentAuthorizationSummary: jest.fn() }));
 // AI Workforce Management, Checkpoint E — the generic GOALS dimension score.
 jest.mock('../../agentGoalsDimensionsService', () => ({ computeAgentGoalsDimensions: jest.fn() }));
+// Reese Product Phase 1, R7 — the new Reese-only employee_facts field's own
+// dependencies. Every test's default fixture is agent_name: 'Reese', so this
+// path runs in nearly every test here — mocked with a harmless default
+// (charter:null, no room message) so existing assertions are unaffected.
+jest.mock('../../../models/RoomMessage', () => ({ findOne: jest.fn() }));
+jest.mock('../../agentRoleCharterService', () => ({ getRoleCharter: jest.fn() }));
 
 import { Op } from 'sequelize';
 import AiAgent from '../../../models/AiAgent';
@@ -43,6 +49,8 @@ import { getPersonaVersionHistory } from '../../agentPersonaVersionHistoryServic
 import { agentCostRows } from '../../trustMetricsService';
 import { getAgentAuthorizationSummary } from '../../agentAuthorizationService';
 import { computeAgentGoalsDimensions } from '../../agentGoalsDimensionsService';
+import RoomMessage from '../../../models/RoomMessage';
+import { getRoleCharter } from '../../agentRoleCharterService';
 import { getAgentDetail } from '../agentDetailService';
 
 const mockAgentFindByPk = AiAgent.findByPk as unknown as jest.Mock;
@@ -62,6 +70,8 @@ const mockPersonaHistory = getPersonaVersionHistory as unknown as jest.Mock;
 const mockCostRows = agentCostRows as unknown as jest.Mock;
 const mockAuthSummary = getAgentAuthorizationSummary as unknown as jest.Mock;
 const mockGoalsDimensions = computeAgentGoalsDimensions as unknown as jest.Mock;
+const mockRoomMessageFindOne = RoomMessage.findOne as unknown as jest.Mock;
+const mockGetRoleCharter = getRoleCharter as unknown as jest.Mock;
 
 const reeseAgent = {
   id: 'agent-1', agent_name: 'Reese', agent_type: 'ai_staff_mentor', category: 'student_success',
@@ -86,6 +96,8 @@ beforeEach(() => {
   mockCostRows.mockResolvedValue([]);
   mockAuthSummary.mockResolvedValue({ window_days: 30, total: 0, allow: 0, approval: 0, block: 0, enforced_count: 0 });
   mockGoalsDimensions.mockResolvedValue({ goals: [], goalsOverall: 0 });
+  mockRoomMessageFindOne.mockResolvedValue(null);
+  mockGetRoleCharter.mockResolvedValue({ agentId: 'agent-1', charter: null });
 });
 
 describe('getAgentDetail', () => {
@@ -803,6 +815,97 @@ describe('getAgentDetail', () => {
         expect(mockGoalsDimensions).toHaveBeenCalledWith(reeseAgent);
         expect(result!.goals).toEqual(realGoals);
         expect(result!.goals_overall).toBe(4.2);
+      });
+    });
+
+    describe('employee_facts (Reese Product Phase 1, R7 — truthful employee facts)', () => {
+      it('honesty boundary: null for every agent that is not Reese — no fabricated availability/work-state for an agent this phase never reviewed', async () => {
+        mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, agent_name: 'CoryBrain' });
+
+        const result = await getAgentDetail('agent-1');
+
+        expect(result!.employee_facts).toBeNull();
+        expect(mockRoomMessageFindOne).not.toHaveBeenCalled();
+        expect(mockGetRoleCharter).not.toHaveBeenCalled();
+      });
+
+      it('happy path: real charter version/effective date, real last meaningful action, real manager chain, real behaviour switches', async () => {
+        mockGetRoleCharter.mockResolvedValue({
+          agentId: 'agent-1',
+          charter: { version: 2, effectiveAt: new Date('2026-09-18T00:00:00Z') },
+        });
+        mockRoomMessageFindOne.mockResolvedValue({ created_at: new Date('2026-09-18T10:00:00Z'), content: 'Here is your next move.' });
+        mockLastActivity.mockResolvedValue(new Date('2026-09-17T09:00:00Z')); // older than the room message
+        mockResolveChain.mockResolvedValue({ resolvedHumanId: 'org-member-ali', trail: ['Reese (human) -> Ali'] });
+        mockOrgMemberFindByPk.mockResolvedValue({ id: 'org-member-ali', email: 'ali@colaberry.com', enrollment_id: 'enrollment-ali' });
+        mockEnrollmentFindByPk.mockResolvedValue({ full_name: 'Ali Muwwakkil' });
+        const reeseWithHumanManager = { ...reeseAgent, reports_to_type: 'human', reports_to_id: 'org-member-ali' };
+        mockAgentFindByPk.mockResolvedValue(reeseWithHumanManager);
+        mockCountOpenTickets.mockResolvedValue(2);
+
+        const result = await getAgentDetail('agent-1');
+        const facts = result!.employee_facts!;
+
+        expect(facts.charter_version).toBe(2);
+        expect(facts.charter_effective_at).toEqual(new Date('2026-09-18T00:00:00Z'));
+        expect(facts.manager_chain_note).toBe('Reports to: Ali Muwwakkil');
+        expect(facts.last_meaningful_action).toEqual({ at: new Date('2026-09-18T10:00:00Z'), description: 'Sent a DM: "Here is your next move."' });
+        expect(facts.work_state).toBe('working_on_ticket');
+        expect(facts.work_state_detail).toBe('2 open ticket(s)');
+        expect(facts.availability).toBe('available');
+      });
+
+      it('honesty boundary: no charter, no room message, no ticket activity, no manager chain — every field is honestly null/idle, never fabricated', async () => {
+        mockGetRoleCharter.mockResolvedValue({ agentId: 'agent-1', charter: null });
+        mockRoomMessageFindOne.mockResolvedValue(null);
+        mockLastActivity.mockResolvedValue(null);
+        mockCountOpenTickets.mockResolvedValue(0);
+
+        const result = await getAgentDetail('agent-1');
+        const facts = result!.employee_facts!;
+
+        expect(facts.charter_version).toBeNull();
+        expect(facts.charter_effective_at).toBeNull();
+        expect(facts.last_meaningful_action).toBeNull();
+        expect(facts.work_state).toBe('idle');
+        expect(facts.manager_chain_note).toBe('No manager chain configured');
+      });
+
+      it('picks the ticket activity over the room message when the ticket is more recent', async () => {
+        mockRoomMessageFindOne.mockResolvedValue({ created_at: new Date('2026-09-10T00:00:00Z'), content: 'old message' });
+        mockLastActivity.mockResolvedValue(new Date('2026-09-17T00:00:00Z'));
+
+        const result = await getAgentDetail('agent-1');
+
+        expect(result!.employee_facts!.last_meaningful_action!.at).toEqual(new Date('2026-09-17T00:00:00Z'));
+      });
+
+      it('availability: unavailable when Reese\'s own row is disabled, even if a cron behaviour row is still enabled', async () => {
+        mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, enabled: false, module: 'reese' });
+        mockAgentFindAll.mockResolvedValue([{ agent_name: 'ReeseAutonomousOutreachSweep', enabled: true }]);
+
+        const result = await getAgentDetail('agent-1');
+
+        expect(result!.employee_facts!.availability).toBe('unavailable');
+      });
+
+      it('behaviours: reflects the real registry-row enabled flags for the cron-gated behaviours, via the same relatedTaskRows already fetched', async () => {
+        mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, module: 'reese' });
+        mockAgentFindAll.mockResolvedValue([
+          { agent_name: 'ReeseAutonomousOutreachSweep', enabled: true },
+          { agent_name: 'ReeseOutreachFollowUps', enabled: false },
+          { agent_name: 'ReesePresenceHeartbeat', enabled: true },
+          { agent_name: 'ReeseStudentSupportSupersessionResolver', enabled: false },
+        ]);
+
+        const result = await getAgentDetail('agent-1');
+        const byName = Object.fromEntries(result!.employee_facts!.behaviours.map((b) => [b.name, b.enabled]));
+
+        expect(byName['Autonomous outreach sweep']).toBe(true);
+        expect(byName['Outreach follow-ups']).toBe(false);
+        expect(byName['Presence heartbeat']).toBe(true);
+        expect(byName['Student support supersession resolver']).toBe(false);
+        expect(byName['Reactive DM reply']).toBe(true); // agent.enabled, not registry-gated
       });
     });
   });

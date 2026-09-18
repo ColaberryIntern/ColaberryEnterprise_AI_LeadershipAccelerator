@@ -59,6 +59,54 @@ describe('buildRoleCharterBlock', () => {
     expect(block).not.toContain('Responsibilities:');
     expect(block).not.toContain('KPIs');
   });
+
+  const baseCharter = {
+    roleTitle: 'Mentor',
+    mission: 'Help students.',
+    responsibilities: ['Reply to DMs'],
+    kpis: ['Response time'],
+    updatedByEmail: 'a@b.com',
+    updatedAt: new Date(),
+    boundaries: ['Never message outside DM'],
+    authorityAutonomous: ['Reply to inbound DMs'],
+    authorityApprovalRequired: ['Outreach beyond the pilot cohort'],
+    authorityForbidden: ['Promise a refund'],
+    escalationPolicy: 'Escalate to Ali after 3 attempts.',
+  };
+
+  it('Product Phase 1, R4 hard stop: version null renders byte-identical to a charter with no version field at all, even when authority/boundary columns are populated', async () => {
+    mockGetRoleCharter.mockResolvedValueOnce({ agentId: 'agent-1', charter: { ...baseCharter, version: null } });
+    mockGetRoleCharter.mockResolvedValueOnce({ agentId: 'agent-1', charter: baseCharter });
+
+    const withNullVersion = await buildRoleCharterBlock('agent-1');
+    const withNoVersionField = await buildRoleCharterBlock('agent-1');
+
+    expect(withNullVersion).toBe(withNoVersionField);
+    expect(withNullVersion).not.toContain('Boundaries');
+    expect(withNullVersion).not.toContain('Escalation policy');
+  });
+
+  it('Product Phase 1, R4: version 1 also renders the plain, pre-Phase-1 shape (only version >= 2 adds sections)', async () => {
+    mockGetRoleCharter.mockResolvedValue({ agentId: 'agent-1', charter: { ...baseCharter, version: 1 } });
+
+    const block = await buildRoleCharterBlock('agent-1');
+
+    expect(block).not.toContain('Boundaries');
+    expect(block).not.toContain('You may do these without asking first');
+    expect(block).not.toContain('Escalation policy');
+  });
+
+  it('Product Phase 1, R4: version 2 renders boundaries, authority tiers, and escalation policy', async () => {
+    mockGetRoleCharter.mockResolvedValue({ agentId: 'agent-1', charter: { ...baseCharter, version: 2 } });
+
+    const block = await buildRoleCharterBlock('agent-1');
+
+    expect(block).toContain('Boundaries (what you must not do):\n- Never message outside DM');
+    expect(block).toContain('You may do these without asking first:\n- Reply to inbound DMs');
+    expect(block).toContain('You need explicit human approval before these:\n- Outreach beyond the pilot cohort');
+    expect(block).toContain('You must never do these:\n- Promise a refund');
+    expect(block).toContain('Escalation policy: Escalate to Ali after 3 attempts.');
+  });
 });
 
 describe('buildReliabilityStateBlock', () => {

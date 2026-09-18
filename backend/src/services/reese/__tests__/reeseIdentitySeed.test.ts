@@ -15,6 +15,7 @@ import CommunityMember from '../../../models/CommunityMember';
 import AiAgent from '../../../models/AiAgent';
 import Cohort from '../../../models/Cohort';
 import { seedReeseIdentity, REESE_EMAIL, REESE_AGENT_NAME } from '../reeseIdentitySeed';
+import { ORG_MEMBER } from '../../agentBlueprint/ticketCreatorIdentitySeed';
 
 const mockAiAgentFindOne = AiAgent.findOne as unknown as jest.Mock;
 const mockEnrollmentFindOrCreate = Enrollment.findOrCreate as unknown as jest.Mock;
@@ -26,14 +27,16 @@ function makeFakeAgent(config: Record<string, any> = {}) {
   return {
     id: 'agent-reese-1',
     config,
-    // AI Leadership / AI Staff hierarchy (2026-08-19) — pre-satisfied by
-    // default (same posture as agentIdentitySeed.test.ts's own makeFakeAgent())
-    // so the reports_to_type/reports_to_id self-heal doesn't fire an incidental
-    // extra update() call in every OTHER test in this file (happy path,
-    // idempotency, pilot-cohort). The dedicated hierarchy describe block below
-    // explicitly overrides these two fields to exercise the self-heal itself.
-    reports_to_type: 'agent',
-    reports_to_id: 'workforce-intelligence-engine-id',
+    // Reese Product Phase 1, R6 — pre-satisfied by default (same posture as
+    // agentIdentitySeed.test.ts's own makeFakeAgent()) so the reports_to_type/
+    // reports_to_id/reports_to_org_member_id self-heals don't fire an
+    // incidental extra update() call in every OTHER test in this file (happy
+    // path, idempotency, pilot-cohort). The dedicated hierarchy describe
+    // block below explicitly overrides these fields to exercise the
+    // self-heals themselves.
+    reports_to_type: 'human',
+    reports_to_id: ORG_MEMBER.ALI,
+    reports_to_org_member_id: ORG_MEMBER.ALI,
     // Registration-time hardening (2026-08-19) — same pre-satisfied-by-default
     // posture as the reports_to fields above.
     tools_granted: ['reese_fixture_tool'],
@@ -161,33 +164,46 @@ describe('seedReeseIdentity — pilot-cohort allowlist (T013)', () => {
   });
 });
 
-describe('seedReeseIdentity — AI Leadership / AI Staff hierarchy (Ali, live, 2026-08-19)', () => {
-  // Reese was a direct reportsToOrgMemberId report to Taiwo through session
-  // CC-20260818-x4nk; as of this hierarchy change Reese is AI Staff, reporting
-  // through workforce_intelligence_engine (AI Leadership), which itself still
-  // reports to Kes — see reeseIdentitySeed.ts's own header comment on this call.
-  it("populates reports_to_type='agent'/reports_to_id on first run, resolved to workforce_intelligence_engine's real ai_agents.id, when both are currently null", async () => {
+describe('seedReeseIdentity — manager chain (Product Phase 1, R6, 2026-09-18)', () => {
+  // Ali's 2026-09-15 decision: "Reese reports to Ali for now, to be
+  // reassigned to Kes later" (HUMAN_OWNERSHIP_MAP.md answer 4). Reese moved
+  // from AI Staff (reporting through workforce_intelligence_engine, which
+  // is itself enabled=false in production) to a direct AI Leadership-style
+  // report to Ali — see reeseIdentitySeed.ts's own header comment.
+  it("populates reports_to_type='human'/reports_to_id=ORG_MEMBER.ALI on first run when both are currently null, with no agent-name lookup", async () => {
     fakeAgent = makeFakeAgent();
     (fakeAgent as any).reports_to_type = null;
     (fakeAgent as any).reports_to_id = null;
-    const workforceIntelligenceEngine = { id: 'wie-real-id', agent_name: 'workforce_intelligence_engine' };
-    mockAiAgentFindOne
-      .mockResolvedValueOnce(fakeAgent) // Reese's own registry row
-      .mockResolvedValueOnce(workforceIntelligenceEngine); // the reportsToAgentName lookup
+    mockAiAgentFindOne.mockResolvedValue(fakeAgent); // Reese's own registry row only
     mockCohortFindOne.mockResolvedValue(null); // keep the pilot-cohort block a no-op too
 
     await seedReeseIdentity();
 
-    expect(mockAiAgentFindOne).toHaveBeenNthCalledWith(2, { where: { agent_name: 'workforce_intelligence_engine' } });
+    // reportsToOrgMemberId resolves directly -- no second AiAgent lookup for
+    // a target agent, unlike the old reportsToAgentName path.
+    expect(mockAiAgentFindOne).toHaveBeenCalledTimes(1);
     expect(fakeAgent.update).toHaveBeenCalledWith(
-      expect.objectContaining({ reports_to_type: 'agent', reports_to_id: 'wie-real-id' }),
+      expect.objectContaining({ reports_to_type: 'human', reports_to_id: ORG_MEMBER.ALI }),
     );
   });
 
-  it('never overwrites an already-set reports_to_type/reports_to_id', async () => {
+  it('populates reports_to_org_member_id on first run when currently null', async () => {
+    fakeAgent = makeFakeAgent();
+    (fakeAgent as any).reports_to_org_member_id = null;
+    mockAiAgentFindOne.mockResolvedValue(fakeAgent);
+    mockCohortFindOne.mockResolvedValue(null);
+
+    await seedReeseIdentity();
+
+    expect(fakeAgent.update).toHaveBeenCalledWith(
+      expect.objectContaining({ reports_to_org_member_id: ORG_MEMBER.ALI }),
+    );
+  });
+
+  it('never overwrites an already-set reports_to_type/reports_to_id (e.g. the still-unfixed workforce_intelligence_engine chain on the real production row)', async () => {
     fakeAgent = makeFakeAgent();
     (fakeAgent as any).reports_to_type = 'agent';
-    (fakeAgent as any).reports_to_id = 'already-set-target-id';
+    (fakeAgent as any).reports_to_id = 'workforce-intelligence-engine-id';
     mockAiAgentFindOne.mockResolvedValue(fakeAgent);
     mockCohortFindOne.mockResolvedValue(null); // keep the pilot-cohort block a no-op too
 
@@ -195,6 +211,6 @@ describe('seedReeseIdentity — AI Leadership / AI Staff hierarchy (Ali, live, 2
 
     expect(fakeAgent.update).not.toHaveBeenCalled();
     expect((fakeAgent as any).reports_to_type).toBe('agent');
-    expect((fakeAgent as any).reports_to_id).toBe('already-set-target-id');
+    expect((fakeAgent as any).reports_to_id).toBe('workforce-intelligence-engine-id');
   });
 });

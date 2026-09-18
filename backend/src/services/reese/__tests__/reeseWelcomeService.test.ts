@@ -18,13 +18,13 @@ jest.mock('../../../models/Cohort', () => ({
   __esModule: true,
   default: { findByPk: jest.fn() },
 }));
-jest.mock('../reeseIdentitySeed', () => ({ getReeseEnrollmentId: jest.fn() }));
+jest.mock('../reeseIdentitySeed', () => ({ getReeseEnrollmentId: jest.fn(), isReeseEnabled: jest.fn() }));
 jest.mock('../reeseInitiateDmService', () => ({ initiateDm: jest.fn() }));
 
 import ReeseWelcome from '../../../models/ReeseWelcome';
 import Enrollment from '../../../models/Enrollment';
 import Cohort from '../../../models/Cohort';
-import { getReeseEnrollmentId } from '../reeseIdentitySeed';
+import { getReeseEnrollmentId, isReeseEnabled } from '../reeseIdentitySeed';
 import { initiateDm } from '../reeseInitiateDmService';
 import {
   maybeSendWelcomes,
@@ -40,6 +40,7 @@ const mockCreate = ReeseWelcome.create as unknown as jest.Mock;
 const mockEnrollment = Enrollment.findByPk as unknown as jest.Mock;
 const mockCohort = Cohort.findByPk as unknown as jest.Mock;
 const mockReeseId = getReeseEnrollmentId as unknown as jest.Mock;
+const mockIsReeseEnabled = isReeseEnabled as unknown as jest.Mock;
 const mockInitiate = initiateDm as unknown as jest.Mock;
 
 const PERSON = '11111111-1111-4111-8111-111111111111';
@@ -60,6 +61,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   delete process.env.REESE_WELCOME_ENABLED;
   process.env.REESE_WELCOME_EPOCH = EPOCH;
+  mockIsReeseEnabled.mockResolvedValue(true);
   mockReeseId.mockResolvedValue(REESE);
   mockFindOne.mockResolvedValue(null);
   mockEnrollment.mockResolvedValue({ full_name: 'Ali Muwwakkil', tier: 'guest', cohort_id: null, created_at: NEW });
@@ -305,6 +307,19 @@ describe('guards', () => {
     expect(outcomes(await maybeSendWelcomes(PERSON))).toEqual({ account: 'disabled' });
     expect(mockFindOne).not.toHaveBeenCalled();
     expect(mockInitiate).not.toHaveBeenCalled();
+  });
+
+  it('Product Phase 1, R2: honours Reese\'s own ai_agents.enabled flag too, independent of the env var', async () => {
+    mockIsReeseEnabled.mockResolvedValue(false);
+    expect(outcomes(await maybeSendWelcomes(PERSON))).toEqual({ account: 'disabled' });
+    expect(mockFindOne).not.toHaveBeenCalled();
+    expect(mockInitiate).not.toHaveBeenCalled();
+  });
+
+  it('Product Phase 1, R2: Reese enabled and the env flag on leaves welcomes unchanged', async () => {
+    mockIsReeseEnabled.mockResolvedValue(true);
+    expect(outcomes(await maybeSendWelcomes(PERSON))).toEqual({ account: 'sent', student: 'not_applicable' });
+    expect(mockInitiate).toHaveBeenCalledTimes(1);
   });
 
   it('skips a missing enrollment rather than claiming rows for it', async () => {

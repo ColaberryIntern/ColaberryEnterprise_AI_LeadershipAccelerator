@@ -73,6 +73,7 @@ const DETAIL: AgentDetail = {
   },
   goals: [],
   goals_overall: 0,
+  employee_facts: null,
 };
 
 let container: HTMLDivElement;
@@ -174,5 +175,43 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
     expect(container.textContent).toContain('Flags curriculum gaps daily.');
     expect(container.textContent).toContain('behavior');
     expect(container.textContent).not.toContain("doesn't own any absorbed legacy behaviors");
+  });
+
+  // Reese Product Phase 1, R7 — truthful employee facts. Not shown for the
+  // CoryBrain fixture (employee_facts: null); this test proves the section
+  // DOES render, with real content, when it is populated.
+  it('Employee facts: renders charter version, manager chain, last meaningful action, and behaviour switches when employee_facts is populated', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      employee_facts: {
+        availability: 'available',
+        work_state: 'working_on_ticket',
+        work_state_detail: '2 open ticket(s)',
+        last_meaningful_action: { at: '2026-09-18T10:00:00Z', description: 'Sent a DM: "Here is your next move."' },
+        charter_version: 2,
+        charter_effective_at: '2026-09-18T00:00:00Z',
+        manager_chain_note: 'Reports to: Ali Muwwakkil',
+        behaviours: [
+          { name: 'Reactive DM reply', enabled: true, population: 'Whoever messages her.', kill_switch: "Reese's own ai_agents.enabled." },
+          { name: 'Autonomous outreach sweep', enabled: true, population: 'Pilot cohort.', kill_switch: 'Registry row enabled.' },
+        ],
+      },
+    });
+    await renderAgentPage();
+    await openOverviewTab();
+
+    expect(container.textContent).toContain('Employee facts');
+    expect(container.textContent).toContain('Reports to: Ali Muwwakkil');
+    expect(container.textContent).toContain('v2');
+    expect(container.textContent).toContain('Sent a DM: "Here is your next move."');
+    expect(container.textContent).toContain('Reactive DM reply');
+    expect(container.textContent).toContain('Autonomous outreach sweep');
+  });
+
+  it('Employee facts: honest empty state (section absent) for every non-Reese agent', async () => {
+    await renderAgentPage();
+    await openOverviewTab();
+
+    expect(container.textContent).not.toContain('Employee facts');
   });
 });

@@ -95,6 +95,7 @@ const DETAIL: AgentDetail = {
     { key: 'solid', label: 'Solid', score: 5, source: 'live', evidence: '0/0 of the last 0 logged actions failed.' },
   ],
   goals_overall: 3.8,
+  employee_facts: null,
 };
 
 let container: HTMLDivElement;

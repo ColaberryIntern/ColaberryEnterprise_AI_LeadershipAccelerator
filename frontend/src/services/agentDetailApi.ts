@@ -229,6 +229,28 @@ export interface AgentDetail {
   trust_contract: AgentDetailTrustContract;
   goals: AgentGoalsDimension[];
   goals_overall: number;
+  /** Reese Product Phase 1, R7 — truthful employee facts. `null` for every
+   * agent except Reese: no fabricated availability/work-state for an agent
+   * this phase never reviewed. */
+  employee_facts: AgentDetailEmployeeFacts | null;
+}
+
+export interface AgentDetailEmployeeFactsBehaviour {
+  name: string;
+  enabled: boolean;
+  population: string;
+  kill_switch: string;
+}
+
+export interface AgentDetailEmployeeFacts {
+  availability: 'available' | 'unavailable';
+  work_state: 'idle' | 'working_on_ticket' | 'blocked' | 'waiting_on_person';
+  work_state_detail: string | null;
+  last_meaningful_action: { at: string; description: string } | null;
+  charter_version: number | null;
+  charter_effective_at: string | null;
+  manager_chain_note: string;
+  behaviours: AgentDetailEmployeeFactsBehaviour[];
 }
 
 /** AI Workforce Management, Checkpoint E (Trust Before Intelligence

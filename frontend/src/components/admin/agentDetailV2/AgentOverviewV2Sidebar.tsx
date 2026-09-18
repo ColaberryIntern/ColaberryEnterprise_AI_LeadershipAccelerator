@@ -37,7 +37,7 @@ interface Props {
 }
 
 export default function AgentOverviewV2Sidebar({ detail, agentId, agentDisplayName }: Props) {
-  const { identity, agent, reports_to, persona_version_history } = detail;
+  const { identity, agent, reports_to, persona_version_history, employee_facts } = detail;
 
   const [charter, setCharter] = useState<AgentRoleCharter | null | undefined>(undefined);
   const [charterLoadError, setCharterLoadError] = useState<string | null>(null);
@@ -187,6 +187,49 @@ export default function AgentOverviewV2Sidebar({ detail, agentId, agentDisplayNa
           )}
         </div>
       </section>
+
+      {employee_facts && (
+        <section className="adv2-card">
+          <h2>Employee facts</h2>
+          <div className="adv2-body">
+            <dl className="adv2-rows adv2-rows-narrow">
+              <dt>Availability</dt>
+              <dd>
+                <span className={`adv2-pill ${employee_facts.availability === 'available' ? 'adv2-trust' : 'adv2-bad'}`}>
+                  {employee_facts.availability === 'available' ? 'Available' : 'Unavailable'}
+                </span>
+              </dd>
+              <dt>Work state</dt>
+              <dd>{employee_facts.work_state === 'working_on_ticket' ? 'Working' : employee_facts.work_state}{employee_facts.work_state_detail ? ` — ${employee_facts.work_state_detail}` : ''}</dd>
+              <dt>Last meaningful action</dt>
+              <dd>
+                {employee_facts.last_meaningful_action
+                  ? <>{timeAgo(employee_facts.last_meaningful_action.at)} — {employee_facts.last_meaningful_action.description}</>
+                  : 'No recorded activity yet'}
+              </dd>
+              <dt>Charter version</dt>
+              <dd>
+                {employee_facts.charter_version
+                  ? <>v{employee_facts.charter_version}{employee_facts.charter_effective_at ? `, effective ${new Date(employee_facts.charter_effective_at).toLocaleDateString()}` : ''}</>
+                  : 'Unversioned'}
+              </dd>
+              <dt>Manager chain</dt>
+              <dd>{employee_facts.manager_chain_note}</dd>
+            </dl>
+            <p className="adv2-muted" style={{ marginTop: 12, marginBottom: 6, fontSize: 12.5 }}>Behaviours and their kill switches</p>
+            <dl className="adv2-rows adv2-rows-narrow">
+              {employee_facts.behaviours.map((b) => (
+                <React.Fragment key={b.name}>
+                  <dt>{b.name}</dt>
+                  <dd>
+                    <span className={`adv2-pill ${b.enabled ? 'adv2-trust' : 'adv2-bad'}`}>{b.enabled ? 'On' : 'Off'}</span>
+                  </dd>
+                </React.Fragment>
+              ))}
+            </dl>
+          </div>
+        </section>
+      )}
 
       <section className="adv2-card">
         <h2>Persona and prompt</h2>
