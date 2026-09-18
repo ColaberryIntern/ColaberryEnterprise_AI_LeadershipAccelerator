@@ -33,6 +33,12 @@ interface TicketWorkUnitAttributes {
   expected_output_refs?: any[] | null;
   assigned_agent_name?: string | null;
   assigned_run_id?: string | null;
+  /** Reese Agentic Employee & Manager Workspace Phase 1, R12 — added by
+   * ensureAgentWorkLifecycleFieldsSchema.ts. Nothing reads or writes these
+   * yet (schema-only, see that file's own header). */
+  plan_version?: number;
+  next_wakeup_at?: Date | null;
+  attempt_count?: number;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -54,6 +60,9 @@ class TicketWorkUnit extends Model<TicketWorkUnitAttributes> implements TicketWo
   declare expected_output_refs: any[] | null;
   declare assigned_agent_name: string | null;
   declare assigned_run_id: string | null;
+  declare plan_version: number;
+  declare next_wakeup_at: Date | null;
+  declare attempt_count: number;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -132,6 +141,20 @@ TicketWorkUnit.init(
       type: DataTypes.UUID,
       allowNull: true,
       references: { model: 'agent_runs', key: 'id' },
+    },
+    plan_version: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1,
+    },
+    next_wakeup_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    attempt_count: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
     },
     created_at: {
       type: DataTypes.DATE,

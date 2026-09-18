@@ -273,6 +273,19 @@ export interface AgentDetailEmployeeFactsBehaviour {
    * `null` for a behaviour that structurally never produces one or
    * genuinely has none yet. */
   last_ticket: AgentDetailLastTicketRef | null;
+  /** Phase 1 workspace mission, R11 — whether this behaviour's execution is
+   * decided by the model, a fixed rule, or a human. */
+  trigger_mode: 'model_selected' | 'rule_triggered' | 'human_directed';
+  /** Phase 1 workspace mission, R11 — callable/configured/authorized/enabled/
+   * healthy as distinct facts, instead of collapsing them into `enabled`
+   * above. `healthy` is `null` when no per-behaviour run signal exists. */
+  status: {
+    callable: boolean;
+    configured: boolean;
+    authorized: boolean;
+    enabled: boolean;
+    healthy: boolean | null;
+  };
 }
 
 export interface AgentDetailEmployeeFacts {

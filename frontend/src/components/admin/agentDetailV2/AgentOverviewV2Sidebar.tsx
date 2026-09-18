@@ -15,6 +15,18 @@ function sharedSwitchNote(key: ReeseBehaviourKey): string | null {
   return null;
 }
 
+// Phase 1 workspace mission, R11 (2026-09-18) — Ali's new mission doc: "Show
+// whether each action is model-selected, rule-triggered, or human-directed."
+const TRIGGER_MODE_LABEL: Record<string, string> = {
+  model_selected: 'Model-selected',
+  rule_triggered: 'Rule-triggered',
+  human_directed: 'Human-directed',
+};
+
+const STATUS_FACT_LABEL: Record<string, string> = {
+  callable: 'Callable', configured: 'Configured', authorized: 'Authorized', enabled: 'Enabled', healthy: 'Healthy',
+};
+
 // Agent Detail V2, sidebar (2026-09-11) — Identity, Role Charter, Reports to
 // (chain), Persona/prompt. The mockup Ali pasted didn't include Role
 // Charter (it predates that build), but it's real, already-shipped content
@@ -311,6 +323,15 @@ export default function AgentOverviewV2Sidebar({ detail, agentId, agentDisplayNa
                           {b.last_ticket.ticket_number ? `#${b.last_ticket.ticket_number}` : b.last_ticket.title} · {timeAgo(b.last_ticket.at)}
                         </a>
                       ) : 'None'}
+                    </div>
+                    <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--adv2-ink-3)', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                      <span className="adv2-pill adv2-neutral">{TRIGGER_MODE_LABEL[b.trigger_mode]}</span>
+                      {(Object.keys(STATUS_FACT_LABEL) as Array<keyof typeof STATUS_FACT_LABEL>).map((factKey) => {
+                        const value = b.status[factKey as keyof typeof b.status];
+                        const tone = value === null ? 'adv2-neutral' : value ? 'adv2-trust' : 'adv2-bad';
+                        const text = value === null ? `${STATUS_FACT_LABEL[factKey]}: —` : `${STATUS_FACT_LABEL[factKey]}: ${value ? 'yes' : 'no'}`;
+                        return <span key={factKey} className={`adv2-pill ${tone}`} style={{ fontSize: 10.5 }}>{text}</span>;
+                      })}
                     </div>
                     {note && <p className="adv2-muted" style={{ margin: '4px 0 0', fontSize: 11.5 }}>{note}</p>}
                     {error && <p style={{ margin: '4px 0 0', fontSize: 11.5, color: 'var(--adv2-bad)' }}>{error}</p>}
