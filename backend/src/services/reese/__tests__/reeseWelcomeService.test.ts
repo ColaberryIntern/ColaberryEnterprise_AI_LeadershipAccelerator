@@ -18,14 +18,18 @@ jest.mock('../../../models/Cohort', () => ({
   __esModule: true,
   default: { findByPk: jest.fn() },
 }));
-jest.mock('../reeseIdentitySeed', () => ({ getReeseEnrollmentId: jest.fn(), isReeseEnabled: jest.fn() }));
+jest.mock('../reeseIdentitySeed', () => ({
+  getReeseEnrollmentId: jest.fn(), isReeseEnabled: jest.fn(), getReeseAdminUserId: jest.fn(),
+}));
 jest.mock('../reeseInitiateDmService', () => ({ initiateDm: jest.fn() }));
+jest.mock('../reeseWorkLedgerEvents', () => ({ emitReeseLedgerEvent: jest.fn() }));
 
 import ReeseWelcome from '../../../models/ReeseWelcome';
 import Enrollment from '../../../models/Enrollment';
 import Cohort from '../../../models/Cohort';
-import { getReeseEnrollmentId, isReeseEnabled } from '../reeseIdentitySeed';
+import { getReeseEnrollmentId, isReeseEnabled, getReeseAdminUserId } from '../reeseIdentitySeed';
 import { initiateDm } from '../reeseInitiateDmService';
+import { emitReeseLedgerEvent } from '../reeseWorkLedgerEvents';
 import {
   maybeSendWelcomes,
   isGreetable,
@@ -42,6 +46,8 @@ const mockCohort = Cohort.findByPk as unknown as jest.Mock;
 const mockReeseId = getReeseEnrollmentId as unknown as jest.Mock;
 const mockIsReeseEnabled = isReeseEnabled as unknown as jest.Mock;
 const mockInitiate = initiateDm as unknown as jest.Mock;
+const mockGetReeseAdminUserId = getReeseAdminUserId as unknown as jest.Mock;
+const mockEmitReeseLedgerEvent = emitReeseLedgerEvent as unknown as jest.Mock;
 
 const PERSON = '11111111-1111-4111-8111-111111111111';
 const REESE = '99999999-9999-4999-8999-999999999999';
@@ -68,6 +74,8 @@ beforeEach(() => {
   mockCohort.mockResolvedValue(null);
   mockCreate.mockImplementation(async () => claimRow());
   mockInitiate.mockResolvedValue({ roomId: 'room-1', messageId: 'msg-1' });
+  mockGetReeseAdminUserId.mockResolvedValue('reese-admin-1');
+  mockEmitReeseLedgerEvent.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -103,6 +111,23 @@ describe('an empty ledger does not mean everyone is new', () => {
     mockEnrollment.mockResolvedValue({ full_name: 'New Person', tier: 'guest', cohort_id: null, created_at: NEW });
 
     expect(outcomes(await maybeSendWelcomes(PERSON))).toEqual({ account: 'sent', student: 'not_applicable' });
+  });
+
+  // Phase 2 (2026-09-18) — R13's own finding: welcome sends never wrote to
+  // the real Work Ledger. No ticket exists for a welcome (TOOL_INVENTORY.md),
+  // so ticketId is honestly null, not fabricated.
+  it('emits a real work-ledger event for the send, with no ticket (welcomes create none)', async () => {
+    mockEnrollment.mockResolvedValue({ full_name: 'New Person', tier: 'guest', cohort_id: null, created_at: NEW });
+
+    await maybeSendWelcomes(PERSON);
+
+    expect(mockEmitReeseLedgerEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ticketId: null, actorType: 'ai_staff', actorId: 'reese-admin-1', intent: 'reese.welcome_account',
+        domain: 'student_support', actionClass: 'dm_message', targetType: 'enrollment', targetId: PERSON,
+        result: 'success', sourceRecordType: 'room_message', sourceRecordId: 'msg-1',
+      }),
+    );
   });
 
   it('fails CLOSED on an unknown enrollment age', async () => {

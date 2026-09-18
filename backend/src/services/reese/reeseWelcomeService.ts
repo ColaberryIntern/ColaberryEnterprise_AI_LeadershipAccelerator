@@ -55,10 +55,12 @@
  *    REESE_WELCOME_EPOCH is the guard: nobody whose enrollment predates the
  *    feature is ever greeted, however empty the ledger looks.
  */
+import crypto from 'crypto';
 import ReeseWelcome, { type ReeseWelcomeKind } from '../../models/ReeseWelcome';
 import Enrollment from '../../models/Enrollment';
 import Cohort from '../../models/Cohort';
-import { getReeseEnrollmentId, isReeseEnabled } from './reeseIdentitySeed';
+import { getReeseEnrollmentId, getReeseAdminUserId, isReeseEnabled } from './reeseIdentitySeed';
+import { emitReeseLedgerEvent } from './reeseWorkLedgerEvents';
 
 export type WelcomeOutcome =
   | 'sent'
@@ -223,6 +225,28 @@ async function sendOnce(
     const { initiateDm } = await import('./reeseInitiateDmService');
     const { roomId, messageId } = await initiateDm(enrollmentId, messageFor(kind, firstName, cohortName));
     await claim.update({ room_id: roomId, message_id: messageId }).catch(() => {});
+
+    // Phase 2 (2026-09-18) — welcome sends never wrote to the real Work
+    // Ledger. Fail-open (emitReeseLedgerEvent's own contract) and never
+    // awaited-to-block: this must never be the thing that makes a login slow
+    // or fail, matching this file's own design decision 5.
+    const reeseAdminUserId = await getReeseAdminUserId();
+    emitReeseLedgerEvent({
+      ticketId: null,
+      traceId: crypto.randomUUID(),
+      actorType: 'ai_staff',
+      actorId: reeseAdminUserId || 'Reese',
+      intent: kind === 'student' ? 'reese.welcome_student' : 'reese.welcome_account',
+      domain: 'student_support',
+      actionClass: 'dm_message',
+      targetType: 'enrollment',
+      targetId: enrollmentId,
+      idempotencyKey: `reese-welcome-send:${messageId}`,
+      result: 'success',
+      sourceRecordType: 'room_message',
+      sourceRecordId: messageId,
+    }).catch(() => {});
+
     return { kind, outcome: 'sent', roomId, messageId };
   } catch (e: any) {
     // The claim stays. Someone who hit a transient failure is better off with

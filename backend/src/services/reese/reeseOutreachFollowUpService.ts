@@ -9,8 +9,9 @@ import { evaluateInactivitySignal, evaluateBehaviorAnomalySignal } from './reese
 import { generateOutreachMessage } from './reeseOutreachMessageService';
 import { initiateDm } from './reeseInitiateDmService';
 import { getReeseAdminUserId, getReeseEnrollmentId } from './reeseIdentitySeed';
-import { countAutonomousSendsToday, DAILY_SEND_CAP, FOLLOW_UP_DAYS } from './reeseAutonomousOutreachService';
+import { countAutonomousSendsToday, DAILY_SEND_CAP, FOLLOW_UP_DAYS, RISK_TIER } from './reeseAutonomousOutreachService';
 import { createClosureChecklistInstance } from './closureChecklist';
+import { emitReeseLedgerEvent } from './reeseWorkLedgerEvents';
 
 // Reese Phase 2 (Autonomous Outreach) — the follow-up + closure loop. Mirrors
 // M5's outcomeMeasurementService.ts structurally (a `status`/due-timestamp
@@ -98,6 +99,25 @@ async function closeWithEvidence(
   await updateTicketStatus(row.ticket_id, 'done', 'ai_staff', actorId);
   await row.update({ status, next_follow_up_due_at: null } as any);
 
+  // Phase 2 (2026-09-18) — R13's own finding: closure never wrote to the
+  // real Work Ledger. Fail-open, after the real closure.
+  await emitReeseLedgerEvent({
+    ticketId: row.ticket_id,
+    traceId: eventId,
+    actorType: 'ai_staff',
+    actorId,
+    intent: status === 'signal_cleared' ? 'reese.outreach_signal_cleared' : 'reese.outreach_goal_met',
+    domain: 'student_support',
+    actionClass: 'ticket_close',
+    targetType: 'ticket',
+    targetId: row.ticket_id,
+    riskTier: RISK_TIER,
+    idempotencyKey: `reese-outreach-close:${row.ticket_id}:${status}`,
+    result: 'success',
+    sourceRecordType: 'reese_outreach',
+    sourceRecordId: row.id,
+  });
+
   // Reese Agentic AI Employee mission, Capability 6 — a real, persisted
   // Closure checklist per resolution, linked to this outreach's real
   // ticket. Observational only (same posture as outreachChecklist.ts):
@@ -125,6 +145,24 @@ async function escalate(row: ReeseOutreach): Promise<void> {
     actorId,
   );
   await row.update({ status: 'escalated', next_follow_up_due_at: null } as any);
+
+  // Phase 2 (2026-09-18) — escalation never wrote to the real Work Ledger.
+  await emitReeseLedgerEvent({
+    ticketId: row.ticket_id,
+    traceId: crypto.randomUUID(),
+    actorType: 'ai_staff',
+    actorId,
+    intent: 'reese.outreach_escalated',
+    domain: 'student_support',
+    actionClass: 'escalation',
+    targetType: 'ticket',
+    targetId: row.ticket_id,
+    riskTier: RISK_TIER,
+    idempotencyKey: `reese-outreach-escalate:${row.ticket_id}`,
+    result: 'success',
+    sourceRecordType: 'reese_outreach',
+    sourceRecordId: row.id,
+  });
 }
 
 async function sendFollowUp(row: ReeseOutreach, currentSnapshot: Record<string, any>): Promise<void> {
@@ -136,13 +174,32 @@ async function sendFollowUp(row: ReeseOutreach, currentSnapshot: Record<string, 
     isFollowUp: true,
     attemptNumber: row.attempt_count + 1,
   });
-  await initiateDm(row.enrollment_id, message);
+  const dm = await initiateDm(row.enrollment_id, message);
   await row.update({
     attempt_count: row.attempt_count + 1,
     last_contacted_at: new Date(),
     next_follow_up_due_at: new Date(Date.now() + FOLLOW_UP_DAYS * 24 * 60 * 60 * 1000),
     signal_snapshot: currentSnapshot,
   } as any);
+
+  // Phase 2 (2026-09-18) — follow-up sends never wrote to the real Work Ledger.
+  const reeseAdminUserId = await getReeseAdminUserId();
+  await emitReeseLedgerEvent({
+    ticketId: row.ticket_id,
+    traceId: crypto.randomUUID(),
+    actorType: 'ai_staff',
+    actorId: reeseAdminUserId || 'Reese',
+    intent: 'reese.outreach_follow_up',
+    domain: 'student_support',
+    actionClass: 'dm_message',
+    targetType: 'ticket',
+    targetId: row.ticket_id,
+    riskTier: RISK_TIER,
+    idempotencyKey: `reese-outreach-follow-up-send:${dm.messageId}`,
+    result: 'success',
+    sourceRecordType: 'room_message',
+    sourceRecordId: dm.messageId,
+  });
 }
 
 /**

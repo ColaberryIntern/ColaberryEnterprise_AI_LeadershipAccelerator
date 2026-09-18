@@ -154,6 +154,8 @@ export async function resolveReeseStudentSupportSupersession(): Promise<StudentS
   const start = Date.now();
   const { updateTicketStatus } = await import('../../services/company/ticketOrchestrator');
   const { getReeseAdminUserId } = await import('../../services/reese/reeseIdentitySeed');
+  const { emitReeseLedgerEvent } = await import('../../services/reese/reeseWorkLedgerEvents');
+  const crypto = await import('crypto');
 
   const reeseAdminUserId = await getReeseAdminUserId();
   const actorId = reeseAdminUserId || 'Reese';
@@ -171,6 +173,26 @@ export async function resolveReeseStudentSupportSupersession(): Promise<StudentS
       await updateTicketStatus(candidate.ticket_id, 'done', 'ai_staff', actorId, candidate.evidence_note);
       closed++;
       breakdown[candidate.outcome].closed++;
+
+      // Phase 2 (2026-09-18) — supersession closures never wrote to the real
+      // Work Ledger. Fail-open, after the real close (this call's own error
+      // handling below only guards updateTicketStatus's real write; a
+      // ledger-write failure here must not be mistaken for that).
+      await emitReeseLedgerEvent({
+        ticketId: candidate.ticket_id,
+        traceId: crypto.randomUUID(),
+        actorType: 'ai_staff',
+        actorId,
+        intent: 'reese.student_support_superseded',
+        domain: 'student_support',
+        actionClass: 'ticket_close',
+        targetType: 'ticket',
+        targetId: candidate.ticket_id,
+        idempotencyKey: `reese-supersession-close:${candidate.ticket_id}`,
+        result: 'success',
+        sourceRecordType: 'ticket',
+        sourceRecordId: candidate.ticket_id,
+      });
     } catch (err: any) {
       // One bad ticket must never abort the batch (Failure-First Design: no silent
       // swallow — logged with context, batch continues).
