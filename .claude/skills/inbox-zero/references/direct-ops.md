@@ -68,6 +68,17 @@ down to nothing, archive it; the stand-alone emails are the outstanding list.
 
 **Restore on request.** "Put it back in my inbox" is `gmailRestore.js` on the message id, verified.
 
+**The family board rides along with the mail.** (Ali, 2026-09-18: "Add the family bc group to the
+check so you always keep me aware of the family group task as well as my emails. This will help
+show my wife that I'm on top of shit.") Every sweep runs `scripts/familyBoard.js` against Family
+Goals & Life Planning (bucket 33392153) and reports it beside the inbox: overdue first, then the
+next seven days, then undated, then what was finished in the last three days so movement shows.
+Report it even when there is nothing new; a household item going unmentioned is the failure this
+rule exists to prevent. The CPN and AI Flotation lists sit in that project for privacy rather than
+because they are household work, so they are listed apart and never padded into the family count.
+Writes into that project keep the family-BC rules: file into the existing lists, every to-do gets
+a `due_on` and Ali as assignee, and `notify:false` unless he says to tag someone.
+
 **Report only what this tab did.** Other tabs archive, reply and deploy too. Never claim a change
 this session did not make; when the inbox count moves for no reason of yours, say so.
 

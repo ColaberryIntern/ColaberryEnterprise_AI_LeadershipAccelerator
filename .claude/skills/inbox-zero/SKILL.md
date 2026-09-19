@@ -72,6 +72,16 @@ This skill is that human loop, made fast: one screen, one item at a time, one de
    replying, and in his voice, a little less formal (Ram, 2026-09-17). `references/direct-ops.md`
    is the operating manual for this mode and for everything else Ali asks for by name rather than
    by command.
+12. **The family board is part of the check, every time.** (Ali, 2026-09-18: "Add the family bc
+   group to the check so you always keep me aware of the family group task as well as my emails.
+   This will help show my wife that I'm on top of shit.") Every sweep reports the Family Goals &
+   Life Planning project (bucket 33392153) beside the mail: `scripts/familyBoard.js` gives what is
+   overdue, what is due in the next seven days, what carries no date, and what was finished in the
+   last three days. Household work counts as work. It is reported even when the inbox is empty,
+   and its absence from a report is a defect, not a quiet day. The CPN and AI Flotation lists live
+   in that project for privacy, not because they are household items, so they are counted apart.
+   Family to-dos follow the family-BC rules: existing lists, a `due_on`, assigned to Ali,
+   `notify:false` unless he says to tag someone.
 
 ## Commands
 
@@ -190,6 +200,7 @@ these, each run inside the prod backend container (invocation in `references/dir
 | `scripts/gmailRestore.js` | Put messages back in the inbox, verified |
 | `scripts/hotmail.js` | Hotmail over Graph: inbox, folders, read (with attachments), move to a named folder, recent across folders |
 | `scripts/bcComment.js` | Comment on a Basecamp recording as Ali, mention by sgid, idempotent on `MARK`, optional complete |
+| `scripts/familyBoard.js` | The family board: overdue, due in `DAYS`, undated, finished in `DONE_DAYS`, entity lists apart. Read-only |
 | `scripts/send.sh` + `scripts/sendAsAli.js` | The only send path; signature kit in `assets/` |
 
 ## References
