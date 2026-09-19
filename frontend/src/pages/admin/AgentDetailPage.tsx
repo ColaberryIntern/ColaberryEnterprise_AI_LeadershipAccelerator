@@ -217,7 +217,7 @@ export default function AgentDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    if ((activeTab !== 'glance' && activeTab !== 'command' && activeTab !== 'decisions') || !id || inboxFetchedFor === id) return;
+    if ((activeTab !== 'glance' && activeTab !== 'command' && activeTab !== 'decisions' && activeTab !== 'overview') || !id || inboxFetchedFor === id) return;
     fetchInbox();
   }, [activeTab, id, inboxFetchedFor, fetchInbox]);
 
@@ -323,7 +323,9 @@ export default function AgentDetailPage() {
           <AgentLiveStatusTab detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} />
         </div>
       )}
-      {activeTab === 'overview' && <AgentOverviewV2 detail={detail} />}
+      {activeTab === 'overview' && (
+        <AgentOverviewV2 detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} onNavigate={setActiveTab} />
+      )}
       {activeTab === 'work' && (
         <div className="adv2-wrap">
           <AgentWorkTab detail={detail} />
