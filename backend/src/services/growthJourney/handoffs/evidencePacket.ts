@@ -1,5 +1,6 @@
 import type { GrowthJourneyHandoffPriority } from '../../../models/GrowthJourneyHandoff';
 import { AddressInPayloadError, findAddressLikeValue } from '../noAddress';
+import { escalationEntry } from './escalationTriggers';
 import type { DecisionRowView, HandoffTrigger, StoredSignals, SubjectRefs } from './types';
 
 /**
@@ -112,7 +113,8 @@ export function buildEvidencePacket(a: BuildPacketArgs): EvidencePacket {
     origin: signals.context
       ? { first_source_id: signals.context.first_source_id, first_entry_point_id: signals.context.first_entry_point_id, first_campaign_id: signals.context.first_campaign_id, first_touch_at: signals.context.first_touch_at?.toISOString() ?? null }
       : unavailable('no_lead_tenant_context'),
-    escalation_reason: { source: trigger.source, reason: trigger.reason, decision_id: decision?.id ?? null, decision_reason: decision?.reason ?? null },
+    // A list from T501 on: every later trigger that lands on this open row is appended by the writer (`./escalationTriggers`).
+    escalation_reason: [escalationEntry(trigger, decision, a.built_at)],
     signals: decision
       ? { state_at_decision: decision.state_at_decision, overlays: decision.overlays_at_decision, scores: scoresSection(decision), human_conversation: decision.human_conversation, sales_capacity: decision.sales_capacity, pipeline_stage: signals.lead?.pipeline_stage ?? null }
       : { state_at_decision: null, overlays: [], scores: unavailable('no_decision'), human_conversation: null, sales_capacity: null, pipeline_stage: signals.lead?.pipeline_stage ?? null },

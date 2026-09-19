@@ -1,5 +1,6 @@
 import { Op } from 'sequelize';
 import { GROWTH_JOURNEY_PHASE4_STATEMENTS } from '../../../../db/growthJourneyPhase4Statements';
+import { GROWTH_JOURNEY_PHASE5_STATEMENTS } from '../../../../db/growthJourneyPhase5Statements';
 
 /**
  * T414 — the in-memory tables the Phase 4 world (`phase4Harness.ts`) is made of. Split from the
@@ -211,4 +212,5 @@ export class Table {
   };
 }
 
-export const UNIQUES = uniqueIndexesFromDdl();
+/** Every unique index the world enforces: T401's, and T501's one-open-per-person index from the Phase 5 statements. */
+export const UNIQUES = uniqueIndexesFromDdl([...GROWTH_JOURNEY_PHASE4_STATEMENTS, ...GROWTH_JOURNEY_PHASE5_STATEMENTS]);

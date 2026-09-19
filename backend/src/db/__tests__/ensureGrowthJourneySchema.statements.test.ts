@@ -37,6 +37,7 @@ const SCHEMA_TEST_FAMILY = [
   path.join(__dirname, 'helpers', 'bootCalls.ts'),
   path.join(__dirname, '..', 'ensureGrowthJourneySchema.ts'),
   path.join(__dirname, '..', 'growthJourneyPhase4Statements.ts'),
+  path.join(__dirname, '..', 'growthJourneyPhase5Statements.ts'),
 ];
 
 describe('the schema is additive, and provably so', () => {

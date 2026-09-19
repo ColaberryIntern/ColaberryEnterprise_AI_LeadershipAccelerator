@@ -12,6 +12,7 @@ import { computeIdempotencyKey } from '../../inboxCase/textNormalization';
 import { recordJourneyEvent } from '../ledger';
 import { assignHandoff, type AssignResult } from './assignment';
 import { assertPacketCarriesNoAddress, buildEvidencePacket } from './evidencePacket';
+import { escalationEntry, withEscalationTrigger, type EscalationTrigger } from './escalationTriggers';
 import { computeExpectedValue, priorityFor, rankHandoffs } from './expectedValue';
 import { loadStoredSignals } from './handoffSignals';
 import type { DecisionRowView, HandoffTrigger, SubjectRefs } from './types';
@@ -143,14 +144,52 @@ export async function createHandoff(args: CreateHandoffArgs): Promise<CreateHand
     return { row: created, replayed: false };
   } catch (err: unknown) {
     if (!isUniqueViolation(err)) throw err;
-    // The idempotency key, or the one-open-per-subject-per-brand index: either way the row that holds it is the answer.
-    const existing = await GrowthJourneyHandoff.findOne({
-      where: { brand_id: refs.brand_id, [Op.or]: [{ idempotency_key: row.idempotency_key }, { subject_ref: refs.subject_ref, status: { [Op.in]: [...OPEN_HANDOFF_STATUSES] } }] },
-      order: [['created_at', 'DESC']],
-    });
+    // The idempotency key, the one-open-per-SUBJECT index (T401), or the one-open-per-PERSON index (T501, which
+    // catches the same lead under its other ref): whichever refused the insert, the row that holds it is the answer.
+    const open = { [Op.in]: [...OPEN_HANDOFF_STATUSES] };
+    const arms: Array<Record<string, unknown>> = [{ idempotency_key: row.idempotency_key }, { subject_ref: refs.subject_ref, status: open }];
+    if (refs.lead_id !== null) arms.push({ lead_id: refs.lead_id, status: open });
+    const existing = await GrowthJourneyHandoff.findOne({ where: { brand_id: refs.brand_id, [Op.or]: arms }, order: [['created_at', 'DESC']] });
     if (!existing) throw err;
-    return { row: existing, replayed: true };
+    const answer = isOpen(existing.status) ? await recordTriggerOnOpenRow(existing, escalationEntry(trigger, decision, asOf), refs) : existing;
+    return { row: answer, replayed: true };
   }
+}
+
+/* ── a second trigger on an open row (T501, the Phase 5 packet's 8A) ────────── */
+
+const isOpen = (status: string): boolean => (OPEN_HANDOFF_STATUSES as readonly string[]).includes(status);
+
+/** Attempts before a trigger is left to the ledger alone. Bounded: a row that keeps moving is never retried forever. */
+export const TRIGGER_APPEND_ATTEMPTS = 3;
+
+/**
+ * Records a trigger that landed on an OPEN row in that row's packet, so the
+ * person reading it sees every reason the handoff was asked for, not only the
+ * first. An exact replay of a trigger already on the row writes nothing. The
+ * update is guarded on `updated_at`: another writer in between (a second
+ * trigger, the assignment pass) makes it match no row, and the row is re-read
+ * and re-merged instead of overwritten. If every attempt loses, the packet
+ * keeps what it had and the trigger is still in the ledger, as a conflict row.
+ */
+async function recordTriggerOnOpenRow(found: GrowthJourneyHandoff, entry: EscalationTrigger, refs: SubjectRefs): Promise<GrowthJourneyHandoff> {
+  const scope = { tenant_id: refs.tenant_id, brand_id: refs.brand_id };
+  const payload = { handoff_id: found.id, source: entry.source, owner_queue: entry.queue, reason: entry.reason, decision_id: entry.decision_id };
+  let row: GrowthJourneyHandoff | null = found;
+  for (let attempt = 1; attempt <= TRIGGER_APPEND_ATTEMPTS && row; attempt += 1) {
+    if (!isOpen(row.status)) return row;
+    const merged = withEscalationTrigger(row.evidence, entry);
+    if (!merged.appended) return row;
+    assertPacketCarriesNoAddress(merged.packet);
+    const [updated] = await GrowthJourneyHandoff.update({ evidence: merged.packet }, { where: { id: row.id, updated_at: row.updated_at } });
+    if (updated === 1) {
+      await recordJourneyEvent('growth_journey.handoff.trigger_appended', ENTITY, row.id, scope, { ...payload, triggers: merged.count }, ACTOR);
+      return (await GrowthJourneyHandoff.findOne({ where: { id: row.id } })) ?? row;
+    }
+    row = await GrowthJourneyHandoff.findOne({ where: { id: row.id } });
+  }
+  await recordJourneyEvent('growth_journey.handoff.trigger_append_conflict', ENTITY, found.id, scope, { ...payload, attempts: TRIGGER_APPEND_ATTEMPTS }, ACTOR);
+  return row ?? found;
 }
 
 /* ── the queue ─────────────────────────────────────────────────────────────── */

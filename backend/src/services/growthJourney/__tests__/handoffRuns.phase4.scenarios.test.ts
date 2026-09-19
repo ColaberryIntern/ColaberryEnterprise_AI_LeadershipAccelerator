@@ -121,6 +121,23 @@ describe('A/B: learners hand off through the learner deferral, and only with Exp
     expect(await recordReplyHandoff({ leadId, replyClass: 'NOT_INTERESTED', providerMessageId: 'pm-101' }, flags4(), AS_OF_4)).toEqual({ status: 'no_handoff', reason: 'class_not_routed:NOT_INTERESTED' });
     table.push(lineFor(`${activating.key} + NEEDS_ALI reply`, rows[0] as Row, '-'));
   });
+
+  it('T501 (7A): the learner decision opens admissions under enrollment:<id>, a READY_TO_ENROLL reply for the SAME lead comes in under lead:<id> - one open row for the person, the reply recorded on it', async () => {
+    const [ready] = learnerScenarios();
+    arrangeWorld([ready]);
+    await decide(ready, AS_OF_4);
+    const [learnerRow] = handoffsOf(ready) as Row[];
+    expect(learnerRow).toMatchObject({ owner_queue: 'admissions', subject_ref: `enrollment:${ready.subject.enrollment_id}`, lead_id: ready.subject.lead_id });
+    const reply = await recordReplyHandoff({ leadId: ready.subject.lead_id as number, replyClass: 'READY_TO_ENROLL', providerMessageId: 'pm-7a' }, flags4(), AS_OF_4);
+    expect(reply).toMatchObject({ status: 'recorded', replayed: true, handoff_id: learnerRow.id });
+    // Two refs, one person, one brand: the per-person index (T501) refused the second row that T414 reproduced.
+    const brandId = brandRow('colaberry-training').id;
+    expect(open(T.handoffs.rows.filter((r) => r.lead_id === ready.subject.lead_id && r.brand_id === brandId))).toHaveLength(1);
+    expect(T.handoffs.rows.some((r) => r.subject_ref === `lead:${ready.subject.lead_id}`)).toBe(false);
+    const reasons = ((learnerRow.evidence as { escalation_reason: Array<{ source: string; queue: string; reason: string }> }).escalation_reason).map((t) => [t.source, t.queue, t.reason]);
+    expect(reasons).toEqual([['decision_deferral', 'admissions', 'enrollment_ready_in_conversation'], ['reply_route', 'admissions', 'reply_class:READY_TO_ENROLL']]);
+    table.push(lineFor(`${ready.key} + READY_TO_ENROLL reply (7A)`, learnerRow, '-'));
+  });
 });
 
 /* ── C / D / E: the queue follows the programme ──────────────────────────────── */

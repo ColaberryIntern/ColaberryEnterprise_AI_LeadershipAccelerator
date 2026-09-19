@@ -49,7 +49,8 @@ describe('every §9 field is present, or explicitly unavailable with a reason', 
     expect(p.person).toEqual({ subject_ref: 'lead:501', lead_id: 501, enrollment_id: null });
     expect(p.account).toEqual({ organization_id: 'org-1' });
     expect(p.origin).toEqual({ first_source_id: 'src-1', first_entry_point_id: 'ep-1', first_campaign_id: 'camp-1', first_touch_at: '2026-08-01T00:00:00.000Z' });
-    expect(p.escalation_reason).toEqual({ source: 'decision_deferral', reason: 'commercial_state:DISCOVERY_READY', decision_id: 'd-1', decision_reason: 'no_candidate:commercial_state_needs_layer_4:DISCOVERY_READY' });
+    // T501: a list - the first trigger here; later ones are appended by the writer when they land on the open row.
+    expect(p.escalation_reason).toEqual([{ source: 'decision_deferral', queue: 'sales', reason: 'commercial_state:DISCOVERY_READY', decision_id: 'd-1', decision_reason: 'no_candidate:commercial_state_needs_layer_4:DISCOVERY_READY', at: '2026-09-16T12:00:00.000Z' }]);
     expect((p.signals as { scores: { components: unknown[] } }).scores.components).toEqual([{ key: 'fit', value: 70, gap: null }, { key: 'urgency', value: null, gap: 'no_source' }]);
     expect(p.transcript).toEqual({ available: false, reason: 'permission_has_no_source' });
     expect(p.qualification_gaps).toEqual(['urgency', 'firmographic:annual_revenue']);
