@@ -161,13 +161,20 @@ for (const f of exitTwins()) {
       expect(types).toEqual(['handoff_accepted', 'handoff_dispositioned', want.pipeline_advances ? 'opportunity_stage' : 'project_started'].sort());
     });
 
-    it('the whole run, replayed: the decision and the handoff land on their rows, the human\'s moves are refused as moves already made - and every count is unchanged', async () => {
+    it('the whole run, replayed: sales\' `qualified` is now an input (T502) - one NEW decision that holds the AI off and hands off nothing, replaying THAT is a no-op, the human\'s moves are refused as moves already made, every other count unchanged', async () => {
+      // Before T502 the replay found the same inputs and landed on the same decision row. Now the verdict
+      // holds the AI off this person for 30 days, so the pipeline decides again: WAIT under RETURNED_TO_AI,
+      // no create_handoff - and no second sales handoff, which is the bug T414 reproduced.
       const again = await decide(f, AS_OF_4);
-      expect(again.replayed).toBe(true);
-      expect(again.handoffs).toMatchObject({ status: 'materialized', handoffs: [{ handoff_id: handoff.id, replayed: true }] });
+      expect(again.replayed).toBe(false);
+      expect(again.row.overlays_at_decision).toContain('RETURNED_TO_AI');
+      expect(again.handoffs).toMatchObject({ status: 'none' });
+      const twice = await decide(f, AS_OF_4);
+      expect(twice.replayed).toBe(true);
+      expect(twice.row.id).toBe(again.row.id);
       await expect(acceptHandoff(handoff as never, HUMAN, AS_OF_4)).rejects.toBeInstanceOf(HandoffTransitionError);
       await expect(dispositionHandoff(handoff as never, { disposition: 'qualified', reason: 'again' }, HUMAN, AS_OF_4)).rejects.toBeInstanceOf(HandoffTransitionError);
-      expect(tally()).toEqual(first);
+      expect(tally()).toEqual({ ...first, decisions: first.decisions + 1 });
     });
   });
 }

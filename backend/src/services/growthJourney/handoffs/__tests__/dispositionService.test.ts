@@ -28,6 +28,7 @@ import {
   ACCEPT_FROM,
   CLOSING_DISPOSITIONS,
   DISPOSITION_FROM,
+  HOLDING_DISPOSITIONS,
   HandoffTransitionError,
   RELEASE_FROM,
   RETURN_DISPOSITIONS,
@@ -81,6 +82,8 @@ describe('the transition table', () => {
     expect(RETURN_DISPOSITIONS).toEqual(['not_ready', 'nurture']);
     expect(CLOSING_DISPOSITIONS).toEqual(['qualified', 'converted', 'no_contact', 'disqualified']);
     expect(new Set([...RETURN_DISPOSITIONS, ...CLOSING_DISPOSITIONS]).size).toBe(6);
+    // T502: of the closing four, qualified alone still holds the AI off - a human is working the person.
+    expect(HOLDING_DISPOSITIONS).toEqual(['qualified']);
   });
 
   it.each(ALL_STATUSES)('from %s: each move is allowed exactly when the table says, and a refusal touches nothing', async (status) => {
@@ -177,7 +180,26 @@ describe('disposition', () => {
     expect(result).toEqual({ row: r, status: 'returned_to_ai', cooldown_until: until, cooldown_source: 'body', ownership_cleared: 1, outcome_id: 'out-1', integration: null });
   });
 
-  it.each(CLOSING_DISPOSITIONS)('%s closes: dispositioned, no cooldown asked for, the ownership cleared, the outcome says returned_to_ai false', async (disposition) => {
+  it('T502: qualified closes the row AND holds the AI off - dispositioned, return_to_ai written, 30 days by default, the brand policy never read', async () => {
+    const r = row('accepted');
+    const result = await dispositionHandoff(asModel(r), { disposition: 'qualified', reason: 'budget confirmed' }, ACTOR, AS_OF);
+    const until = new Date(AS_OF.getTime() + 30 * 86_400_000);
+    expect(m.cooldownDaysFor).not.toHaveBeenCalled();
+    expect(r.update).toHaveBeenCalledWith({
+      disposition: 'qualified', disposition_reason: 'budget confirmed', disposition_at: AS_OF, dispositioned_by: 'admin:staff-1',
+      status: 'dispositioned', return_to_ai: { program_slug: 'business-growth', cooldown_until: until.toISOString(), reason: 'qualified:budget confirmed' }, integration_refused: null,
+    });
+    expect(m.recordOutcome).toHaveBeenCalledWith(expect.objectContaining({ source_ref: 'h-1:qualified', metadata: { disposition: 'qualified', returned_to_ai: false, cooldown_until: until.toISOString() } }));
+    expect(m.logEvent).toHaveBeenCalledWith('growth_journey.handoff.dispositioned', 'admin:staff-1', 'growth_journey_handoff', 'h-1', expect.objectContaining({ disposition: 'qualified', cooldown_until: until.toISOString(), cooldown_source: 'default' }), { tenant_id: 't-col', brand_id: 'b-ent' });
+    expect(result).toMatchObject({ status: 'dispositioned', cooldown_until: until, cooldown_source: 'default', ownership_cleared: 1 });
+    // The body's days win when given.
+    const r2 = row('accepted');
+    expect((await dispositionHandoff(asModel(r2), { disposition: 'qualified', reason: 'r', cooldown_days: 60 }, ACTOR, AS_OF)).cooldown_source).toBe('body');
+    expect((r2.return_to_ai as { cooldown_until: string }).cooldown_until).toBe(new Date(AS_OF.getTime() + 60 * 86_400_000).toISOString());
+  });
+
+  // T502 moved qualified out of this set: it closes, but it holds the AI off (the test above).
+  it.each(CLOSING_DISPOSITIONS.filter((d) => !HOLDING_DISPOSITIONS.includes(d)))('%s closes: dispositioned, no cooldown asked for, the ownership cleared, the outcome says returned_to_ai false', async (disposition) => {
     const r = row('accepted');
     const result = await dispositionHandoff(asModel(r), { disposition, reason: 'the human decided' }, ACTOR, AS_OF);
     expect(m.cooldownDaysFor).not.toHaveBeenCalled();

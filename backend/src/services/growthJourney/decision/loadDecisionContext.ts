@@ -233,7 +233,7 @@ export async function loadDecisionContext(args: LoadDecisionContextArgs): Promis
     guarded('profile', unavailable, () => GrowthJourneyProfile.findOne({ where: { subject_ref: subjectRef, brand_id: brandId } })),
     guarded('lifecycle_sources', unavailable, () => loadLifecycleSourceCounts(subject.lead_id)),
     program.kind === 'learner' ? guarded('learner_facts', unavailable, () => loadLearnerFacts(anchor, asOf)) : Promise.resolve(null),
-    guarded('return_to_ai', unavailable, () => resolveReturnToAi({ subjectRef, brandId, asOf })),
+    guarded('return_to_ai', unavailable, () => resolveReturnToAi({ subjectRef, brandId, asOf, leadId: subject.lead_id })),
   ]);
 
   const lead = orNull(leadRaw) as LeadSignalColumns | null;

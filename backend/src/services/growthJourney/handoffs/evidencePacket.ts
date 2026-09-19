@@ -39,7 +39,8 @@ const NEED_BY_FAMILY: Readonly<Record<string, { likely_need: string; talking_poi
 
 /** Every disposition a human may record, and what each means for the AI. */
 export const DISPOSITION_OPTIONS = Object.freeze([
-  { value: 'qualified', means: 'a human continues; the AI pauses' },
+  // T502: the pause is a cooldown on the row, so it ends on its own (the body's days, else 30).
+  { value: 'qualified', means: 'a human continues; the AI holds off this person in this brand for a cooldown (30 days unless set)' },
   { value: 'not_ready', means: 'back to the AI journey with a cooldown' },
   { value: 'nurture', means: 'back to the AI journey, nurture only' },
   { value: 'no_contact', means: 'do not contact; recorded as an outcome' },

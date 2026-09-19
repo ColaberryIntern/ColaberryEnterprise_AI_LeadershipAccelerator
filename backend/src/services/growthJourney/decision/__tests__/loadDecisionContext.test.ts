@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { Op } from 'sequelize';
 
 const m = {
   brandFindByPk: jest.fn(),
@@ -307,7 +308,8 @@ describe("T405 - the human's cooldown as an overlay", () => {
     expect(r.lifecycle.overlays).toEqual(['NO_RESPONSE']);
     expect(r.returnToAi).toEqual({ active: true, handoff_id: 'h-1', cooldown_until: until, reason: 'not_ready:q1' });
     expect(r.unavailable).toEqual([]);
-    expect(m.handoffFindOne).toHaveBeenCalledWith({ where: { subject_ref: 'lead:501', brand_id: 'b-ent', status: 'returned_to_ai' }, order: [['updated_at', 'DESC']] });
+    // T502: any row carrying the record (a qualified one is `dispositioned`), found by the subject ref or the lead.
+    expect(m.handoffFindOne).toHaveBeenCalledWith({ where: { brand_id: 'b-ent', return_to_ai: { [Op.ne]: null }, [Op.or]: [{ subject_ref: 'lead:501' }, { lead_id: 501 }] }, order: [['updated_at', 'DESC']] });
   });
 
   it('past cooldown_until the overlay is gone; with no returned row there never was one', async () => {

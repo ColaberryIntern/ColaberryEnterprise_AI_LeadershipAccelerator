@@ -495,19 +495,19 @@ describe('the state machine, through the routes', () => {
     expect(new Date(fallback.body.cooldown_until).getTime() - (handoffs.get(ROW_ID)!.disposition_at as Date).getTime()).toBe(DEFAULT_RETURN_COOLDOWN_DAYS * DAY);
   });
 
-  it('a closing disposition (qualified) → dispositioned with no cooldown; the existing systems are reached through the one door, with the human\'s platform identity, and the response says what was written', async () => {
+  it('a closing disposition (qualified) → dispositioned AND a 30-day hold on the AI (T502); the existing systems are reached through the one door, with the human\'s platform identity, and the response says what was written', async () => {
     integrateDisposition.mockResolvedValue({ status: 'written', reason: null, program_kind: 'business', disposition: 'qualified', writes: ['account_rollup', 'pipeline_advance'], refusals: [], outcome_ids: ['out-77'], ids: { organization_id: 'org-1', context_id: 'ctx-1', stage: 'meeting_scheduled', advanced: true } });
     const row = seed(TENANT.colaberry, BRAND.enterprise, { status: 'accepted' });
     ownership.push({ id: 'own-0', tenant_id: TENANT.colaberry, brand_id: BRAND.enterprise, lead_id: 501, owner_type: 'human', owner_id: 'staff-1', cleared_at: null });
     const res = await post(DISPOSITION, { disposition: 'qualified', reason: 'budget confirmed; wants a proposal next week' });
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ status: 'dispositioned', cooldown_until: null, cooldown_source: null, ownership_cleared: 1, integration: { status: 'written', reason: null, program_kind: 'business', disposition: 'qualified', writes: ['account_rollup', 'pipeline_advance'], refusals: [], outcome_ids: ['out-77'], ids: { organization_id: 'org-1', context_id: 'ctx-1', stage: 'meeting_scheduled', advanced: true } } });
+    expect(res.body).toMatchObject({ status: 'dispositioned', cooldown_until: new Date((handoffs.get(ROW_ID)!.disposition_at as Date).getTime() + 30 * DAY).toISOString(), cooldown_source: 'default', ownership_cleared: 1, integration: { status: 'written', reason: null, program_kind: 'business', disposition: 'qualified', writes: ['account_rollup', 'pipeline_advance'], refusals: [], outcome_ids: ['out-77'], ids: { organization_id: 'org-1', context_id: 'ctx-1', stage: 'meeting_scheduled', advanced: true } } });
     expect(res.body.handoff.integration_refused).toBeNull();
-    expect(row).toMatchObject({ status: 'dispositioned', disposition: 'qualified', return_to_ai: null, integration_refused: null });
+    expect(row).toMatchObject({ status: 'dispositioned', disposition: 'qualified', return_to_ai: { reason: 'qualified:budget confirmed; wants a proposal next week', cooldown_until: res.body.cooldown_until }, integration_refused: null });
     expect(integrateDisposition).toHaveBeenCalledTimes(1);
     expect(integrateDisposition.mock.calls[0][0]).toMatchObject({ handoff: { id: ROW_ID }, disposition: 'qualified', actor: { id: 'staff-1', platformIdentityId: 'pid-1' } });
     expect(JSON.stringify(integrateDisposition.mock.calls)).not.toContain('@');
-    expect(outcomes[0]).toMatchObject({ outcome_type: 'handoff_dispositioned', source_ref: `${ROW_ID}:qualified`, metadata: { disposition: 'qualified', returned_to_ai: false, cooldown_until: null } });
+    expect(outcomes[0]).toMatchObject({ outcome_type: 'handoff_dispositioned', source_ref: `${ROW_ID}:qualified`, metadata: { disposition: 'qualified', returned_to_ai: false, cooldown_until: res.body.cooldown_until } });
     expect(ledgerEvents()).toEqual(['growth_journey.handoff.dispositioned']);
   });
 

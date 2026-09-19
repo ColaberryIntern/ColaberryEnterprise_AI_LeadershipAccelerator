@@ -5,7 +5,7 @@ import { clearHumanConversation, openHumanConversation } from '../conversationOw
 import { integrateDisposition, type IntegrationSummary } from '../integration/integrateDisposition';
 import { isIntegratingDisposition } from '../integration/dispositions';
 import { recordOutcome } from '../outcomes/outcomeRecorder';
-import { cooldownDaysFor, cooldownUntil } from './returnToAi';
+import { cooldownDaysFor, cooldownUntil, qualifiedCooldownDays } from './returnToAi';
 
 /**
  * The human's three moves on a handoff, as a state machine (§11; Phase 4 T405).
@@ -13,6 +13,7 @@ import { cooldownDaysFor, cooldownUntil } from './returnToAi';
  *   accept       queued | assigned  → accepted        opens the human's conversation-ownership row
  *   disposition  accepted           → dispositioned   (qualified | converted | no_contact | disqualified)
  *                accepted           → returned_to_ai  (not_ready | nurture) with a cooldown the strategies honour
+ *                (`qualified` also carries a cooldown on its dispositioned row - Phase 5 T502, see `./returnToAi`)
  *   release      assigned | accepted → queued          the ownership row cleared, the queue takes it back
  *
  * Every other transition is a `HandoffTransitionError` (409, `ValidationError`)
@@ -50,6 +51,8 @@ export const DISPOSITION_FROM: readonly GrowthJourneyHandoffStatus[] = ['accepte
 export const RELEASE_FROM: readonly GrowthJourneyHandoffStatus[] = ['assigned', 'accepted'];
 export const RETURN_DISPOSITIONS: readonly GrowthJourneyHandoffDisposition[] = ['not_ready', 'nurture'];
 export const CLOSING_DISPOSITIONS: readonly GrowthJourneyHandoffDisposition[] = ['qualified', 'converted', 'no_contact', 'disqualified'];
+/** Closing dispositions that still hold the AI off the person for a cooldown (T502): a human is working them. */
+export const HOLDING_DISPOSITIONS: readonly GrowthJourneyHandoffDisposition[] = ['qualified'];
 
 const ACTOR_PREFIX = 'admin';
 const ENTITY = 'growth_journey_handoff';
@@ -118,12 +121,15 @@ export async function dispositionHandoff(row: GrowthJourneyHandoff, input: Dispo
   let cooldown_until: Date | null = null;
   let cooldown_source: DispositionResult['cooldown_source'] = null;
   let patch: Partial<GrowthJourneyHandoffAttributes> = { ...base, status: 'dispositioned' };
-  if (returning) {
-    const { days, source } = await cooldownDaysFor(row.brand_id, input.cooldown_days);
+  const holding = HOLDING_DISPOSITIONS.includes(input.disposition);
+  if (returning || holding) {
+    // not_ready / nurture: the body, the brand's cooldown policy, or 14 days. qualified: the body or 30 days, never the policy.
+    const { days, source } = returning ? await cooldownDaysFor(row.brand_id, input.cooldown_days) : qualifiedCooldownDays(input.cooldown_days);
     cooldown_until = cooldownUntil(asOf, days);
     cooldown_source = source;
     const program_slug = (row.evidence as { brand_program_path?: { program?: { slug?: string } | null } })?.brand_program_path?.program?.slug ?? 'unknown';
-    patch = { ...base, status: 'returned_to_ai', return_to_ai: { program_slug, cooldown_until: cooldown_until.toISOString(), reason: `${input.disposition}:${input.reason}` } };
+    const return_to_ai = { program_slug, cooldown_until: cooldown_until.toISOString(), reason: `${input.disposition}:${input.reason}` };
+    patch = { ...base, status: returning ? 'returned_to_ai' : 'dispositioned', return_to_ai };
   }
   // Reads first, then the ownership row is cleared BEFORE the row turns terminal: a failure here leaves the
   // handoff `accepted`, where a retry is legal. The other order left a dispositioned row

@@ -138,6 +138,22 @@ describe('A/B: learners hand off through the learner deferral, and only with Exp
     expect(reasons).toEqual([['decision_deferral', 'admissions', 'enrollment_ready_in_conversation'], ['reply_route', 'admissions', 'reply_class:READY_TO_ENROLL']]);
     table.push(lineFor(`${ready.key} + READY_TO_ENROLL reply (7A)`, learnerRow, '-'));
   });
+
+  it('T502: sales qualifies the REPLY\'s handoff (lead:<id>) - the learner\'s own decision (enrollment:<id>) is held off too: one person, two refs, one cooldown', async () => {
+    const [ready] = learnerScenarios();
+    arrangeWorld([ready]);
+    const leadId = ready.subject.lead_id as number;
+    const reply = await recordReplyHandoff({ leadId, replyClass: 'READY_TO_ENROLL', providerMessageId: 'pm-6a' }, flags4(), AS_OF_4);
+    const replyRow = T.handoffs.rows.find((r) => r.id === (reply as { handoff_id: string }).handoff_id) as Row;
+    expect(replyRow.subject_ref).toBe(`lead:${leadId}`);
+    await acceptHandoff(replyRow as never, { id: 'au-admissions-2' }, AS_OF_4);
+    await dispositionHandoff(replyRow as never, { disposition: 'qualified', reason: 'enrolling next cohort' }, { id: 'au-admissions-2' }, AS_OF_4);
+    const decided = await decide(ready, new Date(AS_OF_4.getTime() + 86_400_000));
+    // The decision is keyed on the enrolment; the record was written on the lead's row - found through the lead.
+    expect(decided.row.subject_ref).toBe(`enrollment:${ready.subject.enrollment_id}`);
+    expect(decided.row.overlays_at_decision).toContain('RETURNED_TO_AI');
+    expect(open(T.handoffs.rows.filter((r) => r.lead_id === leadId))).toHaveLength(0);
+  });
 });
 
 /* ── C / D / E: the queue follows the programme ──────────────────────────────── */
@@ -224,6 +240,29 @@ describe('H: one person, two relationships - two independent handoffs, two owner
     expect(open(handoffsOf(ent))).toHaveLength(1);
     await decide(trn, AS_OF_4);
     expect(open(T.handoffs.rows)).toHaveLength(2);
+  });
+
+  it('T502 (6A): sales records `qualified` - a changed input and a re-decision open NO second sales handoff while the cooldown holds; after it, one may', async () => {
+    const [ent] = samePersonTwoBrands();
+    arrangeWorld([ent]);
+    await decide(ent, AS_OF_4);
+    const [row] = handoffsOf(ent) as Row[];
+    await acceptHandoff(row as never, HUMAN, AS_OF_4);
+    await dispositionHandoff(row as never, { disposition: 'qualified', reason: 'budget confirmed' }, HUMAN, AS_OF_4);
+    expect(row).toMatchObject({ status: 'dispositioned', return_to_ai: { reason: 'qualified:budget confirmed' } });
+    // T414's reproduction: new inputs the next day. Before T502 this opened a SECOND sales handoff.
+    ent.counts = counts({ inbound: { replied: 3, booked_meeting: 1 }, appointments: { scheduled: 1 } });
+    const DAY = 86_400_000;
+    const held = await decide(ent, new Date(AS_OF_4.getTime() + DAY));
+    expect(held.row.overlays_at_decision).toContain('RETURNED_TO_AI');
+    expect((held.row.deferred_actions as Array<{ would: string }>).some((d) => d.would === 'create_handoff')).toBe(false);
+    expect(open(handoffsOf(ent))).toHaveLength(0);
+    expect(handoffsOf(ent)).toHaveLength(1);
+    // The hold is a cooldown, not a lock: past 30 days the same inputs hand off again.
+    const after = await decide(ent, new Date(AS_OF_4.getTime() + 31 * DAY));
+    expect(after.row.overlays_at_decision).not.toContain('RETURNED_TO_AI');
+    expect(open(handoffsOf(ent))).toHaveLength(1);
+    note(ent);
   });
 });
 
