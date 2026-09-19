@@ -79,10 +79,14 @@ const { resetAgents, reactivateAgent } = require('../../../services/workforceOrg
 // these 5 new mocks follow the identical convention, applied per describe
 // block below, not once at module scope.
 jest.mock('../../../services/managerInboxApi', () => ({ getManagerInboxItems: jest.fn() }));
-jest.mock('../../../services/managerDirectiveApi', () => ({ listDirectives: jest.fn() }));
+jest.mock('../../../services/managerDirectiveApi', () => ({ listDirectives: jest.fn(), revokeDirective: jest.fn() }));
 jest.mock('../../../services/agentReportSubscriptionApi', () => ({ listReportSubscriptions: jest.fn() }));
 jest.mock('../../../services/agentGoalApi', () => ({ listGoals: jest.fn() }));
 jest.mock('../../../services/agentOneOnOneApi', () => ({ listOneOnOnes: jest.fn() }));
+// Dashboard redesign, Slice 1 (2026-09-19) — Performance & Settings'
+// "Authority & controls" sub-tab mounts AgentTrustControlTab, which this
+// file never needed to mock before (it was reached via a different tab).
+jest.mock('../../../services/agentMemoryProposalApi', () => ({ listMemoryProposals: jest.fn() }));
 // Role Charter tile, Checkpoint H (2026-09-10) — a 6th summary fetch,
 // same reasoning as the 5 above: CRA's Jest preset runs `resetMocks: true`
 // between every test (wipes implementations, not just call history — this
@@ -104,6 +108,8 @@ const { listReportSubscriptions } = require('../../../services/agentReportSubscr
 const { listGoals } = require('../../../services/agentGoalApi') as { listGoals: jest.Mock };
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { listOneOnOnes } = require('../../../services/agentOneOnOneApi') as { listOneOnOnes: jest.Mock };
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { listMemoryProposals } = require('../../../services/agentMemoryProposalApi') as { listMemoryProposals: jest.Mock };
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getAgentRoleCharter } = require('../../../services/agentRoleCharterApi') as { getAgentRoleCharter: jest.Mock };
 
@@ -381,7 +387,9 @@ describe('AgentDetailPage — "what this agent reads / produces" section', () =>
   it('renders the real reads/produces text derived from tools_granted, and the live produced-ticket-type badges', async () => {
     getAgentDetail.mockResolvedValue(DETAIL);
 
-    await renderAgentPage();
+    // Dashboard redesign, Slice 1 (2026-09-19) — Capabilities relocated to
+    // Performance & Settings' "Tools & channels" sub-tab.
+    await renderToolsChannelsTab();
 
     expect(container.textContent).toContain('Capabilities');
     expect(container.textContent).toContain('ProofDesk learner-progress signals');
@@ -398,7 +406,7 @@ describe('AgentDetailPage — "what this agent reads / produces" section', () =>
       capabilities: { reads: [], produces: [], undocumented_tools: ['a_tool_from_the_future'], produced_ticket_types: [], by_tool: [] },
     });
 
-    await renderAgentPage();
+    await renderToolsChannelsTab();
 
     expect(container.textContent).toContain('a_tool_from_the_future');
     expect(container.textContent).toContain('no documented reads/produces yet');
@@ -410,7 +418,7 @@ describe('AgentDetailPage — "what this agent reads / produces" section', () =>
       capabilities: { reads: [], produces: [], undocumented_tools: [], produced_ticket_types: [], by_tool: [] },
     });
 
-    await renderAgentPage();
+    await renderToolsChannelsTab();
 
     expect(container.textContent).toContain("don't read any external data source");
     expect(container.textContent).toContain("don't produce anything on their own");
@@ -546,6 +554,37 @@ describe('AgentDetailPage — "Reports to" section', () => {
 
 // Tool & capability drill-down (2026-08-23) — Ali: "I also would like to see
 // the tool & capability drill down so I can understand the tool better."
+// Dashboard redesign, Slice 1, R18 (2026-09-19) — Capabilities relocated
+// out of Overview into Performance & Settings' "Tools & channels" sub-tab
+// (AgentOverviewV2ToolsChannels.tsx). This describe block's own tests are
+// unchanged in what they assert — only how they navigate there, via a
+// local helper rather than renderAgentPage()'s default Overview landing.
+async function renderToolsChannelsTab() {
+  await act(async () => {
+    root.render(
+      <MemoryRouter initialEntries={['/admin/agents/agent-reese']}>
+        <Routes>
+          <Route path="/admin/agents/:id" element={<AgentDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  const findButton = (label: string) => Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.trim() === label);
+  const performanceSettingsTab = findButton('Performance & Settings');
+  if (!performanceSettingsTab) throw new Error('Performance & Settings tab button not found');
+  await act(async () => {
+    performanceSettingsTab.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  const toolsChannelsSubTab = findButton('Tools & channels');
+  if (!toolsChannelsSubTab) throw new Error('Tools & channels sub-tab button not found');
+  await act(async () => {
+    toolsChannelsSubTab.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
 describe('AgentDetailPage — "Tools & capabilities" per-tool drill-down', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -566,8 +605,14 @@ describe('AgentDetailPage — "Tools & capabilities" per-tool drill-down', () =>
     container.remove();
   });
 
-  it('renders one row per granted tool, named after the real tool string', async () => {
+  it('is no longer on Overview — relocated to Performance & Settings' + "'" + 's Tools & channels sub-tab', async () => {
     await renderAgentPage();
+    expect(container.querySelector('.adv2-tool')).toBeNull();
+    expect(container.textContent).not.toContain('respond_to_dm');
+  });
+
+  it('renders one row per granted tool, named after the real tool string', async () => {
+    await renderToolsChannelsTab();
 
     // Checkpoint I (2026-09-11) — the per-tool drill-down is no longer a
     // collapsible <details> (the mockup's own .adv2-tool rows are always
@@ -579,7 +624,7 @@ describe('AgentDetailPage — "Tools & capabilities" per-tool drill-down', () =>
   });
 
   it('each tool\'s own reads/produces are nested inside ITS row, not the flattened aggregate', async () => {
-    await renderAgentPage();
+    await renderToolsChannelsTab();
 
     const rows = Array.from(container.querySelectorAll('.adv2-tool'));
     const readLearnerContext = rows.find((d) => d.querySelector('code')?.textContent === 'read_learner_context');
@@ -597,7 +642,7 @@ describe('AgentDetailPage — "Tools & capabilities" per-tool drill-down', () =>
   // gets a distinct color dot (assignDistinctAvatarColors — real colors,
   // never blank) and an honest "Last used" line.
   it('gives each tool its own distinct color dot, and an honest "not recorded yet" when no behaviour activity backs it', async () => {
-    await renderAgentPage();
+    await renderToolsChannelsTab();
 
     const rows = Array.from(container.querySelectorAll('.adv2-tool'));
     const dots = rows.map((d) => (d.querySelector('.adv2-dot') as HTMLElement | null)?.style.background);
@@ -612,7 +657,7 @@ describe('AgentDetailPage — "Tools & capabilities" per-tool drill-down', () =>
       capabilities: { ...DETAIL.capabilities, by_tool: [{ tool: 'a_tool_from_the_future', reads: [], produces: [], documented: false }] },
     });
 
-    await renderAgentPage();
+    await renderToolsChannelsTab();
 
     expect(container.textContent).toContain('a_tool_from_the_future');
     expect(container.textContent).toContain('undocumented');
@@ -625,9 +670,104 @@ describe('AgentDetailPage — "Tools & capabilities" per-tool drill-down', () =>
       capabilities: { ...DETAIL.capabilities, by_tool: [] },
     });
 
-    await renderAgentPage();
+    await renderToolsChannelsTab();
 
     expect(container.textContent).toContain('No tools recorded.');
+  });
+});
+
+// Dashboard redesign, Slice 1 (2026-09-19) — Reports/Performance/Trust &
+// Control consolidated into one "Performance & Settings" tab with 3 real
+// sub-tabs, matching Ali's preview (3).html mockup.
+describe('AgentDetailPage — "Performance & Settings" consolidation', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getManagerInboxItems.mockResolvedValue([]);
+    listDirectives.mockResolvedValue([]);
+    listReportSubscriptions.mockResolvedValue([]);
+    listGoals.mockResolvedValue([]);
+    listOneOnOnes.mockResolvedValue([]);
+    listMemoryProposals.mockResolvedValue([]);
+    getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
+    getAgentDetail.mockResolvedValue(DETAIL);
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => { root.unmount(); });
+    container.remove();
+  });
+
+  async function openPerformanceSettings() {
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={['/admin/agents/agent-reese']}>
+          <Routes><Route path="/admin/agents/:id" element={<AgentDetailPage />} /></Routes>
+        </MemoryRouter>,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const tab = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Performance & Settings');
+    if (!tab) throw new Error('Performance & Settings tab button not found');
+    await act(async () => {
+      tab.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+
+  function clickSubTab(label: string) {
+    const btn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.trim() === label);
+    if (!btn) throw new Error(`${label} sub-tab button not found`);
+    return act(async () => {
+      btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+
+  it('the 3 old top-level tab buttons no longer exist — only one consolidated tab remains', async () => {
+    await renderAgentPage();
+    const labels = Array.from(container.querySelectorAll('button')).map((b) => b.textContent?.trim());
+    expect(labels).not.toContain('Reports');
+    expect(labels).not.toContain('Performance');
+    expect(labels).not.toContain('Trust & Control');
+    expect(labels).toContain('Performance & Settings');
+  });
+
+  it('lands on "Results & reports" by default, showing real Reports and Performance content', async () => {
+    listReportSubscriptions.mockResolvedValue([{ id: 'sub-1', contentScope: ['cost'], cadence: 'daily', deliveryHourLocal: 8, timezone: 'America/Chicago', channel: 'email', enabled: true }]);
+    listGoals.mockResolvedValue([{ id: 'goal-1', metricKey: 'monthly_cost_usd', comparison: 'at_most', targetValue: 50, currentValue: 10, met: true, status: 'active' }]);
+
+    await openPerformanceSettings();
+
+    expect(container.textContent).toContain('Results & reports');
+    expect(container.textContent).toContain('Tools & channels');
+    expect(container.textContent).toContain('Authority & controls');
+  });
+
+  it('"Tools & channels" sub-tab shows the real Capabilities content', async () => {
+    await openPerformanceSettings();
+    await clickSubTab('Tools & channels');
+
+    expect(container.querySelector('.adv2-tool')).not.toBeNull();
+    expect(container.textContent).toContain('respond_to_dm');
+  });
+
+  it('"Authority & controls" sub-tab shows the real Trust & Control content (GOALS score, Governed Memory)', async () => {
+    await openPerformanceSettings();
+    await clickSubTab('Authority & controls');
+
+    expect(container.textContent).toContain('Governed Memory');
+  });
+
+  it('works for a non-Reese agent too — this is a generic page', async () => {
+    getAgentDetail.mockResolvedValue({ ...DETAIL, agent: { ...DETAIL.agent, id: 'agent-cory', agent_name: 'cory-engine' } });
+
+    await openPerformanceSettings();
+    await clickSubTab('Tools & channels');
+
+    expect(container.querySelector('.adv2-tool')).not.toBeNull();
   });
 });
 

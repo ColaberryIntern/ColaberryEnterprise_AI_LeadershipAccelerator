@@ -30,7 +30,11 @@ import { deriveAttentionItems } from '../../utils/agentAttentionRequired';
 // Promise.all: one slow/failing endpoint must not blank out the other three
 // tiles' real data.
 
-type NavTarget = 'command' | 'overview' | 'work' | 'talk' | 'reports' | 'performance' | 'trust';
+// Dashboard redesign, Slice 1 (2026-09-19) — 'reports'/'performance'/
+// 'trust' retired in favor of one 'performance_settings' destination (see
+// AgentDetailV2Header.tsx's TabKey); the 3 tiles below are unchanged, only
+// their onNavigate target moved.
+type NavTarget = 'command' | 'overview' | 'work' | 'talk' | 'performance_settings';
 type StatTone = 'primary' | 'success' | 'danger' | 'warning' | 'info' | 'neutral';
 
 interface Props {
@@ -214,7 +218,7 @@ export default function AgentAtAGlanceTab({ agentId, detail, inboxItems, inboxLo
               icon="mail-send-line"
               tone={reportsTone}
               hint={reportsHint}
-              onClick={() => onNavigate('reports')}
+              onClick={() => onNavigate('performance_settings')}
             />
           </div>
           <div className="col-md-4">
@@ -224,7 +228,7 @@ export default function AgentAtAGlanceTab({ agentId, detail, inboxItems, inboxLo
               icon="flag-2-line"
               tone={performanceTone}
               hint={performanceHint}
-              onClick={() => onNavigate('performance')}
+              onClick={() => onNavigate('performance_settings')}
             />
           </div>
           <div className="col-md-4">
@@ -235,7 +239,7 @@ export default function AgentAtAGlanceTab({ agentId, detail, inboxItems, inboxLo
               icon="shield-check-line"
               tone={trustTone}
               hint={weakestDimension ? `${weakestDimension.label} (${weakestDimension.score}/5) is the lowest dimension` : 'GOALS™ score not yet computed'}
-              onClick={() => onNavigate('trust')}
+              onClick={() => onNavigate('performance_settings')}
             />
           </div>
           <div className="col-md-4">

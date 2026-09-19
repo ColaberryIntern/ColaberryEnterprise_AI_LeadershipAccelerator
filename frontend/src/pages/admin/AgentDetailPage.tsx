@@ -10,9 +10,7 @@ import AgentAtAGlanceTab from '../../components/admin/AgentAtAGlanceTab';
 import AgentLiveStatusTab from '../../components/admin/AgentLiveStatusTab';
 import AgentWorkDecisionsTab from '../../components/admin/AgentWorkDecisionsTab';
 import AgentTalkTab from '../../components/admin/AgentTalkTab';
-import AgentReportsTab from '../../components/admin/AgentReportsTab';
-import AgentPerformanceTab from '../../components/admin/AgentPerformanceTab';
-import AgentTrustControlTab from '../../components/admin/AgentTrustControlTab';
+import AgentPerformanceSettingsTab from '../../components/admin/AgentPerformanceSettingsTab';
 
 // Agent Detail — Ali's requested transparency page: who this agent is, its real
 // system prompt, its real tools/capabilities, its live status, and its linked
@@ -125,6 +123,25 @@ import AgentTrustControlTab from '../../components/admin/AgentTrustControlTab';
 // six tabs' own content is intentionally NOT restyled in this pass — a
 // deliberate scoping choice (same "ship the named surface first"
 // precedent as every earlier checkpoint on this page), not an oversight.
+//
+// Dashboard redesign, Slice 1, Checkpoint J (2026-09-19) — Ali shared a
+// real interactive mockup ("Reese - Employee workspace preview") whose
+// Performance & Settings destination folds Reports/Performance/Trust &
+// Control into one page with 3 internal sub-tabs — the same kind of fold
+// Checkpoint E already did for Charter, applied at the top-level-tab
+// scale this time. New AgentPerformanceSettingsTab.tsx hosts all 3
+// components unchanged, plus Capabilities relocated out of Overview
+// (AgentOverviewV2ToolsChannels.tsx) into its own "Tools & channels"
+// sub-tab, matching the mockup's placement. Top-level tab count drops
+// from 8 to 6. AgentAtAGlanceTab.tsx's 3 click-throughs that used to
+// target 'reports'/'performance'/'trust' now all target
+// 'performance_settings' — the tiles themselves are unchanged, only
+// their destination. Overview, Talk, Work & Decisions, At a Glance
+// (beyond the 3 retargeted clicks), and Live Status are unchanged in
+// this slice — the mockup's Work/Decisions split and Overview's new
+// hero/KPI/timeline content are real, deliberately deferred scope for a
+// later slice, gated on real answers to what an "owned case" is and what
+// feeds "Needs Ali" (see this run's own execution-contract.md).
 
 export default function AgentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -312,9 +329,9 @@ export default function AgentDetailPage() {
         </div>
       )}
       {activeTab === 'talk' && <div className="adv2-wrap"><AgentTalkTab agentId={id} /></div>}
-      {activeTab === 'reports' && <div className="adv2-wrap"><AgentReportsTab agentId={id} /></div>}
-      {activeTab === 'performance' && <div className="adv2-wrap"><AgentPerformanceTab agentId={id} /></div>}
-      {activeTab === 'trust' && <div className="adv2-wrap"><AgentTrustControlTab agentId={id} detail={detail} /></div>}
+      {activeTab === 'performance_settings' && (
+        <div className="adv2-wrap"><AgentPerformanceSettingsTab agentId={id} detail={detail} /></div>
+      )}
     </div>
   );
 }
