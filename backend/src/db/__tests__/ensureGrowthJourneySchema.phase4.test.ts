@@ -363,7 +363,7 @@ describe('where the four sit, and what they never do', () => {
     }
   });
 
-  it('every Phase 4 statement is IF NOT EXISTS and none is destructive', () => {
+  it('every statement naming a Phase 4 table - T401/T402\'s, and T501\'s index on handoffs - is IF NOT EXISTS and none is destructive', () => {
     const mine = GROWTH_JOURNEY_STATEMENTS.filter((s) => /growth_journey_(handoffs|outcomes|policies|conversation_ownership)\b/i.test(s));
     // 4 tables + 5 + 3 + 1 + 2 indexes, + 1: T501's per-person index names growth_journey_handoffs too.
     expect(mine).toHaveLength(16);
