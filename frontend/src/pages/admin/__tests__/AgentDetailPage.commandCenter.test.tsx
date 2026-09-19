@@ -71,8 +71,8 @@ const DETAIL: AgentDetail = {
   live_status: 'unknown',
   open_ticket_count: 1,
   tickets: [
-    { id: 't-1', ticket_number: 401, title: 'Ops Summary', description: null, status: 'done', priority: 'normal', type: 'ops_summary', created_at: null, updated_at: '2026-08-29T10:00:00Z' },
-    { id: 't-2', ticket_number: 398, title: 'Agent Escalation', description: null, status: 'in_progress', priority: 'high', type: 'agent_escalation', created_at: null, updated_at: '2026-08-28T10:00:00Z' },
+    { id: 't-1', ticket_number: 401, title: 'Ops Summary', description: null, status: 'done', priority: 'normal', type: 'ops_summary', created_at: null, updated_at: '2026-08-29T10:00:00Z', due_date: null, status_bucket: null },
+    { id: 't-2', ticket_number: 398, title: 'Agent Escalation', description: null, status: 'in_progress', priority: 'high', type: 'agent_escalation', created_at: null, updated_at: '2026-08-28T10:00:00Z', due_date: null, status_bucket: 'open' },
   ],
   ticket_breakdown: [],
   related_tasks: [],

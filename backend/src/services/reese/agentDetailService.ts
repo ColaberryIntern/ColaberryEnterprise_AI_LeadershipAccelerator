@@ -4,7 +4,7 @@ import AdminUser from '../../models/AdminUser';
 import Enrollment from '../../models/Enrollment';
 import CommunityMember from '../../models/CommunityMember';
 import OrgMember from '../../models/OrgMember';
-import { Ticket } from '../../models';
+import { Ticket, TicketActivity } from '../../models';
 import { derivePresence } from '../communityService';
 import type { CommunityPresenceStatus } from '../../models/CommunityMember';
 import { buildCreatorIdMatchList } from '../agentBlueprint/legacyCreatorAliases';
@@ -19,6 +19,7 @@ import { classifyAgentAutonomyLevel } from '../agentCapabilityClassifier';
 import { getReeseEmployeeFacts, type AgentDetailResult } from './agentDetailEmployeeFacts';
 import { computeLastTicketPerBehaviour } from './reeseBehaviourLastTicket';
 import { BEHAVIOUR_KEY_BY_CRON_AGENT_NAME } from './reeseBehaviourMetadata';
+import { computeNeedsReply, computeStatusBucket } from './ticketStatusBucket';
 
 export type { AgentDetailResult } from './agentDetailEmployeeFacts';
 
@@ -93,6 +94,30 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
         limit: MAX_TICKETS,
       })
     : [];
+
+  // Dashboard redesign, Slice 2a (2026-09-19) — the Work tab's honest
+  // "needs a reply" filter needs each ticket's most recent activity actor.
+  // One bounded query scoped to the SAME ticket ids already fetched above
+  // (never unbounded — capped by MAX_TICKETS transitively), grouped in JS
+  // to the latest row per ticket_id — same "fetch once, group in JS" shape
+  // as ticketBreakdown below. Skipped entirely when there are no tickets.
+  const ticketIds = tickets.map((t: any) => t.id);
+  const latestActivityByTicketId = new Map<string, { actor_id: string; created_at: Date }>();
+  if (ticketIds.length > 0) {
+    const activityRows = await TicketActivity.findAll({
+      where: { ticket_id: { [Op.in]: ticketIds } },
+      attributes: ['ticket_id', 'actor_id', 'created_at'],
+      order: [['ticket_id', 'ASC'], ['created_at', 'DESC']],
+    });
+    for (const row of activityRows as any[]) {
+      // First row seen per ticket_id (thanks to the DESC order above) is
+      // the latest — never overwritten by an older row for the same ticket.
+      if (!latestActivityByTicketId.has(row.ticket_id)) {
+        latestActivityByTicketId.set(row.ticket_id, { actor_id: row.actor_id, created_at: row.created_at });
+      }
+    }
+  }
+  const ownIdentityIds = adminUser ? buildCreatorIdMatchList(adminUser.id, agent) : [];
 
   // Agent Detail transparency, part 2 (2026-08-18) — the real, live ticket
   // types this agent has ever created/been assigned, UNLIMITED (not the
@@ -277,17 +302,26 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
     live_status: liveStatus,
     open_ticket_count: openTicketCount,
     oldest_open_ticket_age_days: oldestOpenTicketAge?.ageDays ?? null,
-    tickets: tickets.map((t: any) => ({
-      id: t.id,
-      ticket_number: t.ticket_number ?? null,
-      title: t.title,
-      description: t.description ?? null,
-      status: t.status,
-      priority: t.priority,
-      type: t.type,
-      created_at: t.created_at ?? null,
-      updated_at: t.updated_at ?? null,
-    })),
+    tickets: tickets.map((t: any) => {
+      const latestActivity = latestActivityByTicketId.get(t.id) ?? null;
+      const needsReply = computeNeedsReply(latestActivity?.actor_id ?? null, ownIdentityIds);
+      return {
+        id: t.id,
+        ticket_number: t.ticket_number ?? null,
+        title: t.title,
+        description: t.description ?? null,
+        status: t.status,
+        priority: t.priority,
+        type: t.type,
+        created_at: t.created_at ?? null,
+        updated_at: t.updated_at ?? null,
+        // Dashboard redesign, Slice 2a — real column, previously fetched but
+        // never surfaced in this response (response-shape change only, no
+        // schema change; see models/Ticket.ts's real due_date column).
+        due_date: t.due_date ?? null,
+        status_bucket: computeStatusBucket({ status: t.status, dueDate: t.due_date ?? null, needsReply }),
+      };
+    }),
     ticket_breakdown: ticketBreakdown,
     related_tasks: relatedTaskRows.map((t: any) => ({
       id: t.id,
