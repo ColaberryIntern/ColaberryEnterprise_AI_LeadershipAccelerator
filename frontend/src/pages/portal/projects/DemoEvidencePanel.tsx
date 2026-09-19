@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import portalApi from '../../../utils/portalApi';
 import { refreshProjectsFromBackend } from './projectSync';
 import type { ProjectTask } from './projectsStore';
+import { guideFor } from './demoPrepGuide';
 
 /**
  * The workspace for a demo-prep task: submit the evidence it asks for.
@@ -27,10 +28,10 @@ const LINK_ONLY = new Set(['PREP-2', 'PREP-5']);
 
 const ASK: Record<string, { lead: string; placeholder: string }> = {
   'PREP-1': { lead: 'Write the demo narrative here, or paste a link to it.', placeholder: 'The problem is… The one moment is… The guardrail is…' },
-  'PREP-2': { lead: 'Paste a link to your first run-through recording.', placeholder: 'https://…' },
+  'PREP-2': { lead: 'Paste the share link to your run-through recording.', placeholder: 'https://drive.google.com/… or https://youtu.be/…' },
   'PREP-3': { lead: 'Paste a link to your slides, or describe them here.', placeholder: 'https://… (Google Slides, PowerPoint, PDF)' },
   'PREP-4': { lead: 'Who did you rehearse with, and what did they tell you?', placeholder: 'Rehearsed with… Their notes: …' },
-  'PREP-5': { lead: 'Paste a link to the final demo video.', placeholder: 'https://…' },
+  'PREP-5': { lead: 'Paste the share link to your final demo video.', placeholder: 'https://drive.google.com/… or https://youtu.be/…' },
 };
 
 export function isPrepStory(storyId: string | null | undefined): boolean {
@@ -72,6 +73,22 @@ const DemoEvidencePanel: React.FC<{
   }
 
   const ask = ASK[storyId] ?? { lead: 'Hand in what this task asks for.', placeholder: '' };
+  // What the task is and how to do it, above the box that takes it. The
+  // page used to be the title and a box, and a learner with every story
+  // verified had to write in to ask what to record. See demoPrepGuide.
+  const guide = guideFor(storyId);
+  const guideBlock = guide && (
+    <section className="rt-step">
+      <div className="rt-step-h"><span className="rt-step-n">1</span><span className="rt-step-t">What to do</span></div>
+      <div className="rt-card">
+        <p style={{ marginTop: 0 }}>{guide.what}</p>
+        <ol style={{ margin: 0, paddingLeft: 20, lineHeight: 1.55 }}>
+          {guide.steps.map((st, i) => <li key={i} style={{ marginBottom: 6 }}>{st}</li>)}
+        </ol>
+      </div>
+    </section>
+  );
+  const handInNo = guide ? 2 : 1;
 
   const submit = async () => {
     if (demo) return;
@@ -108,9 +125,11 @@ const DemoEvidencePanel: React.FC<{
   }
 
   return (
+    <>
+    {guideBlock}
     <section className="rt-step">
       <div className="rt-step-h">
-        <span className="rt-step-n">1</span>
+        <span className="rt-step-n">{handInNo}</span>
         <span className="rt-step-t">Hand it in{points ? <> · <strong>+{points} pts</strong></> : null}</span>
       </div>
       <div className="rt-card">
@@ -157,6 +176,7 @@ const DemoEvidencePanel: React.FC<{
         </div>
       </div>
     </section>
+    </>
   );
 };
 

@@ -76,6 +76,36 @@ export function isHttpUrl(value: string): boolean {
 }
 
 /**
+ * A link that can only open on the student's own machine or network:
+ * localhost, loopback, private and link-local addresses, `.local` names,
+ * and single-label hosts (`http://my-laptop:8420`). Evidence is handed in
+ * so someone else can open it; one learner's demo narrative was accepted
+ * on 2026-09-17 as `http://localhost:8420/command-center/...`, which
+ * nobody but him will ever see. Pure; exported for the test.
+ */
+export function isPrivateLink(value: string): boolean {
+  let host: string;
+  try {
+    host = new URL(value.trim()).hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  } catch {
+    return false;
+  }
+  if (!host) return true;
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) return true;
+  if (host === '::1' || host === '0.0.0.0' || /^(fc|fd|fe80)[0-9a-f]*:/.test(host)) return true;
+  const v4 = host.match(/^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/);
+  if (v4) {
+    const a = Number(v4[1]); const b = Number(v4[2]);
+    return a === 127 || a === 10 || a === 0 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31) || (a === 169 && b === 254);
+  }
+  // A public name always has a dot; `http://my-laptop:8420` does not.
+  return !host.includes('.') && !host.includes(':');
+}
+
+const PRIVATE_LINK_REASON =
+  'That link only opens on your own computer. Upload the file to Google Drive or OneDrive and set sharing to "Anyone with the link can view" (or upload it to YouTube as Unlisted), then paste that link.';
+
+/**
  * Whether this evidence satisfies this task. Pure, so the rule is testable
  * without a database and readable in one place.
  */
@@ -84,7 +114,8 @@ export function validateDemoEvidence(storyId: PrepStoryId, input: DemoEvidenceIn
   if (!value) return { ok: false, reason: 'Evidence is required.' };
   if (value.length > MAX_VALUE_CHARS) return { ok: false, reason: `Evidence is limited to ${MAX_VALUE_CHARS} characters.` };
   if (input.kind === 'link') {
-    return isHttpUrl(value) ? { ok: true } : { ok: false, reason: 'A link must be a full http(s) URL.' };
+    if (!isHttpUrl(value)) return { ok: false, reason: 'A link must be a full http(s) URL.' };
+    return isPrivateLink(value) ? { ok: false, reason: PRIVATE_LINK_REASON } : { ok: true };
   }
   if (input.kind === 'text') {
     if (LINK_ONLY.has(storyId)) return { ok: false, reason: 'This task needs a link to your recording.' };
