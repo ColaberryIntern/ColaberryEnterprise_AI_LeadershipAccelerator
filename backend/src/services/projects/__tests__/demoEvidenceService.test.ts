@@ -33,7 +33,7 @@ jest.mock('../projectReadService', () => ({ getOwnedProjectTree: jest.fn() }));
 jest.mock('../../pointsService', () => ({ award: (...a: any[]) => mockAward(...a) }));
 jest.mock('../../progression/pointsConfigService', () => ({ getTypeXp: (...a: any[]) => mockGetTypeXp(...a) }));
 
-import { submitDemoEvidence, markDemoDayPresented, validateDemoEvidence, isHttpUrl } from '../demoEvidenceService';
+import { submitDemoEvidence, markDemoDayPresented, validateDemoEvidence, isHttpUrl, isPrivateLink } from '../demoEvidenceService';
 
 const ENROLLMENT = 'enr-1';
 const PROJECT = 'proj-1';
@@ -65,6 +65,50 @@ describe('validateDemoEvidence', () => {
     expect(validateDemoEvidence('PREP-4', { kind: 'text', value: 'too short' }).ok).toBe(false);
     expect(validateDemoEvidence('PREP-1', { kind: 'text', value: '   ' }).ok).toBe(false);
     expect(validateDemoEvidence('PREP-1', { kind: 'text', value: 'x'.repeat(5001) }).ok).toBe(false);
+  });
+
+  // A link is evidence only if someone else can open it. One learner's
+  // narrative went in as http://localhost:8420/command-center/... on
+  // 2026-09-17 and was accepted; nobody but him can ever open it.
+  it('refuses a link that only opens on the student\'s own machine, and says what to do instead', () => {
+    for (const v of [
+      'http://localhost:8420/command-center/index.html#card-guardrails',
+      'http://127.0.0.1:3000/demo.mp4',
+      'http://0.0.0.0:8080/',
+      'http://[::1]:5173/',
+      'http://192.168.1.20/video.mp4',
+      'http://10.0.0.5/x',
+      'http://172.20.3.4/x',
+      'http://my-laptop:8420/',
+      'http://printer.local/x',
+      'http://app.localhost:3000/',
+    ]) {
+      const r = validateDemoEvidence('PREP-2', { kind: 'link', value: v });
+      expect({ v, ok: r.ok }).toEqual({ v, ok: false });
+      if (!r.ok) expect(r.reason).toMatch(/only opens on your own computer.*Anyone with the link/);
+    }
+  });
+
+  it('still accepts the hosts real recordings live on', () => {
+    for (const v of [
+      'https://drive.google.com/file/d/abc/view?usp=sharing',
+      'https://1drv.ms/v/s!abc',
+      'https://youtu.be/abc',
+      'https://www.loom.com/share/abc',
+      'https://172.217.0.1.nip.io/x',
+      'https://fcbarcelona.com/',
+    ]) expect({ v, ok: validateDemoEvidence('PREP-5', { kind: 'link', value: v }).ok }).toEqual({ v, ok: true });
+  });
+
+  it('isPrivateLink draws the private ranges exactly, not by prefix guesswork', () => {
+    expect(isPrivateLink('http://172.15.0.1/')).toBe(false);
+    expect(isPrivateLink('http://172.16.0.1/')).toBe(true);
+    expect(isPrivateLink('http://172.31.255.1/')).toBe(true);
+    expect(isPrivateLink('http://172.32.0.1/')).toBe(false);
+    expect(isPrivateLink('http://169.254.1.1/')).toBe(true);
+    expect(isPrivateLink('http://[fe80::1]/')).toBe(true);
+    expect(isPrivateLink('https://[2001:4860:4860::8888]/')).toBe(false);
+    expect(isPrivateLink('not a url')).toBe(false); // isHttpUrl refuses it first
   });
 
   it('isHttpUrl accepts http(s) only', () => {
