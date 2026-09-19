@@ -3,9 +3,8 @@ import { AgentDetail } from '../../../services/agentDetailApi';
 import { AUTONOMY_LEVELS, AUTONOMY_LEVEL_DESCRIPTIONS, AutonomyLevel } from '../../../services/workforceOrgChartApi';
 import { LEVEL_PILL_CLASS } from './AgentDetailV2Header';
 import { timeAgo } from '../shell/trust';
-import { getTicketTypeLabel } from '../../../utils/ticketTypeMeta';
 import AgentOverviewV2Tickets from './AgentOverviewV2Tickets';
-import { scheduledWorkColors, toolColors, toolLastUsed } from './agentDetailV2Correlation';
+import { scheduledWorkColors } from './agentDetailV2Correlation';
 
 // Agent Detail V2, main column (2026-09-11) — Ali: "same content just a
 // different view." Every established honest phrase from the pre-redesign
@@ -37,10 +36,8 @@ interface Props {
 }
 
 export default function AgentOverviewV2MainColumn({ detail }: Props) {
-  const { agent, trust_contract, cost_summary, authorization_summary, capabilities, related_tasks, owned_behaviors, tickets, ticket_breakdown } = detail;
+  const { agent, trust_contract, cost_summary, authorization_summary, related_tasks, owned_behaviors, tickets, ticket_breakdown } = detail;
   const currentIndex = agent.autonomy_level ? AUTONOMY_LEVELS.indexOf(agent.autonomy_level) : -1;
-  const toolColor = toolColors(detail);
-  const toolLastUsedAt = toolLastUsed(detail);
   const workColor = scheduledWorkColors(detail);
 
   const shadowNote = authorization_summary.total === 0
@@ -124,59 +121,11 @@ export default function AgentOverviewV2MainColumn({ detail }: Props) {
         <p className="adv2-callout"><span className="adv2-mark" /><span>{shadowNote}</span></p>
       </section>
 
-      <section className="adv2-card">
-        <h2>Capabilities <span className="adv2-hint">{capabilities.by_tool.length} tool{capabilities.by_tool.length === 1 ? '' : 's'}</span></h2>
-        <div className="adv2-body" style={{ paddingBottom: 8 }}>
-          <div className="adv2-io-grid">
-            <div>
-              <h3>Reads</h3>
-              {capabilities.reads.length > 0 ? (
-                <ul>{capabilities.reads.map((r) => <li key={r}>{r}</li>)}</ul>
-              ) : <p className="adv2-muted">Granted tools don't read any external data source.</p>}
-            </div>
-            <div>
-              <h3>Produces</h3>
-              {capabilities.produces.length > 0 ? (
-                <ul>{capabilities.produces.map((p) => <li key={p}>{p}</li>)}</ul>
-              ) : <p className="adv2-muted">Granted tools don't produce anything on their own.</p>}
-            </div>
-          </div>
-          {capabilities.produced_ticket_types.length > 0 && (
-            <div style={{ marginTop: 14 }}>
-              <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Ticket types actually created</h3>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {capabilities.produced_ticket_types.map((t) => <span key={t} className="adv2-pill adv2-neutral">{getTicketTypeLabel(t)}</span>)}
-              </div>
-            </div>
-          )}
-          {capabilities.undocumented_tools.length > 0 && (
-            <p className="adv2-muted" style={{ marginTop: 14, fontSize: 12.5 }}>
-              {capabilities.undocumented_tools.length === 1 ? 'One tool' : `${capabilities.undocumented_tools.length} tools`} granted to this agent
-              {' '}(<code>{capabilities.undocumented_tools.join(', ')}</code>) {capabilities.undocumented_tools.length === 1 ? 'has' : 'have'} no documented reads/produces yet — disclosed honestly rather than guessed.
-            </p>
-          )}
-        </div>
-        {capabilities.by_tool.length === 0 ? (
-          <p className="adv2-muted" style={{ padding: '0 18px 16px' }}>No tools recorded.</p>
-        ) : capabilities.by_tool.map((tool) => (
-          <div className="adv2-tool" key={tool.tool}>
-            <div>
-              <span className="adv2-dot" style={{ background: toolColor[tool.tool] }} />
-              <code>{tool.tool}</code>{!tool.documented && <span className="adv2-pill adv2-warn" style={{ marginLeft: 8 }}>undocumented</span>}
-            </div>
-            <div>
-              <div className="adv2-what">
-                {tool.documented ? (
-                  <>{tool.reads.length > 0 && `Reads: ${tool.reads.join(', ')}. `}{tool.produces.length > 0 && `Produces: ${tool.produces.join(', ')}.`}</>
-                ) : <span className="adv2-gap">No documented reads/produces yet for this tool</span>}
-              </div>
-              <div className="adv2-muted" style={{ fontSize: 12, marginTop: 4 }}>
-                Last used: {toolLastUsedAt[tool.tool] ? timeAgo(toolLastUsedAt[tool.tool] as string) : 'not recorded yet'}
-              </div>
-            </div>
-          </div>
-        ))}
-      </section>
+      {/* Agent Detail dashboard redesign, Slice 1, R18 (2026-09-19) —
+          Capabilities relocated to AgentOverviewV2ToolsChannels.tsx, mounted
+          under Performance & Settings' "Tools & channels" sub-tab, matching
+          Ali's mockup. Real relocation, not a duplicate — this section no
+          longer renders here. */}
 
       <section className="adv2-card">
         <h2>Scheduled work <span className="adv2-hint">{related_tasks.length} task{related_tasks.length === 1 ? '' : 's'}</span></h2>

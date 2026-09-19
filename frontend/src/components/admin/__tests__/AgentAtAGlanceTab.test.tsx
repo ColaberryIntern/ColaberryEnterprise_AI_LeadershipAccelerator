@@ -255,9 +255,10 @@ describe('AgentAtAGlanceTab — navigation', () => {
     expect(onNavigate).toHaveBeenCalledWith('command');
     expect(onNavigate).toHaveBeenCalledWith('work');
     expect(onNavigate).toHaveBeenCalledWith('talk');
-    expect(onNavigate).toHaveBeenCalledWith('reports');
-    expect(onNavigate).toHaveBeenCalledWith('performance');
-    expect(onNavigate).toHaveBeenCalledWith('trust');
+    // Dashboard redesign, Slice 1 (2026-09-19) — Reports/Performance/Trust &
+    // Control tiles all now navigate to the one consolidated
+    // 'performance_settings' destination, not 3 separate keys.
+    expect(onNavigate).toHaveBeenCalledWith('performance_settings');
     // Checkpoint H (2026-09-10) — Role Charter moved to Overview's Identity
     // sub-tab, so its tile now navigates to 'overview', not 'trust'.
     expect(onNavigate).toHaveBeenCalledWith('overview');

@@ -9,7 +9,13 @@ import { timeAgo } from '../shell/trust';
 // page only (scoped under .adv2-page, see agentDetailV2.css) — PageHeader
 // itself is untouched and still used by every other admin page.
 
-export type TabKey = 'glance' | 'command' | 'overview' | 'work' | 'talk' | 'reports' | 'performance' | 'trust';
+// Dashboard redesign, Slice 1 (2026-09-19) — Ali shared a real mockup
+// ("Reese - Employee workspace preview") whose Performance & Settings
+// destination consolidates 3 real, separate tabs (Reports/Performance/
+// Trust & Control) into one page with 3 internal sub-tabs. 'reports' /
+// 'performance' / 'trust' retired in favor of one 'performance_settings'
+// key — see AgentPerformanceSettingsTab.tsx for the sub-tab shell.
+export type TabKey = 'glance' | 'command' | 'overview' | 'work' | 'talk' | 'performance_settings';
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'glance', label: 'At a Glance' },
@@ -17,9 +23,7 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'overview', label: 'Overview' },
   { key: 'work', label: 'Work & Decisions' },
   { key: 'talk', label: 'Talk' },
-  { key: 'reports', label: 'Reports' },
-  { key: 'performance', label: 'Performance' },
-  { key: 'trust', label: 'Trust & Control' },
+  { key: 'performance_settings', label: 'Performance & Settings' },
 ];
 
 const STATUS_LABEL: Record<AgentDetail['live_status'], string> = {
