@@ -1,0 +1,80 @@
+{
+  "slug": "the-workflow-grew-so-did-the-responsibility",
+  "output": "cora-platform-ownership-walkthrough.mp4",
+  "slides": [
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "The Workflow Grew. So Did the Responsibility.",
+      "subtitle": "Cora Recap Engine  ·  an operational AI system",
+      "caption": "When a call ends, an admissions team's calling system has work to finish: analyse the call, move the lead, schedule the next contact and update the CRM."
+    },
+    {
+      "kind": "title",
+      "seconds": 10,
+      "title": "Who owns unfinished work?",
+      "subtitle": "Postgres holds it. The queue carries it. The CRM receives it.",
+      "caption": "Three systems own different parts of the work. Postgres holds process state, Redis and its queue carry execution only, and the CRM owns contacts, tasks and notes."
+    },
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "Write the job row first.",
+      "subtitle": "Then queue it.",
+      "caption": "Every job is a row in Postgres before it is queued. If the queue refuses, the row stays pending, and a loop that runs every 30 seconds queues it."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 12,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/frontend/public/site-v2/shot-cora-platform-queue-boundary.png",
+      "caption": "Queue Health, on a local copy with invented rows: jobs stuck past their time, which an operator can cancel, and expired leases, which the worker returns to pending by itself."
+    },
+    {
+      "kind": "title",
+      "seconds": 10,
+      "title": "Claim with a lease.",
+      "subtitle": "Five minutes, then back to pending.",
+      "caption": "A worker claims a job with a five-minute lease. Each pass of the loop first returns expired leases to pending, then queues whatever is due."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 12,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/.loop-architect/runs/20260919-cora-pair-04-revise-05-build/imagery/video/video-exceptions-list.png",
+      "caption": "The Exceptions Monitor, on the same local copy. Most jobs that fail for good open an exception; the system closes a pending-call exception when its call ends, and an operator acts on the rest."
+    },
+    {
+      "kind": "cards",
+      "seconds": 12,
+      "rows": [
+        [
+          "82,701 of 83,604",
+          "jobs accepted in 30 days ran to completion"
+        ],
+        [
+          "0 of 349",
+          "open jobs overdue or on an expired lease, at one moment"
+        ],
+        [
+          "0 of 40",
+          "exceptions opened in the month still open"
+        ]
+      ],
+      "accent_index": 1,
+      "caption": "Read from the platform's own tables on 19 September 2026. Completed means the job function returned, not that a lead was served, and an ignored exception is not a resolved one."
+    },
+    {
+      "kind": "title",
+      "seconds": 12,
+      "title": "Bound every write to the CRM.",
+      "subtitle": "Three clients. A retry bound and a switch each. No idempotency key.",
+      "caption": "Contacts and tasks, call notes and the call log each reach the CRM through a client of their own, with its own write switch and a bounded retry. A task write carries no idempotency key, so a repeat can land twice."
+    },
+    {
+      "kind": "title",
+      "seconds": 11,
+      "title": "Where responsibility still leaks.",
+      "subtitle": "A job queued whose row never commits is dropped.",
+      "caption": "Nothing sweeps for it and no test covers it. Recovery runs on one worker role, and two job types fail without opening an exception."
+    }
+  ]
+}
