@@ -1,0 +1,69 @@
+{
+  "slug": "every-lead-has-a-history",
+  "output": "cora-lead-journey-walkthrough.mp4",
+  "slides": [
+    {
+      "kind": "title",
+      "seconds": 7,
+      "title": "Every Lead Has a History.",
+      "subtitle": "Cora Recap Engine  \u00b7  an operational AI system",
+      "caption": "An admissions team's calling system decides, lead by lead, when to call, text or email, and which campaign each lead belongs to."
+    },
+    {
+      "kind": "title",
+      "seconds": 8,
+      "title": "A status says where a lead stands.",
+      "subtitle": "Not how it got there, or what happens next.",
+      "caption": "The calls, the messages, the record of each campaign switch and the next scheduled job all sit in separate tables."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 10,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/.loop-architect/runs/20260918-cora-pair-03-revise-04-build/imagery/video/video-earlier-console.png",
+      "caption": "The first console joined them into one timeline in March 2026: calls, messages, and each campaign switch with its reason. It has since been replaced, and this copy runs on placeholder rows."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 9,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/frontend/public/site-v2/shot-cora-journey-lead-lifecycle.png",
+      "caption": "The current console reads the same records through three views. Lead Lifecycle gives one row per lead, with its first and current campaign and its next pending job."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 9,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/.loop-architect/runs/20260918-cora-pair-03-revise-04-build/imagery/video/video-drilldown.png",
+      "caption": "Contact Drill-Down lays out six tables for one lead. None of them says why the lead's campaign changed."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 9,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/frontend/public/site-v2/shot-cora-journey-pipeline-trace.png",
+      "caption": "The Pipeline Trace lists a lead's jobs in the order they run, but only the lead-level ones: for 200 sampled leads, 3,551 of 6,203."
+    },
+    {
+      "kind": "cards",
+      "seconds": 10,
+      "rows": [
+        ["7 of 2,181", "recorded campaign writes carry a reason"],
+        ["314 of 314", "leads show their pending job as the next action"],
+        ["0 of 516", "new leads carry a voice agent's line"]
+      ],
+      "accent_index": 1,
+      "caption": "Read from the system's own tables: only switches made from a call carry a reason, both views agree on the next action, and no new lead carries an agent's line."
+    },
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "Fix the record, not just the view.",
+      "subtitle": "24 and 26 August 2026.",
+      "caption": "A stale next-action time was cleared on campaign entry, calls were filed under the right campaign, and new leads took the number called instead of the agent's line."
+    },
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "Where the history stops.",
+      "subtitle": "No reason on the current console. No proof of delivery.",
+      "caption": "Entries into a campaign write no reason, the current console does not show one, and 0 of 21,408 stored messages record whether they arrived."
+    }
+  ]
+}

@@ -554,7 +554,9 @@
 .cs-decision { display: grid; gap: .75rem; align-content: start; min-width: 0; padding: 1.5rem; background: var(--cs-surface); border: 1px solid var(--cs-line); border-radius: var(--cs-radius, 10px); }
 .cs-decision__top { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; }
 .cs-decision__index { font-family: var(--cs-font-display, inherit); font-size: 2rem; font-weight: 700; line-height: 1; color: var(--cs-accent); }
-.cs-decision__stage { padding: .2rem .6rem; border: 1px solid var(--cs-line); border-radius: 999px; font-family: var(--cs-font-mono, ui-monospace, monospace); font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--cs-fg-muted); white-space: nowrap; }
+/* A stage name may be longer than the card is wide ("Separate history from next action"): the label
+   wraps inside the card instead of running past its edge. Labels that fit stay on one line. */
+.cs-decision__stage { min-width: 0; padding: .2rem .6rem; border: 1px solid var(--cs-line); border-radius: 999px; font-family: var(--cs-font-mono, ui-monospace, monospace); font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--cs-fg-muted); overflow-wrap: anywhere; }
 .cs-decision__title { margin: 0; font-size: 1.1rem; line-height: 1.3; }
 .cs-decision__text { margin: 0; line-height: 1.55; }
 .cs-decision__evidence { margin: 0; font-size: .88rem; line-height: 1.5; color: var(--cs-fg-muted); }

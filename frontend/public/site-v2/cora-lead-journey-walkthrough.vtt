@@ -1,0 +1,37 @@
+WEBVTT
+
+1
+00:00:00.500 --> 00:00:09.780
+An admissions team's calling system decides, lead by lead, when to call, text or email, and which campaign each lead belongs to.
+
+2
+00:00:10.900 --> 00:00:19.170
+The calls, the messages, the record of each campaign switch and the next scheduled job all sit in separate tables.
+
+3
+00:00:20.300 --> 00:00:33.660
+The first console joined them into one timeline in March 2026: calls, messages, and each campaign switch with its reason. It has since been replaced, and this copy runs on placeholder rows.
+
+4
+00:00:34.800 --> 00:00:45.950
+The current console reads the same records through three views. Lead Lifecycle gives one row per lead, with its first and current campaign and its next pending job.
+
+5
+00:00:47.100 --> 00:00:54.100
+Contact Drill-Down lays out six tables for one lead. None of them says why the lead's campaign changed.
+
+6
+00:00:56.100 --> 00:01:08.790
+The Pipeline Trace lists a lead's jobs in the order they run, but only the lead-level ones: for 200 sampled leads, 3,551 of 6,203.
+
+7
+00:01:09.900 --> 00:01:20.720
+Read from the system's own tables: only switches made from a call carry a reason, both views agree on the next action, and no new lead carries an agent's line.
+
+8
+00:01:21.800 --> 00:01:31.730
+A stale next-action time was cleared on campaign entry, calls were filed under the right campaign, and new leads took the number called instead of the agent's line.
+
+9
+00:01:32.800 --> 00:01:44.120
+Entries into a campaign write no reason, the current console does not show one, and 0 of 21,408 stored messages record whether they arrived.
