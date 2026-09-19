@@ -149,18 +149,27 @@ def slide_cards(rows, cap, accent_index=None):
     cw, gap = 420, 46
     total = n * cw + (n - 1) * gap
     x = (W - total) / 2
+    sf = font(F_REG, 30)
+    # A long figure ("82,701 of 83,604") ran past its card at 74 px, and a three-line label ran
+    # below it. The figure now shrinks to fit the card, one size for the whole row so the cards
+    # still match, and every card grows to hold the longest label. A row that already fitted
+    # draws exactly as before: 74 px and a 260 px card.
+    size = 74
+    while size > 44 and max(d.textlength(big, font=font(F_BOLD, size)) for big, _ in rows) > cw - 40:
+        size -= 2
+    bf = font(F_BOLD, size)
+    most_lines = max(len(wrap(d, small, sf, cw - 60)) for _, small in rows)
+    card_h = max(260, 156 + most_lines * 38 + 28)
     for i, (big, small) in enumerate(rows):
         is_accent = i == accent_index
         top_c = 330 if BURN_CAPTIONS else 410
-        box = [x, top_c, x + cw, top_c + 260]
+        box = [x, top_c, x + cw, top_c + card_h]
         rounded_card(img, box, 22, ACCENT if is_accent else CARD)
         d = ImageDraw.Draw(img)
-        bf = font(F_BOLD, 74)
-        sf = font(F_REG, 30)
         col = (255, 255, 255) if is_accent else INK
         sub = (255, 235, 220) if is_accent else MUTED
         tw = d.textlength(big, font=bf)
-        d.text((x + (cw - tw) / 2, top_c + 50), big, font=bf, fill=col)
+        d.text((x + (cw - tw) / 2, top_c + 50 + (74 - size) / 2), big, font=bf, fill=col)
         for j, line in enumerate(wrap(d, small, sf, cw - 60)):
             tw = d.textlength(line, font=sf)
             d.text((x + (cw - tw) / 2, top_c + 156 + j * 38), line, font=sf, fill=sub)
