@@ -9,7 +9,9 @@ jest.mock('../../../models/AdminUser', () => ({ findOne: jest.fn() }));
 jest.mock('../../../models/Enrollment', () => ({ findOne: jest.fn(), findByPk: jest.fn() }));
 jest.mock('../../../models/CommunityMember', () => ({ findOne: jest.fn() }));
 jest.mock('../../../models/OrgMember', () => ({ findByPk: jest.fn() }));
-jest.mock('../../../models', () => ({ Ticket: { findAll: jest.fn() } }));
+// Dashboard redesign, Slice 2a (2026-09-19) — getAgentDetail() now also
+// queries TicketActivity for the Work tab's "needs a reply" derivation.
+jest.mock('../../../models', () => ({ Ticket: { findAll: jest.fn() }, TicketActivity: { findAll: jest.fn() } }));
 jest.mock('../../communityService', () => ({ derivePresence: jest.fn() }));
 jest.mock('../../ticketCreatorReportsToResolver', () => ({ resolveReportsToChainWithTrail: jest.fn() }));
 // Ticket Count Sync fix (2026-08-21, session CC-20260818-x4nk continued) —
@@ -41,7 +43,7 @@ import AdminUser from '../../../models/AdminUser';
 import Enrollment from '../../../models/Enrollment';
 import CommunityMember from '../../../models/CommunityMember';
 import OrgMember from '../../../models/OrgMember';
-import { Ticket } from '../../../models';
+import { Ticket, TicketActivity } from '../../../models';
 import { derivePresence } from '../../communityService';
 import { resolveReportsToChainWithTrail } from '../../ticketCreatorReportsToResolver';
 import { countOpenTicketsForAgent, getLastTicketActivityForAgent, getOldestOpenTicketAge } from '../../workforce/liveAgentsService';
@@ -61,6 +63,7 @@ const mockEnrollmentFindByPk = Enrollment.findByPk as unknown as jest.Mock;
 const mockMemberFindOne = CommunityMember.findOne as unknown as jest.Mock;
 const mockOrgMemberFindByPk = OrgMember.findByPk as unknown as jest.Mock;
 const mockTicketFindAll = Ticket.findAll as unknown as jest.Mock;
+const mockTicketActivityFindAll = TicketActivity.findAll as unknown as jest.Mock;
 const mockDerivePresence = derivePresence as unknown as jest.Mock;
 const mockResolveChain = resolveReportsToChainWithTrail as unknown as jest.Mock;
 const mockCountOpenTickets = countOpenTicketsForAgent as unknown as jest.Mock;
@@ -88,6 +91,7 @@ beforeEach(() => {
   mockMemberFindOne.mockResolvedValue({ last_active_at: new Date() });
   mockDerivePresence.mockReturnValue('online');
   mockTicketFindAll.mockResolvedValue([]);
+  mockTicketActivityFindAll.mockResolvedValue([]);
   mockCountOpenTickets.mockResolvedValue(0);
   mockLastActivity.mockResolvedValue(null);
   mockOldestOpenTicketAge.mockResolvedValue(null);
@@ -649,6 +653,126 @@ describe('getAgentDetail', () => {
     expect(result!.tickets[0].description).toBe(
       'Reese is proactively reaching out to Jane Doe. Signal: inactivity. Goal: Confirm the student is unblocked and re-engaged with the curriculum within 7 days.',
     );
+  });
+
+  // Dashboard redesign, Slice 2a (2026-09-19) — the Work tab's honest
+  // status filter. due_date is a real column, previously fetched but never
+  // surfaced; status_bucket is derived from real fields, no schema change.
+  describe('tickets: due_date / status_bucket (Slice 2a)', () => {
+    it('due_date passes through verbatim, and null when the ticket genuinely has none', async () => {
+      const due = new Date('2026-09-01T00:00:00Z');
+      mockTicketFindAll.mockResolvedValue([
+        { id: 't1', ticket_number: 1, title: 'Has a due date', status: 'todo', priority: 'medium', type: 'student_support', created_at: new Date(), updated_at: new Date(), due_date: due },
+        { id: 't2', ticket_number: 2, title: 'No due date', status: 'todo', priority: 'medium', type: 'student_support', created_at: new Date(), updated_at: new Date(), due_date: null },
+      ]);
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.tickets[0].due_date).toEqual(due);
+      expect(result!.tickets[1].due_date).toBeNull();
+    });
+
+    it("status_bucket: 'overdue' when due_date is past and status is non-terminal, taking priority over the agent's own latest activity", async () => {
+      mockTicketFindAll.mockResolvedValue([
+        { id: 't1', ticket_number: 1, title: 'Overdue', status: 'in_progress', priority: 'medium', type: 'student_support', created_at: new Date(), updated_at: new Date(), due_date: new Date('2020-01-01T00:00:00Z') },
+      ]);
+      mockTicketActivityFindAll.mockResolvedValue([
+        { ticket_id: 't1', actor_id: 'admin-1', created_at: new Date('2026-09-01T00:00:00Z') }, // Reese's own latest activity
+      ]);
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.tickets[0].status_bucket).toBe('overdue');
+    });
+
+    it("status_bucket: 'ready_to_verify' for a non-overdue in_review ticket", async () => {
+      mockTicketFindAll.mockResolvedValue([
+        { id: 't1', ticket_number: 1, title: 'In review', status: 'in_review', priority: 'medium', type: 'student_support', created_at: new Date(), updated_at: new Date(), due_date: null },
+      ]);
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.tickets[0].status_bucket).toBe('ready_to_verify');
+    });
+
+    it("status_bucket: 'needs_reply' when the most recent TicketActivity actor is NOT this agent's own identity", async () => {
+      mockTicketFindAll.mockResolvedValue([
+        { id: 't1', ticket_number: 1, title: 'Student replied', status: 'in_progress', priority: 'medium', type: 'student_support', created_at: new Date(), updated_at: new Date(), due_date: null },
+      ]);
+      mockTicketActivityFindAll.mockResolvedValue([
+        { ticket_id: 't1', actor_id: 'some-student-id', created_at: new Date('2026-09-15T00:00:00Z') },
+      ]);
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(mockTicketActivityFindAll).toHaveBeenCalledWith(expect.objectContaining({
+        where: { ticket_id: { [Op.in]: ['t1'] } },
+      }));
+      expect(result!.tickets[0].status_bucket).toBe('needs_reply');
+    });
+
+    it("status_bucket: 'open' when the latest activity IS this agent's own — never a fabricated needs_reply", async () => {
+      mockTicketFindAll.mockResolvedValue([
+        { id: 't1', ticket_number: 1, title: 'Reese replied last', status: 'in_progress', priority: 'medium', type: 'student_support', created_at: new Date(), updated_at: new Date(), due_date: null },
+      ]);
+      mockTicketActivityFindAll.mockResolvedValue([
+        { ticket_id: 't1', actor_id: 'admin-1', created_at: new Date('2026-09-15T00:00:00Z') },
+      ]);
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.tickets[0].status_bucket).toBe('open');
+    });
+
+    it("status_bucket: 'open' for a ticket with zero activity rows — never a fabricated needs_reply", async () => {
+      mockTicketFindAll.mockResolvedValue([
+        { id: 't1', ticket_number: 1, title: 'No activity yet', status: 'todo', priority: 'medium', type: 'student_support', created_at: new Date(), updated_at: new Date(), due_date: null },
+      ]);
+      mockTicketActivityFindAll.mockResolvedValue([]);
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.tickets[0].status_bucket).toBe('open');
+    });
+
+    it("status_bucket: null for a terminal (done/cancelled) ticket — never a fabricated 'open' or 'needs_reply' on a closed ticket, even with a past due_date and a non-agent latest activity", async () => {
+      mockTicketFindAll.mockResolvedValue([
+        { id: 't1', ticket_number: 1, title: 'Closed', status: 'done', priority: 'medium', type: 'student_support', created_at: new Date(), updated_at: new Date(), due_date: new Date('2020-01-01T00:00:00Z') },
+      ]);
+      mockTicketActivityFindAll.mockResolvedValue([
+        { ticket_id: 't1', actor_id: 'some-student-id', created_at: new Date('2026-09-15T00:00:00Z') },
+      ]);
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.tickets[0].status_bucket).toBeNull();
+    });
+
+    it('TicketActivity.findAll is skipped entirely when there are no tickets — no unbounded/empty-array query', async () => {
+      mockTicketFindAll.mockResolvedValue([]);
+
+      await getAgentDetail('agent-1');
+
+      expect(mockTicketActivityFindAll).not.toHaveBeenCalled();
+    });
+
+    it('groups multiple activity rows per ticket correctly, taking only the latest per ticket_id from a mixed multi-ticket result set', async () => {
+      mockTicketFindAll.mockResolvedValue([
+        { id: 't1', ticket_number: 1, title: 'Ticket 1', status: 'todo', priority: 'medium', type: 'student_support', created_at: new Date(), updated_at: new Date(), due_date: null },
+        { id: 't2', ticket_number: 2, title: 'Ticket 2', status: 'todo', priority: 'medium', type: 'student_support', created_at: new Date(), updated_at: new Date(), due_date: null },
+      ]);
+      mockTicketActivityFindAll.mockResolvedValue([
+        { ticket_id: 't1', actor_id: 'some-student-id', created_at: new Date('2026-09-15T00:00:00Z') }, // t1's latest
+        { ticket_id: 't1', actor_id: 'admin-1', created_at: new Date('2026-09-01T00:00:00Z') }, // t1's older, Reese's own
+        { ticket_id: 't2', actor_id: 'admin-1', created_at: new Date('2026-09-10T00:00:00Z') }, // t2's only/latest, Reese's own
+      ]);
+
+      const result = await getAgentDetail('agent-1');
+
+      const byId = Object.fromEntries(result!.tickets.map((t) => [t.id, t.status_bucket]));
+      expect(byId.t1).toBe('needs_reply'); // latest was the student, not Reese
+      expect(byId.t2).toBe('open'); // latest was Reese's own
+    });
   });
 
   // Trust Contract Phase 1 (2026-08-26) — real version history, real cost,

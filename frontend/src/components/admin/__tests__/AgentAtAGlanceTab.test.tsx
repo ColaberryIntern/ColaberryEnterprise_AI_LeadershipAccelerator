@@ -246,14 +246,14 @@ describe('AgentAtAGlanceTab — navigation', () => {
       btn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     };
     clickByLabel('Live Status');
-    clickByLabel('Work & Decisions');
+    clickByLabel('Decisions');
     clickByLabel('Talk');
     clickByLabel('Reports');
     clickByLabel('Performance');
     clickByLabel('Trust & Control');
     clickByLabel('Role Charter');
     expect(onNavigate).toHaveBeenCalledWith('command');
-    expect(onNavigate).toHaveBeenCalledWith('work');
+    expect(onNavigate).toHaveBeenCalledWith('decisions');
     expect(onNavigate).toHaveBeenCalledWith('talk');
     // Dashboard redesign, Slice 1 (2026-09-19) — Reports/Performance/Trust &
     // Control tiles all now navigate to the one consolidated

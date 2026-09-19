@@ -9,6 +9,7 @@ import AgentOverviewV2 from '../../components/admin/agentDetailV2/AgentOverviewV
 import AgentAtAGlanceTab from '../../components/admin/AgentAtAGlanceTab';
 import AgentLiveStatusTab from '../../components/admin/AgentLiveStatusTab';
 import AgentWorkDecisionsTab from '../../components/admin/AgentWorkDecisionsTab';
+import AgentWorkTab from '../../components/admin/AgentWorkTab';
 import AgentTalkTab from '../../components/admin/AgentTalkTab';
 import AgentPerformanceSettingsTab from '../../components/admin/AgentPerformanceSettingsTab';
 
@@ -216,7 +217,7 @@ export default function AgentDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    if ((activeTab !== 'glance' && activeTab !== 'command' && activeTab !== 'work') || !id || inboxFetchedFor === id) return;
+    if ((activeTab !== 'glance' && activeTab !== 'command' && activeTab !== 'decisions') || !id || inboxFetchedFor === id) return;
     fetchInbox();
   }, [activeTab, id, inboxFetchedFor, fetchInbox]);
 
@@ -324,6 +325,11 @@ export default function AgentDetailPage() {
       )}
       {activeTab === 'overview' && <AgentOverviewV2 detail={detail} />}
       {activeTab === 'work' && (
+        <div className="adv2-wrap">
+          <AgentWorkTab detail={detail} />
+        </div>
+      )}
+      {activeTab === 'decisions' && (
         <div className="adv2-wrap">
           <AgentWorkDecisionsTab agentId={id} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} onInboxChanged={fetchInbox} />
         </div>

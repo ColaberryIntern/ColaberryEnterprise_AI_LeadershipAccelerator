@@ -13,6 +13,8 @@ function makeTicket(overrides: Partial<AgentDetailTicket> = {}): AgentDetailTick
     type: 'ops_summary',
     created_at: '2026-08-25T00:00:00.000Z',
     updated_at: '2026-08-25T00:00:00.000Z',
+    due_date: null,
+    status_bucket: null, // base status is 'done' (terminal) — honest default per Slice 2a
     ...overrides,
   };
 }

@@ -15,13 +15,20 @@ import { timeAgo } from '../shell/trust';
 // Trust & Control) into one page with 3 internal sub-tabs. 'reports' /
 // 'performance' / 'trust' retired in favor of one 'performance_settings'
 // key — see AgentPerformanceSettingsTab.tsx for the sub-tab shell.
-export type TabKey = 'glance' | 'command' | 'overview' | 'work' | 'talk' | 'performance_settings';
+//
+// Dashboard redesign, Slice 2a (2026-09-19) — the combined "Work &
+// Decisions" tab splits into two real tabs: 'work' now means the ticket
+// list + detail (AgentWorkTab.tsx, new), and 'decisions' is the EXISTING
+// Pending Approvals + Decision Journal content (AgentWorkDecisionsTab.tsx,
+// relocated unchanged, not rewritten).
+export type TabKey = 'glance' | 'command' | 'overview' | 'work' | 'decisions' | 'talk' | 'performance_settings';
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'glance', label: 'At a Glance' },
   { key: 'command', label: 'Live Status' },
   { key: 'overview', label: 'Overview' },
-  { key: 'work', label: 'Work & Decisions' },
+  { key: 'work', label: 'Work' },
+  { key: 'decisions', label: 'Decisions' },
   { key: 'talk', label: 'Talk' },
   { key: 'performance_settings', label: 'Performance & Settings' },
 ];
