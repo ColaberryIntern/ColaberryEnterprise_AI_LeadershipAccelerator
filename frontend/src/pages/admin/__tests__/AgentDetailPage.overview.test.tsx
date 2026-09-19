@@ -9,8 +9,14 @@ import { AgentDetail } from '../../../services/agentDetailApi';
 // its format for Overview. Replaces the Checkpoint H sub-tabbed version:
 // Overview is now one flowing page (AgentOverviewV2), so every section's
 // real content shows with a single "Overview" tab click, no further
-// sub-tab clicks needed. This file's own mocking setup is unchanged from
-// before — AgentOverviewV2 still takes only `detail`, no inbox dependency.
+// sub-tab clicks needed.
+//
+// Dashboard redesign, Slice 2b (2026-09-19) — AgentOverviewV2 now also
+// takes inboxItems/inboxLoading/onNavigate (the hero's 4 KPI tiles + the
+// new "Needs Ali" card). This file's existing getManagerInboxItems mock
+// (already present for other tests) covers it — no new mock needed, only
+// this comment update since it was previously (correctly, at the time)
+// stated as inbox-independent.
 
 jest.mock('../../../services/agentDetailApi', () => ({ getAgentDetail: jest.fn(), setReeseBehaviourSwitch: jest.fn() }));
 jest.mock('../../../services/managerInboxApi', () => ({ getManagerInboxItems: jest.fn() }));
