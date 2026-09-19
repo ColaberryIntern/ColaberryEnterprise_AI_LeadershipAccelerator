@@ -1,0 +1,41 @@
+WEBVTT
+
+1
+00:00:00.500 --> 00:00:07.570
+A system calls an admissions team's leads, texts and emails them, and writes what happened into their record.
+
+2
+00:00:08.700 --> 00:00:16.080
+A model that writes a convincing message can still attach it to the wrong lead, the wrong campaign or the wrong moment.
+
+3
+00:00:17.200 --> 00:00:32.600
+Every job still runs and every message is still written. Only the last step is held. Texts, emails and one kind of CRM update keep exactly what they would have sent; a held call keeps who would have been called and on which campaign.
+
+4
+00:00:33.700 --> 00:00:44.280
+Both gates reading shadow, with every change to them listed underneath. This copy runs on this machine with no keys, which is why the pre-flight list shows errors.
+
+5
+00:00:45.400 --> 00:00:56.980
+One lead's held run: four actions recorded, two messages stored, and no call events at all, because a held call is never placed. Every row here is a placeholder.
+
+6
+00:00:58.100 --> 00:01:04.360
+Each step of that run is marked shadow, and the text the model wrote is there to read in full.
+
+7
+00:01:07.100 --> 00:01:21.730
+Read from the system's own tables: in five days of rehearsal, 4,267 intended actions for 722 leads were held, and 3,204 of them kept their words or fields.
+
+8
+00:01:22.800 --> 00:01:29.990
+Nothing pairs a real call with the one it shadowed. The overlap and the go-live runbook are what the record rests on.
+
+9
+00:01:31.800 --> 00:01:44.460
+A held call produces no completion, so nothing after it happens. Nothing records that a person read a held action. And none of the six evaluations of the model's call summaries ran with a fixture.
+
+10
+00:01:45.600 --> 00:01:55.890
+Both gates opened from that one page, about five and a half seconds apart, each change recorded with its old value, its new value and where it came from.

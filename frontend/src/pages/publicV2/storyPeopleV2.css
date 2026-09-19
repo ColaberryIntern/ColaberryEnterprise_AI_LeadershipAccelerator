@@ -45,7 +45,10 @@
   letter-spacing: var(--ls-overline);
   text-transform: uppercase;
   color: var(--text-muted);
-  white-space: nowrap;
+  /* A stage name may be longer than a phone-width card ("At Separate history from next action" is
+     36 characters of spaced capitals): wrap it rather than push the card past the screen edge. */
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .cbv2-story__decision-title { margin: 0; font-size: 1.1rem; line-height: 1.3; }
 .cbv2-story__decision-text { margin: 0; line-height: var(--lh-relaxed); }
