@@ -31,7 +31,7 @@ jest.mock('../../pipelineService', () => ({ ...jest.requireActual('../../pipelin
 jest.mock('../../delivery/leadConversion', () => ({ convertLeadToClient: (...a: unknown[]) => require('./fixtures/phase4Harness').m4.convertLead(...a) }));
 
 import { anchorOf4, AS_OF_4, arrangeWorld, clock, flags4, handoffsOf, lineFor, m4, printTable, T, tally, writes, type TableLine } from './fixtures/phase4Harness';
-import { brandRow, counts } from './fixtures/phase3Fixtures';
+import { brandRow, counts, programRow } from './fixtures/phase3Fixtures';
 import {
   flotationTrainingScenarios,
   fullQueueLearner,
@@ -49,7 +49,8 @@ import {
 import { sequelize } from '../../../config/database';
 import { decideForSubjectAndRecord } from '../decisionService';
 import { acceptHandoff, dispositionHandoff } from '../handoffs/dispositionService';
-import { assignRankedQueue } from '../handoffs/handoffService';
+import { assignRankedQueue, createHandoff } from '../handoffs/handoffService';
+import { RETURNED_TO_AI_REASON } from '../handoffs/returnToAi';
 import { recordReplyHandoff } from '../replyHandoffHook';
 import { runScheduledShadowDecisions } from '../runShadowDecisionsNightly';
 
@@ -256,6 +257,9 @@ describe('H: one person, two relationships - two independent handoffs, two owner
     const held = await decide(ent, new Date(AS_OF_4.getTime() + DAY));
     expect(held.row.overlays_at_decision).toContain('RETURNED_TO_AI');
     expect((held.row.deferred_actions as Array<{ would: string }>).some((d) => d.would === 'create_handoff')).toBe(false);
+    // The generators decline by the cooldown's own name, exactly as they do for not_ready / nurture.
+    const declined = (held.row.eligibility as { not_emitted: Array<{ reason: string }> }).not_emitted.filter((n) => n.reason === RETURNED_TO_AI_REASON);
+    expect(declined.length).toBeGreaterThan(0);
     expect(open(handoffsOf(ent))).toHaveLength(0);
     expect(handoffsOf(ent)).toHaveLength(1);
     // The hold is a cooldown, not a lock: past 30 days the same inputs hand off again.
@@ -263,6 +267,35 @@ describe('H: one person, two relationships - two independent handoffs, two owner
     expect(after.row.overlays_at_decision).not.toContain('RETURNED_TO_AI');
     expect(open(handoffsOf(ent))).toHaveLength(1);
     note(ent);
+  });
+
+  it('T502: two records for one person - the NEWEST human verdict governs, so a later, shorter `not_ready` ends the hold a longer `qualified` had set', async () => {
+    const DAY = 86_400_000;
+    const [ent] = samePersonTwoBrands();
+    arrangeWorld([ent]);
+    await decide(ent, AS_OF_4);
+    const [first] = handoffsOf(ent) as Row[];
+    await acceptHandoff(first as never, HUMAN, AS_OF_4);
+    // A 30-day hold…
+    await dispositionHandoff(first as never, { disposition: 'qualified', reason: 'budget confirmed' }, HUMAN, AS_OF_4);
+    // …then, five days later, a second handoff for the same person is sent back with a SHORTER one.
+    const later = new Date(AS_OF_4.getTime() + 5 * DAY);
+    clock.now = later;
+    const manual = await createHandoff({
+      refs: { tenant_id: String(first.tenant_id), brand_id: String(first.brand_id), brand_slug: ent.brand, program: { id: String(first.program_id), slug: programRow(ent.brand).slug, kind: 'business' as const }, subject_ref: String(first.subject_ref), lead_id: ent.subject.lead_id, enrollment_id: null, path: null },
+      trigger: { source: 'manual', owner_queue: 'sales', reason: 'routing_rule:rr-9', event_ref: 'rule:rr-9' },
+      decision: null,
+      asOf: later,
+    });
+    await acceptHandoff(manual.row as never, HUMAN, later);
+    await dispositionHandoff(manual.row as never, { disposition: 'not_ready', reason: 'circle back', cooldown_days: 7 }, HUMAN, later);
+    // Day 8: the newer verdict (7 days from day 5) is still holding.
+    const held = await decide(ent, new Date(AS_OF_4.getTime() + 8 * DAY));
+    expect(held.row.overlays_at_decision).toContain('RETURNED_TO_AI');
+    // Day 20: the newer verdict is over, and the older 30-day `qualified` hold is NOT consulted - the latest
+    // human verdict governs, which is what `order: [['updated_at', 'DESC']]` buys.
+    const free = await decide(ent, new Date(AS_OF_4.getTime() + 20 * DAY));
+    expect(free.row.overlays_at_decision).not.toContain('RETURNED_TO_AI');
   });
 });
 
