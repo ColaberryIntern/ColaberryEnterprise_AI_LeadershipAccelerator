@@ -1,5 +1,6 @@
 import { isGrowthJourneyCapabilityEnabled, type GrowthJourneyFlags } from '../../../config/growthJourneyFlags';
 import { isExplorerFeatureEnabled, type ExplorerGrowthFeature, type ExplorerGrowthFlags } from '../../../config/explorerGrowthFlags';
+import { classifyError } from '../../../utils/errorClassifier';
 import { isKillSwitchActiveStrict } from '../../launchSafety';
 import { countExecutionsToday, findActivePause, findActiveRollout, type ActiveControl } from './controlsRepo';
 import { describeScopeKey, pauseScopeKeysFor, rolloutScopeKey } from './scopeKey';
@@ -108,8 +109,13 @@ async function resolveStops(target: ModeTarget): Promise<ModeResult | null> {
 
   try {
     if (await isKillSwitchActiveStrict()) return result('off', 'kill_switch');
-  } catch {
-    // An unreadable switch is treated as ON. This is the one place in the run that fails CLOSED on a read error.
+  } catch (err: unknown) {
+    // An unreadable switch is treated as ON. This is the one place in the run that fails CLOSED on a
+    // read error - and the error is named, so "why did everything stop?" is answerable from the logs.
+    console.error(JSON.stringify({
+      level: 'error', service: 'growth-journey', event: 'growth_journey.execution.kill_switch_unreadable',
+      outcome: 'failure', error_class: classifyError(err), context: { tenant_id: target.tenantId, brand_id: target.brandId, channel },
+    }));
     return result('off', 'kill_switch_unreadable');
   }
 

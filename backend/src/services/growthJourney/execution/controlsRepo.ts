@@ -1,6 +1,5 @@
 import { Op } from 'sequelize';
 import { GrowthJourneyExecution, GrowthJourneyExecutionControl } from '../../../models';
-import { OPEN_EXECUTION_STATUSES } from '../../../models/GrowthJourneyExecution';
 
 /**
  * Reading the operator's switchboard (Phase 5 T504).
@@ -92,19 +91,4 @@ export async function countExecutionsToday(
       created_at: { [Op.gte]: startOfUtcDay(asOf) },
     },
   });
-}
-
-/** Whether this person already holds an open receipt in this brand and channel (the one-open slot, read for a reason string). */
-export async function hasOpenExecution(scope: { tenantId: string; brandId: string; channel: string; leadId: number | null }): Promise<boolean> {
-  if (scope.leadId === null) return false;
-  const n = await GrowthJourneyExecution.count({
-    where: {
-      tenant_id: scope.tenantId,
-      brand_id: scope.brandId,
-      channel: scope.channel,
-      lead_id: scope.leadId,
-      status: { [Op.in]: [...OPEN_EXECUTION_STATUSES] },
-    },
-  });
-  return n > 0;
 }

@@ -101,12 +101,18 @@ describe('the ladder, in order', () => {
     expect(EXECUTABLE_CHANNELS).toEqual(['email', 'in_app', 'ali_outreach']);
   });
 
-  it('5 the kill switch beats any rollout, and an UNREADABLE switch is treated as ON', async () => {
+  it('5 the kill switch beats any rollout, and an UNREADABLE switch is treated as ON - and logged with its error class', async () => {
     rollout();
     killSwitch.mockResolvedValue(true);
     expect(await resolveExecutionMode(target())).toEqual({ mode: 'off', reason: 'kill_switch', control_ids: [] });
-    killSwitch.mockRejectedValue(new Error('connection reset'));
+    const errorLog = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    killSwitch.mockRejectedValue(Object.assign(new Error('connection reset'), { code: 'ECONNRESET' }));
     expect(await resolveExecutionMode(target())).toEqual({ mode: 'off', reason: 'kill_switch_unreadable', control_ids: [] });
+    const line = JSON.parse(String(errorLog.mock.calls[0][0])) as { event: string; error_class: string; context: Record<string, unknown> };
+    expect(line).toMatchObject({ event: 'growth_journey.execution.kill_switch_unreadable', context: { brand_id: BRAND, channel: 'email' } });
+    expect(typeof line.error_class).toBe('string');
+    expect(JSON.stringify(line)).not.toContain('@');
+    errorLog.mockRestore();
   });
 
   it.each([
@@ -159,6 +165,10 @@ describe('the ladder, in order', () => {
   it('8b the daily limit is per UTC day: at the limit it falls back to review, and tomorrow it is limited again', async () => {
     rollout({ daily_limit: 2 });
     receiptToday();
+    // Receipts in ANOTHER brand, ANOTHER programme and ANOTHER channel do not spend this rollout's quota.
+    receiptToday({ brand_id: 'b-other', decision_id: 'd-ob' });
+    receiptToday({ program_id: 'p-other', decision_id: 'd-op', lead_id: 601, subject_ref: 'lead:601' });
+    receiptToday({ channel: 'in_app', decision_id: 'd-oc', enrollment_id: 'e-1' });
     expect(await resolveExecutionMode(target())).toMatchObject({ mode: 'limited' });
     receiptToday();
     expect(await resolveExecutionMode(target())).toMatchObject({ mode: 'review', reason: 'daily_limit_reached' });
