@@ -352,8 +352,9 @@ describe('where the four sit, and what they never do', () => {
     expect(GROWTH_JOURNEY_PHASE4_STATEMENTS).toHaveLength(15);
     expect(GROWTH_JOURNEY_PHASE4_STATEMENTS.every((s) => GROWTH_JOURNEY_STATEMENTS.includes(s))).toBe(true);
     const tables = tablesCreated();
-    expect(tables).toHaveLength(15);
-    expect(tables.slice(-4)).toEqual(['growth_journey_handoffs', 'growth_journey_outcomes', 'growth_journey_policies', 'growth_journey_conversation_ownership']);
+    // T503 appended three Phase 5 tables AFTER these four, so the Phase 4 four are sliced by position, not from the end.
+    expect(tables).toHaveLength(18);
+    expect(tables.slice(11, 15)).toEqual(['growth_journey_handoffs', 'growth_journey_outcomes', 'growth_journey_policies', 'growth_journey_conversation_ownership']);
     const alterAt = GROWTH_JOURNEY_STATEMENTS.findIndex((s) => /ALTER\s+TABLE\s+brands/i.test(s));
     expect(alterAt).toBe(GROWTH_JOURNEY_STATEMENTS.length - 1);
     for (const table of ['growth_journey_handoffs', 'growth_journey_outcomes', 'growth_journey_policies', 'growth_journey_conversation_ownership']) {

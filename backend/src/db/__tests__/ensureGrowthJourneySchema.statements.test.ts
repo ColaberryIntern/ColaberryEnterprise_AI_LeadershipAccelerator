@@ -145,7 +145,10 @@ describe('the schema is additive, and provably so', () => {
       'growth_journey_conversation_ownership',
       'growth_journey_decisions',
       'growth_journey_enrollments',
+      'growth_journey_execution_controls',
+      'growth_journey_executions',
       'growth_journey_handoffs',
+      'growth_journey_in_app_nudges',
       'growth_journey_outcomes',
       'growth_journey_policies',
       'growth_journey_profiles',
@@ -228,7 +231,7 @@ describe('the schema is additive, and provably so', () => {
     expect(SQL).not.toMatch(/explorer_/i);
   });
 
-  it('creates exactly the fifteen tables the run owns so far (five from Phase 1, two from Phase 2, four from Phase 3, four from Phase 4)', () => {
+  it('creates exactly the eighteen tables the run owns so far (five from Phase 1, two from Phase 2, four from Phase 3, four from Phase 4, three from Phase 5)', () => {
     // An explicit list rather than a count. The assertion exists to catch a
     // table nobody meant to add, and a count would not distinguish the two.
     // Phase 2 (T222) added classifications and transitions; Phase 3 (T301) added
@@ -242,7 +245,10 @@ describe('the schema is additive, and provably so', () => {
       'growth_journey_conversation_ownership',
       'growth_journey_decisions',
       'growth_journey_enrollments',
+      'growth_journey_execution_controls',
+      'growth_journey_executions',
       'growth_journey_handoffs',
+      'growth_journey_in_app_nudges',
       'growth_journey_outcomes',
       'growth_journey_policies',
       'growth_journey_profiles',

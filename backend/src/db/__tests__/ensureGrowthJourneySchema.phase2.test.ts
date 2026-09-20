@@ -206,7 +206,8 @@ describe('the two tables sit in the statement list where the foreign keys allow'
     // count is asserted, not the names —
     // the names have their own explicit set-equality assertion in the
     // statements test.
-    expect(tablesCreated()).toHaveLength(15);
+    // T503 added the three execution tables (receipts, controls, in-app nudges).
+    expect(tablesCreated()).toHaveLength(18);
     const uniqueNamed = [...SQL.matchAll(/CREATE\s+UNIQUE\s+INDEX\s+IF\s+NOT\s+EXISTS\s+(\w+)/gi)].map((m) => m[1]);
     expect(uniqueNamed).toEqual(expect.arrayContaining([
       'growth_journey_classifications_idempotency_unique',
