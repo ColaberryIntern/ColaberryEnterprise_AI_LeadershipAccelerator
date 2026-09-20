@@ -334,7 +334,12 @@ import { objectivesLine } from '../ClaudeStudioRender';
 describe('objectivesLine', () => {
   it('joins the objectives into one sentence and drops trailing periods', () => {
     expect(objectivesLine(['Write a problem brief.', 'Separate symptoms from causes', 'Name the evidence that would kill a cause.']))
-      .toBe('By the end you will Write a problem brief; separate symptoms from causes; name the evidence that would kill a cause.');
+      .toBe('By the end you will write a problem brief; separate symptoms from causes; name the evidence that would kill a cause.');
+  });
+  it('lowers the first objective too, and leaves an acronym alone', () => {
+    // Week 8 read "By the end you will Translate one technical initiative" on the live page, 2026-09-20.
+    expect(objectivesLine(['Translate one technical initiative for four audiences'])).toBe('By the end you will translate one technical initiative for four audiences.');
+    expect(objectivesLine(['SQL your way through a dataset', 'Explain it'])).toBe('By the end you will SQL your way through a dataset; explain it.');
   });
   it('is null when there is nothing to promise', () => {
     expect(objectivesLine([])).toBeNull();
