@@ -159,6 +159,10 @@ async function sendNewOutreach(
     agentName: 'Reese',
     action: 'reese_autonomous_outreach',
     riskTier: RISK_TIER,
+    // Real-enforcement scoping, Phase 1 (2026-09-20) — the exact real params
+    // initiateDm() itself takes, so a held action can be replayed verbatim
+    // later (see approvalRequestReplayService.ts) rather than re-derived.
+    preparedAction: { studentEnrollmentId: enrollmentId, content: message },
   });
 
   const dm = await initiateDm(enrollmentId, message);

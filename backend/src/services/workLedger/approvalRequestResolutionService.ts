@@ -1,4 +1,5 @@
 import { ApprovalRequest } from '../../models';
+import { replayApprovedAction } from './approvalRequestReplayService';
 
 // Real-enforcement scoping, Phase 1 slice 1 (2026-09-13) — the first code
 // anywhere that ever moves an ApprovalRequest row off its create-time
@@ -37,6 +38,12 @@ export async function listPendingApprovalRequests(): Promise<InstanceType<typeof
   });
 }
 
+// Real-enforcement scoping, Phase 1 (2026-09-20) — the ONLY call site for
+// replayApprovedAction(). bulkApproveApprovalRequests() below delegates every
+// id through THIS function, so it inherits the replay (and its idempotency
+// guard) for free — it must never get its own, independent replay call; see
+// approvalRequestReplayService.ts's own header for why (a real bug caught by
+// plan-audit before this shipped).
 export async function approveApprovalRequest(
   id: string,
   decidedBy: string,
@@ -47,6 +54,26 @@ export async function approveApprovalRequest(
   if (row.status !== 'pending') return { outcome: 'not_pending', row };
 
   await row.update({ status: 'approved', decided_by: decidedBy, decided_at: new Date(), decision_channel: decisionChannel });
+
+  // Fail-open: a replay failure must never leave this call reporting failure
+  // when the real status transition already succeeded — the honest signal is
+  // a visible log line an operator can act on, never a swallowed error and
+  // never a thrown exception that would make the approval itself look failed.
+  try {
+    const replay = await replayApprovedAction(row);
+    if (!replay.replayed) {
+      console.warn(JSON.stringify({
+        level: 'warn', service: 'approvalRequestResolutionService', event: 'replay_not_performed',
+        approval_request_id: row.id, reason: replay.reason,
+      }));
+    }
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      level: 'error', service: 'approvalRequestResolutionService', event: 'replay_failed',
+      approval_request_id: row.id, error_class: err?.name || 'Error', message: String(err?.message || err),
+    }));
+  }
+
   return { outcome: 'approved', row };
 }
 
