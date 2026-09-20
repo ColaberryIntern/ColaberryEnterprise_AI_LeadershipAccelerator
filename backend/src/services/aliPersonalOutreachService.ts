@@ -11,7 +11,9 @@ import { enrollLeadsInCampaign } from './campaignService';
 import { redactForLogs } from '../utils/piiRedaction';
 
 const MAX_ENROLL_PER_DAY = 50;
-const CAMPAIGN_NAME = 'Ali Personal Outreach';
+/** Exported (Phase 5 T505) so the journey's setup script finds the SAME row this cron does, by the same name and type. */
+export const CAMPAIGN_NAME = 'Ali Personal Outreach';
+export const CAMPAIGN_TYPE = 'executive_outreach';
 
 /** Ali's signature — plain text style like Gmail, not a styled corporate block */
 export const ALI_SIGNATURE = `
@@ -80,7 +82,7 @@ export async function findHighIntentLeads(): Promise<any[]> {
  */
 export async function runAliPersonalOutreach(): Promise<void> {
   // Find the campaign
-  const campaign = await Campaign.findOne({ where: { name: CAMPAIGN_NAME, type: 'executive_outreach' } });
+  const campaign = await Campaign.findOne({ where: { name: CAMPAIGN_NAME, type: CAMPAIGN_TYPE } });
   if (!campaign) {
     console.warn('[AliOutreach] Campaign not found — run seed first');
     return;
