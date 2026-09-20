@@ -15,12 +15,13 @@ import { AgentExplainability } from '../../../services/agentExplainabilityApi';
 jest.mock('../../../services/managerInboxApi', () => ({
   approveInboxItem: jest.fn(),
   rejectInboxItem: jest.fn(),
+  getInboxItemInspector: jest.fn(),
 }));
 jest.mock('../../../services/agentExplainabilityApi', () => ({ getAgentExplainability: jest.fn() }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { approveInboxItem, rejectInboxItem } = require('../../../services/managerInboxApi') as {
-  approveInboxItem: jest.Mock; rejectInboxItem: jest.Mock;
+const { approveInboxItem, rejectInboxItem, getInboxItemInspector } = require('../../../services/managerInboxApi') as {
+  approveInboxItem: jest.Mock; rejectInboxItem: jest.Mock; getInboxItemInspector: jest.Mock;
 };
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getAgentExplainability } = require('../../../services/agentExplainabilityApi') as { getAgentExplainability: jest.Mock };
@@ -101,10 +102,67 @@ describe('AgentWorkDecisionsTab — Pending Approvals honesty', () => {
     expect(container.textContent).toContain('Loading pending approvals');
   });
 
-  it('shows real risk/impact/priority scores, and an em-dash for missing ones, never a fabricated blast radius', async () => {
+  it('shows real risk/impact/priority scores, and an em-dash for missing ones', async () => {
     await renderTab({ inboxItems: [DECORATIVE_ITEM] });
     expect(container.textContent).toContain('— / — / —');
-    expect(container.textContent).toContain('Not tracked on this proposal today');
+  });
+});
+
+describe('AgentWorkDecisionsTab — decision inspector (Slice 2c)', () => {
+  it('does not fetch the inspector until "View details" is clicked', async () => {
+    await renderTab({ inboxItems: [REAL_EXECUTOR_ITEM] });
+    expect(getInboxItemInspector).not.toHaveBeenCalled();
+  });
+
+  it('clicking "View details" fetches and renders the real 3 fields', async () => {
+    getInboxItemInspector.mockResolvedValue({
+      blastRadius: '1 recipient',
+      reversibility: 'Reversible — this email has not sent yet',
+      expectedResult: "Subject changes from 'Old' to 'New'.",
+    });
+    await renderTab({ inboxItems: [REAL_EXECUTOR_ITEM] });
+
+    const button = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'View details')!;
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(getInboxItemInspector).toHaveBeenCalledWith('agent-1', 'p1');
+    expect(container.textContent).toContain('1 recipient');
+    expect(container.textContent).toContain('Reversible — this email has not sent yet');
+    expect(container.textContent).toContain("Subject changes from 'Old' to 'New'.");
+  });
+
+  it('a second click on "Hide details" collapses without re-fetching', async () => {
+    getInboxItemInspector.mockResolvedValue({ blastRadius: '1 recipient', reversibility: 'x', expectedResult: 'y' });
+    await renderTab({ inboxItems: [REAL_EXECUTOR_ITEM] });
+
+    const firstClick = () => Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'View details')!;
+    await act(async () => { firstClick().dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
+    expect(container.textContent).toContain('1 recipient');
+
+    const hideButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Hide details')!;
+    await act(async () => { hideButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(container.textContent).not.toContain('1 recipient');
+
+    const reopenButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'View details')!;
+    await act(async () => { reopenButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
+    expect(getInboxItemInspector).toHaveBeenCalledTimes(1); // cached, not re-fetched
+    expect(container.textContent).toContain('1 recipient');
+  });
+
+  it('shows an honest error, not a blank panel, when the fetch fails', async () => {
+    getInboxItemInspector.mockRejectedValue(new Error('network error'));
+    await renderTab({ inboxItems: [REAL_EXECUTOR_ITEM] });
+
+    const button = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'View details')!;
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(container.textContent).toContain('Could not load these details.');
   });
 });
 

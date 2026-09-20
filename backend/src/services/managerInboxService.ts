@@ -1,6 +1,8 @@
 import AiAgent from '../models/AiAgent';
 import ProposedAgentAction from '../models/ProposedAgentAction';
+import ScheduledEmail from '../models/ScheduledEmail';
 import { approveProposedAction, rejectProposedAction, ProposalOutcome } from './agentApprovalService';
+import { describeBlastRadius, describeReversibility, describeExpectedResult } from './proposedActionInspectorFields';
 
 // AI Workforce Management, Checkpoint C — the Manager Inbox. Deliberately
 // reuses the real, already-live ProposedAgentAction rather than a new empty
@@ -103,4 +105,32 @@ export async function rejectManagerInboxItem(agentId: string, proposalId: string
   const result = await rejectProposedAction(proposalId, adminEmail, notes);
   if (result.outcome !== 'rejected') return { outcome: result.outcome, item: result.proposal ? toView(result.proposal) : undefined };
   return { outcome: 'rejected', item: toView(result.proposal) };
+}
+
+export interface ManagerInboxItemInspector {
+  blastRadius: string;
+  reversibility: string;
+  expectedResult: string;
+}
+
+// Dashboard redesign, Slice 2c (2026-09-20) — the decision inspector's 3
+// real facts, computed on demand (not on the list endpoint above) so the
+// one live ScheduledEmail read this needs never runs N times for every
+// item in a list view. Same ownership check as approve/reject above —
+// never leaks whether a proposal belonging to a different agent exists.
+export async function getManagerInboxItemInspector(agentId: string, proposalId: string): Promise<ManagerInboxItemInspector | null> {
+  const proposal = await ProposedAgentAction.findByPk(proposalId);
+  if (!proposal || proposal.agent_id !== agentId) return null;
+
+  let targetStatus: string | null = null;
+  if (proposal.target_table === 'scheduled_emails') {
+    const target = await ScheduledEmail.findByPk(proposal.target_id, { attributes: ['status'] });
+    targetStatus = target?.status ?? null;
+  }
+
+  return {
+    blastRadius: describeBlastRadius(proposal.target_table),
+    reversibility: describeReversibility(proposal.target_table, targetStatus),
+    expectedResult: describeExpectedResult(proposal.action_type, proposal.proposed_changes, proposal.before_state),
+  };
 }

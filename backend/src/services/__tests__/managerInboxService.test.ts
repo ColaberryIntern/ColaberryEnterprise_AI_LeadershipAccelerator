@@ -27,7 +27,13 @@ jest.mock('../agentApprovalService', () => ({
   rejectProposedAction: (...a: any[]) => mockRejectProposedAction(...a),
 }));
 
-import { getManagerInboxItems, approveManagerInboxItem, rejectManagerInboxItem } from '../managerInboxService';
+const mockScheduledEmailFindByPk = jest.fn();
+jest.mock('../../models/ScheduledEmail', () => ({
+  __esModule: true,
+  default: { findByPk: (...a: any[]) => mockScheduledEmailFindByPk(...a) },
+}));
+
+import { getManagerInboxItems, approveManagerInboxItem, rejectManagerInboxItem, getManagerInboxItemInspector } from '../managerInboxService';
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -147,5 +153,67 @@ describe('rejectManagerInboxItem — agent-scoped rejection (Checkpoint B)', () 
 
     expect(mockRejectProposedAction).toHaveBeenCalledWith('p1', 'ali@colaberry.com', 'no');
     expect(result.outcome).toBe('rejected');
+  });
+});
+
+describe('getManagerInboxItemInspector — the decision inspector (Slice 2c)', () => {
+  it('security: a proposal id from a DIFFERENT agent returns null — never leaks that it belongs elsewhere', async () => {
+    mockProposalFindByPk.mockResolvedValue({ agent_id: 'other-agent', id: 'p1' });
+
+    const result = await getManagerInboxItemInspector('agent-1', 'p1');
+
+    expect(result).toBeNull();
+    expect(mockScheduledEmailFindByPk).not.toHaveBeenCalled();
+  });
+
+  it('boundary: a genuinely nonexistent proposal id returns null the same way', async () => {
+    mockProposalFindByPk.mockResolvedValue(null);
+    const result = await getManagerInboxItemInspector('agent-1', 'missing');
+    expect(result).toBeNull();
+  });
+
+  it('happy path: scheduled_emails target does the ONE real live status lookup and computes all 3 real facts', async () => {
+    mockProposalFindByPk.mockResolvedValue({
+      agent_id: 'agent-1', id: 'p1', action_type: 'subject_rewrite', target_table: 'scheduled_emails',
+      target_id: 'email-1', proposed_changes: { subject: 'New subject' }, before_state: { subject: 'Old subject' },
+    });
+    mockScheduledEmailFindByPk.mockResolvedValue({ status: 'pending' });
+
+    const result = await getManagerInboxItemInspector('agent-1', 'p1');
+
+    expect(mockScheduledEmailFindByPk).toHaveBeenCalledWith('email-1', expect.objectContaining({ attributes: ['status'] }));
+    expect(result).toEqual({
+      blastRadius: '1 recipient',
+      reversibility: 'Reversible — this email has not sent yet',
+      expectedResult: "Subject changes from 'Old subject' to 'New subject'.",
+    });
+  });
+
+  it('a paused target reads as reversible, not "already sent" — the real regression this slice fixed', async () => {
+    mockProposalFindByPk.mockResolvedValue({
+      agent_id: 'agent-1', id: 'p1', action_type: 'subject_rewrite', target_table: 'scheduled_emails',
+      target_id: 'email-1', proposed_changes: {}, before_state: {},
+    });
+    mockScheduledEmailFindByPk.mockResolvedValue({ status: 'paused' });
+
+    const result = await getManagerInboxItemInspector('agent-1', 'p1');
+
+    expect(result?.reversibility).toBe('Reversible — this email has not sent yet');
+  });
+
+  it('proposed_agent_actions target: no downstream table, so the live ScheduledEmail lookup is skipped entirely', async () => {
+    mockProposalFindByPk.mockResolvedValue({
+      agent_id: 'agent-1', id: 'p1', action_type: 'propose_content_idea', target_table: 'proposed_agent_actions',
+      target_id: 'signal-1', proposed_changes: { content_idea: 'Headline.' }, before_state: {},
+    });
+
+    const result = await getManagerInboxItemInspector('agent-1', 'p1');
+
+    expect(mockScheduledEmailFindByPk).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      blastRadius: 'No downstream effect (nothing executes automatically on approval)',
+      reversibility: "N/A — nothing to reverse; approving only changes this proposal's own status.",
+      expectedResult: "Proposed content idea: 'Headline.'.",
+    });
   });
 });
