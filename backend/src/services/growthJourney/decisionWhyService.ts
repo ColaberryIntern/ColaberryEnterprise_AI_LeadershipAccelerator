@@ -107,7 +107,19 @@ export interface GrowthJourneyDecisionWhyFound extends WhyEnvelope {
   /** The two §7.3 inputs that have no source in this codebase, with the stored reason for each. */
   unknown_inputs: { human_conversation: WhyUnknownInput; sales_capacity: WhyUnknownInput };
   content: { selected: Record<string, unknown> | null; gaps: string[] };
-  execution: { executed: boolean; receipt: Record<string, unknown> | null };
+  /**
+   * T507: whether the row MAY execute and why - the ladder's answer, stamped at decision time. `mode` is null
+   * for a row written before the stamp existed; such a row is shadow, and `mode` on the envelope says so.
+   */
+  execution: { executed: boolean; receipt: Record<string, unknown> | null; mode: WhyExecutionMode | null };
+}
+
+export interface WhyExecutionMode {
+  mode: GrowthJourneyDecisionMode;
+  reason: string | null;
+  resolved: string | null;
+  channel: string | null;
+  control_ids: string[];
 }
 
 export interface GrowthJourneyDecisionWhyAbsent {
@@ -202,7 +214,7 @@ export function decisionWhyFromRow(row: GrowthJourneyDecision): GrowthJourneyDec
       sales_capacity: { value: row.sales_capacity, reason: asString(contact?.sales_capacity_reason) },
     },
     content: { selected: asRecord(row.selected_content), gaps: asStrings(row.content_gaps) },
-    execution: { executed: row.executed, receipt: asRecord(row.execution_receipt) },
+    execution: { executed: row.executed, receipt: asRecord(row.execution_receipt), mode: executionModeOf(eligibility?.execution_mode) },
     versions: { ruleset_version: row.ruleset_version, model_version: row.model_version ?? null, ai_involved: row.ai_involved },
     inputs_unavailable: asStrings(eligibility?.inputs_unavailable),
   };
@@ -219,6 +231,19 @@ function dimensionWithGap(stored: unknown, gaps: string[]): WhyScoreDimension {
     source: asString(d.source),
     gap: gaps.find((g) => g.startsWith(`${key}:`)) ?? null,
     factors: asArray(d.factors),
+  };
+}
+
+/** The T507 stamp as stored, or null for a row from before it. A stamp whose mode is not a known mode is read as shadow. */
+function executionModeOf(stored: unknown): WhyExecutionMode | null {
+  const s = asRecord(stored);
+  if (!s) return null;
+  return {
+    mode: s.mode === 'live' ? 'live' : 'shadow',
+    reason: asString(s.reason),
+    resolved: asString(s.resolved),
+    channel: asString(s.channel),
+    control_ids: asStrings(s.control_ids),
   };
 }
 

@@ -4,7 +4,7 @@ import { JourneyProgram } from '../../models';
 import { OWNER_QUEUES } from '../../models/GrowthJourneyHandoff';
 import { classifyError } from '../../utils/errorClassifier';
 import { redactForLogs } from '../../utils/piiRedaction';
-import { runShadowDecisions, type RunShadowDecisionsResult } from './decisionService';
+import { runShadowDecisions, type RunShadowDecisionsArgs, type RunShadowDecisionsResult } from './decisionService';
 import { assignRankedQueue } from './handoffs/handoffService';
 import { runOutcomesPass, type OutcomesPassSummary } from './outcomes/nightlyOutcomesPass';
 
@@ -82,6 +82,8 @@ export interface RunScheduledShadowDecisionsOptions {
   asOf?: Date;
   /** Defaults to the process flags; a test hands in its own. */
   flags?: GrowthJourneyFlags;
+  /** T507: the Explorer family, for each decision's execution-mode stamp. Same default. */
+  explorerFlags?: RunShadowDecisionsArgs['explorerFlags'];
   /** Per-brand cap handed to the batch runner. */
   limit?: number;
 }
@@ -116,6 +118,7 @@ async function guardedAssignmentPass(base: { brand_id: string; program_slug: str
 
 export async function runScheduledShadowDecisions(options: RunScheduledShadowDecisionsOptions = {}): Promise<NightlyResult> {
   const flags = options.flags ?? env.growthJourney;
+  const explorerFlags = options.explorerFlags ?? env.explorerGrowth;
   if (!isGrowthJourneyCapabilityEnabled('journeyDecisions', flags)) {
     return { skipped: true, reason: 'journeyDecisions_off' };
   }
@@ -130,7 +133,7 @@ export async function runScheduledShadowDecisions(options: RunScheduledShadowDec
   for (const program of programs) {
     const base = { brand_id: String(program.brand_id), program_slug: String(program.slug), program_status: String(program.status) };
     try {
-      const r = await runShadowDecisions({ brandId: base.brand_id, trigger: 'nightly', flags, asOf, limit: options.limit });
+      const r = await runShadowDecisions({ brandId: base.brand_id, trigger: 'nightly', flags, explorerFlags, asOf, limit: options.limit });
       // The pass has its own failure domain: the decisions above are on disk whatever happens
       // to the queues, and the summary says so instead of zeroing the brand (the T408 verifier).
       const handoffsOn = r.status === 'ran' && isGrowthJourneyCapabilityEnabled('journeyHandoffs', flags);

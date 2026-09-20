@@ -1,6 +1,7 @@
 import { GrowthJourneyClassification, GrowthJourneyDecision } from '../../models';
 import type { GrowthJourneyDecisionAttributes } from '../../models/GrowthJourneyDecision';
 import { isGrowthJourneyCapabilityEnabled, type GrowthJourneyFlags } from '../../config/growthJourneyFlags';
+import type { ExplorerGrowthFlags } from '../../config/explorerGrowthFlags';
 import { classifyError } from '../../utils/errorClassifier';
 import { redactForLogs } from '../../utils/piiRedaction';
 import { isUniqueViolation } from '../../utils/uniqueViolation';
@@ -8,6 +9,7 @@ import { computeIdempotencyKey } from '../inboxCase/textNormalization';
 import { stableJson } from './classificationService';
 import { recordJourneyEvent } from './ledger';
 import { loadDecisionContext, type LoadedDecisionContext } from './decision/loadDecisionContext';
+import { resolveDecisionExecutionMode, withExecutionMode } from './decision/executionModeStamp';
 import { evaluateFreshness } from '../explorerGrowth/governor/freshness';
 import { decideForSubject } from './governor/decideForSubject';
 import type { DecideDeps, JourneyCandidate, JourneyDecision, JourneySubjectContext } from './governor/types';
@@ -78,6 +80,8 @@ export interface DecideAndRecordArgs {
   brandId: string;
   trigger: DecisionTrigger;
   flags: GrowthJourneyFlags;
+  /** T507: the Explorer flag family T504's ladder also reads. Defaults to the process's own. */
+  explorerFlags?: ExplorerGrowthFlags;
   asOf?: Date;
   /** T414: `'ranked_pass'` leaves the handoffs for the caller's pass over the whole queue (the batch runner's mode). */
   handoffAssignment?: 'now' | 'ranked_pass';
@@ -345,7 +349,10 @@ export async function decideForSubjectAndRecord(args: DecideAndRecordArgs): Prom
   const outcome = await decideForSubject(loaded.ctx, loaded.strategy, productionDeps(), args.flags);
   if (outcome.status === 'disabled') return { status: 'disabled' };
 
-  const row = decisionRow(loaded, outcome.decision, args.trigger, notEmittedOf(loaded));
+  // T507: may this decision execute? T504's ladder answers for the selected action's channel; the answer is
+  // stamped on the row and, ONLY when it is live, into the row's key - every shadow key stays what it was.
+  const stamp = await resolveDecisionExecutionMode({ ctx: loaded.ctx, decision: outcome.decision, flags: args.flags, explorerFlags: args.explorerFlags });
+  const row = withExecutionMode(decisionRow(loaded, outcome.decision, args.trigger, notEmittedOf(loaded)), stamp);
   const persisted = await persistDecision(row);
   const handoffs = await handoffsFor(persisted.row, loaded, args.flags, asOf, args.handoffAssignment);
   return { status: 'recorded', row: persisted.row, replayed: persisted.replayed, decision: outcome.decision, profile, unavailable: loaded.unavailable, handoffs };
@@ -357,6 +364,8 @@ export interface RunShadowDecisionsArgs {
   brandId: string;
   trigger: DecisionTrigger;
   flags: GrowthJourneyFlags;
+  /** T507: handed to every decision's mode stamp; the nightly passes the process's Explorer flags. */
+  explorerFlags?: ExplorerGrowthFlags;
   asOf?: Date;
   /** Cap on subjects per run. A nightly batch over a brand is bounded on purpose. */
   limit?: number;
@@ -414,7 +423,7 @@ export async function runShadowDecisions(args: RunShadowDecisionsArgs): Promise<
       // A batch never assigns first-come: its handoffs wait for the caller's ranked pass over the whole
       // queue (the nightly runs it after every subject of the brand), so a one-slot queue goes to the
       // subject the ranking puts first - urgent, then value - not the one this loop reached first (T414).
-      const out = await decideForSubjectAndRecord({ anchor, brandId: args.brandId, trigger: args.trigger, flags: args.flags, asOf: args.asOf, handoffAssignment: 'ranked_pass' });
+      const out = await decideForSubjectAndRecord({ anchor, brandId: args.brandId, trigger: args.trigger, flags: args.flags, explorerFlags: args.explorerFlags, asOf: args.asOf, handoffAssignment: 'ranked_pass' });
       if (out.status === 'recorded') {
         if (out.replayed) result.replayed += 1;
         else result.recorded += 1;
