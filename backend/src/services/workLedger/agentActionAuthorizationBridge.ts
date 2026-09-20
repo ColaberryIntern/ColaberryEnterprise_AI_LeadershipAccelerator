@@ -52,7 +52,22 @@ export interface AuthorizeTicketDispatchInput {
   agentName: string;
   action: string;
   riskTier?: string | null;
+  /** Real-enforcement scoping, Phase 1 (2026-09-20) — enough real detail to
+   * replay the held action later (see approvalRequestReplayService.ts). Optional
+   * and backward-compatible: every existing caller that doesn't pass one keeps
+   * creating rows exactly as before, just with prepared_action left null (which
+   * the replay executor already treats as an honest "nothing to replay" case). */
+  preparedAction?: Record<string, any> | null;
 }
+
+// Real-enforcement scoping, Phase 1 (2026-09-20) — how long a held action waits
+// for a real human decision before the auto-approve-timeout job (R38) releases
+// it on its own. 4 hours: grounded in Reese's own real autonomous-outreach sweep
+// cadence (a periodic daily-scale job, not sub-minute), not an arbitrary guess —
+// long enough for a real review, short enough the queue doesn't feel broken.
+// A genuinely disclosed default, not something Ali specified — see this run's
+// own report if it needs to change.
+export const APPROVAL_REVIEW_WINDOW_MS = 4 * 60 * 60 * 1000;
 
 export interface AuthorizeTicketDispatchResult {
   decisionId: string | null;
@@ -119,6 +134,8 @@ export async function authorizeTicketDispatch(
         verdict,
         reason_code: result.reason,
         status: 'pending',
+        prepared_action: input.preparedAction ?? null,
+        expires_at: new Date(Date.now() + APPROVAL_REVIEW_WINDOW_MS),
       } as any,
     });
 

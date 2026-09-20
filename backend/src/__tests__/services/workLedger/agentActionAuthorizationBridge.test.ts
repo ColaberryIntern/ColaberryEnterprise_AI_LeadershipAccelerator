@@ -94,6 +94,39 @@ describe('authorizeTicketDispatch — boundary (R3, would_require_approval)', ()
   });
 });
 
+describe('authorizeTicketDispatch — prepared_action / expires_at (Real-enforcement Phase 1)', () => {
+  it('happy path: a real preparedAction is written to prepared_action verbatim, and a real future expires_at is set', async () => {
+    mockAuthorize.mockResolvedValue({
+      allowed: true, enforced: false, reason: 'requires_approval:high_risk_tier',
+      requiresApproval: true, level: 'act_audited', wouldDeny: true, mode: 'shadow',
+    });
+    findOrCreate.mockResolvedValue([{ id: 'approval-row-4' }, true]);
+    const before = Date.now();
+
+    await authorizeTicketDispatch({
+      ...baseInput, riskTier: 'R3',
+      preparedAction: { studentEnrollmentId: 'enrollment-1', content: 'Hi!' },
+    });
+
+    const defaults = findOrCreate.mock.calls[0][0].defaults;
+    expect(defaults.prepared_action).toEqual({ studentEnrollmentId: 'enrollment-1', content: 'Hi!' });
+    expect(defaults.expires_at).toBeInstanceOf(Date);
+    expect(defaults.expires_at.getTime()).toBeGreaterThan(before);
+  });
+
+  it('boundary: omitting preparedAction is honestly null, never fabricated — every existing caller keeps working unchanged', async () => {
+    mockAuthorize.mockResolvedValue({
+      allowed: true, enforced: false, reason: 'requires_approval:high_risk_tier',
+      requiresApproval: true, level: 'act_audited', wouldDeny: true, mode: 'shadow',
+    });
+    findOrCreate.mockResolvedValue([{ id: 'approval-row-5' }, true]);
+
+    await authorizeTicketDispatch({ ...baseInput, riskTier: 'R3' });
+
+    expect(findOrCreate.mock.calls[0][0].defaults.prepared_action).toBeNull();
+  });
+});
+
 describe('authorizeTicketDispatch — idempotency (same eventId twice = one row, not two)', () => {
   it('a second call with the same eventId returns the existing row via findOrCreate, no duplicate', async () => {
     mockAuthorize.mockResolvedValue({

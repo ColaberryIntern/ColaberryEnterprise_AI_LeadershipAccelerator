@@ -105,7 +105,13 @@ describe('runReeseAutonomousOutreachSweep — happy path', () => {
     );
     expect(mockInitiateDm).toHaveBeenCalledWith(STUDENT_ID, 'Real, unique outreach message.');
     expect(mockAuthorizeTicketDispatch).toHaveBeenCalledWith(
-      expect.objectContaining({ ticketId: 'ticket-1', riskTier: 'R3', action: 'reese_autonomous_outreach' }),
+      expect.objectContaining({
+        ticketId: 'ticket-1', riskTier: 'R3', action: 'reese_autonomous_outreach',
+        // Real-enforcement scoping, Phase 1 (2026-09-20) — the exact real
+        // params passed to initiateDm() above, so a held action can be
+        // replayed verbatim later.
+        preparedAction: { studentEnrollmentId: STUDENT_ID, content: 'Real, unique outreach message.' },
+      }),
     );
     expect(mockReeseOutreachCreate).toHaveBeenCalledWith(
       expect.objectContaining({ enrollment_id: STUDENT_ID, signal_type: 'inactivity', status: 'active', attempt_count: 1 }),

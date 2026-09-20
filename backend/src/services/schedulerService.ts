@@ -1759,6 +1759,20 @@ export function startScheduler(): void {
     });
   });
 
+  // Real-enforcement scoping, Phase 1 (2026-09-20) — releases a held
+  // ApprovalRequest that nobody reviewed within its real review window
+  // (default), so the queue never holds an action indefinitely. Calls the
+  // SAME approveApprovalRequest() the admin UI's Approve button calls — one
+  // real code path, inherits the replay + idempotency guard for free.
+  cron.schedule('*/15 * * * *', () => {
+    instrumentCronJob('ApprovalRequestTimeoutSweep', async () => {
+      const { sweepExpiredApprovalRequests } = await import('./workLedger/approvalRequestTimeoutJob');
+      await sweepExpiredApprovalRequests();
+    }).catch((err) => {
+      console.error('[Scheduler] Approval request timeout sweep error:', err);
+    });
+  });
+
   // Explorer Growth OS — nightly profile recompute (EPIC 3 T006).
   //
   // RECOMPUTES ONLY. It scores and classifies; it decides nothing and sends
