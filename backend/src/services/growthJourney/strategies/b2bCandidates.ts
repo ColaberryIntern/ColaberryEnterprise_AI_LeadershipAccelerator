@@ -1,4 +1,5 @@
 import type { PriorityTier } from '../../explorerGrowth/governor/types';
+import { registeredKeysForBrand } from '../execution/campaignKeys';
 import { tierZeroStopsFromContact } from '../governor/contactEvidence';
 import type {
   HardStopFlags,
@@ -36,6 +37,17 @@ import type {
  * owner §8 names, recorded on the decision and never applied. The layer test
  * pins the action set, and the plan's control — emit a Layer 3 candidate —
  * fails it.
+ *
+ * ─── THE ONE LAYER 2 EXCEPTION: AN APPROVED FLOW (Phase 5 T506) ─────────────
+ *
+ * A Layer 2 discovery-question email becomes a CANDIDATE - a `SEND_EMAIL` that
+ * names the flow campaign's `campaign_key` - only when a human has approved that
+ * brand's registered flow campaign (`ctx.approvedFlows`, read by the loader
+ * through the same checks the adapter re-runs at enrolment). Otherwise it stays
+ * the deferral it always was, with the gap named. The scheduling offer and the
+ * reply-aware sequence have no flow campaign yet and stay deferrals, their gap
+ * named the same way. The tier order, the suppression vocabulary and the
+ * arbitration are untouched.
  *
  * ─── THE OVERLAYS MEAN WHAT T307 SAYS THEY MEAN ─────────────────────────────
  *
@@ -128,8 +140,20 @@ export interface B2bGeneration {
 
 export type B2bStrategy = JourneyStrategy & { generateWithReport: (ctx: JourneySubjectContext) => B2bGeneration };
 
-const TIER = { suppress: 1, stalled: 6, educate: 7, caseStudy: 7, clarify: 8, nudge: 9 } as const satisfies Record<string, PriorityTier>;
-const POSITION = { suppress: 90, stalled: 40, educate: 50, caseStudy: 50, clarify: 40, nudge: 30 } as const;
+// T506: `discovery` sits above every Layer-1 nurture tier and below the suppress tier - a reply earned it.
+const TIER = { suppress: 1, discovery: 5, stalled: 6, educate: 7, caseStudy: 7, clarify: 8, nudge: 9 } as const satisfies Record<string, PriorityTier>;
+const POSITION = { suppress: 90, discovery: 60, stalled: 40, educate: 50, caseStudy: 50, clarify: 40, nudge: 30 } as const;
+
+/** The registered discovery-question flow for this brand, if the registry has one. Never another brand's. */
+export function discoveryFlowKeyFor(p: Pick<B2bProgramme, 'brand_slug'>): string | null {
+  return registeredKeysForBrand(p.brand_slug).find((k) => k.startsWith('gj_') && k.endsWith('_discovery_questions')) ?? null;
+}
+
+const GAP = {
+  discovery_questions: 'no_approved_flow:discovery_questions',
+  scheduling_offer: 'no_approved_flow:scheduling_offer',
+  reply_aware_sequence: 'no_approved_flow:reply_aware_sequence',
+} as const;
 
 /* ── small readers ─────────────────────────────────────────────────────────── */
 
@@ -307,6 +331,32 @@ const inAppNudge: Generator = (p, ctx) => {
   };
 };
 
+/**
+ * T506, the one Layer 2 generator. Fires in a qualified state only when the
+ * brand's registered discovery flow is APPROVED (`ctx.approvedFlows`), and
+ * still under `emailBlock` - a human in the thread, a cooldown, an ineligible
+ * address all stop it exactly as they stop Layer 1. `required_assets` is empty
+ * because the campaign's own sequence renders the email from its approved
+ * instructions; the content gate has nothing to resolve.
+ */
+const discoveryQuestions: Generator = (p, ctx) => {
+  if (!p.states.qualified.includes(ctx.state)) return 'predicate_false';
+  const key = discoveryFlowKeyFor(p);
+  if (!key) return 'no_registered_flow:discovery_questions';
+  if (!(ctx.approvedFlows ?? []).includes(key)) return GAP.discovery_questions;
+  const blocked = emailBlock(ctx);
+  if (blocked) return blocked;
+  return {
+    action_type: 'SEND_EMAIL',
+    campaign_key: key,
+    priority_tier: TIER.discovery,
+    intra_tier_score: POSITION.discovery,
+    channel: 'email',
+    required_assets: [],
+    rationale: [`${ctx.state}: one reply earned §8's Layer 2 - discovery questions through the approved flow ${key}`, scoreNote(ctx)],
+  };
+};
+
 export const B2B_GENERATORS: ReadonlyArray<{ name: string; run: Generator }> = Object.freeze([
   { name: 'declinedSuppress', run: declinedSuppress },
   { name: 'stalledReengage', run: stalledReengage },
@@ -314,6 +364,7 @@ export const B2B_GENERATORS: ReadonlyArray<{ name: string; run: Generator }> = O
   { name: 'caseStudy', run: caseStudy },
   { name: 'clarificationQuestion', run: clarificationQuestion },
   { name: 'inAppNudge', run: inAppNudge },
+  { name: 'discoveryQuestions', run: discoveryQuestions },
 ]);
 
 /* ── what the strategy WOULD do beyond Layer 1 ─────────────────────────────── */
@@ -329,8 +380,13 @@ function deferrals(p: B2bProgramme, ctx: JourneySubjectContext): JourneyDeferral
     // ONE reply is §8's Layer-2 trigger — discovery questions, a scheduling
     // offer — not yet a person's time. The first draft named a handoff to
     // Sales here; T310's verifier read §8 more carefully than I had.
-    out.push({ would: 'discovery_questions', reason: `qualified_state:${ctx.state}`, payload: { ...base, layer: 2 } });
-    out.push({ would: 'scheduling_offer', reason: `qualified_state:${ctx.state}`, payload: { ...base, layer: 2 } });
+    // T506: discovery questions are a CANDIDATE once the brand's flow is approved (`discoveryQuestions`
+    // above); until then the deferral stays, with its gap named. The scheduling offer has no flow yet.
+    const key = discoveryFlowKeyFor(p);
+    if (!key || !(ctx.approvedFlows ?? []).includes(key)) {
+      out.push({ would: 'discovery_questions', reason: `qualified_state:${ctx.state}`, payload: { ...base, layer: 2, gap: GAP.discovery_questions } });
+    }
+    out.push({ would: 'scheduling_offer', reason: `qualified_state:${ctx.state}`, payload: { ...base, layer: 2, gap: GAP.scheduling_offer } });
   }
   if (p.states.commercial.includes(ctx.state) && !onCooldown) {
     out.push({ would: 'create_handoff', reason: `commercial_state:${ctx.state}`, payload: { ...base, layer: 4, owner: p.handoff.owner } });
@@ -339,10 +395,10 @@ function deferrals(p: B2bProgramme, ctx: JourneySubjectContext): JourneyDeferral
     out.push({ would: 'create_handoff', reason: 'human_review_overlay', payload: { ...base, layer: 4, owner: 'human_review' } });
   }
   if (has(ctx, 'MEETING_NO_SHOW')) {
-    out.push({ would: 'scheduling_offer', reason: 'meeting_no_show', payload: { ...base, layer: 2 } });
+    out.push({ would: 'scheduling_offer', reason: 'meeting_no_show', payload: { ...base, layer: 2, gap: GAP.scheduling_offer } });
   }
   if (has(ctx, 'NO_RESPONSE')) {
-    out.push({ would: 'reply_aware_sequence', reason: 'no_response_overlay', payload: { ...base, layer: 2 } });
+    out.push({ would: 'reply_aware_sequence', reason: 'no_response_overlay', payload: { ...base, layer: 2, gap: GAP.reply_aware_sequence } });
   }
   return out;
 }

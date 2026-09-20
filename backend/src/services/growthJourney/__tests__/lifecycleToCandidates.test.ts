@@ -1,7 +1,7 @@
 jest.mock('../ledger', () => ({ recordJourneyEvent: jest.fn(async () => ({ recorded: true })) }));  // T410: the ledger adapter, at its boundary
 import { classifyBusinessState, DEFERRED_STATES as BUSINESS_DEFERRED } from '../lifecycle/businessLifecycle';
 import { classifyFlotationState, DEFERRED_STATES as FLOTATION_DEFERRED } from '../lifecycle/aiFlotationLifecycle';
-import { B2B_GENERATORS, generateB2b, type B2bProgramme } from '../strategies/b2bCandidates';
+import { B2B_GENERATORS, discoveryFlowKeyFor, generateB2b, type B2bProgramme } from '../strategies/b2bCandidates';
 import { BUSINESS_PROGRAMME } from '../strategies/businessCandidates';
 import { FLOTATION_PROGRAMME } from '../strategies/aiFlotationCandidates';
 import type { JourneySubjectContext } from '../governor/types';
@@ -128,11 +128,14 @@ describe.each(PROGRAMMES)('%s: the real lifecycle into the real generators', (_n
 
   it('EVERY generator fires for at least one context the lifecycle actually produced', () => {
     const fired = new Map<string, number>(B2B_GENERATORS.map((g) => [g.name, 0]));
-    for (const x of all) {
-      const g = generateB2b(p, x.ctx);
+    // T506: the discovery generator needs the brand's flow APPROVED, so every context is also driven with it.
+    const flow = discoveryFlowKeyFor(p);
+    const contexts = all.flatMap((x) => [x.ctx, { ...x.ctx, approvedFlows: flow ? [flow] : [] }]);
+    for (const ctx of contexts) {
+      const g = generateB2b(p, ctx);
       for (const c of g.candidates) {
         const which = B2B_GENERATORS.find((gen) => {
-          const r = gen.run(p, x.ctx);
+          const r = gen.run(p, ctx);
           return typeof r !== 'string' && r.action_type === c.action_type && r.priority_tier === c.priority_tier && r.required_assets[0]?.asset_type === c.required_assets[0]?.asset_type;
         });
         if (which) fired.set(which.name, (fired.get(which.name) ?? 0) + 1);
@@ -140,6 +143,28 @@ describe.each(PROGRAMMES)('%s: the real lifecycle into the real generators', (_n
     }
     const silent = [...fired.entries()].filter(([, n]) => n === 0).map(([name]) => name);
     expect({ silent, counts: Object.fromEntries(fired) }).toEqual({ silent: [], counts: Object.fromEntries(fired) });
+  });
+
+  it('T506: discovery questions fire in EVERY qualified state once the flow is approved, in NO other state, and never without the approval', () => {
+    const flow = discoveryFlowKeyFor(p)!;
+    expect(flow).toMatch(/^gj_.*_discovery_questions$/);
+    const isDiscovery = (ctx: JourneySubjectContext) => generateB2b(p, ctx).candidates.some((c) => c.campaign_key === flow);
+    const qualified = all.filter((x) => p.states.qualified.includes(x.state));
+    const others = all.filter((x) => !p.states.qualified.includes(x.state));
+    expect(qualified.length).toBeGreaterThan(0);
+    // Without the approval: never, anywhere - the deferral stays, with its gap named.
+    expect(all.some((x) => isDiscovery(x.ctx))).toBe(false);
+    for (const x of qualified) {
+      const g = generateB2b(p, x.ctx);
+      expect(g.deferred.find((d) => d.would === 'discovery_questions')?.payload).toMatchObject({ gap: 'no_approved_flow:discovery_questions' });
+      expect(g.not_emitted.find((n) => n.generator === 'discoveryQuestions')?.reason).toBe('no_approved_flow:discovery_questions');
+    }
+    // With it: every qualified state whose email is not otherwise blocked, and no other state.
+    const approved = (ctx: JourneySubjectContext) => ({ ...ctx, approvedFlows: [flow] });
+    const qualifiedFiring = qualified.filter((x) => isDiscovery(approved(x.ctx)));
+    expect(new Set(qualifiedFiring.map((x) => x.state))).toEqual(new Set(p.states.qualified));
+    for (const x of qualifiedFiring) expect(generateB2b(p, approved(x.ctx)).deferred.some((d) => d.would === 'discovery_questions')).toBe(false);
+    expect(others.some((x) => isDiscovery(approved(x.ctx)))).toBe(false);
   });
 
   it('education fires under NO_RESPONSE — a lead who never replied is who nurture is for', () => {

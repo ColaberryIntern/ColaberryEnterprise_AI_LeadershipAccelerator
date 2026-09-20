@@ -2,6 +2,8 @@ import { Brand, ExplorerJourneyProfile, GrowthJourneyProfile, JourneyProgram, Le
 import { classifyError } from '../../../utils/errorClassifier';
 import { redactForLogs } from '../../../utils/piiRedaction';
 import { latestClassification } from '../classificationService';
+import { registeredKeysForBrand } from '../execution/campaignKeys';
+import { validateCampaign } from '../execution/validateCampaign';
 import { subjectRefOf } from '../classification/inputs';
 import { resolveContactEvidence } from '../governor/contactEvidence';
 import { NO_RETURN, resolveReturnToAi, RETURNED_TO_AI_OVERLAY, type ReturnToAiState } from '../handoffs/returnToAi';
@@ -227,13 +229,15 @@ export async function loadDecisionContext(args: LoadDecisionContextArgs): Promis
   const brand = { id: String(brandRow.id), slug: String(brandRow.slug), tenant_id: String(brandRow.tenant_id) };
   const program = { id: String(programRow.id), slug: String(programRow.slug), kind: programRow.kind as JourneyProgramKind, status: String(programRow.status ?? 'draft') };
 
-  const [leadRaw, classificationRaw, profileRaw, countsRaw, learnerRaw, returnRaw] = await Promise.all([
+  const [leadRaw, classificationRaw, profileRaw, countsRaw, learnerRaw, returnRaw, flowsRaw] = await Promise.all([
     guarded('lead', unavailable, async () => (subject.lead_id === null ? null : Lead.findByPk(subject.lead_id))),
     guarded('classification', unavailable, () => latestClassification(subjectRef, brandId)),
     guarded('profile', unavailable, () => GrowthJourneyProfile.findOne({ where: { subject_ref: subjectRef, brand_id: brandId } })),
     guarded('lifecycle_sources', unavailable, () => loadLifecycleSourceCounts(subject.lead_id)),
     program.kind === 'learner' ? guarded('learner_facts', unavailable, () => loadLearnerFacts(anchor, asOf)) : Promise.resolve(null),
     guarded('return_to_ai', unavailable, () => resolveReturnToAi({ subjectRef, brandId, asOf, leadId: subject.lead_id })),
+    // T506: only a B2B programme has Layer 2 flows; a learner context never reads them.
+    program.kind === 'learner' ? Promise.resolve([]) : guarded('approved_flows', unavailable, () => loadApprovedFlows(brand.tenant_id, brand.id, brand.slug)),
   ]);
 
   const lead = orNull(leadRaw) as LeadSignalColumns | null;
@@ -303,9 +307,28 @@ export async function loadDecisionContext(args: LoadDecisionContextArgs): Promis
     freshness,
     asOf,
     learner,
+    // An unavailable read means NO flow is approved for this decision: the safe direction is a deferral.
+    approvedFlows: flowsRaw === UNAVAILABLE ? [] : flowsRaw,
   };
 
   return { status: 'loaded', ctx, strategy: STRATEGY_BY_KIND[program.kind], subject, program, brand, lifecycle, previousProfile, returnToAi, unavailable };
+}
+
+/**
+ * T506. The brand's registered Layer 2 flow keys whose campaign a human has
+ * approved - the same five checks the adapter will re-run at enrolment time, so
+ * a flow that would be refused there is never proposed here. Keys of ANOTHER
+ * brand are never read: the registry answers per brand, so an AI Flotation
+ * subject cannot see a Colaberry Business flow.
+ */
+async function loadApprovedFlows(tenantId: string, brandId: string, brandSlug: string): Promise<string[]> {
+  const keys = registeredKeysForBrand(brandSlug).filter((k) => k.startsWith('gj_'));
+  const approved: string[] = [];
+  for (const campaignKey of keys) {
+    const r = await validateCampaign({ campaignKey, tenantId, brandId, mode: 'review' });
+    if (r.ok) approved.push(campaignKey);
+  }
+  return approved;
 }
 
 /** The freshness pair, per subject kind. See the header. */

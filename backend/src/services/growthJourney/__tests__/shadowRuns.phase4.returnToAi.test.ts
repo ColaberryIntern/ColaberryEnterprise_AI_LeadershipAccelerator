@@ -74,7 +74,7 @@ describe('a business subject a human sent back', () => {
     // The two generators that would have proposed for this subject (the control below shows the email; the
     // fixture has a portal account, so the nudge) decline by the cooldown's name; the rest declined on their own predicates.
     expect(ne.filter((n) => n.reason === RETURNED_TO_AI_REASON).map((n) => n.generator)).toEqual(['capabilityEducation', 'inAppNudge']);
-    expect(ne).toHaveLength(6);
+    expect(ne).toHaveLength(7); // T506 added discoveryQuestions, declining predicate_false here (an exploring state)
     // T502: any row carrying the record (a qualified one is `dispositioned`), found by the subject ref or the lead.
     const [{ where, order }] = m.handoffFindOne.mock.calls[0] as [{ where: Record<string | symbol, unknown>; order: unknown }];
     expect(order).toEqual([['updated_at', 'DESC']]);
