@@ -70,6 +70,7 @@ import { ensurePageEventLeadId } from './db/ensurePageEventLeadId';
 import { ensureSbpSchema } from './db/ensureSbpSchema';
 import { ensureCertPrepSchema } from './db/ensureCertPrepSchema';
 import { ensureProjectArchiveSchema } from './db/ensureProjectArchiveSchema';
+import { ensureProjectApprovalSchema } from './db/ensureProjectApprovalSchema';
 import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
 import { ensureInternshipSchema } from './db/ensureInternshipSchema';
 import { ensureMilestoneLadderSchema } from './db/ensureMilestoneLadderSchema';
@@ -2711,6 +2712,12 @@ async function start(): Promise<void> {
   // student-project listing query now filters on this column and a missing
   // column would 500 the whole Projects surface rather than degrade it.
   await ensureProjectArchiveSchema();
+  // projects.approval_state and friends — "review your project, then approve it".
+  // Additive and default-free: NULL means never gated, so this changes nothing
+  // for existing projects. Runs next to the archive schema for the same reason —
+  // the project tree DTO now reads these columns and a missing one would 500 the
+  // student's project page rather than degrade it.
+  await ensureProjectApprovalSchema();
   // Transactional email dedup ledger. CLAUDE.md mandates application-level
   // dedup on (recipient, subject, business_event_id) for Mandrill sends and
   // production had no such table, so every batch send was one retry away from

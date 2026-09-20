@@ -136,6 +136,14 @@ export type StudentProject = {
    * dead link.
    */
   commandCenterUrl?: string | null;
+  /**
+   * Review-and-approve state. Absent or null = never gated (legacy, or the gate
+   * is off) and the project behaves exactly as today. ONLY `'pending_approval'`
+   * sends the student to the review screen before the workspace opens; `approved`
+   * and `changes_requested` are ungated. Treating absent/null as gated would lock
+   * every existing student out, so every consumer must default to "ungated".
+   */
+  approvalState?: 'pending_approval' | 'approved' | 'changes_requested' | null;
 };
 
 export type NewBuildAnswers = {
@@ -349,6 +357,23 @@ export function removeProjectLocally(id: string): boolean {
   const target = list.find((p) => p.id === id);
   if (!target || target.sample) return false;
   write(list.filter((p) => p.id !== id));
+  notify();
+  return true;
+}
+
+/**
+ * Set a project's review-and-approve state in THIS browser, optimistically, so
+ * the gate clears (or re-arms) the instant the student acts instead of waiting
+ * for the next pull to reconcile the server's `approval_state`. Matched to the
+ * backend UUID or the local id; a no-op if the project is not found. The next
+ * `refreshProjectsFromBackend` overwrites this with the server's truth.
+ */
+export function setApprovalState(id: string, state: StudentProject['approvalState']): boolean {
+  const list = read();
+  const p = list.find((x) => x.id === id || x.pipelineProjectId === id || x.legacyIds?.includes(id));
+  if (!p) return false;
+  p.approvalState = state;
+  write(list);
   notify();
   return true;
 }

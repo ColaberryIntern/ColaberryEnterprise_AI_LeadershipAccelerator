@@ -3,6 +3,17 @@ import { sequelize } from '../config/database';
 
 export type ProjectStage = 'discovery' | 'architecture' | 'implementation' | 'portfolio' | 'complete';
 
+/**
+ * Review-and-approve state.
+ *   pending_approval  — built, waiting on the student to review and approve.
+ *   approved          — the student confirmed the build matches what they wanted.
+ *   changes_requested — the student said it is not right; flagged for revision.
+ *   null              — legacy / never gated. Treated exactly like `approved`
+ *                       (NOT gated). A project only becomes pending_approval by a
+ *                       publish that ran while the gate was on for its enrollment.
+ */
+export type ProjectApprovalState = 'pending_approval' | 'approved' | 'changes_requested';
+
 export interface ProjectAttributes {
   id?: string;
   enrollment_id: string;
@@ -48,6 +59,16 @@ export interface ProjectAttributes {
    * tasks, verified stories and awarded points stay intact and restorable.
    */
   archived_at?: Date | null;
+  /**
+   * Review-and-approve. NULL = legacy / never gated (treated as approved). See
+   * ProjectApprovalState and db/ensureProjectApprovalSchema.ts. No default on the
+   * column, deliberately, so existing projects stay NULL and ungated.
+   */
+  approval_state?: ProjectApprovalState | null;
+  approved_at?: Date | null;
+  approved_by?: string | null;
+  approval_notes?: string | null;
+  approval_updated_at?: Date | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -84,6 +105,11 @@ class Project extends Model<ProjectAttributes> implements ProjectAttributes {
   declare share_token: string | null;
   declare share_enabled: boolean;
   declare archived_at: Date | null;
+  declare approval_state: ProjectApprovalState | null;
+  declare approved_at: Date | null;
+  declare approved_by: string | null;
+  declare approval_notes: string | null;
+  declare approval_updated_at: Date | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -234,6 +260,30 @@ Project.init(
     // change nothing. Deliberately no defaultValue (see
     // db/ensureProjectArchiveSchema.ts).
     archived_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    // Review-and-approve. Same rule as archived_at: declared here so Sequelize
+    // does not silently strip it from reads and writes. Deliberately NO
+    // defaultValue on approval_state (see db/ensureProjectApprovalSchema.ts) —
+    // NULL must mean "never gated" for every project that predates this.
+    approval_state: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    approved_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    approved_by: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    approval_notes: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    approval_updated_at: {
       type: DataTypes.DATE,
       allowNull: true,
     },
