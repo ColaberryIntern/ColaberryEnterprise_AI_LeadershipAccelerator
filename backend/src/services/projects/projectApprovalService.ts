@@ -16,9 +16,17 @@
  * deployment. OFF is the default and means no project is ever moved to
  * pending_approval — nothing is gated and existing students are untouched.
  */
-import Project from '../../models/Project';
+import type Project from '../../models/Project';
 import type { ProjectApprovalState } from '../../models/Project';
 import { env } from '../../config/env';
+
+// The Project model is loaded LAZILY (dynamic import inside loadOwned), never at
+// module eval. sbpOrchestrator imports this service statically for the publish
+// hook, and its module graph is deliberately model-free at load time: a static
+// `import Project` here pulls Sequelize's model init into every test that loads
+// the orchestrator, and those run without an initialized `sequelize` — which is
+// exactly the "reading 'define'" crash sbpOrchestrator.test.ts hit. The type is
+// still imported (erased at compile), so the signatures below stay typed.
 
 export interface ProjectApprovalDto {
   id: string;
@@ -55,7 +63,8 @@ function toDto(p: Project): ProjectApprovalDto {
 
 async function loadOwned(enrollmentId: string, projectId: string): Promise<Project | null> {
   if (!enrollmentId || !projectId) return null;
-  return Project.findOne({ where: { id: projectId, enrollment_id: enrollmentId } });
+  const { default: ProjectModel } = await import('../../models/Project');
+  return ProjectModel.findOne({ where: { id: projectId, enrollment_id: enrollmentId } });
 }
 
 /**
