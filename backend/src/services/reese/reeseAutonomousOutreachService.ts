@@ -139,21 +139,17 @@ async function sendNewOutreach(
   // input type.
   await ticket.update({ risk_tier: RISK_TIER });
 
-  // Governance (Milestone 4, shadow-mode only) — evaluated BEFORE the real
-  // send, matching agentActionAuthorizationBridge.ts's own documented design
-  // intent ("authorization is evaluated BEFORE the real action runs — the
-  // conventional 'gate ahead of the action,' even in shadow/log-only mode")
-  // and the canonical caller pattern in ticketAgentDispatcher.ts. Ordering
-  // fix (2026-09-07): this call used to run AFTER initiateDm() below, a real,
-  // previously-flagged instance of the anti-pattern the mission text calls
-  // out by name ("do not preserve an unsafe pattern where the message is
-  // sent first and governance is logged afterward"). The verdict still never
-  // gates the send — that stays real, separate, deliberately out-of-scope
-  // work (the shadow-to-enforce migration) — this fix only corrects the
-  // ordering so that migration, whenever it happens, doesn't also require
-  // restructuring this call site.
+  // Governance — evaluated BEFORE the real send, matching
+  // agentActionAuthorizationBridge.ts's own documented design intent
+  // ("authorization is evaluated BEFORE the real action runs — the
+  // conventional 'gate ahead of the action'") and the canonical caller
+  // pattern in ticketAgentDispatcher.ts. Ordering fix (2026-09-07): this call
+  // used to run AFTER initiateDm() below, a real, previously-flagged instance
+  // of the anti-pattern the mission text calls out by name ("do not preserve
+  // an unsafe pattern where the message is sent first and governance is
+  // logged afterward").
   const eventId = crypto.randomUUID();
-  await authorizeTicketDispatch({
+  const authResult = await authorizeTicketDispatch({
     eventId,
     ticketId: ticket.id,
     agentName: 'Reese',
@@ -164,6 +160,28 @@ async function sendNewOutreach(
     // later (see approvalRequestReplayService.ts) rather than re-derived.
     preparedAction: { studentEnrollmentId: enrollmentId, content: message },
   });
+
+  // Real-enforcement scoping, Phase 2 (2026-09-20) — `allowed` is the real,
+  // mode-aware signal (unconditionally true in shadow mode; see
+  // agentActionAuthorizationBridge.ts's own header for the allowed-vs-verdict
+  // distinction). A held action returns here, BEFORE initiateDm() and every
+  // downstream side effect below it — deliberately, so a held send is never
+  // recorded as a real contact: ReeseOutreach.create() (below) sets
+  // last_contacted_at/status:'active' and feeds wasContactedWithinCadence()'s
+  // real cadence-blocking logic, both of which would be dishonest and would
+  // incorrectly suppress a legitimate future contact attempt if stamped for
+  // an action that was never actually sent. The ticket itself (already
+  // created above, status: 'in_progress') is correctly left as-is — the real
+  // ApprovalRequest row Phase 1 already created is what makes the hold
+  // visible and actionable, not a new ticket status.
+  if (!authResult.allowed) {
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'info', service: 'reeseAutonomousOutreachService',
+      event: 'outreach_held_for_approval', outcome: 'partial', correlation_id: eventId,
+      context: { ticket_id: ticket.id, enrollment_id: enrollmentId, signal_type: signalType, reason: authResult.reason },
+    }));
+    return { enrollmentId, signalType, action: 'skipped', reason: 'held_for_approval' };
+  }
 
   const dm = await initiateDm(enrollmentId, message);
 
