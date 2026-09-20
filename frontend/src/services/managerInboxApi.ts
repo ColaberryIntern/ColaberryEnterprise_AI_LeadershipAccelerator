@@ -59,3 +59,17 @@ export async function rejectInboxItem(agentId: string, proposalId: string, notes
   const res = await api.post<InboxDecisionResponse>(`/api/admin/agents/${agentId}/inbox/${proposalId}/reject`, { notes });
   return res.data;
 }
+
+// Dashboard redesign, Slice 2c (2026-09-20) — the decision inspector's 3
+// real facts, fetched on demand (only when a manager opens "View details"
+// on one proposal), never on the list above.
+export interface InboxItemInspector {
+  blastRadius: string;
+  reversibility: string;
+  expectedResult: string;
+}
+
+export async function getInboxItemInspector(agentId: string, proposalId: string): Promise<InboxItemInspector> {
+  const res = await api.get<InboxItemInspector>(`/api/admin/agents/${agentId}/inbox/${proposalId}/inspector`);
+  return res.data;
+}

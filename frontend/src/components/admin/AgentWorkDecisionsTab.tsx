@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { SectionCard, StatusBadge } from './shell';
 import { timeAgo } from './shell/trust';
-import { ManagerInboxItem, approveInboxItem, rejectInboxItem } from '../../services/managerInboxApi';
+import { ManagerInboxItem, approveInboxItem, rejectInboxItem, getInboxItemInspector, InboxItemInspector } from '../../services/managerInboxApi';
 import { getAgentExplainability, AgentExplainability } from '../../services/agentExplainabilityApi';
 
 // AI Agent Dashboard redesign, Checkpoint B (2026-09-02) — Work & Decisions:
@@ -11,12 +11,14 @@ import { getAgentExplainability, AgentExplainability } from '../../services/agen
 // agentExplainabilityService.ts's real ai_events/ProposedAgentAction rows —
 // every line here is a recorded fact, never a generated narrative.
 //
-// Fields the original design brief asked for that have NO real backing
-// today (blast radius, reversibility, expected result, a per-proposal
-// "policy reason approval was required") are deliberately NOT fabricated —
-// see the "not tracked today" notes below instead. ProposedAgentAction has
-// no such columns; inventing prose for them would violate the same
-// never-fabricate rule this whole mission has followed throughout.
+// Dashboard redesign, Slice 2c (2026-09-20) — blast radius / reversibility /
+// expected result ARE now tracked, computed on demand via
+// proposedActionInspectorFields.ts + the new inspector endpoint (a "View
+// details" toggle below, not fetched for every item up front — reversibility
+// needs one real live DB read per proposal, so it's fetched only for the
+// one item a manager actually opens). A per-proposal "policy reason
+// approval was required" still has no real backing anywhere and is still
+// deliberately NOT fabricated.
 
 interface Props {
   agentId: string;
@@ -42,6 +44,10 @@ export default function AgentWorkDecisionsTab({ agentId, inboxItems, inboxLoadin
   const [journalError, setJournalError] = useState<string | null>(null);
   const [decidingId, setDecidingId] = useState<string | null>(null);
   const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [inspectorById, setInspectorById] = useState<Record<string, InboxItemInspector>>({});
+  const [inspectorLoadingId, setInspectorLoadingId] = useState<string | null>(null);
+  const [inspectorErrorId, setInspectorErrorId] = useState<string | null>(null);
 
   const fetchJournal = useCallback(async () => {
     setJournalLoading(true);
@@ -87,6 +93,27 @@ export default function AgentWorkDecisionsTab({ agentId, inboxItems, inboxLoadin
       setDecidingId(null);
     }
   }, [agentId, onInboxChanged, fetchJournal]);
+
+  // Dashboard redesign, Slice 2c — fetches only once per proposal id
+  // (cached in inspectorById), only when a manager actually opens it.
+  const handleToggleDetails = useCallback(async (proposalId: string) => {
+    if (expandedId === proposalId) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(proposalId);
+    if (inspectorById[proposalId]) return;
+    setInspectorLoadingId(proposalId);
+    setInspectorErrorId(null);
+    try {
+      const data = await getInboxItemInspector(agentId, proposalId);
+      setInspectorById((prev) => ({ ...prev, [proposalId]: data }));
+    } catch {
+      setInspectorErrorId(proposalId);
+    } finally {
+      setInspectorLoadingId(null);
+    }
+  }, [agentId, expandedId, inspectorById]);
 
   return (
     <>
@@ -141,9 +168,39 @@ export default function AgentWorkDecisionsTab({ agentId, inboxItems, inboxLoadin
                 <dd className="col-sm-9">{item.riskScore ?? '—'} / {item.impactScore ?? '—'} / {item.priorityScore ?? '—'}</dd>
                 <dt className="col-sm-3">Expires</dt>
                 <dd className="col-sm-9">{item.expiresAt ? timeAgo(item.expiresAt) : 'No expiration set'}</dd>
-                <dt className="col-sm-3">Blast radius / reversibility / expected result</dt>
-                <dd className="col-sm-9 text-muted">Not tracked on this proposal today</dd>
               </dl>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary mb-2"
+                onClick={() => handleToggleDetails(item.id)}
+              >
+                {expandedId === item.id ? 'Hide details' : 'View details'}
+              </button>
+              {expandedId === item.id && (
+                <dl className="row small mb-2">
+                  {inspectorLoadingId === item.id && (
+                    <dd className="col-12 text-muted">
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
+                      Loading…
+                    </dd>
+                  )}
+                  {inspectorErrorId === item.id && (
+                    <dd className="col-12">
+                      <div className="alert alert-warning py-2 mb-0 small">Could not load these details.</div>
+                    </dd>
+                  )}
+                  {inspectorById[item.id] && (
+                    <>
+                      <dt className="col-sm-3">Blast radius</dt>
+                      <dd className="col-sm-9">{inspectorById[item.id].blastRadius}</dd>
+                      <dt className="col-sm-3">Reversibility</dt>
+                      <dd className="col-sm-9">{inspectorById[item.id].reversibility}</dd>
+                      <dt className="col-sm-3">Expected result</dt>
+                      <dd className="col-sm-9">{inspectorById[item.id].expectedResult}</dd>
+                    </>
+                  )}
+                </dl>
+              )}
               {hasRealExecutor ? (
                 <div className="alert alert-success py-2 small mb-2">
                   <i className="ri-check-line" aria-hidden="true" /> If you approve, the {item.targetTable} record is updated immediately and automatically — a real, tested executor path.
