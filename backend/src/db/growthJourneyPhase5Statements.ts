@@ -126,7 +126,8 @@ export const GROWTH_JOURNEY_PHASE5_STATEMENTS: readonly string[] = [
      cleared_by_admin_id VARCHAR(128),
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      CHECK (kind <> 'pause' OR mode = 'off'),
-     CHECK (mode <> 'limited' OR (daily_limit > 0 AND cohort_lead_ids IS NOT NULL AND array_length(cohort_lead_ids, 1) > 0))
+     CHECK (kind <> 'rollout' OR brand_id IS NOT NULL),
+     CHECK (mode <> 'limited' OR (COALESCE(daily_limit, 0) > 0 AND COALESCE(array_length(cohort_lead_ids, 1), 0) > 0))
    )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS growth_journey_execution_controls_scope_unique ON growth_journey_execution_controls (scope_key) WHERE cleared_at IS NULL`,
   `CREATE INDEX IF NOT EXISTS idx_gj_execution_controls_kind ON growth_journey_execution_controls (kind, brand_id)`,

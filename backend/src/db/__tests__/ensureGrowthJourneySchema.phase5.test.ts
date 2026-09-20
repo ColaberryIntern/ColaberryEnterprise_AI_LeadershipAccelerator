@@ -146,7 +146,16 @@ describe('T503: the execution tables', () => {
   it('a limited rollout cannot exist without a cohort and a daily limit, and a pause is always off - the database says so, not the caller', () => {
     const stmt = ws(statementCreating('growth_journey_execution_controls')!);
     expect(stmt).toContain("CHECK (kind <> 'pause' OR mode = 'off')");
-    expect(stmt).toContain("CHECK (mode <> 'limited' OR (daily_limit > 0 AND cohort_lead_ids IS NOT NULL AND array_length(cohort_lead_ids, 1) > 0))");
+    // A rollout RAISES a mode, so it must name the brand it raises; only a pause may be brandless.
+    expect(stmt).toContain("CHECK (kind <> 'rollout' OR brand_id IS NOT NULL)");
+    // COALESCE, not a bare comparison: a Postgres CHECK passes when its expression is NULL, so
+    // `daily_limit > 0` with a NULL limit, and `array_length('{}', 1) > 0` with an empty cohort, both
+    // evaluate to NULL and would ADMIT an unbounded `limited` rollout. Proven against PostgreSQL 16 and
+    // recorded in evidence/T503-producer.md; these three cases are what the form below refuses:
+    //   limited + cohort + NULL daily_limit | limited + limit + EMPTY cohort | rollout + NULL brand_id
+    expect(stmt).toContain("CHECK (mode <> 'limited' OR (COALESCE(daily_limit, 0) > 0 AND COALESCE(array_length(cohort_lead_ids, 1), 0) > 0))");
+    // The NULL-admitting forms must not come back.
+    expect(stmt).not.toMatch(/CHECK \(mode <> 'limited' OR \(daily_limit > 0/);
     expect(ws(GROWTH_JOURNEY_STATEMENTS.find((s) => /growth_journey_execution_controls_scope_unique/.test(s))!))
       .toBe('CREATE UNIQUE INDEX IF NOT EXISTS growth_journey_execution_controls_scope_unique ON growth_journey_execution_controls (scope_key) WHERE cleared_at IS NULL');
   });

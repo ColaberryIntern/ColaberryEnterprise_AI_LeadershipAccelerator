@@ -199,7 +199,7 @@ describe('the two tables sit in the statement list where the foreign keys allow'
     expect(idxAlter).toBeGreaterThan(idxTransitions);
   });
 
-  it('the run now owns fifteen tables, and the bidirectional _unique guard covers them all', () => {
+  it('the run now owns eighteen tables, and the bidirectional _unique guard covers them all', () => {
     // Seven when Phase 2 wrote this; Phase 3 added decisions, profiles and
     // score_snapshots (T301) and content_rules (T305); Phase 4 (T401) added
     // handoffs, outcomes and policies, and (T402) conversation ownership. The
