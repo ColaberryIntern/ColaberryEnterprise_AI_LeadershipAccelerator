@@ -127,7 +127,13 @@ export async function applyPlan(plan: Plan): Promise<number> {
       written += 1;
     } else if (step.kind === 'create_draft') {
       const def = step.definition;
-      const sequence = await FollowUpSequence.create({
+      // Two inserts, no transaction: if the campaign insert fails after the sequence insert, the sequence is
+      // orphaned (inactive, so inert) and the plan's `already_exists` check - which reads the CAMPAIGN by key -
+      // would not see it on the re-run. `FollowUpSequence.name` carries no unique constraint, so the name lookup
+      // IS the idempotency key, as it is in the Explorer seed: the re-run adopts the orphan instead of minting a
+      // second one.
+      const orphan = await FollowUpSequence.findOne({ where: { name: def.sequenceName } });
+      const sequence = orphan ?? await FollowUpSequence.create({
         name: def.sequenceName,
         description: def.description,
         // The Explorer seed's step shape: an empty body_template, rendered from ai_instructions at send time.

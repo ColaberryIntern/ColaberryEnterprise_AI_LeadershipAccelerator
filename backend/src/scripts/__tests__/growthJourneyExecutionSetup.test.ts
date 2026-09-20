@@ -3,10 +3,11 @@ const campaignFindOne = jest.fn();
 const campaignUpdate = jest.fn();
 const campaignCreate = jest.fn();
 const sequenceCreate = jest.fn();
+const sequenceFindOne = jest.fn();
 jest.mock('../../config/database', () => ({ sequelize: { query: (...a: unknown[]) => query(...a) } }));
 jest.mock('../../models', () => ({
   Campaign: { findOne: (...a: unknown[]) => campaignFindOne(...a), update: (...a: unknown[]) => campaignUpdate(...a), create: (...a: unknown[]) => campaignCreate(...a) },
-  FollowUpSequence: { create: (...a: unknown[]) => sequenceCreate(...a) },
+  FollowUpSequence: { create: (...a: unknown[]) => sequenceCreate(...a), findOne: (...a: unknown[]) => sequenceFindOne(...a) },
 }));
 jest.mock('../../services/aliPersonalOutreachService', () => ({ CAMPAIGN_NAME: 'Ali Personal Outreach', CAMPAIGN_TYPE: 'executive_outreach' }));
 
@@ -37,8 +38,9 @@ function arrangeShipped() {
 const writes = () => campaignUpdate.mock.calls.length + campaignCreate.mock.calls.length + sequenceCreate.mock.calls.length;
 
 beforeEach(() => {
-  for (const fn of [query, campaignFindOne, campaignUpdate, campaignCreate, sequenceCreate]) fn.mockReset();
+  for (const fn of [query, campaignFindOne, campaignUpdate, campaignCreate, sequenceCreate, sequenceFindOne]) fn.mockReset();
   campaignUpdate.mockResolvedValue([1]);
+  sequenceFindOne.mockResolvedValue(null);
   sequenceCreate.mockImplementation(async (attrs: Record<string, unknown>) => ({ id: 's-new', ...attrs }));
   campaignCreate.mockImplementation(async (attrs: Record<string, unknown>) => ({ id: 'c-new', ...attrs }));
   delete process.env.DATABASE_URL;
@@ -123,6 +125,27 @@ describe('run', () => {
     expect(biz).toMatchObject({ status: 'draft', approval_status: 'draft', type: 'warm_nurture', tenant_id: 't-col', brand_id: 'b-ent', sequence_id: 's-new', settings: { campaign_key: 'gj_colaberry_business_discovery_questions', test_mode_enabled: true } });
     expect(flo).toMatchObject({ status: 'draft', approval_status: 'draft', tenant_id: 't-flo', brand_id: 'b-flo', settings: { campaign_key: 'gj_ai_flotation_discovery_questions', test_mode_enabled: true } });
     expect(JSON.stringify(campaignCreate.mock.calls)).not.toMatch(/"status":"active"|"is_active":true/);
+  });
+
+  it('a re-run after a failed campaign insert creates NO second sequence: the orphan is looked up by name and adopted', async () => {
+    // Run 1: the Colaberry Business sequence lands, its campaign insert fails. Nothing is transactional here, so the
+    // sequence row survives, orphaned. The plan's `already_exists` reads the CAMPAIGN by key and misses it.
+    arrangeShipped();
+    campaignCreate.mockRejectedValueOnce(new Error('connection reset'));
+    await expect(run(parseArgs(['create-flow-drafts', '--confirm-production', '--expect-count', '2']), () => undefined)).rejects.toThrow('connection reset');
+    expect(sequenceCreate).toHaveBeenCalledTimes(1);
+    const [[orphanAttrs]] = sequenceCreate.mock.calls as [[{ name: string }]];
+
+    // Run 2: the orphan exists under that name. It is adopted; only the other brand's sequence is created.
+    for (const fn of [sequenceCreate, campaignCreate, sequenceFindOne]) fn.mockClear();
+    sequenceFindOne.mockImplementation(async ({ where }: { where: { name: string } }) => (where.name === orphanAttrs.name ? { id: 's-orphan', name: where.name, is_active: false } : null));
+    expect(await run(parseArgs(['create-flow-drafts', '--confirm-production', '--expect-count', '2']), () => undefined)).toBe(0);
+    expect(sequenceCreate).toHaveBeenCalledTimes(1);
+    expect((sequenceCreate.mock.calls[0][0] as { name: string }).name).not.toBe(orphanAttrs.name);
+    expect(campaignCreate).toHaveBeenCalledTimes(2);
+    const [[biz]] = campaignCreate.mock.calls as [[{ sequence_id: string; settings: { campaign_key: string } }]];
+    expect(biz).toMatchObject({ sequence_id: 's-orphan', settings: { campaign_key: 'gj_colaberry_business_discovery_questions' } });
+    expect(sequenceFindOne).toHaveBeenCalledTimes(2);
   });
 
   it('a write against what looks like production without the flag is refused before anything is read', async () => {
