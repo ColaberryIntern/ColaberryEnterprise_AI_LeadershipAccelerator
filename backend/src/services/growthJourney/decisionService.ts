@@ -161,6 +161,10 @@ export function decisionInputHash(ctx: JourneySubjectContext, unavailable: reado
     learner: ctx.learner
       ? { primary_state: ctx.learner.primary_state, overlays: [...ctx.learner.overlays].sort(), scores: ctx.learner.scores }
       : null,
+    // T506: a human's approval of a Layer 2 flow is a fact the decision rests on - the WAIT decided before Ali
+    // approved the flow must not shadow the SEND decided after it. Present only when a flow IS approved, so every
+    // key computed without one (all of them, today) is unchanged.
+    ...(ctx.approvedFlows?.length ? { approved_flows: [...ctx.approvedFlows].sort() } : {}),
   });
 }
 

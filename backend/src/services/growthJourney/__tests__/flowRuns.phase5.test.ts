@@ -35,8 +35,9 @@ import { m } from './fixtures/phase3Harness';
 import { brandRow, classified, counts } from './fixtures/phase3Fixtures';
 import { b2bSubject, type HandoffFixture } from './fixtures/phase4Fixtures';
 import { sequelize } from '../../../config/database';
-import { decideForSubjectAndRecord } from '../decisionService';
+import { decideForSubjectAndRecord, decisionInputHash } from '../decisionService';
 import { FLOW_CAMPAIGN_KEYS } from '../execution/campaignKeys';
+import { bizCtx } from './fixtures/b2bFixtures';
 
 /**
  * T506 — an approved Layer 2 flow becomes a Governor candidate, through the
@@ -108,6 +109,27 @@ describe('Colaberry Business, QUALIFIED_OPPORTUNITY', () => {
     expect(JSON.stringify(row)).not.toContain('@');
   });
 
+  it('the approval is a fact the decision rests on: a subject decided WAIT before it is decided AGAIN once the flow is approved, not replayed', async () => {
+    // The verifier's finding: with the approval outside the input hash, the second run computed SEND_EMAIL and then
+    // landed on the first run's WAIT row (same key, `replayed: true`) - Ali's approval changed nothing until T507.
+    const f = qualifiedBusiness();
+    arrangeWorld([f]);
+    const first = await decideForSubjectAndRecord({ anchor: anchorOf4(f), brandId: brandRow(f.brand).id, trigger: 'nightly', flags: flags4(), asOf: AS_OF_4 });
+    if (first.status !== 'recorded') throw new Error(first.status);
+    expect([first.replayed, first.row.selected_action]).toEqual([false, 'WAIT']);
+
+    m.campaignFindOne.mockResolvedValue(approvedBizFlow());
+    const second = await decideForSubjectAndRecord({ anchor: anchorOf4(f), brandId: brandRow(f.brand).id, trigger: 'nightly', flags: flags4(), asOf: AS_OF_4 });
+    if (second.status !== 'recorded') throw new Error(second.status);
+    expect([second.replayed, second.row.selected_action]).toEqual([false, 'SEND_EMAIL']);
+    expect(second.row.idempotency_key).not.toBe(first.row.idempotency_key);
+
+    // And the approval alone, with nothing else changed, replays its own row - one decision per set of facts.
+    const third = await decideForSubjectAndRecord({ anchor: anchorOf4(f), brandId: brandRow(f.brand).id, trigger: 'nightly', flags: flags4(), asOf: AS_OF_4 });
+    if (third.status !== 'recorded') throw new Error(third.status);
+    expect([third.replayed, third.row.idempotency_key]).toEqual([true, second.row.idempotency_key]);
+  });
+
   it('the approval alone does not override a human in the thread: the flow is withheld like every other email', async () => {
     // A human's call two hours ago: the T402 derivation opens the ownership row, and the AI's commercial outreach pauses.
     const f = { ...qualifiedBusiness(), humanActivity: { type: 'call', hoursAgo: 2 } } as HandoffFixture;
@@ -116,6 +138,18 @@ describe('Colaberry Business, QUALIFIED_OPPORTUNITY', () => {
     const row = await decide(f);
     expect(row.selected_action).toBe('WAIT');
     expect(row.eligibility.not_emitted).toContainEqual({ generator: 'discoveryQuestions', reason: 'human_in_conversation' });
+  });
+});
+
+describe('the input hash and the approval', () => {
+  it('an approved flow moves the hash; none, empty or absent is the SAME key as before T506, and order does not matter', () => {
+    const a = bizCtx({ state: 'QUALIFIED_OPPORTUNITY' });
+    expect(decisionInputHash(bizCtx({ state: 'QUALIFIED_OPPORTUNITY', approvedFlows: [] }))).toBe(decisionInputHash(a));
+    expect(decisionInputHash(bizCtx({ state: 'QUALIFIED_OPPORTUNITY', approvedFlows: undefined }))).toBe(decisionInputHash(a));
+    expect(decisionInputHash(bizCtx({ state: 'QUALIFIED_OPPORTUNITY', approvedFlows: [BIZ_FLOW] }))).not.toBe(decisionInputHash(a));
+    expect(decisionInputHash(bizCtx({ state: 'QUALIFIED_OPPORTUNITY', approvedFlows: [BIZ_FLOW, FLO_FLOW] }))).toBe(
+      decisionInputHash(bizCtx({ state: 'QUALIFIED_OPPORTUNITY', approvedFlows: [FLO_FLOW, BIZ_FLOW] })),
+    );
   });
 });
 
