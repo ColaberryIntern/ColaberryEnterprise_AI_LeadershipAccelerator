@@ -18,6 +18,7 @@ import {
   VerificationLatch, VerificationRecord,
 } from '../sbp/verification/verificationLatch';
 import { isProtectedProject } from './protectedProjects';
+import type { ProjectApprovalState } from '../../models/Project';
 
 export type { VerificationLatch };
 
@@ -184,6 +185,16 @@ export interface ProjectTreeDto {
    * "you have not started" and the second means "we have not looked".
    */
   build_verification: BuildVerificationRollupDto | null;
+  /**
+   * Review-and-approve. NULL means never gated (legacy or gate off), and the
+   * client treats NULL exactly like 'approved' — NOT gated. Only
+   * 'pending_approval' sends the student to the review screen before the
+   * workspace. See models/Project ProjectApprovalState.
+   */
+  approval_state: ProjectApprovalState | null;
+  approved_at: string | null;
+  /** What the student said was wrong, when approval_state is 'changes_requested'. */
+  approval_notes: string | null;
 }
 
 /**
@@ -231,6 +242,11 @@ export interface ProjectSummaryDto {
    * ./protectedProjects for why that distinction is enforced by id.
    */
   is_protected: boolean;
+  /**
+   * Review-and-approve state, so the overview can badge a project that is
+   * waiting on the student and route it to the review screen. NULL = not gated.
+   */
+  approval_state: ProjectApprovalState | null;
 }
 
 /**
@@ -490,6 +506,9 @@ export function toProjectTreeDto(
     task_counts: countTasks(listDtos),
     command_center_url: commandCenterUrl(p),
     build_verification: toBuildVerificationRollup(listDtos, verificationXpEarned),
+    approval_state: (p.approval_state ?? null) as ProjectApprovalState | null,
+    approved_at: p.approved_at ? new Date(p.approved_at).toISOString() : null,
+    approval_notes: p.approval_notes ?? null,
   };
 }
 
@@ -523,5 +542,6 @@ export function toProjectSummaryDto(
     repo_sync: connection === undefined ? null : repoSyncFrom(connection),
     repo_url: connection?.repo_url ?? null,
     is_protected: isProtectedProject(p.id),
+    approval_state: (p.approval_state ?? null) as ProjectApprovalState | null,
   };
 }

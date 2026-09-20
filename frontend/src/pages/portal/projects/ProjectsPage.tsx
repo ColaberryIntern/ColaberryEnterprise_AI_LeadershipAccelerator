@@ -19,10 +19,12 @@ import ProjectsNextStepHero from './ProjectsNextStepHero';
 import TimelineCard, { type TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import {
   useProjectsList, createProjectFromAnswers, claimBackendProject, projectProgress, projectPoints, reqVerified, nextTask, isTaskBlocked,
-  removeProjectLocally,
+  removeProjectLocally, setApprovalState,
   StudentProject, ProjectTask, ProjectList, NewBuildAnswers,
 } from './projectsStore';
 import { syncProjectsWithBackend, refreshProjectsFromBackend, hydrateProjectById, pushActiveProject } from './projectSync';
+import ProjectReviewPane from './ProjectReviewPane';
+import { approveProject, requestProjectChanges } from './projectApprovalApi';
 import ProjectDriftBanner from './ProjectDriftBanner';
 import ArchiveProjectDialog from './ArchiveProjectDialog';
 import {
@@ -58,6 +60,7 @@ type View =
   | { kind: 'overview' }
   | { kind: 'wizard' }
   | { kind: 'preview'; id: string }
+  | { kind: 'review'; id: string }
   | { kind: 'interior'; id: string; taskId?: string | null };
 
 const DUE_RANK: Record<string, number> = { overdue: 0, today: 1, up: 2, done: 9 };
@@ -333,6 +336,41 @@ const ProjectsPage: React.FC = () => {
   }, [loadArchived]);
 
   /**
+   * The student approves their reviewed build. On success the gate clears
+   * optimistically (so the workspace is reachable at once) and the interior
+   * opens; the server's `approval_state` is then reconciled by the pull. A
+   * failed approve intentionally does nothing — it must never fake-unlock a
+   * workspace the server did not actually open. Talks to the server about the
+   * backend UUID, which a pending build always has.
+   */
+  const handleApprove = useCallback(async (project: StudentProject): Promise<boolean> => {
+    const backendId = project.pipelineProjectId || project.id;
+    const r = await approveProject(backendId);
+    if (!r.ok) return false;
+    setApprovalState(backendId, 'approved');
+    setView({ kind: 'interior', id: project.id, taskId: null });
+    window.scrollTo(0, 0);
+    if (!project.sample) void pushActiveProject(backendId);
+    void refreshProjectsFromBackend();
+    return true;
+  }, []);
+
+  /**
+   * The student says the build is not what they wanted. Flags it for revision
+   * with a note; the pane then shows its confirmation state. Returns whether the
+   * server accepted it so the pane can surface an error instead of a false
+   * confirmation.
+   */
+  const handleRequestChanges = useCallback(async (project: StudentProject, notes: string): Promise<boolean> => {
+    const backendId = project.pipelineProjectId || project.id;
+    const r = await requestProjectChanges(backendId, notes);
+    if (!r.ok) return false;
+    setApprovalState(backendId, 'changes_requested');
+    void refreshProjectsFromBackend();
+    return true;
+  }, []);
+
+  /**
    * Which builds may be removed, and by which route.
    *
    * The seeded training example is never removable: `projectsStore.read()`
@@ -349,8 +387,19 @@ const ProjectsPage: React.FC = () => {
     return backendId ? 'server' : 'local';
   };
 
-  const active = (view.kind === 'preview' || view.kind === 'interior') ? projects.find((p) => p.id === view.id) : null;
+  const active = (view.kind === 'preview' || view.kind === 'interior' || view.kind === 'review')
+    ? projects.find((p) => p.id === view.id) : null;
   const openInterior = (id: string, taskId?: string | null) => {
+    const target = projects.find((p) => p.id === id);
+    // Review gate: a freshly built project the student has not yet approved
+    // opens on the review screen, not the workspace. ONLY 'pending_approval'
+    // gates — null / 'approved' / 'changes_requested' fall through exactly as
+    // before, so every existing (ungated) student is unaffected.
+    if (target?.approvalState === 'pending_approval') {
+      setView({ kind: 'review', id });
+      window.scrollTo(0, 0);
+      return;
+    }
     setView({ kind: 'interior', id, taskId: taskId ?? null });
     window.scrollTo(0, 0);
     // Make the switch durable. Opening a build is the only signal the student
@@ -359,7 +408,6 @@ const ProjectsPage: React.FC = () => {
     // build, so the "Your next step" hero on the overview kept naming it and a
     // reload dropped them back onto it. Fire-and-forget by design — the view has
     // already changed and a failed preference write must not undo that.
-    const target = projects.find((p) => p.id === id);
     if (target && !target.sample) void pushActiveProject(target.pipelineProjectId || target.id);
   };
   /**
@@ -371,6 +419,15 @@ const ProjectsPage: React.FC = () => {
    */
   const openTaskWorkspace = (projectId: string, task: ProjectTask | null) => {
     if (!task) return;
+    // Same review gate: a pending build's task workspace is not reachable until
+    // the student approves — show the review screen here instead of navigating
+    // away to the workspace. Ungated projects are untouched.
+    const owner = projects.find((x) => x.id === projectId || x.pipelineProjectId === projectId);
+    if (owner?.approvalState === 'pending_approval') {
+      setView({ kind: 'review', id: owner.id });
+      window.scrollTo(0, 0);
+      return;
+    }
     const key = task.storyId || task.id;
     navigate(`/portal/projects/workspace/${projectId}/${encodeURIComponent(key)}`,
       { state: { from: window.location.pathname } });
@@ -612,7 +669,32 @@ const ProjectsPage: React.FC = () => {
   const feedTop = feedCards.slice(0, 6);
 
   // ── interior + wizard + preview take over the whole page ──
+  // The review screen, used by the explicit `review` view AND as a defensive
+  // guard below, so a stale `interior` view state cannot slip a pending build
+  // past the gate. Rendered (not setView-in-render) to avoid a render-phase
+  // side effect.
+  const renderReview = (p: StudentProject) => (
+    <PortalShell><div className="pj-root">
+      <ProjectReviewPane
+        project={p}
+        onApprove={() => handleApprove(p)}
+        onRequestChanges={(notes) => handleRequestChanges(p, notes)}
+        onBack={() => { setView({ kind: 'overview' }); window.scrollTo(0, 0); }}
+      />
+    </div></PortalShell>
+  );
+
+  if (view.kind === 'review' && active) {
+    return renderReview(active);
+  }
+
   if (view.kind === 'interior' && active) {
+    // A pending build is never reachable in the workspace, whatever the view
+    // state says. Only 'pending_approval' is caught; ungated projects fall
+    // straight through.
+    if (active.approvalState === 'pending_approval') {
+      return renderReview(active);
+    }
     if (active.status === 'creating') {
       return (
         <PortalShell><div className="pj-root">

@@ -338,4 +338,46 @@ router.post(
   },
 );
 
+// ── review & approve a build the student owns ─────────────────────────────────
+/**
+ * The student reviews their built project and either approves it (the workspace
+ * unlocks) or asks for changes (it is flagged for revision, with a note).
+ *
+ * 404 covers both "no such project" and "not yours" — the service loads by
+ * (id AND enrollment), so probing another student's id tells you nothing.
+ * Idempotent: approving an approved project returns the same state.
+ */
+const requestChangesSchema = z.object({
+  notes: z.string().trim().max(5000).optional().default(''),
+});
+
+router.post(
+  '/api/portal/projects/:projectId/approve',
+  requireParticipant,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!gate(res)) return;
+      const { approveProject } = await import('../services/projects/projectApprovalService');
+      const r = await approveProject(eid(req), String(req.params.projectId));
+      if (!r) return res.status(404).json({ error: 'Project not found' });
+      res.json(r);
+    } catch (e) { fail(res, e, next); }
+  },
+);
+
+router.post(
+  '/api/portal/projects/:projectId/request-changes',
+  requireParticipant,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!gate(res)) return;
+      const { notes } = requestChangesSchema.parse(req.body || {});
+      const { requestProjectChanges } = await import('../services/projects/projectApprovalService');
+      const r = await requestProjectChanges(eid(req), String(req.params.projectId), notes);
+      if (!r) return res.status(404).json({ error: 'Project not found' });
+      res.json(r);
+    } catch (e) { fail(res, e, next); }
+  },
+);
+
 export default router;

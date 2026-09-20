@@ -45,6 +45,7 @@ import { repoWriteAccessForProject } from './repoWriteAccess';
 import { writeDocsToRepo, readRepoManifest } from './repoWriter';
 import { loadBuildProgress } from './buildProgressSnapshot';
 import { materializePlanAsTasks } from './materializeTasks';
+import { markProjectPendingApproval } from '../projects/projectApprovalService';
 import { Schedule } from './buildSchedule';
 import { scheduleForEnrollment } from './scheduleForEnrollment';
 import { hashPlan } from './planHash';
@@ -690,6 +691,9 @@ export async function publishBuild(
     );
     const m = await materializePlanAsTasks(projectId, opts.enrollmentId, published.plan as BuildPlan, { schedule });
     await makeActiveProject(opts.enrollmentId, projectId, correlationId);
+    // Hold it for review, IF the gate is on for this enrollment (no-op otherwise).
+    // Never throws — a failed mark must not fail the publish.
+    await markProjectPendingApproval(projectId, opts.enrollmentId);
     await setStatus(projectId, 'awaiting_repo');
     log('sbp_build_published_no_repo', correlationId, 'partial', {
       projectId, version: published.version, lists: m.lists, tasks: m.tasks,
@@ -761,6 +765,9 @@ export async function publishBuild(
     schedule,
   });
   await makeActiveProject(opts.enrollmentId, projectId, correlationId);
+  // Hold it for review, IF the gate is on for this enrollment (no-op otherwise).
+  // Never throws — a failed mark must not fail the publish.
+  await markProjectPendingApproval(projectId, opts.enrollmentId);
 
   await setStatus(projectId, 'published');
   log('sbp_build_published', correlationId, 'success', {
