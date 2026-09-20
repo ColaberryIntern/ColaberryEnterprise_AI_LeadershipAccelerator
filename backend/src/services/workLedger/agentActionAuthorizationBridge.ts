@@ -9,11 +9,20 @@ import { authorizeAgentAction } from '../agentAuthorizationService';
 // implementation of the chokepoint itself.
 //
 // SHADOW MODE INVARIANT (non-negotiable, per this run's execution contract): this
-// function's return value is advisory only. Its caller (ticketAgentDispatcher.ts,
+// function's return value is advisory only. Its original caller (ticketAgentDispatcher.ts,
 // T006) MUST proceed with the real action exactly as it would have before this
 // milestone, regardless of what this function returns. Nothing in this file ever
-// throws to block a caller, and nothing in this file's return shape contains a field
-// meant to be read as "stop." It exists to LOG a decision, not to make one.
+// throws to block a caller.
+//
+// Real-enforcement scoping, Phase 2 (2026-09-20): `verdict` (above) stays exactly what
+// it always was — a mode-INDEPENDENT policy read, "would this be denied," true
+// regardless of whether anything is actually enforcing it. `allowed` (below) is the
+// new, mode-AWARE field: it mirrors authorizeAgentAction()'s own real `allowed`, which
+// is unconditionally true in shadow mode and only reflects `!wouldDeny` once
+// `abac_enforcement` is actually 'enforce'. Reese's two send paths
+// (reeseAutonomousOutreachService.ts, reeseReplyService.ts) are the first real callers
+// meant to branch on `allowed` to actually hold a send — every other existing caller
+// still only reads `verdict`/`reason` and is unaffected by this field's addition.
 //
 // Correlation design: authorization is evaluated BEFORE the real action runs (the
 // conventional "gate ahead of the action," even in shadow/log-only mode), but the
@@ -73,12 +82,20 @@ export interface AuthorizeTicketDispatchResult {
   decisionId: string | null;
   verdict: 'would_allow' | 'would_require_approval' | 'would_block';
   reason: string;
+  /** Real-enforcement scoping, Phase 2 (2026-09-20) — the mode-AWARE signal, mirrored
+   * from authorizeAgentAction()'s own `allowed`. Unconditionally true in shadow mode.
+   * See this file's header comment for the full allowed-vs-verdict distinction. */
+  allowed: boolean;
 }
 
+// Fail-open by design (see this file's own Failure-First Design note above): any
+// internal error here must never look like a real policy hold to a caller branching
+// on `allowed`, or a transient bridge failure would silently stop a real send.
 const SAFE_DEFAULT: AuthorizeTicketDispatchResult = {
   decisionId: null,
   verdict: 'would_allow',
   reason: 'bridge_error',
+  allowed: true,
 };
 
 export async function authorizeTicketDispatch(
@@ -98,7 +115,7 @@ export async function authorizeTicketDispatch(
     });
 
     if (!result.wouldDeny) {
-      return { decisionId: null, verdict: 'would_allow', reason: result.reason };
+      return { decisionId: null, verdict: 'would_allow', reason: result.reason, allowed: result.allowed };
     }
 
     const verdict: AuthorizeTicketDispatchResult['verdict'] = result.requiresApproval
@@ -139,7 +156,7 @@ export async function authorizeTicketDispatch(
       } as any,
     });
 
-    return { decisionId: row.id, verdict, reason: result.reason };
+    return { decisionId: row.id, verdict, reason: result.reason, allowed: result.allowed };
   } catch (err: any) {
     console.error(
       JSON.stringify({

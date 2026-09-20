@@ -27,6 +27,7 @@ jest.mock('../reeseTools', () => ({
   executeReeseTool: jest.fn(),
 }));
 jest.mock('../../agentBlueprint/agentActivityLogService', () => ({ logAgentActivity: jest.fn() }));
+jest.mock('../../workLedger/agentActionAuthorizationBridge', () => ({ authorizeTicketDispatch: jest.fn() }));
 
 import RoomMembership from '../../../models/RoomMembership';
 import RoomMessage from '../../../models/RoomMessage';
@@ -38,6 +39,7 @@ import { ensureReeseTicketForRoom, logReeseExchangeActivity } from '../reeseTick
 import { maybeRefreshStudentAssessment } from '../../studentHealthAssessment';
 import { executeReeseTool } from '../reeseTools';
 import { logAgentActivity } from '../../agentBlueprint/agentActivityLogService';
+import { authorizeTicketDispatch } from '../../workLedger/agentActionAuthorizationBridge';
 import { maybeTriggerReeseReply } from '../reeseReplyService';
 
 const mockMembershipFindOne = RoomMembership.findOne as unknown as jest.Mock;
@@ -54,6 +56,7 @@ const mockLogExchange = logReeseExchangeActivity as unknown as jest.Mock;
 const mockMaybeRefreshAssessment = maybeRefreshStudentAssessment as unknown as jest.Mock;
 const mockExecuteReeseTool = executeReeseTool as unknown as jest.Mock;
 const mockLogAgentActivity = logAgentActivity as unknown as jest.Mock;
+const mockAuthorizeTicketDispatch = authorizeTicketDispatch as unknown as jest.Mock;
 
 const REESE_ADMIN_ID = 'reese-admin-1';
 const REESE_AGENT_ID = 'reese-agent-1';
@@ -94,6 +97,7 @@ beforeEach(() => {
   mockMaybeRefreshAssessment.mockResolvedValue(undefined);
   mockExecuteReeseTool.mockResolvedValue('{}');
   mockLogAgentActivity.mockResolvedValue(undefined);
+  mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_allow', reason: 'ok', allowed: true });
 });
 
 describe('maybeTriggerReeseReply', () => {
@@ -295,6 +299,46 @@ describe('maybeTriggerReeseReply', () => {
     expect(roles[0]).toBe('system');
     expect(roles).toContain('assistant');
     expect(roles).toContain('user');
+  });
+
+  describe('Real-enforcement Phase 2 (respects authorizeTicketDispatch().allowed — this function\'s FIRST authorization call ever)', () => {
+    it('shadow-mode no-op proof: allowed:true (the real, current, unconditional shadow-mode value) leaves the reply byte-for-byte unchanged', async () => {
+      mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+      mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_require_approval', reason: 'requires_approval:high_risk_tier', allowed: true });
+
+      await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+      expect(mockAuthorizeTicketDispatch).toHaveBeenCalledWith(
+        expect.objectContaining({ ticketId: 'ticket-1', agentName: 'Reese', action: 'reese_dm_reply', riskTier: 'R3' }),
+      );
+      expect(mockSendDmMessage).toHaveBeenCalledTimes(1);
+      expect(mockSendDmMessage).toHaveBeenCalledWith(
+        { enrollmentId: REESE_ID, cohortId: null, isAdmin: false }, ROOM_ID, 'Here is your next move.',
+      );
+    });
+
+    it('a held reply (allowed:false) never sends — an honest hold, not a silent drop', async () => {
+      mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+      mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_require_approval', reason: 'requires_approval:high_risk_tier', allowed: false });
+
+      await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+      expect(mockSendDmMessage).not.toHaveBeenCalled();
+      // No downstream reply-side-effect bookkeeping either — nothing was sent.
+      expect(mockLogAgentActivity).not.toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'reese_dm_reply', result: 'success' }),
+      );
+    });
+
+    it('ticketId === null (ticket-ensure already failed and was swallowed) skips the authorization call entirely and sends exactly as today — the disclosed design decision, not a new blocking condition', async () => {
+      mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+      mockEnsureTicket.mockRejectedValue(new Error('ticket service down'));
+
+      await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+      expect(mockAuthorizeTicketDispatch).not.toHaveBeenCalled();
+      expect(mockSendDmMessage).toHaveBeenCalledTimes(1); // reply still sent, exactly as before this phase
+    });
   });
 
   describe('GOALS scorecard activity logging (Ali: "improve the 3.8/5 Trust score for Reese")', () => {

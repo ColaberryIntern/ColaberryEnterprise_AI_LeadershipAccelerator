@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import RoomMembership from '../../models/RoomMembership';
@@ -11,6 +12,16 @@ import { readAttachments, attachmentInstruction } from '../agents/tools/readAtta
 import type { AttachmentRef } from '../agents/tools/types';
 import { maybeRefreshStudentAssessment } from '../studentHealthAssessment';
 import { executeReeseTool, REESE_TOOLS } from './reeseTools';
+import { authorizeTicketDispatch } from '../workLedger/agentActionAuthorizationBridge';
+
+// Real-enforcement scoping, Phase 2 (2026-09-20) — a DM reply reaching a real
+// student is the same kind of real, external side effect as her autonomous
+// outreach send (deliveryRiskLevels.ts's own platform-wide R3 definition:
+// "schema_security_or_external_side_effect"). No risk tier existed for this
+// path before now (REESE_STANDARD_AUDIT.md gap #1 was "no authorization call
+// at all"); reusing R3 here is a disclosed, deliberate assumption for
+// consistency with her outreach path's own classification, not a guess.
+const REPLY_RISK_TIER = 'R3';
 
 // Reese Phase 1 — the ONLY place Reese-authored DM content is ever produced.
 // Reactive, guarded, never proactive:
@@ -197,6 +208,45 @@ export async function maybeTriggerReeseReply(roomId: string, senderEnrollmentId:
 
     const reply = completion.choices[0]?.message?.content?.trim();
     if (!reply) return;
+
+    // Real-enforcement scoping, Phase 2 (2026-09-20) — this function's FIRST
+    // authorization call ever (REESE_STANDARD_AUDIT.md gap #1). Matches
+    // sendNewOutreach()'s established "gate ahead of the action" ordering:
+    // evaluated after the reply is generated, before the real send.
+    //
+    // Only when a real ticketId exists: a missing ticketId (ticket-linking
+    // already failed and was swallowed above, this function's own established
+    // "a ticket-layer problem never blocks the reply" posture) skips this call
+    // entirely and sends exactly as today — a deliberate, disclosed design
+    // decision (see this run's execution-contract.md), not a new gap. Getting
+    // this the other way around — blocking the reply because ticketId is null
+    // — would be a real, new regression: a student's reply going unanswered
+    // over an unrelated ticket-linking hiccup, worse than the gap it would
+    // "fix".
+    if (ticketId) {
+      const authResult = await authorizeTicketDispatch({
+        eventId: crypto.randomUUID(),
+        ticketId,
+        agentName: 'Reese',
+        action: 'reese_dm_reply',
+        riskTier: REPLY_RISK_TIER,
+        preparedAction: { roomId, content: reply },
+      });
+
+      // allowed is the real, mode-aware signal (unconditionally true in shadow
+      // mode — see agentActionAuthorizationBridge.ts's own header). A held
+      // reply returns here, before the real send — an honest hold, not a
+      // silent drop: the student's message was received, Reese's reply is
+      // just not released yet.
+      if (!authResult.allowed) {
+        console.log(JSON.stringify({
+          timestamp: new Date().toISOString(), level: 'info', service: 'reeseReplyService',
+          event: 'reply_held_for_approval', outcome: 'partial',
+          context: { room_id: roomId, ticket_id: ticketId, reason: authResult.reason },
+        }));
+        return;
+      }
+    }
 
     // Dynamic import breaks the dmService.ts <-> reeseReplyService.ts circular
     // dependency (dmService calls this module; this module posts back through
