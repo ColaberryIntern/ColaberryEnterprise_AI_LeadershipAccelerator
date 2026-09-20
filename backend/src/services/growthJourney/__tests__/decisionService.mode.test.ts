@@ -39,11 +39,11 @@ import type { ExplorerGrowthFlags } from '../../../config/explorerGrowthFlags';
 import type { GrowthJourneyFlags } from '../../../config/growthJourneyFlags';
 import { sequelize } from '../../../config/database';
 import { anchorOf4, AS_OF_4, arrangeWorld, flags4 } from './fixtures/phase4Harness';
-import { m } from './fixtures/phase3Harness';
+import { m, persisted } from './fixtures/phase3Harness';
 import { brandRow, classified, counts, programRow } from './fixtures/phase3Fixtures';
 import { b2bSubject, exitTwins, flotationTrainingScenarios, humanInThreadSubject, learnerScenarios, programmeScenarios, replyOnlySubject, samePersonTwoBrands, twoTriggerSubject, type HandoffFixture } from './fixtures/phase4Fixtures';
 import { T5, resetPhase5Tables } from './fixtures/phase5Tables';
-import { decideForSubjectAndRecord, decisionRow, type DecideAndRecordArgs } from '../decisionService';
+import { decideForSubjectAndRecord, decisionRow, runShadowDecisions, type DecideAndRecordArgs } from '../decisionService';
 import { executionChannelOf, resolveDecisionExecutionMode, withExecutionMode, LIVE_MODES, type ExecutionModeStamp } from '../decision/executionModeStamp';
 import { rolloutScopeKey } from '../execution/scopeKey';
 import { computeIdempotencyKey } from '../../inboxCase/textNormalization';
@@ -227,6 +227,35 @@ describe('the flip: flag on with a limited rollout', () => {
     const logged = (console.error as jest.Mock).mock.calls.map((c) => String(c[0])).filter((s) => s.includes('growth_journey.decision.execution_mode_unavailable'));
     expect(logged).toHaveLength(1);
     expect(logged[0]).not.toContain('@');
+  });
+});
+
+describe('the batch runner hands the Explorer family down - the hop the T507 verifier found unpinned', () => {
+  // A B2B subject in an exploring state with a portal account and its email paused: the in-app nudge is the only candidate,
+  // and in_app is a channel whose ladder answer depends on the Explorer family - so a dropped pass-through is visible.
+  const nudgeSubject = (): HandoffFixture => {
+    const f = b2bSubject(BRAND, 'mode-nudge', 'I', { classification: classified(BRAND, 'workflow_automation', 'automation_request'), contact: 'email_paused', expect: { state: 'EXPLORING_SOLUTIONS', queue: null } });
+    // Enrollment-anchored: the world carries a portal account only for an enrollment anchor.
+    return { ...f, anchor: { enrollmentId: 'enr-mode-nudge' }, subject: { ...f.subject, enrollment_id: 'enr-mode-nudge' } };
+  };
+  type Persisted = { selected_action: string; mode: string; eligibility: { execution_mode: ExecutionModeStamp } };
+  const rows = () => [...persisted.values()] as unknown as Persisted[];
+
+  it('runShadowDecisions over the nudge subject: shadow `explorer_flag_off:inAppNudge` with the sub-flag off in the family handed in, live on a new row once it is on', async () => {
+    const f = nudgeSubject();
+    arrangeWorld([f]);
+    rollout({ channel: 'in_app', scope_key: rolloutScopeKey({ brandId: brandRow(BRAND).id, programId: programRow(BRAND).id, channel: 'in_app' }), mode: 'review', cohort_lead_ids: null, daily_limit: null });
+    const run = (family: ExplorerGrowthFlags) => runShadowDecisions({ brandId: brandRow(BRAND).id, trigger: 'nightly', flags: executionOn(), explorerFlags: family, asOf: AS_OF_4 });
+
+    const off = await run(explorerFlags({ inAppNudgeEnabled: false }));
+    expect(off).toMatchObject({ status: 'ran', subjects: 1, recorded: 1, replayed: 0, errors: [] });
+    expect(rows()).toHaveLength(1);
+    expect([rows()[0].selected_action, rows()[0].mode, rows()[0].eligibility.execution_mode]).toEqual(['SHOW_IN_APP_NUDGE', 'shadow', { mode: 'shadow', reason: 'explorer_flag_off:inAppNudge', resolved: 'shadow', channel: 'in_app', control_ids: [] }]);
+
+    const on = await run(explorerFlags({ inAppNudgeEnabled: true }));
+    expect(on).toMatchObject({ status: 'ran', subjects: 1, recorded: 1, replayed: 0, errors: [] });
+    expect(rows()).toHaveLength(2);
+    expect(rows()[1]).toMatchObject({ selected_action: 'SHOW_IN_APP_NUDGE', mode: 'live', eligibility: { execution_mode: { mode: 'live', reason: 'rollout', resolved: 'review', channel: 'in_app' } } });
   });
 });
 
