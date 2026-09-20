@@ -78,6 +78,8 @@ const CSS = `
 .ba-submit-btn{border:0;border-radius:9px;padding:12px 16px;font-weight:800;font-size:13px;cursor:pointer;background:var(--accent);color:#fff;width:100%}
 .ba-submit-btn:hover{background:var(--accent2)}
 .ba-submit-btn:disabled{opacity:.6;cursor:default}
+.ba-again{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}
+.ba-again-note{font-size:12.5px;color:var(--mut);line-height:1.55;margin-top:8px}
 .ba-err{color:#b3261e;background:#fdeceb;border:1px solid #f5c6c2;border-radius:8px;padding:8px 11px;font-size:12.5px;margin:10px 0 0}
 .ba-donemsg{border:1px solid #bfe6cd;background:#eafaf1;color:var(--green);border-radius:12px;padding:14px 16px;margin:18px 0 0;font-size:13.5px;font-weight:600}
 .ba-sync{border-radius:10px;padding:11px 14px;margin:10px 0 0;font-size:12.8px;line-height:1.55}
@@ -246,6 +248,27 @@ const BuildArtifactsRender: React.FC<Props> = ({ bodyHtml, title, summary, varia
         {isDone ? (
           <>
             <div className="ba-donemsg">&#10003; Build submitted — nice work. You can keep building more artifacts for practice (no extra points).</div>
+            {/* SUBMITTING IS NOT A ONE-WAY DOOR.
+
+                Uploading a file completes the whole card. Until 2026-09-20 the
+                upload control then disappeared, so a learner who submitted after
+                step 1 of a seven-step task had no way back in: she had to email and
+                wait for someone to re-open it by hand. The line above already told
+                her she could keep building; there was nothing to build with.
+
+                Re-uploading is safe: each file is added as its own artifact, and
+                points are keyed on the card, so they are paid once either way. */}
+            <div className="ba-again">
+              <input ref={fileRef} type="file" accept={ACCEPT} style={{ display: 'none' }} onChange={onFile} />
+              <button type="button" className="ba-submit-btn" disabled={uploading} onClick={() => fileRef.current && fileRef.current.click()}>
+                {uploading ? 'Uploading…' : '⬆  Upload another file'}
+              </button>
+              {uploadErr && <div className="ba-err">{uploadErr}</div>}
+              <div className="ba-again-note">
+                Submitted before you were finished, or uploaded the wrong file? Upload the real one here.
+                It is added to your evidence and your points do not change.
+              </div>
+            </div>
             {repoSync === 'written' && (
               <div className="ba-sync ok">&#10003; Saved to your GitHub repo under <code>artifacts/</code>.</div>
             )}
