@@ -80,8 +80,14 @@ describe('the extraction (acceptance 4, 5)', () => {
     expect(call).toBeGreaterThan(recomputeClose);
   });
 
-  it('schedulerService.ts has fewer lines than before the extraction (3,668)', () => {
-    expect(scheduler.split('\n').length).toBeLessThan(3668);
+  it('the moved block is gone from schedulerService.ts line for line (a count is not a regression property - main grows)', () => {
+    // T520's gate: the sibling pin on server.ts (T514a) broke on the merge; this one was eight lines from breaking.
+    for (const line of [
+      '  // Growth Journey OS - the nightly shadow decisions (Phase 4 T408).',
+      `  cron.schedule('${NIGHTLY.schedule}', () => {`,
+      `    instrumentCronJob('${NIGHTLY.agent}', async () => {`,
+      '      await runScheduledShadowDecisions();',
+    ]) expect(scheduler).not.toContain(line);
   });
 
   it('the shadow block moved whole: its comment, schedule, wrapping, runner call and error line are in the module', () => {

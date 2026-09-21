@@ -72,8 +72,11 @@ describe('the extraction (acceptance 7, 8)', () => {
     expect(module_).toContain('export function mountLearnerPortalRoutes(app: Express): void {');
   });
 
-  it('server.ts has fewer lines than before the extraction (3,371)', () => {
-    expect(server.split('\n').length).toBeLessThan(3371);
+  it('the moved block is gone from server.ts line for line (the extraction commit recorded the count; a count is not a regression property - main grows)', () => {
+    // T520's gate: the absolute pin (< 3,371 lines) broke the day main added 13 lines to server.ts. What the extraction
+    // guarantees is that none of the block's lines remain in the parent, and that is what is pinned.
+    const serverLines = new Set(server.split('\n').map((l) => l.trim()));
+    for (const line of BLOCK_BEFORE) expect(serverLines.has(line.trim())).toBe(false);
   });
 });
 
