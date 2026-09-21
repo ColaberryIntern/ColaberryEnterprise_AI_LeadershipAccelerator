@@ -24,6 +24,7 @@ jest.mock('../reeseInitiateDmService', () => ({ initiateDm: jest.fn() }));
 jest.mock('../resolveStudentDisplayName', () => ({ resolveStudentDisplayName: jest.fn() }));
 jest.mock('../outreachChecklist', () => ({ createOutreachChecklistInstance: jest.fn() }));
 jest.mock('../reeseWorkLedgerEvents', () => ({ emitReeseLedgerEvent: jest.fn() }));
+jest.mock('../../workGraph/workGraphService', () => ({ createWorkUnit: jest.fn(), updateWorkUnitStatus: jest.fn() }));
 
 import ReeseOutreach from '../../../models/ReeseOutreach';
 import { createTicket } from '../../ticketService';
@@ -41,6 +42,7 @@ import { initiateDm } from '../reeseInitiateDmService';
 import { resolveStudentDisplayName } from '../resolveStudentDisplayName';
 import { createOutreachChecklistInstance } from '../outreachChecklist';
 import { emitReeseLedgerEvent } from '../reeseWorkLedgerEvents';
+import { createWorkUnit, updateWorkUnitStatus } from '../../workGraph/workGraphService';
 import { runReeseAutonomousOutreachSweep, countAutonomousSendsToday, DAILY_SEND_CAP } from '../reeseAutonomousOutreachService';
 
 const mockReeseOutreachCount = ReeseOutreach.count as unknown as jest.Mock;
@@ -60,6 +62,8 @@ const mockInitiateDm = initiateDm as unknown as jest.Mock;
 const mockResolveStudentDisplayName = resolveStudentDisplayName as unknown as jest.Mock;
 const mockCreateOutreachChecklistInstance = createOutreachChecklistInstance as unknown as jest.Mock;
 const mockEmitReeseLedgerEvent = emitReeseLedgerEvent as unknown as jest.Mock;
+const mockCreateWorkUnit = createWorkUnit as unknown as jest.Mock;
+const mockUpdateWorkUnitStatus = updateWorkUnitStatus as unknown as jest.Mock;
 
 const STUDENT_ID = 'd6a4b017-6716-4673-96b5-ab3074b70191'; // real-shaped UUID — the exact defect Ali flagged live
 const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
@@ -83,6 +87,8 @@ beforeEach(() => {
   mockInitiateDm.mockResolvedValue({ roomId: 'room-1', messageId: 'msg-1' });
   mockResolveStudentDisplayName.mockResolvedValue('Jordan Rivera');
   mockCreateOutreachChecklistInstance.mockResolvedValue({ id: 'checklist-1' });
+  mockCreateWorkUnit.mockResolvedValue({ id: 'wu-1', update: jest.fn().mockResolvedValue(undefined) });
+  mockUpdateWorkUnitStatus.mockResolvedValue(undefined);
 });
 
 describe('runReeseAutonomousOutreachSweep — happy path', () => {
@@ -128,6 +134,7 @@ describe('runReeseAutonomousOutreachSweep — happy path', () => {
     expect(mockEmitReeseLedgerEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         ticketId: 'ticket-1',
+        workUnitId: 'wu-1', // Workspace mission, Phase 2 slice 2
         actorType: 'ai_staff',
         actorId: 'reese-admin-1',
         intent: 'reese.autonomous_outreach',
@@ -387,6 +394,11 @@ describe('runReeseAutonomousOutreachSweep — Real-enforcement Phase 2 (respects
     expect(result.decisions[0]).toEqual(
       expect.objectContaining({ enrollmentId: STUDENT_ID, action: 'skipped', reason: 'held_for_approval' }),
     );
+    // Workspace mission, Phase 2 slice 2: a held outreach transitions the real
+    // work unit to 'blocked' — never 'done' or 'failed'.
+    expect(mockUpdateWorkUnitStatus).toHaveBeenCalledWith('wu-1', 'blocked');
+    expect(mockUpdateWorkUnitStatus).not.toHaveBeenCalledWith('wu-1', 'done');
+    expect(mockUpdateWorkUnitStatus).not.toHaveBeenCalledWith('wu-1', 'failed');
     // The ticket itself is still created (authorization runs after ticket creation,
     // matching the existing ordering) — only the send and its downstream bookkeeping
     // are held.
@@ -444,5 +456,49 @@ describe('countAutonomousSendsToday', () => {
     expect(mockReeseOutreachCount).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ last_contacted_at: expect.anything() }) }),
     );
+  });
+});
+
+describe('runReeseAutonomousOutreachSweep — Workspace mission, Phase 2 slice 2 (real, persisted TicketWorkUnit lifecycle for outreach)', () => {
+  it('happy path: a real work unit is created for the send, assigned to Reese, and transitions to \'done\' after a successful send', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+    const mockWorkUnitUpdate = jest.fn().mockResolvedValue(undefined);
+    mockCreateWorkUnit.mockResolvedValue({ id: 'wu-42', update: mockWorkUnitUpdate });
+
+    await runReeseAutonomousOutreachSweep(false);
+
+    expect(mockCreateWorkUnit).toHaveBeenCalledWith('ticket-1', expect.objectContaining({
+      title: 'Outreach to Jordan Rivera (inactivity)',
+      requiredCapability: 'student_support.outreach',
+      riskTier: 'R3',
+      status: 'in_progress',
+      approvalPolicy: 'auto',
+    }));
+    expect(mockWorkUnitUpdate).toHaveBeenCalledWith({ assigned_agent_name: 'Reese' });
+    expect(mockUpdateWorkUnitStatus).toHaveBeenCalledWith('wu-42', 'done');
+  });
+
+  it('a thrown error after the work unit was created (e.g. the DM send fails) transitions the work unit to \'failed\', and the original error still propagates unchanged', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+    mockInitiateDm.mockRejectedValue(new Error('DM service down'));
+
+    // Pre-existing behavior, unchanged by this task: sendNewOutreach() has no
+    // outer catch of its own, so a thrown error still propagates all the way
+    // out of the sweep — this task only adds a fail-open bookkeeping step
+    // ahead of that same propagation, never a new swallow.
+    await expect(runReeseAutonomousOutreachSweep(false)).rejects.toThrow('DM service down');
+
+    expect(mockUpdateWorkUnitStatus).toHaveBeenCalledWith('wu-1', 'failed');
+  });
+
+  it('boundary: a work-unit-creation failure never blocks the real send — fail-open, and no status transition is attempted for a work unit that was never created', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+    mockCreateWorkUnit.mockRejectedValue(new Error('DB write failed'));
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(result.sent).toBe(1);
+    expect(mockInitiateDm).toHaveBeenCalled();
+    expect(mockUpdateWorkUnitStatus).not.toHaveBeenCalled();
   });
 });
