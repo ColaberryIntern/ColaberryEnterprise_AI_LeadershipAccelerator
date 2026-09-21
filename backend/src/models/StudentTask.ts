@@ -62,6 +62,23 @@ export interface StudentTaskAttributes {
    * StoryVerificationRecord in sbp/verification.
    */
   verification_json?: unknown;
+  // ── AI Project Factory attributes (nullable, additive; db/ensureFactoryTaskSchema.ts) ──
+  // The typed executor CLASS (owner_agent stays the agent's name); the accountable human; and
+  // the attributes a human-or-AI allocation is decided against. Null until the factory sets them.
+  // `any` on the JSONB columns (required_skills, source_evidence) follows this model's own
+  // convention (acceptance, fulfills): their shape is the typed factoryContract (skill-id and
+  // block-id string[]), enforced by factoryValidate() at the service boundary, not the ORM type.
+  executor_type?: string | null;
+  accountable_identity_id?: string | null;
+  required_skills?: any;
+  judgment_level?: string | null;
+  decision_authority?: string | null;
+  data_sensitivity?: string | null;
+  interaction_pattern?: string | null;
+  frequency?: string | null;
+  factory_confidence?: number | null;
+  source_evidence?: any;
+  decomposition_method?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -93,6 +110,17 @@ class StudentTask extends Model<StudentTaskAttributes> implements StudentTaskAtt
   declare verified_by: string | null;
   declare verified_ref: string | null;
   declare verification_json: unknown;
+  declare executor_type: string | null;
+  declare accountable_identity_id: string | null;
+  declare required_skills: any;
+  declare judgment_level: string | null;
+  declare decision_authority: string | null;
+  declare data_sensitivity: string | null;
+  declare interaction_pattern: string | null;
+  declare frequency: string | null;
+  declare factory_confidence: number | null;
+  declare source_evidence: any;
+  declare decomposition_method: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -143,6 +171,20 @@ StudentTask.init(
     // the UPDATE without a word, and every story renders as "not started"
     // forever while the loop reports success.
     verification_json: { type: DataTypes.JSONB, allowNull: true },
+    // ── AI Project Factory attributes (nullable, additive). Declared here for the same
+    // reason as the fields above: an attribute absent from init is silently stripped from
+    // INSERT/UPDATE, so the factory would write executor/accountable and get nulls back. ──
+    executor_type: { type: DataTypes.TEXT, allowNull: true },
+    accountable_identity_id: { type: DataTypes.TEXT, allowNull: true },
+    required_skills: { type: DataTypes.JSONB, allowNull: true },
+    judgment_level: { type: DataTypes.TEXT, allowNull: true },
+    decision_authority: { type: DataTypes.TEXT, allowNull: true },
+    data_sensitivity: { type: DataTypes.TEXT, allowNull: true },
+    interaction_pattern: { type: DataTypes.TEXT, allowNull: true },
+    frequency: { type: DataTypes.TEXT, allowNull: true },
+    factory_confidence: { type: DataTypes.DOUBLE, allowNull: true },
+    source_evidence: { type: DataTypes.JSONB, allowNull: true },
+    decomposition_method: { type: DataTypes.TEXT, allowNull: true },
   },
   {
     sequelize,
