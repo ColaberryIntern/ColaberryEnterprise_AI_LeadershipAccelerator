@@ -59,3 +59,18 @@ teardown Ali emailed.
     JS, removing the array bind. The schema/feature were always correct; only the assert lied.
   - Verification: the tables provably exist (positional query on prod); the fixed assert has no
     bind to fail. Confirmed clean on the next deploy's boot log.
+
+- [x] Fix the assert PROPERLY: this app's sequelize returns single-column selects as raw arrays
+  - Date: 2026-09-21
+  - Session: CC-20260920-af3p
+  - What changed: the first fix (fetch-all + JS filter) STILL returned false in production. Root
+    cause, MEASURED: `sequelize.query('SELECT table_name ...')` in this app returns each row as a
+    RAW ARRAY (`["some_table"]`, keys `["0"]`), NOT a `{ table_name }` object — so `r.table_name`
+    was undefined for every row and the membership check always failed (the original `= ANY($names)`
+    bind failed for the same underlying reason). assertFactoryTaskSchema works only because it
+    passes `{ bind }`, which changes the return to objects. Final fix: aggregate existence in SQL
+    with one `bool_or(table_name = '<t>') AS t<i>` per required table and read a single keyed row
+    back — validated on prod (all five true, missing=[]). REQUIRED_TABLES are constants, so the
+    interpolation is not injectable.
+  - Verification: ran the exact bool_or query against prod sequelize — `{t0..t4: true}`, missing=[];
+    confirmed clean "contract track schema ensured" on the redeploy boot.
