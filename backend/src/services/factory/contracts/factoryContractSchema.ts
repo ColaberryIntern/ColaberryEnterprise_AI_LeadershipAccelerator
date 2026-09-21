@@ -63,3 +63,75 @@ export const FACTORY_ASSIGNMENT_JSON_SCHEMA = {
     evidence_note: { type: ['string', 'null'] },
   },
 } as const;
+
+/**
+ * Phase 2 additions — the parts of a FactoryProject the LLM must ALSO emit so a decomposition
+ * is a COMPLETE, gate-valid project rather than just tasks+assignments. factoryValidate requires
+ * a resolvable process per task (WORK_REFERENCE) and a single-START/≥1-END reachable transition
+ * graph (START/END/REACHABILITY/BRANCH_KIND/LOOP), so the model emits processes, transitions, and
+ * roles too. These mirror ProcessRecord / TransitionEdge / Role in factoryContract.ts and are held
+ * in lockstep by factoryContract.test.ts exactly as FACTORY_TASK/ASSIGNMENT are. Additive: the two
+ * frozen schemas above are reused unchanged.
+ */
+export const FACTORY_PROCESS_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: [
+    'id', 'business_outcome', 'success_criterion', 'trigger', 'inputs', 'outputs',
+    'decision_branches', 'future_owner_role_id', 'exceptions',
+  ],
+  properties: {
+    id: { type: 'string' },
+    business_outcome: { type: 'string' },
+    success_criterion: { type: 'string' },
+    trigger: { type: 'string' },
+    inputs: { type: 'array', items: { type: 'string' } },
+    outputs: { type: 'array', items: { type: 'string' } },
+    decision_branches: { type: 'array', items: { type: 'string' } },
+    future_owner_role_id: { type: ['string', 'null'] },
+    exceptions: { type: 'array', items: { type: 'string' } },
+  },
+} as const;
+
+export const FACTORY_TRANSITION_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['id', 'from_task_id', 'to_task_id', 'condition', 'is_rework'],
+  properties: {
+    id: { type: 'string' },
+    from_task_id: { type: 'string' },
+    to_task_id: { type: 'string' },
+    condition: { type: ['string', 'null'] },
+    is_rework: { type: 'boolean' },
+  },
+} as const;
+
+export const FACTORY_ROLE_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['id', 'name', 'definition'],
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    definition: { type: 'string' },
+  },
+} as const;
+
+/**
+ * The full decomposition the Phase-2 LLM returns in one structured-output call. factoryAssemble
+ * (T5) then attaches the deterministic source_blocks/requirements/tracks from the input and derives
+ * idempotent assignment/edge ids, producing a FactoryProject factoryValidate can gate. Every array
+ * is required (an empty array is a legal, gate-checkable value — "no roles yet" is visible, not absent).
+ */
+export const FACTORY_DECOMPOSITION_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['processes', 'tasks', 'assignments', 'transitions', 'roles'],
+  properties: {
+    processes: { type: 'array', items: FACTORY_PROCESS_JSON_SCHEMA },
+    tasks: { type: 'array', items: FACTORY_TASK_JSON_SCHEMA },
+    assignments: { type: 'array', items: FACTORY_ASSIGNMENT_JSON_SCHEMA },
+    transitions: { type: 'array', items: FACTORY_TRANSITION_JSON_SCHEMA },
+    roles: { type: 'array', items: FACTORY_ROLE_JSON_SCHEMA },
+  },
+} as const;

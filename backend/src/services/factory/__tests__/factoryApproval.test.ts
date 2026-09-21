@@ -11,7 +11,11 @@ jest.mock('../../../models/ContractProcessDocument', () => ({
 
 import {
   approveProcessDocument, contentHash, canTransition, checkExpectedVersion, ApprovalConflictError,
+  assertApprovable, ApprovalGateError,
 } from '../factoryApproval';
+import { buildSampleContractProject } from '../sample/sampleContractProject';
+
+const validDoc = buildSampleContractProject();
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -50,7 +54,8 @@ describe('approveProcessDocument (fork-on-edit + CAS)', () => {
   });
 
   it('forks a NEW version marked approved, hashes the doc, and supersedes the prior', async () => {
-    const current: any = { version: 1, status: 'draft', doc_json: { hello: 'world' }, save: jest.fn().mockResolvedValue(undefined) };
+    // doc_json must now be a gate-clean FactoryProject (the write is gated) — use the known-valid sample.
+    const current: any = { version: 1, status: 'draft', doc_json: validDoc, save: jest.fn().mockResolvedValue(undefined) };
     findOne.mockResolvedValue(current);
     create.mockResolvedValue({ id: 'new-id', version: 2 });
 
@@ -60,12 +65,26 @@ describe('approveProcessDocument (fork-on-edit + CAS)', () => {
     const created = create.mock.calls[0][0];
     expect(created.version).toBe(2);              // a NEW version, not an overwrite
     expect(created.status).toBe('documented');
-    expect(created.content_sha256).toBe(contentHash('rev-1', { hello: 'world' }));
+    expect(created.content_sha256).toBe(contentHash('rev-1', validDoc));
     expect(created.enrichment_status).toBe('partial');   // decoupled from level
     expect(current.status).toBe('superseded');    // fork-on-edit: prior superseded, not mutated away
     expect(current.superseded_by_id).toBe('new-id');
     expect(current.save).toHaveBeenCalledTimes(1);
     expect(dto).toMatchObject({ version: 2, status: 'documented', approval_level: 'documented' });
+  });
+
+  it('REFUSES to approve a decomposition with gate errors (ApprovalGateError, nothing written)', async () => {
+    // a valid project minus t-route-tech's PERFORMER → one PERFORMER gate error
+    const broken = { ...validDoc, assignments: validDoc.assignments.filter((a) => !(a.task_id === 't-route-tech' && a.responsibility === 'PERFORMER')) };
+    findOne.mockResolvedValue({ version: 1, status: 'draft', doc_json: broken, save: jest.fn() });
+    await expect(approveProcessDocument(input)).rejects.toBeInstanceOf(ApprovalGateError);
+    expect(create).not.toHaveBeenCalled(); // the write never happened
+  });
+
+  it('refuses a malformed document (not a complete FactoryProject) before writing', async () => {
+    findOne.mockResolvedValue({ version: 1, status: 'draft', doc_json: { hello: 'world' }, save: jest.fn() });
+    await expect(approveProcessDocument(input)).rejects.toMatchObject({ name: 'ApprovalGateError' });
+    expect(create).not.toHaveBeenCalled();
   });
 
   it('refuses an illegal transition (full -> documented) even when the version matches', async () => {
@@ -78,5 +97,30 @@ describe('approveProcessDocument (fork-on-edit + CAS)', () => {
   it('throws when there is no document to approve', async () => {
     findOne.mockResolvedValue(null);
     await expect(approveProcessDocument(input)).rejects.toThrow(/no process document/);
+  });
+});
+
+describe('assertApprovable — the pure write gate', () => {
+  it('passes a gate-clean FactoryProject', () => {
+    expect(() => assertApprovable(validDoc)).not.toThrow();
+  });
+  it('throws ApprovalGateError carrying the real gate issues on a broken project', () => {
+    const broken = { ...validDoc, assignments: validDoc.assignments.filter((a) => a.responsibility !== 'PERFORMER') };
+    try {
+      assertApprovable(broken);
+      throw new Error('should have thrown');
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ApprovalGateError);
+      expect(e.issues.some((i: any) => i.code === 'PERFORMER')).toBe(true);
+    }
+  });
+  it('throws MALFORMED_DOCUMENT when the document is not a complete FactoryProject', () => {
+    try {
+      assertApprovable({ tasks: [] }); // missing processes/assignments/transitions/source_blocks arrays
+      throw new Error('should have thrown');
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ApprovalGateError);
+      expect(e.issues[0].code).toBe('MALFORMED_DOCUMENT');
+    }
   });
 });

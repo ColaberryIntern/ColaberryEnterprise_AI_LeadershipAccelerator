@@ -764,3 +764,7 @@ in this folder is failures that were reported as fixed because someone inferred.
 - In-repo design docs: `docs/BUILD_PIPELINE_AUDIT.md` (why), `BUILD_PIPELINE_REQUIREMENTS.md`
   (SBP-REQ-v1), `BUILD_PIPELINE_GITHUB_SYNC.md` (SBP-GH-v1),
   `BUILD_PIPELINE_RELEASES_AND_STORIES.md`.
+- **Separate lane, not SBP:** the **AI Project Factory** (`backend/src/services/factory/`, see its
+  `README.md`) decomposes a `delivery_projects` **contract** into a process/workforce/flow behind the
+  `factoryValidate` gate. It mirrors this pipeline's decompose→gate→repair shape but shares no code
+  and produces a `FactoryProject`, not a `BuildPlan`. Ships dark behind `ENABLE_FACTORY_GENERATION`.
