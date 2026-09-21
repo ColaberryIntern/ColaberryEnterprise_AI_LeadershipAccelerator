@@ -23,6 +23,13 @@ import {
   releaseHandoffHandler,
 } from '../../controllers/growthJourneyHandoffController';
 import { getPersonJourneyHandler } from '../../controllers/growthJourneyPersonController';
+import {
+  clearPauseHandler,
+  clearRolloutHandler,
+  createPauseHandler,
+  createRolloutHandler,
+  listControlsHandler,
+} from '../../controllers/growthJourneyExecutionController';
 
 /**
  * Growth Journey admin read routes (T207).
@@ -52,13 +59,15 @@ import { getPersonJourneyHandler } from '../../controllers/growthJourneyPersonCo
  *
  * ─── READS, AND THE AUDITED WRITES ──────────────────────────────────────────
  *
- * Nine GETs and four POSTs. The participation, decision and person routes
- * perform no write at all; the classification override and the three handoff moves
- * (accept, disposition, release - Phase 4) are the writes, each audited through
- * `requireBrandAccessAudited` before the row changes. The scope every read
- * enforces comes from the caller's memberships, never from a header the client
- * controls — see each controller's header for the full status matrix and the
- * refuse-never-widen rule.
+ * Ten GETs and eight POSTs. The participation, decision, person and control-list
+ * routes perform no write at all; the classification override, the three handoff
+ * moves (accept, disposition, release - Phase 4) and the four execution-control
+ * writes (a pause, a rollout, their clears - Phase 5) are the writes, each audited
+ * through `requireBrandAccessAudited` or, where the scope spans brands or raises
+ * a mode, `requirePlatformSuperAdminAudited`, before the row changes. The scope
+ * every read enforces comes from the caller's memberships, never from a header
+ * the client controls — see each controller's header for the full status matrix
+ * and the refuse-never-widen rule.
  */
 
 const router = Router();
@@ -104,5 +113,18 @@ router.post(`${BASE}/handoffs/:id/release`, releaseHandoffHandler);
 // may see, stored rows only, scoped collection by collection. A lead the caller
 // can see nothing of is the byte-identical 404.
 router.get(`${BASE}/people/:leadId`, getPersonJourneyHandler);
+
+// Phase 5 (T518): the operator's switchboard. One GET (the controls in the
+// caller's scope), four audited POSTs: a pause on a brand is the brand's admins'
+// (`requireBrandAccessAudited`); a pause with no brand, and any rollout, is the
+// platform's (`requirePlatformSuperAdminAudited`); a clear needs the guard its
+// row's scope needed to set it. A second active control for a scope is a 409
+// from the database's own index. Nothing here sends: a control is a row the
+// executor reads on its next run.
+router.get(`${BASE}/execution/controls`, listControlsHandler);
+router.post(`${BASE}/execution/pauses`, createPauseHandler);
+router.post(`${BASE}/execution/pauses/:id/clear`, clearPauseHandler);
+router.post(`${BASE}/execution/rollouts`, createRolloutHandler);
+router.post(`${BASE}/execution/rollouts/:id/clear`, clearRolloutHandler);
 
 export default router;

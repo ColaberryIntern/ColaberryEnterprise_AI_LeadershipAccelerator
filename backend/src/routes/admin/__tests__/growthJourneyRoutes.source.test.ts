@@ -40,12 +40,12 @@ describe('the route module reads the MASTER flag only', () => {
   });
 });
 
-describe('neither controller has a code path that reads a host header', () => {
+describe('no controller has a code path that reads a host header', () => {
   // Not "refuses the claim" — there is nothing to refuse. Asserted on the
   // source so a future `req.hostname` cannot slip in beside the guard.
   const HOST_READ = /req\.hostname|req\.host\b|headers\[?['"`]?host|x-forwarded-host|x-brand|req\.get\(/i;
 
-  for (const file of ['growthJourneyController.ts', 'growthJourneyClassificationController.ts', 'growthJourneyDecisionController.ts', 'growthJourneyHandoffController.ts', 'growthJourneyPersonController.ts']) {
+  for (const file of ['growthJourneyController.ts', 'growthJourneyClassificationController.ts', 'growthJourneyDecisionController.ts', 'growthJourneyHandoffController.ts', 'growthJourneyPersonController.ts', 'growthJourneyExecutionController.ts']) {
     it(`${file} reads no host header`, () => {
       const code = stripComments(read('..', '..', '..', 'controllers', file));
       expect(code.length).toBeGreaterThan(1000); // the scan is not vacuous

@@ -38,11 +38,13 @@ export type JourneyEntityType =
   | 'growth_journey_decision'
   | 'growth_journey_handoff'
   | 'growth_journey_outcome'
-  | 'growth_journey_execution';
+  | 'growth_journey_execution'
+  | 'growth_journey_execution_control';
 
 export interface JourneyScope {
   tenant_id: string;
-  brand_id: string;
+  /** Null for a control that spans brands (a programme- or channel-wide pause, T518); the ledger column is nullable. */
+  brand_id: string | null;
 }
 
 export type JourneyLedgerResult = { recorded: true } | { recorded: false; error_class: string };

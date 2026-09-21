@@ -150,3 +150,75 @@ export const personQuerySchema = z.object({
 
 export type PersonParams = z.infer<typeof personParamsSchema>;
 export type PersonQuery = z.infer<typeof personQuerySchema>;
+
+/* ── Execution controls (Phase 5 T518) ─────────────────────────────────────── */
+
+/** The channels a rollout may raise. Ali's own outreach is REVIEW-only by construction and has no rollout route here. */
+export const ROLLOUT_CHANNELS = ['email', 'in_app'] as const;
+export const ROLLOUT_MODES = ['review', 'limited'] as const;
+/** A pause may name any executable channel, or none. */
+export const PAUSE_CHANNELS = ['email', 'in_app', 'ali_outreach'] as const;
+export const COHORT_MAX = 50;
+export const DAILY_LIMIT_MAX = 25;
+
+export const controlParamsSchema = z.object({
+  id: z.string().uuid(),
+});
+
+export const controlsQuerySchema = z.object({
+  tenant_id: z.string().uuid().optional(),
+  brand_id: z.string().uuid().optional(),
+  /** Cleared rows are history; they are listed only when asked for. */
+  include_cleared: z.enum(['true', 'false', '1', '0']).default('false').transform((v) => v === 'true' || v === '1'),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+});
+
+/**
+ * A pause lowers a scope to `off`. At least one dimension must be named - the
+ * all-wildcard pause is refused by `pauseScopeKey` (it would be a second global
+ * kill switch) and by this schema before it. A pause with no brand needs the
+ * tenant named, and is a super-admin write.
+ */
+export const pauseBodySchema = z
+  .object({
+    tenant_id: z.string().uuid().optional(),
+    brand_id: z.string().uuid().optional(),
+    program_id: z.string().uuid().optional(),
+    channel: z.enum(PAUSE_CHANNELS).optional(),
+    subject_ref: z.string().min(3).max(128).regex(/^(lead|enrollment):[^|\s]+$/).optional(),
+    reason: z.string().min(1).max(500),
+  })
+  .strict()
+  .refine((b) => b.brand_id || b.program_id || b.channel || b.subject_ref, { message: 'a pause must name a brand, a programme, a channel or a subject' })
+  .refine((b) => b.brand_id || b.tenant_id, { message: 'a pause with no brand must name the tenant' });
+
+/**
+ * A rollout raises ONE brand x programme x channel to `review` or `limited`.
+ * `limited` needs its cohort (1-50 existing lead ids) and a daily limit (1-25);
+ * `review` carries neither.
+ */
+export const rolloutBodySchema = z
+  .object({
+    brand_id: z.string().uuid(),
+    program_id: z.string().uuid(),
+    channel: z.enum(ROLLOUT_CHANNELS),
+    mode: z.enum(ROLLOUT_MODES),
+    cohort_lead_ids: z.array(z.number().int().positive()).min(1).max(COHORT_MAX).optional(),
+    daily_limit: z.number().int().min(1).max(DAILY_LIMIT_MAX).optional(),
+    reason: z.string().min(1).max(500),
+  })
+  .strict()
+  .refine((b) => b.mode !== 'limited' || (b.cohort_lead_ids !== undefined && b.daily_limit !== undefined), { message: 'a limited rollout needs cohort_lead_ids and daily_limit' })
+  .refine((b) => b.mode !== 'review' || (b.cohort_lead_ids === undefined && b.daily_limit === undefined), { message: 'a review rollout carries no cohort or daily limit' });
+
+export const clearControlBodySchema = z
+  .object({
+    reason: z.string().min(1).max(500).default('cleared'),
+  })
+  .strict();
+
+export type ControlParams = z.infer<typeof controlParamsSchema>;
+export type ControlsQuery = z.infer<typeof controlsQuerySchema>;
+export type PauseBody = z.infer<typeof pauseBodySchema>;
+export type RolloutBody = z.infer<typeof rolloutBodySchema>;
+export type ClearControlBody = z.infer<typeof clearControlBodySchema>;
