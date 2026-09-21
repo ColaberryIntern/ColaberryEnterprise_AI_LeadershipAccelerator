@@ -231,6 +231,8 @@ describe('enrolling: an interrupted enrolment is attached or returned, never red
     expect(row(r.id).status_reason).toBe('retries_exhausted');
     expect(row(r.id).last_error_class).toBe('RetriesExhausted');
     expect(transitions()).toEqual([['enrolling', 'failed', 'retries_exhausted']]);
+    // T512 verifier's V6: the ledger row names this pass as its actor, so a receipt's life reads who moved it.
+    expect(m.ledger.mock.calls[0][5]).toBe('growth_journey_reconciler');
     const before = JSON.stringify(row(r.id));
     m.ledger.mockClear();
     const s = await run();
@@ -285,6 +287,17 @@ describe('approved and pending_review: nothing holds the slot forever', () => {
     expect(row(b.id).status).toBe('expired');
     expect(row(c.id).status).toBe('pending_review');
     expect(tables.proposals.rows.map((p) => p.status)).toEqual(['pending', 'expired']);
+  });
+
+  it('the flip is conditional on pending: an approval cut between its two writes keeps the admin\'s decision on the proposal while the receipt still expires', async () => {
+    // T512 verifier's V3: an unconditional flip would overwrite `approved` with `expired`.
+    const approved = tables.proposals.insert({ status: 'approved', expires_at: ago(MINUTE) });
+    const rejected = tables.proposals.insert({ status: 'rejected', expires_at: ago(MINUTE) });
+    const a = receipt({ status: 'pending_review', proposal_id: approved.id, claimed_at: null });
+    const b = receipt({ lead_id: 513, subject_ref: 'lead:513', status: 'pending_review', proposal_id: rejected.id, claimed_at: null });
+    await run();
+    expect([row(a.id).status, row(b.id).status]).toEqual(['expired', 'expired']);
+    expect(tables.proposals.rows.map((p) => p.status)).toEqual(['approved', 'rejected']);
   });
 });
 
