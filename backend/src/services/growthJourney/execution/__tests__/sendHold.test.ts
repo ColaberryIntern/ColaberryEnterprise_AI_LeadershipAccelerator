@@ -57,13 +57,18 @@ describe('who the key belongs to decides what an error means', () => {
     expect(findOne).not.toHaveBeenCalled();
   });
 
-  it('acceptance 4: a registered key with no open receipt is not held (a manual enrolment is not the journey\'s to stop); a closed receipt does not count', async () => {
+  it('acceptance 4: a registered key with no open receipt is not held (a manual enrolment is not the journey\'s to stop); a closed receipt, another lead in the campaign, this lead in another campaign do not count', async () => {
     expect(await hold()).toEqual({ held: false, reason: null });
     receipt({ status: 'completed' });
     receipt({ status: 'cancelled', decision_id: 'd-x' });
     expect(await hold()).toEqual({ held: false, reason: null });
     // A closed receipt is not the journey's in-flight work: with the kill switch ON, closed receipts alone still hold nothing.
     m.killSwitch.mockResolvedValue(true);
+    expect(await hold()).toEqual({ held: false, reason: null });
+    // The read is THIS lead's receipt for THIS campaign: another lead's open receipt in the same campaign, and this lead's
+    // open receipt in another brand's registered campaign, hold nothing here (T511 verifier's V4/V6, pinned after the fact).
+    receipt({ lead_id: LEAD + 1, subject_ref: `lead:${LEAD + 1}`, status: 'enrolled', decision_id: 'd-other-lead' });
+    receipt({ brand_id: 'b-other', campaign_id: 'c-other', campaign_key: FLOW_CAMPAIGN_KEYS.aiFlotationDiscoveryQuestions, status: 'enrolled', decision_id: 'd-other-campaign' });
     expect(await hold()).toEqual({ held: false, reason: null });
     receipt({ status: 'in_progress', decision_id: 'd-open' });
     expect(await hold()).toEqual({ held: true, reason: 'journey_hold:kill_switch' });
