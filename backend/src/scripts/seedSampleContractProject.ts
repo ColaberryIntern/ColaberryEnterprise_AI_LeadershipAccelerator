@@ -15,33 +15,30 @@
 import { buildSampleContractProject, SAMPLE_DELIVERY_PROJECT_ID } from '../services/factory/sample/sampleContractProject';
 import { contentHash } from '../services/factory/factoryApproval';
 import { factoryId } from '../services/factory/factoryIds';
+import { sequelize } from '../config/database';
 
-/** Upsert the sample contract's factory layer onto a delivery project. Idempotent + reusable. */
-export async function persistSampleContract(deliveryProjectId: string): Promise<{ tracks: number; requirements: number; process_documents: number }> {
+/**
+ * Options for persisting the sample contract onto a real delivery project.
+ * `solutionStudentProjectId`: override the solution_build track's link to an SBP `projects.id`.
+ * The sample fixture points it at a dev-only student project; a real/prod delivery project has no
+ * such row, and the column is FK-constrained + nullable — so pass `null` (or a real projects.id
+ * that exists) to avoid a foreign-key violation. Omit the key to keep the sample's own value.
+ */
+export interface PersistSampleContractOptions {
+  solutionStudentProjectId?: string | null;
+}
+
+/** Upsert the sample contract's factory layer onto a delivery project. Idempotent + reusable + atomic. */
+export async function persistSampleContract(
+  deliveryProjectId: string,
+  opts: PersistSampleContractOptions = {},
+): Promise<{ tracks: number; requirements: number; process_documents: number }> {
   const sample = buildSampleContractProject();
+  const overrideStudentProject = Object.prototype.hasOwnProperty.call(opts, 'solutionStudentProjectId');
 
   const { default: ContractTrack } = await import('../models/ContractTrack');
   const { default: ContractRequirement } = await import('../models/ContractRequirement');
   const { default: ContractProcessDocument } = await import('../models/ContractProcessDocument');
-
-  // Tracks — upsert by the deterministic id.
-  for (const t of sample.tracks) {
-    await ContractTrack.upsert({
-      id: t.id, delivery_project_id: deliveryProjectId, track_type: t.track_type,
-      status: t.status, owner_identity_id: t.owner_identity_id, solution_student_project_id: t.solution_student_project_id,
-    });
-  }
-
-  // Requirements — id is derived from (delivery, canonical_req_id) so re-runs are stable.
-  for (const r of sample.requirements) {
-    await ContractRequirement.upsert({
-      id: factoryId('contract_requirement', [deliveryProjectId, r.id]),
-      delivery_project_id: deliveryProjectId, canonical_req_id: r.id, statement: r.statement, kind: r.kind,
-      priority: r.priority, tracks: r.tracks, source_document: r.source_document, amendment_version: r.amendment_version,
-      section: r.section, extracted_text: r.extracted_text, interpretation: r.interpretation,
-      human_confirmed: r.human_confirmed, evidence_state: r.evidence_state, source_evidence: r.source_evidence,
-    });
-  }
 
   // The decomposition document, one per track, version 1, content-hashed.
   const docJson = {
@@ -49,14 +46,41 @@ export async function persistSampleContract(deliveryProjectId: string): Promise<
     assignments: sample.assignments, transitions: sample.transitions,
     allocation: sample.allocation, role_map: sample.role_map, source_blocks: sample.source_blocks,
   };
-  for (const trackType of ['proposal', 'solution_build']) {
-    await ContractProcessDocument.upsert({
-      id: factoryId('contract_process_document', [deliveryProjectId, trackType, '1']),
-      delivery_project_id: deliveryProjectId, track_type: trackType, version: 1,
-      doc_json: docJson, content_sha256: contentHash(`${deliveryProjectId}:${trackType}:1`, docJson),
-      status: 'draft',
-    });
-  }
+
+  // One transaction: a mid-loop failure (e.g. a stale FK) must leave NO partial rows behind
+  // (CLAUDE.md — partial commits are forbidden). Re-runnable: every id is deterministic.
+  await sequelize.transaction(async (transaction) => {
+    // Tracks — upsert by the deterministic id.
+    for (const t of sample.tracks) {
+      const solutionStudentProjectId = overrideStudentProject && t.track_type === 'solution_build'
+        ? (opts.solutionStudentProjectId ?? null)
+        : t.solution_student_project_id;
+      await ContractTrack.upsert({
+        id: t.id, delivery_project_id: deliveryProjectId, track_type: t.track_type,
+        status: t.status, owner_identity_id: t.owner_identity_id, solution_student_project_id: solutionStudentProjectId,
+      }, { transaction });
+    }
+
+    // Requirements — id is derived from (delivery, canonical_req_id) so re-runs are stable.
+    for (const r of sample.requirements) {
+      await ContractRequirement.upsert({
+        id: factoryId('contract_requirement', [deliveryProjectId, r.id]),
+        delivery_project_id: deliveryProjectId, canonical_req_id: r.id, statement: r.statement, kind: r.kind,
+        priority: r.priority, tracks: r.tracks, source_document: r.source_document, amendment_version: r.amendment_version,
+        section: r.section, extracted_text: r.extracted_text, interpretation: r.interpretation,
+        human_confirmed: r.human_confirmed, evidence_state: r.evidence_state, source_evidence: r.source_evidence,
+      }, { transaction });
+    }
+
+    for (const trackType of ['proposal', 'solution_build']) {
+      await ContractProcessDocument.upsert({
+        id: factoryId('contract_process_document', [deliveryProjectId, trackType, '1']),
+        delivery_project_id: deliveryProjectId, track_type: trackType, version: 1,
+        doc_json: docJson, content_sha256: contentHash(`${deliveryProjectId}:${trackType}:1`, docJson),
+        status: 'draft',
+      }, { transaction });
+    }
+  });
 
   return { tracks: sample.tracks.length, requirements: sample.requirements.length, process_documents: 2 };
 }

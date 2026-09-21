@@ -59,7 +59,9 @@ export async function seedFactoryDemoContract(): Promise<{ deliveryProjectId: st
   }
 
   // Persist (idempotent) the sample decomposition onto the demo project so it is approvable.
-  await persistSampleContract(project.id);
+  // The demo has no linked SBP student build, and the sample fixture's solution_student_project_id
+  // points at a dev-only projects.id that does not exist on prod (FK-constrained) — so null it.
+  await persistSampleContract(project.id, { solutionStudentProjectId: null });
   return { deliveryProjectId: project.id, created };
 }
 
