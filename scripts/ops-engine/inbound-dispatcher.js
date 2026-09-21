@@ -187,6 +187,23 @@ async function resolveSelfId() {
   catch (e) { console.error(`  resolveSelfId failed: ${e.message}`); return null; }
 }
 
+// What a resolved identity means for this tick. Two failure shapes, two
+// different responses:
+//   'wrong'   - the token resolves to a REAL person (2026-06-22: Ali). Every
+//               author-based guard is blind to our own output, so this is the
+//               flood condition: halt AND flip the persistent kill switch.
+//   'unknown' - /my/profile.json failed (401 on an expired token, network, 5xx).
+//               A token that cannot answer profile.json cannot post as anyone
+//               either, so there is nothing to loop; halt this tick and alarm,
+//               but leave the switch alone so the next tick resumes on its own
+//               once the wrapper re-mints. Tripping here (2026-09-21) cost three
+//               hours of silence and a hand re-enable for an expired token.
+function classifyIdentity(id) {
+  if (id === CB_SYSTEM_ID) return 'ok';
+  if (id === null || typeof id === 'undefined') return 'unknown';
+  return 'wrong';
+}
+
 function acquireLock() {
   fs.mkdirSync(path.dirname(LOCK_PATH), { recursive: true });
   if (fs.existsSync(LOCK_PATH)) {
@@ -669,7 +686,7 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
 }
 
 // Exported for unit tests. Guarded IIFE below only runs when executed directly.
-module.exports = { shouldCircuitBreak, replyCountFor, recordReply, isCBMention, isAutomatedAgentCard, classifyKeyword, MAX_REPLIES_PER_COMMENT, findNewMentionsByFeed, findNewMentionsByWalk, isOwnOutput, CB_SYSTEM_ID, noteReply, AUTOTRIP_MAX, AUTOTRIP_WINDOW_MS };
+module.exports = { shouldCircuitBreak, replyCountFor, recordReply, isCBMention, isAutomatedAgentCard, classifyKeyword, MAX_REPLIES_PER_COMMENT, findNewMentionsByFeed, findNewMentionsByWalk, isOwnOutput, CB_SYSTEM_ID, noteReply, AUTOTRIP_MAX, AUTOTRIP_WINDOW_MS, classifyIdentity };
 
 if (require.main !== module) return;
 
@@ -715,11 +732,15 @@ if (require.main !== module) return;
     // Resolve who we are posting AS. The loop-safety model REQUIRES CB System.
     // If the token has degraded to a real person, trip the kill switch + HALT
     // (post nothing) rather than ignite a self-reply loop. Re-enable from the
-    // dashboard once a CB System token is confirmed restored.
+    // dashboard once a CB System token is confirmed restored. If the identity
+    // is simply unknown (dead token), HALT + alarm only: the switch stays on and
+    // the next tick resumes by itself once the wrapper has re-minted.
     selfId = await resolveSelfId();
-    if (selfId !== CB_SYSTEM_ID) {
-      console.error(`  IDENTITY DEGRADED: posting as ${selfId}, expected CB System ${CB_SYSTEM_ID}; halting tick (no posts) to avoid a self-reply loop.`);
-      await autoTrip(state, `identity_degraded: posting as ${selfId}, expected CB System ${CB_SYSTEM_ID}`);
+    const identity = classifyIdentity(selfId);
+    if (identity !== 'ok') {
+      console.error(`  IDENTITY ${identity === 'wrong' ? 'DEGRADED' : 'UNKNOWN'}: posting as ${selfId}, expected CB System ${CB_SYSTEM_ID}; halting tick (no posts) to avoid a self-reply loop.`);
+      if (identity === 'wrong') await autoTrip(state, `identity_degraded: posting as ${selfId}, expected CB System ${CB_SYSTEM_ID}`);
+      else console.error('  token cannot post as anyone; kill switch left ON so the next tick resumes once the wrapper re-mints the CB System token');
       await alarmIdentityDegraded(state, selfId);
       state.last_tick = new Date().toISOString();
       if (!DRY) saveState(state);
