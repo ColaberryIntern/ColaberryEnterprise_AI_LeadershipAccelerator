@@ -143,14 +143,24 @@ describe('acceptance 3: after the classification resolves, once, with the reply 
     expect((console.error as jest.Mock).mock.calls.map((c) => String(c[0])).some((l) => l.includes('reply_hook_failed'))).toBe(true);
   });
 
-  it('the hook flags travel: with the master off, the classifier, the outcome and the re-decision are each handed the off flags (each answers disabled itself)', async () => {
+  it('the master off (production today): the classifier is still asked (it answers disabled itself), but neither the outcome nor the re-decision is even required', async () => {
     m.envFlags = { ...m.envFlags, growthJourneyEnabled: false };
     const { req, res } = mandrillReq('Yes, tell me more');
     await handleMandrillInbound(req, res);
     await flush();
     expect(m.classify.mock.calls[0][0]).toMatchObject({ flags: { growthJourneyEnabled: false } });
-    expect(m.outcome.mock.calls[0][0]).toMatchObject({ flags: { growthJourneyEnabled: false } });
-    expect(m.redecide.mock.calls[0][0]).toMatchObject({ flags: { growthJourneyEnabled: false } });
+    expect(m.outcome).not.toHaveBeenCalled();
+    expect(m.redecide).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+
+  it('the master on with the capability flags off: both steps are handed the flags and answer disabled themselves (their own gates, their own suites)', async () => {
+    m.envFlags = { ...m.envFlags, journeyDecisions: false, journeyExecution: false };
+    const { req, res } = mandrillReq('Yes, tell me more');
+    await handleMandrillInbound(req, res);
+    await flush();
+    expect(m.outcome.mock.calls[0][0]).toMatchObject({ flags: { growthJourneyEnabled: true, journeyExecution: false } });
+    expect(m.redecide.mock.calls[0][0]).toMatchObject({ flags: { growthJourneyEnabled: true, journeyDecisions: false } });
     expect(res.status).toHaveBeenCalledWith(200);
   });
 });

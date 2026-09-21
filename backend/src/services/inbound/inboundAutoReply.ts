@@ -11,7 +11,8 @@ import { redactForLogs } from '../../utils/piiRedaction';
  * splits before it adds: the auto-reply body - the Ali personal-outreach check,
  * the generated message, the send through nodemailer, the outbound log row -
  * is that file's block moved as it was (de-indented by six spaces inside this
- * function; nothing else changed), and the controller keeps its own try/catch
+ * function, its two lazy require paths one directory different - nothing
+ * else changed), and the controller keeps its own try/catch
  * and the Explorer-routed skip around one call to this. The characterization
  * suite (`mandrillInboundAutoReply.characterization.test.ts`) passes byte-
  * identical on both sides of the move.

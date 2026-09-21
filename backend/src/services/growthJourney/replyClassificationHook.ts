@@ -71,8 +71,14 @@ export function recordReplyClassification(args: ReplyClassificationArgs, flags: 
 type RecordReplyOutcome = (a: { leadId: number; campaignId: string | null; providerMessageId: string | null; flags: GrowthJourneyFlags }) => Promise<unknown>;
 type RedecideOnReply = (a: { leadId: number; campaignId: string | null; flags: GrowthJourneyFlags }) => Promise<unknown>;
 
-/** T515: what follows a classified reply - the outcome first (the re-decision's context may read it), then the re-decision. Required lazily, as the classifier is. */
+/**
+ * T515: what follows a classified reply - the outcome first (the re-decision's context may read it), then the
+ * re-decision. Required lazily, as the classifier is, and only with the master on: both steps answer `disabled`
+ * themselves when it is off, so nothing is lost, and the modules' import chains (a model file, the database) are never
+ * loaded where the master is off - the same rule the inbound auto-reply applies to its guard.
+ */
 async function afterReplyClassified(args: ReplyClassificationArgs, flags: GrowthJourneyFlags): Promise<void> {
+  if (!flags.growthJourneyEnabled) return;
   const { recordReplyOutcome } = require('./execution/replyOutcome') as { recordReplyOutcome: RecordReplyOutcome };
   const { redecideOnReply } = require('./execution/replyRedecide') as { redecideOnReply: RedecideOnReply };
   await recordReplyOutcome({ leadId: args.leadId, campaignId: args.campaignId, providerMessageId: args.providerMessageId ?? null, flags });
