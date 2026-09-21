@@ -1,8 +1,10 @@
 import React from 'react';
 
 /**
- * The learner's journey nudges on the portal dashboard (Growth Journey OS,
- * Phase 5 T514): the in-app channel's one surface. It renders what
+ * The learner's journey nudges on the portal home (Growth Journey OS,
+ * Phase 5 T514; mounted at /portal/today by TodayJourneyNudges since T521's
+ * fix cycle 1 - T514's host page was one nothing routes to): the in-app
+ * channel's one surface. It renders what
  * `GET /api/portal/journey-nudges` returns - four fields a nudge, every title
  * and href copied at execution time from content a human approved - and it
  * renders nothing at all when there is nothing to show: no empty box, no

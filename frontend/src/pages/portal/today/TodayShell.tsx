@@ -29,6 +29,7 @@ import SkillDetailDrawer from './SkillDetailDrawer';
 import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
 import CommunityPulse from './CommunityPulse';
 import TodayStreakCard from './TodayStreakCard';
+import TodayJourneyNudges from './TodayJourneyNudges';
 import NextLiveClassCard from './NextLiveClassCard';
 import InternshipOpportunityCard from './InternshipOpportunityCard';
 import InternshipCommandCard from './InternshipCommandCard';
@@ -544,6 +545,8 @@ const TodayShell: React.FC = () => {
 
         {/* ── right sidebar ── */}
         <aside className="te-side">
+          {/* Growth Journey nudges (Phase 5) — its own read; renders nothing until a rollout writes a row */}
+          <TodayJourneyNudges />
           {/* Live community pulse — surfaces rooms people are in + live/next sessions */}
           <CommunityPulse />
           {/* Your day — meters fold into the command band when the redesign flag is on */}
