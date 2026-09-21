@@ -1,4 +1,5 @@
 import { GrowthJourneyExecution } from '../../../models';
+import type { GrowthJourneyExecutionAttributes, GrowthJourneyExecutionStatus } from '../../../models/GrowthJourneyExecution';
 import { contextFromAdminRequest } from '../../../modules/tenancy/adminScopeBridge';
 import { requireBrandAccessAudited } from '../../../modules/tenancy/tenantAccessGuards';
 import { TenantAccessError, type PlatformRequestContext } from '../../../modules/tenancy/tenantAuthorization';
@@ -14,13 +15,18 @@ import { assertTransition, recordReceiptTransition } from './receiptTransitions'
  *      `not_authorized`, and the proposal stays pending - nothing here
  *      widens an anonymous caller into an approver.
  *   2  the receipt. A proposal whose receipt is gone is `receipt_not_found`.
- *   3  brand access, RECORDED either way: `contextFromAdminRequest` for the
- *      receipt's own tenant and brand (it throws 403 for a brand outside the
- *      caller's scope), then `requireBrandAccessAudited`, so a review can see
- *      who tried to approve what, and whether they could.
- *   4  the receipt is `pending_review`. Anything else - already approved,
- *      expired by the reconciler, cancelled - is `not_pending`, and the
- *      proposal records the approval with `applied: false`.
+ *   3  brand access, RECORDED either way: the context is built for the
+ *      receipt's TENANT only (asking the builder for the brand would refuse
+ *      out-of-scope callers before anything is recorded - the T509 verifier's
+ *      finding), and `requireBrandAccessAudited` decides the brand and writes
+ *      the access decision, allowed or denied, so a review can see who tried
+ *      to approve what, and whether they could.
+ *   4  the receipt is `pending_review` AT THE WRITE: the flip is a conditional
+ *      update (`where: { id, status: 'pending_review' }`), so two approvers, or
+ *      an approver and the reconciler, cannot both move it; the loser reads
+ *      `not_pending` and the proposal records the approval with
+ *      `applied: false`. The ledger row is written only after the update
+ *      succeeded.
  *
  * APPROVAL NEVER SENDS. It flips `pending_review -> approved` and writes the
  * ledger row; the adapter (T510/T511) re-runs every gate before anything
@@ -46,13 +52,9 @@ async function authorize(receipt: GrowthJourneyExecution, admin: ReviewerIdentit
   if (!admin) return null;
   const tenantId = String(receipt.get('tenant_id'));
   const brandId = String(receipt.get('brand_id'));
-  let ctx: PlatformRequestContext;
-  try {
-    ctx = await contextFromAdminRequest(admin, { requestedTenantId: tenantId, requestedBrandId: brandId });
-  } catch (err: unknown) {
-    if (err instanceof TenantAccessError) return null;
-    throw err;
-  }
+  // Tenant only: the builder confines a brand-restricted operator to their brands (`authorizedBrandIds`,
+  // `brandId`), and the audited guard below is what judges the receipt's brand against them - and records it.
+  const ctx: PlatformRequestContext = await contextFromAdminRequest(admin, { requestedTenantId: tenantId });
   try {
     await requireBrandAccessAudited(ctx, tenantId, brandId, { resourceType: RESOURCE_TYPE, action, resourceId: String(receipt.get('id')), actorEmail: admin.email ?? null });
   } catch (err: unknown) {
@@ -71,19 +73,24 @@ async function review(receiptId: string, admin: ReviewerIdentity | undefined, ac
 
   const status = String(receipt.get('status'));
   if (status !== 'pending_review') return { outcome: 'not_pending', status };
-  const to = action === 'approve' ? 'approved' : 'rejected';
+  const to: GrowthJourneyExecutionStatus = action === 'approve' ? 'approved' : 'rejected';
   assertTransition('pending_review', to);
   const now = new Date();
   const actor = `admin:${ctx.platformIdentityId ?? 'unknown'}`;
-  await receipt.update(
-    action === 'approve'
-      ? { status: to, status_reason: 'approved_by_review', approved_by: actor, approved_at: now }
-      : { status: to, status_reason: 'rejected_by_review' },
-  );
+  const patch: Partial<GrowthJourneyExecutionAttributes> = action === 'approve'
+    ? { status: to, status_reason: 'approved_by_review', approved_by: actor, approved_at: now }
+    : { status: to, status_reason: 'rejected_by_review' };
+  // Conditional on the status at the write, not at the read above: the database decides who moved it.
+  const [moved] = await GrowthJourneyExecution.update(patch, { where: { id: receiptId, status: 'pending_review' } });
+  if (moved === 0) {
+    const now_ = await GrowthJourneyExecution.findOne({ where: { id: receiptId } });
+    return { outcome: 'not_pending', status: String(now_?.get('status') ?? 'unknown') };
+  }
   await recordReceiptTransition(String(receipt.get('id')), { tenant_id: String(receipt.get('tenant_id')), brand_id: String(receipt.get('brand_id')) }, 'pending_review', to, `${to}_by_review`, {
     decision_id: String(receipt.get('decision_id')), proposal_id: (receipt.get('proposal_id') as string | null) ?? null,
   }, actor);
-  return { outcome: to, receipt };
+  const updated = await GrowthJourneyExecution.findOne({ where: { id: receiptId } });
+  return { outcome: to, receipt: updated ?? receipt };
 }
 
 /** Approve: `pending_review -> approved`. Never enrols. */

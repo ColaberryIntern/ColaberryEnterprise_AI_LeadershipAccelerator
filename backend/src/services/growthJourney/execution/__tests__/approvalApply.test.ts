@@ -43,7 +43,8 @@ describe('approve', () => {
     const out = await applyExecutionApproval(r.id as string, ADMIN);
     expect(out.outcome).toBe('approved');
     expect(row(r.id as string)).toMatchObject({ status: 'approved', status_reason: 'approved_by_review', approved_by: 'admin:pi-1', approved_at: expect.any(Date) });
-    expect(m.context).toHaveBeenCalledWith(ADMIN, { requestedTenantId: 't-col', requestedBrandId: 'b-ent' });
+    // Tenant only: the audited guard is what judges the brand, so an out-of-scope brand is a RECORDED denial.
+    expect(m.context).toHaveBeenCalledWith(ADMIN, { requestedTenantId: 't-col' });
     expect(m.audited).toHaveBeenCalledWith(CTX, 't-col', 'b-ent', { resourceType: 'growth_journey_execution', action: 'approve', resourceId: r.id, actorEmail: ADMIN.email });
     expect(m.ledger).toHaveBeenCalledTimes(1);
     expect(m.ledger).toHaveBeenCalledWith('growth_journey.execution.approved', 'growth_journey_execution', r.id, { tenant_id: 't-col', brand_id: 'b-ent' },
@@ -60,23 +61,41 @@ describe('approve', () => {
     expect(m.ledger).not.toHaveBeenCalled();
   });
 
-  it('acceptance 2: a brand outside the caller\'s scope -> not_authorized, whether the context builder refuses (403) or the audited guard does - and the guard\'s refusal is RECORDED', async () => {
+  it.each([
+    ['a brand outside the caller\'s scope (403)', new TenantAccessError('Brand not in scope', 403, 'AuthorizationError')],
+    ['a receipt in another tenant (404, an isolation event)', new TenantAccessError('Tenant isolation', 404, 'TenantIsolationError')],
+  ])('acceptance 2: %s -> not_authorized, and the audited guard was asked - it records the denial itself - with the receipt untouched', async (_label, refusal) => {
     const r = receipt();
-    m.context.mockRejectedValueOnce(new TenantAccessError('Brand not in scope', 403, 'AuthorizationError'));
+    m.audited.mockRejectedValueOnce(refusal);
     expect(await applyExecutionApproval(r.id as string, ADMIN)).toEqual({ outcome: 'not_authorized' });
-    expect(m.audited).not.toHaveBeenCalled();
-
-    m.audited.mockRejectedValueOnce(new TenantAccessError('Tenant isolation', 404, 'TenantIsolationError'));
-    expect(await applyExecutionApproval(r.id as string, ADMIN)).toEqual({ outcome: 'not_authorized' });
-    expect(m.audited).toHaveBeenCalledTimes(1); // it was asked, and it recorded the denial itself
+    // The context was built for the TENANT only, so the builder could not refuse the brand unrecorded (the T509 verifier's finding).
+    expect(m.context).toHaveBeenCalledWith(ADMIN, { requestedTenantId: 't-col' });
+    expect(m.audited).toHaveBeenCalledTimes(1);
+    expect(m.audited).toHaveBeenCalledWith(CTX, 't-col', 'b-ent', expect.objectContaining({ resourceType: 'growth_journey_execution', action: 'approve', resourceId: r.id }));
     expect(row(r.id as string).status).toBe('pending_review');
     expect(m.ledger).not.toHaveBeenCalled();
   });
 
+  it('the REAL guard over a brand-restricted context: an operator confined to another brand is denied AND the decision is recorded', async () => {
+    // The actual `requireBrandAccessAudited` with only its recorder stubbed - the path the verifier probed.
+    const decisions = jest.requireActual('../../../../modules/tenancy/tenantAccessAudit') as { recordAccessDecision: (d: unknown) => Promise<void> };
+    const recorded: unknown[] = [];
+    const recorder = jest.spyOn(decisions, 'recordAccessDecision').mockImplementation(async (d) => { recorded.push(d); });
+    const guards = jest.requireActual('../../../../modules/tenancy/tenantAccessGuards') as { requireBrandAccessAudited: (...a: unknown[]) => Promise<void> };
+    m.audited.mockImplementation((...a: unknown[]) => guards.requireBrandAccessAudited(...a));
+    m.context.mockResolvedValue({ ...CTX, brandId: 'b-other', authorizedBrandIds: ['b-other'] });
+    const r = receipt();
+    expect(await applyExecutionApproval(r.id as string, ADMIN)).toEqual({ outcome: 'not_authorized' });
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toMatchObject({ decision: 'denied', reason: 'AuthorizationError', resourceType: 'growth_journey_execution', resourceId: r.id, resourceTenantId: 't-col', resourceBrandId: 'b-ent' });
+    expect(row(r.id as string).status).toBe('pending_review');
+    recorder.mockRestore();
+  });
+
   it('an error that is not an access refusal propagates - never read as authorized, never as unauthorized', async () => {
     const r = receipt();
-    m.context.mockRejectedValueOnce(new Error('memberships table gone'));
-    await expect(applyExecutionApproval(r.id as string, ADMIN)).rejects.toThrow('memberships table gone');
+    m.audited.mockRejectedValueOnce(new Error('access_decisions table gone'));
+    await expect(applyExecutionApproval(r.id as string, ADMIN)).rejects.toThrow('access_decisions table gone');
     expect(row(r.id as string).status).toBe('pending_review');
   });
 
@@ -90,6 +109,27 @@ describe('approve', () => {
     expect(await applyExecutionApproval(r.id as string, ADMIN)).toEqual({ outcome: 'not_pending', status });
     expect(row(r.id as string).status).toBe(status);
     expect(m.ledger).not.toHaveBeenCalled();
+  });
+
+  it('the ledger row is written only AFTER the update succeeded: a failing update leaves no row and the error propagates', async () => {
+    const r = receipt();
+    jest.spyOn(T5.executions, 'update').mockRejectedValueOnce(new Error('connection reset'));
+    await expect(applyExecutionApproval(r.id as string, ADMIN)).rejects.toThrow('connection reset');
+    expect(m.ledger).not.toHaveBeenCalled();
+    expect(row(r.id as string).status).toBe('pending_review');
+  });
+
+  it('two approvers: the flip is conditional on pending_review AT THE WRITE, so the loser reads not_pending and writes no second ledger row', async () => {
+    const r = receipt();
+    const update = jest.spyOn(T5.executions, 'update');
+    const first = await applyExecutionApproval(r.id as string, ADMIN);
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ status: 'approved' }), { where: { id: r.id, status: 'pending_review' } });
+    // The loser read the row while it was still pending (the read is not what decides), then lost the write.
+    (row(r.id as string) as { status: string }).status = 'pending_review';
+    update.mockResolvedValueOnce([0]);
+    const second = await applyExecutionApproval(r.id as string, ADMIN);
+    expect([first.outcome, second.outcome]).toEqual(['approved', 'not_pending']);
+    expect(m.ledger).toHaveBeenCalledTimes(1);
   });
 
   it('the flip releases nothing: a second receipt for the same person, brand and channel is still refused by the open-slot index', async () => {
@@ -113,8 +153,9 @@ describe('reject', () => {
   it('the same gates as approve: no admin, and a brand outside scope, both not_authorized', async () => {
     const r = receipt();
     expect(await applyExecutionRejection(r.id as string, undefined)).toEqual({ outcome: 'not_authorized' });
-    m.context.mockRejectedValueOnce(new TenantAccessError('Brand not in scope', 403, 'AuthorizationError'));
+    m.audited.mockRejectedValueOnce(new TenantAccessError('Brand not in scope', 403, 'AuthorizationError'));
     expect(await applyExecutionRejection(r.id as string, ADMIN)).toEqual({ outcome: 'not_authorized' });
+    expect(m.audited).toHaveBeenCalledWith(CTX, 't-col', 'b-ent', expect.objectContaining({ action: 'reject' }));
     expect(row(r.id as string).status).toBe('pending_review');
   });
 });
