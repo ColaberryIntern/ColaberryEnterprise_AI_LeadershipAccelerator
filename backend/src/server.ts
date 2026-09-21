@@ -71,6 +71,8 @@ import { ensureSbpSchema } from './db/ensureSbpSchema';
 import { ensureCertPrepSchema } from './db/ensureCertPrepSchema';
 import { ensureProjectArchiveSchema } from './db/ensureProjectArchiveSchema';
 import { ensureProjectApprovalSchema } from './db/ensureProjectApprovalSchema';
+import { ensureContractTrackSchema } from './db/ensureContractTrackSchema';
+import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
 import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
 import { ensureInternshipSchema } from './db/ensureInternshipSchema';
 import { ensureMilestoneLadderSchema } from './db/ensureMilestoneLadderSchema';
@@ -2718,6 +2720,14 @@ async function start(): Promise<void> {
   // the project tree DTO now reads these columns and a missing one would 500 the
   // student's project page rather than degrade it.
   await ensureProjectApprovalSchema();
+  // AI Project Factory: the two-track contract model (contract_tracks, contract_requirements,
+  // the requirement link tables, and the versioned contract_process_documents). Additive NEW
+  // tables that FK to delivery_projects (and projects) — no existing table is altered.
+  await ensureContractTrackSchema();
+  // AI Project Factory: the executor/accountable/skills/judgment/confidence/source-evidence
+  // attributes, added to student_tasks as new nullable columns (the archived_at/approval_state
+  // pattern). Existing rows are untouched and unset until the factory populates them.
+  await ensureFactoryTaskSchema();
   // Transactional email dedup ledger. CLAUDE.md mandates application-level
   // dedup on (recipient, subject, business_event_id) for Mandrill sends and
   // production had no such table, so every batch send was one retry away from
