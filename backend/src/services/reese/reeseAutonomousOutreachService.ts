@@ -17,6 +17,7 @@ import { initiateDm } from './reeseInitiateDmService';
 import { resolveStudentDisplayName } from './resolveStudentDisplayName';
 import { createOutreachChecklistInstance } from './outreachChecklist';
 import { emitReeseLedgerEvent } from './reeseWorkLedgerEvents';
+import { createWorkUnit, updateWorkUnitStatus } from '../workGraph/workGraphService';
 
 // Reese Phase 2 (Autonomous Outreach) — the decision + orchestration sweep.
 // Named, non-negotiable constants (see execution-contract.md — logged there as
@@ -139,6 +140,29 @@ async function sendNewOutreach(
   // input type.
   await ticket.update({ risk_tier: RISK_TIER });
 
+  // Workspace mission, Phase 2 slice 2 (2026-09-21) — the same real, persisted
+  // work unit pattern slice 1 proved on Reese's reply path, extended to her
+  // outreach send. Fail-open, own try/catch (this function has no pre-existing
+  // outer catch to lean on, unlike the reply path): a work-unit-creation
+  // failure must never block a real outreach send.
+  let workUnitId: string | null = null;
+  try {
+    const workUnit = await createWorkUnit(ticket.id, {
+      title: `Outreach to ${studentName} (${signalType})`,
+      requiredCapability: 'student_support.outreach',
+      riskTier: RISK_TIER,
+      status: 'in_progress',
+      approvalPolicy: 'auto',
+    });
+    workUnitId = workUnit.id;
+    await (workUnit as any).update({ assigned_agent_name: 'Reese' });
+  } catch (e: any) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'reeseAutonomousOutreachService', event: 'work_unit_create_failed',
+      ticket_id: ticket.id, error_class: e?.name || 'Error', message: String(e?.message || e),
+    }));
+  }
+
   // Governance — evaluated BEFORE the real send, matching
   // agentActionAuthorizationBridge.ts's own documented design intent
   // ("authorization is evaluated BEFORE the real action runs — the
@@ -180,81 +204,107 @@ async function sendNewOutreach(
       event: 'outreach_held_for_approval', outcome: 'partial', correlation_id: eventId,
       context: { ticket_id: ticket.id, enrollment_id: enrollmentId, signal_type: signalType, reason: authResult.reason },
     }));
+    // Workspace mission, Phase 2 slice 2 — the real, correct existing status
+    // value for exactly this case, same as the reply path's own precedent.
+    if (workUnitId) await updateWorkUnitStatus(workUnitId, 'blocked');
     return { enrollmentId, signalType, action: 'skipped', reason: 'held_for_approval' };
   }
 
-  const dm = await initiateDm(enrollmentId, message);
-
-  // Phase 2 (2026-09-18) — R13's own finding: this send never wrote to the
-  // real Work Ledger her replies already use. Fail-open, after the real send
-  // (see reeseWorkLedgerEvents.ts's own header) — a ledger-write failure must
-  // never be mistaken for the send having failed.
-  await emitReeseLedgerEvent({
-    ticketId: ticket.id,
-    traceId: eventId,
-    actorType: 'ai_staff',
-    actorId: reeseAdminUserId,
-    intent: 'reese.autonomous_outreach',
-    domain: 'student_support',
-    actionClass: 'dm_message',
-    targetType: 'ticket',
-    targetId: ticket.id,
-    riskTier: RISK_TIER,
-    idempotencyKey: `reese-outreach-send:${dm.messageId}`,
-    result: 'success',
-    sourceRecordType: 'room_message',
-    sourceRecordId: dm.messageId,
-  });
-
-  // GOALS scorecard fix (Ali: "improve the 3.8/5 Trust score for Reese") —
-  // record this real send under Reese's OWN AiAgent.id so
-  // agentGoalsDimensionsService.ts's observability/availability/solid
-  // dimensions have real data to compute from instead of their zero-row
-  // fallback constants. See agentActivityLogService.ts's header for why this
-  // was missing. Fail-open (logAgentActivity never throws) — a bookkeeping
-  // failure here must never be mistaken for the real send having failed.
-  const reeseAgentId = await getReeseAgentId();
-  if (reeseAgentId) {
-    await logAgentActivity({
-      agentId: reeseAgentId,
-      action: 'reese_autonomous_outreach',
-      result: 'success',
-      reason: `${signalType}_signal_fired`,
-      traceId: eventId,
-      details: { ticket_id: ticket.id, signal_type: signalType },
-    });
-  }
-
-  const nextFollowUpDueAt = new Date(Date.now() + FOLLOW_UP_DAYS * 24 * 60 * 60 * 1000);
-  await ReeseOutreach.create({
-    enrollment_id: enrollmentId,
-    ticket_id: ticket.id,
-    signal_type: signalType,
-    signal_snapshot: signalSnapshot,
-    goal,
-    status: 'active',
-    attempt_count: 1,
-    last_contacted_at: new Date(),
-    next_follow_up_due_at: nextFollowUpDueAt,
-    risk_tier: RISK_TIER,
-  });
-
-  // Reese Agentic AI Employee mission, Capability 6 — a real, persisted
-  // Outreach checklist per send, linked to this send's real ticket.
-  // Observational only (Ali's explicit choice, 2026-09-07): computed and
-  // persisted after the real send already happened, never gating it — see
-  // outreachChecklist.ts's own header for why. Fail-open: a checklist
-  // bookkeeping failure must never surface as an autonomous-outreach defect.
+  // Workspace mission, Phase 2 slice 2 — everything from here on is wrapped so
+  // a thrown error can mark the work unit 'failed' before propagating exactly
+  // as it always has. This function had no pre-existing outer catch (unlike
+  // the reply path); this local try/catch adds the SAME failed-terminal-state
+  // honesty without changing what the caller (runReeseAutonomousOutreachSweep's
+  // per-signal loop) observes on error — the original error still propagates
+  // unchanged, this only adds a fail-open bookkeeping step ahead of it.
   try {
-    await createOutreachChecklistInstance(ticket.id, signalType, goal, message, nextFollowUpDueAt);
-  } catch (e: any) {
-    console.warn(JSON.stringify({
-      level: 'warn', service: 'reeseAutonomousOutreachService', event: 'outreach_checklist_instance_failed',
-      ticket_id: ticket.id, error_class: e?.name || 'Error', message: String(e?.message || e),
-    }));
-  }
+    const dm = await initiateDm(enrollmentId, message);
 
-  return { enrollmentId, signalType, action: 'sent', reason: `${signalType}_signal_fired` };
+    // Phase 2 (2026-09-18) — R13's own finding: this send never wrote to the
+    // real Work Ledger her replies already use. Fail-open, after the real send
+    // (see reeseWorkLedgerEvents.ts's own header) — a ledger-write failure must
+    // never be mistaken for the send having failed.
+    await emitReeseLedgerEvent({
+      ticketId: ticket.id,
+      workUnitId,
+      traceId: eventId,
+      actorType: 'ai_staff',
+      actorId: reeseAdminUserId,
+      intent: 'reese.autonomous_outreach',
+      domain: 'student_support',
+      actionClass: 'dm_message',
+      targetType: 'ticket',
+      targetId: ticket.id,
+      riskTier: RISK_TIER,
+      idempotencyKey: `reese-outreach-send:${dm.messageId}`,
+      result: 'success',
+      sourceRecordType: 'room_message',
+      sourceRecordId: dm.messageId,
+    });
+
+    // GOALS scorecard fix (Ali: "improve the 3.8/5 Trust score for Reese") —
+    // record this real send under Reese's OWN AiAgent.id so
+    // agentGoalsDimensionsService.ts's observability/availability/solid
+    // dimensions have real data to compute from instead of their zero-row
+    // fallback constants. See agentActivityLogService.ts's header for why this
+    // was missing. Fail-open (logAgentActivity never throws) — a bookkeeping
+    // failure here must never be mistaken for the real send having failed.
+    const reeseAgentId = await getReeseAgentId();
+    if (reeseAgentId) {
+      await logAgentActivity({
+        agentId: reeseAgentId,
+        action: 'reese_autonomous_outreach',
+        result: 'success',
+        reason: `${signalType}_signal_fired`,
+        traceId: eventId,
+        details: { ticket_id: ticket.id, signal_type: signalType },
+      });
+    }
+
+    const nextFollowUpDueAt = new Date(Date.now() + FOLLOW_UP_DAYS * 24 * 60 * 60 * 1000);
+    await ReeseOutreach.create({
+      enrollment_id: enrollmentId,
+      ticket_id: ticket.id,
+      signal_type: signalType,
+      signal_snapshot: signalSnapshot,
+      goal,
+      status: 'active',
+      attempt_count: 1,
+      last_contacted_at: new Date(),
+      next_follow_up_due_at: nextFollowUpDueAt,
+      risk_tier: RISK_TIER,
+    });
+
+    // Reese Agentic AI Employee mission, Capability 6 — a real, persisted
+    // Outreach checklist per send, linked to this send's real ticket.
+    // Observational only (Ali's explicit choice, 2026-09-07): computed and
+    // persisted after the real send already happened, never gating it — see
+    // outreachChecklist.ts's own header for why. Fail-open: a checklist
+    // bookkeeping failure must never surface as an autonomous-outreach defect.
+    try {
+      await createOutreachChecklistInstance(ticket.id, signalType, goal, message, nextFollowUpDueAt);
+    } catch (e: any) {
+      console.warn(JSON.stringify({
+        level: 'warn', service: 'reeseAutonomousOutreachService', event: 'outreach_checklist_instance_failed',
+        ticket_id: ticket.id, error_class: e?.name || 'Error', message: String(e?.message || e),
+      }));
+    }
+
+    if (workUnitId) await updateWorkUnitStatus(workUnitId, 'done');
+    return { enrollmentId, signalType, action: 'sent', reason: `${signalType}_signal_fired` };
+  } catch (e: any) {
+    if (workUnitId) {
+      try {
+        await updateWorkUnitStatus(workUnitId, 'failed');
+      } catch (updateErr: any) {
+        console.warn(JSON.stringify({
+          level: 'warn', service: 'reeseAutonomousOutreachService', event: 'work_unit_status_update_failed',
+          ticket_id: ticket.id, error_class: updateErr?.name || 'Error', message: String(updateErr?.message || updateErr),
+        }));
+      }
+    }
+    throw e;
+  }
 }
 
 /**
