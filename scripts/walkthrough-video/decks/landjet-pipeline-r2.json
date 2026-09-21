@@ -1,0 +1,72 @@
+{
+  "slug": "the-pipeline-needed-more-than-one-person",
+  "output": "landjet-pipeline-walkthrough-r2.mp4",
+  "slides": [
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "The Pipeline Needed More Than One Person.",
+      "subtitle": "An outreach workflow for a small team, told as a retrospective",
+      "caption": "At an executive ground-transportation company, one person was the sales pipeline: finding companies, writing the first message, sending it, following up. The ask was a daily queue a small team could share."
+    },
+    {
+      "kind": "title",
+      "seconds": 10,
+      "title": "Three questions a shared queue raises.",
+      "subtitle": "Who sees which leads? Whose name goes on a message? What may a model change?",
+      "caption": "On 14 June 2026 the client described who would work the pipeline: one person seeing everything, a second owning Texas, Iowa handed to a new hire. That made it a multi-person problem."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 12,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/frontend/public/site-v2/shot-landjet-outreach-queue.png",
+      "caption": "The daily queue for one representative, scoped to one state, on a keyless local copy at the pinned commit with invented rows. The territory rule runs on the server: the user's states win over anything the query asks for."
+    },
+    {
+      "kind": "title",
+      "seconds": 10,
+      "title": "Territory beyond the screen.",
+      "subtitle": "List, chips, export, detail and queue, clamped on the server.",
+      "caption": "Verified over the API with a minted token per user, 25 of 25 checks on 24 June 2026. Not through a browser login: every browser was signed in as one shared administrator account."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 12,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/frontend/public/site-v2/shot-landjet-outreach-email-card.png",
+      "caption": "One email step: a template draft a person reviews before anything is sent. At the last commit the draft speaks in the campaign's sender voice, and mail leaves through four guards as that campaign's mailbox."
+    },
+    {
+      "kind": "cards",
+      "seconds": 12,
+      "rows": [
+        [
+          "7,786",
+          "leads in the pipeline on 18 September 2026, by the platform's own daily report; 0 emails sent in each September report read, each covering the previous day"
+        ],
+        [
+          "113",
+          "live campaign emails to 29 June 2026, every one logged to a campaign and a lead"
+        ],
+        [
+          "0",
+          "meetings, proposals and won recorded on 20 June 2026 and in the September reports read"
+        ]
+      ],
+      "accent_index": 2,
+      "caption": "Counts with dates, from the repository's own log and the platform's own report. No revenue, conversion or hours figure exists, and none is claimed."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 12,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/frontend/public/site-v2/shot-landjet-report-issue-result.png",
+      "caption": "Report an issue: a model may apply one of five bounded actions, or hold. Here, with no model key, the issue is logged and held for a person, which is the honest keyless outcome."
+    },
+    {
+      "kind": "title",
+      "seconds": 11,
+      "title": "What remains unresolved.",
+      "subtitle": "The shared login, six unscoped routes, a dormant unguarded mail path.",
+      "caption": "Sign-out, per-user signatures and drafts as the signed-in representative were built locally after the last commit and never committed or deployed. The project was sunset in September 2026."
+    }
+  ]
+}
