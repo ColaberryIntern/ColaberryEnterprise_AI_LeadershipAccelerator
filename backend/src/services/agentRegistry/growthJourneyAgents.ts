@@ -39,7 +39,7 @@ export const GROWTH_JOURNEY_AGENT_ENTRIES: AgentSeedEntry[] = [
     agent_name: 'GrowthJourneyExecutor',
     agent_type: 'scheduled_processor',
     module: 'growthJourney',
-    source_file: 'backend/src/services/growthJourney/execution/planExecution.ts',
+    source_file: 'backend/src/services/growthJourney/execution/runExecutor.ts',
     trigger_type: 'cron',
     // T513 registers the cron on this schedule: every 15 minutes, 14:00-22:59 UTC, Monday to Friday
     // (business hours, Central).

@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { instrumentCronJob } from '../cronInstrumentation';
+import { runExecutor } from '../growthJourney/execution/runExecutor';
 import { runScheduledShadowDecisions } from '../growthJourney/runShadowDecisionsNightly';
 
 /**
@@ -14,10 +15,11 @@ import { runScheduledShadowDecisions } from '../growthJourney/runShadowDecisions
  * scanners forbid `schedulerService`, `cronInstrumentation` and `node-cron`
  * inside `services/growthJourney/`).
  *
- * What registers here decides and records; nothing here sends. Every job is
- * wrapped in `instrumentCronJob`, so a registry row that is `enabled: false`
- * (every Growth Journey row is, shipped) is a logged skip, and the runner
- * itself returns skipped unless its flags are on.
+ * What registers here decides and records (the nightly), and plans, enrols
+ * through the one adapter and reconciles (the executor); nothing here sends.
+ * Every job is wrapped in `instrumentCronJob`, so a registry row that is
+ * `enabled: false` (every Growth Journey row is, shipped) is a logged skip,
+ * and each runner itself returns skipped unless its flags are on.
  */
 export function registerGrowthJourneyCrons(): void {
   // Growth Journey OS - the nightly shadow decisions (Phase 4 T408).
@@ -43,6 +45,27 @@ export function registerGrowthJourneyCrons(): void {
       await runScheduledShadowDecisions();
     }).catch((err) => {
       console.error('[Scheduler] GrowthJourneyShadowDecisions failed:', err);
+    });
+  });
+
+  // Growth Journey OS - the executor (Phase 5 T513).
+  //
+  // Every 15 minutes, 14:00-22:59 UTC, Monday to Friday - business hours Central,
+  // when a human is there to read the review queue it fills. One run is three
+  // bounded passes: plan live decisions into receipts (T508), enrol approved
+  // receipts through the adapter (T510) with T504's hold asked before every claim,
+  // reconcile (T512). Its schedule and agent name are the constants the batch
+  // exports (EXECUTOR_SCHEDULE, EXECUTOR_AGENT) and the registry seed carries;
+  // the guard test pins all three together.
+  //
+  // SHIPPED PAUSED, three times over, like the nightly: the registry row is
+  // enabled:false, and runExecutor returns skipped unless the master flag and
+  // GROWTH_JOURNEY_EXECUTION_ENABLED - Ali's alone to set - are both on.
+  cron.schedule('*/15 14-22 * * 1-5', () => {
+    instrumentCronJob('GrowthJourneyExecutor', async () => {
+      await runExecutor();
+    }).catch((err) => {
+      console.error('[Scheduler] GrowthJourneyExecutor failed:', err);
     });
   });
 }

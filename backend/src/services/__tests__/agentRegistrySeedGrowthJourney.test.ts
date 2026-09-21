@@ -57,7 +57,7 @@ describe('the module', () => {
     const executor = GROWTH_JOURNEY_AGENT_ENTRIES[1];
     expect(executor).toMatchObject({
       agent_name: EXECUTOR_AGENT_NAME, agent_type: 'scheduled_processor', module: 'growthJourney',
-      source_file: 'backend/src/services/growthJourney/execution/planExecution.ts', trigger_type: 'cron', schedule: '*/15 14-22 * * 1-5', category: 'outbound', enabled: false,
+      source_file: 'backend/src/services/growthJourney/execution/runExecutor.ts', trigger_type: 'cron', schedule: '*/15 14-22 * * 1-5', category: 'outbound', enabled: false,
     });
     // Acceptance 7: the kill switch disables every agent in these categories, this one included.
     expect(OUTBOUND_AGENT_CATEGORIES).toContain(executor.category);

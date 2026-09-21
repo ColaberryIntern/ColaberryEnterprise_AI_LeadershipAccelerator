@@ -1,3 +1,4 @@
+import { Op } from 'sequelize';
 import { GrowthJourneyDecision } from '../../../models';
 import type { ExecutionDecisionView } from './planChecks';
 
@@ -39,4 +40,14 @@ export function decisionViewOf(row: GrowthJourneyDecision): ExecutionDecisionVie
 export async function readDecisionView(decisionId: string): Promise<ExecutionDecisionView | null> {
   const row = await GrowthJourneyDecision.findOne({ where: { id: decisionId } });
   return row ? decisionViewOf(row) : null;
+}
+
+/** T513: a brand's `live` decisions since `since`, oldest first, at most `limit` - the executor's planning window. */
+export async function readLiveDecisionViews(args: { brandId: string; since: Date; limit: number }): Promise<ExecutionDecisionView[]> {
+  const rows = await GrowthJourneyDecision.findAll({
+    where: { brand_id: args.brandId, mode: 'live', created_at: { [Op.gte]: args.since } },
+    order: [['created_at', 'ASC']],
+    limit: args.limit,
+  });
+  return rows.map(decisionViewOf);
 }
