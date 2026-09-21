@@ -137,17 +137,20 @@ export async function ensureContractTrackSchema(): Promise<void> {
 export async function assertContractTrackSchema(): Promise<boolean> {
   const problems: string[] = [];
   try {
-    // Fetch every public table name and check membership in JS, rather than a
-    // `table_name = ANY($names)` bind. MEASURED in production 2026-09-21: the
-    // Sequelize named-array bind returned a FALSE NEGATIVE for this exact query —
-    // the five tables existed (a positional `ANY($1)` found them) but the assert
-    // reported them all missing and logged a bogus "contract reads will fail"
-    // error on every boot. Filtering in JS removes the unreliable array bind.
+    // Aggregate existence per table in SQL and read ONE row back. MEASURED in production
+    // 2026-09-21: this app's sequelize returns a single-column SELECT (e.g. `SELECT table_name`)
+    // as RAW ARRAYS, not `{ table_name }` objects (the row keys were `["0"]`), so both a
+    // `= ANY($names)` bind AND a JS-side membership filter reported all five tables missing
+    // while they demonstrably existed — logging a bogus "contract reads will fail" error every
+    // boot. A one-row `bool_or` result is an object keyed by the aliases and sidesteps the
+    // array-vs-object quirk. REQUIRED_TABLES are fixed constants, so the interpolation is not
+    // injectable.
+    const selects = REQUIRED_TABLES.map((t, i) => `bool_or(table_name = '${t}') AS t${i}`).join(', ');
     const [rows] = await sequelize.query(
-      `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`,
+      `SELECT ${selects} FROM information_schema.tables WHERE table_schema = 'public'`,
     );
-    const have = new Set((rows as { table_name: string }[]).map((r) => r.table_name));
-    for (const t of REQUIRED_TABLES) if (!have.has(t)) problems.push(`table ${t} missing`);
+    const row = (((rows as any[]) || [])[0] || {}) as Record<string, boolean>;
+    REQUIRED_TABLES.forEach((t, i) => { if (!row[`t${i}`]) problems.push(`table ${t} missing`); });
   } catch (err: any) {
     problems.push(`schema introspection failed: ${err?.message}`);
   }
