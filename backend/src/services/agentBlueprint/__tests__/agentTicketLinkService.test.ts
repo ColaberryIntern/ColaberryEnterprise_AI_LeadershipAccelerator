@@ -116,4 +116,17 @@ describe('logAgentExchangeActivity', () => {
       logAgentExchangeActivity('ticket-1', 'ai_staff', AGENT_ADMIN_ID, 'msg-3', 'reply text', 'curriculumqa', 'curriculum_review'),
     ).resolves.toBeUndefined();
   });
+
+  // Workspace mission, Phase 2 slice 1 (2026-09-21) — the new, optional workUnitId
+  // parameter, threaded straight through to emitEvent()'s own real, already-supported
+  // work_unit_id field.
+  it('passes workUnitId through to emitEvent() when supplied', async () => {
+    await logAgentExchangeActivity('ticket-1', 'human', 'user-1', 'msg-4', 'Hello', 'curriculumqa', 'curriculum_review', 'wu-1');
+    expect(mockEmitEvent.mock.calls[0][0].workUnitId).toBe('wu-1');
+  });
+
+  it('genuine no-op when workUnitId is omitted — every existing caller (Dara included) is unaffected', async () => {
+    await logAgentExchangeActivity('ticket-1', 'human', 'user-1', 'msg-5', 'Hello', 'curriculumqa', 'curriculum_review');
+    expect(mockEmitEvent.mock.calls[0][0].workUnitId).toBeUndefined();
+  });
 });

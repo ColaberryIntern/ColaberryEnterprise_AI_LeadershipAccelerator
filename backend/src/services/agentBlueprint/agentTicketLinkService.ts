@@ -68,6 +68,11 @@ export async function ensureAgentTicketForRoom(
  * `intentPrefix` namespaces the ledger event intent (e.g. 'reese' produces
  * 'reese.reply' / 'reese.student_message'); `domain` is the work-ledger domain
  * (e.g. 'student_support').
+ *
+ * Workspace mission, Phase 2 slice 1 (2026-09-21) — optional `workUnitId`, passed
+ * straight through to the real, already-supported `WorkLedgerEvent.work_unit_id`
+ * field. Additive: every existing caller (Dara's own `daraTicketLinkService.ts`,
+ * and Reese's own calls that don't pass one yet) is completely unaffected.
  */
 export async function logAgentExchangeActivity(
   ticketId: string,
@@ -77,11 +82,13 @@ export async function logAgentExchangeActivity(
   content: string,
   intentPrefix: string,
   domain: string,
+  workUnitId?: string | null,
 ): Promise<void> {
   try {
     await addTicketComment(ticketId, snippet(content), actorType, actorId);
     await emitEvent({
       ticketId,
+      workUnitId: workUnitId ?? undefined,
       traceId: crypto.randomUUID(),
       actorType,
       actorId,

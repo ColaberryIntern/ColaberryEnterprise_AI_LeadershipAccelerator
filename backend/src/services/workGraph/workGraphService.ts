@@ -3,6 +3,7 @@ import { TicketWorkUnit, WorkUnitDependency, ResourceLease } from '../../models'
 import {
   createWorkUnitInputSchema,
   createWorkUnitDependencySchema,
+  WORK_UNIT_STATUSES,
   type CreateWorkUnitInput,
   type CreateWorkUnitDependencyInput,
 } from '../../schemas/workGraphSchema';
@@ -67,6 +68,18 @@ export async function createWorkUnit(ticketId: string, input: CreateWorkUnitInpu
 
 export async function listWorkUnitsForTicket(ticketId: string): Promise<TicketWorkUnit[]> {
   return TicketWorkUnit.findAll({ where: { ticket_id: ticketId }, order: [['created_at', 'ASC']] });
+}
+
+// Workspace mission, Phase 2 slice 1 (2026-09-21) — the real, already-established
+// pattern for transitioning a work unit's status is a plain Sequelize `.update()`
+// (inboxCaseWorkGraphAutoRecorder.ts's own real precedent); this is that same call,
+// extracted once so callers with multiple real terminal states (a reply cycle can
+// end 'done', 'blocked', or 'failed') don't repeat it inline three-plus times.
+export async function updateWorkUnitStatus(
+  workUnitId: string,
+  status: (typeof WORK_UNIT_STATUSES)[number],
+): Promise<void> {
+  await TicketWorkUnit.update({ status } as any, { where: { id: workUnitId } });
 }
 
 /** Follows depends_on edges forward from `fromId` looking for `toId` — used to
