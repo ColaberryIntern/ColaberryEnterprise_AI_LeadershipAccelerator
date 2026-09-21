@@ -19,7 +19,7 @@ import { ALL_SECTIONS, type SectionKey } from '../services/access/mgmtRoles';
 // Admin API path prefix → section key. Longest-meaningful prefixes; matched with
 // a segment boundary so '/api/admin/community' never captures '/communications'.
 const PATH_SECTION: Array<[string, SectionKey]> = [
-  ['/api/admin/dashboard', 'dashboard'],
+  ['/api/admin/dashboard', 'dashboard'],
   ['/api/admin/trust', 'trust'],
   ['/api/admin/war-room', 'war_room'],
   ['/api/admin/revenue', 'revenue'], ['/api/admin/refunds', 'revenue'], ['/api/admin/pipeline', 'revenue'],
@@ -57,6 +57,9 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   ['/api/admin/inbox', 'inbox_content'], ['/api/admin/content-queue', 'inbox_content'],
   ['/api/admin/accelerator', 'program'], ['/api/admin/community', 'program'], ['/api/admin/orchestration', 'program'],
   ['/api/admin/workforce', 'program'], ['/api/admin/brain', 'program'], ['/api/admin/projects', 'program'],
+  // AI Project Factory Command Center (Phase 3): a delivery contract is program-domain work, the
+  // same section as /api/admin/projects. Mapped the day the route landed; an unmapped path is a latent 403.
+  ['/api/admin/factory', 'program'],
   ['/api/admin/cohorts', 'program'], ['/api/admin/curriculum', 'program'], ['/api/admin/components', 'program'],
   ['/api/admin/composer', 'program'], ['/api/admin/capabilities', 'program'], ['/api/admin/recipes', 'program'],
   ['/api/admin/feed-control', 'program'],

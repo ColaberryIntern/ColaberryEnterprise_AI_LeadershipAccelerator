@@ -67,3 +67,33 @@ assertApprovable / approveProcessDocument  (factoryApproval.ts — the WRITE gat
 Set `ENABLE_FACTORY_GENERATION=true` on the backend to enable the capability. Default off. See the
 run handoff (`.loop-architect/runs/20260921-064616-ai-project-factory-phase2/handoff.md`) for the
 numbered verification steps and rollback.
+
+## Command Center — the read surface (Phase 3)
+
+The admin **Factory Command Center** (`/admin/factory`, Program section) renders one delivery contract's
+decomposition. It is READ-ONLY and additive; the write actions (approve / request-changes) are disabled and
+land in Phase 4 (the gated `approveProcessDocument` already exists).
+
+```
+factoryProjectView.ts (PURE)
+  reconstructFactoryProject({ deliveryProjectId, docJson, tracks, requirements })
+    merges the persisted doc_json SUBSET (processes/roles/tasks/assignments/transitions/allocation/
+    role_map/source_blocks) with the contract_tracks (→tracks) and contract_requirements (→requirements)
+    rows into a full FactoryProject.
+  factoryProjectView(project, opts)
+    → the command-center view model: tracks, process, flow, allocation, roster (each agent with its
+      accountable human), compliance, role map, and a gate summary from the REAL factoryValidate.
+
+routes/admin/factoryRoutes.ts  (requireSection('program') + Zod, lazy-loaded models)
+  GET /api/admin/factory/sample                    → the Phase-1 sample view (day-one fixture, no DB)
+  GET /api/admin/factory/contract/:deliveryProjectId → reconstruct a real contract; 404 until one exists
+  (mounted in adminRoutes.ts; mgmtSectionGate maps /api/admin/factory → 'program')
+
+frontend/src/services/factoryApi.ts + pages/admin/AdminFactoryCommandCenterPage.tsx
+  the typed client + the page (Bootstrap 5 + admin-shell + RemixIcon + tokens), registered at
+  /admin/factory with a Program nav link (section 'program', agreeing with the backend gate).
+```
+
+Fixture-first: the sample renders on day one; a real contract needs a `delivery_projects` engagement/tenant
+(a later delivery-domain integration). See
+`.loop-architect/runs/20260921-p3-command-center/handoff.md` for numbered verification steps.
