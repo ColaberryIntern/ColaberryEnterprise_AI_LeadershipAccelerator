@@ -15,7 +15,7 @@ import { recordJourneyEvent, type JourneyLedgerResult } from '../ledger';
  *   (none)          -> pending_review | approved
  *   pending_review  -> approved | rejected | expired | cancelled
  *   approved        -> enrolling | expired | cancelled
- *   enrolling       -> enrolled | approved (returned by the reconciler) | failed
+ *   enrolling       -> enrolled | approved (returned: a hold, or by the reconciler) | cancelled (the re-check refused) | failed
  *   enrolled        -> in_progress | completed | blocked | failed | cancelled
  *   in_progress     -> completed | blocked | failed | cancelled
  *   completed, blocked, failed, cancelled, expired, rejected: terminal
@@ -27,7 +27,7 @@ export const RECEIPT_TRANSITIONS: Readonly<Record<string, readonly GrowthJourney
   none: ['pending_review', 'approved'],
   pending_review: ['approved', 'rejected', 'expired', 'cancelled'],
   approved: ['enrolling', 'expired', 'cancelled'],
-  enrolling: ['enrolled', 'approved', 'failed'],
+  enrolling: ['enrolled', 'approved', 'cancelled', 'failed'],
   enrolled: ['in_progress', 'completed', 'blocked', 'failed', 'cancelled'],
   in_progress: ['completed', 'blocked', 'failed', 'cancelled'],
   completed: [],

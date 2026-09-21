@@ -40,7 +40,7 @@ describe('the state machine', () => {
   it.each([
     ['pending_review', ['approved', 'rejected', 'expired', 'cancelled']],
     ['approved', ['enrolling', 'expired', 'cancelled']],
-    ['enrolling', ['enrolled', 'approved', 'failed']],
+    ['enrolling', ['enrolled', 'approved', 'cancelled', 'failed']],
     ['enrolled', ['in_progress', 'completed', 'blocked', 'failed', 'cancelled']],
     ['in_progress', ['completed', 'blocked', 'failed', 'cancelled']],
   ] as Array<[GrowthJourneyExecutionStatus, GrowthJourneyExecutionStatus[]]>)('%s moves only to %j', (from, allowed) => {
@@ -50,7 +50,8 @@ describe('the state machine', () => {
   it('the edges the later tasks rely on are present: approve, claim, return by the reconciler, expire, reject, cancel', () => {
     expect(canTransition('pending_review', 'approved')).toBe(true); // T509
     expect(canTransition('approved', 'enrolling')).toBe(true); // T510's claim
-    expect(canTransition('enrolling', 'approved')).toBe(true); // T512's return of an enrolment that never happened
+    expect(canTransition('enrolling', 'approved')).toBe(true); // T510's hold, T512's return of an enrolment that never happened
+    expect(canTransition('enrolling', 'cancelled')).toBe(true); // T510's re-check: a channel closed since approval
     expect(canTransition('approved', 'expired')).toBe(true); // T512's stale approval
     expect(canTransition('pending_review', 'rejected')).toBe(true); // T509
     expect(canTransition('enrolled', 'cancelled')).toBe(true); // rollback

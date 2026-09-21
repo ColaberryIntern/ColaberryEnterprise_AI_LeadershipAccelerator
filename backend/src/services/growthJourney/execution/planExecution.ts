@@ -91,8 +91,8 @@ async function newestInboundAt(leadId: number | null): Promise<Date | null> {
   return ats.length === 0 ? null : new Date(Math.max(...ats.map((d) => d.getTime())));
 }
 
-/** The address the consent record may be keyed by. Held for the evidence call; written nowhere. */
-async function leadAddress(leadId: number): Promise<{ email: string | null; phone: string | null } | null> {
+/** The address the consent record may be keyed by. Held for the evidence call; written nowhere. Shared with the adapter (T510). */
+export async function readLeadAddress(leadId: number): Promise<{ email: string | null; phone: string | null } | null> {
   const lead = await Lead.findByPk(leadId, { attributes: ['email', 'phone'] });
   if (!lead) return null;
   const email = lead.get('email');
@@ -200,7 +200,7 @@ export async function planExecution(args: PlanExecutionArgs): Promise<PlanExecut
 
   let address: { email: string | null; phone: string | null } | null = { email: null, phone: null };
   if (decision.lead_id !== null) {
-    address = await leadAddress(decision.lead_id);
+    address = await readLeadAddress(decision.lead_id);
     if (!address) return refuse('lead_unreadable', channel);
   }
 
