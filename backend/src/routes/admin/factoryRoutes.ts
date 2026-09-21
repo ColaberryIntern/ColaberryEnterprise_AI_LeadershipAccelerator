@@ -205,7 +205,8 @@ function toContractTrack(r: any): ContractTrack {
     solution_student_project_id: r.solution_student_project_id ?? null,
   };
 }
-function toContractRequirement(r: any): ContractRequirement {
+/** Exported for unit test: maps a DB requirement row to the typed contract shape. */
+export function toContractRequirement(r: any): ContractRequirement {
   return {
     id: r.canonical_req_id, // the traceability spine id, NOT the row UUID
     statement: r.statement ?? '',
@@ -218,7 +219,9 @@ function toContractRequirement(r: any): ContractRequirement {
     extracted_text: r.extracted_text ?? '',
     interpretation: r.interpretation ?? null,
     human_confirmed: !!r.human_confirmed,
-    evidence_state: (r.evidence_state ?? 'planned') as EvidenceState,
+    // A null/unknown evidence_state reads as honestly-unknown (`unassessed`), never as `planned` —
+    // a migrated/legacy requirement with no established evidence must not claim it is planned.
+    evidence_state: (r.evidence_state ?? 'unassessed') as EvidenceState,
     source_evidence: Array.isArray(r.source_evidence) ? r.source_evidence : [],
   };
 }

@@ -101,3 +101,50 @@ describe('the gate summary genuinely flips on a broken project (not hardcoded)',
     expect(v.gate.checks.find((c) => c.code === 'PERFORMER')?.ok).toBe(true);
   });
 });
+
+describe('an UNASSESSED migrated shell renders HONESTLY — renders, does not approve (Phase 6)', () => {
+  // Exactly what backfillUnassessedContract produces: empty decomposition + one explicit
+  // "not yet assessed" requirement + two unassessed tracks. No invented work.
+  const emptyDoc: FactoryDocJson = {
+    processes: [], roles: [], tasks: [], assignments: [], transitions: [], allocation: [], role_map: [], source_blocks: [],
+  };
+  const tracks = [
+    { id: 't-p', delivery_project_id: 'dp-x', track_type: 'proposal', status: 'unassessed', owner_identity_id: null, solution_student_project_id: null },
+    { id: 't-s', delivery_project_id: 'dp-x', track_type: 'solution_build', status: 'unassessed', owner_identity_id: null, solution_student_project_id: null },
+  ] as any;
+  const requirements = [
+    {
+      id: 'r-unassessed', delivery_project_id: 'dp-x', canonical_req_id: 'UNASSESSED',
+      statement: 'This project has not been assessed against the factory model.', kind: 'compliance', priority: 'must',
+      tracks: ['proposal', 'solution_build'], source_document: '', amendment_version: '', section: '', extracted_text: '',
+      interpretation: 'Migrated shell — evidence not yet established.', human_confirmed: false, evidence_state: 'unassessed', source_evidence: [],
+    },
+  ] as any;
+
+  const project = reconstructFactoryProject({ deliveryProjectId: 'dp-x', docJson: emptyDoc, tracks, requirements });
+
+  it('renders the command-center view WITHOUT throwing', () => {
+    expect(() => factoryProjectView(project, { contractName: 'AI Ops Assistant (ordinary demo)' })).not.toThrow();
+  });
+
+  const view = factoryProjectView(project, { contractName: 'AI Ops Assistant (ordinary demo)' });
+
+  it('the gate HONESTLY fails (empty task graph → no START/END) — it is not approvable', () => {
+    expect(view.gate.ok).toBe(false);
+    expect(view.gate.errorCount).toBeGreaterThan(0);
+    expect(view.gate.checks.find((c) => c.code === 'FLOW')?.ok).toBe(false); // one start, a reachable end
+  });
+
+  it('surfaces the unassessed label and NO invented work', () => {
+    expect(view.compliance).toHaveLength(1);
+    expect(view.compliance[0].evidenceState).toBe('unassessed');
+    expect(view.flow.nodes).toHaveLength(0);
+    expect(view.allocation).toHaveLength(0);
+    expect(view.roster).toHaveLength(0);
+    expect(view.process).toBeNull();
+    expect(view.workforce).toEqual({ people: 0, agents: 0 });
+    // the two tracks still render, so the page shows the shape honestly
+    expect(view.tracks.map((t) => t.trackType).sort()).toEqual(['proposal', 'solution_build']);
+    expect(view.tracks.every((t) => t.status === 'unassessed')).toBe(true);
+  });
+});
