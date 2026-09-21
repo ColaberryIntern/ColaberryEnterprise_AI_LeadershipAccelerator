@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI Project Factory — Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --navy:#14283c; --navy2:#1a365d; --accent:#2b6cb0; --accent-soft:#e7effa;
+    --ground:#f5f6f8; --panel:#ffffff; --ink:#1d2733; --muted:#66717f; --faint:#9aa4b1;
+    --line:#e3e7ec; --good:#2f855a; --good-soft:#e7f2ec; --warn:#b5710a; --warn-soft:#fbf0dd;
+    --serif:'Spectral',Georgia,'Times New Roman',serif;
+    --sans:'IBM Plex Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);line-height:1.6;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:500}
+  h1,h2,h3{font-family:var(--serif);font-weight:600;line-height:1.15;text-wrap:balance;margin:0}
+  p{margin:0}
+  a{color:var(--accent)}
+
+  /* Hero */
+  header.hero{background:linear-gradient(160deg,var(--navy) 0%,var(--navy2) 62%,#20507f 100%);color:#eef3f8}
+  .hero .wrap{padding-block:64px 56px}
+  .hero .eyebrow{color:#8fb6e0}
+  .hero h1{font-size:clamp(30px,5vw,50px);color:#fff;margin:14px 0 0;max-width:16ch}
+  .hero .lede{font-size:clamp(16px,2.2vw,20px);color:#c4d3e4;max-width:60ch;margin-top:18px;font-family:var(--serif);font-style:italic}
+  .hero .meta{display:flex;flex-wrap:wrap;gap:10px 26px;margin-top:28px;font-size:13px;color:#9db6d2}
+  .hero .meta b{color:#dce7f3;font-weight:500}
+
+  /* Principle band */
+  .principle{background:var(--navy2);color:#eaf1f8}
+  .principle .wrap{padding-block:36px}
+  .principle .grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(255,255,255,.14);border-radius:12px;overflow:hidden}
+  .principle .cell{background:var(--navy2);padding:22px 24px}
+  .principle .cell h3{font-size:15px;color:#fff;font-family:var(--sans);font-weight:600;display:flex;align-items:center;gap:9px}
+  .principle .cell p{color:#c0d2e6;font-size:14px;margin-top:8px}
+  .tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:20px}
+  .tag.model{background:#3d6ea3;color:#eaf3ff}
+  .tag.code{background:#1f3f5e;color:#a9c8e8;border:1px solid #34557a}
+
+  section{padding-block:52px}
+  .sec-head{max-width:64ch}
+  .sec-head h2{font-size:clamp(22px,3.4vw,32px);margin-top:10px}
+  .sec-head p.sub{color:var(--muted);margin-top:12px;font-size:16px}
+
+  /* Engine: keep vs add */
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:30px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 22px 8px;
+    box-shadow:0 1px 2px rgba(20,40,60,.04)}
+  .card > h3{font-family:var(--sans);font-size:13px;letter-spacing:.02em;text-transform:uppercase;color:var(--navy2);font-weight:600;
+    display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .card.add > h3{color:var(--accent)}
+  .dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .dot.k{background:var(--good)} .dot.a{background:var(--accent)}
+  ul.tight{list-style:none;padding:0;margin:14px 0 0}
+  ul.tight li{padding:11px 0;border-top:1px solid var(--line);font-size:14px;color:#374250}
+  ul.tight li:first-child{border-top:0}
+  ul.tight li b{color:var(--ink);font-weight:600}
+  code,.k-code{font-family:var(--mono);font-size:12.5px;background:#eef1f4;color:#33465a;padding:1px 6px;border-radius:5px}
+
+  /* Timeline */
+  .timeline{margin-top:34px;position:relative}
+  .phase{position:relative;display:grid;grid-template-columns:64px 1fr;gap:20px;padding-bottom:26px}
+  .phase:last-child{padding-bottom:0}
+  .rail{position:relative;display:flex;flex-direction:column;align-items:center}
+  .num{width:46px;height:46px;border-radius:12px;background:var(--navy2);color:#fff;display:grid;place-items:center;
+    font-family:var(--serif);font-size:20px;font-weight:600;flex:none;z-index:1;box-shadow:0 2px 8px rgba(20,40,60,.18)}
+  .phase.blocked .num{background:var(--warn)}
+  .line{position:absolute;top:46px;bottom:-8px;width:2px;background:var(--line)}
+  .phase:last-child .line{display:none}
+  .pcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px;box-shadow:0 1px 2px rgba(20,40,60,.04)}
+  .pcard h3{font-family:var(--sans);font-size:18px;font-weight:600}
+  .pcard .scope{color:#42505f;font-size:14.5px;margin-top:8px}
+  .exit{margin-top:14px;background:var(--good-soft);border:1px solid #cfe6d8;border-radius:10px;padding:11px 14px;font-size:13.5px;color:#1f5138}
+  .exit b{color:#173d2a}
+  .phase.blocked .exit{background:var(--warn-soft);border-color:#eddcbd;color:#7a4f0c}
+  .phase.blocked .exit b{color:#5f3d08}
+  .runline{margin-top:12px;font-family:var(--mono);font-size:11.5px;color:var(--faint);letter-spacing:.02em}
+  .runline b{color:var(--accent);font-weight:500}
+
+  /* Command centers */
+  .three{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:30px}
+  .cc{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;box-shadow:0 1px 2px rgba(20,40,60,.04)}
+  .cc .ci{width:38px;height:38px;border-radius:10px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;
+    font-family:var(--mono);font-weight:500;font-size:15px}
+  .cc h3{font-family:var(--sans);font-size:16px;font-weight:600;margin-top:14px}
+  .cc p{font-size:13.5px;color:var(--muted);margin-top:8px}
+
+  /* loop-architect flow */
+  .flowband{background:var(--navy);color:#dce7f2}
+  .flowband .sec-head h2{color:#fff}
+  .flowband .sec-head p.sub{color:#9db6d2}
+  .flow{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px;align-items:stretch}
+  .step{flex:1 1 118px;background:#1b3350;border:1px solid #2c4a6c;border-radius:10px;padding:12px 12px 13px}
+  .step .s-n{font-family:var(--mono);font-size:10px;color:#7fa3cc;letter-spacing:.1em}
+  .step .s-t{font-size:13px;color:#eaf2fb;font-weight:600;margin-top:5px}
+  .step .s-g{font-size:11px;color:#9db6d2;margin-top:6px;line-height:1.4}
+  .step.gate{background:#12406e;border-color:#2f6aa8}
+  .step.gate .s-g{color:#bcd8f5}
+  .flownote{margin-top:20px;font-size:13px;color:#a7c0dc;max-width:70ch}
+  .flownote b{color:#e7f0fa;font-weight:500}
+
+  /* Dependency callout */
+  .dep{margin-top:28px;background:var(--warn-soft);border:1px solid #ecd9b5;border-left:4px solid var(--warn);border-radius:12px;padding:20px 22px}
+  .dep h3{font-family:var(--sans);font-size:16px;color:#7a4f0c;font-weight:600}
+  .dep p{font-size:14px;color:#6b4a12;margin-top:8px}
+  .dep .need{margin-top:12px;font-family:var(--mono);font-size:12.5px;color:#5f3d08}
+
+  footer{background:var(--navy2);color:#cfe0f0}
+  footer .wrap{padding-block:34px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px;align-items:center}
+  footer .next{font-family:var(--serif);font-size:18px;color:#fff}
+  footer .next b{color:#9fc4ea;font-weight:600}
+  footer small{color:#8fabc9;font-family:var(--mono);font-size:11px;letter-spacing:.04em}
+
+  @media (max-width:760px){
+    .principle .grid,.cols,.three{grid-template-columns:1fr}
+    .phase{grid-template-columns:48px 1fr;gap:14px}
+    .num{width:40px;height:40px;font-size:17px}
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Colaberry · AI Internship · Execution Plan</div>
+    <h1>The AI Project Factory &amp; Internship Command Center</h1>
+    <p class="lede">Every project analyzes the real work, decides what AI does and what people still own, and proves the result — before a single page is called done.</p>
+    <div class="meta">
+      <span>Owner · <b>Ali Muwwakkil</b></span>
+      <span>Method · <b>/loop-architect, one governed run per phase</b></span>
+      <span>Decomposition · <b>LLM + the NuOrg gate model</b></span>
+      <span>Dated · <b>Sep 20, 2026</b></span>
+    </div>
+  </div>
+</header>
+
+<div class="principle">
+  <div class="wrap">
+    <div class="grid">
+      <div class="cell">
+        <h3><span class="tag model">Model</span> does the probabilistic work</h3>
+        <p>Decompose a requirement or contract into candidate tasks, normalize them, propose role→executor matches, draft prose. It is allowed to say "don't know."</p>
+      </div>
+      <div class="cell">
+        <h3><span class="tag code">Code</span> does the deterministic work</h3>
+        <p>Coverage, structural validity, ids, versions, hashes, immutable audit, approval transactions — and the human-or-AI allocation <i>score</i>. The model never grades itself.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">The engine that divides the work</div>
+      <h2>Requirement → tasks, built on the NuOrg model</h2>
+      <p class="sub">NuOrg's platform <i>parses</i> a procedure someone already wrote; it never generates. We keep its output contract, precedence, gates and review model — and put an LLM exactly where its regex recall stops: the decomposition itself.</p>
+    </div>
+    <div class="cols">
+      <div class="card keep">
+        <h3><span class="dot k"></span> Keep from NuOrg — proven</h3>
+        <ul class="tight">
+          <li><b>Evidence is the unit of truth.</b> Every task cites its source blocks; every block must be cited or classified. Coverage is a query, not a judgment.</li>
+          <li><b>Written precedence.</b> Explicit &gt; implied &gt; model-added — each task tags which, with a one-line reason.</li>
+          <li><b>"Don't know" is a value.</b> Unspecified performer, unknown basis, open question — never a guess. The judge penalizes invention, not omission.</li>
+          <li><b>Three separate decisions.</b> What the task is · which role performs it · which person / team / agent fills the role.</li>
+          <li><b>Executor is one of person / team / agent</b>, and an agent always needs a human accountable. Enforced twice.</li>
+          <li><b>A machine gate with named codes.</b> <code>SOURCE_COVERAGE</code>, <code>OVERSIGHT</code>, <code>LOOP</code>, <code>PERFORMER</code>… errors go back to the model, never self-certified.</li>
+          <li><b>Approval is a transaction.</b> Version, hash, immutable audit, fork-on-edit. Reproducible history for free.</li>
+        </ul>
+      </div>
+      <div class="card add">
+        <h3><span class="dot a"></span> Add beyond NuOrg — where ours is better</h3>
+        <ul class="tight">
+          <li><b>Actually decompose.</b> One task = one verb, one object, one outcome, one performer — from a goal or narrative, not just numbered steps.</li>
+          <li><b>Attributes an assignment needs.</b> <code>required_skills</code>, <code>judgment_level</code>, <code>decision_authority</code>, <code>data_sensitivity</code>, <code>interaction_pattern</code>, <code>frequency</code>, <code>confidence</code>.</li>
+          <li><b>Assignment as a scored pass.</b> Ranked candidates with <code>match_method</code> + confidence; auto-accept only exact-unique; the human-or-AI call is computed in code.</li>
+          <li><b>Re-derive, don't patch.</b> A changed requirement re-runs the pipeline and shows a diff against the approved version.</li>
+          <li><b>Confidence + thresholds</b> everywhere the LLM contributes — NuOrg is binary because it is pure rules.</li>
+          <li><b>Tests as failure modes first.</b> "A block cited by nothing." "A compound sentence that must become two tasks." "An agent on an approval step."</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="background:#eef1f5;border-block:1px solid var(--line)">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">The roadmap</div>
+      <h2>Six phases, each one governed loop-architect run</h2>
+      <p class="sub">Sequential. Each phase ends in a reviewable exit you approve before the next starts. The run plans, gets its plan independently audited, builds one task at a time with a fresh-evidence verifier, gates, deploys, and verifies the live release.</p>
+    </div>
+    <div class="timeline">
+
+      <div class="phase">
+        <div class="rail"><div class="num">1</div><div class="line"></div></div>
+        <div class="pcard">
+          <h3>Process &amp; project contract</h3>
+          <p class="scope">The linked-tracks model (proposal + solution build), the process/task schema above, the human/AI allocation matrix, the old→new role map, the workspace design, and the project-identity mapping between domains.</p>
+          <div class="exit"><b>Exit ·</b> one complete sample contract project showing both tracks, task ownership, and consolidated human roles — as data plus a rendered review.</div>
+          <div class="runline"><b>loop-architect ▸</b> discover · contract · plan · <b>audit</b> · build · gate · deploy · verify · handoff</div>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="rail"><div class="num">2</div><div class="line"></div></div>
+        <div class="pcard">
+          <h3>Generation pipeline</h3>
+          <p class="scope">Update the <code>/build-student-project</code> skill <i>and</i> the real pipeline together — plan contract, decomposition, gates, story prompts, doc renderer, verification. LLM decomposition behind the deterministic validate(); agent-scoping reconciles with explicit assignments.</p>
+          <div class="exit"><b>Exit ·</b> a newly generated project produces coherent process, workforce and UI architecture with stories traced to tasks and requirements — and gates reject the incoherent ones.</div>
+          <div class="runline"><b>loop-architect ▸</b> honors the renderDocs write-allowlist; no silent bypass of the UI-map contract</div>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="rail"><div class="num">3</div><div class="line"></div></div>
+        <div class="pcard">
+          <h3>Management workspaces</h3>
+          <p class="scope">The Internship Admin Command Center over the whole portfolio, and the human-operator Command Center generated inside each app. Admin authorization, never intern impersonation; "See as intern" stays distinct.</p>
+          <div class="exit"><b>Exit ·</b> admin sees the whole project (counts drill into real records); a human operator runs their authorized business work through one login — never a superuser.</div>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="rail"><div class="num">4</div><div class="line"></div></div>
+        <div class="pcard">
+          <h3>Evidence &amp; approvals</h3>
+          <p class="scope">Page inventory (extending the existing UI-map contract), captures to object storage, review submissions bound to immutable versions, six separate decision types, revision tasks that don't duplicate on retry.</p>
+          <div class="exit"><b>Exit ·</b> review, rejection, correction, resubmission — and a stale approval refused: an old screenshot can never sign off a newer unreviewed build.</div>
+        </div>
+      </div>
+
+      <div class="phase blocked">
+        <div class="rail"><div class="num">5</div><div class="line"></div></div>
+        <div class="pcard">
+          <h3>Builder integration <span style="font-family:var(--mono);font-size:11px;color:var(--warn);letter-spacing:.06em">· DEP</span></h3>
+          <p class="scope">The AI builder that writes the software, with a caption feed of observable events — each backed by a timestamped, evidence-linked event. Pending is never shown as success; disconnection is shown honestly.</p>
+          <div class="exit"><b>Exit ·</b> one real scoped build emits truthful captions and reaches human review; unavailable runtime functions are marked, not faked.</div>
+          <div class="runline"><b>Blocked on ▸</b> the other-tab builder design (see below). Builds only to the integration contract until then.</div>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="rail"><div class="num">6</div></div>
+        <div class="pcard">
+          <h3>Migration &amp; acceptance</h3>
+          <p class="scope">Backfill known processes and links without fabricating evidence (legacy work labeled unassessed where it can't be proven); page-consolidation and role-migration maps before touching nav or permissions.</p>
+          <div class="exit"><b>Exit ·</b> one contract project and one ordinary AI project pass the full workflow; a migration/rollback report and remaining gaps are visible.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Who watches the operation</div>
+      <h2>Three connected command centers</h2>
+      <p class="sub">Distinct identities, distinct permissions, distinct activity — never collapsed into one superuser or one impersonation.</p>
+    </div>
+    <div class="three">
+      <div class="cc">
+        <div class="ci">A</div>
+        <h3>Internship Admin</h3>
+        <p>One portfolio across interns and projects: proposal readiness, build readiness, verified stories, required approvals, blockers, deadlines — every count drilling into the real records.</p>
+      </div>
+      <div class="cc">
+        <div class="ci">B</div>
+        <h3>Human Operator</h3>
+        <p>Generated inside each delivered app: the AI work running, waiting or failed; approval and exception queues by urgency; the controls to direct it — all within one authorized scope.</p>
+      </div>
+      <div class="cc">
+        <div class="ci">C</div>
+        <h3>AI Builder</h3>
+        <p>The employee that writes the software, kept separate from the AI employees inside the delivered solution. The intern still understands, supervises, tests and explains the system.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="flowband">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">How each phase is actually run</div>
+      <h2>The loop-architect run, gate by gate</h2>
+      <p class="sub">The loop never self-grades: the plan, each task, and the live deploy each go to a separate verifier subagent.</p>
+    </div>
+    <div class="flow">
+      <div class="step"><div class="s-n">A</div><div class="s-t">Discover</div><div class="s-g">Re-read CLAUDE.md; inspect live code — the foundations drift</div></div>
+      <div class="step"><div class="s-n">C·D</div><div class="s-t">Contract + Plan</div><div class="s-g">Small, verifiable tasks in a run directory</div></div>
+      <div class="step gate"><div class="s-n">E</div><div class="s-t">Plan audit ▸</div><div class="s-g">Auditor scores 10 dims · ≥18/20 · Kickoff dashboard</div></div>
+      <div class="step"><div class="s-n">F</div><div class="s-t">Execute</div><div class="s-g">One task at a time · smallest complete change</div></div>
+      <div class="step gate"><div class="s-n">F</div><div class="s-t">Task verify ▸</div><div class="s-g">Fresh evidence · ≥11/12 · Halfway at 50%</div></div>
+      <div class="step gate"><div class="s-n">G</div><div class="s-t">Quality gate ▸</div><div class="s-g">tsc · jest · lint · Shipping dashboard</div></div>
+      <div class="step"><div class="s-n">H</div><div class="s-t">Deploy</div><div class="s-g">Only via deploy-prod.sh</div></div>
+      <div class="step gate"><div class="s-n">I·J</div><div class="s-t">Prod verify ▸</div><div class="s-g">Live release checked · Live dashboard + handoff</div></div>
+    </div>
+    <p class="flownote"><b>Hard-stops become a Blocked dashboard, not silent action:</b> changes to compose or nginx, a schema <i>redesign</i>, a new paid dependency, or anything on CLAUDE.md's Strategic Decisions list. An additive nullable column with an ensure-schema migration — the pattern already used for archive and approval — is fine.</p>
+  </div>
+</section>
+
+<section style="padding-top:14px">
+  <div class="wrap">
+    <div class="dep">
+      <h3>⚑ One open dependency — gates Phase 5's internals</h3>
+      <p>The spec records a separate-tab design for the AI employee that writes code with visible captions. It has not been located, and the Reese / Dara / consolidation material is not it. Until it is found, Phase 5 builds only to the caption + work-assignment integration contract — it will not pretend the design was recovered, or spawn a duplicate employee.</p>
+      <p class="need">NEED ▸ the other tab's title, shared link, employee name, or design file.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span class="next">Next ▸ <b>kick off Phase 1</b> as a loop-architect run — the plan-audit Kickoff dashboard is the first checkpoint.</span>
+    <small>docs/AI_PROJECT_FACTORY_EXECUTION_PLAN.md</small>
+  </div>
+</footer>
+
+</body>
+</html>

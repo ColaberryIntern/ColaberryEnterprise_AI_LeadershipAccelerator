@@ -73,17 +73,50 @@ probe_bc_token() {
 # stale, the job does not run (the dispatcher's own identity-halt is then just a
 # second layer of the same guarantee). refreshCbSystemToken.sh asserts the cached
 # token resolves to 37708014 before writing, so a 200 here is trustworthy.
+#
+# WHY THE MINT-ON-STALE BRANCH EXISTS. The daily 07:00 refreshCbSystemToken.sh
+# asks the advisor for a token, and the advisor hands back the one it already
+# holds whenever that token has more than its refresh buffer (300s) of life
+# left. So the daily run can "refresh" a token with only hours remaining and
+# declare DONE. Observed 2026-09-21: green refresh at 07:00 UTC, 401 on
+# /my/profile.json at 10:30, the dispatcher auto-tripped its kill switch on the
+# null identity, and every tick after that was refused here until a manual mint
+# at 10:43 - three hours of silence and a hand re-enable, for a token that the
+# advisor would have re-minted on request the moment it expired. The Ali-token
+# path below has had the same mint-on-dead step since 2026-09-14; this gives the
+# CB path its own, against its own store. It never touches CCPP or Ali's grant,
+# and it stays fail-closed: refreshCbSystemToken.sh refuses to write anything
+# that does not resolve to 37708014, and we still only run on a 200 probe.
 CB_SYSTEM_TOKEN_CACHE=/opt/colaberry-accelerator/tmp/ops-engine/cb-system-token.cache
-if [ "${CB_USE_SYSTEM_TOKEN:-}" = "1" ]; then
+CB_MINT_LOCK=/opt/colaberry-accelerator/tmp/ops-engine/cb-system-mint.lock
+CB_MINT_SCRIPT=/opt/colaberry-accelerator/scripts/refreshCbSystemToken.sh
+read_cb_system_token() {
   if [ -f "$CB_SYSTEM_TOKEN_CACHE" ]; then
     export BASECAMP_ACCESS_TOKEN="$(cat "$CB_SYSTEM_TOKEN_CACHE" 2>/dev/null)"
   else
     export BASECAMP_ACCESS_TOKEN=""
   fi
+}
+if [ "${CB_USE_SYSTEM_TOKEN:-}" = "1" ]; then
+  read_cb_system_token
   if probe_bc_token; then
     exec node "$@"
   fi
-  echo "[cron-env-wrapper] CB System token missing/stale; refusing to run '$*' as a non-CB identity (fail-closed)" >&2
+  # Stale or missing: mint a fresh CB System token under a lock (the dispatcher
+  # and the CB task runners share this wrapper, so a burst of jobs on a dead
+  # token would otherwise all mint at once), then re-read and re-probe. The
+  # waiter re-probes after the lock rather than minting a second time.
+  if [ -x "$CB_MINT_SCRIPT" ] && command -v flock >/dev/null 2>&1; then
+    echo "[cron-env-wrapper] CB System token missing/stale; minting a fresh one" >&2
+    mkdir -p "$(dirname "$CB_MINT_LOCK")"
+    flock "$CB_MINT_LOCK" "$CB_MINT_SCRIPT" --commit >/dev/null 2>&1 || true
+    read_cb_system_token
+    if probe_bc_token; then
+      echo "[cron-env-wrapper] minted a fresh CB System token; running '$*'" >&2
+      exec node "$@"
+    fi
+  fi
+  echo "[cron-env-wrapper] CB System token missing/stale and mint did not recover it; refusing to run '$*' as a non-CB identity (fail-closed)" >&2
   exit 0
 fi
 

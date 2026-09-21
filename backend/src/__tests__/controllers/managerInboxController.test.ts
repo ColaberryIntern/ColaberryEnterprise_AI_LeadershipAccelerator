@@ -2,13 +2,14 @@ import express from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { env } from '../../config/env';
-import { getManagerInboxItems, approveManagerInboxItem, rejectManagerInboxItem } from '../../services/managerInboxService';
+import { getManagerInboxItems, approveManagerInboxItem, rejectManagerInboxItem, getManagerInboxItemInspector } from '../../services/managerInboxService';
 import managerInboxRoutes from '../../routes/admin/managerInboxRoutes';
 
 jest.mock('../../services/managerInboxService', () => ({
   getManagerInboxItems: jest.fn(),
   approveManagerInboxItem: jest.fn(),
   rejectManagerInboxItem: jest.fn(),
+  getManagerInboxItemInspector: jest.fn(),
 }));
 
 const mockOrgMemberFindOne = jest.fn();
@@ -25,6 +26,7 @@ jest.mock('../../services/workforce/orgChartHierarchyService', () => ({
 const mockGetManagerInboxItems = getManagerInboxItems as unknown as jest.Mock;
 const mockApproveManagerInboxItem = approveManagerInboxItem as unknown as jest.Mock;
 const mockRejectManagerInboxItem = rejectManagerInboxItem as unknown as jest.Mock;
+const mockGetManagerInboxItemInspector = getManagerInboxItemInspector as unknown as jest.Mock;
 
 function buildApp() {
   const app = express();
@@ -177,5 +179,48 @@ describe('POST /api/admin/agents/:id/inbox/:proposalId/reject', () => {
 
     expect(res.status).toBe(403);
     expect(mockRejectManagerInboxItem).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/admin/agents/:id/inbox/:proposalId/inspector (Slice 2c)', () => {
+  it('happy path: 200s with the real 3 computed facts for a super_admin', async () => {
+    mockGetManagerInboxItemInspector.mockResolvedValue({
+      blastRadius: '1 recipient',
+      reversibility: 'Reversible — this email has not sent yet',
+      expectedResult: "Subject changes from 'Old' to 'New'.",
+    });
+
+    const res = await request(buildApp()).get('/api/admin/agents/agent-1/inbox/p1/inspector').set('Authorization', `Bearer ${superAdminToken()}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.blastRadius).toBe('1 recipient');
+    expect(mockGetManagerInboxItemInspector).toHaveBeenCalledWith('agent-1', 'p1');
+  });
+
+  it('boundary: a proposal that does not belong to this agent 404s, same as approve/reject', async () => {
+    mockGetManagerInboxItemInspector.mockResolvedValue(null);
+
+    const res = await request(buildApp()).get('/api/admin/agents/agent-1/inbox/other-agents-proposal/inspector').set('Authorization', `Bearer ${superAdminToken()}`);
+
+    expect(res.status).toBe(404);
+  });
+
+  it('auth: an admin outside this agent\'s reporting chain is 403d and the service is never called', async () => {
+    mockOrgMemberFindOne.mockResolvedValue({ id: 'org-member-1' });
+    mockIsAgentInHumanDownstream.mockResolvedValue(false);
+
+    const res = await request(buildApp()).get('/api/admin/agents/agent-1/inbox/p1/inspector').set('Authorization', `Bearer ${managerToken()}`);
+
+    expect(res.status).toBe(403);
+    expect(mockGetManagerInboxItemInspector).not.toHaveBeenCalled();
+  });
+
+  it('failure: an unexpected service error 500s without leaking the raw message', async () => {
+    mockGetManagerInboxItemInspector.mockRejectedValue(new Error('db unavailable'));
+
+    const res = await request(buildApp()).get('/api/admin/agents/agent-1/inbox/p1/inspector').set('Authorization', `Bearer ${superAdminToken()}`);
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).not.toMatch(/db unavailable/);
   });
 });

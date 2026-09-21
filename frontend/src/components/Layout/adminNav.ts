@@ -138,6 +138,9 @@ export const NAV_GROUPS: NavGroup[] = [
     // so every existing deep link, bookmark and ?tab= link keeps working.
     { path: '/admin/orchestration', label: 'Curriculum', icon: 'flow-chart' },
     { path: '/admin/workforce', label: 'AI Organization', icon: 'team-line' },
+    // AI Project Factory Command Center (Phase 3). A delivery contract is program-domain work; the
+    // backend mgmtSectionGate maps /api/admin/factory to 'program', so the nav and the API agree.
+    { path: '/admin/factory', label: 'Project Factory', icon: 'node-tree' },
   ]},
   { label: 'Intelligence', section: 'intelligence', links: [
     { path: '/admin/ceo', label: 'CEO Command', icon: 'vip-crown-line' },

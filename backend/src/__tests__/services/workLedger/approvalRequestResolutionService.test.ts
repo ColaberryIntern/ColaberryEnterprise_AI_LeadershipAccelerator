@@ -12,13 +12,23 @@ import {
   rejectApprovalRequest,
   bulkApproveApprovalRequests,
 } from '../../../services/workLedger/approvalRequestResolutionService';
+import { replayApprovedAction } from '../../../services/workLedger/approvalRequestReplayService';
 
 jest.mock('../../../models', () => ({
   ApprovalRequest: { findByPk: jest.fn(), findAll: jest.fn() },
 }));
+// Real-enforcement scoping, Phase 1 (2026-09-20) — approveApprovalRequest()
+// now calls this. Mocked here so these tests stay scoped to the resolution
+// service's own logic; replayApprovedAction's own real behavior (including
+// the double-fire bug plan-audit caught) is tested in its own file, against
+// the real implementation.
+jest.mock('../../../services/workLedger/approvalRequestReplayService', () => ({
+  replayApprovedAction: jest.fn(),
+}));
 
 const findByPk = ApprovalRequest.findByPk as unknown as jest.Mock;
 const findAll = ApprovalRequest.findAll as unknown as jest.Mock;
+const mockReplayApprovedAction = replayApprovedAction as unknown as jest.Mock;
 
 function pendingRow(overrides: Partial<Record<string, any>> = {}) {
   return {
@@ -31,6 +41,7 @@ function pendingRow(overrides: Partial<Record<string, any>> = {}) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockReplayApprovedAction.mockResolvedValue({ replayed: true, reason: 'replayed' });
 });
 
 describe('listPendingApprovalRequests', () => {
@@ -77,6 +88,38 @@ describe('approveApprovalRequest', () => {
     expect(result.outcome).toBe('not_pending');
     expect(row.update).not.toHaveBeenCalled();
   });
+
+  // Real-enforcement scoping, Phase 1 (2026-09-20).
+  describe('replay wiring', () => {
+    it('happy path: a successful approve triggers exactly one replay call for the real row', async () => {
+      const row = pendingRow();
+      findByPk.mockResolvedValue(row);
+
+      await approveApprovalRequest('approval-1', 'ali@colaberry.com');
+
+      expect(mockReplayApprovedAction).toHaveBeenCalledTimes(1);
+      expect(mockReplayApprovedAction).toHaveBeenCalledWith(row);
+    });
+
+    it('an already-not-pending row never reaches the replay call', async () => {
+      const row = pendingRow({ status: 'approved' });
+      findByPk.mockResolvedValue(row);
+
+      await approveApprovalRequest('approval-1', 'ali@colaberry.com');
+
+      expect(mockReplayApprovedAction).not.toHaveBeenCalled();
+    });
+
+    it('fail-open: a replay failure never makes the approve call itself report failure', async () => {
+      const row = pendingRow();
+      findByPk.mockResolvedValue(row);
+      mockReplayApprovedAction.mockRejectedValue(new Error('send failed'));
+
+      const result = await approveApprovalRequest('approval-1', 'ali@colaberry.com');
+
+      expect(result.outcome).toBe('approved');
+    });
+  });
 });
 
 describe('rejectApprovalRequest', () => {
@@ -122,5 +165,21 @@ describe('bulkApproveApprovalRequests', () => {
 
     expect(result.approved).toEqual(['a1', 'a3']);
     expect(result.skipped).toEqual([{ id: 'missing', reason: 'not_found' }]);
+  });
+
+  // Real-enforcement scoping, Phase 1 (2026-09-20) — the EXACT scenario an
+  // independent plan-audit caught before any code shipped: the original
+  // design wired replayApprovedAction() into BOTH approveApprovalRequest()
+  // AND bulkApproveApprovalRequests(), which would have fired a real send
+  // TWICE per bulk-approved row (this function delegates every id through
+  // approveApprovalRequest() below, which already replays once on its own).
+  // This test is the concrete proof the fix holds — not just a single-approve
+  // test in isolation.
+  it('replay fires EXACTLY ONCE per row through the bulk path, never twice — the exact bug plan-audit caught', async () => {
+    findByPk.mockImplementation((id: string) => Promise.resolve(pendingRow({ id })));
+
+    await bulkApproveApprovalRequests(['a1', 'a2'], 'ali@colaberry.com');
+
+    expect(mockReplayApprovedAction).toHaveBeenCalledTimes(2); // once per row, not 4
   });
 });

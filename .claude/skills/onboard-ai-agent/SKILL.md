@@ -47,8 +47,8 @@ own business logic must call; nothing does this automatically.
 | 5 | B | Identity + accountability: an `AdminUser` + `Enrollment` + `CommunityMember` the agent can act as, plus `reports_to_type`/`reports_to_id` pointing at a real human or AI Leadership agent | `backend/src/services/agentBlueprint/agentIdentitySeed.ts` `seedAgentIdentity()` — real and generic, already reused by 5 other agents (name-display only) via `ticketCreatorIdentitySeed.ts` | No identity: the agent has no durable presence a student or manager can see or address. No `reports_to`: there is no accountable human — this is the single biggest gap between Reese and the other 231 agents, and the one Ali named directly ("report to an actual human that will be responsible for them"). |
 | 6 | B | `RISK_TIER` (R0-R4, honest, not copied from Reese) | `backend/src/modules/delivery/deliveryRiskLevels.ts` for the real meaning (R0=read_only, R1=reversible_content, R2=code_change, R3=schema/security/external_side_effect); set as a bare constant the way `reeseAutonomousOutreachService.ts:26` sets `RISK_TIER = 'R3'` | A wrong tier is either dangerous (too low — a real external-side-effect action never gets reviewed) or paralyzing (too high — routine work permanently stuck in an approval queue with no release path, the exact failure mode this session's real-enforcement scoping work found waiting for Reese). **This is a STOP AND ASK gate — see below.** |
 | 7 | B | Role Charter content | Generic model, but never auto-populated by any seed path | An agent with no charter looks unfinished forever — nothing flags the absence as blocking, so it's the easiest obligation to silently forget. |
-| 8 | B | Autonomy level, auto-classified from `tools_granted` | `backend/src/services/agentCapabilityClassifier.ts` (pure classifier) + `backend/src/scripts/classifyAiAgentAutonomyLevels.ts` (backfill script, run with `--apply`) | **As of 2026-09-14, PR #2540 (the ongoing-sync wiring into `seedAgentRegistry()`) is still OPEN, unmerged.** Until it merges, a new registry entry does NOT get classified automatically on boot — run `node backend/src/scripts/classifyAiAgentAutonomyLevels.js --apply` manually after adding `tools_granted`, or the agent sits at the bare column default (`observe`, `autonomy_level_set_at` null) indefinitely. Re-check `gh pr view 2540` before assuming this is automatic. |
-| 9 | C | Authorization/audit chokepoint on **every** real outbound or write action | `backend/src/services/workLedger/agentActionAuthorizationBridge.ts` `authorizeTicketDispatch()` | Skipping this is invisible until enforcement is turned on (see Known Gaps) — the action just happens with no real audit trail and no way to ever hold it for review. **Confirmed inconsistent even on Reese**: her outreach path calls it, her reply path does not (PR #2477, still open as of 2026-09-14). Call it on every send in the new agent's own code — do not copy what Reese's reply path does, copy what her outreach path does. |
+| 8 | B | Autonomy level, auto-classified from `tools_granted` | `backend/src/services/agentCapabilityClassifier.ts` (pure classifier) + `backend/src/services/agentAutonomyReclassificationService.ts` (the ongoing-sync wiring, merged PR #2540, 2026-09-15) + `backend/src/scripts/classifyAiAgentAutonomyLevels.ts` (one-time backfill, `--apply`, only needed for pre-existing agents that predate the wiring) | **Update, 2026-09-21: PR #2540 merged.** `seedAgentRegistry()`'s real create/update loop now calls `classifyNewAgentAutonomyLevel()` for a brand-new agent, or `maybeReclassifyAutonomyLevel()` when an existing agent's `tools_granted` genuinely changes this boot — asymmetric by source, so a real human decision (`autonomy_level_source: 'manual'`) is never silently overwritten. **Declare `tools_granted` honestly and this now just happens** — no manual classifier run needed for a new agent. The backfill script is still the right tool only for a pre-existing agent that has never gone through either path. |
+| 9 | C | Authorization/audit chokepoint on **every** real outbound or write action, branching on the real, mode-aware `allowed` field | `backend/src/services/workLedger/agentActionAuthorizationBridge.ts` `authorizeTicketDispatch()` → `backend/src/services/agentAuthorizationService.ts` `authorizeAgentAction()` | **Update, 2026-09-21, from this session's own real-enforcement build**: skipping this call is no longer merely invisible-until-enforcement — real, live per-agent enforcement now exists (see Known Gaps). `authorizeTicketDispatch()`'s result carries TWO fields easy to confuse: `verdict` (mode-INDEPENDENT — "would this be denied," true regardless of enforcement) and `allowed` (mode-AWARE — unconditionally `true` in shadow mode, the real gate once enforcement is on for that agent). **Branch on `allowed`, never `verdict`/`wouldDeny`** — a real design finding from Reese's own build: getting this backwards makes shadow mode silently start holding real actions the moment the code ships. When `allowed` is `false`, return an honest "held" outcome and skip every downstream side effect that would dishonestly record something that never happened (a "last contacted" timestamp, a ledger event). Reese's OUTREACH path is the correct worked example to copy (her reply path now also does this correctly — see Known Gaps, this was the real fix behind PR #2477's now-closed gap). |
 | 10 | C | GOALS-score activity logging, success AND failure paths | `backend/src/services/agentBlueprint/agentActivityLogService.ts` `logAgentActivity()` | **Real gotcha**: there is a same-named, unrelated `logAgentActivity` in `aiEventService.ts` that department/admissions agents call instead — calling the wrong one compiles fine and silently produces no real GOALS-score evidence for this agent. Double-check the import path. |
 | 11 | C | Real per-call LLM cost tagging (`agent_id` passed to `getInstrumentedOpenAI()`) | Call site inside the agent's own LLM-calling code | Easy to omit — roughly 50 other call sites across this codebase already don't pass it, and Reese's own reply service needed a real, dated bug fix for exactly this omission. Without it, the agent's real spend is invisible in `ai_events`. |
 | 12 | C | Ticket/ProofDesk visibility for real work | `backend/src/services/agentBlueprint/agentTicketLinkService.ts` `ensureAgentTicketForRoom` / `logAgentExchangeActivity` — generic and reusable; Reese's own wrapper is a thin pass-through over this | Without it, the agent's real work never shows up on the tickets board — from a manager's view, the agent looks idle even while doing real work. |
@@ -83,19 +83,29 @@ later" outcome Ali asked this skill to prevent.
 
 ---
 
-## Known gaps on Reese herself (2026-09-14) — don't silently copy these
+## Known gaps on Reese herself (2026-09-14, updated 2026-09-21) — don't silently copy these
 
 Reese is the reference implementation, not a finished one. Disclosing her real open
 gaps here means this skill doesn't launder them into every future agent as if they were
 the standard:
 
-- **Her reply path skips the authorization chokepoint** (`reeseReplyService.ts`
-  `maybeTriggerReeseReply()`) — PR #2477 (adds the missing call) is still open. New
-  agents should call the chokepoint on every send regardless of what Reese's reply path
-  currently does.
-- **New-agent autonomy classification isn't wired to boot yet** — PR #2540 is still
-  open (see obligation #8). Until it merges, autonomy level does not "just stay in
-  sync"; it requires a manual backfill run.
+- **RESOLVED, 2026-09-21**: her reply path (`reeseReplyService.ts`
+  `maybeTriggerReeseReply()`) now calls the authorization chokepoint and genuinely gates
+  on `allowed`, not just logs shadow-mode-style — shipped in this session's own Phase 2
+  of the real-enforcement build (not via PR #2477, which predates this fix and is now
+  superseded/stale — its own shadow-only advisory check was replaced by a real gating
+  one; that PR should be closed, not merged, if it's still sitting open).
+- **RESOLVED, 2026-09-21**: new-agent autonomy classification IS wired to boot now — PR
+  #2540 merged 2026-09-15 (see obligation #8). Declare `tools_granted` and it classifies
+  itself; no manual backfill run needed for a new agent.
+- **New, real capability as of 2026-09-21, know it exists**: enforcement is no longer
+  purely global. `AiAgent.abac_mode_override` (`'shadow' | 'enforce' | null`) lets an
+  admin put ONE agent into real enforcement independent of the platform default —
+  visible/settable on that agent's own Agent Detail page (Performance & Settings →
+  Authority & controls). A new agent inherits the platform default automatically
+  (`null` override); nothing to build for this, but its first real enforcement moment
+  can now be a deliberate, single-agent decision rather than an all-or-nothing platform
+  flip.
 - **The GOALS score's zero-activity fallback is inflated, not conservative** —
   `backend/src/services/agentGoalsDimensionsService.ts`: a brand-new agent with zero
   real tracked activity shows governance=5, lexicon=4, availability=2-or-5 (5 if

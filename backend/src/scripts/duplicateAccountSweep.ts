@@ -20,10 +20,18 @@ import nodemailer from 'nodemailer';
 import { env } from '../config/env';
 import { sequelize } from '../config/database';
 import { runDuplicateAccountSweep, SweepResult } from '../services/duplicateAccountSweepService';
+import { findAliasDuplicates, AliasDuplicate } from '../services/duplicateAliasDetector';
 
 const DRY = process.argv.includes('--dry');
 
-function renderReport(result: SweepResult): { html: string; text: string } {
+function renderReport(result: SweepResult, aliases: AliasDuplicate[] = []): { html: string; text: string } {
+  // Same person under two emails in one cohort: listed, never merged. The
+  // per-row numbers say which row they use and which one pays.
+  const aliasRows = aliases.map((a) => ({
+    name: a.name,
+    matchedOn: a.matchedOn.join(' + '),
+    rows: a.rows.map((r) => `${r.email}: attended ${r.attended}, auto-absent ${r.autoAbsent}${r.paid ? ', PAID' : ''}`).join(' | '),
+  }));
   const merged = result.merges.flatMap((m) =>
     m.merged.map((row) => ({
       name: m.name,
@@ -78,6 +86,8 @@ ${rows('Needs manual review', flagged, ['name', 'email', 'shadowId', 'reason'])}
 ${rows(DRY ? 'Would merge' : 'Merged', DRY ? wouldMergeCrossCohort : crossCohortMerged, DRY ? ['name', 'email', 'otherRows'] : ['name', 'email', 'dupeId', 'pointsMoved', 'creditsMoved'])}
 ${rows('Attendance corrected to excused', crossCohortAttendance, ['name', 'email', 'sessionsExcused'])}
 ${rows('Needs manual review', crossCohortFlagged, ['name', 'email', 'dupeId', 'reason'])}
+<h2 style="font-size:15px;margin-top:20px">Same person, different emails, one cohort (report only, merge by hand)</h2>
+${rows('Needs a decision', aliasRows, ['name', 'matchedOn', 'rows'])}
 </div>`;
 
   const text = [
@@ -93,6 +103,7 @@ ${rows('Needs manual review', crossCohortFlagged, ['name', 'email', 'dupeId', 'r
       : crossCohortMerged.length ? `Merged (${crossCohortMerged.length}):\n` + crossCohortMerged.map((e) => `  ${e.name} <${e.email}> +${e.pointsMoved}pts +${e.creditsMoved} credit rows (from ${e.dupeId})`).join('\n') : '',
     crossCohortAttendance.length ? `Attendance corrected to excused (${crossCohortAttendance.length}):\n` + crossCohortAttendance.map((e) => `  ${e.name} <${e.email}> ${e.sessionsExcused} session(s)`).join('\n') : '',
     crossCohortFlagged.length ? `Needs manual review (${crossCohortFlagged.length}):\n` + crossCohortFlagged.map((e) => `  ${e.name} <${e.email}> (${e.dupeId}) -- ${e.reason}`).join('\n') : '',
+    aliasRows.length ? `\n-- Same person, different emails, one cohort (report only) --\n` + aliasRows.map((e) => `  ${e.name} [${e.matchedOn}] ${e.rows}`).join('\n') : '',
   ]
     .filter(Boolean)
     .join('\n');
@@ -100,12 +111,12 @@ ${rows('Needs manual review', crossCohortFlagged, ['name', 'email', 'dupeId', 'r
   return { html, text };
 }
 
-async function sendReport(result: SweepResult): Promise<void> {
+async function sendReport(result: SweepResult, aliases: AliasDuplicate[] = []): Promise<void> {
   if (!env.mandrillApiKey) {
     console.warn('[duplicateAccountSweep] MANDRILL_API_KEY not set, skipping email report');
     return;
   }
-  const { html, text } = renderReport(result);
+  const { html, text } = renderReport(result, aliases);
   const transport = nodemailer.createTransport({
     host: 'smtp.mandrillapp.com',
     port: 587,
@@ -122,7 +133,7 @@ async function sendReport(result: SweepResult): Promise<void> {
   await transport.sendMail({
     from: '"Colaberry Enterprise AI" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    subject: `[Duplicate Account Sweep] ${DRY ? wouldMergeCount + ' would merge' : mergedCount + ' merged'}, ${flaggedCount} need review${DRY ? ' (DRY RUN)' : ''}`,
+    subject: `[Duplicate Account Sweep] ${DRY ? wouldMergeCount + ' would merge' : mergedCount + ' merged'}, ${flaggedCount} need review${aliases.length ? `, ${aliases.length} same-person pair(s)` : ''}${DRY ? ' (DRY RUN)' : ''}`,
     html,
     text,
     headers: { 'X-MC-Track': 'none' },
@@ -132,6 +143,14 @@ async function sendReport(result: SweepResult): Promise<void> {
 async function main(): Promise<void> {
   await sequelize.authenticate();
   const result = await runDuplicateAccountSweep({ dryRun: DRY });
+  // Report-only and independent: a failure here is logged and never costs
+  // the sweep above its report.
+  let aliases: AliasDuplicate[] = [];
+  try {
+    aliases = await findAliasDuplicates();
+  } catch (err: any) {
+    console.error(JSON.stringify({ event: 'duplicate_alias_detect_failed', error_class: err?.name || 'Error', message: err?.message }));
+  }
 
   const mergedCount = result.merges.reduce((n, m) => n + m.merged.length, 0) + result.crossCohortMerges.reduce((n, m) => n + m.merged.length, 0);
   const flaggedCount =
@@ -152,12 +171,13 @@ async function main(): Promise<void> {
       merged: mergedCount,
       flagged: flaggedCount,
       attendance_sessions_corrected: attendanceCorrectedCount,
+      same_person_pairs: aliases.length,
     }),
   );
 
-  const hasSomethingToReport = DRY ? result.shadowed.length + result.crossCohort.length > 0 : mergedCount > 0 || flaggedCount > 0;
+  const hasSomethingToReport = (DRY ? result.shadowed.length + result.crossCohort.length > 0 : mergedCount > 0 || flaggedCount > 0) || aliases.length > 0;
   if (hasSomethingToReport) {
-    await sendReport(result);
+    await sendReport(result, aliases);
   }
 }
 

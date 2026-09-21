@@ -1,0 +1,80 @@
+{
+  "slug": "the-workflow-grew-so-did-the-responsibility",
+  "output": "cora-platform-ownership-walkthrough-r2.mp4",
+  "slides": [
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "The Workflow Grew. So Did the Responsibility.",
+      "subtitle": "Cora Recap Engine  ·  an operational AI system",
+      "caption": "When a call ends, an admissions team's calling system has work to finish, and the team needs to know what happened to each piece of it."
+    },
+    {
+      "kind": "title",
+      "seconds": 10,
+      "title": "Who owns unfinished work?",
+      "subtitle": "Postgres holds it. The queue carries it. The CRM receives it.",
+      "caption": "Three systems own different parts of the work. Postgres holds process state, Redis and its queue carry execution only, and the CRM owns contacts, tasks and notes."
+    },
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "Record it before saying yes.",
+      "subtitle": "Flush the row. Queue the job. Commit. Then 202.",
+      "caption": "The webhook adds the job row and queues it inside one transaction, and answers 202 Accepted only after the commit. If the commit fails, the caller gets an error, and the queued job, with no row behind it, is dropped."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 12,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/frontend/public/site-v2/shot-cora-platform-queue-boundary.png",
+      "caption": "Queue Health, on a local copy with invented rows: jobs stuck past their time, which an operator can cancel, and expired leases, which the worker returns to pending by itself."
+    },
+    {
+      "kind": "title",
+      "seconds": 10,
+      "title": "Claim with a lease.",
+      "subtitle": "Five minutes, then back to pending.",
+      "caption": "A worker claims a committed job with a five-minute lease. Every 30 seconds the loop returns expired leases to pending and queues due rows again, but only while the default worker runs."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 12,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/.loop-architect/runs/20260919-cora-pair-04-revise-05-build/imagery/video/video-exceptions-list.png",
+      "caption": "The Exceptions Monitor, on the same local copy. Most jobs that fail for good open an exception; the system closes a pending-call exception when its call ends, and an operator acts on the rest."
+    },
+    {
+      "kind": "cards",
+      "seconds": 12,
+      "rows": [
+        [
+          "56,683 of 83,604",
+          "jobs in 30 days were the platform's own periodic work"
+        ],
+        [
+          "0 of 349",
+          "open jobs past the five-minute alert line, at one reading"
+        ],
+        [
+          "13 of 40",
+          "exceptions ignored, not resolved"
+        ]
+      ],
+      "accent_index": 2,
+      "caption": "Read from the platform's own tables on 19 September 2026. One reading is not a record of lateness, and an ignored exception is not a resolved one."
+    },
+    {
+      "kind": "title",
+      "seconds": 12,
+      "title": "Bound every write to the CRM.",
+      "subtitle": "Three clients. A retry bound and a switch each. No idempotency key.",
+      "caption": "Contacts and tasks, call notes and the call log each reach the CRM through a client of their own, with its own write switch and a bounded retry. A task write carries no idempotency key, so a repeat can land twice."
+    },
+    {
+      "kind": "title",
+      "seconds": 11,
+      "title": "Where responsibility still leaks.",
+      "subtitle": "A queued job whose commit fails is dropped.",
+      "caption": "The caller gets an error, not an acceptance. Outbound launches are swept for a missing completion, inbound calls are not, and no test covers the path. Recovery runs on one worker role, and two job types fail without opening an exception."
+    }
+  ]
+}

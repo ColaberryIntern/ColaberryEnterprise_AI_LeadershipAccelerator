@@ -73,6 +73,17 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'Processes pending ScheduledEmail records across all channels (email, voice, SMS). Applies AI content generation at send time, handles test mode overrides, and enforces pacing/rate limits per campaign.',
   },
   {
+    agent_name: 'ApprovalRequestTimeoutSweep',
+    agent_type: 'scheduled_processor',
+    module: 'schedulerService',
+    source_file: 'backend/src/services/workLedger/approvalRequestTimeoutJob.ts',
+    trigger_type: 'cron',
+    schedule: '*/15 * * * *',
+    category: 'governance_ops',
+    description:
+      'Real-enforcement scoping, Phase 1 (2026-09-20). Auto-approves any ApprovalRequest still pending past its real review window, so a held agent action is never stuck indefinitely with nobody reviewing it. Calls the same approveApprovalRequest() the admin UI uses, inheriting its replay + idempotency guard.',
+  },
+  {
     agent_name: 'NoShowDetector',
     agent_type: 'scheduled_processor',
     module: 'schedulerService',

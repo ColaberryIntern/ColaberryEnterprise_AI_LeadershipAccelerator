@@ -9,11 +9,20 @@ import { authorizeAgentAction } from '../agentAuthorizationService';
 // implementation of the chokepoint itself.
 //
 // SHADOW MODE INVARIANT (non-negotiable, per this run's execution contract): this
-// function's return value is advisory only. Its caller (ticketAgentDispatcher.ts,
+// function's return value is advisory only. Its original caller (ticketAgentDispatcher.ts,
 // T006) MUST proceed with the real action exactly as it would have before this
 // milestone, regardless of what this function returns. Nothing in this file ever
-// throws to block a caller, and nothing in this file's return shape contains a field
-// meant to be read as "stop." It exists to LOG a decision, not to make one.
+// throws to block a caller.
+//
+// Real-enforcement scoping, Phase 2 (2026-09-20): `verdict` (above) stays exactly what
+// it always was — a mode-INDEPENDENT policy read, "would this be denied," true
+// regardless of whether anything is actually enforcing it. `allowed` (below) is the
+// new, mode-AWARE field: it mirrors authorizeAgentAction()'s own real `allowed`, which
+// is unconditionally true in shadow mode and only reflects `!wouldDeny` once
+// `abac_enforcement` is actually 'enforce'. Reese's two send paths
+// (reeseAutonomousOutreachService.ts, reeseReplyService.ts) are the first real callers
+// meant to branch on `allowed` to actually hold a send — every other existing caller
+// still only reads `verdict`/`reason` and is unaffected by this field's addition.
 //
 // Correlation design: authorization is evaluated BEFORE the real action runs (the
 // conventional "gate ahead of the action," even in shadow/log-only mode), but the
@@ -52,18 +61,41 @@ export interface AuthorizeTicketDispatchInput {
   agentName: string;
   action: string;
   riskTier?: string | null;
+  /** Real-enforcement scoping, Phase 1 (2026-09-20) — enough real detail to
+   * replay the held action later (see approvalRequestReplayService.ts). Optional
+   * and backward-compatible: every existing caller that doesn't pass one keeps
+   * creating rows exactly as before, just with prepared_action left null (which
+   * the replay executor already treats as an honest "nothing to replay" case). */
+  preparedAction?: Record<string, any> | null;
 }
+
+// Real-enforcement scoping, Phase 1 (2026-09-20) — how long a held action waits
+// for a real human decision before the auto-approve-timeout job (R38) releases
+// it on its own. 4 hours: grounded in Reese's own real autonomous-outreach sweep
+// cadence (a periodic daily-scale job, not sub-minute), not an arbitrary guess —
+// long enough for a real review, short enough the queue doesn't feel broken.
+// A genuinely disclosed default, not something Ali specified — see this run's
+// own report if it needs to change.
+export const APPROVAL_REVIEW_WINDOW_MS = 4 * 60 * 60 * 1000;
 
 export interface AuthorizeTicketDispatchResult {
   decisionId: string | null;
   verdict: 'would_allow' | 'would_require_approval' | 'would_block';
   reason: string;
+  /** Real-enforcement scoping, Phase 2 (2026-09-20) — the mode-AWARE signal, mirrored
+   * from authorizeAgentAction()'s own `allowed`. Unconditionally true in shadow mode.
+   * See this file's header comment for the full allowed-vs-verdict distinction. */
+  allowed: boolean;
 }
 
+// Fail-open by design (see this file's own Failure-First Design note above): any
+// internal error here must never look like a real policy hold to a caller branching
+// on `allowed`, or a transient bridge failure would silently stop a real send.
 const SAFE_DEFAULT: AuthorizeTicketDispatchResult = {
   decisionId: null,
   verdict: 'would_allow',
   reason: 'bridge_error',
+  allowed: true,
 };
 
 export async function authorizeTicketDispatch(
@@ -83,7 +115,7 @@ export async function authorizeTicketDispatch(
     });
 
     if (!result.wouldDeny) {
-      return { decisionId: null, verdict: 'would_allow', reason: result.reason };
+      return { decisionId: null, verdict: 'would_allow', reason: result.reason, allowed: result.allowed };
     }
 
     const verdict: AuthorizeTicketDispatchResult['verdict'] = result.requiresApproval
@@ -119,10 +151,12 @@ export async function authorizeTicketDispatch(
         verdict,
         reason_code: result.reason,
         status: 'pending',
+        prepared_action: input.preparedAction ?? null,
+        expires_at: new Date(Date.now() + APPROVAL_REVIEW_WINDOW_MS),
       } as any,
     });
 
-    return { decisionId: row.id, verdict, reason: result.reason };
+    return { decisionId: row.id, verdict, reason: result.reason, allowed: result.allowed };
   } catch (err: any) {
     console.error(
       JSON.stringify({

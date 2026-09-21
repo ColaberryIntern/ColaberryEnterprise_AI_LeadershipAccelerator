@@ -71,7 +71,7 @@ beforeEach(() => {
   mockReeseOutreachFindOne.mockResolvedValue(null); // no existing open outreach, no recent contact, by default
   mockReeseOutreachCreate.mockResolvedValue({ id: 'outreach-1' });
   mockCreateTicket.mockResolvedValue({ ...TICKET, update: jest.fn().mockResolvedValue(undefined) });
-  mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_allow', reason: 'ok' });
+  mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_allow', reason: 'ok', allowed: true });
   mockGetReeseAdminUserId.mockResolvedValue('reese-admin-1');
   mockGetReeseAgentId.mockResolvedValue('reese-agent-1');
   mockLogAgentActivity.mockResolvedValue(undefined);
@@ -105,7 +105,13 @@ describe('runReeseAutonomousOutreachSweep — happy path', () => {
     );
     expect(mockInitiateDm).toHaveBeenCalledWith(STUDENT_ID, 'Real, unique outreach message.');
     expect(mockAuthorizeTicketDispatch).toHaveBeenCalledWith(
-      expect.objectContaining({ ticketId: 'ticket-1', riskTier: 'R3', action: 'reese_autonomous_outreach' }),
+      expect.objectContaining({
+        ticketId: 'ticket-1', riskTier: 'R3', action: 'reese_autonomous_outreach',
+        // Real-enforcement scoping, Phase 1 (2026-09-20) — the exact real
+        // params passed to initiateDm() above, so a held action can be
+        // replayed verbatim later.
+        preparedAction: { studentEnrollmentId: STUDENT_ID, content: 'Real, unique outreach message.' },
+      }),
     );
     expect(mockReeseOutreachCreate).toHaveBeenCalledWith(
       expect.objectContaining({ enrollment_id: STUDENT_ID, signal_type: 'inactivity', status: 'active', attempt_count: 1 }),
@@ -292,13 +298,14 @@ describe('runReeseAutonomousOutreachSweep — the required boundaries', () => {
     expect(result.decisions.some((d) => d.reason === 'daily_cap_reached')).toBe(true);
   });
 
-  it('governance call fires for every real send with riskTier R3 and NEVER blocks regardless of its verdict (shadow mode)', async () => {
+  it('governance call fires for every real send with riskTier R3 and NEVER blocks in shadow mode, regardless of verdict — allowed:true is the real, unconditional shadow-mode value even on a would_block verdict', async () => {
     mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
-    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_block', reason: 'high_risk_tier' });
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_block', reason: 'high_risk_tier', allowed: true });
 
     const result = await runReeseAutonomousOutreachSweep(false);
 
-    // The send still fully completed even though the shadow verdict was would_block.
+    // The send still fully completed even though the shadow verdict was would_block —
+    // verdict stays mode-independent; allowed (real, mode-aware) is what gates.
     expect(result.sent).toBe(1);
     expect(mockInitiateDm).toHaveBeenCalled();
     expect(mockAuthorizeTicketDispatch).toHaveBeenCalledWith(expect.objectContaining({ riskTier: 'R3' }));
@@ -343,6 +350,47 @@ describe('runReeseAutonomousOutreachSweep — the required boundaries', () => {
     const result = await runReeseAutonomousOutreachSweep(false);
     expect(result.sent).toBe(0);
     expect(result.decisions.some((d) => d.reason === 'no_signal')).toBe(true);
+  });
+});
+
+describe('runReeseAutonomousOutreachSweep — Real-enforcement Phase 2 (respects authorizeTicketDispatch().allowed)', () => {
+  it('shadow-mode no-op proof: allowed:true (the real, current, unconditional shadow-mode value) leaves the send byte-for-byte unchanged — DM sent, ticket created, ReeseOutreach row created', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_require_approval', reason: 'requires_approval:high_risk_tier', allowed: true });
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(result.sent).toBe(1);
+    expect(mockCreateTicket).toHaveBeenCalled();
+    expect(mockInitiateDm).toHaveBeenCalledWith(STUDENT_ID, 'Real, unique outreach message.');
+    expect(mockReeseOutreachCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ enrollment_id: STUDENT_ID, status: 'active', last_contacted_at: expect.any(Date) }),
+    );
+  });
+
+  it('a held action (allowed:false) never sends, never records a false contact, and honestly reports skipped/held_for_approval', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_require_approval', reason: 'requires_approval:high_risk_tier', allowed: false });
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(result.sent).toBe(0);
+    expect(result.skipped).toBe(1);
+    expect(mockInitiateDm).not.toHaveBeenCalled();
+    // A held action must never be recorded as a real contact — it would both be
+    // dishonest and would incorrectly suppress a legitimate future contact attempt
+    // via wasContactedWithinCadence().
+    expect(mockReeseOutreachCreate).not.toHaveBeenCalled();
+    expect(mockEmitReeseLedgerEvent).not.toHaveBeenCalled();
+    expect(mockLogAgentActivity).not.toHaveBeenCalled();
+    expect(mockCreateOutreachChecklistInstance).not.toHaveBeenCalled();
+    expect(result.decisions[0]).toEqual(
+      expect.objectContaining({ enrollmentId: STUDENT_ID, action: 'skipped', reason: 'held_for_approval' }),
+    );
+    // The ticket itself is still created (authorization runs after ticket creation,
+    // matching the existing ordering) — only the send and its downstream bookkeeping
+    // are held.
+    expect(mockCreateTicket).toHaveBeenCalled();
   });
 });
 

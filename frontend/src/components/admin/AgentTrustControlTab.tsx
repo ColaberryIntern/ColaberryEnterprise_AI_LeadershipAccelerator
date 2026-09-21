@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { SectionCard, StatusBadge } from './shell';
 import { timeAgo } from './shell/trust';
-import { AgentDetail } from '../../services/agentDetailApi';
+import { AgentDetail, setAgentAbacOverride } from '../../services/agentDetailApi';
 import {
   AgentMemoryProposal,
   listMemoryProposals,
@@ -64,6 +64,17 @@ function memoryStatusBadge(status: AgentMemoryProposal['status']) {
   return <StatusBadge label="Rejected" tone="neutral" />;
 }
 
+// Real-enforcement scoping, Phase 3 (2026-09-20) — the per-agent shadow/enforce switch Ali
+// asked for. 'off' is included only because AgentDetail's abac_effective_mode type allows it
+// (the platform-wide kill switch) — it's not a value this card's own controls can ever select.
+function abacModeBadge(mode: 'off' | 'shadow' | 'enforce') {
+  if (mode === 'enforce') return <StatusBadge label="Enforce" tone="success" icon="shield-check-line" />;
+  if (mode === 'off') return <StatusBadge label="Off (platform-wide)" tone="neutral" icon="shield-line" />;
+  return <StatusBadge label="Shadow" tone="info" icon="eye-line" />;
+}
+
+type AbacSelection = 'default' | 'shadow' | 'enforce';
+
 export default function AgentTrustControlTab({ agentId, detail }: Props) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [proposals, setProposals] = useState<AgentMemoryProposal[]>([]);
@@ -80,6 +91,37 @@ export default function AgentTrustControlTab({ agentId, detail }: Props) {
   const [directivesLoading, setDirectivesLoading] = useState(true);
   const [directivesError, setDirectivesError] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  // Real-enforcement scoping, Phase 3 — local state seeded from the detail prop once, then
+  // updated from the real save response (never re-derived/guessed client-side), same pattern
+  // as this file's own Governed Memory / Standing Directives sections above.
+  const [abacOverride, setAbacOverride] = useState<'shadow' | 'enforce' | null>(detail.agent.abac_mode_override);
+  const [abacSetAt, setAbacSetAt] = useState<string | null>(detail.agent.abac_mode_override_set_at);
+  const [abacSetBy, setAbacSetBy] = useState<string | null>(detail.agent.abac_mode_override_set_by);
+  const [abacSelection, setAbacSelection] = useState<AbacSelection>(detail.agent.abac_mode_override ?? 'default');
+  const [abacSaving, setAbacSaving] = useState(false);
+  const [abacError, setAbacError] = useState<string | null>(null);
+  const abacGlobalDefault = detail.agent.abac_global_default;
+  // Global 'off' always wins over any per-agent override, matching the real chokepoint's own
+  // behavior (agentAuthorizationService.ts) — reproduced here so a save's local recomputation
+  // never shows an override "winning" over a global 'off' state that it never actually can.
+  const abacEffectiveMode = abacGlobalDefault === 'off' ? 'off' : (abacOverride ?? abacGlobalDefault);
+
+  const handleSaveAbacOverride = useCallback(async () => {
+    setAbacSaving(true);
+    setAbacError(null);
+    try {
+      const value = abacSelection === 'default' ? null : abacSelection;
+      const result = await setAgentAbacOverride(agentId, value);
+      setAbacOverride(result.override);
+      setAbacSetAt(result.setAt);
+      setAbacSetBy(result.setBy);
+    } catch (err: any) {
+      setAbacError(err?.response?.data?.error || 'Failed to update authorization enforcement');
+    } finally {
+      setAbacSaving(false);
+    }
+  }, [agentId, abacSelection]);
 
   const fetchProposals = useCallback(async () => {
     setProposalsLoading(true);
@@ -260,6 +302,65 @@ export default function AgentTrustControlTab({ agentId, detail }: Props) {
           />
           <button className="btn btn-primary btn-sm" disabled={proposing || !content.trim()} onClick={handlePropose}>
             {proposing ? 'Proposing…' : 'Propose'}
+          </button>
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Authorization Enforcement"
+        icon="shield-flash-line"
+        subtitle="Whether this agent's real actions are actually blocked when policy would deny them, or only logged (shadow mode). Set per agent here, or leave it following the platform-wide default."
+        padded={false}
+      >
+        <div className="p-3 border-bottom">
+          <div className="d-flex align-items-center gap-2 mb-2">
+            <span className="fw-semibold">Currently:</span>
+            {abacModeBadge(abacEffectiveMode)}
+          </div>
+          {abacGlobalDefault === 'off' ? (
+            <p className="text-muted small mb-0">
+              The platform-wide authorization gate is fully off right now — that always wins over any per-agent setting below.
+            </p>
+          ) : abacOverride === null ? (
+            <p className="text-muted small mb-0">
+              Following the platform-wide default ({abacGlobalDefault}). No one has set an override for this agent.
+            </p>
+          ) : (
+            <p className="text-muted small mb-0">
+              Overridden to <strong>{abacOverride}</strong> by {abacSetBy || 'an admin'}
+              {abacSetAt ? `, ${timeAgo(abacSetAt)}` : ''} — the platform-wide default is currently {abacGlobalDefault}.
+            </p>
+          )}
+        </div>
+        <div className="p-3">
+          {abacError && <div className="alert alert-danger py-2 small">{abacError}</div>}
+          <div className="alert alert-warning py-2 small mb-3">
+            Setting this to Enforce has a real, immediate effect once the platform-wide default isn't also off: this
+            agent's held actions actually stop, instead of only being logged.
+          </div>
+          <div className="d-flex flex-column gap-2 mb-3">
+            {(['default', 'shadow', 'enforce'] as const).map((choice) => (
+              <label key={choice} className="d-flex align-items-center gap-2">
+                <input
+                  type="radio"
+                  name={`abac-selection-${agentId}`}
+                  checked={abacSelection === choice}
+                  onChange={() => setAbacSelection(choice)}
+                />
+                <span>
+                  {choice === 'default' && `Follow platform-wide default (${abacGlobalDefault})`}
+                  {choice === 'shadow' && 'Shadow — log only, never block'}
+                  {choice === 'enforce' && 'Enforce — actually block when policy denies'}
+                </span>
+              </label>
+            ))}
+          </div>
+          <button
+            className="btn btn-primary btn-sm"
+            disabled={abacSaving || abacSelection === (abacOverride ?? 'default')}
+            onClick={handleSaveAbacOverride}
+          >
+            {abacSaving ? 'Saving…' : 'Save'}
           </button>
         </div>
       </SectionCard>

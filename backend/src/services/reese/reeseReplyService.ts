@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import RoomMembership from '../../models/RoomMembership';
@@ -5,12 +6,24 @@ import RoomMessage from '../../models/RoomMessage';
 import { getReeseEnrollmentId, getReeseAdminUserId, getReeseAgentId, isReeseEnabled } from './reeseIdentitySeed';
 import { buildReeseSystemPrompt } from './reeseSystemPrompt';
 import { ensureReeseTicketForRoom, logReeseExchangeActivity } from './reeseTicketLinkService';
+import { resolveStudentDisplayName } from './resolveStudentDisplayName';
 import { logAgentActivity } from '../agentBlueprint/agentActivityLogService';
 import { agentHasTool } from '../agents/tools/agentToolRegistry';
 import { readAttachments, attachmentInstruction } from '../agents/tools/readAttachmentsTool';
 import type { AttachmentRef } from '../agents/tools/types';
 import { maybeRefreshStudentAssessment } from '../studentHealthAssessment';
 import { executeReeseTool, REESE_TOOLS } from './reeseTools';
+import { authorizeTicketDispatch } from '../workLedger/agentActionAuthorizationBridge';
+import { createWorkUnit, updateWorkUnitStatus } from '../workGraph/workGraphService';
+
+// Real-enforcement scoping, Phase 2 (2026-09-20) — a DM reply reaching a real
+// student is the same kind of real, external side effect as her autonomous
+// outreach send (deliveryRiskLevels.ts's own platform-wide R3 definition:
+// "schema_security_or_external_side_effect"). No risk tier existed for this
+// path before now (REESE_STANDARD_AUDIT.md gap #1 was "no authorization call
+// at all"); reusing R3 here is a disclosed, deliberate assumption for
+// consistency with her outreach path's own classification, not a guess.
+const REPLY_RISK_TIER = 'R3';
 
 // Reese Phase 1 — the ONLY place Reese-authored DM content is ever produced.
 // Reactive, guarded, never proactive:
@@ -68,6 +81,11 @@ function attachmentRefsOf(message: RoomMessage): AttachmentRef[] {
  * send request (same fail-open-but-logged posture as emitLedgerEventSafe()).
  */
 export async function maybeTriggerReeseReply(roomId: string, senderEnrollmentId: string): Promise<void> {
+  // Declared here, not inside the try block below, so the catch block can
+  // still reach the real work unit id to transition it to 'failed' — a
+  // `let` scoped to `try {}` is NOT visible in the sibling `catch {}` block.
+  let ticketId: string | null = null;
+  let workUnitId: string | null = null;
   try {
     // Product Phase 1, R2 — the parent row's own kill switch. Previously the
     // only thing that stopped a reply was Reese's identity not existing at
@@ -102,13 +120,33 @@ export async function maybeTriggerReeseReply(roomId: string, senderEnrollmentId:
     // swallowed inside logReese*/ensureReese* themselves where reasonable, but
     // this whole function is also wrapped in try/catch, so a ticket-layer
     // problem never blocks the reply itself.
-    let ticketId: string | null = null;
+    //
+    // Workspace mission, Phase 2 slice 1 (2026-09-21) — the first real, persisted
+    // work unit Reese has ever created. Same fail-open posture as ticket-ensure
+    // itself: a work-unit-creation failure must never block the real reply — see
+    // this run's own execution-contract.md for why this stays inside the SAME
+    // try/catch rather than getting its own.
     if (triggeringMessage) {
       try {
         const ticket = await ensureReeseTicketForRoom(roomId, senderEnrollmentId, triggeringMessage.content);
         ticketId = ticket.id;
+
+        const studentName = await resolveStudentDisplayName(senderEnrollmentId);
+        const workUnit = await createWorkUnit(ticketId, {
+          title: `Reply to ${studentName}`,
+          requiredCapability: 'student_support.reply',
+          riskTier: REPLY_RISK_TIER,
+          status: 'in_progress',
+          approvalPolicy: 'auto',
+        });
+        workUnitId = workUnit.id;
+        // assigned_agent_name cannot be set at creation (not part of
+        // createWorkUnitInputSchema) — the same post-create .update() pattern
+        // inboxCaseWorkGraphAutoRecorder.ts's own real precedent uses.
+        await (workUnit as any).update({ assigned_agent_name: 'Reese' });
+
         await logReeseExchangeActivity(
-          ticketId, 'human', senderEnrollmentId, triggeringMessage.id, triggeringMessage.content,
+          ticketId, 'human', senderEnrollmentId, triggeringMessage.id, triggeringMessage.content, workUnitId,
         );
       } catch (e: any) {
         console.warn(JSON.stringify({
@@ -196,7 +234,56 @@ export async function maybeTriggerReeseReply(roomId: string, senderEnrollmentId:
     }
 
     const reply = completion.choices[0]?.message?.content?.trim();
-    if (!reply) return;
+    if (!reply) {
+      // Workspace mission, Phase 2 slice 1 — a genuine, non-error outcome:
+      // Reese investigated and decided no reply was needed. 'done', not
+      // 'failed'/'cancelled' — the real operation ("decide whether to
+      // reply") did succeed.
+      if (workUnitId) await updateWorkUnitStatus(workUnitId, 'done');
+      return;
+    }
+
+    // Real-enforcement scoping, Phase 2 (2026-09-20) — this function's FIRST
+    // authorization call ever (REESE_STANDARD_AUDIT.md gap #1). Matches
+    // sendNewOutreach()'s established "gate ahead of the action" ordering:
+    // evaluated after the reply is generated, before the real send.
+    //
+    // Only when a real ticketId exists: a missing ticketId (ticket-linking
+    // already failed and was swallowed above, this function's own established
+    // "a ticket-layer problem never blocks the reply" posture) skips this call
+    // entirely and sends exactly as today — a deliberate, disclosed design
+    // decision (see this run's execution-contract.md), not a new gap. Getting
+    // this the other way around — blocking the reply because ticketId is null
+    // — would be a real, new regression: a student's reply going unanswered
+    // over an unrelated ticket-linking hiccup, worse than the gap it would
+    // "fix".
+    if (ticketId) {
+      const authResult = await authorizeTicketDispatch({
+        eventId: crypto.randomUUID(),
+        ticketId,
+        agentName: 'Reese',
+        action: 'reese_dm_reply',
+        riskTier: REPLY_RISK_TIER,
+        preparedAction: { roomId, content: reply },
+      });
+
+      // allowed is the real, mode-aware signal (unconditionally true in shadow
+      // mode — see agentActionAuthorizationBridge.ts's own header). A held
+      // reply returns here, before the real send — an honest hold, not a
+      // silent drop: the student's message was received, Reese's reply is
+      // just not released yet.
+      if (!authResult.allowed) {
+        console.log(JSON.stringify({
+          timestamp: new Date().toISOString(), level: 'info', service: 'reeseReplyService',
+          event: 'reply_held_for_approval', outcome: 'partial',
+          context: { room_id: roomId, ticket_id: ticketId, reason: authResult.reason },
+        }));
+        // Workspace mission, Phase 2 slice 1 — 'blocked' is the real, correct
+        // existing status value for exactly this case.
+        if (workUnitId) await updateWorkUnitStatus(workUnitId, 'blocked');
+        return;
+      }
+    }
 
     // Dynamic import breaks the dmService.ts <-> reeseReplyService.ts circular
     // dependency (dmService calls this module; this module posts back through
@@ -245,14 +332,33 @@ export async function maybeTriggerReeseReply(roomId: string, senderEnrollmentId:
       // different identity row used only for presence/DM membership.
       const reeseAdminUserId = await getReeseAdminUserId();
       if (reeseAdminUserId) {
-        await logReeseExchangeActivity(ticketId, 'ai_staff', reeseAdminUserId, replyMessage.id, reply);
+        await logReeseExchangeActivity(ticketId, 'ai_staff', reeseAdminUserId, replyMessage.id, reply, workUnitId);
       }
     }
+
+    // Workspace mission, Phase 2 slice 1 — the real send succeeded; bookkeeping
+    // after the side effect, matching this function's own established ordering.
+    if (workUnitId) await updateWorkUnitStatus(workUnitId, 'done');
   } catch (e: any) {
     console.warn(JSON.stringify({
       level: 'warn', service: 'reese', event: 'reply_failed',
       room_id: roomId, error_class: e?.name || 'Error', message: String(e?.message || e),
     }));
+    // Workspace mission, Phase 2 slice 1 — an honest 'failed' terminal state,
+    // guarded on workUnitId being non-null (a work unit only exists once the
+    // ticket-ensure step itself succeeded; an error before that never created
+    // one to transition). Fail-open: if this update itself throws, it must not
+    // mask the original error already being logged above.
+    if (workUnitId) {
+      try {
+        await updateWorkUnitStatus(workUnitId, 'failed');
+      } catch (updateErr: any) {
+        console.warn(JSON.stringify({
+          level: 'warn', service: 'reese', event: 'work_unit_status_update_failed',
+          room_id: roomId, error_class: updateErr?.name || 'Error', message: String(updateErr?.message || updateErr),
+        }));
+      }
+    }
     // Real failure signal for the GOALS "Solid" dimension, same reasoning as
     // the success-path log above — a caught reply failure is exactly the
     // kind of real data that dimension is supposed to be computed from.

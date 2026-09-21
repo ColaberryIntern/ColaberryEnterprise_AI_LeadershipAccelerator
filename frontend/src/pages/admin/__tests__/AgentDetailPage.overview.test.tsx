@@ -9,8 +9,14 @@ import { AgentDetail } from '../../../services/agentDetailApi';
 // its format for Overview. Replaces the Checkpoint H sub-tabbed version:
 // Overview is now one flowing page (AgentOverviewV2), so every section's
 // real content shows with a single "Overview" tab click, no further
-// sub-tab clicks needed. This file's own mocking setup is unchanged from
-// before — AgentOverviewV2 still takes only `detail`, no inbox dependency.
+// sub-tab clicks needed.
+//
+// Dashboard redesign, Slice 2b (2026-09-19) — AgentOverviewV2 now also
+// takes inboxItems/inboxLoading/onNavigate (the hero's 4 KPI tiles + the
+// new "Needs Ali" card). This file's existing getManagerInboxItems mock
+// (already present for other tests) covers it — no new mock needed, only
+// this comment update since it was previously (correctly, at the time)
+// stated as inbox-independent.
 
 jest.mock('../../../services/agentDetailApi', () => ({ getAgentDetail: jest.fn(), setReeseBehaviourSwitch: jest.fn() }));
 jest.mock('../../../services/managerInboxApi', () => ({ getManagerInboxItems: jest.fn() }));
@@ -27,6 +33,7 @@ jest.mock('../../../services/agentReportSubscriptionApi', () => ({ listReportSub
 jest.mock('../../../services/agentGoalApi', () => ({ listGoals: jest.fn() }));
 jest.mock('../../../services/agentOneOnOneApi', () => ({ listOneOnOnes: jest.fn() }));
 jest.mock('../../../services/agentRoleCharterApi', () => ({ getAgentRoleCharter: jest.fn(), saveAgentRoleCharter: jest.fn() }));
+jest.mock('../../../services/agentExplainabilityApi', () => ({ getAgentExplainability: jest.fn() }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getAgentDetail, setReeseBehaviourSwitch } = require('../../../services/agentDetailApi') as { getAgentDetail: jest.Mock; setReeseBehaviourSwitch: jest.Mock };
@@ -42,6 +49,8 @@ const { listGoals } = require('../../../services/agentGoalApi') as { listGoals: 
 const { listOneOnOnes } = require('../../../services/agentOneOnOneApi') as { listOneOnOnes: jest.Mock };
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getAgentRoleCharter } = require('../../../services/agentRoleCharterApi') as { getAgentRoleCharter: jest.Mock };
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { getAgentExplainability } = require('../../../services/agentExplainabilityApi') as { getAgentExplainability: jest.Mock };
 
 const DETAIL: AgentDetail = {
   agent: {
@@ -52,6 +61,11 @@ const DETAIL: AgentDetail = {
     max_runs_per_hour: 60, max_writes_per_execution: 100, max_proposals_per_run: 50,
     autonomy_level_set_at: null,
     autonomy_level_source: null,
+    abac_mode_override: null,
+    abac_mode_override_set_at: null,
+    abac_mode_override_set_by: null,
+    abac_effective_mode: 'shadow',
+    abac_global_default: 'shadow',
   },
   identity: null,
   live_status: 'unknown',
@@ -106,6 +120,7 @@ beforeEach(() => {
   listGoals.mockResolvedValue([]);
   listOneOnOnes.mockResolvedValue([]);
   getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-cory', charter: null });
+  getAgentExplainability.mockResolvedValue({ agentId: 'agent-cory', agentName: 'corybrain', events: [], proposedActions: [] });
   getAgentDetail.mockResolvedValue(DETAIL);
   getManagerInboxItems.mockResolvedValue([]);
   container = document.createElement('div');

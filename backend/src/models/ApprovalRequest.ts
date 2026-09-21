@@ -37,6 +37,11 @@ interface ApprovalRequestAttributes {
   decided_by?: string | null;
   decided_at?: Date | null;
   decision_channel?: string | null;
+  /** Real-enforcement scoping, Phase 1 (2026-09-20) — set exactly once, by the
+   * replay executor's own conditional-update idempotency guard. `null` means
+   * "never replayed" (including every row that predates this column, which is
+   * correct — none of them has ever been replayed either). */
+  replayed_at?: Date | null;
   created_at?: Date;
 }
 
@@ -59,6 +64,7 @@ class ApprovalRequest extends Model<ApprovalRequestAttributes> implements Approv
   declare decided_by: string | null;
   declare decided_at: Date | null;
   declare decision_channel: string | null;
+  declare replayed_at: Date | null;
   declare created_at: Date;
 }
 
@@ -141,6 +147,10 @@ ApprovalRequest.init(
     },
     decision_channel: {
       type: DataTypes.STRING(30),
+      allowNull: true,
+    },
+    replayed_at: {
+      type: DataTypes.DATE,
       allowNull: true,
     },
     created_at: {

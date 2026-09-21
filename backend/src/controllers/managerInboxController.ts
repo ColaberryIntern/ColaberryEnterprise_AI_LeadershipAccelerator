@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { getManagerInboxItems, approveManagerInboxItem, rejectManagerInboxItem } from '../services/managerInboxService';
+import { getManagerInboxItems, approveManagerInboxItem, rejectManagerInboxItem, getManagerInboxItemInspector } from '../services/managerInboxService';
 
 // AI Workforce Management, Checkpoint C — requireAgentManagerOrAdmin-gated
 // (route layer), same 500-on-unexpected-failure / never-a-raw-stack-trace
@@ -68,5 +68,24 @@ export async function handleRejectManagerInboxItem(req: Request, res: Response) 
   } catch (err: any) {
     console.error('[ManagerInbox] Reject error:', err.message);
     res.status(500).json({ error: 'Failed to reject proposal' });
+  }
+}
+
+// Dashboard redesign, Slice 2c (2026-09-20) — the decision inspector's 3
+// real facts, on demand only. Same auth gate and same-agent ownership
+// check as approve/reject above — a proposal id from a different agent
+// 404s here too, never leaking that it exists.
+export async function handleGetManagerInboxItemInspector(req: Request, res: Response) {
+  try {
+    const id = req.params.id as string;
+    const proposalId = req.params.proposalId as string;
+
+    const inspector = await getManagerInboxItemInspector(id, proposalId);
+    if (!inspector) return res.status(404).json({ error: 'Proposal not found for this agent' });
+
+    res.json(inspector);
+  } catch (err: any) {
+    console.error('[ManagerInbox] Inspector error:', err.message);
+    res.status(500).json({ error: 'Failed to load proposal details' });
   }
 }

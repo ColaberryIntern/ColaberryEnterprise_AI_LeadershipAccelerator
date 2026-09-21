@@ -1,0 +1,66 @@
+{
+  "results": [
+    {
+      "agentId": "97dfbdf4-0e5b-4d86-b060-f4087b61f311",
+      "agentLabel": "Reese",
+      "httpStatus": 200,
+      "headerTabs": [
+        "At a Glance",
+        "Live Status",
+        "Overview",
+        "Work & Decisions",
+        "Talk",
+        "Performance & Settings"
+      ],
+      "clickedPerformanceSettings": true,
+      "hasResultsReportsSubtab": true,
+      "hasToolsChannelsSubtab": true,
+      "hasAuthorityControlsSubtab": true,
+      "defaultSubtabHasReportContent": true,
+      "clickedToolsChannels": true,
+      "toolsTabHasCapabilities": true,
+      "toolsTabHasReadsOrProduces": true,
+      "clickedAuthorityControls": true,
+      "authorityTabHasGovernedMemory": true,
+      "clickedOverview": true,
+      "overviewHasCapabilities": true,
+      "overviewHasReadsOrProduces": false,
+      "clickedAtAGlance": true,
+      "clickedReportsTile": true,
+      "activeTabAfterTileClick": "Performance & Settings",
+      "tileClickLandedOnPerformanceSettings": true
+    },
+    {
+      "agentId": "089e4fd5-0187-46a3-9c56-5db68ef21cca",
+      "agentLabel": "Dara",
+      "httpStatus": 200,
+      "headerTabs": [
+        "At a Glance",
+        "Live Status",
+        "Overview",
+        "Work & Decisions",
+        "Talk",
+        "Performance & Settings"
+      ],
+      "clickedPerformanceSettings": true,
+      "hasResultsReportsSubtab": true,
+      "hasToolsChannelsSubtab": true,
+      "hasAuthorityControlsSubtab": true,
+      "defaultSubtabHasReportContent": true,
+      "clickedToolsChannels": true,
+      "toolsTabHasCapabilities": true,
+      "toolsTabHasReadsOrProduces": true,
+      "clickedAuthorityControls": true,
+      "authorityTabHasGovernedMemory": true,
+      "clickedOverview": true,
+      "overviewHasCapabilities": true,
+      "overviewHasReadsOrProduces": false,
+      "clickedAtAGlance": true,
+      "clickedReportsTile": true,
+      "activeTabAfterTileClick": "Performance & Settings",
+      "tileClickLandedOnPerformanceSettings": true
+    }
+  ],
+  "consoleErrors": [],
+  "anonFinalUrl": "https://enterprise.colaberry.ai/admin/login"
+}

@@ -40,6 +40,7 @@ const AdminStudentStoryPage = lazy(() => import('../pages/admin/AdminStudentStor
 const AdminKnowledgeOpsPage = lazy(() => import('../pages/admin/AdminKnowledgeOpsPage'));
 const AdminOrchestrationPage = lazy(() => import('../pages/admin/AdminOrchestrationPage'));
 const WorkforceOSPage = lazy(() => import('../pages/admin/workforce/WorkforceOSPage'));
+const ApprovalRequestsPage = lazy(() => import('../pages/admin/ApprovalRequestsPage'));
 const EnterpriseIntelligencePage = lazy(() => import('../pages/admin/intelligence/EnterpriseIntelligencePage'));
 const IntelligenceOSPage = lazy(() => import('../pages/admin/intelligence/IntelligenceOSPage'));
 const IntelligenceDiscoveryPage = lazy(() => import('../pages/admin/intelligence/IntelligenceDiscoveryPage'));
@@ -61,6 +62,7 @@ const AdminGovernancePolicyPage = lazy(() => import('../pages/admin/AdminGoverna
 const AdminProjectOverview = lazy(() => import('../pages/admin/AdminProjectOverview'));
 const AdminCaseStudiesPage = lazy(() => import('../pages/admin/AdminCaseStudiesPage'));
 const AdminInternshipPage = lazy(() => import('../pages/admin/AdminInternshipPage'));
+const AdminFactoryCommandCenterPage = lazy(() => import('../pages/admin/AdminFactoryCommandCenterPage'));
 const AdminCaseStudyDetailPage = lazy(() => import('../pages/admin/AdminCaseStudyDetailPage'));
 const InboxCOSPage = lazy(() => import('../pages/admin/inbox/InboxCOSPage'));
 const ContentQueuePage = lazy(() => import('../pages/admin/ContentQueuePage'));
@@ -201,6 +203,9 @@ const adminRoutes = (
         {/* Operations Center is merged into AI Organization (Mission Control is its home). */}
         <Route path="/admin/ops-center" element={<Navigate to="/admin/workforce" replace />} />
         <Route path="/admin/workforce" element={<WorkforceOSPage />} />
+        {/* Real-enforcement scoping, Phase 1 (2026-09-20) — the first real UI
+            for the already-real approval-requests backend routes. */}
+        <Route path="/admin/approval-requests" element={<ApprovalRequestsPage />} />
         <Route path="/admin/brain" element={<EnterpriseIntelligencePage />} />
         <Route path="/admin/ai-settings" element={<Navigate to="/admin/intelligence" replace />} />
         <Route path="/admin/intelligence" element={<IntelligenceOSPage />} />
@@ -246,6 +251,7 @@ const adminRoutes = (
             same way as the business-account pair above. */}
         <Route path="/admin/case-studies" element={<AdminCaseStudiesPage />} />
         <Route path="/admin/internship" element={<AdminInternshipPage />} />
+        <Route path="/admin/factory" element={<AdminFactoryCommandCenterPage />} />
         <Route path="/admin/case-studies/:id" element={<AdminCaseStudyDetailPage />} />
         <Route path="/admin/inbox" element={<InboxCOSPage />} />
         <Route path="/admin/content-queue" element={<ContentQueuePage />} />

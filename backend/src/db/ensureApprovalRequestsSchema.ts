@@ -55,6 +55,14 @@ export async function ensureApprovalRequestsSchema(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_approval_requests_status ON approval_requests (status)`,
     `CREATE INDEX IF NOT EXISTS idx_approval_requests_created_at ON approval_requests (created_at)`,
 
+    // Real-enforcement scoping, Phase 1 (2026-09-20) — the replay executor's own
+    // idempotency guard: a conditional UPDATE ... WHERE replayed_at IS NULL is the
+    // ONLY thing that decides whether a real send actually fires, so a retried or
+    // duplicated approve call is a provable no-op, not just structurally unlikely
+    // (see approvalRequestReplayService.ts). Nullable, no backfill needed — every
+    // pre-existing row correctly reads as "never replayed."
+    `ALTER TABLE approval_requests ADD COLUMN IF NOT EXISTS replayed_at TIMESTAMPTZ`,
+
     // FK from the M1-preexisting work_ledger_events.authorization_decision_id column
     // (added nullable, no FK target, since approval_requests did not exist at M1 time —
     // see WorkLedgerEvent.ts's comment: "No approval_requests table exists yet

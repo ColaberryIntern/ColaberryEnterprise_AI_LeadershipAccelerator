@@ -23,6 +23,12 @@ export interface AgentDetailLastTicketRef {
   at: string;
 }
 
+/** Dashboard redesign, Slice 2a (2026-09-19) — the Work tab's honest status
+ * filter, derived server-side from real fields (status/due_date/latest-
+ * activity-actor), no schema change. See backend's ticketStatusBucket.ts
+ * for the exact derivation and precedence order. */
+export type AgentDetailTicketStatusBucket = 'overdue' | 'ready_to_verify' | 'needs_reply' | 'open';
+
 export interface AgentDetailTicket {
   id: string;
   ticket_number: number | null;
@@ -37,6 +43,13 @@ export interface AgentDetailTicket {
   type: string;
   created_at: string | null;
   updated_at: string | null;
+  /** Dashboard redesign, Slice 2a — real column, previously fetched but
+   * never surfaced in this response. */
+  due_date: string | null;
+  /** `null` for a terminal ticket (done/cancelled) — none of the 4 real
+   * buckets honestly fits a closed ticket; the Work tab excludes these
+   * from its action-focused view rather than mislabeling them. */
+  status_bucket: AgentDetailTicketStatusBucket | null;
 }
 
 /** Task visibility (2026-08-26) — Ali, live, on Reese's real page: "which
@@ -213,6 +226,15 @@ export interface AgentDetail {
      * 'manual' (a human set it via the reactivation flow) vs null (neither
      * has ever touched this agent). */
     autonomy_level_source: 'auto' | 'manual' | null;
+    /** Real-enforcement scoping, Phase 3 (2026-09-20) — the per-agent shadow/enforce
+     * switch. `abac_mode_override` null means "follow the global default" (the real,
+     * untouched state until an admin deliberately sets one). `abac_effective_mode` and
+     * `abac_global_default` are computed server-side — never re-derive them here. */
+    abac_mode_override: 'shadow' | 'enforce' | null;
+    abac_mode_override_set_at: string | null;
+    abac_mode_override_set_by: string | null;
+    abac_effective_mode: 'off' | 'shadow' | 'enforce';
+    abac_global_default: 'off' | 'shadow' | 'enforce';
   };
   identity: AgentDetailIdentity | null;
   live_status: 'online' | 'away' | 'offline' | 'unknown';
@@ -334,4 +356,29 @@ export async function setReeseBehaviourSwitch(
 ): Promise<SetReeseBehaviourSwitchResult> {
   const res = await api.patch<SetReeseBehaviourSwitchResult>(`/api/admin/agents/${agentId}/behaviours/${key}`, { enabled });
   return res.data;
+}
+
+export interface SetAgentAbacOverrideResult {
+  agentId: string;
+  agentName: string;
+  found: boolean;
+  updated: boolean;
+  override: 'shadow' | 'enforce' | null;
+  setAt: string | null;
+  setBy: string | null;
+  error: string | null;
+}
+
+// Real-enforcement scoping, Phase 3 (2026-09-20) — the per-agent switch Ali asked for.
+// `override: null` is a real, first-class request ("follow the global default again"), not
+// just on/off.
+export async function setAgentAbacOverride(
+  agentId: string,
+  override: 'shadow' | 'enforce' | null,
+): Promise<SetAgentAbacOverrideResult> {
+  const res = await api.patch<{ result: SetAgentAbacOverrideResult }>(
+    `/api/admin/workforce/agents/${agentId}/abac-override`,
+    { override },
+  );
+  return res.data.result;
 }

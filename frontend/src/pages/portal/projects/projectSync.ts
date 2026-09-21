@@ -17,7 +17,7 @@ import portalApi from '../../../utils/portalApi';
 import type { StudentProject, ProjectTask, TaskState } from './projectsStore';
 import { loadProjects, hydrateProjects, claimBackendProject } from './projectsStore';
 import {
-  reconcileProjects, UNKNOWN_INVENTORY,
+  reconcileProjects, UNKNOWN_INVENTORY, backendIdOf,
   type BackendProjectTree, type ServerInventory,
 } from './projectHydrate';
 import { isUuid } from './projectIdentity';
@@ -263,6 +263,56 @@ export async function hydrateProjectById(projectId: string): Promise<boolean> {
 }
 
 /**
+ * Refresh ONE project by its backend id and reconcile it in — the supersede
+ * path, not the ADD-only one `hydrateProjectById` takes.
+ *
+ * THE HOLE THIS CLOSES. A build publishes STORY-000 (and the rest of its plan)
+ * at publish time, but the student only ever sees it if that project's tree
+ * reaches `reconcileProjects` — and the pull only fetches the ACTIVE project's
+ * tree. When the published build is NOT the active one at pull time (the student
+ * opened a second build during the minutes-long generate, or drift moved the
+ * pointer), its local `origin:'local'` placeholder is never handed its own tree,
+ * so it stays the ten-task skeleton with no Command Center. `hydrateMissingProjects`
+ * cannot fix it either: that placeholder already "holds" the backend id, so it
+ * is excluded from `missing`. This fetches the tree by id and runs it through
+ * `reconcileProjects`, which supersedes the placeholder (lossless: guarded on
+ * completed work and disjoint task keys, exactly as the active path is).
+ *
+ * UNKNOWN_INVENTORY on purpose: this is a single-project view, so it must not be
+ * allowed to prune OTHER cards it cannot see. Returns whether anything changed.
+ */
+export async function refreshProjectById(projectId: string): Promise<boolean> {
+  try {
+    const res = await portalApi.get(`/api/portal/projects/${encodeURIComponent(projectId)}`);
+    const tree = (res.data && Array.isArray(res.data.lists)) ? (res.data as BackendProjectTree) : null;
+    if (!tree) return false;
+    const { next, changed } = reconcileProjects(loadProjects(), tree, UNKNOWN_INVENTORY);
+    if (changed) hydrateProjects(next);
+    return changed;
+  } catch (err) {
+    reportFailure('pull', err);
+    return false;
+  }
+}
+
+/**
+ * Any local card that is a server-bound placeholder still wearing the local
+ * skeleton (`origin:'local'` with a backend id) gets its real tree pulled by id
+ * and superseded. This is the non-active twin of the active-project supersede:
+ * without it, STORY-000 shows on the active build but not on a second one the
+ * student built and then navigated away from. Scoped tightly to
+ * `origin==='local' && backendIdOf!==null` so genuine local-only builds and the
+ * sample (backendIdOf === null) are never touched. Sequential and best-effort.
+ */
+async function refreshHeldLocalPlaceholders(): Promise<void> {
+  const stale = loadProjects().filter((p) => !p.sample && p.origin === 'local' && backendIdOf(p) !== null);
+  for (const p of stale) {
+    const id = backendIdOf(p);
+    if (id) await refreshProjectById(id);
+  }
+}
+
+/**
  * Give a card to every server project this device is missing — not just the
  * active one.
  *
@@ -358,6 +408,11 @@ async function reconcileFromBackend(): Promise<void> {
     // Inside the try, but deliberately last: every projects-page load ends by
     // giving a card to any live server project this device still lacks.
     await hydrateMissingProjects(inventory);
+
+    // Then heal any server-bound placeholder still wearing the local skeleton —
+    // a published build (STORY-000 and all) that was not the active one at pull
+    // time, so the active-project path above never handed it its tree.
+    await refreshHeldLocalPlaceholders();
   } catch (err) {
     reportFailure('pull', err);
   }

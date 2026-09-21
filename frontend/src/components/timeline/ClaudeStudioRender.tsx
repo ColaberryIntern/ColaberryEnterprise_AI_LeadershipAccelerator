@@ -194,7 +194,11 @@ const CSS = `
 export function objectivesLine(objectives: readonly string[]): string | null {
   const parts = objectives.map((o) => o.trim().replace(/\.$/, '')).filter(Boolean);
   if (!parts.length) return null;
-  const lower = parts.map((p, i) => (i === 0 ? p : p.charAt(0).toLowerCase() + p.slice(1)));
+  // Every objective starts a clause after "you will", so every one is lowered,
+  // not just the second onward: the first used to keep its capital and the
+  // page read "By the end you will Translate one technical initiative" on all
+  // thirteen studios. An acronym (two capitals in a row) is left alone.
+  const lower = parts.map((p) => (/^[A-Z][A-Z]/.test(p) ? p : p.charAt(0).toLowerCase() + p.slice(1)));
   return `By the end you will ${lower.join('; ')}.`;
 }
 

@@ -203,6 +203,16 @@ export const env = {
   // Deliberately NOT a boolean — the first audience for this is one account
   // being tested while a class is running on the same deployment.
   sbpAgentScoping: (process.env.SBP_AGENT_SCOPING ?? 'off').trim(),
+  // Review-and-approve gate. When a build publishes for an enrollment in scope,
+  // the project is held in `pending_approval`: the student reviews the whole
+  // build and must Approve before the workspace unlocks. 'off' (default), 'all',
+  // or a comma-separated list of enrollment ids. Per-enrollment, NOT a boolean,
+  // for the same reason as SBP_AGENT_SCOPING: this changes the student's core
+  // flow, so its first audience is one test account while a class runs on the
+  // same deployment, never the whole cohort at once. OFF means no project is
+  // ever moved to pending_approval, so nothing is gated and existing students
+  // are untouched even after this ships.
+  projectApprovalGate: (process.env.PROJECT_APPROVAL_GATE ?? 'off').trim(),
   // Who may preview a Case Study on a surface OTHER than `enterprise` — the
   // admin four-lens surface lab. 'off' (default), 'all', or a comma-separated
   // list of admin user ids (the `sub` claim on the admin JWT).

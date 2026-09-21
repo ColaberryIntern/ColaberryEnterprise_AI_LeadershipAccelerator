@@ -1,0 +1,65 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sample Contract — Factory Review</title><style>
+:root{--navy:#1a365d;--accent:#2b6cb0;--ink:#1f2733;--muted:#6b7685;--line:#e3e7ec;--bg:#f5f6f8;--good:#2f855a;--warn:#b5710a}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:14px;line-height:1.55}
+.wrap{max-width:1000px;margin:auto;padding:0 20px 50px}
+header{background:linear-gradient(135deg,var(--navy),#20507f);color:#fff;padding:34px 0}
+header .wrap{padding-bottom:0}h1{margin:8px 0 4px;font-size:26px}.eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:700}
+header .eyebrow{color:#9fc4ea}.muted{color:var(--muted);font-size:12.5px}
+h2{font-size:16px;margin:30px 0 12px;color:var(--navy)}
+.cards{display:flex;gap:14px;flex-wrap:wrap;margin-top:18px}.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px;flex:1 1 220px}
+table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top;font-size:13px}
+th{background:#eef1f5;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+tr:last-child td{border-bottom:0}
+.pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#eef1f5;color:var(--navy)}
+.pill.agent{background:#fff3e0;color:#b5710a}.pill.human{background:#e7f2ec;color:var(--good)}.pill.warn{background:#fbeee0;color:var(--warn)}
+.note{margin-top:8px;font-size:12px;color:var(--muted)}
+</style></head><body>
+<header><div class="wrap"><div class="eyebrow">AI Project Factory · Phase 1 sample</div>
+<h1>AI Government Contract Finder — contract project</h1>
+<div class="muted" style="color:#c4d3e4">A worked sample: two tracks, an evidence-anchored process, and human/AI ownership — validated by factoryValidate() with zero errors.</div></div></header>
+<div class="wrap">
+<h2>Tracks</h2><div class="cards"><div class="card"><div class="eyebrow">proposal track</div>
+    <div class="muted">status: in_progress</div></div><div class="card"><div class="eyebrow">solution_build track</div>
+    <div class="muted">status: in_progress</div><div class="muted">solution build → student project 4edd9656…</div></div></div>
+<h2>Process tasks — who does the work, and who is accountable</h2>
+<table><thead><tr><th>Task</th><th>Executor (performer)</th><th>Accountable human</th><th>Evidence</th></tr></thead><tbody><tr>
+      <td><b>Extract requirements from the solicitation</b><div class="muted">TASK · LLM · conf 0.72</div></td>
+      <td><span class="pill agent">agent</span> agent · Requirement Extraction Agent</td>
+      <td>Compliance Analyst <span class="pill human">human</span></td>
+      <td>blk-1</td>
+    </tr><tr>
+      <td><b>Classify each requirement as technical or administrative</b><div class="muted">DECISION · LLM · conf 0.68</div></td>
+      <td><span class="pill agent">agent</span> agent · Requirement Extraction Agent</td>
+      <td>Compliance Analyst <span class="pill human">human</span></td>
+      <td>blk-2</td>
+    </tr><tr>
+      <td><b>Map administrative requirements to proposal sections</b><div class="muted">TASK · INFERRED</div></td>
+      <td>person · Proposal Lead</td>
+      <td><span class="pill warn">none</span></td>
+      <td>blk-3</td>
+    </tr><tr>
+      <td><b>Map technical requirements to build stories</b><div class="muted">TASK · INFERRED</div></td>
+      <td>person · Compliance Analyst</td>
+      <td><span class="pill warn">none</span></td>
+      <td>blk-4</td>
+    </tr></tbody></table>
+<div class="note">Every task that an agent performs carries a human accountable — the rule the gate enforces (OVERSIGHT).</div>
+<h2>Human / AI allocation</h2>
+<table><thead><tr><th>Task</th><th>Execution class</th><th>Accountable</th><th>Why</th></tr></thead><tbody><tr><td>Extract requirements from the solicitation</td>
+    <td><span class="pill">ai_with_approval</span></td><td>Compliance Analyst</td><td class="muted">Extraction is pattern work the agent drafts; a human confirms before it counts.</td></tr><tr><td>Classify each requirement as technical or administrative</td>
+    <td><span class="pill">ai_with_approval</span></td><td>Compliance Analyst</td><td class="muted">Classification needs judgment on ambiguous items, so a human is accountable.</td></tr><tr><td>Map administrative requirements to proposal sections</td>
+    <td><span class="pill">human</span></td><td>Proposal Lead</td><td class="muted">Proposal-side mapping is owned by the Proposal Lead.</td></tr><tr><td>Map technical requirements to build stories</td>
+    <td><span class="pill">human</span></td><td>Compliance Analyst</td><td class="muted">Build-side mapping is owned by the Compliance Analyst.</td></tr></tbody></table>
+<h2>Old → new role map</h2>
+<table><thead><tr><th>Previous function</th><th>AI contribution</th><th>New role</th><th>Retained by the human</th></tr></thead><tbody><tr><td>Manual compliance reviewer</td><td>Extracts and classifies requirements from the solicitation</td>
+    <td><b>Compliance Analyst</b></td><td>confirm ambiguous requirements; approve the compliance matrix</td></tr></tbody></table>
+<h2>Requirement → task coverage</h2>
+<table><thead><tr><th>Requirement</th><th>Statement</th><th>Source blocks</th><th>Cited by</th></tr></thead><tbody><tr><td><b>REQ-1</b> technical</td><td>Extract requirements from a solicitation</td><td>blk-1</td>
+      <td>Extract requirements from the solicitation</td></tr><tr><td><b>REQ-2</b> technical</td><td>Classify each requirement</td><td>blk-2</td>
+      <td>Classify each requirement as technical or administrative</td></tr><tr><td><b>REQ-3</b> administrative</td><td>Map administrative requirements to proposal sections</td><td>blk-3</td>
+      <td>Map administrative requirements to proposal sections</td></tr><tr><td><b>REQ-4</b> technical</td><td>Map technical requirements to build stories</td><td>blk-4</td>
+      <td>Map technical requirements to build stories</td></tr></tbody></table>
+<div class="note">DESIGN SAMPLE · fictional government contract. Generated from the typed sample data, not hardcoded.</div>
+</div></body></html>

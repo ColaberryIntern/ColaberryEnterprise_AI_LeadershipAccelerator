@@ -34,7 +34,15 @@ import { deriveAttentionItems } from '../../utils/agentAttentionRequired';
 // 'trust' retired in favor of one 'performance_settings' destination (see
 // AgentDetailV2Header.tsx's TabKey); the 3 tiles below are unchanged, only
 // their onNavigate target moved.
-type NavTarget = 'command' | 'overview' | 'work' | 'talk' | 'performance_settings';
+//
+// Dashboard redesign, Slice 2a (2026-09-19) — the "Work & Decisions" tab
+// split into 'work' (ticket list) and 'decisions' (Pending Approvals +
+// Decision Journal). This tile's own real metric is inboxItems.length —
+// entirely a Decisions-flavored count, not a ticket count — so it now
+// points at 'decisions' and is relabeled to match (see below). No new
+// tile is added for the ticket-count side: a dedicated "Work" KPI tile is
+// Overview/At-a-Glance content work, explicitly Slice 2b scope.
+type NavTarget = 'command' | 'overview' | 'decisions' | 'talk' | 'performance_settings';
 type StatTone = 'primary' | 'success' | 'danger' | 'warning' | 'info' | 'neutral';
 
 interface Props {
@@ -193,12 +201,12 @@ export default function AgentAtAGlanceTab({ agentId, detail, inboxItems, inboxLo
           </div>
           <div className="col-md-4">
             <StatCard
-              label="Work & Decisions"
+              label="Decisions"
               value={inboxLoading ? '—' : inboxItems.length}
               icon="list-check-3"
               tone={workTone}
               hint={workHint}
-              onClick={() => onNavigate('work')}
+              onClick={() => onNavigate('decisions')}
             />
           </div>
           <div className="col-md-4">

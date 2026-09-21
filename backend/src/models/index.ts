@@ -456,6 +456,11 @@ import TenantAccessAudit from './TenantAccessAudit';
 // sequelize.models, so an unregistered model is an invisible one.
 import DeliveryEngagement from './DeliveryEngagement';
 import DeliveryProject from './DeliveryProject';
+// AI Project Factory — imported here so the models self-register at boot, not only when a
+// consumer first imports them.
+import ContractTrack from './ContractTrack';
+import ContractRequirement from './ContractRequirement';
+import ContractProcessDocument from './ContractProcessDocument';
 import CapstoneReviewApproval from './CapstoneReviewApproval';
 import CohortMembership from './CohortMembership';
 import InternshipApplication from './InternshipApplication';
@@ -1639,6 +1644,9 @@ export {
   DeliveryEngagement,
   DeliveryProject,
   DeliveryProjectSourceLink,
+  ContractTrack,
+  ContractRequirement,
+  ContractProcessDocument,
 
   // Living Career Portfolio (Gate 10 — versioned publication)
   CapstoneReviewApproval,

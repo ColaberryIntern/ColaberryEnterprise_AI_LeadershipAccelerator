@@ -13,6 +13,8 @@ function makeTicket(overrides: Partial<AgentDetailTicket> = {}): AgentDetailTick
     type: 'ops_summary',
     created_at: '2026-08-25T00:00:00.000Z',
     updated_at: '2026-08-25T00:00:00.000Z',
+    due_date: null,
+    status_bucket: null, // base status is 'done' (terminal) — honest default per Slice 2a
     ...overrides,
   };
 }
@@ -27,6 +29,11 @@ function makeDetail(overrides: Partial<AgentDetail> = {}): AgentDetail {
       max_runs_per_hour: 60, max_writes_per_execution: 100, max_proposals_per_run: 50,
       autonomy_level_set_at: null,
       autonomy_level_source: null,
+      abac_mode_override: null,
+      abac_mode_override_set_at: null,
+      abac_mode_override_set_by: null,
+      abac_effective_mode: 'shadow',
+      abac_global_default: 'shadow',
     },
     identity: null,
     live_status: 'unknown',

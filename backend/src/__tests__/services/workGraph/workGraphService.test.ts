@@ -3,18 +3,20 @@ import {
   listWorkUnitsForTicket,
   addWorkUnitDependency,
   getWorkGraphForTicket,
+  updateWorkUnitStatus,
   WorkGraphValidationError,
 } from '../../../services/workGraph/workGraphService';
 import { TicketWorkUnit, WorkUnitDependency, ResourceLease } from '../../../models';
 
 jest.mock('../../../models', () => ({
-  TicketWorkUnit: { create: jest.fn(), findAll: jest.fn() },
+  TicketWorkUnit: { create: jest.fn(), findAll: jest.fn(), update: jest.fn() },
   WorkUnitDependency: { create: jest.fn(), findAll: jest.fn() },
   ResourceLease: { findAll: jest.fn() },
 }));
 
 const workUnitCreate = TicketWorkUnit.create as unknown as jest.Mock;
 const workUnitFindAll = TicketWorkUnit.findAll as unknown as jest.Mock;
+const workUnitUpdate = TicketWorkUnit.update as unknown as jest.Mock;
 const dependencyCreate = WorkUnitDependency.create as unknown as jest.Mock;
 const dependencyFindAll = WorkUnitDependency.findAll as unknown as jest.Mock;
 const leaseFindAll = ResourceLease.findAll as unknown as jest.Mock;
@@ -166,5 +168,18 @@ describe('getWorkGraphForTicket', () => {
     expect(result.dependencies).toEqual([
       { id: 'dep-1', work_unit_id: 'wu-2', depends_on_work_unit_id: 'wu-1', dependency_type: 'blocks' },
     ]);
+  });
+});
+
+// Workspace mission, Phase 2 slice 1 (2026-09-21) — the small, reusable status
+// transition helper, matching inboxCaseWorkGraphAutoRecorder.ts's own real
+// precedent for updating a work unit's status via a plain Sequelize .update().
+describe('updateWorkUnitStatus', () => {
+  it.each(['done', 'blocked', 'failed'] as const)("transitions a real work unit to '%s'", async (status) => {
+    workUnitUpdate.mockResolvedValue([1]);
+
+    await updateWorkUnitStatus(WU_A, status);
+
+    expect(workUnitUpdate).toHaveBeenCalledWith({ status }, { where: { id: WU_A } });
   });
 });

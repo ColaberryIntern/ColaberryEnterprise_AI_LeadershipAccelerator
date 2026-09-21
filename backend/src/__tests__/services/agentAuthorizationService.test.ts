@@ -174,6 +174,74 @@ describe('authorizeAgentAction — deliberate autonomy_level from the reactivati
   });
 });
 
+// Real-enforcement scoping, Phase 3 (2026-09-20) — the per-agent shadow/enforce switch
+// Ali asked for ("I would like a switch for each agent so I can turn off/on Shadow mode").
+// `abac_mode_override` on the registry row: null means "follow the global default" (every
+// real agent's actual state on ship day — the fleet-wide no-op proof is every test ABOVE
+// this block passing unchanged, since none of them set this field at all).
+describe('authorizeAgentAction — Real-enforcement Phase 3: per-agent abac_mode_override', () => {
+  it('a per-agent override to "enforce" actually blocks, even while the GLOBAL setting stays shadow', async () => {
+    mockSetting.mockResolvedValue('shadow'); // global stays shadow throughout
+    findOne.mockResolvedValue({ enabled: true, status: 'idle', abac_mode_override: 'enforce' });
+
+    const r = await authorizeAgentAction({ ...base, action: 'update_campaign_config', tier: 'read_only' });
+
+    expect(r.allowed).toBe(false); // genuinely blocked, unlike shadow's usual "logged but allowed"
+    expect(r.enforced).toBe(true);
+    expect(r.mode).toBe('enforce'); // reflects the EFFECTIVE (per-agent) mode, not the bare global one
+    expect(mockEmit.mock.calls[0][0].metadata.mode).toBe('enforce'); // the emitted event too
+  });
+
+  it('a per-agent override to "shadow" keeps logging-only, even while the GLOBAL setting is enforce', async () => {
+    mockSetting.mockResolvedValue('enforce'); // global is enforce
+    findOne.mockResolvedValue({ enabled: true, status: 'idle', abac_mode_override: 'shadow' });
+
+    const r = await authorizeAgentAction({ ...base, action: 'update_campaign_config', tier: 'read_only' });
+
+    expect(r.allowed).toBe(true); // this ONE agent stays in shadow despite the global flip
+    expect(r.enforced).toBe(false);
+    expect(r.wouldDeny).toBe(true); // still recorded as would-deny — the shadow exposure
+    expect(r.mode).toBe('shadow');
+  });
+
+  it('null override (the untouched default) falls back to whatever the global setting is', async () => {
+    mockSetting.mockResolvedValue('enforce');
+    findOne.mockResolvedValue({ enabled: true, status: 'idle', abac_mode_override: null });
+
+    const r = await authorizeAgentAction({ ...base, action: 'update_campaign_config', tier: 'read_only' });
+
+    expect(r.allowed).toBe(false); // follows the global 'enforce' — no override present
+    expect(r.mode).toBe('enforce');
+  });
+
+  it('cross-agent isolation: one agent\'s override never leaks onto a different agent evaluated in the same run', async () => {
+    mockSetting.mockResolvedValue('shadow');
+    // First call: agent with an 'enforce' override.
+    findOne.mockResolvedValueOnce({ enabled: true, status: 'idle', abac_mode_override: 'enforce' });
+    const overridden = await authorizeAgentAction({ ...base, agentName: 'OverriddenAgent', action: 'update_campaign_config', tier: 'read_only' });
+    // Second call: a DIFFERENT agent with no override at all (real fleet default).
+    findOne.mockResolvedValueOnce({ enabled: true, status: 'idle', abac_mode_override: null });
+    const plainAgent = await authorizeAgentAction({ ...base, agentName: 'PlainAgent', action: 'update_campaign_config', tier: 'read_only' });
+
+    expect(overridden.allowed).toBe(false); // genuinely enforced
+    expect(overridden.mode).toBe('enforce');
+    expect(plainAgent.allowed).toBe(true); // untouched — still follows the global shadow default
+    expect(plainAgent.mode).toBe('shadow');
+  });
+
+  it('global "off" still wins over a per-agent "enforce" override — off is a broader bypass this switch does not touch', async () => {
+    mockSetting.mockResolvedValue('off');
+    findOne.mockResolvedValue({ enabled: true, status: 'idle', abac_mode_override: 'enforce' });
+
+    const r = await authorizeAgentAction({ ...base, action: 'update_campaign_config', tier: 'read_only' });
+
+    expect(r.allowed).toBe(true); // 'off' short-circuits before the registry row / override is ever read
+    expect(r.reason).toBe('gate_off');
+    expect(findOne).not.toHaveBeenCalled(); // the early return in 'off' mode never fetches the row
+    expect(mockEmit).not.toHaveBeenCalled(); // off mode never emits, unchanged from before this phase
+  });
+});
+
 // Trust Contract Phase 1 (2026-08-26) — per-agent read of the real
 // agent.authorization ai_events trail, sibling to countAbacChecks() above
 // (same table, same event_type, scoped to one agent instead of the fleet).

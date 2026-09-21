@@ -73,6 +73,11 @@ export interface BackendProjectTree {
    * reason as `verified_at`: an older server omits the key entirely.
    */
   command_center_url?: string | null;
+  /**
+   * Review-and-approve. Optional so an older server yields `undefined`, which
+   * maps to null → ungated. Only 'pending_approval' gates.
+   */
+  approval_state?: 'pending_approval' | 'approved' | 'changes_requested' | null;
 }
 
 // The client's link key for a task — the same value it imported as `story_id`.
@@ -326,6 +331,14 @@ export function overlayCompletions(p: StudentProject, tree: BackendProjectTree):
   const nextUrl = tree.command_center_url ?? null;
   const urlChanged = nextUrl !== (p.commandCenterUrl ?? null);
 
+  // Review-and-approve, threaded exactly like commandCenterUrl above: the state
+  // changes on the device that already holds this build (the student approving
+  // it), so an overlay that never adopted it would leave the gate stuck open or
+  // shut on the one device that acted. Normalised so absent-on-both is not a
+  // change, preserving the same-reference fast path.
+  const nextApproval = tree.approval_state ?? null;
+  const approvalChanged = nextApproval !== (p.approvalState ?? null);
+
   // A project the server is actively describing is not being CREATED, whatever
   // this device last wrote down. `status` was the one field this path never
   // normalised, so a card stranded at `creating` — by the id-adoption race in
@@ -349,11 +362,12 @@ export function overlayCompletions(p: StudentProject, tree: BackendProjectTree):
   const reqs = deriveReqStates(reconcileReqCatalog(withServerTasks.reqs, mergedLists), mergedLists);
   const reqsChanged = reqs !== withServerTasks.reqs;
 
-  const base: StudentProject = (!changed && !urlChanged && !adopted && !statusStale && !reqsChanged) ? p : {
+  const base: StudentProject = (!changed && !urlChanged && !adopted && !statusStale && !reqsChanged && !approvalChanged) ? p : {
     ...withServerTasks,
     ...(changed ? { lists } : {}),
     ...(reqsChanged ? { reqs } : {}),
     ...(urlChanged ? { commandCenterUrl: nextUrl } : {}),
+    ...(approvalChanged ? { approvalState: nextApproval } : {}),
     ...(statusStale ? { status: 'ready' as StudentProject['status'] } : {}),
   };
   // Applied last and on the merged object, so a rename and a completion arriving
@@ -602,6 +616,7 @@ export function backendTreeToProject(tree: BackendProjectTree): StudentProject {
     reqs,
     lists,
     commandCenterUrl: tree.command_center_url ?? null,
+    approvalState: tree.approval_state ?? null,
     activity: [
       { id: 'a-restored', kind: 'note', who: 'Cory', time: 'just now',
         title: 'Restored from your account',

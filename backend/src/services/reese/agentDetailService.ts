@@ -4,7 +4,7 @@ import AdminUser from '../../models/AdminUser';
 import Enrollment from '../../models/Enrollment';
 import CommunityMember from '../../models/CommunityMember';
 import OrgMember from '../../models/OrgMember';
-import { Ticket } from '../../models';
+import { Ticket, TicketActivity } from '../../models';
 import { derivePresence } from '../communityService';
 import type { CommunityPresenceStatus } from '../../models/CommunityMember';
 import { buildCreatorIdMatchList } from '../agentBlueprint/legacyCreatorAliases';
@@ -13,12 +13,13 @@ import { deriveAgentCapabilities } from './agentToolCapabilities';
 import { resolveReportsToChainWithTrail } from '../ticketCreatorReportsToResolver';
 import { getPersonaVersionHistory } from '../agentPersonaVersionHistoryService';
 import { agentCostRows } from '../trustMetricsService';
-import { getAgentAuthorizationSummary } from '../agentAuthorizationService';
+import { getAgentAuthorizationSummary, getAbacMode, resolveEffectiveMode } from '../agentAuthorizationService';
 import { computeAgentGoalsDimensions } from '../agentGoalsDimensionsService';
 import { classifyAgentAutonomyLevel } from '../agentCapabilityClassifier';
 import { getReeseEmployeeFacts, type AgentDetailResult } from './agentDetailEmployeeFacts';
 import { computeLastTicketPerBehaviour } from './reeseBehaviourLastTicket';
 import { BEHAVIOUR_KEY_BY_CRON_AGENT_NAME } from './reeseBehaviourMetadata';
+import { computeNeedsReply, computeStatusBucket } from './ticketStatusBucket';
 
 export type { AgentDetailResult } from './agentDetailEmployeeFacts';
 
@@ -93,6 +94,30 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
         limit: MAX_TICKETS,
       })
     : [];
+
+  // Dashboard redesign, Slice 2a (2026-09-19) — the Work tab's honest
+  // "needs a reply" filter needs each ticket's most recent activity actor.
+  // One bounded query scoped to the SAME ticket ids already fetched above
+  // (never unbounded — capped by MAX_TICKETS transitively), grouped in JS
+  // to the latest row per ticket_id — same "fetch once, group in JS" shape
+  // as ticketBreakdown below. Skipped entirely when there are no tickets.
+  const ticketIds = tickets.map((t: any) => t.id);
+  const latestActivityByTicketId = new Map<string, { actor_id: string; created_at: Date }>();
+  if (ticketIds.length > 0) {
+    const activityRows = await TicketActivity.findAll({
+      where: { ticket_id: { [Op.in]: ticketIds } },
+      attributes: ['ticket_id', 'actor_id', 'created_at'],
+      order: [['ticket_id', 'ASC'], ['created_at', 'DESC']],
+    });
+    for (const row of activityRows as any[]) {
+      // First row seen per ticket_id (thanks to the DESC order above) is
+      // the latest — never overwritten by an older row for the same ticket.
+      if (!latestActivityByTicketId.has(row.ticket_id)) {
+        latestActivityByTicketId.set(row.ticket_id, { actor_id: row.actor_id, created_at: row.created_at });
+      }
+    }
+  }
+  const ownIdentityIds = adminUser ? buildCreatorIdMatchList(adminUser.id, agent) : [];
 
   // Agent Detail transparency, part 2 (2026-08-18) — the real, live ticket
   // types this agent has ever created/been assigned, UNLIMITED (not the
@@ -208,13 +233,24 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
   // `adminUser.id` like the tickets queries above), since ai_events and the
   // new history table are keyed on the real AiAgent row regardless of
   // whether it has a linked staff identity.
-  const [personaVersionHistory, costRows, authorizationSummary, goalsResult] = await Promise.all([
+  const [personaVersionHistory, costRows, authorizationSummary, goalsResult, abacGlobalDefault] = await Promise.all([
     getPersonaVersionHistory(agent.id),
     agentCostRows(30, agent.id),
     getAgentAuthorizationSummary(agent.id, agent.agent_name, 30),
     computeAgentGoalsDimensions(agent),
+    getAbacMode(),
   ]);
   const costSummary = costRows[0] ? { cost_usd: costRows[0].costUsd, runs: costRows[0].runs } : null;
+
+  // Real-enforcement scoping, Phase 3 (2026-09-20) — the per-agent switch Ali asked for.
+  // Global 'off' ALWAYS wins over any per-agent override, matching
+  // authorizeAgentAction()'s own early return (its 'off' short-circuit happens BEFORE the
+  // registry row/override is ever read — resolveEffectiveMode() is only ever called there in
+  // the non-'off' branch). Reproduced here explicitly rather than calling
+  // resolveEffectiveMode() unconditionally, which would incorrectly let an 'enforce' override
+  // win over a global 'off' state on this page alone.
+  const abacOverride = (agent as any).abac_mode_override ?? null;
+  const abacEffectiveMode = abacGlobalDefault === 'off' ? 'off' : resolveEffectiveMode(abacGlobalDefault, abacOverride);
 
   // R9 — Ali, live: "I'd also like to see the last time the tool and
   // scheduled work was used/run and the ticket." Reese-only, computed from
@@ -265,6 +301,11 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
       max_proposals_per_run: agent.max_proposals_per_run ?? null,
       autonomy_level_set_at: agent.autonomy_level_set_at ?? null,
       autonomy_level_source: agent.autonomy_level_source ?? null,
+      abac_mode_override: abacOverride,
+      abac_mode_override_set_at: (agent as any).abac_mode_override_set_at ?? null,
+      abac_mode_override_set_by: (agent as any).abac_mode_override_set_by ?? null,
+      abac_effective_mode: abacEffectiveMode,
+      abac_global_default: abacGlobalDefault,
     },
     identity: adminUser
       ? {
@@ -277,17 +318,26 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
     live_status: liveStatus,
     open_ticket_count: openTicketCount,
     oldest_open_ticket_age_days: oldestOpenTicketAge?.ageDays ?? null,
-    tickets: tickets.map((t: any) => ({
-      id: t.id,
-      ticket_number: t.ticket_number ?? null,
-      title: t.title,
-      description: t.description ?? null,
-      status: t.status,
-      priority: t.priority,
-      type: t.type,
-      created_at: t.created_at ?? null,
-      updated_at: t.updated_at ?? null,
-    })),
+    tickets: tickets.map((t: any) => {
+      const latestActivity = latestActivityByTicketId.get(t.id) ?? null;
+      const needsReply = computeNeedsReply(latestActivity?.actor_id ?? null, ownIdentityIds);
+      return {
+        id: t.id,
+        ticket_number: t.ticket_number ?? null,
+        title: t.title,
+        description: t.description ?? null,
+        status: t.status,
+        priority: t.priority,
+        type: t.type,
+        created_at: t.created_at ?? null,
+        updated_at: t.updated_at ?? null,
+        // Dashboard redesign, Slice 2a — real column, previously fetched but
+        // never surfaced in this response (response-shape change only, no
+        // schema change; see models/Ticket.ts's real due_date column).
+        due_date: t.due_date ?? null,
+        status_bucket: computeStatusBucket({ status: t.status, dueDate: t.due_date ?? null, needsReply }),
+      };
+    }),
     ticket_breakdown: ticketBreakdown,
     related_tasks: relatedTaskRows.map((t: any) => ({
       id: t.id,

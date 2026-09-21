@@ -6,6 +6,7 @@ import RoomMessage from '../../models/RoomMessage';
 import { getRoleCharter } from '../agentRoleCharterService';
 import { REESE_BEHAVIOURS } from '../../scripts/lib/reeseBehaviourInventory';
 import type { LastTicketRef } from './reeseBehaviourLastTicket';
+import type { AgentDetailTicket, AgentDetailTicketBreakdown } from './agentDetailTicketTypes';
 import {
   type ReeseBehaviourKey,
   BEHAVIOUR_KEY_BY_NAME,
@@ -89,6 +90,17 @@ export interface AgentDetailResult {
     max_proposals_per_run: number | null;
     autonomy_level_set_at: Date | null;
     autonomy_level_source: 'auto' | 'manual' | null;
+    /** Real-enforcement scoping, Phase 3 (2026-09-20) — the per-agent shadow/enforce
+     * switch Ali asked for. `abac_mode_override` is `null` for the real, untouched
+     * default (every agent until an admin deliberately sets one); `abac_effective_mode`
+     * and `abac_global_default` are computed server-side via the SAME resolution logic
+     * authorizeAgentAction() itself uses, so this page can never drift from what
+     * actually governs this agent's real calls. */
+    abac_mode_override: 'shadow' | 'enforce' | null;
+    abac_mode_override_set_at: Date | null;
+    abac_mode_override_set_by: string | null;
+    abac_effective_mode: 'off' | 'shadow' | 'enforce';
+    abac_global_default: 'off' | 'shadow' | 'enforce';
   };
   identity: {
     admin_user_id: string;
@@ -113,37 +125,10 @@ export interface AgentDetailResult {
    * tickets — never a fabricated age. Read-only/informational: nothing in
    * this codebase uses this to auto-close anything. */
   oldest_open_ticket_age_days: number | null;
-  tickets: Array<{
-    id: string;
-    ticket_number: number | null;
-    title: string;
-    /** Task visibility (2026-08-26) — Ali, live, looking at Reese's real page:
-     * "what triggers them, what they are looking for, why they triggered."
-     * The real narrative already exists at ticket-creation time (e.g. "Signal:
-     * inactivity. Goal: confirm the student is unblocked...") but was never
-     * returned by this endpoint. Never fabricated — whatever the creating code
-     * actually wrote, verbatim. */
-    description: string | null;
-    status: string;
-    priority: string;
-    type: string;
-    created_at: Date | null;
-    updated_at: Date | null;
-  }>;
-  /** Task visibility (2026-08-26) — real tickets grouped by `type`, the one
-   * field every ticket-creating call site already sets meaningfully (see
-   * `ticketService.ts`'s real `source`/`type` conventions). Sub-grouped by
-   * `metadata.signal_type` ONLY when tickets of that type actually carry it
-   * (Reese's autonomous-outreach tickets do; most other types don't) — never
-   * a fabricated sub-group. Answers "which task is creating the most
-   * tickets" without inventing a new task_id column: grounded entirely in
-   * the same unlimited, MAX_TICKETS-independent query capabilities.produced_
-   * ticket_types already runs. */
-  ticket_breakdown: Array<{
-    type: string;
-    count: number;
-    by_signal: Array<{ signal_type: string; count: number }>;
-  }>;
+  /** Types extracted to agentDetailTicketTypes.ts (Dashboard redesign, Slice
+   * 2a) — this file hit the 500-line hard ceiling; pure type split. */
+  tickets: AgentDetailTicket[];
+  ticket_breakdown: AgentDetailTicketBreakdown[];
   /** Task visibility (2026-08-26) — Ali, live: "I need to see what those
    * [tasks] are... what triggers them... I should be able to see that."
    * Reese's real recurring behaviors (autonomous outreach sweep, follow-up
