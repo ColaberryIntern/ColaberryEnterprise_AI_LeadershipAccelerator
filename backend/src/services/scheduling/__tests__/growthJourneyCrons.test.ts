@@ -3,14 +3,21 @@ const m = {
   instrument: jest.fn(),
   nightly: jest.fn(),
   executor: jest.fn(),
+  digest: jest.fn(),
 };
 jest.mock('node-cron', () => ({ __esModule: true, default: { schedule: (...a: unknown[]) => m.schedule(...a) } }));
 jest.mock('../../cronInstrumentation', () => ({ instrumentCronJob: (...a: unknown[]) => m.instrument(...a) }));
 jest.mock('../../growthJourney/runShadowDecisionsNightly', () => ({ runScheduledShadowDecisions: (...a: unknown[]) => m.nightly(...a) }));
 jest.mock('../../growthJourney/execution/runExecutor', () => ({ runExecutor: (...a: unknown[]) => m.executor(...a) }));
+// The sender's constants are the real ones (the cron registers on them); only its runner is a spy.
+jest.mock('../../briefings/handoffDigestSender', () => ({ ...jest.requireActual('../../briefings/handoffDigestSender'), sendHandoffDigests: (...a: unknown[]) => m.digest(...a) }));
+jest.mock('../../../models', () => ({}));
+jest.mock('../../emailService', () => ({}));
+jest.mock('../../executiveBriefingService', () => ({}));
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { HANDOFF_DIGEST_AGENT, HANDOFF_DIGEST_SCHEDULE } from '../../briefings/handoffDigestSender';
 import { registerGrowthJourneyCrons } from '../growthJourneyCrons';
 
 /**
@@ -20,11 +27,15 @@ import { registerGrowthJourneyCrons } from '../growthJourneyCrons';
  * executor cron added beside it. Half the file is source-level, like the
  * scheduler's other cron guards, because importing the scheduler pulls in half
  * the service graph; the other half registers the crons for real against a
- * mocked node-cron and drives each callback once.
+ * mocked node-cron and drives each callback once. T517 added the handoff
+ * digest beside them: the one runner here that sends (staff mail, through
+ * the guarded mailer), registered on the sender's own constants.
  */
 
 const ROOT = path.join(__dirname, '..', '..', '..');
 const read = (rel: string) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+/** The source without its comments - an import-direction guard reads code, and a header may name what it must not import. */
+const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 const crons = read('services/scheduling/growthJourneyCrons.ts');
 const scheduler = read('services/schedulerService.ts');
 const registry = read('services/agentRegistry/growthJourneyAgents.ts');
@@ -32,6 +43,7 @@ const executor = read('services/growthJourney/execution/runExecutor.ts');
 
 const NIGHTLY = { agent: 'GrowthJourneyShadowDecisions', schedule: '20 4 * * *' };
 const EXECUTOR = { agent: 'GrowthJourneyExecutor', schedule: '*/15 14-22 * * 1-5' };
+const DIGEST = { agent: 'GrowthJourneyHandoffDigest', schedule: '30 12 * * 1-5' };
 
 /** The registry entry, from its agent_name to the next entry's. */
 function registryEntry(agent: string): string {
@@ -46,6 +58,7 @@ beforeEach(() => {
   m.instrument.mockImplementation(async (_name: string, body: () => Promise<void>) => body());
   m.nightly.mockResolvedValue({ skipped: true, reason: 'journeyDecisions_off' });
   m.executor.mockResolvedValue({ status: 'skipped', reason: 'journeyExecution_off' });
+  m.digest.mockResolvedValue({ status: 'skipped', reason: 'journeyHandoffs_off' });
 });
 
 describe('the extraction (acceptance 4, 5)', () => {
@@ -84,9 +97,10 @@ describe('the extraction (acceptance 4, 5)', () => {
     expect(crons).toContain('export function registerGrowthJourneyCrons(): void {');
   });
 
-  it('the module holds exactly two crons, both wrapped the house way, and the import direction is scheduler -> journey', () => {
-    expect(crons.split('cron.schedule(').length - 1).toBe(2);
-    expect(crons.split('instrumentCronJob(').length - 1).toBe(2);
+  it('the module holds exactly three crons, each wrapped the house way, and the import direction is scheduler -> journey', () => {
+    expect(crons.split('cron.schedule(').length - 1).toBe(3);
+    expect(crons.split('instrumentCronJob(').length - 1).toBe(3);
+    expect(code(read('services/growthJourney/handoffs/assigneeDigest.ts'))).not.toMatch(/schedulerService|cronInstrumentation|node-cron|scheduling\/|briefings\//);
     expect(executor).not.toMatch(/schedulerService|cronInstrumentation|node-cron|scheduling\//);
     expect(read('services/growthJourney/runShadowDecisionsNightly.ts')).not.toMatch(/schedulerService|cronInstrumentation|node-cron|scheduling\//);
   });
@@ -118,16 +132,35 @@ describe('the executor cron (acceptance 4)', () => {
   });
 });
 
+describe('the digest cron (T517)', () => {
+  it('registers on the sender\'s own constants, which are the values the registry seed carries: a weekday-morning schedule, category outbound, shipped disabled', () => {
+    expect(HANDOFF_DIGEST_AGENT).toBe(DIGEST.agent);
+    expect(HANDOFF_DIGEST_SCHEDULE).toBe(DIGEST.schedule);
+    expect(crons).toContain('  cron.schedule(HANDOFF_DIGEST_SCHEDULE, () => {');
+    expect(crons).toContain('    instrumentCronJob(HANDOFF_DIGEST_AGENT, async () => {');
+    expect(crons).toContain('      await sendHandoffDigests();');
+    expect(crons).toContain("import { HANDOFF_DIGEST_AGENT, HANDOFF_DIGEST_SCHEDULE, sendHandoffDigests } from '../briefings/handoffDigestSender';");
+    const entry = registryEntry(DIGEST.agent);
+    expect(entry).toContain(`schedule: '${DIGEST.schedule}'`);
+    expect(entry).toContain("source_file: 'backend/src/services/briefings/handoffDigestSender.ts'");
+    expect(entry).toContain('enabled: false');
+    expect(entry).toContain("category: 'outbound'");
+    expect(DIGEST.schedule.split(' ')).toEqual(['30', '12', '*', '*', '1-5']);
+  });
+});
+
 describe('registration, for real, against a mocked node-cron', () => {
-  it('registers the two crons on their schedules, in order, and each callback runs its runner once under its agent name', async () => {
+  it('registers the three crons on their schedules, in order, and each callback runs its runner once under its agent name', async () => {
     registerGrowthJourneyCrons();
-    expect(m.schedule.mock.calls.map((c) => c[0])).toEqual([NIGHTLY.schedule, EXECUTOR.schedule]);
+    expect(m.schedule.mock.calls.map((c) => c[0])).toEqual([NIGHTLY.schedule, EXECUTOR.schedule, DIGEST.schedule]);
     for (const [, callback] of m.schedule.mock.calls) (callback as () => void)();
     await new Promise((r) => setImmediate(r));
-    expect(m.instrument.mock.calls.map((c) => c[0])).toEqual([NIGHTLY.agent, EXECUTOR.agent]);
+    expect(m.instrument.mock.calls.map((c) => c[0])).toEqual([NIGHTLY.agent, EXECUTOR.agent, DIGEST.agent]);
     expect(m.nightly).toHaveBeenCalledTimes(1);
     expect(m.executor).toHaveBeenCalledTimes(1);
     expect(m.executor).toHaveBeenCalledWith();
+    expect(m.digest).toHaveBeenCalledTimes(1);
+    expect(m.digest).toHaveBeenCalledWith();
   });
 
   it('a runner that throws is caught at the cron boundary and logged; the process does not fall over', async () => {
@@ -136,7 +169,7 @@ describe('registration, for real, against a mocked node-cron', () => {
     registerGrowthJourneyCrons();
     for (const [, callback] of m.schedule.mock.calls) (callback as () => void)();
     await new Promise((r) => setImmediate(r));
-    expect(error.mock.calls.map((c) => c[0])).toEqual([`[Scheduler] ${NIGHTLY.agent} failed:`, `[Scheduler] ${EXECUTOR.agent} failed:`]);
+    expect(error.mock.calls.map((c) => c[0])).toEqual([`[Scheduler] ${NIGHTLY.agent} failed:`, `[Scheduler] ${EXECUTOR.agent} failed:`, `[Scheduler] ${DIGEST.agent} failed:`]);
     error.mockRestore();
   });
 
@@ -144,6 +177,7 @@ describe('registration, for real, against a mocked node-cron', () => {
     registerGrowthJourneyCrons();
     expect(m.nightly).not.toHaveBeenCalled();
     expect(m.executor).not.toHaveBeenCalled();
+    expect(m.digest).not.toHaveBeenCalled();
     expect(m.instrument).not.toHaveBeenCalled();
   });
 });

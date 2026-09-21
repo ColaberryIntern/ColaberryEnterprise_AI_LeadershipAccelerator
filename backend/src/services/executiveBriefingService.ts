@@ -34,7 +34,8 @@ import { Op, QueryTypes } from 'sequelize';
 // observe an unclaimed slot and both send; the WHERE clause here makes the
 // check and the claim atomic. system_settings.key carries a UNIQUE constraint
 // (system_settings_key_key), so the row-creation INSERT leans on ON CONFLICT.
-async function claimBriefingSlot(slot: string, deliveredTo: string): Promise<boolean> {
+// Exported for the Growth Journey handoff digest (Phase 5 T517), which claims its own slot here.
+export async function claimBriefingSlot(slot: string, deliveredTo: string): Promise<boolean> {
   const { sequelize } = await import('../config/database');
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
   const path = `${slot}|${deliveredTo.trim().toLowerCase()}`;

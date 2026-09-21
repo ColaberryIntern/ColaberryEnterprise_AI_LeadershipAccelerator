@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { HANDOFF_DIGEST_AGENT, HANDOFF_DIGEST_SCHEDULE, sendHandoffDigests } from '../briefings/handoffDigestSender';
 import { instrumentCronJob } from '../cronInstrumentation';
 import { runExecutor } from '../growthJourney/execution/runExecutor';
 import { runScheduledShadowDecisions } from '../growthJourney/runShadowDecisionsNightly';
@@ -15,11 +16,14 @@ import { runScheduledShadowDecisions } from '../growthJourney/runShadowDecisions
  * scanners forbid `schedulerService`, `cronInstrumentation` and `node-cron`
  * inside `services/growthJourney/`).
  *
- * What registers here decides and records (the nightly), and plans, enrols
- * through the one adapter and reconciles (the executor); nothing here sends.
- * Every job is wrapped in `instrumentCronJob`, so a registry row that is
- * `enabled: false` (every Growth Journey row is, shipped) is a logged skip,
- * and each runner itself returns skipped unless its flags are on.
+ * What registers here decides and records (the nightly), plans, enrols
+ * through the one adapter and reconciles (the executor), and mails each human
+ * assignee their open handoffs once a day through the existing guarded mailer
+ * (the digest, T517 - the one job here whose runner sends, and it sends to
+ * staff, never to a lead). Every job is wrapped in `instrumentCronJob`, so a
+ * registry row that is `enabled: false` (every Growth Journey row is,
+ * shipped) is a logged skip, and each runner itself returns skipped unless
+ * its flags are on.
  */
 export function registerGrowthJourneyCrons(): void {
   // Growth Journey OS - the nightly shadow decisions (Phase 4 T408).
@@ -66,6 +70,27 @@ export function registerGrowthJourneyCrons(): void {
       await runExecutor();
     }).catch((err) => {
       console.error('[Scheduler] GrowthJourneyExecutor failed:', err);
+    });
+  });
+
+  // Growth Journey OS - the handoff digest (Phase 5 T517, 5A).
+  //
+  // 12:30 UTC, Monday to Friday - 7:30 AM Central in summer, before the desk
+  // day starts. One mail per human assignee with something open, once per
+  // mailbox per Central date (the briefing's slot claim), through the guarded
+  // mailer (the kill switch, the dev sink). It is mail to STAFF about their
+  // queue; it never reaches a lead, and carries no lead name, address or
+  // message. The schedule and agent name are the sender's exports and the
+  // registry seed carries them; the guard test pins all three together.
+  //
+  // SHIPPED PAUSED, three times over, like the other two: the registry row is
+  // enabled:false, and sendHandoffDigests returns skipped unless the master
+  // flag and GROWTH_JOURNEY_HANDOFFS_ENABLED are both on.
+  cron.schedule(HANDOFF_DIGEST_SCHEDULE, () => {
+    instrumentCronJob(HANDOFF_DIGEST_AGENT, async () => {
+      await sendHandoffDigests();
+    }).catch((err) => {
+      console.error(`[Scheduler] ${HANDOFF_DIGEST_AGENT} failed:`, err);
     });
   });
 }

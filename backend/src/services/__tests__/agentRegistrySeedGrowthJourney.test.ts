@@ -40,8 +40,17 @@ const names = () => mockFindOrCreate.mock.calls.map((c) => c[0]?.where?.agent_na
 const defaultsFor = (agentName: string) => mockFindOrCreate.mock.calls.find((c) => c[0]?.where?.agent_name === agentName)?.[0].defaults;
 
 describe('the module', () => {
-  it('holds exactly the two scheduled journey agents, in order: the moved Phase 4 row, then the executor', () => {
-    expect(GROWTH_JOURNEY_AGENT_ENTRIES.map((e) => e.agent_name)).toEqual(['GrowthJourneyShadowDecisions', EXECUTOR_AGENT_NAME]);
+  it('holds exactly the three scheduled journey agents, in order: the moved Phase 4 row, the executor, then the handoff digest (T517)', () => {
+    expect(GROWTH_JOURNEY_AGENT_ENTRIES.map((e) => e.agent_name)).toEqual(['GrowthJourneyShadowDecisions', EXECUTOR_AGENT_NAME, 'GrowthJourneyHandoffDigest']);
+  });
+
+  it('the digest (T517): a cron on the sender\'s schedule, category outbound (it mails staff), shipped disabled', () => {
+    expect(GROWTH_JOURNEY_AGENT_ENTRIES[2]).toMatchObject({
+      agent_name: 'GrowthJourneyHandoffDigest', agent_type: 'scheduled_processor', module: 'growthJourney', trigger_type: 'cron',
+      source_file: 'backend/src/services/briefings/handoffDigestSender.ts', schedule: '30 12 * * 1-5', category: 'outbound', enabled: false,
+    });
+    expect(OUTBOUND_AGENT_CATEGORIES).toContain(GROWTH_JOURNEY_AGENT_ENTRIES[2].category);
+    expect(GROWTH_JOURNEY_AGENT_ENTRIES[2].description).toMatch(/SHIPPED DISABLED/);
   });
 
   it('the moved entry is Phase 4\'s row, field for field', () => {
@@ -67,16 +76,19 @@ describe('the module', () => {
 });
 
 describe('the seed', () => {
-  it('acceptance 7: registers both journey rows through findOrCreate with enabled:false, at the same position - the executor beside the shadow row, both before GrowthJourneyHandoffs', async () => {
+  it('acceptance 7: registers the three journey rows through findOrCreate with enabled:false, at the same position - the executor and the digest beside the shadow row, all before GrowthJourneyHandoffs', async () => {
     await seedAgentRegistry();
     const order = names();
     const shadow = order.indexOf('GrowthJourneyShadowDecisions');
     expect(shadow).toBeGreaterThan(0);
     expect(order[shadow + 1]).toBe(EXECUTOR_AGENT_NAME);
-    expect(order[shadow + 2]).toBe('GrowthJourneyHandoffs');
+    expect(order[shadow + 2]).toBe('GrowthJourneyHandoffDigest');
+    expect(order[shadow + 3]).toBe('GrowthJourneyHandoffs');
     expect(order.filter((n) => n === EXECUTOR_AGENT_NAME)).toHaveLength(1);
-    for (const n of ['GrowthJourneyShadowDecisions', EXECUTOR_AGENT_NAME]) expect([n, defaultsFor(n).enabled]).toEqual([n, false]);
+    expect(order.filter((n) => n === 'GrowthJourneyHandoffDigest')).toHaveLength(1);
+    for (const n of ['GrowthJourneyShadowDecisions', EXECUTOR_AGENT_NAME, 'GrowthJourneyHandoffDigest']) expect([n, defaultsFor(n).enabled]).toEqual([n, false]);
     expect(defaultsFor(EXECUTOR_AGENT_NAME).category).toBe('outbound');
+    expect(defaultsFor('GrowthJourneyHandoffDigest').category).toBe('outbound');
   });
 
   it('idempotent: a second boot finds the executor row and never re-creates it, and an existing row\'s enabled flag is not in the update patch', async () => {
