@@ -103,8 +103,12 @@ function AdminLayout() {
       )
     : null;
 
-  // Intelligence OS page gets full-screen treatment (no sidebar, no padding)
-  const isImmersive = location.pathname === '/admin/intelligence';
+  // Intelligence OS page gets full-screen treatment (no sidebar, no padding).
+  // Agent Detail redesign, Track A0 (2026-09-21) — Reese's (and every other
+  // agent's) own page gets the same treatment: it renders its own
+  // contextual sidebar (AgentDetailLayout.tsx) instead of this one. Additive
+  // (`||`) — /admin/intelligence keeps matching exactly as before.
+  const isImmersive = location.pathname === '/admin/intelligence' || location.pathname.startsWith('/admin/agents/');
 
   return (
     <div className="d-flex min-vh-100">
