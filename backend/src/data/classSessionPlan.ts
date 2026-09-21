@@ -1344,7 +1344,7 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
         'Quality gates: an eval threshold that blocks bad AI output',
       ],
       realExample: 'A retry loop with no cap and a non-idempotent write — how one blip becomes duplicate charges.',
-      microBuild: 'Add a timeout and capped retry to one external call.',
+      microBuild: 'Build the order desk and its vendor from an empty folder — reliability-lab/ inside your repo — then add a timeout and a capped retry to the vendor call.',
       designChoice: {
         kind: 'poll',
         q: 'A webhook can fire twice. How do you stay correct?',
@@ -1361,11 +1361,15 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
       thursdayTrailer: 'Thursday we break the system on purpose — and make it recover.',
     },
     thursday: {
-      resultPreview: 'A reliability layer (timeouts + retries + breaker + fallback), idempotency proven, and a quality gate blocking a bad output on camera.',
-      readinessCheck: 'Your Intensive 1–3 system in the repo, ready to wrap.',
-      buildMap: ['CP0: baseline system', 'CP1: timeouts + retries + breaker', 'CP2: idempotency proven', 'CP3: quality gate blocks bad output'],
+      resultPreview: 'The order desk survives a vendor that hangs, fails or sends nonsense: breaker + fallback + dead-letter replay, idempotency proven by a test, a quality gate refusing a wrong message, and a receipt with a correlation id.',
+      // Week 9 is built from scratch (2026-09-21): nothing from earlier weeks
+      // is needed, and everything lives in reliability-lab/ inside the
+      // student's repo. The readiness slide is generated from this line and is
+      // not overridable per session, so the source text has to say so.
+      readinessCheck: 'A laptop, Claude Code open inside your project repository, and either Monday’s reliability-lab/ folder or nothing at all. Nothing from earlier weeks is needed.',
+      buildMap: ['CP0: the desk, the vendor, the timeout and the retry — verified or built by one prompt', 'CP1: breaker + fallback + dead-letter replay', 'CP2: idempotency proven by a test', 'CP3: quality gate + receipt'],
       checkpoints: [
-        { n: 0, label: 'Baseline', detail: 'The system runs on the happy path.' },
+        { n: 0, label: 'Baseline', detail: 'The order desk, its vendor, the timeout and the capped retry — verified in a minute or built in four.' },
         { n: 1, label: 'Resilient', detail: 'Timeouts + capped retries + circuit breaker + fallback added.' },
         { n: 2, label: 'Idempotent', detail: 'Same operation run twice yields one end state.' },
         { n: 3, label: 'Gated', detail: 'An eval threshold blocks a deliberately bad output.' },
@@ -1387,8 +1391,8 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
     },
     assignment: {
       title: 'Reliability + quality layer',
-      deliverables: ['Reliability module (timeouts/retries/breaker/DLQ) + eval gate + tests'],
-      proof: 'A demo of a forced failure being handled and retried to one clean state.',
+      deliverables: ['reliability-lab/ in your repo: breaker + fallback + dead-letter replay, an idempotency test, a quality gate, a receipt with a correlation id, and RELIABILITY.md answering the four questions'],
+      proof: 'A recording of the chaos run — the unprotected copy failing, the real desk holding to one clean end state — committed inside reliability-lab/.',
     },
     builderBroadcastFocus: 'a system that survives failure and refuses to duplicate work',
   },
