@@ -35,7 +35,7 @@ export default function AgentOverviewV2({ detail, inboxItems, inboxLoading, onNa
         <AgentOverviewV2NeedsAli inboxItems={inboxItems} inboxLoading={inboxLoading} onNavigate={onNavigate} />
       </div>
       <div className="adv2-wrap adv2-grid">
-        <AgentOverviewV2MainColumn detail={detail} />
+        <AgentOverviewV2MainColumn detail={detail} onNavigate={onNavigate} />
         <AgentOverviewV2Sidebar detail={detail} agentId={detail.agent.id} agentDisplayName={agentDisplayName} />
       </div>
     </>

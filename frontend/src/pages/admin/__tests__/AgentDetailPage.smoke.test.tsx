@@ -98,6 +98,11 @@ jest.mock('../../../services/agentMemoryProposalApi', () => ({ listMemoryProposa
 jest.mock('../../../services/agentRoleCharterApi', () => ({
   getAgentRoleCharter: jest.fn().mockResolvedValue({ agentId: 'agent-reese', charter: null }),
 }));
+// "Work, explained" (Overview tab) — same convention as agentRoleCharterApi above: every
+// describe block's own beforeEach re-applies this explicitly.
+jest.mock('../../../services/agentExplainabilityApi', () => ({ getAgentExplainability: jest.fn() }));
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { getAgentExplainability } = require('../../../services/agentExplainabilityApi') as { getAgentExplainability: jest.Mock };
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getManagerInboxItems } = require('../../../services/managerInboxApi') as { getManagerInboxItems: jest.Mock };
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -265,6 +270,7 @@ describe('AgentDetailPage — Ticket activity table: colored status badges + CST
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
     getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
+    getAgentExplainability.mockResolvedValue({ agentId: 'agent-reese', agentName: 'Reese', events: [], proposedActions: [] });
     getAgentDetail.mockResolvedValue(DETAIL);
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -333,6 +339,7 @@ describe('AgentDetailPage — "last activity" indicator on the ticket-activity t
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
     getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
+    getAgentExplainability.mockResolvedValue({ agentId: 'agent-reese', agentName: 'Reese', events: [], proposedActions: [] });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -379,6 +386,7 @@ describe('AgentDetailPage — "what this agent reads / produces" section', () =>
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
     getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
+    getAgentExplainability.mockResolvedValue({ agentId: 'agent-reese', agentName: 'Reese', events: [], proposedActions: [] });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -442,6 +450,7 @@ describe('AgentDetailPage — title prefers identity.display_name over raw agent
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
     getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
+    getAgentExplainability.mockResolvedValue({ agentId: 'agent-reese', agentName: 'Reese', events: [], proposedActions: [] });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -488,6 +497,7 @@ describe('AgentDetailPage — "Reports to" section', () => {
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
     getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
+    getAgentExplainability.mockResolvedValue({ agentId: 'agent-reese', agentName: 'Reese', events: [], proposedActions: [] });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -599,6 +609,7 @@ describe('AgentDetailPage — "Tools & capabilities" per-tool drill-down', () =>
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
     getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
+    getAgentExplainability.mockResolvedValue({ agentId: 'agent-reese', agentName: 'Reese', events: [], proposedActions: [] });
     getAgentDetail.mockResolvedValue(DETAIL);
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -694,6 +705,7 @@ describe('AgentDetailPage — "Performance & Settings" consolidation', () => {
     listOneOnOnes.mockResolvedValue([]);
     listMemoryProposals.mockResolvedValue([]);
     getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
+    getAgentExplainability.mockResolvedValue({ agentId: 'agent-reese', agentName: 'Reese', events: [], proposedActions: [] });
     getAgentDetail.mockResolvedValue(DETAIL);
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -788,6 +800,7 @@ describe('AgentDetailPage — "Scheduled tasks" section', () => {
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
     getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
+    getAgentExplainability.mockResolvedValue({ agentId: 'agent-reese', agentName: 'Reese', events: [], proposedActions: [] });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -895,6 +908,7 @@ describe('AgentDetailPage — "Ticket activity" table: Why column and ticket_bre
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
     getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
+    getAgentExplainability.mockResolvedValue({ agentId: 'agent-reese', agentName: 'Reese', events: [], proposedActions: [] });
     getAgentDetail.mockResolvedValue(DETAIL);
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -962,6 +976,7 @@ describe('AgentDetailPage — "Trust evidence" section', () => {
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
     getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
+    getAgentExplainability.mockResolvedValue({ agentId: 'agent-reese', agentName: 'Reese', events: [], proposedActions: [] });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -1062,6 +1077,7 @@ describe('AgentDetailPage — "Deactivate" action', () => {
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
     getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
+    getAgentExplainability.mockResolvedValue({ agentId: 'agent-reese', agentName: 'Reese', events: [], proposedActions: [] });
     getAgentDetail.mockResolvedValue(DETAIL);
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -1143,6 +1159,7 @@ describe('AgentDetailPage — reactivation flow (deactivated agent)', () => {
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
     getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
+    getAgentExplainability.mockResolvedValue({ agentId: 'agent-reese', agentName: 'Reese', events: [], proposedActions: [] });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -1362,6 +1379,7 @@ describe('AgentDetailPage — "Trust Contract" section', () => {
     listGoals.mockResolvedValue([]);
     listOneOnOnes.mockResolvedValue([]);
     getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
+    getAgentExplainability.mockResolvedValue({ agentId: 'agent-reese', agentName: 'Reese', events: [], proposedActions: [] });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);

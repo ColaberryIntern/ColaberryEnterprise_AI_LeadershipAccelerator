@@ -33,6 +33,7 @@ jest.mock('../../../services/agentReportSubscriptionApi', () => ({ listReportSub
 jest.mock('../../../services/agentGoalApi', () => ({ listGoals: jest.fn() }));
 jest.mock('../../../services/agentOneOnOneApi', () => ({ listOneOnOnes: jest.fn() }));
 jest.mock('../../../services/agentRoleCharterApi', () => ({ getAgentRoleCharter: jest.fn(), saveAgentRoleCharter: jest.fn() }));
+jest.mock('../../../services/agentExplainabilityApi', () => ({ getAgentExplainability: jest.fn() }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getAgentDetail, setReeseBehaviourSwitch } = require('../../../services/agentDetailApi') as { getAgentDetail: jest.Mock; setReeseBehaviourSwitch: jest.Mock };
@@ -48,6 +49,8 @@ const { listGoals } = require('../../../services/agentGoalApi') as { listGoals: 
 const { listOneOnOnes } = require('../../../services/agentOneOnOneApi') as { listOneOnOnes: jest.Mock };
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getAgentRoleCharter } = require('../../../services/agentRoleCharterApi') as { getAgentRoleCharter: jest.Mock };
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { getAgentExplainability } = require('../../../services/agentExplainabilityApi') as { getAgentExplainability: jest.Mock };
 
 const DETAIL: AgentDetail = {
   agent: {
@@ -117,6 +120,7 @@ beforeEach(() => {
   listGoals.mockResolvedValue([]);
   listOneOnOnes.mockResolvedValue([]);
   getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-cory', charter: null });
+  getAgentExplainability.mockResolvedValue({ agentId: 'agent-cory', agentName: 'corybrain', events: [], proposedActions: [] });
   getAgentDetail.mockResolvedValue(DETAIL);
   getManagerInboxItems.mockResolvedValue([]);
   container = document.createElement('div');
