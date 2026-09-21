@@ -4,7 +4,8 @@ import { getAgentDetail, AgentDetail } from '../../services/agentDetailApi';
 import { getManagerInboxItems, ManagerInboxItem } from '../../services/managerInboxApi';
 import { resetAgents, reactivateAgent, AutonomyLevel } from '../../services/workforceOrgChartApi';
 import '../../styles/agentDetailV2.css';
-import AgentDetailV2Header, { TabKey } from '../../components/admin/agentDetailV2/AgentDetailV2Header';
+import { TabKey } from '../../components/admin/agentDetailV2/AgentDetailV2Header';
+import AgentDetailLayout from '../../components/admin/agentDetailV2/AgentDetailLayout';
 import AgentOverviewV2 from '../../components/admin/agentDetailV2/AgentOverviewV2';
 import AgentAtAGlanceTab from '../../components/admin/AgentAtAGlanceTab';
 import AgentLiveStatusTab from '../../components/admin/AgentLiveStatusTab';
@@ -294,25 +295,23 @@ export default function AgentDetailPage() {
   const displayName = identity?.display_name || agent.agent_name;
 
   return (
-    <div className="adv2-page">
-      <AgentDetailV2Header
-        detail={detail}
-        displayName={displayName}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        onDeactivate={handleDeactivate}
-        onTalk={() => setActiveTab('talk')}
-        resetting={resetting}
-        resetMessage={resetMessage}
-        refreshing={loading}
-        onRefresh={fetchDetail}
-        reactivating={reactivating}
-        reactivationMessage={reactivationMessage}
-        selectedAutonomyLevel={selectedAutonomyLevel}
-        onSelectAutonomyLevel={setSelectedAutonomyLevel}
-        onReactivate={handleReactivate}
-      />
-
+    <AgentDetailLayout
+      detail={detail}
+      displayName={displayName}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      onDeactivate={handleDeactivate}
+      onTalk={() => setActiveTab('talk')}
+      resetting={resetting}
+      resetMessage={resetMessage}
+      refreshing={loading}
+      onRefresh={fetchDetail}
+      reactivating={reactivating}
+      reactivationMessage={reactivationMessage}
+      selectedAutonomyLevel={selectedAutonomyLevel}
+      onSelectAutonomyLevel={setSelectedAutonomyLevel}
+      onReactivate={handleReactivate}
+    >
       {activeTab === 'glance' && (
         <div className="adv2-wrap">
           <AgentAtAGlanceTab agentId={id} detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} onNavigate={setActiveTab} />
@@ -340,6 +339,6 @@ export default function AgentDetailPage() {
       {activeTab === 'performance_settings' && (
         <div className="adv2-wrap"><AgentPerformanceSettingsTab agentId={id} detail={detail} /></div>
       )}
-    </div>
+    </AgentDetailLayout>
   );
 }
