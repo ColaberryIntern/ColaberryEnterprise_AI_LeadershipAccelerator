@@ -3,6 +3,7 @@ import participantRoutes from './participantRoutes';
 import capePortalRoutes from './capePortalRoutes';
 import careerPortfolioRoutes from './careerPortfolioRoutes';
 import explorerSignalRoutes from './explorerSignalRoutes';
+import journeyNudgeRoutes from './journeyNudgeRoutes';
 import consentPromptRoutes from './consentPromptRoutes';
 
 /**
@@ -28,6 +29,9 @@ export function mountLearnerPortalRoutes(app: Express): void {
   // Explorer Growth OS learner signal ingest (EPIC 2). Dark until
   // EXPLORER_SIGNAL_INGEST_ENABLED + the master flag are both on.
   app.use(explorerSignalRoutes);
+  // Growth Journey OS in-app nudges (Phase 5 T514): the learner's own live nudges, participant-authed. With no
+  // rows it answers [] and the dashboard renders nothing.
+  app.use(journeyNudgeRoutes);
   // In-app consent prompt (participant-authed). A PROMPT, not a gate: the portal
   // stays fully usable whether a learner accepts, declines or ignores it.
   app.use(consentPromptRoutes);
