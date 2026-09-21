@@ -205,7 +205,8 @@ describe('growth_journey_handoffs', () => {
 
     it('the queue reads: (tenant_id, brand_id, status), (subject_ref, brand_id), and the partial open-queue index', () => {
       const all = indexStatementsOn('growth_journey_handoffs').map(ws);
-      expect(all).toHaveLength(5);
+      // 5 of T401's, + T501's per-person unique (pinned in ensureGrowthJourneySchema.phase5.test.ts).
+      expect(all).toHaveLength(6);
       expect(all).toEqual(
         expect.arrayContaining([
           'CREATE INDEX IF NOT EXISTS idx_gj_handoffs_tenant_brand_status ON growth_journey_handoffs (tenant_id, brand_id, status)',
@@ -351,8 +352,9 @@ describe('where the four sit, and what they never do', () => {
     expect(GROWTH_JOURNEY_PHASE4_STATEMENTS).toHaveLength(15);
     expect(GROWTH_JOURNEY_PHASE4_STATEMENTS.every((s) => GROWTH_JOURNEY_STATEMENTS.includes(s))).toBe(true);
     const tables = tablesCreated();
-    expect(tables).toHaveLength(15);
-    expect(tables.slice(-4)).toEqual(['growth_journey_handoffs', 'growth_journey_outcomes', 'growth_journey_policies', 'growth_journey_conversation_ownership']);
+    // T503 appended three Phase 5 tables AFTER these four, so the Phase 4 four are sliced by position, not from the end.
+    expect(tables).toHaveLength(18);
+    expect(tables.slice(11, 15)).toEqual(['growth_journey_handoffs', 'growth_journey_outcomes', 'growth_journey_policies', 'growth_journey_conversation_ownership']);
     const alterAt = GROWTH_JOURNEY_STATEMENTS.findIndex((s) => /ALTER\s+TABLE\s+brands/i.test(s));
     expect(alterAt).toBe(GROWTH_JOURNEY_STATEMENTS.length - 1);
     for (const table of ['growth_journey_handoffs', 'growth_journey_outcomes', 'growth_journey_policies', 'growth_journey_conversation_ownership']) {
@@ -362,10 +364,10 @@ describe('where the four sit, and what they never do', () => {
     }
   });
 
-  it('every Phase 4 statement is IF NOT EXISTS and none is destructive', () => {
+  it('every statement naming a Phase 4 table - T401/T402\'s, and T501\'s index on handoffs - is IF NOT EXISTS and none is destructive', () => {
     const mine = GROWTH_JOURNEY_STATEMENTS.filter((s) => /growth_journey_(handoffs|outcomes|policies|conversation_ownership)\b/i.test(s));
-    // 4 tables + 5 + 3 + 1 + 2 indexes.
-    expect(mine).toHaveLength(15);
+    // 4 tables + 5 + 3 + 1 + 2 indexes, + 1: T501's per-person index names growth_journey_handoffs too.
+    expect(mine).toHaveLength(16);
     for (const s of mine) {
       expect(s).toMatch(/IF NOT EXISTS/i);
       expect(s).not.toMatch(/\bDROP\b|\bTRUNCATE\b|DELETE FROM|ALTER COLUMN|\bRENAME\b/i);

@@ -176,6 +176,7 @@ describe('the exit fixture: a DISCOVERY_READY Business subject', () => {
     expect(a.status === 'materialized' && a.handoffs[0].replayed).toBe(false);
     expect(b.status === 'materialized' && b.handoffs[0].replayed).toBe(true);
     expect(events('growth_journey.handoff.created')).toHaveLength(1);
+    expect(events('growth_journey.handoff.trigger_appended')).toHaveLength(0); // T501: an exact replay records nothing new
   });
 
   it('T414: ranked_pass mode creates the row and offers it to NOTHING - no gate is asked, no ticket is written; the caller\'s pass assigns in rank order', async () => {

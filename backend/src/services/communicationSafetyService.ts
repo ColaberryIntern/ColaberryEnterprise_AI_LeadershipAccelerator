@@ -12,6 +12,8 @@ import { getTestOverrides, getSetting } from './settingsService';
 import { assertConsentForSend } from './consentService';
 import { checkBrandPreference } from '../modules/communications/brandPreferenceGate';
 import { isSuppressedForChannel, type SuppressibleChannel } from './channelSuppression';
+// Phase 5 T511: the journey's campaign registry - a module with no imports, an in-memory lookup.
+import { isRegisteredJourneyCampaignKey } from './growthJourney/execution/campaignKeys';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -154,12 +156,13 @@ export async function checkLeadSendable(
  */
 export async function checkCampaignSendable(
   campaignId?: string | null,
-): Promise<{ sendable: boolean; reason?: string }> {
+): Promise<{ sendable: boolean; reason?: string; campaignKey?: string | null }> {
   if (!campaignId) return { sendable: true };
 
   try {
+    // Phase 5 T511: `settings` rides this read so step 3.7 can see the campaign's key without a second query.
     const campaign = await Campaign.findByPk(campaignId, {
-      attributes: ['id', 'status'],
+      attributes: ['id', 'status', 'settings'],
     });
 
     if (!campaign) {
@@ -170,7 +173,8 @@ export async function checkCampaignSendable(
       return { sendable: false, reason: `campaign_${campaign.status}` };
     }
 
-    return { sendable: true };
+    const key = (campaign.settings as Record<string, unknown> | null | undefined)?.campaign_key;
+    return { sendable: true, campaignKey: typeof key === 'string' ? key : null };
   } catch (err: any) {
     console.error('[CommunicationSafety] Campaign sendable check failed:', err.message);
     return { sendable: false, reason: 'campaign_check_failed' };
@@ -380,6 +384,18 @@ export async function evaluateSend(req: SendRequest): Promise<SendDecision> {
         blockedReason: `brand_${brandPref.reason}`,
         deliveryMode: 'blocked',
       };
+    }
+  }
+
+  // 3.7 The Growth Journey's send-time hold (Phase 5 T511). For every campaign in production today this
+  // is an in-memory registry check and nothing else - no query, no require of the journey tree, no change
+  // to the decision. A REGISTERED key reaches the hold: the lead's open receipt, then the same flags, kill
+  // switch and pauses the executor asks, so a pause set after enrolment stops step 3, not only step 0.
+  if (req.campaignId && isRegisteredJourneyCampaignKey(campaignCheck.campaignKey)) {
+    const { checkJourneyHold } = require('./growthJourney/execution/sendHold') as typeof import('./growthJourney/execution/sendHold'); // eslint-disable-line @typescript-eslint/no-var-requires
+    const hold = await checkJourneyHold({ leadId: req.leadId, campaignId: req.campaignId, campaignKey: campaignCheck.campaignKey });
+    if (hold.held) {
+      return { allowed: false, redirect: null, testMode: false, blockedReason: hold.reason, deliveryMode: 'blocked' };
     }
   }
 

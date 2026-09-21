@@ -14,6 +14,7 @@ import { resolveExplorerReplyRouting } from '../services/explorerGrowth/explorer
 import { recordReplyClassification } from '../services/growthJourney/replyClassificationHook';
 import { recordReplyHandoff } from '../services/growthJourney/replyHandoffHook';
 import { redactForLogs } from '../utils/piiRedaction';
+import { sendInboundAutoReply } from '../services/inbound/inboundAutoReply';
 
 /** Map Mandrill event types to our outcome types */
 function mapMandrillEvent(eventType: string): OutcomeType | null {
@@ -512,82 +513,7 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
           processed++;
           continue;
         }
-        // Don't auto-reply to Ali personal outreach — Ali handles those personally
-        const isAliOutreach = await CommunicationLog.findOne({
-          where: { lead_id: lead.id, metadata: { trigger: 'ali_personal_outreach' } } as any,
-        });
-        if (!isAliOutreach) {
-          const { generateMessage, buildConversationHistory } = require('../services/aiMessageService');
-          const nodemailer = require('nodemailer');
-
-          const conversationHistory = await buildConversationHistory(lead.id);
-          const campaignRecord = campaignId ? await (require('../models').Campaign.findByPk(campaignId)) : null;
-          const senderName = campaignRecord?.settings?.sender_name || 'Dhee - Colaberry Enterprise AI';
-          const senderEmail = campaignRecord?.settings?.sender_email || env.emailFrom;
-          const replyDomain = env.mandrillInboundDomain || 'reply.colaberry.com';
-          const replyToAddr = senderEmail.replace(/@[^@]+$/, '@' + replyDomain);
-
-          const result = await generateMessage({
-            channel: 'email',
-            ai_instructions: [
-              'You are responding to an inbound email reply from a lead.',
-              'The lead said: "' + body.substring(0, 500) + '"',
-              'Respond helpfully and specifically to what they asked or said.',
-              // The instruction here used to read "mention the upcoming April 14
-              // cohort". It shipped in spring and was still telling leads in
-              // September about an "upcoming" cohort five months past — a
-              // hardcoded fact in a prompt outlives the fact itself, and nothing
-              // in the reply looks wrong, so nobody notices.
-              //
-              // NO DATE, PRICE OR SEAT COUNT MAY BE STATED HERE. This path sends
-              // via nodemailer WITHOUT passing through messageValidatorService,
-              // so nothing downstream checks what the model asserts. Until it
-              // does, the only safe instruction is to name no such fact at all.
-              'If they asked about pricing, suggest a strategy call to talk it through. Do NOT state a price, a cohort date, a start date, a deadline or a seat count — you do not have current figures, and a stale one is worse than none.',
-              'If they expressed interest, acknowledge it warmly and offer to schedule a call.',
-              'If they asked a question, answer it directly.',
-              'Keep it concise (3-5 sentences). Be warm, professional, and helpful.',
-              'Sign off as ' + senderName.split(' - ')[0] + '.',
-            ].join('\n'),
-            tone: 'warm',
-            lead: { name: (lead as any).name, email: (lead as any).email, company: (lead as any).company, title: (lead as any).title } as any,
-            conversationHistory,
-          });
-
-          if (result.body) {
-            const replySubject = subject.startsWith('Re:') ? subject : 'Re: ' + subject;
-            const mailer = nodemailer.createTransport({
-              host: 'smtp.mandrillapp.com', port: 587, secure: false,
-              auth: { user: 'apikey', pass: env.mandrillApiKey },
-            });
-            await mailer.sendMail({
-              from: `"${senderName}" <${senderEmail}>`,
-              replyTo: `"${senderName}" <${replyToAddr}>`,
-              to: fromEmail,
-              subject: replySubject,
-              html: result.body,
-            });
-
-            await logCommunication({
-              lead_id: lead.id,
-              campaign_id: campaignId,
-              channel: 'email',
-              direction: 'outbound',
-              delivery_mode: 'live',
-              status: 'sent',
-              to_address: fromEmail,
-              from_address: senderEmail,
-              subject: replySubject,
-              body: result.body,
-              provider: 'mandrill',
-              metadata: { auto_reply: true, in_reply_to: inReplyTo || null },
-            }).catch(() => {});
-
-            console.log(`[MandrillInbound] Auto-replied to ${redactForLogs((lead as any).name)} (${redactForLogs(fromEmail)})`);
-          }
-        } else {
-          console.log(`[MandrillInbound] Skipping auto-reply — Ali personal outreach (Ali handles personally)`);
-        }
+        await sendInboundAutoReply({ lead, campaignId, body, subject, fromEmail, inReplyTo });
       } catch (replyErr: any) {
         console.warn(`[MandrillInbound] Auto-reply failed for lead ${lead.id}: ${replyErr.message}`);
       }

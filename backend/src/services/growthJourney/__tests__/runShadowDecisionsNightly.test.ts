@@ -13,7 +13,9 @@ jest.mock('../outcomes/nightlyOutcomesPass', () => ({ runOutcomesPass: (...a: un
 const redactForLogs = jest.fn((s: string) => jest.requireActual('../../../utils/piiRedaction').redactForLogs(s));
 jest.mock('../../../utils/piiRedaction', () => ({ redactForLogs: (s: string) => redactForLogs(s) }));
 // The process flags: everything off, the way production is. Every test that wants the job to run hands in its own.
-jest.mock('../../../config/env', () => ({ env: { growthJourney: { growthJourneyEnabled: false, journeySignalIngest: false, journeyClassification: false, journeyDecisions: false, journeyHandoffs: false, journeyExecution: false } } }));
+// T507: the Explorer family rides beside it - the process's own, frozen, handed to every batch for the execution-mode stamp.
+const PROCESS_EXPLORER_FLAGS = Object.freeze({ growthOsEnabled: false, signalIngestEnabled: false, journeyIntelligenceEnabled: false, journeyGovernorEnabled: false, commercialEnabled: false, aliOutreachEnabled: false, smsEnabled: false, autoDialEnabled: false, inAppNudgeEnabled: false, aiRankingEnabled: false });
+jest.mock('../../../config/env', () => ({ env: { growthJourney: { growthJourneyEnabled: false, journeySignalIngest: false, journeyClassification: false, journeyDecisions: false, journeyHandoffs: false, journeyExecution: false }, explorerGrowth: PROCESS_EXPLORER_FLAGS } }));
 
 import type { GrowthJourneyFlags } from '../../../config/growthJourneyFlags';
 import { runScheduledShadowDecisions, SHADOW_DECISIONS_AGENT, SHADOW_DECISIONS_SCHEDULE } from '../runShadowDecisionsNightly';
@@ -78,11 +80,20 @@ describe('with the capability on', () => {
     const r = await runScheduledShadowDecisions({ flags: flags(), asOf: AS_OF, limit: 50 });
     expect(m.programFindAll).toHaveBeenCalledWith({ where: { status: ['draft', 'active', 'paused'] }, attributes: ['id', 'brand_id', 'slug', 'status'], order: [['slug', 'ASC']] });
     expect(m.runShadowDecisions).toHaveBeenCalledTimes(4);
-    for (const p of PROGRAMS) expect(m.runShadowDecisions).toHaveBeenCalledWith({ brandId: p.brand_id, trigger: 'nightly', flags: flags(), asOf: AS_OF, limit: 50 });
+    for (const p of PROGRAMS) expect(m.runShadowDecisions).toHaveBeenCalledWith({ brandId: p.brand_id, trigger: 'nightly', flags: flags(), explorerFlags: PROCESS_EXPLORER_FLAGS, asOf: AS_OF, limit: 50 });
+    // The pin above would pass with `explorerFlags: undefined` too; this one cannot.
+    for (const call of m.runShadowDecisions.mock.calls) expect((call[0] as { explorerFlags: unknown }).explorerFlags).toBe(PROCESS_EXPLORER_FLAGS);
     if (r.skipped) throw new Error('skipped');
     expect(r).toMatchObject({ skipped: false, as_of: AS_OF.toISOString(), brands: 4, ran: 4, failed: 0, subjects: 12, recorded: 8, replayed: 4, skipped_subjects: 4, errors: 0 });
     expect(r.per_brand.map((b) => [b.brand_id, b.program_status, b.status])).toEqual([['b-cpn', 'draft', 'ran'], ['b-training', 'draft', 'ran'], ['b-ent', 'draft', 'ran'], ['b-flotation', 'active', 'ran']]);
     expect(r.per_brand[0]).toMatchObject({ program_slug: 'cpn-scholars', subjects: 3, recorded: 2, replayed: 1, skipped: 1, errors: 0, handoffs: { disabled: 2 }, assignment: null });
+  });
+
+  it('T507: Explorer flags handed in are the ones every batch gets, in place of the process flags', async () => {
+    const mine = { ...PROCESS_EXPLORER_FLAGS, growthOsEnabled: true, inAppNudgeEnabled: true };
+    await runScheduledShadowDecisions({ flags: flags(), explorerFlags: mine as never, asOf: AS_OF });
+    expect(m.runShadowDecisions).toHaveBeenCalledTimes(4);
+    for (const call of m.runShadowDecisions.mock.calls) expect((call[0] as { explorerFlags: unknown }).explorerFlags).toBe(mine);
   });
 
   it('a failure in one brand does not stop the others: the brand is recorded as failed with its error class, the run continues, nothing throws', async () => {

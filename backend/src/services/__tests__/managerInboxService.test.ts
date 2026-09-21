@@ -128,9 +128,30 @@ describe('approveManagerInboxItem — agent-scoped approval (Checkpoint B)', () 
 
     const result = await approveManagerInboxItem('agent-1', 'p1', 'ali@colaberry.com', 'ok');
 
-    expect(mockApproveProposedAction).toHaveBeenCalledWith('p1', 'ali@colaberry.com', 'ok');
+    // T509: the caller's identity rides through as the fourth argument (undefined when none was handed in).
+    expect(mockApproveProposedAction).toHaveBeenCalledWith('p1', 'ali@colaberry.com', 'ok', undefined);
     expect(result.outcome).toBe('approved');
     expect(result.applied).toBe(true);
+  });
+});
+
+describe('T509: the growth-journey branch through the inbox', () => {
+  const ADMIN = { id: 'au-1', email: 'ali@colaberry.com', role: 'admin' };
+  it('forwards the admin identity to the shared service, and surfaces not_authorized unchanged with the item', async () => {
+    mockProposalFindByPk.mockResolvedValue({ agent_id: 'agent-1', id: 'p9' });
+    mockApproveProposedAction.mockResolvedValue({
+      outcome: 'not_authorized',
+      proposal: { id: 'p9', action_type: 'growth_journey_execution', reason: 'r', confidence: 1, priority_score: null, risk_score: null, impact_score: null, status: 'pending', created_at: new Date(), expires_at: null, target_table: 'growth_journey_executions', target_id: 'ex-1' },
+    });
+    const result = await approveManagerInboxItem('agent-1', 'p9', 'ali@colaberry.com', null, ADMIN);
+    expect(mockApproveProposedAction).toHaveBeenCalledWith('p9', 'ali@colaberry.com', null, ADMIN);
+    expect(result.outcome).toBe('not_authorized');
+    expect(result.item?.status).toBe('pending');
+
+    mockRejectProposedAction.mockResolvedValue({ outcome: 'not_authorized', proposal: { id: 'p9', action_type: 'growth_journey_execution', reason: 'r', confidence: 1, priority_score: null, risk_score: null, impact_score: null, status: 'pending', created_at: new Date(), expires_at: null, target_table: 'growth_journey_executions', target_id: 'ex-1' } });
+    const rejected = await rejectManagerInboxItem('agent-1', 'p9', 'ali@colaberry.com', null, ADMIN);
+    expect(mockRejectProposedAction).toHaveBeenCalledWith('p9', 'ali@colaberry.com', null, ADMIN);
+    expect(rejected.outcome).toBe('not_authorized');
   });
 });
 
@@ -151,7 +172,7 @@ describe('rejectManagerInboxItem — agent-scoped rejection (Checkpoint B)', () 
 
     const result = await rejectManagerInboxItem('agent-1', 'p1', 'ali@colaberry.com', 'no');
 
-    expect(mockRejectProposedAction).toHaveBeenCalledWith('p1', 'ali@colaberry.com', 'no');
+    expect(mockRejectProposedAction).toHaveBeenCalledWith('p1', 'ali@colaberry.com', 'no', undefined);
     expect(result.outcome).toBe('rejected');
   });
 });

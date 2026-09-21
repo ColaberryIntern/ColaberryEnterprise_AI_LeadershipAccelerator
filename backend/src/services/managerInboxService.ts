@@ -2,6 +2,7 @@ import AiAgent from '../models/AiAgent';
 import ProposedAgentAction from '../models/ProposedAgentAction';
 import ScheduledEmail from '../models/ScheduledEmail';
 import { approveProposedAction, rejectProposedAction, ProposalOutcome } from './agentApprovalService';
+import type { ReviewerIdentity } from './growthJourney/execution/approvalApply';
 import { describeBlastRadius, describeReversibility, describeExpectedResult } from './proposedActionInspectorFields';
 
 // AI Workforce Management, Checkpoint C — the Manager Inbox. Deliberately
@@ -89,20 +90,21 @@ interface InboxDecisionResult {
  * a proposal id from a DIFFERENT agent reads as `not_found` here, the same
  * as a genuinely missing one, rather than leaking which agent it really
  * belongs to. */
-export async function approveManagerInboxItem(agentId: string, proposalId: string, adminEmail: string, notes: string | null): Promise<InboxDecisionResult> {
+export async function approveManagerInboxItem(agentId: string, proposalId: string, adminEmail: string, notes: string | null, admin?: ReviewerIdentity): Promise<InboxDecisionResult> {
   const proposal = await ProposedAgentAction.findByPk(proposalId);
   if (!proposal || proposal.agent_id !== agentId) return { outcome: 'not_found' };
 
-  const result = await approveProposedAction(proposalId, adminEmail, notes);
+  // Phase 5 T509: the identity rides through to the growth-journey branch's brand-access check.
+  const result = await approveProposedAction(proposalId, adminEmail, notes, admin);
   if (result.outcome !== 'approved') return { outcome: result.outcome, item: result.proposal ? toView(result.proposal) : undefined };
   return { outcome: 'approved', applied: result.applied, item: toView(result.proposal) };
 }
 
-export async function rejectManagerInboxItem(agentId: string, proposalId: string, adminEmail: string, notes: string | null): Promise<InboxDecisionResult> {
+export async function rejectManagerInboxItem(agentId: string, proposalId: string, adminEmail: string, notes: string | null, admin?: ReviewerIdentity): Promise<InboxDecisionResult> {
   const proposal = await ProposedAgentAction.findByPk(proposalId);
   if (!proposal || proposal.agent_id !== agentId) return { outcome: 'not_found' };
 
-  const result = await rejectProposedAction(proposalId, adminEmail, notes);
+  const result = await rejectProposedAction(proposalId, adminEmail, notes, admin);
   if (result.outcome !== 'rejected') return { outcome: result.outcome, item: result.proposal ? toView(result.proposal) : undefined };
   return { outcome: 'rejected', item: toView(result.proposal) };
 }

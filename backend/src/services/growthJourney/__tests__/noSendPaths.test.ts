@@ -69,6 +69,19 @@ const basename = (spec: string) => spec.split('/').pop()!.replace(/\.(ts|js)$/, 
  */
 export const ALLOWED_CALLS_BY_FILE: Readonly<Record<string, readonly string[]>> = Object.freeze({
   'services/growthJourney/integration/accountRollup.ts': ['Organization.create', 'ensureLeadTenantContext'],
+  // T510: the ONE file that may enrol, and the literals it may use - the sequence (T510) and, from T516, Ali's own
+  // campaign (`enrollLeadsInCampaign`, REVIEW-only by the branch that calls it).
+  'services/growthJourney/execution/enrollmentAdapter.ts': ['enrollLeadInSequence', 'enrollLeadsInCampaign'],
+});
+
+/**
+ * T510: the same discipline for IMPORTS. A forbidden module may be imported by exactly the file named here,
+ * and only that module: the adapter needs `sequenceService` to enrol and nothing else - `emailService` in the
+ * adapter still fails, `sequenceService` anywhere else still fails.
+ */
+export const ALLOWED_MODULES_BY_FILE: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  // T516: `campaignService` for the Ali branch, the same one file. `campaignService` anywhere else still fails.
+  'services/growthJourney/execution/enrollmentAdapter.ts': ['sequenceService', 'campaignService'],
 });
 
 const rel = (f: string) => path.relative(ROOT, f).replace(/\\/g, '/');
@@ -77,6 +90,12 @@ const rel = (f: string) => path.relative(ROOT, f).replace(/\\/g, '/');
 export function forbiddenCallsIn(relPath: string, src: string): string[] {
   const allowed = ALLOWED_CALLS_BY_FILE[relPath] ?? [];
   return FORBIDDEN_CALLS.filter((c) => src.includes(c) && !allowed.includes(c));
+}
+
+/** The forbidden modules a file imports, minus the ones it is allowlisted for. */
+export function forbiddenModulesIn(relPath: string, src: string): string[] {
+  const allowed = ALLOWED_MODULES_BY_FILE[relPath] ?? [];
+  return importsOf(src).map(basename).filter((b) => FORBIDDEN_MODULES.includes(b) && !allowed.includes(b));
 }
 
 describe('the scanner itself', () => {
@@ -107,10 +126,10 @@ describe('the scanner itself', () => {
 describe('Phase 2 code cannot reach a send, enrol, account or relationship path', () => {
   const files = phase2SourceFiles();
 
-  it('imports none of the forbidden modules', () => {
+  it('imports none of the forbidden modules (outside the one file allowlisted for its one module)', () => {
     for (const f of files) {
-      const bad = importsOf(fs.readFileSync(f, 'utf8')).map(basename).filter((b) => FORBIDDEN_MODULES.includes(b));
-      expect({ file: path.relative(ROOT, f), bad }).toEqual({ file: path.relative(ROOT, f), bad: [] });
+      const bad = forbiddenModulesIn(rel(f), fs.readFileSync(f, 'utf8'));
+      expect({ file: rel(f), bad }).toEqual({ file: rel(f), bad: [] });
     }
   });
 
@@ -123,10 +142,14 @@ describe('Phase 2 code cannot reach a send, enrol, account or relationship path'
 
   describe('the T406 allowlist', () => {
     const ROLLUP = 'services/growthJourney/integration/accountRollup.ts';
+    const ADAPTER = 'services/growthJourney/execution/enrollmentAdapter.ts';
 
-    it('names exactly one file and exactly the two literals the account roll-up needs', () => {
-      expect(Object.keys(ALLOWED_CALLS_BY_FILE)).toEqual([ROLLUP]);
+    it('names exactly two files - the account roll-up with its two literals, and the adapter with its two (T510 the sequence, T516 Ali\'s campaign)', () => {
+      expect(Object.keys(ALLOWED_CALLS_BY_FILE)).toEqual([ROLLUP, ADAPTER]);
       expect([...ALLOWED_CALLS_BY_FILE[ROLLUP]]).toEqual(['Organization.create', 'ensureLeadTenantContext']);
+      expect([...ALLOWED_CALLS_BY_FILE[ADAPTER]]).toEqual(['enrollLeadInSequence', 'enrollLeadsInCampaign']);
+      expect(Object.keys(ALLOWED_MODULES_BY_FILE)).toEqual([ADAPTER]);
+      expect([...ALLOWED_MODULES_BY_FILE[ADAPTER]]).toEqual(['sequenceService', 'campaignService']);
     });
 
     it('the allowlisted file is scanned, really uses both literals (non-vacuous), and nothing else forbidden', () => {
@@ -139,9 +162,43 @@ describe('Phase 2 code cannot reach a send, enrol, account or relationship path'
       expect(forbiddenCallsIn(ROLLUP, src)).toEqual([]);
     });
 
+    it('T510/T516: the adapter is scanned, really enrols through its two literals and two modules (non-vacuous), and nothing else forbidden', () => {
+      const f = files.find((x) => rel(x) === ADAPTER);
+      expect(f).toBeDefined();
+      const src = fs.readFileSync(f!, 'utf8');
+      expect(src).toContain('enrollLeadInSequence(');
+      expect(src).toContain('enrollLeadsInCampaign(');
+      expect(importsOf(src)).toContain('../../sequenceService');
+      expect(importsOf(src)).toContain('../../campaignService');
+      expect(FORBIDDEN_CALLS.filter((c) => src.includes(c))).toEqual(['enrollLeadInSequence', 'enrollLeadsInCampaign']);
+      expect(forbiddenCallsIn(ADAPTER, src)).toEqual([]);
+      expect(forbiddenModulesIn(ADAPTER, src)).toEqual([]);
+    });
+
+    it('T516 controls (acceptance 6): Ali\'s enrol literal and campaignService in any OTHER journey file are caught; a third module in the adapter is caught', () => {
+      const ali = 'await enrollLeadsInCampaign(campaignId, [leadId]);';
+      const svc = "import { enrollLeadsInCampaign } from '../../campaignService';";
+      for (const other of files.map(rel).filter((r) => r !== ADAPTER)) {
+        expect({ other, calls: forbiddenCallsIn(other, ali) }).toEqual({ other, calls: ['enrollLeadsInCampaign'] });
+        expect({ other, modules: forbiddenModulesIn(other, svc) }).toEqual({ other, modules: ['campaignService'] });
+      }
+      expect(forbiddenModulesIn(ADAPTER, svc + "\nimport { runAliPersonalOutreach } from '../../aliPersonalOutreachService';")).toEqual(['aliPersonalOutreachService']);
+    });
+
+    it('T510 controls: the enrol literal in any OTHER journey file is caught; sequenceService imported anywhere else is caught; emailService in the adapter is caught; ScheduledEmail.create in the adapter is caught', () => {
+      const enrol = 'await enrollLeadInSequence(leadId, sequenceId, campaignId);';
+      const seq = "import { enrollLeadInSequence } from '../../sequenceService';";
+      for (const other of files.map(rel).filter((r) => r !== ADAPTER)) {
+        expect({ other, calls: forbiddenCallsIn(other, enrol) }).toEqual({ other, calls: ['enrollLeadInSequence'] });
+        expect({ other, modules: forbiddenModulesIn(other, seq) }).toEqual({ other, modules: ['sequenceService'] });
+      }
+      expect(forbiddenModulesIn(ADAPTER, seq + "\nimport { sendEmail } from '../../emailService';")).toEqual(['emailService']);
+      expect(forbiddenCallsIn(ADAPTER, enrol + ' await ScheduledEmail.create({});')).toEqual(['ScheduledEmail.create']);
+    });
+
     it('the control: the same literal planted in any other file of the tree still fails, and a third literal in the allowlisted file fails too', () => {
       const planted = 'const org = await Organization.create({ lead_id: 1 }); await ensureLeadTenantContext({});';
-      for (const other of files.map(rel).filter((r) => r !== ROLLUP)) {
+      for (const other of files.map(rel).filter((r) => r !== ROLLUP && r !== ADAPTER)) {
         expect({ other, bad: forbiddenCallsIn(other, planted) }).toEqual({ other, bad: ['ensureLeadTenantContext', 'Organization.create'] });
       }
       expect(forbiddenCallsIn(ROLLUP, planted + ' await OrgMember.create({});')).toEqual(['OrgMember.create']);

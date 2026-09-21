@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { Op } from 'sequelize';
 
 const m = {
   brandFindByPk: jest.fn(),
@@ -8,6 +9,7 @@ const m = {
   profileFindOne: jest.fn(),
   explorerProfileFindByPk: jest.fn(),
   handoffFindOne: jest.fn(),
+  campaignFindOne: jest.fn(),
   resolveSubject: jest.fn(),
   latestClassification: jest.fn(),
   resolveContactEvidence: jest.fn(),
@@ -22,6 +24,7 @@ jest.mock('../../../../models', () => ({
   GrowthJourneyProfile: { findOne: (...a: unknown[]) => m.profileFindOne(...a) },
   ExplorerJourneyProfile: { findByPk: (...a: unknown[]) => m.explorerProfileFindByPk(...a) },
   GrowthJourneyHandoff: { findOne: (...a: unknown[]) => m.handoffFindOne(...a) },
+  Campaign: { findOne: (...a: unknown[]) => m.campaignFindOne(...a) },
 }));
 jest.mock('../../subjectResolver', () => ({ resolveSubject: (...a: unknown[]) => m.resolveSubject(...a) }));
 jest.mock('../../classificationService', () => ({ latestClassification: (...a: unknown[]) => m.latestClassification(...a) }));
@@ -68,6 +71,7 @@ function arrange(over: Partial<Record<keyof typeof m, unknown>> = {}) {
   m.profileFindOne.mockResolvedValue(null);
   m.explorerProfileFindByPk.mockResolvedValue(null);
   m.handoffFindOne.mockResolvedValue(null);
+  m.campaignFindOne.mockResolvedValue(null); // T506: no flow campaign exists - the shipped state
   m.latestClassification.mockResolvedValue({ id: 'c-1', brand_relationship: 'colaberry-enterprise', primary_path: 'workflow_automation', secondary_paths: [], intent: 'automation_request', requires_human_review: false, source_step: 3 });
   m.resolveContactEvidence.mockResolvedValue(contact());
   m.loadLifecycleSourceCounts.mockResolvedValue(NONE);
@@ -307,7 +311,8 @@ describe("T405 - the human's cooldown as an overlay", () => {
     expect(r.lifecycle.overlays).toEqual(['NO_RESPONSE']);
     expect(r.returnToAi).toEqual({ active: true, handoff_id: 'h-1', cooldown_until: until, reason: 'not_ready:q1' });
     expect(r.unavailable).toEqual([]);
-    expect(m.handoffFindOne).toHaveBeenCalledWith({ where: { subject_ref: 'lead:501', brand_id: 'b-ent', status: 'returned_to_ai' }, order: [['updated_at', 'DESC']] });
+    // T502: any row carrying the record (a qualified one is `dispositioned`), found by the subject ref or the lead.
+    expect(m.handoffFindOne).toHaveBeenCalledWith({ where: { brand_id: 'b-ent', return_to_ai: { [Op.ne]: null }, [Op.or]: [{ subject_ref: 'lead:501' }, { lead_id: 501 }] }, order: [['updated_at', 'DESC']] });
   });
 
   it('past cooldown_until the overlay is gone; with no returned row there never was one', async () => {
@@ -330,6 +335,64 @@ describe("T405 - the human's cooldown as an overlay", () => {
     expect(r.unavailable).toEqual(['return_to_ai']);
     expect(r.ctx.overlays).toEqual(['NO_RESPONSE']);
     expect(r.returnToAi.active).toBe(false);
+  });
+});
+
+describe('T506 - the approved Layer 2 flows, read per brand', () => {
+  const FLOW = 'gj_colaberry_business_discovery_questions';
+  const approvedRow = (over: Record<string, unknown> = {}) => ({ id: 'c-flow', tenant_id: 't-col', brand_id: 'b-ent', status: 'draft', approval_status: 'approved', sequence_id: 's-1', ...over });
+
+  it('with no flow campaign at all, approvedFlows is empty and nothing is unavailable - the shipped state', async () => {
+    arrange();
+    const r = await load();
+    if (r.status !== 'loaded') throw new Error(r.status);
+    expect(r.ctx.approvedFlows).toEqual([]);
+    expect(r.unavailable).toEqual([]);
+    // Only this brand's registered flow keys are ever asked for - never a learner key, never another brand's.
+    const asked = m.campaignFindOne.mock.calls.map((c) => (c[0] as { where: { settings: { campaign_key: string } } }).where.settings.campaign_key);
+    expect(asked).toEqual([FLOW]);
+  });
+
+  it('an APPROVED, brand-scoped flow campaign puts its key on the context', async () => {
+    arrange({ campaignFindOne: approvedRow() });
+    const r = await load();
+    if (r.status !== 'loaded') throw new Error(r.status);
+    expect(r.ctx.approvedFlows).toEqual([FLOW]);
+  });
+
+  it.each([
+    ['draft', { approval_status: 'draft' }],
+    ['another brand', { brand_id: 'b-other' }],
+    ['a NULL tenant', { tenant_id: null }],
+    ['no sequence', { sequence_id: null }],
+  ])('a flow campaign that is %s is NOT approved', async (_label, over) => {
+    arrange({ campaignFindOne: approvedRow(over) });
+    const r = await load();
+    if (r.status !== 'loaded') throw new Error(r.status);
+    expect(r.ctx.approvedFlows).toEqual([]);
+  });
+
+  it('a failing campaign read is named approved_flows in unavailable, and the context still builds with NO flow approved', async () => {
+    arrange({ campaignFindOne: () => Promise.reject(new Error('connection reset')) });
+    const r = await load();
+    if (r.status !== 'loaded') throw new Error(r.status);
+    expect(r.unavailable).toEqual(['approved_flows']);
+    expect(r.ctx.approvedFlows).toEqual([]);
+  });
+
+  it.each([
+    // The guard is the PROGRAMME KIND, not the brand registry: a learner programme on a brand that does have a
+    // flow registered still never reads it. (Colaberry Training registers no `gj_` key, so the first row alone
+    // could not tell a guarded loader from an unguarded one - that mutation survived the first run.)
+    ['its own brand, which registers no flow', { id: 'b-trn', slug: 'colaberry-training', tenant_id: 't-col' }],
+    ['a brand that DOES register a flow', { id: 'b-ent', slug: 'colaberry-enterprise', tenant_id: 't-col' }],
+  ])('a learner programme never reads a flow - on %s', async (_label, brand) => {
+    arrange({ programFindOne: { id: 'p-trn', slug: 'colaberry-training', kind: 'learner', status: 'draft' }, brandFindByPk: brand, campaignFindOne: approvedRow() });
+    const r = await load(brand.id);
+    if (r.status !== 'loaded') throw new Error(r.status);
+    expect(r.ctx.approvedFlows).toEqual([]);
+    expect(r.unavailable).toEqual([]);
+    expect(m.campaignFindOne).not.toHaveBeenCalled();
   });
 });
 

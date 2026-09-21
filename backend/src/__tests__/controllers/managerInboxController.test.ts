@@ -112,7 +112,8 @@ describe('POST /api/admin/agents/:id/inbox/:proposalId/approve', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.applied).toBe(true);
-    expect(mockApproveManagerInboxItem).toHaveBeenCalledWith('agent-1', 'p1', 'ali@colaberry.com', 'ok');
+    // T509: the decoded admin identity rides through as the fifth argument, for the growth-journey brand-access check.
+    expect(mockApproveManagerInboxItem).toHaveBeenCalledWith('agent-1', 'p1', 'ali@colaberry.com', 'ok', expect.objectContaining({ email: 'ali@colaberry.com' }));
   });
 
   it('boundary: a proposal that does not belong to this agent 404s, same as a missing one', async () => {
@@ -159,7 +160,7 @@ describe('POST /api/admin/agents/:id/inbox/:proposalId/reject', () => {
     const res = await request(buildApp()).post('/api/admin/agents/agent-1/inbox/p1/reject').set('Authorization', `Bearer ${superAdminToken()}`).send({ notes: 'no' });
 
     expect(res.status).toBe(200);
-    expect(mockRejectManagerInboxItem).toHaveBeenCalledWith('agent-1', 'p1', 'ali@colaberry.com', 'no');
+    expect(mockRejectManagerInboxItem).toHaveBeenCalledWith('agent-1', 'p1', 'ali@colaberry.com', 'no', expect.objectContaining({ email: 'ali@colaberry.com' }));
   });
 
   it('boundary: a proposal that does not belong to this agent 404s', async () => {

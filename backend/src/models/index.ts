@@ -444,17 +444,6 @@ import JourneyProgram from './JourneyProgram';
 import JourneyPath from './JourneyPath';
 import OfferFamily from './OfferFamily';
 import BrandOfferPolicy from './BrandOfferPolicy';
-import GrowthJourneyEnrollment from './GrowthJourneyEnrollment';
-import GrowthJourneyClassification from './GrowthJourneyClassification';
-import GrowthJourneyTransition from './GrowthJourneyTransition';
-import GrowthJourneyContentRule from './GrowthJourneyContentRule';
-import GrowthJourneyConversationOwnership from './GrowthJourneyConversationOwnership';
-import GrowthJourneyDecision from './GrowthJourneyDecision';
-import GrowthJourneyHandoff from './GrowthJourneyHandoff';
-import GrowthJourneyOutcome from './GrowthJourneyOutcome';
-import GrowthJourneyPolicy from './GrowthJourneyPolicy';
-import GrowthJourneyProfile from './GrowthJourneyProfile';
-import GrowthJourneyScoreSnapshot from './GrowthJourneyScoreSnapshot';
 import SenderProfile from './SenderProfile';
 import PlatformIdentity from './PlatformIdentity';
 import PlatformIdentityLink from './PlatformIdentityLink';
@@ -1629,17 +1618,7 @@ export {
   JourneyPath,
   OfferFamily,
   BrandOfferPolicy,
-  GrowthJourneyEnrollment,
-  GrowthJourneyClassification,
-  GrowthJourneyTransition,
-  GrowthJourneyContentRule,
-  GrowthJourneyConversationOwnership,
-  GrowthJourneyDecision,
-  GrowthJourneyHandoff,
-  GrowthJourneyOutcome,
-  GrowthJourneyPolicy,
-  GrowthJourneyProfile,
-  GrowthJourneyScoreSnapshot,
+  // Growth Journey OS models: moved to ./growthJourneyModels (T503) and re-exported below.
   SenderProfile,
   PlatformIdentity,
   PlatformIdentityLink,
@@ -2210,3 +2189,6 @@ DeliveryAgentTrustRequirement.belongsTo(DeliveryAgentDefinition, {
   foreignKey: 'agent_definition_id',
   as: 'agent',
 });
+
+// Growth Journey OS models (T503): the sibling module this index was split into.
+export * from './growthJourneyModels';

@@ -240,6 +240,13 @@ export interface JourneySubjectContext {
    * stays valid, and because for three of the four programmes it is meaningless.
    */
   learner?: LearnerFacts | null;
+  /**
+   * T506. The registered Layer 2 flow campaigns a human has APPROVED for this
+   * brand (`validateCampaign` in review mode: registered, present, brand-scoped,
+   * approved, sequenced) - keys only. Absent or empty means every Layer 2 action
+   * stays a deferral with a named gap; nothing here is read for any other brand.
+   */
+  approvedFlows?: string[];
 }
 
 /* ── The strategy ─────────────────────────────────────────────────────────── */

@@ -6,12 +6,15 @@
 
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
+import { env } from '../config/env';
 import { Campaign } from '../models';
 import { enrollLeadsInCampaign } from './campaignService';
 import { redactForLogs } from '../utils/piiRedaction';
 
 const MAX_ENROLL_PER_DAY = 50;
-const CAMPAIGN_NAME = 'Ali Personal Outreach';
+/** Exported (Phase 5 T505) so the journey's setup script finds the SAME row this cron does, by the same name and type. */
+export const CAMPAIGN_NAME = 'Ali Personal Outreach';
+export const CAMPAIGN_TYPE = 'executive_outreach';
 
 /** Ali's signature — plain text style like Gmail, not a styled corporate block */
 export const ALI_SIGNATURE = `
@@ -80,7 +83,7 @@ export async function findHighIntentLeads(): Promise<any[]> {
  */
 export async function runAliPersonalOutreach(): Promise<void> {
   // Find the campaign
-  const campaign = await Campaign.findOne({ where: { name: CAMPAIGN_NAME, type: 'executive_outreach' } });
+  const campaign = await Campaign.findOne({ where: { name: CAMPAIGN_NAME, type: CAMPAIGN_TYPE } });
   if (!campaign) {
     console.warn('[AliOutreach] Campaign not found — run seed first');
     return;
@@ -106,7 +109,22 @@ export async function runAliPersonalOutreach(): Promise<void> {
   }
 
   const remaining = MAX_ENROLL_PER_DAY - enrolledCount;
-  const leads = await findHighIntentLeads();
+  const found = await findHighIntentLeads();
+  // Growth Journey OS (Phase 5 T516): a lead the journey is mid-conversation with (an open execution receipt) or a human
+  // owns (an open ownership row) is the journey's; this cron leaves them out. Required lazily, behind the master flag - the
+  // journey tree's import chain constructs the database module - and FAIL CLOSED: a lookup error enrols nobody this run.
+  let owned = new Set<number>();
+  if (env.growthJourney.growthJourneyEnabled && found.length > 0) {
+    try {
+      const { journeyOwnedLeadIds } = require('./growthJourney/execution/autoReplyGuard') as { journeyOwnedLeadIds: (ids: number[]) => Promise<Set<number>> };
+      owned = await journeyOwnedLeadIds(found.map((l) => Number(l.lead_id)));
+    } catch (err: unknown) {
+      console.error(JSON.stringify({ level: 'error', service: 'ali-outreach', event: 'ali_outreach_journey_lookup_failed', outcome: 'failure', error_class: err instanceof Error ? err.name : 'UnknownError', context: { candidates: found.length } }));
+      return;
+    }
+  }
+  const leads = found.filter((l) => !owned.has(Number(l.lead_id)));
+  if (owned.size > 0) console.log(JSON.stringify({ level: 'info', service: 'ali-outreach', event: 'ali_outreach_journey_excluded', outcome: 'success', context: { excluded: owned.size, remaining_candidates: leads.length } }));
 
   if (leads.length === 0) {
     console.log('[AliOutreach] No new high-intent leads to enroll');

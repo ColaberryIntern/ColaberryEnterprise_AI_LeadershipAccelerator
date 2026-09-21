@@ -29,7 +29,9 @@ const FIXED_FILES: Record<string, number> = {
   'controllers/adminLeadController.ts': 1,
   'controllers/apolloWebhookController.ts': 3,
   'controllers/ghlWebhookController.ts': 4,
-  'controllers/mandrillWebhookController.ts': 6,
+  // T515 moved the auto-reply block (two of the six sites) into services/inbound/inboundAutoReply.ts; both files stay covered.
+  'controllers/mandrillWebhookController.ts': 4,
+  'services/inbound/inboundAutoReply.ts': 2,
   'controllers/advisorySyncController.ts': 3,
   'controllers/trackingController.ts': 2,
   'controllers/calendarController.ts': 1,
@@ -50,8 +52,8 @@ const FIXED_FILES: Record<string, number> = {
 describe('PII log redaction coverage (T005 regression guard)', () => {
   const entries = Object.entries(FIXED_FILES);
 
-  it('covers all 24 files identified by the T005 audit', () => {
-    expect(entries.length).toBe(24);
+  it('covers all 24 files identified by the T005 audit, plus the one T515 split out of the Mandrill controller', () => {
+    expect(entries.length).toBe(25);
   });
 
   it('every fixed file still exists on disk', () => {

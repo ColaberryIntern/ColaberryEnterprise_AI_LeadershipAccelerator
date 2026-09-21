@@ -75,19 +75,32 @@ async function findByKey(key: string): Promise<Campaign | null> {
  * an earlier partial run, or from a rollback that removed the campaigns but left
  * the sequences; inheriting whatever state it is in would make the invariant a
  * matter of history rather than of code.
+ *
+ * ─── THE ONE EXCEPTION: A CAMPAIGN A HUMAN APPROVED (Phase 5 T505) ──────────
+ *
+ * Once a campaign's `approval_status` is `approved` or `live`, an operator has
+ * deliberately switched its sequence on for governed execution, and a boot must
+ * not switch it off again behind their back. `ownerApproved` is read from the
+ * campaign row BEFORE this runs; for it the update refreshes steps and
+ * description and leaves `is_active` whatever the human set. An unapproved
+ * campaign keeps the invariant above exactly as before, and a sequence with no
+ * campaign yet is still created inactive.
  */
-async function upsertSequence(name: string): Promise<FollowUpSequence> {
+const APPROVED_STATUSES: readonly string[] = ['approved', 'live'];
+
+async function upsertSequence(name: string, ownerApproved: boolean): Promise<FollowUpSequence> {
   const def = EXPLORER_SEQUENCES.find((s) => s.name === name);
   if (!def) throw new Error(`no sequence definition named "${name}"`);
 
   const existing = await FollowUpSequence.findOne({ where: { name } });
   if (existing) {
-    // is_active is re-asserted, not assumed. Steps and description are refreshed
-    // so a definition edit reaches the database; nothing else is touched.
+    // is_active is re-asserted, not assumed - unless a human approved the owning
+    // campaign. Steps and description are refreshed so a definition edit reaches
+    // the database; nothing else is touched.
     await existing.update({
       description: def.description,
       steps: def.steps as any,
-      is_active: false,
+      ...(ownerApproved ? {} : { is_active: false }),
     } as any);
     return existing;
   }
@@ -114,8 +127,10 @@ async function seedOne(
   def: (typeof EXPLORER_CAMPAIGNS)[number],
   result: SeedResult,
 ): Promise<void> {
-  const sequence = await upsertSequence(def.sequenceName);
+  // The campaign is read FIRST, so its approval can protect the sequence's `is_active`.
   const existing = await findByKey(def.key);
+  const ownerApproved = existing !== null && APPROVED_STATUSES.includes(String(existing.get('approval_status') ?? ''));
+  const sequence = await upsertSequence(def.sequenceName, ownerApproved);
 
   if (existing) {
     const currentSettings = (existing.get('settings') as Record<string, any>) ?? {};

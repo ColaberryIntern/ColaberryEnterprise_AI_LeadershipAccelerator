@@ -15,6 +15,7 @@ jest.mock('../classificationService', () => ({
   latestClassification: (...a: unknown[]) => require('./fixtures/phase3Harness').m.classificationFindOne(...a),
 }));
 
+import { Op } from 'sequelize';
 import { decideForSubjectAndRecord } from '../decisionService';
 import { RETURNED_TO_AI_OVERLAY, RETURNED_TO_AI_REASON } from '../handoffs/returnToAi';
 import { AS_OF, anchorOf, arrange, flags, m, persisted } from './fixtures/phase3Harness';
@@ -73,8 +74,14 @@ describe('a business subject a human sent back', () => {
     // The two generators that would have proposed for this subject (the control below shows the email; the
     // fixture has a portal account, so the nudge) decline by the cooldown's name; the rest declined on their own predicates.
     expect(ne.filter((n) => n.reason === RETURNED_TO_AI_REASON).map((n) => n.generator)).toEqual(['capabilityEducation', 'inAppNudge']);
-    expect(ne).toHaveLength(6);
-    expect(m.handoffFindOne).toHaveBeenCalledWith({ where: { brand_id: brandRow('colaberry-enterprise').id, status: 'returned_to_ai', subject_ref: expect.stringMatching(/^lead:\d+$/) }, order: [['updated_at', 'DESC']] });
+    expect(ne).toHaveLength(7); // T506 added discoveryQuestions, declining predicate_false here (an exploring state)
+    // T502: any row carrying the record (a qualified one is `dispositioned`), found by the subject ref or the lead.
+    const [{ where, order }] = m.handoffFindOne.mock.calls[0] as [{ where: Record<string | symbol, unknown>; order: unknown }];
+    expect(order).toEqual([['updated_at', 'DESC']]);
+    expect(where).toMatchObject({ brand_id: brandRow('colaberry-enterprise').id });
+    expect(where).not.toHaveProperty('status');
+    expect((where.return_to_ai as Record<symbol, unknown>)[Op.ne]).toBeNull();
+    expect(where[Op.or]).toEqual([{ subject_ref: expect.stringMatching(/^lead:\d+$/) }, { lead_id: expect.any(Number) }]);
   });
 
   it('the control: the same subject with no returned row gets its education email back and no overlay', async () => {

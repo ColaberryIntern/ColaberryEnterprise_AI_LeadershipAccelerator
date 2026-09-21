@@ -94,6 +94,12 @@ export function toPendingRejectConfirmation(target: ManagerInboxItemView): Pendi
  * silently ignored. */
 export async function applyConfirmedApprove(pending: PendingApproveConfirmation, confirmedByEmail: string): Promise<{ summary: string }> {
   const result = await approveProposedAction(pending.proposalId, confirmedByEmail, null);
+  if (result.outcome === 'not_authorized') {
+    // Phase 5 T509: a growth-journey execution needs the approver's brand access checked and
+    // recorded, which this conversational path cannot supply (it carries an email, not an
+    // identity). It fails closed here, by name; the inbox is where such an approval happens.
+    return { summary: "I can't approve growth-journey executions from here - please approve growth-journey executions from the inbox, where your access to the brand is checked." };
+  }
   if (result.outcome !== 'approved') {
     return { summary: `I couldn't approve that — it's no longer pending (${result.outcome}). Check the Manager Inbox for the latest state.` };
   }
@@ -102,6 +108,9 @@ export async function applyConfirmedApprove(pending: PendingApproveConfirmation,
 
 export async function applyConfirmedReject(pending: PendingRejectConfirmation, confirmedByEmail: string): Promise<{ summary: string }> {
   const result = await rejectProposedAction(pending.proposalId, confirmedByEmail, null);
+  if (result.outcome === 'not_authorized') {
+    return { summary: "I can't reject growth-journey executions from here - please reject growth-journey executions from the inbox, where your access to the brand is checked." };
+  }
   if (result.outcome !== 'rejected') {
     return { summary: `I couldn't reject that — it's no longer pending (${result.outcome}). Check the Manager Inbox for the latest state.` };
   }

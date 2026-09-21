@@ -21,7 +21,8 @@ import * as path from 'path';
  */
 
 const source = fs.readFileSync(
-  path.join(__dirname, '..', 'mandrillWebhookController.ts'),
+  // T515 moved the auto-reply body, prompt included, into services/inbound/inboundAutoReply.ts; the pin follows it.
+  path.join(__dirname, '..', '..', 'services', 'inbound', 'inboundAutoReply.ts'),
   'utf8',
 );
 

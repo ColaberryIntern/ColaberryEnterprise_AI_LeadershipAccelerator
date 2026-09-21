@@ -167,6 +167,24 @@ describe('applyConfirmedApprove', () => {
   });
 });
 
+describe('T509: a growth-journey execution cannot be approved or rejected from the conversation', () => {
+  const pending = { intentType: 'APPROVE' as const, proposalId: 'proposal-gj', reason: 'QUALIFIED_OPPORTUNITY: discovery questions', detectedAt: '2026-09-20T00:00:00.000Z' };
+  it('approve: the shared service answers not_authorized (this path carries no identity) and the reply names the inbox as the place to do it', async () => {
+    mockApproveProposedAction.mockResolvedValue({ outcome: 'not_authorized' });
+    const result = await applyConfirmedApprove(pending, 'ali@colaberry.com');
+    // The conversational path passes NO admin - by design, that is what fails it closed.
+    expect(mockApproveProposedAction).toHaveBeenCalledWith('proposal-gj', 'ali@colaberry.com', null);
+    expect(result.summary).toContain('approve growth-journey executions from the inbox');
+    expect(result.summary).not.toContain('Done');
+  });
+  it('reject: the same, by name', async () => {
+    mockRejectProposedAction.mockResolvedValue({ outcome: 'not_authorized' });
+    const result = await applyConfirmedReject({ ...pending, intentType: 'REJECT' as const }, 'ali@colaberry.com');
+    expect(result.summary).toContain('reject growth-journey executions from the inbox');
+    expect(result.summary).not.toContain('Done');
+  });
+});
+
 describe('applyConfirmedReject', () => {
   const pending = { intentType: 'REJECT' as const, proposalId: 'proposal-1', reason: 'Subject line underperforming by 40%.', detectedAt: '2026-09-10T00:00:00.000Z' };
 

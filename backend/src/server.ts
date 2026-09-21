@@ -19,11 +19,7 @@ import calendarRoutes from './routes/calendarRoutes';
 import strategyPrepRoutes from './routes/strategyPrepRoutes';
 import trackingRoutes from './routes/trackingRoutes';
 import publicCaseStudyRoutes from './routes/publicCaseStudyRoutes';
-import participantRoutes from './routes/participantRoutes';
-import capePortalRoutes from './routes/capePortalRoutes';
-import careerPortfolioRoutes from './routes/careerPortfolioRoutes';
-import explorerSignalRoutes from './routes/explorerSignalRoutes';
-import consentPromptRoutes from './routes/consentPromptRoutes';
+import { mountLearnerPortalRoutes } from './routes/mountLearnerPortalRoutes';
 import capeAdminRoutes from './routes/admin/capeAdminRoutes';
 import capeGovernanceRoutes from './routes/admin/capeGovernanceRoutes';
 import communityRoomsRoutes from './routes/communityRoomsRoutes';
@@ -187,15 +183,10 @@ app.use(deliveryClientRoutes);
 app.use(deliveryAdminRoutes);
 app.use(leadRoutes);
 app.use(enrollmentRoutes);
-app.use(participantRoutes);
-app.use(capePortalRoutes);
-app.use(careerPortfolioRoutes);
-// Explorer Growth OS learner signal ingest (EPIC 2). Dark until
-// EXPLORER_SIGNAL_INGEST_ENABLED + the master flag are both on.
-app.use(explorerSignalRoutes);
-// In-app consent prompt (participant-authed). A PROMPT, not a gate: the portal
-// stays fully usable whether a learner accepts, declines or ignores it.
-app.use(consentPromptRoutes);
+// The learner-portal mounts - participant, CAPE portal, career portfolio, Explorer signals, consent prompt - live in
+// routes/mountLearnerPortalRoutes.ts (Phase 5 T514), mounted here at the position they held: after the enrolment routes,
+// before the CAPE admin routes, and above adminRoutes.
+mountLearnerPortalRoutes(app);
 app.use(capeAdminRoutes);
 app.use(capeGovernanceRoutes);
 // Colaberry Commons — Community Rooms (flag-gated inside the router; 404s when

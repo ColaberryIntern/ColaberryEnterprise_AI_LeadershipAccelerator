@@ -80,7 +80,8 @@ afterAll(() => {
 describe('the world enforces the unique indexes T401 ships', () => {
   it('every unique index on the handoff, ownership and outcome tables is read from the DDL - the one-open indexes partial on their open states', () => {
     const on = (table: string) => UNIQUES.filter((u) => u.table === table).map((u) => u.name).sort();
-    expect(on('growth_journey_handoffs')).toEqual(['growth_journey_handoffs_idempotency_unique', 'growth_journey_handoffs_open_subject_unique']);
+    // T501 added the per-PERSON index beside T401's per-subject one; the world reads it from the Phase 5 statements.
+    expect(on('growth_journey_handoffs')).toEqual(['growth_journey_handoffs_idempotency_unique', 'growth_journey_handoffs_open_lead_unique', 'growth_journey_handoffs_open_subject_unique']);
     expect(on('growth_journey_conversation_ownership')).toEqual(['growth_journey_conversation_ownership_open_unique']);
     expect(on('growth_journey_outcomes')).toEqual(['growth_journey_outcomes_source_unique']);
     const open = UNIQUES.find((u) => u.name === 'growth_journey_handoffs_open_subject_unique')!;
@@ -160,13 +161,20 @@ for (const f of exitTwins()) {
       expect(types).toEqual(['handoff_accepted', 'handoff_dispositioned', want.pipeline_advances ? 'opportunity_stage' : 'project_started'].sort());
     });
 
-    it('the whole run, replayed: the decision and the handoff land on their rows, the human\'s moves are refused as moves already made - and every count is unchanged', async () => {
+    it('the whole run, replayed: sales\' `qualified` is now an input (T502) - one NEW decision that holds the AI off and hands off nothing, replaying THAT is a no-op, the human\'s moves are refused as moves already made, every other count unchanged', async () => {
+      // Before T502 the replay found the same inputs and landed on the same decision row. Now the verdict
+      // holds the AI off this person for 30 days, so the pipeline decides again: WAIT under RETURNED_TO_AI,
+      // no create_handoff - and no second sales handoff, which is the bug T414 reproduced.
       const again = await decide(f, AS_OF_4);
-      expect(again.replayed).toBe(true);
-      expect(again.handoffs).toMatchObject({ status: 'materialized', handoffs: [{ handoff_id: handoff.id, replayed: true }] });
+      expect(again.replayed).toBe(false);
+      expect(again.row.overlays_at_decision).toContain('RETURNED_TO_AI');
+      expect(again.handoffs).toMatchObject({ status: 'none' });
+      const twice = await decide(f, AS_OF_4);
+      expect(twice.replayed).toBe(true);
+      expect(twice.row.id).toBe(again.row.id);
       await expect(acceptHandoff(handoff as never, HUMAN, AS_OF_4)).rejects.toBeInstanceOf(HandoffTransitionError);
       await expect(dispositionHandoff(handoff as never, { disposition: 'qualified', reason: 'again' }, HUMAN, AS_OF_4)).rejects.toBeInstanceOf(HandoffTransitionError);
-      expect(tally()).toEqual(first);
+      expect(tally()).toEqual({ ...first, decisions: first.decisions + 1 });
     });
   });
 }
@@ -217,6 +225,12 @@ describe('one open handoff per subject per brand', () => {
     const open = handoffsOf(f).filter((h) => ['queued', 'assigned', 'accepted'].includes(String(h.status)));
     expect(open).toHaveLength(1);
     expect(open[0].owner_queue).toBe(f.expect.queue);
+    // T501 (8A): the review the decision ALSO asked for is on the row, not only an overlay elsewhere in the packet.
+    const triggers = (open[0].evidence as { escalation_reason: Array<{ source: string; queue: string; reason: string }> }).escalation_reason;
+    expect(triggers.map((t) => [t.source, t.queue, t.reason])).toEqual([
+      ['decision_deferral', 'sales', `commercial_state:${f.expect.state}`],
+      ['decision_deferral', 'human_review', 'human_review_overlay'],
+    ]);
     table.push(lineFor(f.key, open[0], '-'));
   });
 
@@ -236,6 +250,14 @@ describe('one open handoff per subject per brand', () => {
     expect(manual.row.id).toBe(row.id);
     expect(manual.row.owner_queue).toBe('sales'); // the OPEN row, not the queue the manual trigger asked for
     expect(handoffsOf(f)).toHaveLength(1);
+    // T501 (8A): the operator's trigger is the row's third entry, with one ledger row saying so; replaying it adds nothing.
+    const reasonsOf = () => (row.evidence as { escalation_reason: Array<{ reason: string }> }).escalation_reason.map((t) => t.reason);
+    expect(reasonsOf()).toEqual([`commercial_state:${f.expect.state}`, 'human_review_overlay', 'routing_rule:rp-1']);
+    const appended = () => m4.ledger.mock.calls.filter((c) => c[0] === 'growth_journey.handoff.trigger_appended' && c[2] === row.id).length;
+    expect(appended()).toBe(2);
+    await createHandoff({ refs, trigger: { source: 'manual', owner_queue: 'human_review', reason: 'routing_rule:rp-1', event_ref: 'rule:rp-1' }, decision: null, asOf: AS_OF_4 });
+    expect(reasonsOf()).toHaveLength(3);
+    expect(appended()).toBe(2);
     // Non-vacuity: the manual trigger's key really is different - the same key would have been collapsed by the
     // idempotency index instead, and once the open row is CLOSED the same trigger is free to make a new one.
     await (row as unknown as { update: (p: Record<string, unknown>) => Promise<unknown> }).update({ status: 'dispositioned' });

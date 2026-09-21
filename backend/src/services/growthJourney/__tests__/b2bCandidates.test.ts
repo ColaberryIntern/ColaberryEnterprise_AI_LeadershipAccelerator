@@ -310,7 +310,8 @@ describe('T303\'s read-ban, re-asserted here against real generators', () => {
   });
 
   it('every generator in the list is a real function, and the strategy exposes the hooks the pipeline reads', () => {
-    expect(B2B_GENERATORS.map((g) => g.name)).toEqual(['declinedSuppress', 'stalledReengage', 'capabilityEducation', 'caseStudy', 'clarificationQuestion', 'inAppNudge']);
+    // T506 added the one Layer 2 generator, last: it fires only for an approved flow.
+    expect(B2B_GENERATORS.map((g) => g.name)).toEqual(['declinedSuppress', 'stalledReengage', 'capabilityEducation', 'caseStudy', 'clarificationQuestion', 'inAppNudge', 'discoveryQuestions']);
     for (const s of [businessStrategy, flotationStrategy]) {
       expect(typeof s.generate).toBe('function');
       expect(typeof s.emptyReason).toBe('function');

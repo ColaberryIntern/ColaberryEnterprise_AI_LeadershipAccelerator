@@ -60,9 +60,12 @@ export async function handleApproveProposal(req: Request, res: Response, next: N
     const { notes } = req.body;
     const adminEmail = (req as any).admin?.email || 'unknown';
 
-    const result = await approveProposedAction(id, adminEmail, notes || null);
+    // Phase 5 T509: the caller's identity rides along so a growth-journey proposal can check the
+    // approver's access to the receipt's brand; every other target_table ignores it.
+    const result = await approveProposedAction(id, adminEmail, notes || null, (req as any).admin);
     if (result.outcome !== 'approved') {
       if (result.outcome === 'not_found') return res.status(404).json({ error: 'Proposal not found' });
+      if (result.outcome === 'not_authorized') return res.status(403).json({ error: 'Not authorized to approve this proposal' });
       if (result.outcome === 'not_pending') return res.status(400).json({ error: `Proposal is already ${result.proposal!.status}` });
       return res.status(400).json({ error: 'Proposal has expired' });
     }
@@ -80,8 +83,9 @@ export async function handleRejectProposal(req: Request, res: Response, next: Ne
     const { notes } = req.body;
     const adminEmail = (req as any).admin?.email || 'unknown';
 
-    const result = await rejectProposedAction(id, adminEmail, notes || null);
+    const result = await rejectProposedAction(id, adminEmail, notes || null, (req as any).admin);
     if (result.outcome === 'not_found') return res.status(404).json({ error: 'Proposal not found' });
+    if (result.outcome === 'not_authorized') return res.status(403).json({ error: 'Not authorized to reject this proposal' });
     if (result.outcome === 'not_pending') return res.status(400).json({ error: `Proposal is already ${result.proposal!.status}` });
 
     res.json({ success: true, proposal: result.proposal });

@@ -13,7 +13,13 @@ const ROOT = path.join(__dirname, '..', '..', '..');
 const read = (rel: string) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 
 const scheduler = read('services/schedulerService.ts');
-const registry = read('services/agentRegistrySeed.ts');
+// T513 moved the block, verbatim, into services/scheduling/growthJourneyCrons.ts (registerGrowthJourneyCrons, called
+// from startScheduler at the position the block held); the block pins read the module, the position pin reads the call.
+const crons = read('services/scheduling/growthJourneyCrons.ts');
+const CALL = 'registerGrowthJourneyCrons();';
+// T509 moved the entry, verbatim, into services/agentRegistry/growthJourneyAgents.ts (spread into the seed at
+// the same position); the pins below are unchanged and read the seed and the module together.
+const registry = read('services/agentRegistrySeed.ts') + read('services/agentRegistry/growthJourneyAgents.ts');
 const runner = read('services/growthJourney/runShadowDecisionsNightly.ts');
 
 const AGENT = 'GrowthJourneyShadowDecisions';
@@ -21,9 +27,9 @@ const SCHEDULE = '20 4 * * *';
 
 /** The nightly block: from its cron.schedule line to the end of the block. */
 function cronBlock(): string {
-  const at = scheduler.indexOf(`instrumentCronJob('${AGENT}'`);
+  const at = crons.indexOf(`instrumentCronJob('${AGENT}'`);
   expect(at).toBeGreaterThan(-1);
-  return scheduler.slice(Math.max(0, at - 1500), at + 400);
+  return crons.slice(Math.max(0, at - 1500), at + 400);
 }
 
 /** The registry entry, from its agent_name to the next entry's. */
@@ -39,7 +45,15 @@ describe('registered the house way', () => {
     const block = cronBlock();
     expect(block).toContain(`instrumentCronJob('${AGENT}'`);
     expect(block).toContain('await runScheduledShadowDecisions();');
-    expect(scheduler).toContain("import { runScheduledShadowDecisions } from './growthJourney/runShadowDecisionsNightly';");
+    expect(crons).toContain("import { runScheduledShadowDecisions } from '../growthJourney/runShadowDecisionsNightly';");
+    expect(scheduler).toContain("import { registerGrowthJourneyCrons } from './scheduling/growthJourneyCrons';");
+  });
+
+  it('the block lives in the module alone: the scheduler names the agent nowhere and calls the module once', () => {
+    expect(scheduler).not.toContain(AGENT);
+    expect(scheduler.split(CALL).length - 1).toBe(1);
+    expect(crons.split(`instrumentCronJob('${AGENT}'`).length - 1).toBe(1);
+    expect(crons).toContain('export function registerGrowthJourneyCrons(): void {');
   });
 
   it('is registered in agentRegistrySeed, PAUSED (enabled: false), as a cron-triggered behavioral processor', () => {
@@ -63,7 +77,8 @@ describe('registered the house way', () => {
   it('runs AFTER the three Explorer blocks, not inside any of them', () => {
     // 02:50 content sync, 03:20 recompute, 03:50 Governor - the learner brands
     // decide on scores recomputed the same night.
-    const nightly = scheduler.indexOf(`instrumentCronJob('${AGENT}'`);
+    const nightly = scheduler.indexOf(CALL);
+    expect(nightly).toBeGreaterThan(-1);
     for (const explorer of ['ExplorerContentSync', 'ExplorerProfileRecompute', 'ExplorerGovernorDecide']) {
       const at = scheduler.indexOf(`instrumentCronJob('${explorer}'`);
       expect(at).toBeGreaterThan(-1);
@@ -73,7 +88,8 @@ describe('registered the house way', () => {
     const recompute = scheduler.indexOf("instrumentCronJob('ExplorerProfileRecompute'");
     const recomputeClose = scheduler.indexOf('  });', scheduler.indexOf('}).catch', recompute));
     expect(recomputeClose).toBeGreaterThan(recompute);
-    expect(scheduler.indexOf(`cron.schedule('${SCHEDULE}'`)).toBeGreaterThan(recomputeClose);
+    expect(scheduler.indexOf(CALL)).toBeGreaterThan(recomputeClose);
+    expect(crons).toContain(`cron.schedule('${SCHEDULE}'`);
     // And the hour says the same: 04:20 is after 03:50.
     expect(SCHEDULE).toMatch(/^20 4 /);
   });

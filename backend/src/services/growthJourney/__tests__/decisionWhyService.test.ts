@@ -110,10 +110,31 @@ describe('the answer, the state, the inputs the pipeline could not see', () => {
     expect(why.eligibility).toEqual(storedRow().eligibility);
     expect(why.contact_evidence).toEqual(storedRow().contact_evidence);
     expect(why.content).toEqual({ selected: { asset_type: 'capability_education', offer_family: 'consulting', assets: [] }, gaps: ['content_purpose_unsupported:capability_education'] });
-    expect(why.execution).toEqual({ executed: false, receipt: null });
+    // T507: a row from before the stamp carries no `execution.mode`; the envelope's `mode` still says shadow.
+    expect(why.execution).toEqual({ executed: false, receipt: null, mode: null });
     expect(why.mode).toBe('shadow');
     expect(why.decision_date).toBe('2026-09-15');
     expect(why.classification_id).toBe('40000000-0000-4000-8000-000000000001');
+  });
+
+  it('T507: the execution-mode stamp is read back as stored - why the row may or may not execute, and which control rows said so', () => {
+    const eligibility = storedRow().eligibility as Record<string, unknown>;
+    const live = decisionWhyFromRow(storedRow({
+      mode: 'live',
+      eligibility: { ...eligibility, execution_mode: { mode: 'live', reason: 'rollout', resolved: 'limited', channel: 'email', control_ids: ['ctl-1'] } },
+    }));
+    expect(live.mode).toBe('live');
+    expect(live.execution).toEqual({ executed: false, receipt: null, mode: { mode: 'live', reason: 'rollout', resolved: 'limited', channel: 'email', control_ids: ['ctl-1'] } });
+
+    const shadow = decisionWhyFromRow(storedRow({
+      eligibility: { ...eligibility, execution_mode: { mode: 'shadow', reason: 'not_in_cohort', resolved: 'shadow', channel: 'email', control_ids: ['ctl-1'] } },
+    }));
+    expect(shadow.mode).toBe('shadow');
+    expect(shadow.execution.mode).toEqual({ mode: 'shadow', reason: 'not_in_cohort', resolved: 'shadow', channel: 'email', control_ids: ['ctl-1'] });
+
+    // A stamp whose mode is anything but the literal `live` reads as shadow; a malformed stamp loses nothing else.
+    const odd = decisionWhyFromRow(storedRow({ eligibility: { ...eligibility, execution_mode: { mode: 'LIVE', reason: 7, control_ids: 'x' } } }));
+    expect(odd.execution.mode).toEqual({ mode: 'shadow', reason: null, resolved: null, channel: null, control_ids: [] });
   });
 
   it('a WAIT refusal reads as one: null action, the named reason, nothing selected', () => {

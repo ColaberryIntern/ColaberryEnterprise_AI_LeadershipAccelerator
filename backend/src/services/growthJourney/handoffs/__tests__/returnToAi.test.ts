@@ -5,13 +5,16 @@ jest.mock('../../../../models', () => ({
   GrowthJourneyPolicy: { findOne: (...a: unknown[]) => policyFindOne(...a) },
 }));
 
+import { Op } from 'sequelize';
 import {
+  DEFAULT_QUALIFIED_COOLDOWN_DAYS,
   DEFAULT_RETURN_COOLDOWN_DAYS,
   NO_RETURN,
   RETURNED_TO_AI_OVERLAY,
   RETURNED_TO_AI_REASON,
   cooldownDaysFor,
   cooldownUntil,
+  qualifiedCooldownDays,
   readReturnToAi,
   resolveReturnToAi,
 } from '../returnToAi';
@@ -56,9 +59,25 @@ describe('readReturnToAi', () => {
 });
 
 describe('resolveReturnToAi', () => {
-  it('asks for the newest returned_to_ai row of the subject in this brand', async () => {
+  it('T502: asks for the newest row CARRYING the record - returned_to_ai or a qualified dispositioned row - by subject ref, or by lead when there is one', async () => {
+    type Q = { where: Record<string | symbol, unknown>; order: unknown };
+    const lastWhere = () => (handoffFindOne.mock.calls[handoffFindOne.mock.calls.length - 1][0] as Q);
     await resolveReturnToAi({ subjectRef: 'lead:501', brandId: 'b-ent', asOf: AS_OF });
-    expect(handoffFindOne).toHaveBeenCalledWith({ where: { subject_ref: 'lead:501', brand_id: 'b-ent', status: 'returned_to_ai' }, order: [['updated_at', 'DESC']] });
+    // Symbol keys asserted one by one: a matcher that skipped them would pass whatever the query said.
+    expect(lastWhere().order).toEqual([['updated_at', 'DESC']]);
+    expect(lastWhere().where.brand_id).toBe('b-ent');
+    expect((lastWhere().where.return_to_ai as Record<symbol, unknown>)[Op.ne]).toBeNull();
+    expect(lastWhere().where[Op.or]).toEqual([{ subject_ref: 'lead:501' }]);
+    await resolveReturnToAi({ subjectRef: 'enrollment:e-1', brandId: 'b-trn', asOf: AS_OF, leadId: 501 });
+    expect(lastWhere().where[Op.or]).toEqual([{ subject_ref: 'enrollment:e-1' }, { lead_id: 501 }]);
+    // No status filter: the record, not the status, is what says "hold off".
+    expect(Object.keys(lastWhere().where).sort()).toEqual(['brand_id', 'return_to_ai']);
+  });
+
+  it('T502: a qualified row (status dispositioned) with an open record is active, exactly like a returned one', async () => {
+    const until = new Date(AS_OF.getTime() + 30 * DAY);
+    handoffFindOne.mockResolvedValue({ id: 'h-9', status: 'dispositioned', return_to_ai: { program_slug: 'business-growth', cooldown_until: until.toISOString(), reason: 'qualified:budget confirmed' } });
+    expect(await resolveReturnToAi({ subjectRef: 'lead:501', brandId: 'b-ent', asOf: AS_OF, leadId: 501 })).toEqual({ active: true, handoff_id: 'h-9', cooldown_until: until, reason: 'qualified:budget confirmed' });
   });
 
   it('no row → not active; a row whose cooldown is ahead of the clock → active with the id, the date and the reason', async () => {
@@ -107,6 +126,18 @@ describe('cooldownDaysFor', () => {
     expect(await cooldownDaysFor('b-ent', undefined)).toEqual({ days: 14, source: 'default' });
     expect(await cooldownDaysFor('b-ent', 0)).toEqual({ days: 14, source: 'default' });
     expect(await cooldownDaysFor('b-ent', -3)).toEqual({ days: 14, source: 'default' });
+  });
+});
+
+describe('qualifiedCooldownDays (T502)', () => {
+  it('the body when positive, else 30 - longer than a return, and never the brand policy', () => {
+    expect(DEFAULT_QUALIFIED_COOLDOWN_DAYS).toBe(30);
+    expect(DEFAULT_QUALIFIED_COOLDOWN_DAYS).toBeGreaterThan(DEFAULT_RETURN_COOLDOWN_DAYS);
+    expect(qualifiedCooldownDays(45)).toEqual({ days: 45, source: 'body' });
+    expect(qualifiedCooldownDays(undefined)).toEqual({ days: 30, source: 'default' });
+    expect(qualifiedCooldownDays(0)).toEqual({ days: 30, source: 'default' });
+    expect(qualifiedCooldownDays(-1)).toEqual({ days: 30, source: 'default' });
+    expect(policyFindOne).not.toHaveBeenCalled();
   });
 });
 
