@@ -48,7 +48,7 @@ import { instrumentCronJob } from './cronInstrumentation';
 import { runScheduledRecompute } from './explorerGrowth/explorerProfileService';
 import { recomputeAllMilestonePromotions } from './progression/milestoneSweep';
 import { runScheduledGovernor } from './explorerGrowth/governor/runGovernor';
-import { runScheduledShadowDecisions } from './growthJourney/runShadowDecisionsNightly';
+import { registerGrowthJourneyCrons } from './scheduling/growthJourneyCrons';
 import { runContentSync } from './explorerGrowth/content/runContentSync';
 import {
   isWithinSendWindow,
@@ -1844,31 +1844,9 @@ export function startScheduler(): void {
     });
   });
 
-  // Growth Journey OS - the nightly shadow decisions (Phase 4 T408).
-  //
-  // 04:20 UTC, AFTER the three Explorer jobs above (02:50 content sync, 03:20
-  // recompute, 03:50 Governor) and not inside any of them: the learner brands
-  // decide on scores recomputed the same night, and the business brands run
-  // once the shared Postgres is quiet again.
-  //
-  // DECIDES AND RECORDS ONLY. Every brand's classified subjects get a shadow
-  // decision (executed:false), each decision materialises its handoff rows
-  // through the T404 writer when journeyHandoffs is on, and the queue's
-  // assignment pass runs once per brand. Nothing is sent, enqueued or
-  // notified; a handoff is a row a human reads.
-  //
-  // SHIPPED PAUSED, three times over: the agentRegistrySeed row is
-  // enabled:false (instrumentCronJob skips it with a warning), and
-  // runScheduledShadowDecisions itself returns skipped unless the master flag
-  // and GROWTH_JOURNEY_DECISIONS_ENABLED are both on. Turning it on is the
-  // registry toggle in Admin > Agents plus the flags - never a redeploy.
-  cron.schedule('20 4 * * *', () => {
-    instrumentCronJob('GrowthJourneyShadowDecisions', async () => {
-      await runScheduledShadowDecisions();
-    }).catch((err) => {
-      console.error('[Scheduler] GrowthJourneyShadowDecisions failed:', err);
-    });
-  });
+  // Growth Journey OS crons - the Phase 4 T408 nightly shadow decisions and, from Phase 5 T513, the executor - live in
+  // services/scheduling/growthJourneyCrons.ts, registered here at the position the shadow block held.
+  registerGrowthJourneyCrons();
 
   // Reliability alerting (Trust Center P1-5): rolling 15-min ai_events error-rate
   // check, alerts ali@colaberry.com on breach (2h in-memory cooldown, see
