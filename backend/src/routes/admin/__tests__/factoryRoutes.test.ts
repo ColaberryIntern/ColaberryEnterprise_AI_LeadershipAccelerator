@@ -33,7 +33,7 @@ jest.mock('../../../services/factory/factoryReview', () => {
 
 import express from 'express';
 import request from 'supertest';
-import factoryRoutes from '../factoryRoutes';
+import factoryRoutes, { toContractRequirement } from '../factoryRoutes';
 import { buildSampleContractProject } from '../../../services/factory/sample/sampleContractProject';
 import { ApprovalConflictError, ApprovalGateError } from '../../../services/factory/factoryApproval';
 
@@ -178,5 +178,20 @@ describe('route-auth — every route is section-gated (required CI lint)', () =>
     const src = fs.readFileSync(path.join(__dirname, '..', 'factoryRoutes.ts'), 'utf8');
     const guards = src.match(/requireSection\('program'\)/g) ?? [];
     expect(guards.length).toBeGreaterThanOrEqual(5); // sample, contract, contracts, approve, request-changes
+  });
+});
+
+describe('toContractRequirement — evidence honesty (Phase 6)', () => {
+  const base = { canonical_req_id: 'REQ-1', statement: 'x', tracks: ['proposal'] };
+
+  it("maps a null/unknown evidence_state to 'unassessed', never 'planned'", () => {
+    expect(toContractRequirement({ ...base, evidence_state: null }).evidence_state).toBe('unassessed');
+    expect(toContractRequirement({ ...base }).evidence_state).toBe('unassessed'); // undefined → unassessed
+  });
+
+  it("passes an explicit evidence_state through unchanged (incl. 'unassessed')", () => {
+    expect(toContractRequirement({ ...base, evidence_state: 'unassessed' }).evidence_state).toBe('unassessed');
+    expect(toContractRequirement({ ...base, evidence_state: 'demonstrated' }).evidence_state).toBe('demonstrated');
+    expect(toContractRequirement({ ...base, evidence_state: 'planned' }).evidence_state).toBe('planned');
   });
 });

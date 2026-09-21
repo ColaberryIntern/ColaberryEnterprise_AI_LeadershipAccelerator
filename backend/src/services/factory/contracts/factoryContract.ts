@@ -24,8 +24,13 @@
 /** Which of a contract's two first-class workstreams a record belongs to. */
 export type ContractTrackType = 'proposal' | 'solution_build';
 
-/** The evidence status a proposal claim / capability carries — never present planned as done. */
-export type EvidenceState = 'demonstrated' | 'tested' | 'planned' | 'assumption' | 'missing';
+/**
+ * The evidence status a proposal claim / capability carries — never present planned as done.
+ * `unassessed` is the honest "we don't know yet" value: legacy/migrated work whose evidence has not
+ * been established. It is a stored value, not a blank, and is distinct from `missing` (assessed and
+ * found absent) and `planned` (intended but not yet done).
+ */
+export type EvidenceState = 'demonstrated' | 'tested' | 'planned' | 'assumption' | 'missing' | 'unassessed';
 
 /** A solicitation requirement's nature. Administrative may be proposal-only; technical can span both. */
 export type RequirementKind = 'administrative' | 'technical' | 'compliance' | 'management' | 'pricing';
@@ -254,4 +259,4 @@ export const EXECUTOR_TYPES: ReadonlyArray<ExecutorType> = ['person', 'team', 'a
 export const RESPONSIBILITIES: ReadonlyArray<Responsibility> =
   ['PERFORMER', 'APPROVER', 'ACCOUNTABLE', 'CONTRIBUTOR', 'CONSULTED', 'INFORMED'];
 export const EVIDENCE_STATES: ReadonlyArray<EvidenceState> =
-  ['demonstrated', 'tested', 'planned', 'assumption', 'missing'];
+  ['demonstrated', 'tested', 'planned', 'assumption', 'missing', 'unassessed'];
