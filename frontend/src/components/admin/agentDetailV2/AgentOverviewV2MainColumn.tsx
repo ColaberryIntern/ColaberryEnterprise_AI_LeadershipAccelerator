@@ -4,7 +4,9 @@ import { AUTONOMY_LEVELS, AUTONOMY_LEVEL_DESCRIPTIONS, AutonomyLevel } from '../
 import { LEVEL_PILL_CLASS } from './AgentDetailV2Header';
 import { timeAgo } from '../shell/trust';
 import AgentOverviewV2Tickets from './AgentOverviewV2Tickets';
+import AgentOverviewV2WorkExplained from './AgentOverviewV2WorkExplained';
 import { scheduledWorkColors } from './agentDetailV2Correlation';
+import type { TabKey } from './AgentDetailV2Header';
 
 // Agent Detail V2, main column (2026-09-11) — Ali: "same content just a
 // different view." Every established honest phrase from the pre-redesign
@@ -33,9 +35,10 @@ function formatCost(v: number): string {
 
 interface Props {
   detail: AgentDetail;
+  onNavigate: (tab: TabKey) => void;
 }
 
-export default function AgentOverviewV2MainColumn({ detail }: Props) {
+export default function AgentOverviewV2MainColumn({ detail, onNavigate }: Props) {
   const { agent, trust_contract, cost_summary, authorization_summary, related_tasks, owned_behaviors, tickets, ticket_breakdown } = detail;
   const currentIndex = agent.autonomy_level ? AUTONOMY_LEVELS.indexOf(agent.autonomy_level) : -1;
   const workColor = scheduledWorkColors(detail);
@@ -126,6 +129,8 @@ export default function AgentOverviewV2MainColumn({ detail }: Props) {
           under Performance & Settings' "Tools & channels" sub-tab, matching
           Ali's mockup. Real relocation, not a duplicate — this section no
           longer renders here. */}
+
+      <AgentOverviewV2WorkExplained agentId={detail.agent.id} onNavigate={onNavigate} />
 
       <section className="adv2-card">
         <h2>Scheduled work <span className="adv2-hint">{related_tasks.length} task{related_tasks.length === 1 ? '' : 's'}</span></h2>
