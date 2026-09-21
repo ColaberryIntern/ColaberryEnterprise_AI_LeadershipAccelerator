@@ -4,8 +4,10 @@
  *
  * Idempotent: every id is deterministic (factoryIds), so re-running upserts the same rows and
  * never duplicates. It does NOT create the `delivery_projects` parent — that row needs an
- * engagement and a tenant, which is delivery-domain integration (a later phase). Pass an
- * existing delivery_projects.id; it defaults to the sample id for a dry description.
+ * engagement and a tenant, which is delivery-domain integration. Pass an existing
+ * delivery_projects.id; it defaults to the sample id for a dry description. The persistence is
+ * exported as `persistSampleContract` so the Phase-4 demo seed (seedFactoryDemoContract) reuses it
+ * against a real delivery project.
  *
  *   Usage (on prod, after the schema deploys):
  *     docker exec accelerator-backend node dist/scripts/seedSampleContractProject.js <delivery_project_id>
@@ -14,8 +16,8 @@ import { buildSampleContractProject, SAMPLE_DELIVERY_PROJECT_ID } from '../servi
 import { contentHash } from '../services/factory/factoryApproval';
 import { factoryId } from '../services/factory/factoryIds';
 
-async function main() {
-  const deliveryProjectId = process.argv[2] || SAMPLE_DELIVERY_PROJECT_ID;
+/** Upsert the sample contract's factory layer onto a delivery project. Idempotent + reusable. */
+export async function persistSampleContract(deliveryProjectId: string): Promise<{ tracks: number; requirements: number; process_documents: number }> {
   const sample = buildSampleContractProject();
 
   const { default: ContractTrack } = await import('../models/ContractTrack');
@@ -56,11 +58,17 @@ async function main() {
     });
   }
 
+  return { tracks: sample.tracks.length, requirements: sample.requirements.length, process_documents: 2 };
+}
+
+async function main() {
+  const deliveryProjectId = process.argv[2] || SAMPLE_DELIVERY_PROJECT_ID;
+  const result = await persistSampleContract(deliveryProjectId);
   console.log(JSON.stringify({
-    event: 'sample_contract_seeded', outcome: 'success',
-    delivery_project_id: deliveryProjectId,
-    tracks: sample.tracks.length, requirements: sample.requirements.length, process_documents: 2,
+    event: 'sample_contract_seeded', outcome: 'success', delivery_project_id: deliveryProjectId, ...result,
   }));
 }
 
-main().then(() => process.exit(0)).catch((e) => { console.error('seed failed:', e.message); process.exit(1); });
+if (require.main === module) {
+  main().then(() => process.exit(0)).catch((e) => { console.error('seed failed:', e.message); process.exit(1); });
+}

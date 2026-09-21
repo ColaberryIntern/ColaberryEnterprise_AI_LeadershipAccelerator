@@ -97,3 +97,34 @@ frontend/src/services/factoryApi.ts + pages/admin/AdminFactoryCommandCenterPage.
 Fixture-first: the sample renders on day one; a real contract needs a `delivery_projects` engagement/tenant
 (a later delivery-domain integration). See
 `.loop-architect/runs/20260921-p3-command-center/handoff.md` for numbered verification steps.
+
+## Approvals — the write layer (Phase 4)
+
+The command center's Approve / Request-changes actions, on top of the gated write engine. Additive; the
+immutable, versioned `contract_process_documents` and its CAS approval ladder are untouched.
+
+```
+POST /api/admin/factory/contract/:deliveryProjectId/approve   (requireSection('program'), Zod)
+  → factoryApproval.approveProcessDocument — transactional (fork-on-edit new version), gate-checked
+    (factoryErrors === 0), CAS-guarded (expected_version). approvedBy from the JWT, never the body.
+    Errors mapped: ApprovalConflictError→409, ApprovalGateError→422 (+issues), no-doc→404, illegal→409.
+
+POST /api/admin/factory/contract/:deliveryProjectId/request-changes
+  → factoryReview.requestChanges — writes a COMPANION record to a NEW additive table
+    contract_process_reviews (delivery_project_id, track_type, reviewed_version, decision, reason,
+    requested_by). Never a status on the immutable document or the CAS ladder.
+
+GET /api/admin/factory/contracts  → delivery projects that have a persisted decomposition (so the page
+    defaults to a real contract instead of the read-only sample).
+
+frontend: factoryApi.{listFactoryContracts,approveFactoryContract,requestFactoryChanges}; the page
+  enables the two controls for a real contract (the sample stays read-only), defaulting Approve to
+  level=documented for a draft (draft→documented→full is the transition ladder).
+```
+
+**The demo contract:** `scripts/seedFactoryDemoContract.ts` — a prod-safe, idempotent, reversible seed that
+resolves the `refactored` tenant/brand (never invents), findOrCreate's a labeled demo delivery project on a
+stable slug, and persists the sample decomposition via `persistSampleContract` (exported from
+`scripts/seedSampleContractProject.ts`). Run it on prod to make Approve demonstrable live; remove the demo by
+deleting the `ai-project-factory-demo-contract` DeliveryProject (contract_* rows cascade). See
+`.loop-architect/runs/20260921-p4-approvals/handoff.md`.

@@ -1,7 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PageHeader, StatCard, SectionCard } from '../../components/admin/shell';
-import { getFactorySample, getFactoryContract, type FactoryCommandCenterView, type CcFlowNode } from '../../services/factoryApi';
+import {
+  getFactorySample, getFactoryContract, listFactoryContracts, approveFactoryContract, requestFactoryChanges,
+  type FactoryCommandCenterView, type CcFlowNode,
+} from '../../services/factoryApi';
 
 /**
  * AdminFactoryCommandCenterPage — the AI Project Factory Command Center (read-only, Phase 3).
@@ -34,23 +37,81 @@ export default function AdminFactoryCommandCenterPage(): React.ReactElement {
   const [view, setView] = useState<FactoryCommandCenterView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [actionNote, setActionNote] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setActionNote(null);
     try {
-      const data = contractId ? await getFactoryContract(contractId) : await getFactorySample();
+      let data: FactoryCommandCenterView;
+      if (contractId) {
+        data = await getFactoryContract(contractId);
+      } else {
+        // Default to the newest real contract when one exists; otherwise the read-only sample.
+        const contracts = await listFactoryContracts().catch(() => []);
+        data = contracts.length > 0 ? await getFactoryContract(contracts[0].deliveryProjectId) : await getFactorySample();
+      }
       setView(data);
     } catch {
       setError(contractId
         ? 'No decomposition has been generated for this contract yet.'
-        : 'Could not load the factory sample. Please try again.');
+        : 'Could not load the factory command center. Please try again.');
     } finally {
       setLoading(false);
     }
   }, [contractId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Writable only for a REAL contract with a persisted approval state (never the read-only sample).
+  const canWrite = !!view && !view.isSample && !!view.approval && !saving;
+
+  const handleApprove = useCallback(async () => {
+    if (!view || !view.approval || view.isSample) return;
+    setSaving(true);
+    setError(null);
+    setActionNote(null);
+    try {
+      // A draft only transitions to 'documented'; a documented one advances to 'full'.
+      const level = view.approval.status === 'documented' ? 'full' : 'documented';
+      const enrichmentStatus = view.approval.enrichmentStatus === 'resolved' ? 'resolved' : 'partial';
+      await approveFactoryContract(view.deliveryProjectId, {
+        trackType: view.approval.trackType,
+        expectedVersion: view.approval.version,
+        level,
+        enrichmentStatus,
+      });
+      setActionNote('Approved — the decomposition is recorded at the next version.');
+      await load();
+    } catch (e: any) {
+      setError(e?.response?.data?.error ?? 'Could not approve the contract.');
+    } finally {
+      setSaving(false);
+    }
+  }, [view, load]);
+
+  const handleRequestChanges = useCallback(async () => {
+    if (!view || !view.approval || view.isSample) return;
+    const reason = window.prompt('What changes are needed?');
+    if (!reason || !reason.trim()) return;
+    setSaving(true);
+    setError(null);
+    setActionNote(null);
+    try {
+      await requestFactoryChanges(view.deliveryProjectId, {
+        trackType: view.approval.trackType,
+        reviewedVersion: view.approval.version,
+        reason: reason.trim(),
+      });
+      setActionNote('Change request recorded.');
+    } catch (e: any) {
+      setError(e?.response?.data?.error ?? 'Could not record the change request.');
+    } finally {
+      setSaving(false);
+    }
+  }, [view]);
 
   return (
     <div className="admin-page">
@@ -176,9 +237,18 @@ export default function AdminFactoryCommandCenterPage(): React.ReactElement {
                 ) : (
                   <div className="small text-muted">Not yet persisted (sample preview).</div>
                 )}
+                {actionNote && <div className="small text-success mt-2"><i className="ri-check-line me-1" aria-hidden="true" />{actionNote}</div>}
                 <div className="d-flex gap-2 mt-3">
-                  <button type="button" className="btn btn-success btn-sm flex-fill" disabled title="Available when a live contract is loaded (Phase 4)">Approve process</button>
-                  <button type="button" className="btn btn-outline-secondary btn-sm flex-fill" disabled title="Available in Phase 4">Request changes</button>
+                  <button
+                    type="button"
+                    className="btn btn-success btn-sm flex-fill"
+                    disabled={!canWrite}
+                    onClick={handleApprove}
+                    title={view.isSample ? 'The sample is read-only — open a real contract to approve' : undefined}
+                  >
+                    {saving ? 'Working…' : (view.approval?.status === 'documented' ? 'Approve (full)' : 'Approve process')}
+                  </button>
+                  <button type="button" className="btn btn-outline-secondary btn-sm flex-fill" disabled={!canWrite} onClick={handleRequestChanges}>Request changes</button>
                 </div>
               </SectionCard>
             </div>
