@@ -6,6 +6,7 @@ import InternshipDocument from '../../models/InternshipDocument';
 import InternshipRequirementAcknowledgement from '../../models/InternshipRequirementAcknowledgement';
 import InternshipStatusEvent from '../../models/InternshipStatusEvent';
 import { ensureInternshipCohort, findInternshipCohort } from './internshipCohortService';
+import { documentTemplate, requiredTemplatesFor, type TemplateKey } from './internshipDocumentTemplates';
 import { emitInternshipEvent } from './internshipAnalytics';
 
 /**
@@ -96,6 +97,23 @@ export interface ConversionPlan {
 }
 
 const norm = (email: string): string => email.trim().toLowerCase();
+
+/**
+ * The signature documents a converted intern is recorded as having signed outside
+ * the platform.
+ *
+ * Derived from the SAME function activation's document check reads
+ * (`outstandingRequirements` → `requiredTemplatesFor`), evaluated for what a
+ * converted intern actually has: no administrative intake and no conditional
+ * approval. Importing only the offer letter left the IP agreement and the
+ * acceptance acknowledgement outstanding, so "documents already verified" produced
+ * an application that `activate()` then blocked on documents — every converted
+ * intern was stuck at the door for paperwork an administrator had just certified.
+ */
+export function importedSignatureDocumentTypes(): TemplateKey[] {
+  return requiredTemplatesFor({ workAuthCategory: null, hasConditions: false })
+    .filter((key) => documentTemplate(key).requires_signature);
+}
 
 /**
  * Build the plan. READ ONLY.
@@ -456,29 +474,32 @@ async function convertOne(params: {
   }
 
   // Record the imported facts as real rows, with their source, so "grandfathered"
-  // is auditable rather than invisible.
+  // is auditable rather than invisible. One row per signature document the
+  // platform would have asked for — see importedSignatureDocumentTypes().
   if (req.documents === 'already_verified') {
-    await InternshipDocument.findOrCreate({
-      where: {
-        application_id: application.id,
-        document_type: 'unpaid_internship_offer',
-        kind: 'signed_upload',
-        revision: 1,
-      },
-      defaults: {
-        application_id: application.id,
-        document_type: 'unpaid_internship_offer',
-        kind: 'signed_upload',
-        revision: 1,
-        status: 'verified',
-        required: true,
-        verified_by: actorId,
-        verified_at: new Date(nowMs),
-        // No storage_key: there is no file, and inventing one would make the row
-        // claim a document exists that nobody can open.
-        original_filename: 'imported — signed outside the platform',
-      } as any,
-    });
+    for (const documentType of importedSignatureDocumentTypes()) {
+      await InternshipDocument.findOrCreate({
+        where: {
+          application_id: application.id,
+          document_type: documentType,
+          kind: 'signed_upload',
+          revision: 1,
+        },
+        defaults: {
+          application_id: application.id,
+          document_type: documentType,
+          kind: 'signed_upload',
+          revision: 1,
+          status: 'verified',
+          required: true,
+          verified_by: actorId,
+          verified_at: new Date(nowMs),
+          // No storage_key: there is no file, and inventing one would make the row
+          // claim a document exists that nobody can open.
+          original_filename: 'imported — signed outside the platform',
+        } as any,
+      });
+    }
   }
 
   // The one requirement conversion never waives.

@@ -42,7 +42,8 @@ jest.mock('../internshipAnalytics', () => ({
   emitInternshipEvent: (...a: unknown[]) => mockEmit(...a),
 }));
 
-import { commitConversion, planConversion } from '../internshipConversionService';
+import { commitConversion, importedSignatureDocumentTypes, planConversion } from '../internshipConversionService';
+import { requiredTemplatesFor } from '../internshipDocumentTemplates';
 
 const COHORT = { id: 'cohort-1' };
 
@@ -251,6 +252,43 @@ describe('commit', () => {
     const plan = await planFor({ email: 'ada@example.com', interview_grandfathered: true });
     await commitConversion({ plan, actorId: 'dhee@colaberry.com' });
     expect(mockMembership.findOrCreate).not.toHaveBeenCalled();
+  });
+
+  it('imports a verified signed copy of EVERY signature document activation will look for', async () => {
+    // Importing only the offer letter left the IP agreement and the acceptance
+    // acknowledgement outstanding, so `activate()` blocked every converted intern
+    // on documents an administrator had just certified. Named explicitly rather
+    // than derived, so this cannot pass by agreeing with an empty list.
+    const plan = await planFor({
+      email: 'ada@example.com', interview_grandfathered: true, documents_already_verified: true,
+    });
+    await commitConversion({ plan, actorId: 'dhee@colaberry.com' });
+
+    const imported = mockDocument.findOrCreate.mock.calls.map(([arg]) => arg.defaults);
+    const types = imported.map((d) => d.document_type).sort();
+    expect(types).toEqual(['acceptance_acknowledgement', 'ip_agreement', 'unpaid_internship_offer']);
+    for (const row of imported) {
+      expect(row).toEqual(expect.objectContaining({
+        kind: 'signed_upload', status: 'verified', required: true, verified_by: 'dhee@colaberry.com',
+      }));
+      // There is no file. A storage key would claim one exists.
+      expect(row.storage_key).toBeUndefined();
+    }
+  });
+
+  it('imports exactly the signature documents a fresh applicant with no intake would owe', () => {
+    // Lockstep with the document check that activation runs: if a required
+    // template is added, conversion follows it without a second list to update.
+    const owed = requiredTemplatesFor({ workAuthCategory: null, hasConditions: false });
+    expect(importedSignatureDocumentTypes()).toEqual(
+      owed.filter((k) => k !== 'work_authorization_request'),
+    );
+  });
+
+  it('writes no documents at all when they were not already verified', async () => {
+    const plan = await planFor({ email: 'ada@example.com', interview_grandfathered: true });
+    await commitConversion({ plan, actorId: 'dhee@colaberry.com' });
+    expect(mockDocument.findOrCreate).not.toHaveBeenCalled();
   });
 
   it('always records the credential acknowledgement', async () => {

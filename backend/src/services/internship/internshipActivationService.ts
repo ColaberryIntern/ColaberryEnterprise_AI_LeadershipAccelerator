@@ -304,7 +304,15 @@ export async function buildChecklist(application: InternshipApplication): Promis
   );
 
   const evidence: ChecklistEvidence = {
-    offer_letter_generated: docs.some((d) => d.kind === 'generated'),
+    // A signed offer letter that a reviewer has verified proves the letter existed
+    // and was signed, whether or not this platform produced it. A converted intern
+    // signed theirs outside the platform (internshipConversionService imports the
+    // verified upload and, honestly, no generated row), and the "sign your offer
+    // letter" step must not hold them at the door for paperwork already done.
+    offer_letter_generated: docs.some((d) => d.kind === 'generated')
+      || docs.some((d) => d.kind === 'signed_upload'
+        && d.document_type === 'unpaid_internship_offer'
+        && d.status === 'verified'),
     signed_documents_uploaded: docs.some((d) => d.kind === 'signed_upload'),
     all_documents_verified: requirements.all_verified,
     membership_ok: membership.ok,
