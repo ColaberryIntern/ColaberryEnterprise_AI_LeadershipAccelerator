@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { Op } from 'sequelize';
 import { isGrowthJourneyCapabilityEnabled, type GrowthJourneyFlags } from '../../../config/growthJourneyFlags';
 import { GrowthJourneyExecution } from '../../../models';
@@ -22,11 +23,15 @@ import { EXECUTION_OUTCOME_SOURCE } from './reconcileExecutions';
  *
  * ─── ONE REPLY, ONE OUTCOME ─────────────────────────────────────────────────
  *
- * The key is `(growth_journey_executions, <receipt>:reply:<provider message
- * id>)` - the receipt AND the message, so two receipts for one lead get their
- * own outcome and a webhook delivered twice lands on the first row (the
- * recorder's replay). Without a provider id the day stands in for it. The
- * reconciler never writes this type: the webhook sees a reply first.
+ * The key is `(growth_journey_executions, <receipt>:reply:mid:<hash of the
+ * provider message id>)` - the receipt AND the message, so two receipts for
+ * one lead get their own outcome and a webhook delivered twice lands on the
+ * first row (the recorder's replay). The id is HASHED, never copied: the
+ * provider's is an RFC Message-Id, `<local@domain>`, and T519's exit fixtures
+ * found it carrying an `@` into `source_ref` and the ledger payload - the
+ * one place the no-address rule had a hole. A hash is as stable across
+ * redeliveries as the id itself. Without a provider id the day stands in.
+ * The reconciler never writes this type: the webhook sees a reply first.
  */
 
 export const COMPLETED_REPLY_WINDOW_DAYS = 14;
@@ -47,10 +52,10 @@ export type RecordReplyOutcomeResult =
   | { status: 'recorded' | 'replayed'; execution_id: string; source_ref: string }
   | { status: 'failed'; error_class: string };
 
-/** The provider's message id with its angle brackets off, or the day, so the key is stable across redeliveries. */
+/** The provider's message id, brackets and whitespace off, HASHED (it is an address-shaped string) - or the day; stable across redeliveries. */
 export function replyKeyOf(providerMessageId: string | null, asOf: Date): string {
   const id = providerMessageId?.replace(/[<>\s]/g, '') ?? '';
-  return id.length > 0 ? id : `day:${asOf.toISOString().slice(0, 10)}`;
+  return id.length > 0 ? `mid:${createHash('sha256').update(id).digest('hex').slice(0, 32)}` : `day:${asOf.toISOString().slice(0, 10)}`;
 }
 
 export async function recordReplyOutcome(args: RecordReplyOutcomeArgs): Promise<RecordReplyOutcomeResult> {

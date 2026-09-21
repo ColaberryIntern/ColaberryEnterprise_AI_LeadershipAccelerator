@@ -12,7 +12,11 @@ import * as models from '../../../../models';
 import { AS_OF_4, type Table } from '../../__tests__/fixtures/phase4Tables';
 import { T5, resetPhase5Tables } from '../../__tests__/fixtures/phase5Tables';
 import { EXECUTION_OUTCOME_SOURCE } from '../reconcileExecutions';
+import { createHash } from 'crypto';
 import { COMPLETED_REPLY_WINDOW_DAYS, recordReplyOutcome, replyKeyOf } from '../replyOutcome';
+
+/** The key's message half: the hash T519 made it (a Message-Id is `<local@domain>`, and the key must carry no `@`). */
+const mid = (id: string) => `mid:${createHash('sha256').update(id).digest('hex').slice(0, 32)}`;
 
 /**
  * T515 - a reply as an outcome on its receipt, over T503's tables (the DDL's
@@ -48,10 +52,10 @@ describe('which receipt', () => {
   it('an open receipt for the replied-to campaign: contact_replied, keyed on the receipt and the message, the source the executions table, the metadata ids only', async () => {
     const r = receipt();
     const out = await run();
-    expect(out).toEqual({ status: 'recorded', execution_id: r.id, source_ref: `${r.id}:reply:m-1@mail.example` });
+    expect(out).toEqual({ status: 'recorded', execution_id: r.id, source_ref: `${r.id}:reply:${mid('m-1@mail.example')}` });
     expect(outcomes.rows).toHaveLength(1);
-    expect(outcomes.rows[0]).toMatchObject({ outcome_type: 'contact_replied', source: EXECUTION_OUTCOME_SOURCE, source_ref: `${r.id}:reply:m-1@mail.example`, lead_id: LEAD, decision_id: r.decision_id, subject_ref: `lead:${LEAD}`, metadata: { campaign_id: 'c-flow' }, occurred_at: AS_OF_4 });
-    expect(JSON.stringify(outcomes.rows[0].metadata)).not.toContain('@');
+    expect(outcomes.rows[0]).toMatchObject({ outcome_type: 'contact_replied', source: EXECUTION_OUTCOME_SOURCE, source_ref: `${r.id}:reply:${mid('m-1@mail.example')}`, lead_id: LEAD, decision_id: r.decision_id, subject_ref: `lead:${LEAD}`, metadata: { campaign_id: 'c-flow' }, occurred_at: AS_OF_4 });
+    expect(JSON.stringify(outcomes.rows[0])).not.toContain('@'); // the whole row - the key included, since T519
   });
 
   it('a receipt completed inside the window counts; one completed before it does not; the newest wins', async () => {
@@ -97,9 +101,9 @@ describe('acceptance 4: two identical deliveries, one outcome; two receipts, two
   it('two receipts for one lead (two campaigns) each get their own outcome for their own reply - the key is the receipt, not the lead', async () => {
     const a = receipt({ campaign_id: 'c-a' });
     const b = receipt({ campaign_id: 'c-b', channel: 'in_app', decision_id: 'd-b' });
-    expect(refOf(await run({ campaignId: 'c-a', providerMessageId: '<r-a>' }))).toBe(`${a.id}:reply:r-a`);
-    expect(refOf(await run({ campaignId: 'c-b', providerMessageId: '<r-b>' }))).toBe(`${b.id}:reply:r-b`);
-    expect(outcomes.rows.map((o) => o.source_ref).sort()).toEqual([`${a.id}:reply:r-a`, `${b.id}:reply:r-b`].sort());
+    expect(refOf(await run({ campaignId: 'c-a', providerMessageId: '<r-a>' }))).toBe(`${a.id}:reply:${mid('r-a')}`);
+    expect(refOf(await run({ campaignId: 'c-b', providerMessageId: '<r-b>' }))).toBe(`${b.id}:reply:${mid('r-b')}`);
+    expect(outcomes.rows.map((o) => o.source_ref).sort()).toEqual([`${a.id}:reply:${mid('r-a')}`, `${b.id}:reply:${mid('r-b')}`].sort());
   });
 
   it('two different messages to the same receipt are two outcomes; without a provider id the day stands in', async () => {
@@ -109,7 +113,10 @@ describe('acceptance 4: two identical deliveries, one outcome; two receipts, two
     expect(refOf(await run({ providerMessageId: null }))).toMatch(/:reply:day:\d{4}-\d{2}-\d{2}$/);
     expect((await run({ providerMessageId: null })).status).toBe('replayed');
     expect(outcomes.rows).toHaveLength(3);
-    expect(replyKeyOf('  <abc> ', AS_OF_4)).toBe('abc');
+    expect(replyKeyOf('  <abc> ', AS_OF_4)).toBe(mid('abc'));
+    expect(replyKeyOf('<abc>', AS_OF_4)).toBe(replyKeyOf('  <abc> ', AS_OF_4)); // stable across redeliveries
+    expect(replyKeyOf('<CAFxyz123@mail.gmail.com>', AS_OF_4)).not.toContain('@');
+    expect(replyKeyOf('<a@x>', AS_OF_4)).not.toBe(replyKeyOf('<b@x>', AS_OF_4));
     expect(replyKeyOf('', AS_OF_4)).toBe(`day:${AS_OF_4.toISOString().slice(0, 10)}`);
   });
 });
