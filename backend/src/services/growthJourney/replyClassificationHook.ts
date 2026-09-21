@@ -13,6 +13,14 @@ import type { ClassifySubjectArgs, ClassifySubjectResult } from './classificatio
  * and nothing else. Opt-out handling, Explorer routing and the auto-reply all
  * happen exactly as before; this only observes.
  *
+ * Phase 5 T515: once the classification has resolved - never before, never
+ * awaited by the webhook - two more fire-and-forget steps follow it: the reply
+ * becomes an outcome on the receipt that sent what it answers
+ * (`execution/replyOutcome`), and the subject is decided again under the
+ * reply's brands (`execution/replyRedecide`). Both are gated by their own
+ * flags and never throw; a rejection anywhere in the chain is the same one
+ * logged line.
+ *
  * Master-gated through the flags the process resolved at boot (`env.growthJourney`,
  * i.e. the flags module — no environment variable is read here). While the
  * master is off — production today — `classifySubject` returns `disabled`
@@ -56,5 +64,17 @@ export function recordReplyClassification(args: ReplyClassificationArgs, flags: 
   }
   const reply = { body: args.body, channel: args.channel, campaign_id: args.campaignId, provider_message_id: args.providerMessageId ?? null };
   void classifySubject({ anchor: { leadId: args.leadId }, trigger: 'reply', extras: { reply }, flags })
+    .then(() => afterReplyClassified(args, flags))
     .catch((err: unknown) => logHookFailure(args.channel, args.leadId, err));
+}
+
+type RecordReplyOutcome = (a: { leadId: number; campaignId: string | null; providerMessageId: string | null; flags: GrowthJourneyFlags }) => Promise<unknown>;
+type RedecideOnReply = (a: { leadId: number; campaignId: string | null; flags: GrowthJourneyFlags }) => Promise<unknown>;
+
+/** T515: what follows a classified reply - the outcome first (the re-decision's context may read it), then the re-decision. Required lazily, as the classifier is. */
+async function afterReplyClassified(args: ReplyClassificationArgs, flags: GrowthJourneyFlags): Promise<void> {
+  const { recordReplyOutcome } = require('./execution/replyOutcome') as { recordReplyOutcome: RecordReplyOutcome };
+  const { redecideOnReply } = require('./execution/replyRedecide') as { redecideOnReply: RedecideOnReply };
+  await recordReplyOutcome({ leadId: args.leadId, campaignId: args.campaignId, providerMessageId: args.providerMessageId ?? null, flags });
+  await redecideOnReply({ leadId: args.leadId, campaignId: args.campaignId, flags });
 }
