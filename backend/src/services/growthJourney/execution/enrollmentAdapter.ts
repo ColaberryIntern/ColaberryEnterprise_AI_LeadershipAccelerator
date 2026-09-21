@@ -21,10 +21,11 @@ import { validateCampaign } from './validateCampaign';
 
 /**
  * The adapter (Phase 5 T510): the ONE file in the journey tree that may enrol.
- * The no-send scanner allowlists exactly this file for exactly
- * `enrollLeadInSequence` and the `sequenceService` import; the same literal
- * anywhere else in the tree still fails the guard, and any other send literal
- * in this file fails it too.
+ * The no-send scanner allowlists exactly this file for exactly two literals
+ * and their two modules - `enrollLeadInSequence` from `sequenceService`
+ * (T510) and `enrollLeadsInCampaign` from `campaignService` (T516, Ali's own
+ * campaign); the same literals anywhere else in the tree still fail the
+ * guard, and any other send literal in this file fails it too.
  *
  * ─── EXACTLY ONCE, BY THE DATABASE ──────────────────────────────────────────
  *
@@ -49,8 +50,10 @@ import { validateCampaign } from './validateCampaign';
  *      decision's approved asset; its href must be a relative portal path or
  *      an https URL on one of the brand's own registered hostnames.
  *   4  An exception is `failed`, its error class on the receipt, one log line
- *      through the redactor. Ali outreach is T511's: a receipt on that
- *      channel is returned to `approved`, untouched.
+ *      through the redactor. ali_outreach (T516) is REVIEW-only: the
+ *      registered Ali campaign resolved by key, the Explorer evaluator over
+ *      stored rows, then `enrollLeadsInCampaign` for the one lead; the day's
+ *      cap is the one transient refusal, every other one is terminal.
  *
  * No address in any row, reason, or line written here.
  */

@@ -335,6 +335,20 @@ describe('the execute stage: the hold before the claim, the channels it may clai
     expect(executionLedgerRows()).toEqual([]);
   });
 
+  it('T516: the run crosses the cap itself - nine sent today, two approved Ali receipts: one enrols, the next waits unclaimed, the count asked once by the executor', async () => {
+    m.campaignFindOne.mockResolvedValue({ ...approvedCampaign(), id: 'c-ali', sequence_id: 's-ali', settings: { campaign_key: 'ali_personal_outreach' } });
+    m.aliSends.mockResolvedValue(9);
+    approvedReceipt({ channel: 'ali_outreach', action_type: 'SEND_ALI_OUTREACH', campaign_id: 'c-ali', campaign_key: 'ali_personal_outreach', mode: 'review', approved_by: 'admin:1', enrollment_id: 'enr-ali', approved_at: new Date(AS_OF_4.getTime() - 2 * 60_000) });
+    approvedReceipt({ lead_id: 514, subject_ref: 'lead:514', channel: 'ali_outreach', action_type: 'SEND_ALI_OUTREACH', campaign_id: 'c-ali', campaign_key: 'ali_personal_outreach', mode: 'review', approved_by: 'admin:1', enrollment_id: 'enr-ali-2', approved_at: new Date(AS_OF_4.getTime() - 60_000) });
+    const s = await run();
+    expect(s.execute).toMatchObject({ candidates: 2, enrolled: 1, held: { ali_cap: 1 } });
+    expect(m.enrolCampaign).toHaveBeenCalledTimes(1);
+    expect(m.enrolCampaign).toHaveBeenCalledWith('c-ali', [LEAD]);
+    // one count by the executor before any claim, one by the adapter's context for the receipt it enrolled - never a third
+    expect(m.aliSends).toHaveBeenCalledTimes(2);
+    expect(T5.executions.rows.map((r) => [r.lead_id, r.status, r.attempts])).toEqual([[LEAD, 'enrolled', 1], [514, 'approved', 0]]);
+  });
+
   it('the 51st receipt waits: fifty approved receipts enrol in one run and the oldest approval goes first', async () => {
     for (let i = 0; i < 51; i += 1) approvedReceipt({ lead_id: 1000 + i, subject_ref: `lead:${1000 + i}`, approved_at: new Date(AS_OF_4.getTime() - (60 - i) * 60_000) });
     const s = await run();

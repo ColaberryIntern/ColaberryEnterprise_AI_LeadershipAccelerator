@@ -57,10 +57,10 @@ import { resolveExecutionHold, resolveExecutionMode, type ExecutionChannel } fro
  * The registry row is `enabled: false` (`instrumentCronJob` skips it), the
  * master flag is off, and `journeyExecution` is off; this function checks the
  * last two itself and answers `skipped` before any model read. Ali outreach is
- * REVIEW-only and executes through its own path (T516); its receipts are never
- * executed here only from a human's approval (T516): its day's cap is asked
- * before the claim, once per campaign per run, so receipts past it wait in
- * place. SMS and voice have no receipts to claim.
+ * REVIEW-only, so each of its receipts here is a human's approval (T516); its
+ * day's cap is asked before the claim, once per campaign per run and counted
+ * up as the run enrols, so receipts past it wait in place unclaimed. SMS and
+ * voice have no receipts to claim.
  *
  * The summary is counts and reason strings - no subject ref, no address. Its
  * `context` goes through `redactForLogs` like every other line in this tree;
