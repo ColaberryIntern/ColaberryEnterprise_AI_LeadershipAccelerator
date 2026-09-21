@@ -52,7 +52,7 @@ export async function seedFactoryDemoContract(): Promise<{ deliveryProjectId: st
       engagement_id: engagement.id, tenant_id: engagement.tenant_id, organization_id: org.id,
       brand_id: brand ? brand.id : null,
       name: 'AI Government Contract Finder (demo)', slug: DEMO_PROJECT_SLUG,
-      status: 'build', project_class: 'sandbox',
+      status: 'building', project_class: 'sandbox',
       business_problem: 'Demo contract for the AI Project Factory Command Center approval flow.',
     });
     created = true;
