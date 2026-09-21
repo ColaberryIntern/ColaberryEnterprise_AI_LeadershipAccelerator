@@ -4,6 +4,7 @@ import { ManagerInboxItem } from '../../../services/managerInboxApi';
 import AgentOverviewV2MainColumn from './AgentOverviewV2MainColumn';
 import AgentOverviewV2Sidebar from './AgentOverviewV2Sidebar';
 import AgentOverviewV2Hero from './AgentOverviewV2Hero';
+import AgentOverviewV2Metrics from './AgentOverviewV2Metrics';
 import AgentOverviewV2NeedsAli from './AgentOverviewV2NeedsAli';
 import type { TabKey } from './AgentDetailV2Header';
 
@@ -17,6 +18,16 @@ import type { TabKey } from './AgentDetailV2Header';
 // 4-tile KPI shape, and "Needs Ali" card, added above the existing
 // two-column grid (a full-width banner, matching the mockup's own
 // placement, not squeezed into either column).
+//
+// Agent Detail redesign, Track A1 (2026-09-21) — Overview becomes the
+// default landing tab (AgentDetailPage.tsx); the hero/KPI top is rebuilt in
+// the mockup's own dark-gradient `.adv2-hero`/`.adv2-metrics` visual
+// language (was plain Bootstrap StatCards — see AgentOverviewV2Hero.tsx's
+// and AgentOverviewV2Metrics.tsx's own header comments for the full
+// honest-relabeling reasoning). Every one of the 11 real sections that
+// existed before this run (6 in MainColumn, 5 in Sidebar) is UNCHANGED —
+// this run only touched the top-of-page composition and appended one new
+// static explainer card at the end of MainColumn.
 
 interface Props {
   detail: AgentDetail;
@@ -29,15 +40,16 @@ export default function AgentOverviewV2({ detail, inboxItems, inboxLoading, onNa
   const agentDisplayName = detail.identity?.display_name || detail.agent.agent_name;
 
   return (
-    <>
+    <div className="adv2-wrap">
       <AgentOverviewV2Hero detail={detail} onNavigate={onNavigate} />
-      <div className="adv2-wrap" style={{ marginBottom: 20 }}>
+      <AgentOverviewV2Metrics detail={detail} inboxItems={inboxItems} onNavigate={onNavigate} />
+      <div style={{ marginBottom: 20 }}>
         <AgentOverviewV2NeedsAli inboxItems={inboxItems} inboxLoading={inboxLoading} onNavigate={onNavigate} />
       </div>
-      <div className="adv2-wrap adv2-grid">
+      <div className="adv2-grid">
         <AgentOverviewV2MainColumn detail={detail} onNavigate={onNavigate} />
         <AgentOverviewV2Sidebar detail={detail} agentId={detail.agent.id} agentDisplayName={agentDisplayName} />
       </div>
-    </>
+    </div>
   );
 }

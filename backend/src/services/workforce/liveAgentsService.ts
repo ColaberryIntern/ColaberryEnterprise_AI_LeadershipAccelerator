@@ -125,6 +125,36 @@ export async function countOpenTicketsForAgent(adminUserId: string, agent: AiAge
   });
 }
 
+// Agent Detail redesign, Track A1 (2026-09-21) — the mockup's "Verified complete"
+// hero tile has no real "verified" concept anywhere in this codebase (no
+// `closed_at` column; `verification_status`/`outcome_status` on Ticket.ts are
+// free-text and unused by this flow) — relabeled "Completed (30d)" to stay
+// honest about what's actually being counted, per this run's own
+// execution-contract.md. `updated_at` is this file's own already-established
+// real proxy for "last touched" (see `getLastTicketActivityForAgent` below).
+const COMPLETED_WINDOW_DAYS = 30;
+
+/** Same real match-list/scoping shape as `countOpenTicketsForAgent()` above, but
+ * counts `done` tickets last touched within the window instead of open ones. */
+export async function countCompletedTicketsForAgent(adminUserId: string, agent: AiAgent): Promise<number> {
+  const matchList = buildCreatorIdMatchList(adminUserId, agent);
+  const cutoff = new Date(Date.now() - COMPLETED_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  return Ticket.count({
+    where: {
+      [Op.and]: [
+        { status: 'done' },
+        { updated_at: { [Op.gte]: cutoff } },
+        {
+          [Op.or]: [
+            { assigned_to_type: 'ai_staff', assigned_to_id: { [Op.in]: matchList } },
+            { created_by_id: { [Op.in]: matchList } },
+          ],
+        },
+      ],
+    },
+  });
+}
+
 /** Trust Contract fix (2026-08-24) — Ali, live, looking at Reese's real page: "Reese
  * has several tickets that have been opened and that he opened for outreach but this
  * says it's never been run." Real bug: `trust_contract.last_run_at` is honestly null

@@ -162,6 +162,43 @@
 .adv2-link:hover { text-decoration: underline; }
 .adv2-muted { color: var(--adv2-ink-3); }
 
+/* Agent Detail redesign, Track A1 (2026-09-21) — the Overview hero banner +
+ * 4-tile metrics row, matching the mockup's own `.hero`/`.metrics`/`.metric`
+ * shape (`preview (3).html`). The hero itself stays dark in both light and
+ * dark page mode (it's a fixed accent panel, not page content) — same
+ * reasoning as the sidebar's own `--adv2-nav` pair.
+ */
+.adv2-hero { background: linear-gradient(115deg, var(--adv2-nav), var(--adv2-nav-2)); border-radius: 14px; padding: 27px 29px; color: #fff; display: grid; grid-template-columns: 1fr 280px; gap: 25px; }
+.adv2-hero .adv2-eyebrow { font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; font-weight: 700; color: #96D9BD; }
+.adv2-hero h2 { font-size: 24px; line-height: 1.35; margin: 8px 0 12px; letter-spacing: -0.5px; font-weight: 600; }
+.adv2-hero p { color: #BED8CB; font-size: 14px; margin: 0 0 14px; max-width: 62ch; }
+.adv2-hero .adv2-btn { background: #E6F4ED; color: #154E3E; border: 0; }
+.adv2-hero-next { border-left: 1px solid #FFFFFF25; padding-left: 25px; align-self: center; }
+.adv2-hero-next strong { display: block; margin: 9px 0; font-size: 15px; }
+.adv2-hero-next span { font-size: 12.5px; color: #BAD5C7; }
+.adv2-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 18px 0; }
+.adv2-metric { background: var(--adv2-panel); border: 1px solid var(--adv2-rule); border-radius: 10px; padding: 16px 18px; text-align: left; }
+.adv2-metric:hover { border-color: var(--adv2-rule-2); }
+.adv2-metric .adv2-k { font-size: 13.5px; color: var(--adv2-ink-2); }
+.adv2-metric .adv2-v { font-size: 27px; font-weight: 600; letter-spacing: -0.02em; margin: 5px 0; }
+.adv2-metric .adv2-hint { font-size: 12.5px; color: var(--adv2-ink-3); }
+.adv2-explainer { background: var(--adv2-trust-soft); }
+
+/* Agent Detail redesign, Track A1 (2026-09-21) — the Work tab's new
+ * list+detail split, matching the mockup's own `.worklayout` shape.
+ */
+.adv2-worklayout { display: grid; grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.4fr); gap: 18px; align-items: start; }
+.adv2-case-row { display: block; width: 100%; text-align: left; background: var(--adv2-panel); border: 1px solid var(--adv2-rule); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; }
+.adv2-case-row:hover { border-color: var(--adv2-rule-2); }
+.adv2-case-row.adv2-active { border-color: var(--adv2-trust); box-shadow: inset 3px 0 var(--adv2-trust); }
+
+@media (max-width: 900px) {
+  .adv2-hero { grid-template-columns: 1fr; }
+  .adv2-hero-next { border-left: 0; border-top: 1px solid #FFFFFF25; padding: 14px 0 0; }
+  .adv2-metrics { grid-template-columns: repeat(2, 1fr); }
+  .adv2-worklayout { grid-template-columns: 1fr; }
+}
+
 /* Autonomy ladder */
 .adv2-ladder { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin: 4px 0 19px; position: relative; }
 .adv2-ladder::before { content: ""; position: absolute; left: 13px; right: 13px; top: 12px; height: 2px; background: var(--adv2-rule-2); }

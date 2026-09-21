@@ -10,7 +10,7 @@ import AgentOverviewV2 from '../../components/admin/agentDetailV2/AgentOverviewV
 import AgentAtAGlanceTab from '../../components/admin/AgentAtAGlanceTab';
 import AgentLiveStatusTab from '../../components/admin/AgentLiveStatusTab';
 import AgentWorkDecisionsTab from '../../components/admin/AgentWorkDecisionsTab';
-import AgentWorkTab from '../../components/admin/AgentWorkTab';
+import AgentWorkV2 from '../../components/admin/agentDetailV2/AgentWorkV2';
 import AgentTalkTab from '../../components/admin/AgentTalkTab';
 import AgentPerformanceSettingsTab from '../../components/admin/AgentPerformanceSettingsTab';
 
@@ -82,13 +82,13 @@ import AgentPerformanceSettingsTab from '../../components/admin/AgentPerformance
 // Checkpoint F, "At a Glance" (2026-09-03) — Ali, after reviewing all five
 // sections: "this is a lot of information... a small update or
 // conditionally formatted KPI... for each section... easy to navigate."
-// Approved as an HTML mockup first, then built here. "Overview" is no
-// longer a standalone tab — its real content (identity, tools, reports-to,
-// system prompt) moved into Command Center, unchanged, just relocated
-// (same pattern as folding Charter into Trust & Control). "At a Glance"
-// takes Overview's old slot as the new default: one real KPI per section,
-// color-coded by what needs attention, click-through to that tab via
-// `onNavigate`. Tab count stays at seven.
+// Approved as an HTML mockup first, then built here. At the time this
+// shipped, "Overview" was folded into Command Center and "At a Glance"
+// took its old default-tab slot. Superseded by Checkpoint G below (Overview
+// returns as its own standalone tab) and, later, by the Agent Detail
+// redesign Track A1 comment further down (Overview becomes the default
+// tab again) — "At a Glance" itself is unchanged and still real, just no
+// longer the landing view. Tab count stays at seven.
 //
 // Checkpoint G (2026-09-10) — Ali, on Reese's own page: "The command
 // center is too big and can be broken out into more tabs." Command Center
@@ -140,17 +140,40 @@ import AgentPerformanceSettingsTab from '../../components/admin/AgentPerformance
 // 'performance_settings' — the tiles themselves are unchanged, only
 // their destination. Overview, Talk, Work & Decisions, At a Glance
 // (beyond the 3 retargeted clicks), and Live Status are unchanged in
-// this slice — the mockup's Work/Decisions split and Overview's new
-// hero/KPI/timeline content are real, deliberately deferred scope for a
-// later slice, gated on real answers to what an "owned case" is and what
-// feeds "Needs Ali" (see this run's own execution-contract.md).
+// this slice — the mockup's Work/Decisions split and Overview's hero/KPI/
+// timeline content were deliberately deferred at this point; Slice 2b
+// (below) shipped Overview's hero/KPI/timeline shortly after, and the
+// Agent Detail redesign Track A1 (further below) later shipped the Work
+// tab's real list+detail split.
+//
+// Agent Detail redesign, Track A0 (2026-09-21) — the sidebar/topbar
+// contextual shell (AgentDetailLayout.tsx), replacing this page's old
+// horizontal AgentDetailV2Header chrome. See
+// .loop-architect/runs/20260921-agent-detail-redesign-a0/handoff.md.
+//
+// Agent Detail redesign, Track A1 (2026-09-21) — Overview becomes the
+// default landing tab (was "At a Glance"); its hero/metrics top ported
+// from Bootstrap into the mockup's own `.adv2-hero`/`.adv2-metrics`
+// visual language; the Work tab rebuilt as a real list+detail split
+// (AgentWorkV2.tsx, replacing AgentWorkTab.tsx) — same 4 real buckets,
+// no fictional 5-step ladder or 3-way split (neither has any real
+// backing anywhere in this codebase). Every one of the 11 real sections
+// that existed on Overview before this run is unchanged, just reflowed —
+// see .loop-architect/runs/20260921-agent-detail-redesign-a1/ for the
+// full reasoning.
 
 export default function AgentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [detail, setDetail] = useState<AgentDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabKey>('glance');
+  // Agent Detail redesign, Track A1 (2026-09-21) — Overview is now the
+  // default landing tab (was 'glance'/"At a Glance"), matching the mockup's
+  // own default page. Generic by construction (this page fetches by route
+  // id with no agent-specific branching) — every agent's own page changes
+  // its landing tab, not just Reese's, same disclosed characteristic as
+  // Track A0's shell change.
+  const [activeTab, setActiveTab] = useState<TabKey>('overview');
   // AI Workforce Reset (2026-08-24) — Ali, live: deactivate an agent and
   // cancel its open tickets, reversible (enabled:false, real ticket
   // cancellation) — see workforceOrgChartApi.ts::resetAgents().
@@ -327,7 +350,7 @@ export default function AgentDetailPage() {
       )}
       {activeTab === 'work' && (
         <div className="adv2-wrap">
-          <AgentWorkTab detail={detail} />
+          <AgentWorkV2 detail={detail} onNavigate={setActiveTab} />
         </div>
       )}
       {activeTab === 'decisions' && (

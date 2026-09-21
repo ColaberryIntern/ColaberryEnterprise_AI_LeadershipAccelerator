@@ -118,6 +118,13 @@ export interface AgentDetailResult {
    * status).length` would undercount — this field is the honest, uncapped answer. `0`
    * when there's no linked `adminUser`, matching `tickets`' own fallback below. */
   open_ticket_count: number;
+  /** Agent Detail redesign, Track A1 (2026-09-21) — the Overview hero's honest
+   * "Completed (30d)" tile: `done` tickets last touched (`updated_at`) within
+   * the last 30 days, via `countCompletedTicketsForAgent()`. `0` when there's
+   * no linked `adminUser`, matching `open_ticket_count`'s own fallback. Not
+   * "verified" — nothing in this codebase verifies a ticket's outcome today,
+   * see that function's own header comment. */
+  completed_ticket_count_30d: number;
   /** Dara v2 Phase 6 ("open-ticket accountability") — the oldest still-open
    * ticket's real age, via the shared `getOldestOpenTicketAge()` (same
    * match-list/open-status query as `open_ticket_count` above). Null when

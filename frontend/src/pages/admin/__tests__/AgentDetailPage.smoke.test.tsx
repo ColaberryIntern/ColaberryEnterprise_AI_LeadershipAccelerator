@@ -64,12 +64,14 @@ const { resetAgents, reactivateAgent } = require('../../../services/workforceOrg
   reactivateAgent: jest.Mock;
 };
 
-// At a Glance, Checkpoint F (2026-09-03) — "At a Glance" is now the
-// default tab, so every test in this file that mounts the page now also
-// mounts AgentAtAGlanceTab, which fetches the manager inbox (real, page-
-// level fetch, previously never triggered by Overview) plus its own 4
-// summary endpoints. None of these were ever mocked in this file before —
-// unmocked, they'd hit a real (nonexistent, in jsdom) network call, and
+// At a Glance, Checkpoint F (2026-09-03) — "At a Glance" was the default
+// tab at the time (superseded by the Agent Detail redesign Track A1,
+// 2026-09-21 — Overview is the default now), so every test in this file
+// that mounts the page also mounted AgentAtAGlanceTab, which fetches the
+// manager inbox (real, page-level fetch, previously never triggered by
+// Overview) plus its own 4 summary endpoints. None of these were ever
+// mocked in this file before that — unmocked, they'd hit a real
+// (nonexistent, in jsdom) network call, and
 // (confirmed live, the hard way) a bare `jest.fn()` with no resolved value
 // makes `await getManagerInboxItems(id)` resolve to `undefined`, which
 // `setInboxItems` then happily stores — `inboxItems.length` inside
@@ -151,6 +153,7 @@ const DETAIL: AgentDetail = {
   // this fixture's 1 open ticket (t-1) + 1 closed (t-2) for consistency, though
   // the two are intentionally separate fields/queries in the real service.
   open_ticket_count: 1,
+  completed_ticket_count_30d: 0,
   tickets: [
     { id: 't-1', ticket_number: 1, title: 'Reaching out to Jordan Rivera', description: 'Reese is proactively reaching out to Jordan Rivera. Signal: inactivity. Goal: Confirm the student is unblocked and re-engaged with the curriculum within 7 days.', status: 'in_progress', priority: 'high', type: 'reese_autonomous_outreach', created_at: null, updated_at: '2026-08-12T15:00:00Z', due_date: null, status_bucket: 'open' },
     { id: 't-2', ticket_number: 2, title: 'DM conversation with Alex Chen', description: null, status: 'done', priority: 'medium', type: 'student_support', created_at: null, updated_at: '2026-01-15T15:00:00Z', due_date: null, status_bucket: null },

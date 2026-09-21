@@ -6,8 +6,13 @@ import { AgentDetail, AgentDetailTicket, AgentDetailEmployeeFacts } from '../../
 
 // Dashboard redesign, Slice 2b (2026-09-19) — the hero sentence must only
 // ever phrase around the 2 real work_state values this codebase actually
-// computes (idle/working_on_ticket); the 4 KPI tiles are generic for any
-// agent regardless of employee_facts.
+// computes (idle/working_on_ticket).
+//
+// Agent Detail redesign, Track A1 (2026-09-21) — the 4 KPI tiles moved to
+// AgentOverviewV2Metrics.test.tsx (see that file). This file gained the
+// "next commitment" panel's own tests — a small, honest, frontend-only
+// derivation with no single real backing field (execution-contract.md
+// Assumption 1).
 
 const BASE_AGENT: AgentDetail['agent'] = {
   id: 'agent-1', agent_name: 'Reese', agent_type: 'ai_staff_mentor', category: null,
@@ -36,6 +41,7 @@ function buildDetail(overrides: Partial<AgentDetail> = {}): AgentDetail {
     identity: null,
     live_status: 'unknown',
     open_ticket_count: 0,
+    completed_ticket_count_30d: 0,
     tickets: [],
     ticket_breakdown: [],
     related_tasks: [],
@@ -105,29 +111,53 @@ describe('AgentOverviewV2Hero', () => {
     expect(container.textContent).not.toContain('is currently');
   });
 
-  it('happy path: 4 KPI tiles show real numbers from a mixed ticket set', async () => {
-    await renderHero(buildDetail({
-      open_ticket_count: 5,
-      ticket_breakdown: [{ type: 'student_support', count: 10, by_signal: [] }],
-      tickets: [
-        ticket({ id: 't-overdue', status_bucket: 'overdue' }),
-        ticket({ id: 't-reply', status_bucket: 'needs_reply' }),
-        ticket({ id: 't-open', status_bucket: 'open' }),
-        ticket({ id: 't-closed', status: 'done', status_bucket: null }),
-      ],
-    }));
-    expect(container.textContent).toContain('Total tickets (lifetime)');
-    const numbers = Array.from(container.querySelectorAll('.admin-stat-card__value')).map((el) => el.textContent?.trim());
-    expect(numbers).toEqual(['10', '5', '1', '1']);
-  });
-
-  it('clicking a KPI tile navigates to the Work tab', async () => {
+  it('CTA button navigates to the Talk tab', async () => {
     const onNavigate = jest.fn();
     await renderHero(buildDetail(), onNavigate);
-    const button = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Open'));
+    const button = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes("Ask me about today's work"));
     await act(async () => {
       button!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(onNavigate).toHaveBeenCalledWith('work');
+    expect(onNavigate).toHaveBeenCalledWith('talk');
+  });
+
+  describe('next commitment panel (Track A1)', () => {
+    it('shows the actionable ticket with the soonest real due_date', async () => {
+      await renderHero(buildDetail({
+        tickets: [
+          ticket({ id: 't-far', title: 'Far-out task', status_bucket: 'open', due_date: '2026-12-01T00:00:00Z' }),
+          ticket({ id: 't-soon', title: 'Verify Jordan can open the lab', status_bucket: 'ready_to_verify', due_date: '2026-09-22T00:00:00Z' }),
+        ],
+      }));
+      expect(container.textContent).toContain('Verify Jordan can open the lab');
+      expect(container.textContent).toContain('Ready to verify');
+      expect(container.textContent).not.toContain('Far-out task');
+    });
+
+    it('honesty boundary: omitted entirely when no actionable ticket has a real due_date', async () => {
+      await renderHero(buildDetail({
+        tickets: [ticket({ id: 't-no-due', status_bucket: 'open', due_date: null })],
+      }));
+      expect(container.textContent).not.toContain('My next commitment');
+    });
+
+    it('a terminal (closed) ticket is never shown as the next commitment even with a due_date', async () => {
+      await renderHero(buildDetail({
+        tickets: [ticket({ id: 't-closed', status: 'done', status_bucket: null, due_date: '2026-09-01T00:00:00Z' })],
+      }));
+      expect(container.textContent).not.toContain('My next commitment');
+    });
+
+    it('"Inspect the case" navigates to the Work tab', async () => {
+      const onNavigate = jest.fn();
+      await renderHero(buildDetail({
+        tickets: [ticket({ id: 't-1', title: 'Verify Jordan can open the lab', status_bucket: 'open', due_date: '2026-09-22T00:00:00Z' })],
+      }), onNavigate);
+      const button = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Inspect the case'));
+      await act(async () => {
+        button!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      expect(onNavigate).toHaveBeenCalledWith('work');
+    });
   });
 });

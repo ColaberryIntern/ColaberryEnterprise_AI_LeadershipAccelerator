@@ -23,7 +23,7 @@ jest.mock('../../ticketCreatorReportsToResolver', () => ({ resolveReportsToChain
 // Trust Contract fix (2026-08-24) — getAgentDetail() now also calls the REAL
 // getLastTicketActivityForAgent() (same module), mocked alongside its sibling.
 // Dara v2 Phase 6 — same for getOldestOpenTicketAge() (open-ticket accountability).
-jest.mock('../../workforce/liveAgentsService', () => ({ countOpenTicketsForAgent: jest.fn(), getLastTicketActivityForAgent: jest.fn(), getOldestOpenTicketAge: jest.fn() }));
+jest.mock('../../workforce/liveAgentsService', () => ({ countOpenTicketsForAgent: jest.fn(), countCompletedTicketsForAgent: jest.fn(), getLastTicketActivityForAgent: jest.fn(), getOldestOpenTicketAge: jest.fn() }));
 // Trust Contract Phase 1 (2026-08-26) — the 3 new real-evidence fields.
 jest.mock('../../agentPersonaVersionHistoryService', () => ({ getPersonaVersionHistory: jest.fn() }));
 jest.mock('../../trustMetricsService', () => ({ agentCostRows: jest.fn() }));
@@ -54,7 +54,7 @@ import OrgMember from '../../../models/OrgMember';
 import { Ticket, TicketActivity } from '../../../models';
 import { derivePresence } from '../../communityService';
 import { resolveReportsToChainWithTrail } from '../../ticketCreatorReportsToResolver';
-import { countOpenTicketsForAgent, getLastTicketActivityForAgent, getOldestOpenTicketAge } from '../../workforce/liveAgentsService';
+import { countOpenTicketsForAgent, countCompletedTicketsForAgent, getLastTicketActivityForAgent, getOldestOpenTicketAge } from '../../workforce/liveAgentsService';
 import { getPersonaVersionHistory } from '../../agentPersonaVersionHistoryService';
 import { agentCostRows } from '../../trustMetricsService';
 import { getAgentAuthorizationSummary, getAbacMode } from '../../agentAuthorizationService';
@@ -76,6 +76,7 @@ const mockTicketActivityFindAll = TicketActivity.findAll as unknown as jest.Mock
 const mockDerivePresence = derivePresence as unknown as jest.Mock;
 const mockResolveChain = resolveReportsToChainWithTrail as unknown as jest.Mock;
 const mockCountOpenTickets = countOpenTicketsForAgent as unknown as jest.Mock;
+const mockCountCompletedTickets = countCompletedTicketsForAgent as unknown as jest.Mock;
 const mockLastActivity = getLastTicketActivityForAgent as unknown as jest.Mock;
 const mockOldestOpenTicketAge = getOldestOpenTicketAge as unknown as jest.Mock;
 const mockPersonaHistory = getPersonaVersionHistory as unknown as jest.Mock;
@@ -102,6 +103,7 @@ beforeEach(() => {
   mockTicketFindAll.mockResolvedValue([]);
   mockTicketActivityFindAll.mockResolvedValue([]);
   mockCountOpenTickets.mockResolvedValue(0);
+  mockCountCompletedTickets.mockResolvedValue(0);
   mockLastActivity.mockResolvedValue(null);
   mockOldestOpenTicketAge.mockResolvedValue(null);
   mockAgentFindAll.mockResolvedValue([]);
@@ -316,6 +318,26 @@ describe('getAgentDetail', () => {
 
     expect(result!.open_ticket_count).toBe(0);
     expect(mockCountOpenTickets).not.toHaveBeenCalled();
+  });
+
+  // Agent Detail redesign, Track A1 (2026-09-21) — the Overview hero's honest
+  // "Completed (30d)" tile, via the shared countCompletedTicketsForAgent().
+  it('completed_ticket_count_30d reflects the real count via the shared per-agent query', async () => {
+    mockCountCompletedTickets.mockResolvedValue(7);
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.completed_ticket_count_30d).toBe(7);
+    expect(mockCountCompletedTickets).toHaveBeenCalledWith('admin-1', reeseAgent);
+  });
+
+  it('completed_ticket_count_30d is 0, and countCompletedTicketsForAgent is never called, when there is no linked AdminUser identity', async () => {
+    mockAdminFindOne.mockResolvedValue(null);
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.completed_ticket_count_30d).toBe(0);
+    expect(mockCountCompletedTickets).not.toHaveBeenCalled();
   });
 
   // Dara v2 Phase 6 ("open-ticket accountability") — real, informational age

@@ -244,6 +244,11 @@ export interface AgentDetail {
    * and can undercount for a high-volume agent). Use this field for any
    * "how many open tickets does this agent have" display. */
   open_ticket_count: number;
+  /** Agent Detail redesign, Track A1 (2026-09-21) — the Overview hero's honest
+   * "Completed (30d)" tile: real `done` tickets last touched in the last 30
+   * days. Not "verified" — nothing in this codebase verifies a ticket's
+   * outcome today; see the backend's `countCompletedTicketsForAgent()`. */
+  completed_ticket_count_30d: number;
   tickets: AgentDetailTicket[];
   ticket_breakdown: AgentDetailTicketTypeBreakdown[];
   related_tasks: AgentDetailRelatedTask[];

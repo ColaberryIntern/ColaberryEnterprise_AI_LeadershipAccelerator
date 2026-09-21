@@ -28,6 +28,7 @@ const DETAIL: AgentDetail = {
   identity: null,
   live_status: 'online',
   open_ticket_count: 1,
+  completed_ticket_count_30d: 0,
   tickets: [],
   ticket_breakdown: [],
   related_tasks: [],

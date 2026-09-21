@@ -1,15 +1,16 @@
 import React from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
-import AgentWorkTab from '../AgentWorkTab';
-import { AgentDetail, AgentDetailTicket } from '../../../services/agentDetailApi';
+import AgentWorkV2 from '../AgentWorkV2';
+import { AgentDetail, AgentDetailTicket } from '../../../../services/agentDetailApi';
 
-// Dashboard redesign, Slice 2a (2026-09-19) — the Work tab's honest status
-// filter (Overdue / Ready to verify / Needs a reply / Open). Real values
-// come from ticketStatusBucket.ts's server-side derivation (unit-tested on
-// its own) — this file only checks the tab renders and filters correctly
-// given a status_bucket already on each ticket, exactly as the real API
-// response provides it.
+// Agent Detail redesign, Track A1 (2026-09-21) — replaces
+// AgentWorkTab.test.tsx (deleted alongside the flat-list component it
+// tested). Ports every real assertion from that file to the new
+// list+detail split, plus 2 new, explicitly required negative checks: no
+// mockup-only 5-step ladder, no mockup-only 3-way "waiting on a person"
+// split — neither has any real backing anywhere in this codebase (see
+// AgentWorkV2CaseDetail.tsx's own header comment).
 
 const BASE_AGENT: AgentDetail['agent'] = {
   id: 'agent-1', agent_name: 'Reese', agent_type: 'ai_staff_mentor', category: null,
@@ -38,6 +39,7 @@ function buildDetail(tickets: AgentDetailTicket[]): AgentDetail {
     identity: null,
     live_status: 'unknown',
     open_ticket_count: tickets.length,
+    completed_ticket_count_30d: 0,
     tickets,
     ticket_breakdown: [],
     related_tasks: [],
@@ -61,12 +63,12 @@ function buildDetail(tickets: AgentDetailTicket[]): AgentDetail {
 let container: HTMLDivElement;
 let root: Root;
 
-async function renderTab(tickets: AgentDetailTicket[]) {
+async function renderTab(tickets: AgentDetailTicket[], onNavigate: (tab: any) => void = () => {}) {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => {
-    root.render(<AgentWorkTab detail={buildDetail(tickets)} />);
+    root.render(<AgentWorkV2 detail={buildDetail(tickets)} onNavigate={onNavigate} />);
   });
 }
 
@@ -75,8 +77,8 @@ afterEach(() => {
   container.remove();
 });
 
-describe('AgentWorkTab', () => {
-  it('happy path: default view (Overdue) shows the right subset and the right live count on every bucket button', async () => {
+describe('AgentWorkV2', () => {
+  it('happy path: default view (Overdue) shows the right subset, the right live count on every bucket button, and auto-selects the first case for the detail panel', async () => {
     await renderTab([
       ticket({ id: 't-overdue', title: 'Overdue ticket', status_bucket: 'overdue' }),
       ticket({ id: 't-verify', title: 'Ready ticket', status_bucket: 'ready_to_verify' }),
@@ -114,18 +116,22 @@ describe('AgentWorkTab', () => {
     expect(container.textContent).toContain('No tickets are overdue right now.');
   });
 
-  it('clicking a ticket row expands its real detail — description, priority, type, timestamps', async () => {
+  it('selecting a case in the list shows its real detail — description, priority, type, timestamps, real status', async () => {
     await renderTab([
-      ticket({ id: 't-overdue', title: 'Overdue ticket', status_bucket: 'overdue', description: 'Real narrative text.', priority: 'high', type: 'student_support' }),
+      ticket({ id: 't-a', title: 'First ticket', status_bucket: 'overdue', description: 'Real narrative text.', priority: 'high', type: 'student_support', status: 'in_review' }),
+      ticket({ id: 't-b', title: 'Second ticket', status_bucket: 'overdue', description: 'Other narrative.', priority: 'low', type: 'task' }),
     ]);
 
-    const rowButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Overdue ticket'));
-    await act(async () => {
-      rowButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
+    // First case auto-selected.
     expect(container.textContent).toContain('Real narrative text.');
     expect(container.textContent).toContain('high');
+    expect(container.textContent).toContain('In Review');
+
+    const secondRow = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Second ticket'));
+    await act(async () => { secondRow!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+
+    expect(container.textContent).toContain('Other narrative.');
+    expect(container.textContent).not.toContain('Real narrative text.');
   });
 
   it('excludes closed tickets (status_bucket: null) from every bucket count and list entirely', async () => {
@@ -145,5 +151,45 @@ describe('AgentWorkTab', () => {
     ]);
 
     expect(container.textContent).toContain('No due date');
+  });
+
+  it('"Explain this decision" navigates to the Decisions tab (never a fake per-ticket explanation)', async () => {
+    const onNavigate = jest.fn();
+    await renderTab([ticket({ id: 't-1', status_bucket: 'overdue' })], onNavigate);
+
+    const btn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Explain this decision');
+    await act(async () => { btn!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+
+    expect(onNavigate).toHaveBeenCalledWith('decisions');
+  });
+
+  it('"Discuss with Reese" navigates to the Talk tab', async () => {
+    const onNavigate = jest.fn();
+    await renderTab([ticket({ id: 't-1', status_bucket: 'overdue' })], onNavigate);
+
+    const btn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Discuss with Reese');
+    await act(async () => { btn!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+
+    expect(onNavigate).toHaveBeenCalledWith('talk');
+  });
+
+  // Required, run-specific hard-stop checks (this run's own plan.md R68 and
+  // execution-contract.md) — neither the mockup's 5-step narrative ladder
+  // nor its 3-way "waiting on Ali/staff/student" split has any real backing
+  // anywhere in this codebase; building either, even in reduced form, would
+  // misrepresent a real kanban `status` as an invented narrative stage.
+  it('never renders the mockup-only 5-step ladder (Assess/Plan/Handoff/Verify/Complete) — no real backing exists', async () => {
+    await renderTab([ticket({ id: 't-1', status_bucket: 'overdue' })]);
+
+    for (const step of ['Assess', 'Handoff', 'Verify', 'Complete']) {
+      expect(container.textContent).not.toContain(step);
+    }
+  });
+
+  it('never renders the mockup-only 3-way "waiting on a person" split — only the 4 real buckets exist', async () => {
+    await renderTab([ticket({ id: 't-1', status_bucket: 'overdue' })]);
+
+    expect(container.textContent).not.toContain('Waiting on');
+    expect(container.textContent).not.toContain('Assign an outcome');
   });
 });

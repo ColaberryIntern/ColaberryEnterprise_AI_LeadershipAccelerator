@@ -8,7 +8,7 @@ import { Ticket, TicketActivity } from '../../models';
 import { derivePresence } from '../communityService';
 import type { CommunityPresenceStatus } from '../../models/CommunityMember';
 import { buildCreatorIdMatchList } from '../agentBlueprint/legacyCreatorAliases';
-import { countOpenTicketsForAgent, getLastTicketActivityForAgent, getOldestOpenTicketAge } from '../workforce/liveAgentsService';
+import { countOpenTicketsForAgent, countCompletedTicketsForAgent, getLastTicketActivityForAgent, getOldestOpenTicketAge } from '../workforce/liveAgentsService';
 import { deriveAgentCapabilities } from './agentToolCapabilities';
 import { resolveReportsToChainWithTrail } from '../ticketCreatorReportsToResolver';
 import { getPersonaVersionHistory } from '../agentPersonaVersionHistoryService';
@@ -180,6 +180,11 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
   // use, independent of the `tickets` array's MAX_TICKETS cap above.
   const openTicketCount = adminUser ? await countOpenTicketsForAgent(adminUser.id, agent) : 0;
 
+  // Agent Detail redesign, Track A1 (2026-09-21) — the Overview hero's honest
+  // "Completed (30d)" tile (relabeled from the mockup's "Verified complete" —
+  // see countCompletedTicketsForAgent()'s own header comment for why).
+  const completedTicketCount30d = adminUser ? await countCompletedTicketsForAgent(adminUser.id, agent) : 0;
+
   // Dara v2 Phase 6 ("open-ticket accountability") — same shared query shape,
   // ASC instead of COUNT. Null (not 0) when there's nothing open, so a caller
   // never confuses "no data" with "brand new, zero days old".
@@ -317,6 +322,7 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
       : null,
     live_status: liveStatus,
     open_ticket_count: openTicketCount,
+    completed_ticket_count_30d: completedTicketCount30d,
     oldest_open_ticket_age_days: oldestOpenTicketAge?.ageDays ?? null,
     tickets: tickets.map((t: any) => {
       const latestActivity = latestActivityByTicketId.get(t.id) ?? null;

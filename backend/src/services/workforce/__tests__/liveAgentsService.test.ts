@@ -22,7 +22,7 @@ import Enrollment from '../../../models/Enrollment';
 import CommunityMember from '../../../models/CommunityMember';
 import { Ticket } from '../../../models';
 import { derivePresence } from '../../communityService';
-import { listLiveAgents, listLiveAgentActivity, countOpenTicketsForAgent, getLastTicketActivityForAgent, getOldestOpenTicketAge } from '../liveAgentsService';
+import { listLiveAgents, listLiveAgentActivity, countOpenTicketsForAgent, countCompletedTicketsForAgent, getLastTicketActivityForAgent, getOldestOpenTicketAge } from '../liveAgentsService';
 
 const mockAdminUserFindAll = AdminUser.findAll as unknown as jest.Mock;
 const mockAiAgentFindAll = AiAgent.findAll as unknown as jest.Mock;
@@ -324,6 +324,57 @@ describe('countOpenTicketsForAgent — the shared per-agent count reused by 3 ca
     const countArgs = mockTicketCount.mock.calls[0][0];
     const statusClause = countArgs.where[Op.and].find((c: any) => 'status' in c);
     expect(statusClause.status[Op.notIn]).toEqual(['done', 'cancelled']);
+  });
+});
+
+// Agent Detail redesign, Track A1 (2026-09-21) — the Overview hero's honest
+// "Completed (30d)" tile. Same real match-list/scoping shape as
+// countOpenTicketsForAgent's own describe block above.
+describe('countCompletedTicketsForAgent — the "Completed (30d)" real count for the Overview hero tile', () => {
+  it('counts a done ticket updated within the last 30 days', async () => {
+    mockTicketCount.mockResolvedValue(3);
+
+    const count = await countCompletedTicketsForAgent('admin-reese', reeseAgent as any);
+
+    expect(count).toBe(3);
+    const countArgs = mockTicketCount.mock.calls[0][0];
+    const statusClause = countArgs.where[Op.and].find((c: any) => 'status' in c);
+    expect(statusClause.status).toBe('done');
+  });
+
+  it('the cutoff is a real 30-day-ago Date passed as $gte, not a fixed literal', async () => {
+    mockTicketCount.mockResolvedValue(0);
+    const before = Date.now();
+
+    await countCompletedTicketsForAgent('admin-reese', reeseAgent as any);
+
+    const after = Date.now();
+    const countArgs = mockTicketCount.mock.calls[0][0];
+    const updatedAtClause = countArgs.where[Op.and].find((c: any) => 'updated_at' in c);
+    const cutoff: Date = updatedAtClause.updated_at[Op.gte];
+    const expectedMin = before - 30 * 24 * 60 * 60 * 1000;
+    const expectedMax = after - 30 * 24 * 60 * 60 * 1000;
+    expect(cutoff.getTime()).toBeGreaterThanOrEqual(expectedMin);
+    expect(cutoff.getTime()).toBeLessThanOrEqual(expectedMax);
+  });
+
+  it('matches EITHER the real AdminUser id OR a legacy alias, same as countOpenTicketsForAgent', async () => {
+    mockTicketCount.mockResolvedValue(12);
+
+    await countCompletedTicketsForAgent('admin-process-1', processAgent as any);
+
+    const countArgs = mockTicketCount.mock.calls[0][0];
+    const orClauses = countArgs.where[Op.and].find((c: any) => Op.or in c)[Op.or];
+    const createdClause = orClauses.find((c: any) => 'created_by_id' in c);
+    expect(createdClause.created_by_id[Op.in]).toEqual(expect.arrayContaining(['admin-process-1', 'cory-engine']));
+  });
+
+  it('boundary: zero completed tickets in the window returns 0, not null or an error', async () => {
+    mockTicketCount.mockResolvedValue(0);
+
+    const count = await countCompletedTicketsForAgent('admin-reese', reeseAgent as any);
+
+    expect(count).toBe(0);
   });
 });
 
