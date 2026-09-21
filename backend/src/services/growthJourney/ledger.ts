@@ -37,7 +37,8 @@ export type JourneyEntityType =
   | 'growth_journey_transition'
   | 'growth_journey_decision'
   | 'growth_journey_handoff'
-  | 'growth_journey_outcome';
+  | 'growth_journey_outcome'
+  | 'growth_journey_execution';
 
 export interface JourneyScope {
   tenant_id: string;
