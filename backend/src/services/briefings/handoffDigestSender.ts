@@ -66,7 +66,7 @@ type HandoffRow = { get(k: string): unknown };
 type AdminRow = { get(k: string): unknown };
 
 const log = (level: 'info' | 'error', event: string, context: Record<string, unknown>): void => {
-  const line = JSON.stringify({ level, service: 'growth-journey', event: `growth_journey.${event}`, outcome: level === 'error' ? 'failure' : 'success', context });
+  const line = JSON.stringify({ timestamp: new Date().toISOString(), level, service: 'growth-journey', event: `growth_journey.${event}`, outcome: level === 'error' ? 'failure' : 'success', context });
   if (level === 'error') console.error(line);
   else console.log(line);
 };

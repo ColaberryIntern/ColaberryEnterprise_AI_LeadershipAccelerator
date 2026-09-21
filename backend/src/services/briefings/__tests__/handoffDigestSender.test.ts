@@ -60,12 +60,16 @@ const logLines = (spy: jest.SpyInstance) => spy.mock.calls.map((c) => String(c[0
 
 let logSpy: jest.SpyInstance;
 let errorSpy: jest.SpyInstance;
+/** The handoff read, spied per case and restored in afterEach - a failing case never leaks its spy into the next. */
+let read: jest.SpyInstance;
 beforeAll(() => {
   logSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
   errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
 });
 afterAll(() => jest.restoreAllMocks());
+afterEach(() => read.mockRestore());
 beforeEach(() => {
+  read = jest.spyOn(handoffs, 'findAll');
   handoffs.reset();
   seq = 0;
   for (const fn of Object.values(m)) if (typeof fn !== 'object') (fn as jest.Mock).mockReset();
@@ -87,14 +91,12 @@ describe('acceptance 3: flags off -> 0 queries', () => {
     ['journeyHandoffs off', { journeyHandoffs: false }],
   ])('%s: skipped before any read, nothing claimed, nothing sent', async (_name, over) => {
     handoff();
-    const read = jest.spyOn(handoffs, 'findAll');
     expect(await run(over)).toMatchObject({ status: 'skipped', reason: 'journeyHandoffs_off', sent: 0 });
     expect(read).not.toHaveBeenCalled();
     expect(m.adminFindAll).not.toHaveBeenCalled();
     expect(m.brandFindAll).not.toHaveBeenCalled();
     expect(m.claim).not.toHaveBeenCalled();
     expect(m.sendMail).not.toHaveBeenCalled();
-    read.mockRestore();
   });
 });
 
@@ -106,7 +108,6 @@ describe('one mail per assignee with something open, through the guarded mailer'
     handoff({ status: 'queued', assigned_to_type: null, assigned_to_id: null });
     handoff({ status: 'dispositioned', assigned_to_id: ADMIN_B });
     handoff({ assigned_to_type: 'agent', assigned_to_id: 'agent-cory' });
-    const read = jest.spyOn(handoffs, 'findAll');
     const s = await run();
     expect(s).toEqual({ status: 'ran', handoffs: 3, assignees: 2, sent: 2, already_sent: 0, no_admin_row: 0, ai_operated: 0, failed: 0, redacted: 0 });
     const sent = mails();
@@ -120,7 +121,6 @@ describe('one mail per assignee with something open, through the guarded mailer'
     // the read: the two statuses that are somebody's, human-owned, oldest first, bounded
     expect(read).toHaveBeenCalledTimes(1);
     expect(read).toHaveBeenCalledWith({ where: { status: { [Op.in]: ['assigned', 'accepted'] }, assigned_to_type: 'human' }, attributes: ['id', 'brand_id', 'owner_queue', 'priority', 'urgent', 'reason', 'sla_due_at', 'created_at', 'assigned_to_id'], order: [['created_at', 'ASC']], limit: DIGEST_READ_LIMIT });
-    read.mockRestore();
     expect(m.claim.mock.calls).toEqual([[HANDOFF_DIGEST_SLOT, 'anita@colaberry.com'], [HANDOFF_DIGEST_SLOT, 'ben@colaberry.com']]);
     expect(m.adminFindAll).toHaveBeenCalledWith({ where: { id: { [Op.in]: [ADMIN_A, ADMIN_B] } }, attributes: ['id', 'email', 'is_ai_operated'] });
     expect(m.brandFindAll).toHaveBeenCalledWith({ where: { id: { [Op.in]: ['b-ent'] } }, attributes: ['id', 'name'] });
@@ -139,6 +139,7 @@ describe('one mail per assignee with something open, through the guarded mailer'
     expect(m.adminFindAll).not.toHaveBeenCalled();
     expect(m.claim).not.toHaveBeenCalled();
     expect(logLines(logSpy)).toHaveLength(1);
+    expect(JSON.parse(logLines(logSpy)[0])).toMatchObject({ timestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/), level: 'info', service: 'growth-journey', event: 'growth_journey.handoff_digest', outcome: 'success', context: { handoffs: 0, assignees: 0, sent: 0 } });
   });
 
   it('an assignee without an admin_users row, or whose row is AI-operated, gets no mail and is counted', async () => {
