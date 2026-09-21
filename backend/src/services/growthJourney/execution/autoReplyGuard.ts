@@ -25,6 +25,19 @@ import { classifyError } from '../../../utils/errorClassifier';
 
 export type AutoReplySkipReason = 'open_receipt' | 'open_ownership' | 'guard_unavailable';
 
+/**
+ * T516: the same two facts for a LIST of leads - the Ali personal-outreach cron asks before it enrols anyone. Throws on a
+ * read error: the cron fails closed by catching it (nobody enrolled that run), which is the caller's rule to own.
+ */
+export async function journeyOwnedLeadIds(leadIds: number[]): Promise<Set<number>> {
+  if (leadIds.length === 0) return new Set();
+  const [receipts, owners] = await Promise.all([
+    GrowthJourneyExecution.findAll({ where: { lead_id: { [Op.in]: leadIds }, status: { [Op.in]: [...OPEN_EXECUTION_STATUSES] } }, attributes: ['lead_id'] }),
+    GrowthJourneyConversationOwnership.findAll({ where: { lead_id: { [Op.in]: leadIds }, cleared_at: null }, attributes: ['lead_id'] }),
+  ]);
+  return new Set([...receipts, ...owners].map((r) => Number(r.get('lead_id'))));
+}
+
 export async function journeyAutoReplySkip(leadId: number, flags: GrowthJourneyFlags = env.growthJourney): Promise<AutoReplySkipReason | null> {
   if (!flags.growthJourneyEnabled) return null;
   try {

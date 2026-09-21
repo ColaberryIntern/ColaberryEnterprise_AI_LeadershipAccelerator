@@ -25,6 +25,8 @@ jest.mock('../../../../models', () => {
   };
 });
 jest.mock('../../../sequenceService', () => ({ enrollLeadInSequence: (...a: unknown[]) => m.enrol(...a) }));
+// T516: the adapter imports the campaign service for Ali's branch; its own suite drives that branch. Never real here.
+jest.mock('../../../campaignService', () => ({ enrollLeadsInCampaign: jest.fn() }));
 jest.mock('../../../launchSafety', () => ({ isKillSwitchActiveStrict: (...a: unknown[]) => m.killSwitch(...a) }));
 jest.mock('../../governor/contactEvidence', () => ({ resolveContactEvidence: (...a: unknown[]) => m.contactEvidence(...a) }));
 jest.mock('../../ledger', () => ({ recordJourneyEvent: (...a: unknown[]) => m.ledger(...a) }));
@@ -243,11 +245,13 @@ describe('email: an approved receipt becomes an enrolment, exactly once', () => 
     expect(transitions().at(-1)?.slice(1, 3)).toEqual(['enrolling', 'failed']);
   });
 
-  it('an Ali outreach receipt is T511\'s: returned to approved, untouched, 0 enrol calls', async () => {
+  it('an Ali outreach receipt in LIMITED mode is refused for good (T516: REVIEW-only), 0 sequence enrol calls', async () => {
+    // T516 moved this from `blocked:adapter_channel_unsupported` (returned to approved) to a terminal refusal: a limited
+    // Ali receipt is a contradiction the ladder never produces, and retrying it every quarter hour would be churn.
     const r = receipt({ channel: 'ali_outreach', action_type: 'SEND_ALI_OUTREACH', campaign_key: 'ali_personal_outreach' });
-    expect(await run(r.id as string)).toEqual({ status: 'blocked', receiptId: r.id, reason: 'adapter_channel_unsupported' });
+    expect(await run(r.id as string)).toEqual({ status: 'cancelled', receiptId: r.id, reason: 'ali_requires_review' });
     expect(m.enrol).not.toHaveBeenCalled();
-    expect(row(r.id as string)).toMatchObject({ status: 'approved', attempts: 0 });
+    expect(row(r.id as string)).toMatchObject({ status: 'cancelled', attempts: 1 });
   });
 });
 

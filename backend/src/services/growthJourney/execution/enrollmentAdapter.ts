@@ -5,9 +5,13 @@ import { BrandDomain, GrowthJourneyExecution, GrowthJourneyInAppNudge, Scheduled
 import type { GrowthJourneyExecutionAttributes, GrowthJourneyExecutionStatus } from '../../../models/GrowthJourneyExecution';
 import { classifyError } from '../../../utils/errorClassifier';
 import { redactForLogs } from '../../../utils/piiRedaction';
+import { enrollLeadsInCampaign } from '../../campaignService';
+import { evaluateAliOutreachEligibility } from '../../explorerGrowth/explorerAliOutreachService';
 import { enrollLeadInSequence } from '../../sequenceService';
 import { resolveContactEvidence } from '../governor/contactEvidence';
 import type { JourneyProgramKind } from '../governor/types';
+import { aliRefusalCode, buildAliOutreachContext } from './aliOutreachContext';
+import { ALI_OUTREACH_CAMPAIGN_KEY } from './campaignKeys';
 import { readDecisionView } from './decisionReads';
 import { channelOpenness, inAppContentOf } from './planChecks';
 import { readLeadAddress } from './planExecution';
@@ -132,7 +136,6 @@ export async function executeApproved(args: ExecuteApprovedArgs): Promise<Execut
       flags: args.flags, explorerFlags: args.explorerFlags ?? resolveExplorerGrowthFlags(),
     });
     if (hold.held) return blocked(hold.reason ?? 'held', hold.control_ids);
-    if (channel === 'ali_outreach') return blocked('adapter_channel_unsupported');
 
     const decision = await readDecisionView(decisionId);
     if (!decision) return cancelled('decision_missing');
@@ -165,6 +168,30 @@ export async function executeApproved(args: ExecuteApprovedArgs): Promise<Execut
     }
 
     if (leadId === null) return cancelled('email_requires_lead');
+    if (channel === 'ali_outreach') {
+      // T516 - REVIEW-only, whatever the row or the ladder says: Ali's own outreach executes only from a human's approval.
+      if (field<string>(receipt, 'mode') !== 'review') return cancelled('ali_requires_review');
+      const ali = await validateCampaign({ campaignKey: ALI_OUTREACH_CAMPAIGN_KEY, tenantId: scope.tenant_id, brandId: scope.brand_id, mode: 'review' });
+      if (!ali.ok) return cancelled(ali.reason);
+      // The eligibility the Explorer programme wrote for Ali's note, built from stored rows: the 45-day cooldown, the
+      // 10-a-day cap shared across every audience, the intent record. The cap is the one transient answer.
+      const built = await buildAliOutreachContext({ enrollmentId: field<string | null>(receipt, 'enrollment_id'), leadId, campaignId: ali.campaign.id, emailEligible: true, explorerFlags: args.explorerFlags ?? resolveExplorerGrowthFlags(), asOf });
+      if (!built.ok) return cancelled(built.reason);
+      const verdict = evaluateAliOutreachEligibility(built.context);
+      if (!verdict.eligible) {
+        const refusal = aliRefusalCode(verdict, built.context);
+        return refusal.transient ? blocked(refusal.code) : cancelled(refusal.code);
+      }
+      // Two arguments: the registered Ali campaign, this one lead. The campaign service writes the campaign_leads row and
+      // enrols the sequence; a lead already in Ali's campaign is the cron's, not this receipt's.
+      const [result] = await enrollLeadsInCampaign(ali.campaign.id, [leadId]);
+      if (result?.status === 'already_enrolled') return cancelled('ali_already_enrolled');
+      if (result?.status !== 'enrolled') throw Object.assign(new Error(result?.error ?? 'ali enrolment failed'), { name: 'AliEnrolError' });
+      const aliStep0 = await ScheduledEmail.findOne({ where: { lead_id: leadId, campaign_id: ali.campaign.id, step_index: 0, created_at: { [Op.gte]: asOf } }, attributes: ['id'], order: [['created_at', 'ASC']] });
+      const aliEmailId = aliStep0 ? String(aliStep0.get('id')) : null;
+      await move(receipt, 'enrolling', 'enrolled', aliEmailId ? 'enrolled' : 'enrolled_no_step0_row', { scheduled_email_id: aliEmailId, campaign_id: ali.campaign.id, sequence_id: ali.campaign.sequence_id }, { scheduled_email_id: aliEmailId, campaign_id: ali.campaign.id });
+      return { status: 'enrolled', receiptId, channel, scheduled_email_id: aliEmailId, nudge_id: null };
+    }
     const validated = await validateCampaign({ campaignKey: field<string | null>(receipt, 'campaign_key'), tenantId: scope.tenant_id, brandId: scope.brand_id, mode: field<'review' | 'limited'>(receipt, 'mode') });
     if (!validated.ok) return cancelled(validated.reason);
     const campaign = validated.campaign;

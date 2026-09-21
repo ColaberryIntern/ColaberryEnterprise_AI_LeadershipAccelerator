@@ -1,5 +1,7 @@
 const m = {
   enrol: jest.fn(),
+  enrolCampaign: jest.fn(),
+  aliSends: jest.fn(),
   uuid: jest.fn(),
   programsFindAll: jest.fn(),
   leadFindByPk: jest.fn(),
@@ -28,7 +30,10 @@ jest.mock('../../../../models', () => {
     GrowthJourneyDecision: decisions,
     ScheduledEmail: scheduled,
     BrandDomain: domains,
-    CommunicationLog: communication,
+    // T516: the Ali branch reads the last outreach marker from the same model the planner reads replies from.
+    CommunicationLog: { findOne: (q: { where: Record<string, unknown> }) => ('metadata' in q.where ? Promise.resolve(null) : communication.findOne(q)) },
+    ExplorerJourneyProfile: { findOne: async () => ({ get: (k: string) => ({ enrollment_id: 'enr-ali', lead_id: 513, overlays: ['HIGH_INTENT'], e_score: 60, f_score: 5, primary_state: 'ACTIVE', signal_summary: { highestIntentTier: 3 } } as Record<string, unknown>)[k] }) },
+    CampaignLead: { count: (...a: unknown[]) => m.aliSends(...a) },
     InteractionOutcome: interactions,
     ProposedAgentAction: proposals,
     GrowthJourneyOutcome: outcomes,
@@ -52,6 +57,7 @@ jest.mock('../../../../config/database', () => ({ sequelize: { transaction: (...
 // sequelize; with the database mocked above, the one value it needs is handed over directly.
 jest.mock('../../../../models/GrowthJourneyExecution', () => ({ OPEN_EXECUTION_STATUSES: ['pending_review', 'approved', 'enrolling', 'enrolled', 'in_progress'] }));
 jest.mock('../../../sequenceService', () => ({ enrollLeadInSequence: (...a: unknown[]) => m.enrol(...a) }));
+jest.mock('../../../campaignService', () => ({ enrollLeadsInCampaign: (...a: unknown[]) => m.enrolCampaign(...a) }));
 jest.mock('../../../launchSafety', () => ({ isKillSwitchActiveStrict: (...a: unknown[]) => m.killSwitch(...a) }));
 jest.mock('../../governor/contactEvidence', () => ({ resolveContactEvidence: (...a: unknown[]) => m.contactEvidence(...a) }));
 jest.mock('../../handoffs/returnToAi', () => ({ ...jest.requireActual('../../handoffs/returnToAi'), resolveReturnToAi: (...a: unknown[]) => m.returnToAi(...a) }));
@@ -151,6 +157,11 @@ beforeEach(() => {
     return { recorded: true };
   });
   m.uuid.mockImplementation(() => randomUUID());
+  m.aliSends.mockResolvedValue(0);
+  m.enrolCampaign.mockImplementation(async (campaignId: string, leadIds: number[]) => {
+    for (const leadId of leadIds) tables.scheduled.insert({ lead_id: leadId, campaign_id: campaignId, sequence_id: 's-ali', step_index: 0, status: 'pending', sent_at: null, metadata: null });
+    return leadIds.map((leadId) => ({ leadId, status: 'enrolled' }));
+  });
   // The sequence service's one visible effect: the step-0 row the scheduler will later send.
   m.enrol.mockImplementation(async (leadId: number, sequenceId: string, campaignId: string) => {
     tables.scheduled.insert({ lead_id: leadId, campaign_id: campaignId, sequence_id: sequenceId, step_index: 0, status: 'pending', sent_at: null, metadata: null });
@@ -180,7 +191,7 @@ describe('the gates', () => {
     expect(EXECUTOR_AGENT).toBe('GrowthJourneyExecutor');
     expect(EXECUTOR_SCHEDULE).toBe('*/15 14-22 * * 1-5');
     expect(EXECUTOR_LIMITS).toEqual({ plan: 200, execute: 50, reconcile: 500 });
-    expect(EXECUTOR_CHANNELS).toEqual(['email', 'in_app']);
+    expect(EXECUTOR_CHANNELS).toEqual(['email', 'in_app', 'ali_outreach']);
   });
 });
 
@@ -301,12 +312,27 @@ describe('the execute stage: the hold before the claim, the channels it may clai
     expect(m.enrol).not.toHaveBeenCalled();
   });
 
-  it('an approved Ali-outreach receipt is never a candidate here: REVIEW-only, T516 executes it', async () => {
-    approvedReceipt({ channel: 'ali_outreach', action_type: 'SEND_ALI_OUTREACH', campaign_id: 'c-ali', campaign_key: 'ali_personal_outreach', mode: 'review', approved_by: 'admin:1' });
+  it('T516: an approved (REVIEW) Ali-outreach receipt is a candidate and enrols through the campaign service, never the sequence directly', async () => {
+    m.campaignFindOne.mockResolvedValue({ ...approvedCampaign(), id: 'c-ali', sequence_id: 's-ali', settings: { campaign_key: 'ali_personal_outreach' } });
+    approvedReceipt({ channel: 'ali_outreach', action_type: 'SEND_ALI_OUTREACH', campaign_id: 'c-ali', campaign_key: 'ali_personal_outreach', mode: 'review', approved_by: 'admin:1', enrollment_id: 'enr-ali' });
     const s = await run();
-    expect(s.execute.candidates).toBe(0);
-    expect(T5.executions.rows[0]).toMatchObject({ status: 'approved', attempts: 0 });
+    expect(s.execute).toMatchObject({ candidates: 1, enrolled: 1, held: {} });
+    expect(m.enrolCampaign).toHaveBeenCalledTimes(1);
+    expect(m.enrolCampaign).toHaveBeenCalledWith('c-ali', [LEAD]);
     expect(m.enrol).not.toHaveBeenCalled();
+    expect(T5.executions.rows[0]).toMatchObject({ status: 'enrolled', attempts: 1 });
+  });
+
+  it('T516: Ali at his day\'s cap - the receipt waits in place: no claim, no attempt, no ledger row; the count is asked once per campaign per run', async () => {
+    m.aliSends.mockResolvedValue(10);
+    approvedReceipt({ channel: 'ali_outreach', action_type: 'SEND_ALI_OUTREACH', campaign_id: 'c-ali', campaign_key: 'ali_personal_outreach', mode: 'review', approved_by: 'admin:1', enrollment_id: 'enr-ali' });
+    approvedReceipt({ lead_id: 514, subject_ref: 'lead:514', channel: 'ali_outreach', action_type: 'SEND_ALI_OUTREACH', campaign_id: 'c-ali', campaign_key: 'ali_personal_outreach', mode: 'review', approved_by: 'admin:1', enrollment_id: 'enr-ali-2' });
+    const s = await run();
+    expect(s.execute).toMatchObject({ candidates: 2, held: { ali_cap: 2 }, enrolled: 0 });
+    expect(m.aliSends).toHaveBeenCalledTimes(1);
+    expect(m.enrolCampaign).not.toHaveBeenCalled();
+    expect(T5.executions.rows.every((r) => r.status === 'approved' && r.attempts === 0)).toBe(true);
+    expect(executionLedgerRows()).toEqual([]);
   });
 
   it('the 51st receipt waits: fifty approved receipts enrol in one run and the oldest approval goes first', async () => {

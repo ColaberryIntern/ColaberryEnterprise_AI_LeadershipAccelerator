@@ -69,9 +69,9 @@ const basename = (spec: string) => spec.split('/').pop()!.replace(/\.(ts|js)$/, 
  */
 export const ALLOWED_CALLS_BY_FILE: Readonly<Record<string, readonly string[]>> = Object.freeze({
   'services/growthJourney/integration/accountRollup.ts': ['Organization.create', 'ensureLeadTenantContext'],
-  // T510: the ONE file that may enrol, and the ONE literal it may use. Ali outreach (`enrollLeadsInCampaign`)
-  // is not granted until T511 allowlists it by name.
-  'services/growthJourney/execution/enrollmentAdapter.ts': ['enrollLeadInSequence'],
+  // T510: the ONE file that may enrol, and the literals it may use - the sequence (T510) and, from T516, Ali's own
+  // campaign (`enrollLeadsInCampaign`, REVIEW-only by the branch that calls it).
+  'services/growthJourney/execution/enrollmentAdapter.ts': ['enrollLeadInSequence', 'enrollLeadsInCampaign'],
 });
 
 /**
@@ -80,7 +80,8 @@ export const ALLOWED_CALLS_BY_FILE: Readonly<Record<string, readonly string[]>> 
  * adapter still fails, `sequenceService` anywhere else still fails.
  */
 export const ALLOWED_MODULES_BY_FILE: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  'services/growthJourney/execution/enrollmentAdapter.ts': ['sequenceService'],
+  // T516: `campaignService` for the Ali branch, the same one file. `campaignService` anywhere else still fails.
+  'services/growthJourney/execution/enrollmentAdapter.ts': ['sequenceService', 'campaignService'],
 });
 
 const rel = (f: string) => path.relative(ROOT, f).replace(/\\/g, '/');
@@ -143,12 +144,12 @@ describe('Phase 2 code cannot reach a send, enrol, account or relationship path'
     const ROLLUP = 'services/growthJourney/integration/accountRollup.ts';
     const ADAPTER = 'services/growthJourney/execution/enrollmentAdapter.ts';
 
-    it('names exactly two files - the account roll-up with its two literals, and (T510) the adapter with its one', () => {
+    it('names exactly two files - the account roll-up with its two literals, and the adapter with its two (T510 the sequence, T516 Ali\'s campaign)', () => {
       expect(Object.keys(ALLOWED_CALLS_BY_FILE)).toEqual([ROLLUP, ADAPTER]);
       expect([...ALLOWED_CALLS_BY_FILE[ROLLUP]]).toEqual(['Organization.create', 'ensureLeadTenantContext']);
-      expect([...ALLOWED_CALLS_BY_FILE[ADAPTER]]).toEqual(['enrollLeadInSequence']);
+      expect([...ALLOWED_CALLS_BY_FILE[ADAPTER]]).toEqual(['enrollLeadInSequence', 'enrollLeadsInCampaign']);
       expect(Object.keys(ALLOWED_MODULES_BY_FILE)).toEqual([ADAPTER]);
-      expect([...ALLOWED_MODULES_BY_FILE[ADAPTER]]).toEqual(['sequenceService']);
+      expect([...ALLOWED_MODULES_BY_FILE[ADAPTER]]).toEqual(['sequenceService', 'campaignService']);
     });
 
     it('the allowlisted file is scanned, really uses both literals (non-vacuous), and nothing else forbidden', () => {
@@ -161,18 +162,30 @@ describe('Phase 2 code cannot reach a send, enrol, account or relationship path'
       expect(forbiddenCallsIn(ROLLUP, src)).toEqual([]);
     });
 
-    it('T510: the adapter is scanned, really enrols through the one literal and the one module (non-vacuous), and nothing else forbidden', () => {
+    it('T510/T516: the adapter is scanned, really enrols through its two literals and two modules (non-vacuous), and nothing else forbidden', () => {
       const f = files.find((x) => rel(x) === ADAPTER);
       expect(f).toBeDefined();
       const src = fs.readFileSync(f!, 'utf8');
       expect(src).toContain('enrollLeadInSequence(');
+      expect(src).toContain('enrollLeadsInCampaign(');
       expect(importsOf(src)).toContain('../../sequenceService');
-      expect(FORBIDDEN_CALLS.filter((c) => src.includes(c))).toEqual(['enrollLeadInSequence']);
+      expect(importsOf(src)).toContain('../../campaignService');
+      expect(FORBIDDEN_CALLS.filter((c) => src.includes(c))).toEqual(['enrollLeadInSequence', 'enrollLeadsInCampaign']);
       expect(forbiddenCallsIn(ADAPTER, src)).toEqual([]);
       expect(forbiddenModulesIn(ADAPTER, src)).toEqual([]);
     });
 
-    it('T510 controls: the enrol literal in any OTHER journey file is caught; sequenceService imported anywhere else is caught; emailService in the adapter is caught; enrollLeadsInCampaign in the adapter is caught (not yet allowlisted)', () => {
+    it('T516 controls (acceptance 6): Ali\'s enrol literal and campaignService in any OTHER journey file are caught; a third module in the adapter is caught', () => {
+      const ali = 'await enrollLeadsInCampaign(campaignId, [leadId]);';
+      const svc = "import { enrollLeadsInCampaign } from '../../campaignService';";
+      for (const other of files.map(rel).filter((r) => r !== ADAPTER)) {
+        expect({ other, calls: forbiddenCallsIn(other, ali) }).toEqual({ other, calls: ['enrollLeadsInCampaign'] });
+        expect({ other, modules: forbiddenModulesIn(other, svc) }).toEqual({ other, modules: ['campaignService'] });
+      }
+      expect(forbiddenModulesIn(ADAPTER, svc + "\nimport { runAliPersonalOutreach } from '../../aliPersonalOutreachService';")).toEqual(['aliPersonalOutreachService']);
+    });
+
+    it('T510 controls: the enrol literal in any OTHER journey file is caught; sequenceService imported anywhere else is caught; emailService in the adapter is caught; ScheduledEmail.create in the adapter is caught', () => {
       const enrol = 'await enrollLeadInSequence(leadId, sequenceId, campaignId);';
       const seq = "import { enrollLeadInSequence } from '../../sequenceService';";
       for (const other of files.map(rel).filter((r) => r !== ADAPTER)) {
@@ -180,7 +193,6 @@ describe('Phase 2 code cannot reach a send, enrol, account or relationship path'
         expect({ other, modules: forbiddenModulesIn(other, seq) }).toEqual({ other, modules: ['sequenceService'] });
       }
       expect(forbiddenModulesIn(ADAPTER, seq + "\nimport { sendEmail } from '../../emailService';")).toEqual(['emailService']);
-      expect(forbiddenCallsIn(ADAPTER, enrol + ' await enrollLeadsInCampaign(campaignId, [leadId]);')).toEqual(['enrollLeadsInCampaign']);
       expect(forbiddenCallsIn(ADAPTER, enrol + ' await ScheduledEmail.create({});')).toEqual(['ScheduledEmail.create']);
     });
 

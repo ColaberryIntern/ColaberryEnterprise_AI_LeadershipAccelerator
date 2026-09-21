@@ -8,6 +8,8 @@ import { classifyError } from '../../../utils/errorClassifier';
 import { redactForLogs } from '../../../utils/piiRedaction';
 import { executionChannelOf, LIVE_MODES } from '../decision/executionModeStamp';
 import type { JourneyProgramKind } from '../governor/types';
+import { ALI_DAILY_CAP } from '../../explorerGrowth/explorerAliOutreachService';
+import { aliSendsToday } from './aliOutreachContext';
 import { readLiveDecisionViews } from './decisionReads';
 import { executeApproved, type ExecuteApprovedResult } from './enrollmentAdapter';
 import { MAX_DECISION_AGE_HOURS, type ExecutionDecisionView } from './planChecks';
@@ -56,7 +58,9 @@ import { resolveExecutionHold, resolveExecutionMode, type ExecutionChannel } fro
  * master flag is off, and `journeyExecution` is off; this function checks the
  * last two itself and answers `skipped` before any model read. Ali outreach is
  * REVIEW-only and executes through its own path (T516); its receipts are never
- * claimed here. SMS and voice have no receipts to claim.
+ * executed here only from a human's approval (T516): its day's cap is asked
+ * before the claim, once per campaign per run, so receipts past it wait in
+ * place. SMS and voice have no receipts to claim.
  *
  * The summary is counts and reason strings - no subject ref, no address. Its
  * `context` goes through `redactForLogs` like every other line in this tree;
@@ -69,8 +73,8 @@ export const EXECUTOR_AGENT = 'GrowthJourneyExecutor';
 /** Every 15 minutes, 14:00-22:59 UTC, Monday to Friday: business hours Central, when a human is there to read the review queue. */
 export const EXECUTOR_SCHEDULE = '*/15 14-22 * * 1-5';
 export const EXECUTOR_LIMITS = Object.freeze({ plan: 200, execute: 50, reconcile: 500 });
-/** The channels this batch enrols; Ali outreach is REVIEW-only and never claimed here. */
-export const EXECUTOR_CHANNELS: readonly ExecutionChannel[] = ['email', 'in_app'];
+/** The channels this batch enrols. Ali outreach joined in T516: its receipts are REVIEW-only, so every one here is a human's approval. */
+export const EXECUTOR_CHANNELS: readonly ExecutionChannel[] = ['email', 'in_app', 'ali_outreach'];
 /** The most `live` decisions read per brand for one run's window; a window this deep is logged, not looped. */
 export const PLAN_WINDOW_CAP = 2000;
 const HOUR = 3_600_000;
@@ -196,6 +200,7 @@ async function planStage(programs: ProgramRow[], asOf: Date, flags: GrowthJourne
 
 async function executeStage(programs: ProgramRow[], asOf: Date, flags: GrowthJourneyFlags, explorerFlags: ExplorerGrowthFlags, limit: number, s: ExecutorSummary): Promise<void> {
   const kindOf = new Map(programs.map((p) => [p.id, p.kind]));
+  const aliSends = new Map<string, number>();
   const rows = await GrowthJourneyExecution.findAll({
     where: { status: 'approved', channel: { [Op.in]: [...EXECUTOR_CHANNELS] }, approved_at: { [Op.gte]: new Date(asOf.getTime() - APPROVED_TTL_HOURS * HOUR) } },
     order: [['approved_at', 'ASC']],
@@ -208,6 +213,15 @@ async function executeStage(programs: ProgramRow[], asOf: Date, flags: GrowthJou
       channel: row.get('channel') as ExecutionChannel, subject_ref: String(row.get('subject_ref')), lead_id: (row.get('lead_id') as number | null) ?? null,
     };
     try {
+      // T516: Ali's day is capped; a receipt past the cap waits in place rather than being claimed and returned.
+      const aliCampaignId = r.channel === 'ali_outreach' ? ((row.get('campaign_id') as string | null) ?? null) : null;
+      if (aliCampaignId) {
+        if (!aliSends.has(aliCampaignId)) aliSends.set(aliCampaignId, await aliSendsToday(aliCampaignId, asOf));
+        if ((aliSends.get(aliCampaignId) ?? 0) >= ALI_DAILY_CAP) {
+          bump(s.execute.held, 'ali_cap');
+          continue;
+        }
+      }
       if (r.program_id) {
         const hold = await resolveExecutionHold({ tenantId: r.tenant_id, brandId: r.brand_id, programId: r.program_id, channel: r.channel, subjectRef: r.subject_ref, leadId: r.lead_id, asOf, flags, explorerFlags });
         if (hold.held) {
@@ -217,6 +231,7 @@ async function executeStage(programs: ProgramRow[], asOf: Date, flags: GrowthJou
       }
       const result: ExecuteApprovedResult = await executeApproved({ receiptId: r.id, flags, explorerFlags, asOf, programKind: r.program_id ? kindOf.get(r.program_id) : undefined });
       s.execute[result.status] += 1;
+      if (aliCampaignId && result.status === 'enrolled') aliSends.set(aliCampaignId, (aliSends.get(aliCampaignId) ?? 0) + 1);
     } catch (err: unknown) {
       s.execute.errors += 1;
       log('error', 'growth_journey.executor.execute_failed', { correlation_id: s.correlation_id, outcome: 'failure', error_class: classifyError(err) }, { execution_id: r.id, channel: r.channel });
