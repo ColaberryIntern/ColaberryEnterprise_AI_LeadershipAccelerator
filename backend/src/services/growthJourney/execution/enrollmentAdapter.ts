@@ -112,7 +112,8 @@ export async function executeApproved(args: ExecuteApprovedArgs): Promise<Execut
 
   const blocked = async (reason: string, controlIds: string[] = []): Promise<ExecuteApprovedResult> => {
     // Returned, not failed: a hold is not an attempt.
-    await move(receipt, 'enrolling', 'approved', `blocked:${reason}`, { attempts: attemptsBefore, claimed_at: null, control_ids: controlIds.length ? controlIds : field<string[]>(receipt, 'control_ids') });
+    const known = field<string[] | null>(receipt, 'control_ids') ?? [];
+    await move(receipt, 'enrolling', 'approved', `blocked:${reason}`, { attempts: attemptsBefore, claimed_at: null, control_ids: [...new Set([...known, ...controlIds])] }, { control_ids: controlIds });
     return { status: 'blocked', receiptId, reason };
   };
   const cancelled = async (reason: string): Promise<ExecuteApprovedResult> => {
@@ -169,8 +170,10 @@ export async function executeApproved(args: ExecuteApprovedArgs): Promise<Execut
     const campaign = validated.campaign;
     // Three arguments: the lead, the sequence, the campaign. Never `force`; never without the campaign.
     await enrollLeadInSequence(leadId, campaign.sequence_id, campaign.id);
+    // Step 0 by its index, not only by time: the sequence writes one row per step in a loop, and two steps can share a
+    // millisecond; a row for another step (or an unrelated one written in the same window) is never recorded as step 0.
     const step0 = await ScheduledEmail.findOne({
-      where: { lead_id: leadId, campaign_id: campaign.id, created_at: { [Op.gte]: asOf } },
+      where: { lead_id: leadId, campaign_id: campaign.id, step_index: 0, created_at: { [Op.gte]: asOf } },
       attributes: ['id'],
       order: [['created_at', 'ASC']],
     });

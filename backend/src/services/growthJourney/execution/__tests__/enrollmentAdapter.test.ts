@@ -78,7 +78,7 @@ const approvedCampaign = (over: Record<string, unknown> = {}) => ({ id: 'c-flow'
 const receipt = (over: Record<string, unknown> = {}) => T5.executions.insert({
   tenant_id: TENANT, brand_id: BRAND, program_id: PROGRAM, decision_id: 'd-1', subject_ref: `lead:${LEAD}`, lead_id: LEAD, enrollment_id: null,
   channel: 'email', action_type: 'SEND_EMAIL', campaign_id: 'c-flow', campaign_key: BIZ_FLOW, sequence_id: 's-flow',
-  mode: 'limited', status: 'approved', status_reason: 'rollout', control_ids: ['ctl-1'], proposal_id: null, approved_by: 'limited_rollout:ctl-1', approved_at: AS_OF_4, attempts: 0, created_at: AS_OF_4, ...over,
+  mode: 'limited', status: 'approved', status_reason: 'rollout', control_ids: ['ctl-rollout'], proposal_id: null, approved_by: 'limited_rollout:ctl-rollout', approved_at: AS_OF_4, attempts: 0, created_at: AS_OF_4, ...over,
 });
 const row = (id: string) => T5.executions.rows.find((r) => r.id === id) as Record<string, unknown>;
 const run = (id: string, over: Record<string, unknown> = {}) => executeApproved({ receiptId: id, flags: flags(), explorerFlags: explorerFlags(), asOf: AS_OF_4, programKind: 'business', ...over });
@@ -129,6 +129,28 @@ describe('email: an approved receipt becomes an enrolment, exactly once', () => 
     expect(JSON.stringify([row(r.id as string), m.ledger.mock.calls])).not.toContain('@');
   });
 
+  it('the step-0 row is found by its index: a step-1 row written in the same instant, or a row from before the claim, is never recorded as step 0', async () => {
+    const r = receipt();
+    tables.scheduled.insert({ lead_id: LEAD, sequence_id: 's-flow', campaign_id: 'c-flow', step_index: 0, status: 'sent', created_at: new Date(AS_OF_4.getTime() - HOUR) }); // an older enrolment's row
+    m.enrol.mockImplementation(async (leadId: number, sequenceId: string, campaignId: string) => {
+      const at = new Date(AS_OF_4.getTime() + 1000);
+      tables.scheduled.insert({ lead_id: leadId, sequence_id: sequenceId, campaign_id: campaignId, step_index: 1, status: 'pending', created_at: at });
+      tables.scheduled.insert({ lead_id: leadId, sequence_id: sequenceId, campaign_id: campaignId, step_index: 0, status: 'pending', created_at: at });
+      return [];
+    });
+    const out = await run(r.id as string);
+    const step0 = tables.scheduled.rows.find((x) => x.step_index === 0 && (x.created_at as Date).getTime() > AS_OF_4.getTime());
+    expect(out).toMatchObject({ status: 'enrolled', scheduled_email_id: step0!.id });
+    expect(row(r.id as string).scheduled_email_id).toBe(step0!.id);
+  });
+
+  it('an enrol that creates no row (the sequence\'s own duplicate guard) is enrolled_no_step0_row, not a failure', async () => {
+    const r = receipt();
+    m.enrol.mockResolvedValue([]);
+    expect(await run(r.id as string)).toMatchObject({ status: 'enrolled', scheduled_email_id: null });
+    expect(row(r.id as string)).toMatchObject({ status: 'enrolled', status_reason: 'enrolled_no_step0_row', scheduled_email_id: null });
+  });
+
   it('acceptance 1: two interleaved calls on one receipt -> exactly ONE enrol call; the loser is not_claimed', async () => {
     const r = receipt();
     const [a, b] = await Promise.all([run(r.id as string), run(r.id as string)]);
@@ -156,7 +178,9 @@ describe('email: an approved receipt becomes an enrolment, exactly once', () => 
     const out = await run(r.id as string);
     expect(out).toEqual({ status: 'blocked', receiptId: r.id, reason: 'pause:brand+channel' });
     expect(m.enrol).not.toHaveBeenCalled();
-    expect(row(r.id as string)).toMatchObject({ status: 'approved', status_reason: 'blocked:pause:brand+channel', attempts: 0, claimed_at: null, control_ids: [T5.controls.rows[0].id] });
+    // The rollout that approved stays on the receipt; the pause that held is added beside it (and named on the ledger row).
+    expect(row(r.id as string)).toMatchObject({ status: 'approved', status_reason: 'blocked:pause:brand+channel', attempts: 0, claimed_at: null, control_ids: ['ctl-rollout', T5.controls.rows[0].id] });
+    expect(m.ledger.mock.calls[1][4]).toMatchObject({ control_ids: [T5.controls.rows[0].id] });
     expect(transitions()).toEqual([
       ['growth_journey.execution.enrolling', 'approved', 'enrolling', 'claimed'],
       ['growth_journey.execution.approved', 'enrolling', 'approved', 'blocked:pause:brand+channel'],
@@ -200,6 +224,11 @@ describe('email: an approved receipt becomes an enrolment, exactly once', () => 
     expect(await run(r.id as string)).toEqual({ status: 'cancelled', receiptId: r.id, reason });
     expect(m.enrol).not.toHaveBeenCalled();
     expect(row(r.id as string)).toMatchObject({ status: 'cancelled', status_reason: reason });
+    // Every transition is a ledger row - the cancel too (the T510 verifier's surviving mutant).
+    expect(transitions()).toEqual([
+      ['growth_journey.execution.enrolling', 'approved', 'enrolling', 'claimed'],
+      ['growth_journey.execution.cancelled', 'enrolling', 'cancelled', reason],
+    ]);
     expect(() => receipt({ decision_id: 'd-2' })).not.toThrow(); // the open slot is free again
   });
 
