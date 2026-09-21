@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import { formatCentralSessionTime } from '../../utils/sessionTime';
-import JourneyNudgeCard, { type JourneyNudge } from '../../components/portal/JourneyNudgeCard';
 
 interface DashboardData {
   enrollment: any;
@@ -67,14 +66,9 @@ function PortalDashboardPage() {
   const [readiness, setReadiness] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [nudges, setNudges] = useState<JourneyNudge[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Growth Journey nudges (Phase 5 T514): its own read, outside the dashboard's, so it can never block or break it.
-    portalApi.get('/api/portal/journey-nudges')
-      .then((r) => setNudges(Array.isArray(r.data) ? r.data : []))
-      .catch(() => {});
     Promise.all([
       portalApi.get('/api/portal/dashboard'),
       portalApi.get('/api/portal/curriculum').catch(() => ({ data: null })),
@@ -92,11 +86,6 @@ function PortalDashboardPage() {
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
-
-  const dismissNudge = (id: string) => {
-    setNudges((prev) => prev.filter((n) => n.id !== id));
-    portalApi.post(`/api/portal/journey-nudges/${id}/dismiss`).catch(() => {});
-  };
 
   // Build countdown target from next session
   const countdownTarget = data?.next_session
@@ -128,8 +117,6 @@ function PortalDashboardPage() {
         </h1>
         <p className="text-muted small mb-0">{cohort?.name || 'Accelerator Program'}</p>
       </div>
-
-      <JourneyNudgeCard nudges={nudges} onDismiss={dismissNudge} />
 
       {/* Score Cards */}
       <div className="row g-3 mb-4">

@@ -28,6 +28,8 @@ import TimelineFilterChips from './TimelineFilterChips';
 import SkillDetailDrawer from './SkillDetailDrawer';
 import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
 import CommunityPulse from './CommunityPulse';
+import TodayStreakCard from './TodayStreakCard';
+import TodayJourneyNudges from './TodayJourneyNudges';
 import NextLiveClassCard from './NextLiveClassCard';
 import InternshipOpportunityCard from './InternshipOpportunityCard';
 import InternshipCommandCard from './InternshipCommandCard';
@@ -543,6 +545,8 @@ const TodayShell: React.FC = () => {
 
         {/* ── right sidebar ── */}
         <aside className="te-side">
+          {/* Growth Journey nudges (Phase 5) — its own read; renders nothing until a rollout writes a row */}
+          <TodayJourneyNudges />
           {/* Live community pulse — surfaces rooms people are in + live/next sessions */}
           <CommunityPulse />
           {/* Your day — meters fold into the command band when the redesign flag is on */}
@@ -564,24 +568,7 @@ const TodayShell: React.FC = () => {
           )}
 
           {/* Daily streak */}
-          <div className="te-card te-scard te-streak accent-amber">
-            <h3><svg viewBox="0 0 24 24" fill="none"><path d="M12 2c1 3-1 4.5-2.5 6.5C8 10.5 7 12 7 14a5 5 0 0 0 10 0c0-2-1-3.4-2-5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Daily streak</h3>
-            <div className="te-streak-top">
-              <span className="fl"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2c1 3-1 4.5-2.5 6.5C8 10.5 7 12 7 14a5 5 0 0 0 10 0c0-2-1-3.4-2-5 .5 1 .5 2 .2 2.8C16.8 9.4 15 8 14.5 5.5 14 3.5 13 2.6 12 2z" fill="#E8920C" /><path d="M12 21a3 3 0 0 0 3-3c0-1.6-1.3-2.6-2-4-.7 1.4-2 2-2 4a1 1 0 0 0 1 3z" fill="#FB2832" /></svg></span>
-              <div className="ct"><b>{streakCount}</b><span>day{streakCount === 1 ? '' : 's'} streak</span></div>
-            </div>
-            <div className="te-streak-week">
-              {streakWeek.map((d) => (
-                <div key={d.date} className={`sd${d.hit ? ' hit' : ''}${d.is_today ? ' today' : ''}`}>
-                  <span className="dot"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg></span>
-                  <span className="lbl">{d.label}</span>
-                </div>
-              ))}
-            </div>
-            <button className="te-btn leaf sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={doClaimStreak} disabled={claimedToday || busy}>
-              {claimedToday ? 'Claimed today' : streak ? `Claim today · +${streak.next_points} pts` : 'Claim today'}
-            </button>
-          </div>
+          <TodayStreakCard streak={streak} streakCount={streakCount} streakWeek={streakWeek} claimedToday={claimedToday} busy={busy} doClaimStreak={doClaimStreak} />
 
           {/* Next live class — when the student has an upcoming/live session
               (from live_sessions) show the live-session card; otherwise fall
