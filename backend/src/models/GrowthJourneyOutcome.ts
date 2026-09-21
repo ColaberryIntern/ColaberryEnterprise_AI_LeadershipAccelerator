@@ -42,7 +42,13 @@ export type GrowthJourneyOutcomeType =
   | 'subscription_active'
   | 'project_started'
   | 'handoff_accepted'
-  | 'handoff_dispositioned';
+  | 'handoff_dispositioned'
+  // Phase 5 T512: what the campaign engine did with a receipt's send, one per scheduled row; `contact_replied` is
+  // recorded by the reply path (T515), never by the reconciler.
+  | 'contact_sent'
+  | 'contact_blocked'
+  | 'contact_failed'
+  | 'contact_replied';
 
 export type GrowthJourneyOutcomeSource =
   | 'interaction_outcomes'
@@ -52,7 +58,8 @@ export type GrowthJourneyOutcomeSource =
   | 'enrollments'
   | 'subscriptions'
   | 'delivery_engagements'
-  | 'growth_journey_handoffs';
+  | 'growth_journey_handoffs'
+  | 'growth_journey_executions';
 
 export interface GrowthJourneyOutcomeAttributes {
   id?: string;
