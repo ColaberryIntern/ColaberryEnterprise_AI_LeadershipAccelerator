@@ -289,6 +289,22 @@ interface AiAgentAttributes {
   // purely declarative — see ensureAiAgentDepartmentScopeSchema.ts.
   department?: string | null;
   scope?: Record<string, any>;
+  // Real-enforcement scoping, Phase 3 (2026-09-20) — the per-agent switch Ali asked for:
+  // "I would like a switch for each agent so I can turn off/on Shadow mode." `null` means
+  // "follow the global `abac_enforcement` SystemSetting" (agentAuthorizationService.ts's
+  // getAbacMode()) — the real, untouched state of every agent on the day this shipped, so
+  // adding this column is a genuine fleet-wide no-op, not just claimed. Deliberately excludes
+  // 'off' — that stays a global-only concept (see ensureAiAgentAbacOverrideSchema.ts's own
+  // header for why). See that file for the real schema.
+  abac_mode_override?: 'shadow' | 'enforce' | null;
+  // Null until an admin deliberately sets an override via agentAbacOverrideService.ts. Same
+  // honesty pattern as autonomy_level_set_at above — distinguishes "an operator chose this"
+  // from "no one has ever touched this agent's enforcement mode."
+  abac_mode_override_set_at?: Date | null;
+  // Goes further than autonomy_level's own precedent (which never recorded who) — an
+  // authorization-enforcement switch is more consequential than an autonomy-level choice, so
+  // this is a real audit trail: the admin's email/sub, per req.admin in workforceController.ts.
+  abac_mode_override_set_by?: string | null;
 }
 
 class AiAgent extends Model<AiAgentAttributes> implements AiAgentAttributes {
@@ -331,6 +347,9 @@ class AiAgent extends Model<AiAgentAttributes> implements AiAgentAttributes {
   declare migration_status: 'legacy' | 'absorbed' | 'archived' | null;
   declare department: string | null;
   declare scope: Record<string, any>;
+  declare abac_mode_override: 'shadow' | 'enforce' | null;
+  declare abac_mode_override_set_at: Date | null;
+  declare abac_mode_override_set_by: string | null;
 }
 
 AiAgent.init(
@@ -513,6 +532,18 @@ AiAgent.init(
       type: DataTypes.JSONB,
       allowNull: true,
       defaultValue: {},
+    },
+    abac_mode_override: {
+      type: DataTypes.STRING(10),
+      allowNull: true,
+    },
+    abac_mode_override_set_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    abac_mode_override_set_by: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
     },
   },
   {

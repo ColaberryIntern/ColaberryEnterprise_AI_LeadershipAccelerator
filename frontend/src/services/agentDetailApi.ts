@@ -226,6 +226,15 @@ export interface AgentDetail {
      * 'manual' (a human set it via the reactivation flow) vs null (neither
      * has ever touched this agent). */
     autonomy_level_source: 'auto' | 'manual' | null;
+    /** Real-enforcement scoping, Phase 3 (2026-09-20) — the per-agent shadow/enforce
+     * switch. `abac_mode_override` null means "follow the global default" (the real,
+     * untouched state until an admin deliberately sets one). `abac_effective_mode` and
+     * `abac_global_default` are computed server-side — never re-derive them here. */
+    abac_mode_override: 'shadow' | 'enforce' | null;
+    abac_mode_override_set_at: string | null;
+    abac_mode_override_set_by: string | null;
+    abac_effective_mode: 'off' | 'shadow' | 'enforce';
+    abac_global_default: 'off' | 'shadow' | 'enforce';
   };
   identity: AgentDetailIdentity | null;
   live_status: 'online' | 'away' | 'offline' | 'unknown';
@@ -347,4 +356,29 @@ export async function setReeseBehaviourSwitch(
 ): Promise<SetReeseBehaviourSwitchResult> {
   const res = await api.patch<SetReeseBehaviourSwitchResult>(`/api/admin/agents/${agentId}/behaviours/${key}`, { enabled });
   return res.data;
+}
+
+export interface SetAgentAbacOverrideResult {
+  agentId: string;
+  agentName: string;
+  found: boolean;
+  updated: boolean;
+  override: 'shadow' | 'enforce' | null;
+  setAt: string | null;
+  setBy: string | null;
+  error: string | null;
+}
+
+// Real-enforcement scoping, Phase 3 (2026-09-20) — the per-agent switch Ali asked for.
+// `override: null` is a real, first-class request ("follow the global default again"), not
+// just on/off.
+export async function setAgentAbacOverride(
+  agentId: string,
+  override: 'shadow' | 'enforce' | null,
+): Promise<SetAgentAbacOverrideResult> {
+  const res = await api.patch<{ result: SetAgentAbacOverrideResult }>(
+    `/api/admin/workforce/agents/${agentId}/abac-override`,
+    { override },
+  );
+  return res.data.result;
 }

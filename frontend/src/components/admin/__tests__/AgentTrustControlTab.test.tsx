@@ -2,7 +2,7 @@ import React from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
 import AgentTrustControlTab from '../AgentTrustControlTab';
-import { AgentDetail } from '../../../services/agentDetailApi';
+import { AgentDetail, setAgentAbacOverride } from '../../../services/agentDetailApi';
 import { AgentMemoryProposal } from '../../../services/agentMemoryProposalApi';
 import { ManagerDirective } from '../../../services/managerDirectiveApi';
 
@@ -28,6 +28,10 @@ jest.mock('../../../services/managerDirectiveApi', () => ({
   createDirective: jest.fn(),
   revokeDirective: jest.fn(),
 }));
+jest.mock('../../../services/agentDetailApi', () => {
+  const actual = jest.requireActual('../../../services/agentDetailApi');
+  return { ...actual, setAgentAbacOverride: jest.fn() };
+});
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { listMemoryProposals, proposeMemory, approveMemoryProposal, rejectMemoryProposal } =
@@ -69,6 +73,11 @@ const DETAIL: AgentDetail = {
     max_runs_per_hour: 60, max_writes_per_execution: 100, max_proposals_per_run: 50,
     autonomy_level_set_at: null,
     autonomy_level_source: null,
+    abac_mode_override: null,
+    abac_mode_override_set_at: null,
+    abac_mode_override_set_by: null,
+    abac_effective_mode: 'shadow',
+    abac_global_default: 'shadow',
   },
   identity: null,
   live_status: 'unknown',
@@ -100,6 +109,8 @@ const DETAIL: AgentDetail = {
 
 let container: HTMLDivElement;
 let root: Root;
+
+const mockSetAgentAbacOverride = setAgentAbacOverride as unknown as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -246,5 +257,104 @@ describe('AgentTrustControlTab — Architecture drawer', () => {
     expect(container.textContent).toContain('Not set — 60 applies');
     expect(container.textContent).toContain('Not set — 100 applies');
     expect(container.textContent).toContain('Not set — 50 applies');
+  });
+});
+
+// Real-enforcement scoping, Phase 3 (2026-09-20) — the per-agent shadow/enforce switch Ali
+// asked for. This test suite proves the CARD works — it never calls the real backend route;
+// setAgentAbacOverride is fully mocked, per this run's own hard stop (never set a real agent's
+// override during BUILD/QUALITY GATE).
+describe('AgentTrustControlTab — Authorization Enforcement', () => {
+  it('shows "Following global default" copy when no override is set', async () => {
+    await renderTab();
+    expect(container.textContent).toContain('Following the platform-wide default (shadow)');
+    expect(container.textContent).toContain('Shadow');
+  });
+
+  it('shows the real override, who set it, and the current global default when one IS set', async () => {
+    const overriddenDetail: AgentDetail = {
+      ...DETAIL,
+      agent: {
+        ...DETAIL.agent,
+        abac_mode_override: 'enforce',
+        abac_mode_override_set_at: '2026-09-20T18:00:00Z',
+        abac_mode_override_set_by: 'ali@colaberry.com',
+        abac_effective_mode: 'enforce',
+        abac_global_default: 'shadow',
+      },
+    };
+    await act(async () => {
+      root.render(<AgentTrustControlTab agentId="agent-1" detail={overriddenDetail} />);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(container.textContent).toContain('Overridden to');
+    expect(container.textContent).toContain('enforce');
+    expect(container.textContent).toContain('ali@colaberry.com');
+    expect(container.textContent).toContain('the platform-wide default is currently shadow');
+    expect(container.textContent).toContain('Enforce'); // the badge
+  });
+
+  it('global "off" always wins in the display, even when a per-agent override to enforce is set', async () => {
+    const offDetail: AgentDetail = {
+      ...DETAIL,
+      agent: {
+        ...DETAIL.agent,
+        abac_mode_override: 'enforce',
+        abac_effective_mode: 'off',
+        abac_global_default: 'off',
+      },
+    };
+    await act(async () => {
+      root.render(<AgentTrustControlTab agentId="agent-1" detail={offDetail} />);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(container.textContent).toContain('Off (platform-wide)');
+    expect(container.textContent).toContain('platform-wide authorization gate is fully off');
+  });
+
+  it('selecting Enforce and Save calls the real API with the real agent id and the chosen value — never a live click against a real agent outside this mocked test', async () => {
+    mockSetAgentAbacOverride.mockResolvedValue({
+      agentId: 'agent-1', agentName: 'CoryStrategicAgent', found: true, updated: true,
+      override: 'enforce', setAt: '2026-09-20T18:05:00Z', setBy: 'ali@colaberry.com', error: null,
+    });
+    await renderTab();
+    const radios = Array.from(container.querySelectorAll('input[type="radio"]')) as HTMLInputElement[];
+    const enforceRadio = radios[2]; // default, shadow, enforce — in that declared order
+    await act(async () => { enforceRadio.dispatchEvent(new MouseEvent('click', { bubbles: true })); enforceRadio.checked = true; enforceRadio.dispatchEvent(new Event('change', { bubbles: true })); });
+    const saveButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Save')!;
+    await act(async () => { saveButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
+    expect(mockSetAgentAbacOverride).toHaveBeenCalledWith('agent-1', 'enforce');
+  });
+
+  it('selecting "Follow platform-wide default" and Save sends null, a real first-class revert, not treated as missing', async () => {
+    const overriddenDetail: AgentDetail = {
+      ...DETAIL,
+      agent: { ...DETAIL.agent, abac_mode_override: 'enforce', abac_effective_mode: 'enforce' },
+    };
+    mockSetAgentAbacOverride.mockResolvedValue({
+      agentId: 'agent-1', agentName: 'CoryStrategicAgent', found: true, updated: true,
+      override: null, setAt: '2026-09-20T18:05:00Z', setBy: 'ali@colaberry.com', error: null,
+    });
+    await act(async () => {
+      root.render(<AgentTrustControlTab agentId="agent-1" detail={overriddenDetail} />);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    const radios = Array.from(container.querySelectorAll('input[type="radio"]')) as HTMLInputElement[];
+    const defaultRadio = radios[0];
+    await act(async () => { defaultRadio.dispatchEvent(new MouseEvent('click', { bubbles: true })); defaultRadio.checked = true; defaultRadio.dispatchEvent(new Event('change', { bubbles: true })); });
+    const saveButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Save')!;
+    await act(async () => { saveButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
+    expect(mockSetAgentAbacOverride).toHaveBeenCalledWith('agent-1', null);
+  });
+
+  it('a save failure shows a real error, not a silent no-op', async () => {
+    mockSetAgentAbacOverride.mockRejectedValue({ response: { data: { error: 'Agent not found' } } });
+    await renderTab();
+    const radios = Array.from(container.querySelectorAll('input[type="radio"]')) as HTMLInputElement[];
+    const enforceRadio = radios[2];
+    await act(async () => { enforceRadio.dispatchEvent(new MouseEvent('click', { bubbles: true })); enforceRadio.checked = true; enforceRadio.dispatchEvent(new Event('change', { bubbles: true })); });
+    const saveButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Save')!;
+    await act(async () => { saveButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
+    expect(container.textContent).toContain('Agent not found');
   });
 });

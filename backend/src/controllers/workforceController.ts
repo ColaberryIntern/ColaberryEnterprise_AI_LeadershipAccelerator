@@ -15,7 +15,8 @@ import { workforceOrgChartResponseSchema } from '../schemas/workforceOrgChartSch
 import { updateOrgMemberTeam } from '../services/workforce/orgChartHierarchyService';
 import { assignTaskToAgent } from '../services/workforce/orgChartTaskAssignmentService';
 import { resetAgents } from '../services/workforce/agentResetService';
-import { reactivateAgent, AUTONOMY_LEVELS } from '../services/workforce/agentReactivationService';
+import { reactivateAgent, AUTONOMY_LEVELS } from '../services/workforce/agentReactivationService';
+import { setAgentAbacOverride, ABAC_OVERRIDE_VALUES } from '../services/workforce/agentAbacOverrideService';
 import { checkWireContract } from '../utils/responseContract';
 
 function fail(res: Response, err: any, next: NextFunction) {
@@ -211,6 +212,28 @@ export async function handleReactivateAgent(req: Request, res: Response, next: N
   try {
     const parsed = reactivateAgentSchema.parse(req.body || {});
     const result = await reactivateAgent(String(req.params.id), parsed.autonomy_level);
+    res.json({ result });
+  } catch (e) { fail(res, e, next); }
+}
+
+/**
+ * Real-enforcement scoping, Phase 3 (2026-09-20) — PATCH
+ * /api/admin/workforce/agents/:id/abac-override. Ali, live: "I would like a
+ * switch for each agent so I can turn off/on Shadow mode." `override` is
+ * `'shadow' | 'enforce' | null` — `null` clears the override and reverts the
+ * agent to following the global `abac_enforcement` default. Deliberately
+ * excludes `'off'`: that stays a global-only concept, a broader bypass than
+ * the shadow/enforce toggle this switch was actually asked for. See
+ * agentAbacOverrideService.ts for the real mechanism.
+ */
+const setAbacOverrideSchema = z.object({
+  override: z.enum(ABAC_OVERRIDE_VALUES).nullable(),
+});
+export async function handleSetAgentAbacOverride(req: Request, res: Response, next: NextFunction) {
+  try {
+    const parsed = setAbacOverrideSchema.parse(req.body || {});
+    const actorId = req.admin?.email || req.admin?.sub || 'unknown-admin';
+    const result = await setAgentAbacOverride(String(req.params.id), parsed.override, actorId);
     res.json({ result });
   } catch (e) { fail(res, e, next); }
 }

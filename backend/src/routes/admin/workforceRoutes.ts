@@ -6,6 +6,7 @@ import {
   handleListTasks, handleCreateTask, handleUpdateTask, handleMessages, handleReview, handleAnalytics,
   handleListLiveAgents, handleListLiveAgentActivity, handleListLiveAgentTimeline, handleOrgChart,
   handleUpdateOrgMemberTeam, handleAssignHierarchyTask, handleResetAgents, handleReactivateAgent,
+  handleSetAgentAbacOverride,
 } from '../../controllers/workforceController';
 
 const router = Router();
@@ -61,5 +62,9 @@ router.post('/api/admin/workforce/agents/reset', requireAdmin, handleResetAgents
 // agent, requiring a real autonomy level. See handleReactivateAgent()'s own
 // header comment.
 router.post('/api/admin/workforce/agents/:id/reactivate', requireAdmin, handleReactivateAgent);
+
+// Real-enforcement scoping, Phase 3 (2026-09-20) — the per-agent shadow/enforce switch Ali
+// asked for. See handleSetAgentAbacOverride()'s own header comment.
+router.patch('/api/admin/workforce/agents/:id/abac-override', requireAdmin, handleSetAgentAbacOverride);
 
 export default router;

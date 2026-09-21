@@ -13,7 +13,7 @@ import { deriveAgentCapabilities } from './agentToolCapabilities';
 import { resolveReportsToChainWithTrail } from '../ticketCreatorReportsToResolver';
 import { getPersonaVersionHistory } from '../agentPersonaVersionHistoryService';
 import { agentCostRows } from '../trustMetricsService';
-import { getAgentAuthorizationSummary } from '../agentAuthorizationService';
+import { getAgentAuthorizationSummary, getAbacMode, resolveEffectiveMode } from '../agentAuthorizationService';
 import { computeAgentGoalsDimensions } from '../agentGoalsDimensionsService';
 import { classifyAgentAutonomyLevel } from '../agentCapabilityClassifier';
 import { getReeseEmployeeFacts, type AgentDetailResult } from './agentDetailEmployeeFacts';
@@ -233,13 +233,24 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
   // `adminUser.id` like the tickets queries above), since ai_events and the
   // new history table are keyed on the real AiAgent row regardless of
   // whether it has a linked staff identity.
-  const [personaVersionHistory, costRows, authorizationSummary, goalsResult] = await Promise.all([
+  const [personaVersionHistory, costRows, authorizationSummary, goalsResult, abacGlobalDefault] = await Promise.all([
     getPersonaVersionHistory(agent.id),
     agentCostRows(30, agent.id),
     getAgentAuthorizationSummary(agent.id, agent.agent_name, 30),
     computeAgentGoalsDimensions(agent),
+    getAbacMode(),
   ]);
   const costSummary = costRows[0] ? { cost_usd: costRows[0].costUsd, runs: costRows[0].runs } : null;
+
+  // Real-enforcement scoping, Phase 3 (2026-09-20) — the per-agent switch Ali asked for.
+  // Global 'off' ALWAYS wins over any per-agent override, matching
+  // authorizeAgentAction()'s own early return (its 'off' short-circuit happens BEFORE the
+  // registry row/override is ever read — resolveEffectiveMode() is only ever called there in
+  // the non-'off' branch). Reproduced here explicitly rather than calling
+  // resolveEffectiveMode() unconditionally, which would incorrectly let an 'enforce' override
+  // win over a global 'off' state on this page alone.
+  const abacOverride = (agent as any).abac_mode_override ?? null;
+  const abacEffectiveMode = abacGlobalDefault === 'off' ? 'off' : resolveEffectiveMode(abacGlobalDefault, abacOverride);
 
   // R9 — Ali, live: "I'd also like to see the last time the tool and
   // scheduled work was used/run and the ticket." Reese-only, computed from
@@ -290,6 +301,11 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
       max_proposals_per_run: agent.max_proposals_per_run ?? null,
       autonomy_level_set_at: agent.autonomy_level_set_at ?? null,
       autonomy_level_source: agent.autonomy_level_source ?? null,
+      abac_mode_override: abacOverride,
+      abac_mode_override_set_at: (agent as any).abac_mode_override_set_at ?? null,
+      abac_mode_override_set_by: (agent as any).abac_mode_override_set_by ?? null,
+      abac_effective_mode: abacEffectiveMode,
+      abac_global_default: abacGlobalDefault,
     },
     identity: adminUser
       ? {

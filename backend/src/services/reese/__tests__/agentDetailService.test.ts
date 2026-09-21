@@ -27,7 +27,15 @@ jest.mock('../../workforce/liveAgentsService', () => ({ countOpenTicketsForAgent
 // Trust Contract Phase 1 (2026-08-26) — the 3 new real-evidence fields.
 jest.mock('../../agentPersonaVersionHistoryService', () => ({ getPersonaVersionHistory: jest.fn() }));
 jest.mock('../../trustMetricsService', () => ({ agentCostRows: jest.fn() }));
-jest.mock('../../agentAuthorizationService', () => ({ getAgentAuthorizationSummary: jest.fn() }));
+jest.mock('../../agentAuthorizationService', () => ({
+  getAgentAuthorizationSummary: jest.fn(),
+  // Real-enforcement scoping, Phase 3 (2026-09-20) — getAbacMode() defaults to the real,
+  // untouched platform default ('shadow'); resolveEffectiveMode() is the real, unmocked
+  // implementation (a trivial `override ?? globalMode`) so this file's own tests exercise the
+  // genuine resolution logic rather than a second, parallel fake of it.
+  getAbacMode: jest.fn().mockResolvedValue('shadow'),
+  resolveEffectiveMode: (globalMode: string, override: string | null) => override ?? globalMode,
+}));
 // AI Workforce Management, Checkpoint E — the generic GOALS dimension score.
 jest.mock('../../agentGoalsDimensionsService', () => ({ computeAgentGoalsDimensions: jest.fn() }));
 // Reese Product Phase 1, R7 — the new Reese-only employee_facts field's own
@@ -49,13 +57,14 @@ import { resolveReportsToChainWithTrail } from '../../ticketCreatorReportsToReso
 import { countOpenTicketsForAgent, getLastTicketActivityForAgent, getOldestOpenTicketAge } from '../../workforce/liveAgentsService';
 import { getPersonaVersionHistory } from '../../agentPersonaVersionHistoryService';
 import { agentCostRows } from '../../trustMetricsService';
-import { getAgentAuthorizationSummary } from '../../agentAuthorizationService';
+import { getAgentAuthorizationSummary, getAbacMode } from '../../agentAuthorizationService';
 import { computeAgentGoalsDimensions } from '../../agentGoalsDimensionsService';
 import RoomMessage from '../../../models/RoomMessage';
 import { getRoleCharter } from '../../agentRoleCharterService';
 import { getAgentDetail } from '../agentDetailService';
 
 const mockAgentFindByPk = AiAgent.findByPk as unknown as jest.Mock;
+const mockGetAbacMode = getAbacMode as unknown as jest.Mock;
 const mockAgentFindAll = AiAgent.findAll as unknown as jest.Mock;
 const mockAdminFindOne = AdminUser.findOne as unknown as jest.Mock;
 const mockEnrollmentFindOne = Enrollment.findOne as unknown as jest.Mock;
@@ -157,6 +166,47 @@ describe('getAgentDetail', () => {
     mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, autonomy_level_source: undefined });
     const result2 = await getAgentDetail('agent-1');
     expect(result2!.agent.autonomy_level_source).toBeNull();
+  });
+
+  // Real-enforcement scoping, Phase 3 (2026-09-20) — the per-agent shadow/enforce switch Ali
+  // asked for. abac_effective_mode/abac_global_default are computed server-side via the SAME
+  // resolution logic authorizeAgentAction() itself uses, so this page can never drift from
+  // what actually governs this agent's real calls.
+  it('no override: abac_mode_override is null, abac_effective_mode equals the current global default', async () => {
+    mockGetAbacMode.mockResolvedValue('enforce');
+    mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, abac_mode_override: undefined });
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.agent.abac_mode_override).toBeNull();
+    expect(result!.agent.abac_global_default).toBe('enforce');
+    expect(result!.agent.abac_effective_mode).toBe('enforce'); // no override → follows the global default
+  });
+
+  it('a real override reflects in abac_effective_mode, overriding the global default', async () => {
+    mockGetAbacMode.mockResolvedValue('shadow');
+    const setAt = new Date('2026-09-20T18:00:00Z');
+    mockAgentFindByPk.mockResolvedValue({
+      ...reeseAgent, abac_mode_override: 'enforce', abac_mode_override_set_at: setAt, abac_mode_override_set_by: 'ali@colaberry.com',
+    });
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.agent.abac_mode_override).toBe('enforce');
+    expect(result!.agent.abac_mode_override_set_at).toEqual(setAt);
+    expect(result!.agent.abac_mode_override_set_by).toBe('ali@colaberry.com');
+    expect(result!.agent.abac_global_default).toBe('shadow');
+    expect(result!.agent.abac_effective_mode).toBe('enforce'); // the override wins over the global default
+  });
+
+  it("global 'off' always wins in the reported effective mode, even when a per-agent override to enforce is set", async () => {
+    mockGetAbacMode.mockResolvedValue('off');
+    mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, abac_mode_override: 'enforce' });
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.agent.abac_global_default).toBe('off');
+    expect(result!.agent.abac_effective_mode).toBe('off'); // off always wins, even over a real override
   });
 
   // UI follow-up to fleet-wide autonomy classification (2026-09-15) — Ali:
