@@ -110,7 +110,8 @@ export function getThrottleMetrics(): {
 const KILL_SWITCH_KEY = 'system_kill_switch';
 
 // Outbound messaging agent categories that should be disabled on kill switch
-const OUTBOUND_AGENT_CATEGORIES = [
+// (exported for the registry's own pin: an agent that may contact people must sit in one of these)
+export const OUTBOUND_AGENT_CATEGORIES = [
   'email', 'sms', 'voice', 'outbound', 'messaging',
   'admissions_email', 'admissions_sms', 'admissions_voice',
 ];

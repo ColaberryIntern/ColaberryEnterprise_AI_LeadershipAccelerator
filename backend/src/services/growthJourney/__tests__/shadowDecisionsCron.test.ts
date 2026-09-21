@@ -13,7 +13,9 @@ const ROOT = path.join(__dirname, '..', '..', '..');
 const read = (rel: string) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 
 const scheduler = read('services/schedulerService.ts');
-const registry = read('services/agentRegistrySeed.ts');
+// T509 moved the entry, verbatim, into services/agentRegistry/growthJourneyAgents.ts (spread into the seed at
+// the same position); the pins below are unchanged and read the seed and the module together.
+const registry = read('services/agentRegistrySeed.ts') + read('services/agentRegistry/growthJourneyAgents.ts');
 const runner = read('services/growthJourney/runShadowDecisionsNightly.ts');
 
 const AGENT = 'GrowthJourneyShadowDecisions';

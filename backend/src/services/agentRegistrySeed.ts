@@ -1,5 +1,4 @@
 import AiAgent from '../models/AiAgent';
-import type { AiAgentType, AiAgentTriggerType, AiAgentCategory } from '../models/AiAgent';
 import { Op } from 'sequelize';
 import { seedReeseIdentity } from './reese/reeseIdentitySeed';
 import { seedTicketCreatorIdentities } from './agentBlueprint/ticketCreatorIdentitySeed';
@@ -9,27 +8,9 @@ import { DARA_PERSONA_BLOCK } from './curriculum/daraPersona';
 import { repointCurriculumLegacyBehaviors } from './curriculum/repointLegacyBehaviors';
 import { recordPersonaVersionChangeIfNeeded } from './agentPersonaVersionHistoryService';
 import { classifyNewAgentAutonomyLevel, maybeReclassifyAutonomyLevel } from './agentAutonomyReclassificationService';
+import { GROWTH_JOURNEY_AGENT_ENTRIES } from './agentRegistry/growthJourneyAgents';
 
-interface AgentSeedEntry {
-  agent_name: string;
-  agent_type: AiAgentType;
-  module: string;
-  source_file: string;
-  trigger_type: AiAgentTriggerType;
-  schedule: string;
-  category: AiAgentCategory;
-  description: string;
-  config?: Record<string, any>;
-  // Only honored on first creation (see the findOrCreate loop below) — lets a
-  // seed entry ship disabled by default without resetting it on every restart.
-  enabled?: boolean;
-  // Reese Phase 1 — agent-transparency fields (additive columns, see
-  // ensureAiAgentIdentitySchema.ts). Optional so every other registry entry is
-  // unaffected.
-  system_prompt?: string;
-  tools_granted?: string[];
-  persona_version?: string;
-}
+import type { AgentSeedEntry } from './agentRegistry/agentSeedTypes';
 
 const AGENT_REGISTRY: AgentSeedEntry[] = [
   // --- schedulerService.ts cron jobs ---
@@ -2775,30 +2756,7 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'post_case_progress_notes',
     ],
   },
-  {
-    agent_name: 'GrowthJourneyShadowDecisions',
-    agent_type: 'scheduled_processor',
-    module: 'growthJourney',
-    source_file: 'backend/src/services/growthJourney/runShadowDecisionsNightly.ts',
-    trigger_type: 'cron',
-    schedule: '20 4 * * *',
-    // 'behavioral', like the Explorer Governor it follows: it decides on
-    // observed behaviour; AiAgentCategory is a closed union.
-    category: 'behavioral',
-    description:
-      'Growth Journey OS nightly shadow decisions (Phase 4, T408). For every ' +
-      'journey programme - all four brands, draft included - decides one shadow ' +
-      'action per classified subject (growth_journey_decisions, executed:false), ' +
-      'materialises the handoff rows of each decision through the T404 writer when ' +
-      'GROWTH_JOURNEY_HANDOFFS_ENABLED is on, and runs the queue assignment pass ' +
-      'once per brand. DECIDES AND RECORDS ONLY - sends nothing, enqueues nothing, ' +
-      'notifies nobody. 04:20 UTC, after the three Explorer jobs. SHIPPED PAUSED: ' +
-      'enabled:false here, and dark until GROWTH_JOURNEY_ENABLED and ' +
-      'GROWTH_JOURNEY_DECISIONS_ENABLED are both true.',
-    // Honoured on first creation only: the row ships paused and stays whatever
-    // an operator sets it to afterwards.
-    enabled: false,
-  },
+  ...GROWTH_JOURNEY_AGENT_ENTRIES,
   {
     agent_name: 'GrowthJourneyHandoffs',
     agent_type: 'ticket_creator_identity',

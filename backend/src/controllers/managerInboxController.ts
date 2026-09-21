@@ -38,10 +38,12 @@ export async function handleApproveManagerInboxItem(req: Request, res: Response)
     const { notes } = req.body;
     const adminEmail = (req as any).admin?.email || 'unknown';
 
-    const result = await approveManagerInboxItem(id, proposalId, adminEmail, notes || null);
+    // Phase 5 T509: the caller's identity rides along for the growth-journey brand-access check.
+    const result = await approveManagerInboxItem(id, proposalId, adminEmail, notes || null, (req as any).admin);
     if (result.outcome === 'not_found') return res.status(404).json({ error: 'Proposal not found for this agent' });
     if (result.outcome === 'not_pending') return res.status(400).json({ error: `Proposal is already ${result.item?.status}` });
     if (result.outcome === 'expired') return res.status(400).json({ error: 'Proposal has expired' });
+    if (result.outcome === 'not_authorized') return res.status(403).json({ error: 'Not authorized to approve this proposal' });
 
     res.json({ success: true, applied: result.applied, item: result.item });
   } catch (err: any) {
@@ -57,9 +59,10 @@ export async function handleRejectManagerInboxItem(req: Request, res: Response) 
     const { notes } = req.body;
     const adminEmail = (req as any).admin?.email || 'unknown';
 
-    const result = await rejectManagerInboxItem(id, proposalId, adminEmail, notes || null);
+    const result = await rejectManagerInboxItem(id, proposalId, adminEmail, notes || null, (req as any).admin);
     if (result.outcome === 'not_found') return res.status(404).json({ error: 'Proposal not found for this agent' });
     if (result.outcome === 'not_pending') return res.status(400).json({ error: `Proposal is already ${result.item?.status}` });
+    if (result.outcome === 'not_authorized') return res.status(403).json({ error: 'Not authorized to reject this proposal' });
 
     res.json({ success: true, item: result.item });
   } catch (err: any) {
