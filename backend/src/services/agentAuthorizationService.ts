@@ -83,6 +83,11 @@ interface AgentRegistryRow {
   status: string;
   autonomy_level: AutonomyLevel | null;
   autonomy_level_set_at: Date | null;
+  // Real-enforcement scoping, Phase 3 (2026-09-20) — the per-agent shadow/enforce switch.
+  // null means "follow the global abac_enforcement setting," the real, untouched state of
+  // every agent until an admin deliberately sets one via agentAbacOverrideService.ts. See
+  // resolveEffectiveMode() below for how this combines with the global mode.
+  abac_mode_override: 'shadow' | 'enforce' | null;
 }
 
 // 2026-08-25 — one shared registry lookup for both the disabled-agent check and
@@ -93,7 +98,7 @@ async function fetchAgentRegistryRow(agentName: string): Promise<AgentRegistryRo
   try {
     const agent = await AiAgent.findOne({
       where: { agent_name: agentName },
-      attributes: ['enabled', 'status', 'autonomy_level', 'autonomy_level_set_at'],
+      attributes: ['enabled', 'status', 'autonomy_level', 'autonomy_level_set_at', 'abac_mode_override'],
     });
     if (!agent) return null; // unregistered (e.g. a .js cron) — don't block on it in shadow
     return {
@@ -101,10 +106,21 @@ async function fetchAgentRegistryRow(agentName: string): Promise<AgentRegistryRo
       status: agent.status,
       autonomy_level: (agent.autonomy_level as AutonomyLevel | undefined) ?? null,
       autonomy_level_set_at: (agent as any).autonomy_level_set_at ?? null,
+      abac_mode_override: (agent as any).abac_mode_override ?? null,
     };
   } catch {
     return null; // registry read failed → don't block on it
   }
+}
+
+// Real-enforcement scoping, Phase 3 (2026-09-20) — the effective mode ONE agent is actually
+// evaluated under: its own deliberate override if it has one, otherwise the global default.
+// Only called in the non-'off' branch of authorizeAgentAction() below — a global 'off' state
+// always wins over any per-agent override (see that function's own early return), since 'off'
+// is a materially broader bypass (skips evaluation entirely) than the shadow/enforce toggle
+// this switch was actually asked for.
+export function resolveEffectiveMode(globalMode: AbacMode, override: 'shadow' | 'enforce' | null): AbacMode {
+  return override ?? globalMode;
 }
 
 function isAgentDisabledFromRow(row: AgentRegistryRow | null): boolean {
@@ -143,6 +159,11 @@ export async function authorizeAgentAction(input: AuthorizeAgentInput): Promise<
     const registryRow = await fetchAgentRegistryRow(input.agentName);
     const level = resolveLevel(registryRow, await resolveTier(input));
     const category = actionCategory(input.action);
+    // Real-enforcement scoping, Phase 3 — THIS agent's own effective mode, not the bare
+    // global setting: its deliberate override if it has one, otherwise the global default.
+    // Every use of "mode" below this line refers to the effective mode, since that's what
+    // actually determines `allowed` for this specific agent.
+    const effectiveMode = resolveEffectiveMode(mode, registryRow?.abac_mode_override ?? null);
 
     // ── Ordered policy checks → a hard-block reason, or null. ──
     let blockReason: string | null = null;
@@ -162,10 +183,13 @@ export async function authorizeAgentAction(input: AuthorizeAgentInput): Promise<
     const approval = blockReason ? { required: false } : actionRequiresApproval(input.action, input.context);
 
     const wouldDeny = !!blockReason || approval.required;
-    const enforced = mode === 'enforce';
+    const enforced = effectiveMode === 'enforce';
     const reason = blockReason ?? (approval.required ? `requires_approval:${approval.rule}` : 'ok');
 
-    // mode is 'shadow' | 'enforce' here ('off' returned early). Record every decision.
+    // effectiveMode is 'shadow' | 'enforce' here ('off' returned early). Record every decision
+    // under THIS agent's own effective mode, not the bare global setting — so a Trust
+    // dashboard reading these events sees what actually governed this agent's call, matching
+    // the per-agent override it may have (mode/enforced below are both effectiveMode-derived).
     {
       const outcome = !enforced || !wouldDeny ? 'success' : blockReason ? 'blocked' : 'escalated';
       await emitAiEvent({
@@ -184,7 +208,7 @@ export async function authorizeAgentAction(input: AuthorizeAgentInput): Promise<
           verdict: wouldDeny ? (blockReason ? 'block' : 'approval') : 'allow',
           reason,
           requires_approval: approval.required,
-          mode,
+          mode: effectiveMode,
           enforced,
           would_deny: wouldDeny && !enforced, // policy says deny but we let it through (shadow)
         },
@@ -198,7 +222,7 @@ export async function authorizeAgentAction(input: AuthorizeAgentInput): Promise<
       requiresApproval: approval.required,
       level,
       wouldDeny,
-      mode,
+      mode: effectiveMode,
     };
   } catch (err: any) {
     console.error('[agentAuthorizationService] authz error — failing OPEN:', err?.message);

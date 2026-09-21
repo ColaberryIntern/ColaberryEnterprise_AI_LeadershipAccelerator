@@ -90,6 +90,17 @@ export interface AgentDetailResult {
     max_proposals_per_run: number | null;
     autonomy_level_set_at: Date | null;
     autonomy_level_source: 'auto' | 'manual' | null;
+    /** Real-enforcement scoping, Phase 3 (2026-09-20) — the per-agent shadow/enforce
+     * switch Ali asked for. `abac_mode_override` is `null` for the real, untouched
+     * default (every agent until an admin deliberately sets one); `abac_effective_mode`
+     * and `abac_global_default` are computed server-side via the SAME resolution logic
+     * authorizeAgentAction() itself uses, so this page can never drift from what
+     * actually governs this agent's real calls. */
+    abac_mode_override: 'shadow' | 'enforce' | null;
+    abac_mode_override_set_at: Date | null;
+    abac_mode_override_set_by: string | null;
+    abac_effective_mode: 'off' | 'shadow' | 'enforce';
+    abac_global_default: 'off' | 'shadow' | 'enforce';
   };
   identity: {
     admin_user_id: string;
