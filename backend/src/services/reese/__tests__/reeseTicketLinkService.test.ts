@@ -132,4 +132,16 @@ describe('logReeseExchangeActivity', () => {
     mockAddComment.mockRejectedValue(new Error('DB write failed'));
     await expect(logReeseExchangeActivity('ticket-1', 'ai_staff', REESE_ADMIN_ID, 'msg-2', 'reply text')).resolves.toBeUndefined();
   });
+
+  // Workspace mission, Phase 2 slice 1 (2026-09-21) — the new, optional workUnitId
+  // parameter, forwarded unchanged to the generic logAgentExchangeActivity().
+  it('forwards workUnitId through to the ledger event when supplied', async () => {
+    await logReeseExchangeActivity('ticket-1', 'human', STUDENT_ID, 'msg-3', 'Hello Reese', 'wu-1');
+    expect(mockEmitEvent.mock.calls[0][0].workUnitId).toBe('wu-1');
+  });
+
+  it('genuine no-op when workUnitId is omitted', async () => {
+    await logReeseExchangeActivity('ticket-1', 'human', STUDENT_ID, 'msg-4', 'Hello Reese');
+    expect(mockEmitEvent.mock.calls[0][0].workUnitId).toBeUndefined();
+  });
 });
