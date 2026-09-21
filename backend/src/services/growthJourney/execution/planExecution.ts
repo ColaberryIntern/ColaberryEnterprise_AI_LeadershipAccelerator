@@ -3,7 +3,7 @@ import type { Transaction } from 'sequelize';
 import { sequelize } from '../../../config/database';
 import { resolveExplorerGrowthFlags, type ExplorerGrowthFlags } from '../../../config/explorerGrowthFlags';
 import type { GrowthJourneyFlags } from '../../../config/growthJourneyFlags';
-import { CommunicationLog, GrowthJourneyExecution, GrowthJourneyExecutionControl, Lead } from '../../../models';
+import { CommunicationLog, GrowthJourneyExecution, GrowthJourneyExecutionControl, InteractionOutcome, Lead } from '../../../models';
 import type { GrowthJourneyExecutionAttributes } from '../../../models/GrowthJourneyExecution';
 import { classifyError } from '../../../utils/errorClassifier';
 import { isUniqueViolation } from '../../../utils/uniqueViolation';
@@ -71,16 +71,24 @@ type Planned = { kind: 'planned'; receipt: GrowthJourneyExecution; mode: ModeRes
 type Refusal = { kind: 'refused'; reason: string };
 const refusal = (reason: string): Refusal => ({ kind: 'refused', reason });
 
-/** The newest inbound message from this lead, or null. Bounded: the same window the evidence reads. */
+/**
+ * The newest inbound reply from this lead, or null - the NEWEST row of each source, by order, never a
+ * bounded scan (the T508 verifier showed a lead with more than 200 inbound rows could hide its latest
+ * reply behind an unordered LIMIT). Two sources, because the inbound webhooks write the
+ * `interaction_outcomes` reply AWAITED and the `communication_logs` row best-effort: a reply present in
+ * one and missing from the other still stales the decision.
+ */
 async function newestInboundAt(leadId: number | null): Promise<Date | null> {
   if (leadId === null) return null;
-  const rows = await CommunicationLog.findAll({ where: { lead_id: leadId, direction: 'inbound' }, attributes: ['created_at'], limit: 200 });
-  let newest: Date | null = null;
-  for (const r of rows as unknown as Array<{ created_at?: Date | string | null }>) {
-    const at = r.created_at ? new Date(r.created_at) : null;
-    if (at && (!newest || at.getTime() > newest.getTime())) newest = at;
-  }
-  return newest;
+  const [message, outcome] = await Promise.all([
+    CommunicationLog.findOne({ where: { lead_id: leadId, direction: 'inbound' }, attributes: ['created_at'], order: [['created_at', 'DESC']] }),
+    InteractionOutcome.findOne({ where: { lead_id: leadId, outcome: 'replied' }, attributes: ['created_at'], order: [['created_at', 'DESC']] }),
+  ]);
+  const ats = [message, outcome]
+    .map((r) => (r ? (r as unknown as { created_at?: Date | string | null }).created_at : null))
+    .filter((v): v is Date | string => v !== null && v !== undefined)
+    .map((v) => new Date(v));
+  return ats.length === 0 ? null : new Date(Math.max(...ats.map((d) => d.getTime())));
 }
 
 /** The address the consent record may be keyed by. Held for the evidence call; written nowhere. */
