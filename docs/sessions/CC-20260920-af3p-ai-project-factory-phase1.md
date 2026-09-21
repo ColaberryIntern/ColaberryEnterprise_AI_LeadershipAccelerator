@@ -44,3 +44,18 @@ teardown Ali emailed.
     path. No existing table column changed. Phases 2–6 (LLM decomposition, generation pipeline,
     command-center UIs, evidence/approvals, builder integration, migration) follow. Phase 5 is
     gated on the AI-builder tab design.
+
+- [x] Fix a false-negative in assertContractTrackSchema (post-deploy)
+  - Date: 2026-09-21
+  - Session: CC-20260920-af3p
+  - What changed: after deploying Phase 1, prod verification showed the five contract tables
+    present and correct (positional `SELECT ... WHERE table_name = ANY($1)` found all five,
+    existing student_tasks columns intact, 899 rows unchanged) — but `assertContractTrackSchema()`
+    returned false and logged a bogus `SchemaInvariantViolation` ("contract reads will fail") on
+    every boot. Root cause: the assert's Sequelize NAMED-ARRAY bind `table_name = ANY($names)`
+    returned a false negative for this query (the identical pattern in assertFactoryTaskSchema
+    works, confirmed on prod — so it is bind-serialization-specific, not universal). Fix:
+    `ensureContractTrackSchema.ts` now fetches all public table names and checks membership in
+    JS, removing the array bind. The schema/feature were always correct; only the assert lied.
+  - Verification: the tables provably exist (positional query on prod); the fixed assert has no
+    bind to fail. Confirmed clean on the next deploy's boot log.
