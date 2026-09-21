@@ -117,13 +117,13 @@ export async function runAliPersonalOutreach(): Promise<void> {
   if (env.growthJourney.growthJourneyEnabled && found.length > 0) {
     try {
       const { journeyOwnedLeadIds } = require('./growthJourney/execution/autoReplyGuard') as { journeyOwnedLeadIds: (ids: number[]) => Promise<Set<number>> };
-      owned = await journeyOwnedLeadIds(found.map((l: any) => Number(l.lead_id)));
-    } catch (err: any) {
-      console.error(JSON.stringify({ level: 'error', service: 'ali-outreach', event: 'ali_outreach_journey_lookup_failed', outcome: 'failure', error_class: err?.name || 'UnknownError', context: { candidates: found.length } }));
+      owned = await journeyOwnedLeadIds(found.map((l) => Number(l.lead_id)));
+    } catch (err: unknown) {
+      console.error(JSON.stringify({ level: 'error', service: 'ali-outreach', event: 'ali_outreach_journey_lookup_failed', outcome: 'failure', error_class: err instanceof Error ? err.name : 'UnknownError', context: { candidates: found.length } }));
       return;
     }
   }
-  const leads = found.filter((l: any) => !owned.has(Number(l.lead_id)));
+  const leads = found.filter((l) => !owned.has(Number(l.lead_id)));
   if (owned.size > 0) console.log(JSON.stringify({ level: 'info', service: 'ali-outreach', event: 'ali_outreach_journey_excluded', outcome: 'success', context: { excluded: owned.size, remaining_candidates: leads.length } }));
 
   if (leads.length === 0) {

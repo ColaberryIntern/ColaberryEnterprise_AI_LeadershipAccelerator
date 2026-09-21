@@ -41,7 +41,7 @@ import { Op } from 'sequelize';
 import type { ExplorerGrowthFlags } from '../../../../config/explorerGrowthFlags';
 import type { GrowthJourneyFlags } from '../../../../config/growthJourneyFlags';
 import * as models from '../../../../models';
-import { ALI_COOLDOWN_DAYS, ALI_DAILY_CAP, evaluateAliOutreachEligibility } from '../../../explorerGrowth/explorerAliOutreachService';
+import { ALI_COOLDOWN_DAYS, ALI_DAILY_CAP, evaluateAliOutreachEligibility, type AliOutreachContext } from '../../../explorerGrowth/explorerAliOutreachService';
 import { AS_OF_4, type Table } from '../../__tests__/fixtures/phase4Tables';
 import { T5, resetPhase5Tables } from '../../__tests__/fixtures/phase5Tables';
 import { contact } from '../../__tests__/fixtures/learnerFixtures';
@@ -137,6 +137,15 @@ describe('acceptance 1: review + eligible -> one call', () => {
     expect(m.campaignLeadCount).toHaveBeenCalledWith({ where: { campaign_id: 'c-ali', enrolled_at: { [Op.gte]: new Date(Date.UTC(AS_OF_4.getUTCFullYear(), AS_OF_4.getUTCMonth(), AS_OF_4.getUTCDate())) } } });
   });
 
+  it('the REGISTERED key, never the receipt\'s own row: a receipt stamped with another campaign still validates ali_personal_outreach and enrols Ali\'s campaign', async () => {
+    const r = receipt({ campaign_id: 'c-other', campaign_key: 'explorer_high_intent_fast_track', sequence_id: 's-other' });
+    expect(await run(r.id as string)).toMatchObject({ status: 'enrolled', receiptId: r.id });
+    expect(m.campaignFindOne).toHaveBeenCalledTimes(1);
+    expect(m.campaignFindOne).toHaveBeenCalledWith({ where: { settings: { campaign_key: ALI_OUTREACH_CAMPAIGN_KEY } } });
+    expect(m.enrolCampaign).toHaveBeenCalledWith('c-ali', [LEAD]);
+    expect(row(r.id as string)).toMatchObject({ status: 'enrolled', campaign_id: 'c-ali', sequence_id: 's-ali' });
+  });
+
   it('a second run of the same receipt is not claimed: exactly once', async () => {
     const r = receipt();
     await run(r.id as string);
@@ -217,9 +226,9 @@ describe('the campaign service\'s answers', () => {
   });
 
   it('every terminal code is pinned against the real evaluator\'s prose, so a reworded reason fails here, not silently as ali_ineligible', () => {
-    const ok = { overlays: ['HIGH_INTENT'], highestSignalTier: 3, eScore: 60, fScore: 5, isConverted: false, emailEligible: true, daysSinceLastAliOutreach: null, aliSendsToday: 0, flagEnabled: true };
+    const ok: AliOutreachContext = { overlays: ['HIGH_INTENT'], highestSignalTier: 3, eScore: 60, fScore: 5, isConverted: false, emailEligible: true, daysSinceLastAliOutreach: null, aliSendsToday: 0, flagEnabled: true };
     expect(evaluateAliOutreachEligibility(ok)).toMatchObject({ eligible: true });
-    const code = (over: Partial<typeof ok>) => { const c = { ...ok, ...over }; return aliRefusalCode(evaluateAliOutreachEligibility(c), c); };
+    const code = (over: Partial<AliOutreachContext>) => { const c = { ...ok, ...over }; return aliRefusalCode(evaluateAliOutreachEligibility(c), c); };
     expect(code({ flagEnabled: false })).toEqual({ code: 'ali_flag_off', transient: false });
     expect(code({ overlays: [] })).toEqual({ code: 'ali_no_high_intent', transient: false });
     expect(code({ highestSignalTier: 1 })).toEqual({ code: 'ali_signal_tier', transient: false });
