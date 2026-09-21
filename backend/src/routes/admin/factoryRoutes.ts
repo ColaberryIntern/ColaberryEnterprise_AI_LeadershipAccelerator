@@ -10,6 +10,11 @@ import {
 // so these static imports never trigger ORM init at module load.
 import { approveProcessDocument, ApprovalConflictError, ApprovalGateError } from '../../services/factory/factoryApproval';
 import { requestChanges, ReviewValidationError } from '../../services/factory/factoryReview';
+// Gov-entry (Phase 5 slice 1): the best-fit opportunity feed (degrade-dark) + create-on-pick. The backfill
+// + gov container lazy-load their models inside their functions, so these imports don't init the ORM here.
+import { fetchBestFitOpportunities } from '../../services/factory/opportunities/oppPulseClient';
+import { backfillUnassessedContract } from '../../services/factory/factoryBackfill';
+import { resolveGovContractsContainer } from '../../scripts/lib/factoryDemoContainer';
 
 /**
  * Admin — AI Project Factory Command Center (READ ONLY, Phase 3).
@@ -191,6 +196,63 @@ router.post('/api/admin/factory/contract/:deliveryProjectId/request-changes', re
     if (err instanceof ReviewValidationError) { res.status(400).json({ error: err.message }); return; }
     logFail('factory_request_changes_failed', err, { deliveryProjectId });
     res.status(500).json({ error: 'Could not record the change request.' });
+  }
+});
+
+/**
+ * GET /api/admin/factory/opportunities — the ranked best-fit government proposals for the entry page.
+ * Live from Opportunity Pulse when configured, else the labeled in-app snapshot (the client degrades dark).
+ * Nested under /api/admin/factory, so mgmtSectionGate's existing '/api/admin/factory' → 'program' covers it.
+ */
+router.get('/api/admin/factory/opportunities', requireSection('program'), async (_req: Request, res: Response) => {
+  try {
+    const feed = await fetchBestFitOpportunities(); // never throws
+    res.json(feed);
+  } catch (err: any) {
+    logFail('factory_opportunities_failed', err, {});
+    res.status(500).json({ error: 'Could not load government opportunities.' });
+  }
+});
+
+const startBody = z.object({ title: z.string().max(300).optional(), agency: z.string().max(200).optional() });
+const uuidParam = z.object({ uuid: z.string().uuid() });
+
+/**
+ * POST /api/admin/factory/opportunities/:uuid/start — pick a gov opportunity and start working on it.
+ * findOrCreate a `government_public_sector` delivery project on a deterministic slug (`gov-<uuid>`, so a
+ * re-pick reuses it) under the Government Contracts container, then backfill an honest `unassessed` shell
+ * (Phase 6) so the Command Center opens on it. The real requirements come from the proposal zip in a later
+ * slice; for now the contract exists and renders as unassessed.
+ */
+router.post('/api/admin/factory/opportunities/:uuid/start', requireSection('program'), async (req: Request, res: Response) => {
+  const p = uuidParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity id.' }); return; }
+  const b = startBody.safeParse(req.body ?? {});
+  if (!b.success) { res.status(400).json({ error: 'Invalid body.' }); return; }
+  const { uuid } = p.data;
+  const slug = `gov-${uuid}`;
+  try {
+    const { default: DeliveryProject } = await import('../../models/DeliveryProject');
+    const { brandId, org, engagement } = await resolveGovContractsContainer();
+
+    let created = false;
+    let project: any = await DeliveryProject.findOne({ where: { slug } });
+    if (!project) {
+      project = await DeliveryProject.create({
+        engagement_id: engagement.id, tenant_id: engagement.tenant_id, organization_id: org.id,
+        brand_id: brandId,
+        name: (b.data.title && b.data.title.trim()) ? b.data.title.trim() : `Government contract ${uuid}`,
+        slug, status: 'building', project_class: 'government_public_sector',
+        business_problem: b.data.agency ? `Government solicitation from ${b.data.agency}.` : 'Government contract opportunity.',
+      });
+      created = true;
+    }
+
+    await backfillUnassessedContract(project.id); // honest unassessed shell so /contract/:id renders
+    res.status(created ? 201 : 200).json({ deliveryProjectId: project.id, created });
+  } catch (err: any) {
+    logFail('factory_opportunity_start_failed', err, { uuid, slug });
+    res.status(500).json({ error: 'Could not start this opportunity.' });
   }
 });
 

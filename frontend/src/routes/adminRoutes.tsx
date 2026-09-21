@@ -63,6 +63,7 @@ const AdminProjectOverview = lazy(() => import('../pages/admin/AdminProjectOverv
 const AdminCaseStudiesPage = lazy(() => import('../pages/admin/AdminCaseStudiesPage'));
 const AdminInternshipPage = lazy(() => import('../pages/admin/AdminInternshipPage'));
 const AdminFactoryCommandCenterPage = lazy(() => import('../pages/admin/AdminFactoryCommandCenterPage'));
+const AdminGovOpportunitiesPage = lazy(() => import('../pages/admin/AdminGovOpportunitiesPage'));
 const AdminCaseStudyDetailPage = lazy(() => import('../pages/admin/AdminCaseStudyDetailPage'));
 const InboxCOSPage = lazy(() => import('../pages/admin/inbox/InboxCOSPage'));
 const ContentQueuePage = lazy(() => import('../pages/admin/ContentQueuePage'));
@@ -252,6 +253,7 @@ const adminRoutes = (
         <Route path="/admin/case-studies" element={<AdminCaseStudiesPage />} />
         <Route path="/admin/internship" element={<AdminInternshipPage />} />
         <Route path="/admin/factory" element={<AdminFactoryCommandCenterPage />} />
+        <Route path="/admin/gov-opportunities" element={<AdminGovOpportunitiesPage />} />
         <Route path="/admin/case-studies/:id" element={<AdminCaseStudyDetailPage />} />
         <Route path="/admin/inbox" element={<InboxCOSPage />} />
         <Route path="/admin/content-queue" element={<ContentQueuePage />} />
