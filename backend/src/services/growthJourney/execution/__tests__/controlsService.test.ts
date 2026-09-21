@@ -93,6 +93,9 @@ describe('a rollout', () => {
     await expect(setRollout({ tenantId: TENANT, brandId: BRAND, programId: PROGRAM, channel: 'in_app', mode: 'review', reason: 'x' }, ACTOR)).rejects.toMatchObject({ name: 'ControlValidationError', status: 400, code: 'program_not_in_brand' });
     m.programFindByPk.mockResolvedValue(null);
     await expect(setRollout({ tenantId: TENANT, brandId: BRAND, programId: PROGRAM, channel: 'in_app', mode: 'review', reason: 'x' }, ACTOR)).rejects.toBeInstanceOf(ControlValidationError);
+    // the programme's tenant is checked in its own right, not only through the brand: a row of another tenant that happens to name this brand id is refused
+    m.programFindByPk.mockResolvedValue({ id: PROGRAM, brand_id: BRAND, tenant_id: 't-other' });
+    await expect(setRollout({ tenantId: TENANT, brandId: BRAND, programId: PROGRAM, channel: 'in_app', mode: 'review', reason: 'x' }, ACTOR)).rejects.toMatchObject({ code: 'program_not_in_brand' });
     expect(T5.controls.rows).toHaveLength(1);
   });
 

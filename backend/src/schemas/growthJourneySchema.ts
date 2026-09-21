@@ -211,11 +211,8 @@ export const rolloutBodySchema = z
   .refine((b) => b.mode !== 'limited' || (b.cohort_lead_ids !== undefined && b.daily_limit !== undefined), { message: 'a limited rollout needs cohort_lead_ids and daily_limit' })
   .refine((b) => b.mode !== 'review' || (b.cohort_lead_ids === undefined && b.daily_limit === undefined), { message: 'a review rollout carries no cohort or daily limit' });
 
-export const clearControlBodySchema = z
-  .object({
-    reason: z.string().min(1).max(500).default('cleared'),
-  })
-  .strict();
+/** A clear carries nothing: the row has no cleared-reason column, so a body field would be a dead input on a public contract. */
+export const clearControlBodySchema = z.object({}).strict();
 
 export type ControlParams = z.infer<typeof controlParamsSchema>;
 export type ControlsQuery = z.infer<typeof controlsQuerySchema>;

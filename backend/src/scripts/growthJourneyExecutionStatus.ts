@@ -24,9 +24,10 @@ import { rolloutScopeKey, WILDCARD } from '../services/growthJourney/execution/s
  *   node dist/scripts/growthJourneyExecutionStatus.js --json     # one JSON document
  *
  * It writes nothing: no model create, update or destroy is reachable from
- * here, and the test spies on all three. No address is printed - the reason
- * strings pass T517's `safeField` (an `@` -> `redacted`, bounded), and the rest
- * is ids, codes and counts. The imports stay clear of any module that loads a
+ * here, and the test spies on all three. No `@` is printed, ever - the reason
+ * strings pass T517's `safeField` (an `@` -> `redacted`, bounded), the rest is
+ * ids, codes and counts, and the separators are words, so the guard on the
+ * output is a plain `not.toContain('@')` on the raw lines. The imports stay clear of any module that loads a
  * model FILE: `reconcileExecutions` does, and constructing Sequelize at load is
  * what a probe must never do.
  */
@@ -161,14 +162,14 @@ export async function buildReport(inputs: ProbeInputs = {}): Promise<ProbeReport
 /** One line per scope, one indented line per covering control - ids, codes and counts only. */
 export function renderReport(report: ProbeReport): string[] {
   const f = report.flags;
-  const out = [`growth journey execution status @ ${report.as_of} · master=${f.master} decisions=${f.decisions} execution=${f.execution} handoffs=${f.handoffs}`];
+  const out = [`growth journey execution status at ${report.as_of} · master=${f.master} decisions=${f.decisions} execution=${f.execution} handoffs=${f.handoffs}`];
   if (report.scopes.length === 0) out.push('no journey programmes');
   for (const sc of report.scopes) {
     const receipts = Object.entries(sc.receipts).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${v}`).join(' ') || 'none';
     out.push(`${sc.brand_slug}/${sc.program_slug} (${sc.program_status}) · ${sc.channel} · mode=${sc.mode} (${sc.mode_reason}) · receipts: ${receipts}`);
     for (const c of sc.controls) {
       const extra = [c.daily_limit !== null ? `daily_limit=${c.daily_limit}` : '', c.cohort_size !== null ? `cohort=${c.cohort_size}` : '', c.subject_ref ? `subject=${c.subject_ref}` : ''].filter(Boolean).join(' ');
-      out.push(`    ${c.kind} ${c.scope_key} mode=${c.mode}${extra ? ` ${extra}` : ''} · ${c.id} · by ${c.set_by_admin_id ?? 'unknown'} @ ${c.created_at} · ${c.reason}`);
+      out.push(`    ${c.kind} ${c.scope_key} mode=${c.mode}${extra ? ` ${extra}` : ''} · ${c.id} · by ${c.set_by_admin_id ?? 'unknown'} at ${c.created_at} · ${c.reason}`);
     }
   }
   return out;

@@ -81,9 +81,8 @@ describe('acceptance 7: read-only, and no address', () => {
     const r = await report();
     expect(scopeOf(r, ENT.brand, 'email').controls[0].reason).toBe('redacted');
     const lines = renderReport(r);
-    expect(lines.join('\n')).not.toContain('@colaberry');
-    expect(lines.join('\n').replace(/ @ \d{4}-\d{2}-\d{2}T[^ ]+/g, '')).not.toContain('@');
-    expect(JSON.stringify(r)).not.toContain('@colaberry');
+    expect(lines.join('\n')).not.toContain('@'); // the raw lines, no carve-out: separators are words
+    expect(JSON.stringify(r)).not.toContain('@');
   });
 });
 
@@ -159,7 +158,7 @@ describe('the command', () => {
     control({});
     const lines: string[] = [];
     expect(await run({ json: false }, (l) => lines.push(l))).toBe(0);
-    expect(lines[0]).toMatch(/^growth journey execution status @ .* master=false/);
+    expect(lines[0]).toMatch(/^growth journey execution status at .* master=false/);
     expect(lines.some((l) => l.startsWith('    pause pause|b-ent|*|*|* mode=off'))).toBe(true);
     const json: string[] = [];
     expect(await run({ json: true }, (l) => json.push(l))).toBe(0);

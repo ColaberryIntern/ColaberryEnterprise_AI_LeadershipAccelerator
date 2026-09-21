@@ -175,6 +175,17 @@ describe('the status matrix, on all five routes', () => {
     expect(recordAccessDecision).not.toHaveBeenCalled();
   });
 
+  it('a pause with no brand must name its tenant (400); an unknown key on a rollout or pause body is a 400 - the contracts are strict', async () => {
+    contextFromAdminRequest.mockResolvedValue(superAdmin());
+    const noTenant = await post(PAUSES, { channel: 'email', reason: 'all email' });
+    expect(noTenant.status).toBe(400);
+    expect(JSON.stringify(noTenant.body)).toMatch(/must name the tenant/);
+    expect((await post(ROLLOUTS, { ...REVIEW, force: true })).status).toBe(400);
+    expect((await post(PAUSES, { ...BRAND_PAUSE, force: true })).status).toBe(400);
+    expect(controlCreate).not.toHaveBeenCalled();
+    expect(recordAccessDecision).not.toHaveBeenCalled();
+  });
+
   it('acceptance 4: an all-wildcard pause is a 400 - a second global kill switch is refused before any guard runs', async () => {
     contextFromAdminRequest.mockResolvedValue(superAdmin());
     const r = await post(PAUSES, { tenant_id: TENANT.colaberry, reason: 'stop everything' });
@@ -282,7 +293,8 @@ describe('acceptance 6: the round trip through the probe', () => {
     expect(dark.scopes.find((s) => s.brand_id === BRAND.enterprise && s.channel === 'in_app')!.controls).toEqual([]);
     expect(dark.scopes.find((s) => s.brand_id === BRAND.training && s.channel === 'email')!.controls).toEqual([]);
 
-    const cleared = await post(`${PAUSES}/${id}/clear`, { reason: 'warm-up done' });
+    expect((await post(`${PAUSES}/${id}/clear`, { reason: 'warm-up done' })).status).toBe(400); // a clear carries nothing
+    const cleared = await post(`${PAUSES}/${id}/clear`, {});
     expect(cleared.status).toBe(200);
     expect(cleared.body).toMatchObject({ status: 'cleared', control: { id, cleared_by_admin_id: ADMIN_ID } });
     expect(cleared.body.control.cleared_at).toEqual(expect.any(String));
