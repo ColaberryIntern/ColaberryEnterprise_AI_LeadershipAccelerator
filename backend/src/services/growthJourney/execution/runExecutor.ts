@@ -3,16 +3,17 @@ import { Op } from 'sequelize';
 import { env } from '../../../config/env';
 import type { ExplorerGrowthFlags } from '../../../config/explorerGrowthFlags';
 import { isGrowthJourneyCapabilityEnabled, type GrowthJourneyFlags } from '../../../config/growthJourneyFlags';
-import { GrowthJourneyExecution, JourneyProgram } from '../../../models';
+import { EventLedger, GrowthJourneyExecution, JourneyProgram } from '../../../models';
 import { classifyError } from '../../../utils/errorClassifier';
 import { redactForLogs } from '../../../utils/piiRedaction';
+import { executionChannelOf, LIVE_MODES } from '../decision/executionModeStamp';
 import type { JourneyProgramKind } from '../governor/types';
 import { readLiveDecisionViews } from './decisionReads';
 import { executeApproved, type ExecuteApprovedResult } from './enrollmentAdapter';
-import { MAX_DECISION_AGE_HOURS } from './planChecks';
+import { MAX_DECISION_AGE_HOURS, type ExecutionDecisionView } from './planChecks';
 import { planExecution } from './planExecution';
 import { APPROVED_TTL_HOURS, reconcileExecutions, type ReconcileSummary } from './reconcileExecutions';
-import { resolveExecutionHold, type ExecutionChannel } from './resolveExecutionMode';
+import { resolveExecutionHold, resolveExecutionMode, type ExecutionChannel } from './resolveExecutionMode';
 
 /**
  * The executor batch: `GrowthJourneyExecutor` (Phase 5 T513), shipped PAUSED.
@@ -25,7 +26,16 @@ import { resolveExecutionHold, type ExecutionChannel } from './resolveExecutionM
  *              last MAX_DECISION_AGE_HOURS that have no receipt yet, oldest
  *              first, at most EXECUTOR_LIMITS.plan across the run, each through
  *              T508's planner (exactly once by `decision_id`; a refusal is a
- *              count by reason, never an error);
+ *              count by reason, never an error). Two things are settled BEFORE
+ *              the planner is called, so a decision that cannot be released is
+ *              not fed to it every quarter hour: T504's ladder is asked per
+ *              candidate (a `not_live` answer - no rollout, not in the cohort,
+ *              a pause - is a count and nothing else, and clears the moment an
+ *              operator's control changes), and the planner's own refusals are
+ *              remembered for the window by reading the refusal rows it wrote,
+ *              bounded to this run's candidates. That memory fails OPEN: if the
+ *              ledger cannot be read the decision is planned again, and the
+ *              receipt's unique index still says exactly once;
  *   execute    at most EXECUTOR_LIMITS.execute `approved` receipts on the
  *              channels this batch may enrol, approved inside the TTL (an older
  *              one is the reconciler's to expire, never this stage's to fire),
@@ -48,8 +58,11 @@ import { resolveExecutionHold, type ExecutionChannel } from './resolveExecutionM
  * REVIEW-only and executes through its own path (T516); its receipts are never
  * claimed here. SMS and voice have no receipts to claim.
  *
- * The summary is counts and reason strings - no subject ref, no address - and
- * goes through `redactForLogs` like every other line in this tree.
+ * The summary is counts and reason strings - no subject ref, no address. Its
+ * `context` goes through `redactForLogs` like every other line in this tree;
+ * the envelope (the event, the correlation id, the timing) does not, because
+ * the redactor's phone pattern rewrites the digits of one v4 UUID in sixty and
+ * a run line without its correlation id is a run that cannot be traced.
  */
 
 export const EXECUTOR_AGENT = 'GrowthJourneyExecutor';
@@ -78,7 +91,7 @@ export interface ExecutorSummary {
   status: 'skipped' | 'ran';
   reason?: string;
   correlation_id: string;
-  plan: { programs: number; candidates: number; planned: number; replayed: number; refused: Record<string, number>; errors: number; window_capped: number };
+  plan: { programs: number; candidates: number; planned: number; replayed: number; refused: Record<string, number>; not_live: Record<string, number>; remembered: number; errors: number; window_capped: number };
   execute: { candidates: number; held: Record<string, number>; enrolled: number; not_claimed: number; blocked: number; cancelled: number; failed: number; errors: number };
   reconcile: ReconcileSummary | null;
   stage_errors: ExecutorStageError[];
@@ -88,15 +101,18 @@ interface ProgramRow { id: string; brand_id: string; kind: JourneyProgramKind }
 interface ReceiptView { id: string; tenant_id: string; brand_id: string; program_id: string | null; channel: ExecutionChannel; subject_ref: string; lead_id: number | null }
 
 const bump = (m: Record<string, number>, k: string): void => { m[k] = (m[k] ?? 0) + 1; };
-const log = (level: 'info' | 'warn' | 'error', event: string, context: Record<string, unknown>): void => {
-  const line = JSON.stringify({ timestamp: new Date().toISOString(), level, service: 'growth-journey', event, ...context });
-  (level === 'error' ? console.error : level === 'warn' ? console.warn : console.log)(redactForLogs(line));
+type Envelope = { correlation_id: string; outcome: 'success' | 'failure' | 'partial'; error_class?: string; duration_ms?: number };
+/** The envelope is written as-is; only `context` is redacted, so a correlation id is never rewritten by the redactor. */
+const log = (level: 'info' | 'warn' | 'error', event: string, envelope: Envelope, context: Record<string, unknown>): void => {
+  const head = JSON.stringify({ timestamp: new Date().toISOString(), level, service: 'growth-journey', event, ...envelope });
+  const line = `${head.slice(0, -1)},"context":${redactForLogs(JSON.stringify(context))}}`;
+  (level === 'error' ? console.error : level === 'warn' ? console.warn : console.log)(line);
 };
 
 function emptySummary(correlation_id: string): ExecutorSummary {
   return {
     status: 'ran', correlation_id,
-    plan: { programs: 0, candidates: 0, planned: 0, replayed: 0, refused: {}, errors: 0, window_capped: 0 },
+    plan: { programs: 0, candidates: 0, planned: 0, replayed: 0, refused: {}, not_live: {}, remembered: 0, errors: 0, window_capped: 0 },
     execute: { candidates: 0, held: {}, enrolled: 0, not_claimed: 0, blocked: 0, cancelled: 0, failed: 0, errors: 0 },
     reconcile: null,
     stage_errors: [],
@@ -108,30 +124,72 @@ async function activePrograms(): Promise<ProgramRow[]> {
   return rows.map((p) => ({ id: String(p.get('id')), brand_id: String(p.get('brand_id')), kind: p.get('kind') as JourneyProgramKind }));
 }
 
+/** The decision ids the planner refused inside the window, among `ids`; on a read error, none (fail open, logged). */
+async function rememberedRefusals(ids: string[], since: Date, correlation_id: string): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  try {
+    const rows = await EventLedger.findAll({
+      where: { event_type: 'growth_journey.execution.refused', entity_type: 'growth_journey_decision', entity_id: { [Op.in]: ids }, created_at: { [Op.gte]: since } },
+      attributes: ['entity_id'],
+    });
+    return new Set(rows.map((r) => String(r.get('entity_id'))));
+  } catch (err: unknown) {
+    log('warn', 'growth_journey.executor.refusal_memory_unavailable', { correlation_id, outcome: 'partial', error_class: classifyError(err) }, { candidates: ids.length });
+    return new Set();
+  }
+}
+
+type Candidate = { decision: ExecutionDecisionView; program: ProgramRow };
+
+/** The ladder's answer for one decision, asked before the planner: only a live answer is worth a planner call. */
+async function ladderReleases(decision: ExecutionDecisionView, asOf: Date, flags: GrowthJourneyFlags, explorerFlags: ExplorerGrowthFlags): Promise<string | null> {
+  // The planner names these refusals itself; they are not the ladder's.
+  if (!decision.selected_action || !decision.program_id) return null;
+  const target = executionChannelOf({ selected_action: decision.selected_action, selected_channel: decision.selected_channel as never });
+  if (!target.channel) return null;
+  const mode = await resolveExecutionMode({ tenantId: decision.tenant_id, brandId: decision.brand_id, programId: decision.program_id, channel: target.channel, subjectRef: decision.subject_ref, leadId: decision.lead_id, asOf, flags, explorerFlags });
+  return LIVE_MODES.includes(mode.mode) ? null : mode.reason;
+}
+
 async function planStage(programs: ProgramRow[], asOf: Date, flags: GrowthJourneyFlags, explorerFlags: ExplorerGrowthFlags, limit: number, s: ExecutorSummary): Promise<void> {
   const since = new Date(asOf.getTime() - MAX_DECISION_AGE_HOURS * HOUR);
   // A receipt is born after its decision, so every receipt for a decision in the window is in the window too.
   const receipts = await GrowthJourneyExecution.findAll({ where: { created_at: { [Op.gte]: since } }, attributes: ['decision_id'] });
   const planned = new Set(receipts.map((r) => String(r.get('decision_id'))));
-  let budget = limit;
+  // 1. The candidates: unplanned, released by the ladder, at most `limit` across the run, oldest first per programme.
+  const candidates: Candidate[] = [];
   for (const program of programs) {
-    if (budget === 0) break;
+    if (candidates.length >= limit) break;
     const decisions = await readLiveDecisionViews({ brandId: program.brand_id, since, limit: PLAN_WINDOW_CAP });
     if (decisions.length >= PLAN_WINDOW_CAP) s.plan.window_capped += 1;
     for (const decision of decisions) {
-      if (budget === 0) break;
+      if (candidates.length >= limit) break;
       if (planned.has(decision.id)) continue;
-      s.plan.candidates += 1;
-      budget -= 1;
-      try {
-        const r = await planExecution({ decision, flags, explorerFlags, asOf, programKind: program.kind });
-        if (r.status === 'planned') s.plan.planned += 1;
-        else if (r.status === 'replayed') s.plan.replayed += 1;
-        else bump(s.plan.refused, r.reason);
-      } catch (err: unknown) {
-        s.plan.errors += 1;
-        log('error', 'growth_journey.executor.plan_failed', { correlation_id: s.correlation_id, outcome: 'failure', error_class: classifyError(err), context: { decision_id: decision.id, brand_id: program.brand_id } });
+      const notLive = await ladderReleases(decision, asOf, flags, explorerFlags);
+      if (notLive) {
+        bump(s.plan.not_live, notLive);
+        continue;
       }
+      candidates.push({ decision, program });
+    }
+  }
+  // 2. The planner's own refusals in the window are remembered; a refused decision is not fed to it again.
+  const remembered = await rememberedRefusals(candidates.map((c) => c.decision.id), since, s.correlation_id);
+  // 3. The planner, exactly once per decision.
+  for (const { decision, program } of candidates) {
+    if (remembered.has(decision.id)) {
+      s.plan.remembered += 1;
+      continue;
+    }
+    s.plan.candidates += 1;
+    try {
+      const r = await planExecution({ decision, flags, explorerFlags, asOf, programKind: program.kind });
+      if (r.status === 'planned') s.plan.planned += 1;
+      else if (r.status === 'replayed') s.plan.replayed += 1;
+      else bump(s.plan.refused, r.reason);
+    } catch (err: unknown) {
+      s.plan.errors += 1;
+      log('error', 'growth_journey.executor.plan_failed', { correlation_id: s.correlation_id, outcome: 'failure', error_class: classifyError(err) }, { decision_id: decision.id, brand_id: program.brand_id });
     }
   }
 }
@@ -161,7 +219,7 @@ async function executeStage(programs: ProgramRow[], asOf: Date, flags: GrowthJou
       s.execute[result.status] += 1;
     } catch (err: unknown) {
       s.execute.errors += 1;
-      log('error', 'growth_journey.executor.execute_failed', { correlation_id: s.correlation_id, outcome: 'failure', error_class: classifyError(err), context: { execution_id: r.id, channel: r.channel } });
+      log('error', 'growth_journey.executor.execute_failed', { correlation_id: s.correlation_id, outcome: 'failure', error_class: classifyError(err) }, { execution_id: r.id, channel: r.channel });
     }
   }
 }
@@ -172,7 +230,7 @@ export async function runExecutor(args: RunExecutorArgs = {}): Promise<ExecutorS
   const explorerFlags = args.explorerFlags ?? env.explorerGrowth;
   if (!isGrowthJourneyCapabilityEnabled('journeyExecution', flags)) {
     const reason = flags.growthJourneyEnabled ? 'journeyExecution_off' : 'growthJourney_off';
-    log('info', 'growth_journey_executor_skipped', { correlation_id, outcome: 'success', context: { reason } });
+    log('info', 'growth_journey_executor_skipped', { correlation_id, outcome: 'success' }, { reason });
     return { ...emptySummary(correlation_id), status: 'skipped', reason };
   }
   const asOf = args.asOf ?? new Date();
@@ -187,7 +245,7 @@ export async function runExecutor(args: RunExecutorArgs = {}): Promise<ExecutorS
     } catch (err: unknown) {
       const error_class = classifyError(err);
       s.stage_errors.push({ stage: name, error_class });
-      log('error', 'growth_journey.executor.stage_failed', { correlation_id, outcome: 'failure', error_class, context: { stage: name } });
+      log('error', 'growth_journey.executor.stage_failed', { correlation_id, outcome: 'failure', error_class }, { stage: name });
     }
   };
   await stage('plan', async () => {
@@ -200,8 +258,8 @@ export async function runExecutor(args: RunExecutorArgs = {}): Promise<ExecutorS
     s.reconcile = await reconcileExecutions({ asOf, limit: limits.reconcile });
   });
 
-  log(s.stage_errors.length ? 'warn' : 'info', 'growth_journey.executor.run', {
-    correlation_id, duration_ms: Date.now() - started, outcome: s.stage_errors.length ? 'partial' : 'success', context: { plan: s.plan, execute: s.execute, reconcile: s.reconcile, stage_errors: s.stage_errors },
+  log(s.stage_errors.length ? 'warn' : 'info', 'growth_journey.executor.run', { correlation_id, duration_ms: Date.now() - started, outcome: s.stage_errors.length ? 'partial' : 'success' }, {
+    plan: s.plan, execute: s.execute, reconcile: s.reconcile, stage_errors: s.stage_errors,
   });
   return s;
 }

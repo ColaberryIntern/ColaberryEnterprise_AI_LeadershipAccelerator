@@ -1,5 +1,6 @@
 const m = {
   enrol: jest.fn(),
+  uuid: jest.fn(),
   programsFindAll: jest.fn(),
   leadFindByPk: jest.fn(),
   agentFindOne: jest.fn(),
@@ -21,6 +22,7 @@ jest.mock('../../../../models', () => {
   const interactions = new Table('interaction_outcomes', 'io');
   const proposals = new Table('proposed_agent_actions', 'pa');
   const outcomes = new Table('growth_journey_outcomes', 'out');
+  const ledger = new Table('event_ledger', 'ev');
   return {
     ...phase5ModelsMock,
     GrowthJourneyDecision: decisions,
@@ -30,12 +32,13 @@ jest.mock('../../../../models', () => {
     InteractionOutcome: interactions,
     ProposedAgentAction: proposals,
     GrowthJourneyOutcome: outcomes,
+    EventLedger: ledger,
     JourneyProgram: { findAll: (...a: unknown[]) => m.programsFindAll(...a) },
     Lead: { findByPk: (...a: unknown[]) => m.leadFindByPk(...a) },
     AiAgent: { findOne: (...a: unknown[]) => m.agentFindOne(...a) },
     Campaign: { findOne: (...a: unknown[]) => m.campaignFindOne(...a) },
     FollowUpSequence: { findByPk: (...a: unknown[]) => m.sequenceFindByPk(...a) },
-    __tables: { decisions, scheduled, domains, communication, interactions, proposals, outcomes },
+    __tables: { decisions, scheduled, domains, communication, interactions, proposals, outcomes, ledger },
   };
 });
 jest.mock('../../../../config/env', () => ({
@@ -53,6 +56,8 @@ jest.mock('../../../launchSafety', () => ({ isKillSwitchActiveStrict: (...a: unk
 jest.mock('../../governor/contactEvidence', () => ({ resolveContactEvidence: (...a: unknown[]) => m.contactEvidence(...a) }));
 jest.mock('../../handoffs/returnToAi', () => ({ ...jest.requireActual('../../handoffs/returnToAi'), resolveReturnToAi: (...a: unknown[]) => m.returnToAi(...a) }));
 jest.mock('../../ledger', () => ({ recordJourneyEvent: (...a: unknown[]) => m.ledger(...a) }));
+// The run's correlation id is real by default; one test forces the UUID the redactor's phone pattern used to rewrite.
+jest.mock('crypto', () => ({ ...jest.requireActual('crypto'), randomUUID: () => m.uuid() }));
 
 import fs from 'fs';
 import path from 'path';
@@ -74,7 +79,10 @@ import { pauseScopeKey, rolloutScopeKey } from '../scopeKey';
  * `enrolled`, and never again.
  */
 
-const tables = (models as unknown as { __tables: Record<'decisions' | 'scheduled' | 'domains' | 'communication' | 'interactions' | 'proposals' | 'outcomes', Table> }).__tables;
+const tables = (models as unknown as { __tables: Record<'decisions' | 'scheduled' | 'domains' | 'communication' | 'interactions' | 'proposals' | 'outcomes' | 'ledger', Table> }).__tables;
+const { randomUUID } = jest.requireActual('crypto') as { randomUUID: () => string };
+/** The v4 UUID the verifier showed the redactor rewriting to `...-12***-***-9012` when the whole line went through it. */
+const MANGLEABLE_UUID = '3f1a2b4c-9e7d-4b1a-8c2e-123456789012';
 const TENANT = 't-col';
 const BRAND = 'b-ent';
 const PROGRAM = 'p-ent';
@@ -137,7 +145,12 @@ beforeEach(() => {
   m.sequenceFindByPk.mockResolvedValue({ id: 's-flow', is_active: true });
   m.contactEvidence.mockResolvedValue(contact());
   m.returnToAi.mockResolvedValue(NO_RETURN);
-  m.ledger.mockResolvedValue({ recorded: true });
+  // The ledger mock writes the row the real ledger would - the planner's refusals are what the executor reads back.
+  m.ledger.mockImplementation(async (type: string, entity: string, id: string) => {
+    tables.ledger.insert({ event_type: type, entity_type: entity, entity_id: id });
+    return { recorded: true };
+  });
+  m.uuid.mockImplementation(() => randomUUID());
   // The sequence service's one visible effect: the step-0 row the scheduler will later send.
   m.enrol.mockImplementation(async (leadId: number, sequenceId: string, campaignId: string) => {
     tables.scheduled.insert({ lead_id: leadId, campaign_id: campaignId, sequence_id: sequenceId, step_index: 0, status: 'pending', sent_at: null, metadata: null });
@@ -207,12 +220,54 @@ describe('acceptance 2: a limited cohort decision reaches enrolled in one run, a
     expect(m.enrol).not.toHaveBeenCalled();
   });
 
-  it('a refusal is a count by reason, never an error, and the decision is a candidate again next run until it ages out', async () => {
-    liveDecision(); // no rollout: the ladder answers shadow / no_rollout
+  it('the ladder is asked before the planner: no rollout is a not_live count, no planner call, no refusal row - and the moment a rollout exists the decision is planned', async () => {
+    liveDecision();
     const s = await run();
-    expect(s.plan).toMatchObject({ candidates: 1, planned: 0, refused: { 'mode_not_live:no_rollout': 1 }, errors: 0 });
+    expect(s.plan).toMatchObject({ candidates: 0, planned: 0, refused: {}, not_live: { no_rollout: 1 }, remembered: 0, errors: 0 });
+    expect(m.transaction).not.toHaveBeenCalled();
+    expect(tables.ledger.rows.filter((r) => r.event_type === 'growth_journey.execution.refused')).toEqual([]);
     expect(T5.executions.rows).toEqual([]);
-    expect((await run()).plan.candidates).toBe(1);
+    expect((await run()).plan.not_live).toEqual({ no_rollout: 1 });
+    expect(tables.ledger.rows).toEqual([]);
+    // An operator's control takes effect at the next run, not the next nightly.
+    limitedRollout();
+    expect((await run()).plan).toMatchObject({ candidates: 1, planned: 1, not_live: {} });
+  });
+
+  it('a decision outside the cohort is a not_live count every run, never a planner call: no refusal row, no budget burned', async () => {
+    limitedRollout([999]);
+    liveDecision();
+    for (let i = 0; i < 3; i += 1) expect((await run()).plan).toMatchObject({ candidates: 0, not_live: { not_in_cohort: 1 } });
+    expect(m.transaction).not.toHaveBeenCalled();
+    expect(tables.ledger.rows).toEqual([]);
+  });
+
+  it('the planner\'s own refusal is a count by reason and ONE refusal row; the next run remembers it and does not feed the decision to the planner again', async () => {
+    limitedRollout();
+    liveDecision();
+    m.returnToAi.mockResolvedValue({ active: true, until: new Date(AS_OF_4.getTime() + 48 * HOUR) });
+    const first = await run();
+    expect(first.plan).toMatchObject({ candidates: 1, planned: 0, refused: { returned_to_ai_cooldown: 1 }, remembered: 0 });
+    const refusals = () => tables.ledger.rows.filter((r) => r.event_type === 'growth_journey.execution.refused');
+    expect(refusals()).toHaveLength(1);
+    expect(m.transaction).toHaveBeenCalledTimes(1);
+    const second = await run();
+    expect(second.plan).toMatchObject({ candidates: 0, remembered: 1, refused: {} });
+    expect(refusals()).toHaveLength(1);
+    expect(m.transaction).toHaveBeenCalledTimes(1);
+    expect(T5.executions.rows).toEqual([]);
+  });
+
+  it('the memory fails OPEN: a ledger that cannot be read is logged and the decision is planned anyway (exactly once is the receipt\'s index, not the memory)', async () => {
+    limitedRollout();
+    liveDecision();
+    const spy = jest.spyOn(tables.ledger, 'findAll').mockRejectedValueOnce(Object.assign(new Error('connection reset'), { name: 'SequelizeConnectionError' }));
+    const s = await run();
+    spy.mockRestore();
+    expect(s.plan).toMatchObject({ candidates: 1, planned: 1, remembered: 0 });
+    expect(s.stage_errors).toEqual([]);
+    const line = (console.warn as jest.Mock).mock.calls.map((c) => String(c[0])).find((l) => l.includes('growth_journey.executor.refusal_memory_unavailable') && l.includes(s.correlation_id))!;
+    expect(JSON.parse(line)).toMatchObject({ level: 'warn', outcome: 'partial', error_class: 'SequelizeConnectionError', context: { candidates: 1 } });
   });
 
   it('only live decisions inside the age window, of active programmes, are candidates', async () => {
@@ -331,11 +386,27 @@ describe('acceptance 3: a stage that fails is one line, and the next stage still
     expect(runLine).not.toContain(`lead:${LEAD}`);
   });
 
+  it('the envelope is never redacted: a correlation id the redactor\'s phone pattern would rewrite survives on every line of the run', async () => {
+    m.uuid.mockImplementation(() => MANGLEABLE_UUID);
+    // The redactor DOES rewrite this id when handed the whole line - the property the fix removes from the envelope.
+    const { redactForLogs } = jest.requireActual('../../../../utils/piiRedaction') as { redactForLogs: (s: string) => string };
+    expect(redactForLogs(JSON.stringify({ correlation_id: MANGLEABLE_UUID }))).not.toContain(MANGLEABLE_UUID);
+    limitedRollout();
+    liveDecision();
+    m.programsFindAll.mockRejectedValueOnce(Object.assign(new Error('boom'), { name: 'SequelizeConnectionError' }));
+    const s = await run();
+    expect(s.correlation_id).toBe(MANGLEABLE_UUID);
+    const lines = [...(console.log as jest.Mock).mock.calls, ...(console.error as jest.Mock).mock.calls, ...(console.warn as jest.Mock).mock.calls].map((c) => String(c[0])).filter((l) => l.includes('growth_journey.executor.') || l.includes('growth_journey_executor_'));
+    const mine = lines.filter((l) => l.includes(`"correlation_id":"${MANGLEABLE_UUID}"`));
+    expect(mine.map((l) => JSON.parse(l).event).sort()).toEqual(['growth_journey.executor.run', 'growth_journey.executor.stage_failed']);
+    for (const l of mine) expect(JSON.parse(l).correlation_id).toBe(MANGLEABLE_UUID);
+  });
+
   it('the batch imports nothing of the scheduler and names no send path; the scheduler side imports it', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'runExecutor.ts'), 'utf8');
     expect(src).not.toMatch(/schedulerService|cronInstrumentation|node-cron/);
     expect(src).not.toMatch(/sequenceService|enrollLeadInSequence|enrollLeadsInCampaign|ScheduledEmail\.create|sendMail/);
     expect(src).not.toMatch(/GrowthJourney(Classification|Transition|Decision|ScoreSnapshot|Outcome)\b/);
-    expect(src.split('\n').length).toBeLessThan(260);
+    expect(src.split('\n').length).toBeLessThan(300);
   });
 });
