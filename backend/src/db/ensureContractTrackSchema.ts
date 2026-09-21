@@ -137,10 +137,14 @@ export async function ensureContractTrackSchema(): Promise<void> {
 export async function assertContractTrackSchema(): Promise<boolean> {
   const problems: string[] = [];
   try {
+    // Fetch every public table name and check membership in JS, rather than a
+    // `table_name = ANY($names)` bind. MEASURED in production 2026-09-21: the
+    // Sequelize named-array bind returned a FALSE NEGATIVE for this exact query —
+    // the five tables existed (a positional `ANY($1)` found them) but the assert
+    // reported them all missing and logged a bogus "contract reads will fail"
+    // error on every boot. Filtering in JS removes the unreliable array bind.
     const [rows] = await sequelize.query(
-      `SELECT table_name FROM information_schema.tables
-        WHERE table_schema = 'public' AND table_name = ANY($names)`,
-      { bind: { names: [...REQUIRED_TABLES] } },
+      `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`,
     );
     const have = new Set((rows as { table_name: string }[]).map((r) => r.table_name));
     for (const t of REQUIRED_TABLES) if (!have.has(t)) problems.push(`table ${t} missing`);
