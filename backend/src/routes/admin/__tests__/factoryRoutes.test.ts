@@ -17,7 +17,16 @@ const projectFindAll = jest.fn();
 jest.mock('../../../models/ContractProcessDocument', () => ({ __esModule: true, default: { findAll: (...a: any[]) => docFindAll(...a) } }));
 jest.mock('../../../models/ContractTrack', () => ({ __esModule: true, default: { findAll: (...a: any[]) => trackFindAll(...a) } }));
 jest.mock('../../../models/ContractRequirement', () => ({ __esModule: true, default: { findAll: (...a: any[]) => reqFindAll(...a) } }));
-jest.mock('../../../models/DeliveryProject', () => ({ __esModule: true, default: { findAll: (...a: any[]) => projectFindAll(...a) } }));
+const govProjFindOne = jest.fn();
+const govProjCreate = jest.fn();
+jest.mock('../../../models/DeliveryProject', () => ({ __esModule: true, default: { findAll: (...a: any[]) => projectFindAll(...a), findOne: (...a: any[]) => govProjFindOne(...a), create: (...a: any[]) => govProjCreate(...a) } }));
+
+const fetchBestFitOpportunities = jest.fn();
+jest.mock('../../../services/factory/opportunities/oppPulseClient', () => ({ fetchBestFitOpportunities: (...a: any[]) => fetchBestFitOpportunities(...a) }));
+const backfillUnassessedContract = jest.fn();
+jest.mock('../../../services/factory/factoryBackfill', () => ({ backfillUnassessedContract: (...a: any[]) => backfillUnassessedContract(...a) }));
+const resolveGovContractsContainer = jest.fn();
+jest.mock('../../../scripts/lib/factoryDemoContainer', () => ({ resolveGovContractsContainer: (...a: any[]) => resolveGovContractsContainer(...a) }));
 
 // Partial mocks: override the write functions but KEEP the real error classes (instanceof must work).
 const approveProcessDocument = jest.fn();
@@ -173,11 +182,57 @@ describe('GET /api/admin/factory/contracts', () => {
   });
 });
 
+describe('GET /api/admin/factory/opportunities', () => {
+  it('returns the best-fit feed from the client (source + snapshotDate passthrough)', async () => {
+    fetchBestFitOpportunities.mockResolvedValue({
+      opportunities: [{ uuid: 'u1', title: 'A', agency: 'X', closeDate: null, fitScore: 70, estimatedValue: 100, sourceUrl: null }],
+      source: 'snapshot', snapshotDate: '2026-06-08',
+    });
+    const res = await request(app).get('/api/admin/factory/opportunities');
+    expect(res.status).toBe(200);
+    expect(res.body.source).toBe('snapshot');
+    expect(res.body.snapshotDate).toBe('2026-06-08');
+    expect(res.body.opportunities).toHaveLength(1);
+  });
+});
+
+describe('POST /api/admin/factory/opportunities/:uuid/start — create the contract + open it', () => {
+  const uuid = '2e287828-9040-4948-98fe-a0250a5d66a5';
+  const container = { brandId: 'b1', org: { id: 'org-1' }, engagement: { id: 'eng-1', tenant_id: 'ten-1' } };
+
+  it('creates a government_public_sector contract (slug gov-<uuid>) + backfills, returns 201', async () => {
+    resolveGovContractsContainer.mockResolvedValue(container);
+    govProjFindOne.mockResolvedValue(null);
+    govProjCreate.mockResolvedValue({ id: 'dp-gov-1' });
+    const res = await request(app).post(`/api/admin/factory/opportunities/${uuid}/start`).send({ title: 'Agenda RFP', agency: 'Harris County' });
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({ deliveryProjectId: 'dp-gov-1', created: true });
+    expect(govProjCreate.mock.calls[0][0]).toMatchObject({ slug: `gov-${uuid}`, project_class: 'government_public_sector', name: 'Agenda RFP' });
+    expect(backfillUnassessedContract).toHaveBeenCalledWith('dp-gov-1');
+  });
+
+  it('is idempotent: an existing gov-<uuid> project is reused (200, no create) and still backfills', async () => {
+    resolveGovContractsContainer.mockResolvedValue(container);
+    govProjFindOne.mockResolvedValue({ id: 'dp-gov-1' });
+    const res = await request(app).post(`/api/admin/factory/opportunities/${uuid}/start`).send({});
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ deliveryProjectId: 'dp-gov-1', created: false });
+    expect(govProjCreate).not.toHaveBeenCalled();
+    expect(backfillUnassessedContract).toHaveBeenCalledWith('dp-gov-1');
+  });
+
+  it('400s an invalid opportunity id (never creates)', async () => {
+    const res = await request(app).post('/api/admin/factory/opportunities/not-a-uuid/start').send({});
+    expect(res.status).toBe(400);
+    expect(govProjCreate).not.toHaveBeenCalled();
+  });
+});
+
 describe('route-auth — every route is section-gated (required CI lint)', () => {
   it('the source guards every route with requireSection(\'program\')', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'factoryRoutes.ts'), 'utf8');
     const guards = src.match(/requireSection\('program'\)/g) ?? [];
-    expect(guards.length).toBeGreaterThanOrEqual(5); // sample, contract, contracts, approve, request-changes
+    expect(guards.length).toBeGreaterThanOrEqual(7); // sample, contract, contracts, approve, request-changes, opportunities, start
   });
 });
 

@@ -124,3 +124,34 @@ export async function requestFactoryChanges(deliveryProjectId: string, body: Req
   const { data } = await api.post<{ id: string; decision: string }>(`/api/admin/factory/contract/${encodeURIComponent(deliveryProjectId)}/request-changes`, body);
   return data;
 }
+
+// ── Gov-entry (Phase 5 slice 1) ──────────────────────────────────────────────
+export interface GovOpportunity {
+  uuid: string;
+  title: string;
+  agency: string;
+  closeDate: string | null;
+  fitScore: number | null;
+  estimatedValue: number | null;
+  sourceUrl: string | null;
+  pursued?: boolean;
+}
+export interface GovOpportunityFeed {
+  opportunities: GovOpportunity[];
+  /** 'live' = pulled from Opportunity Pulse; 'snapshot' = the labeled in-app fallback. */
+  source: 'live' | 'snapshot';
+  snapshotDate: string | null;
+}
+export interface StartOpportunityResult { deliveryProjectId: string; created: boolean; }
+
+/** The ranked best-fit government proposals (live from Opportunity Pulse, or the labeled snapshot). */
+export async function listGovOpportunities(): Promise<GovOpportunityFeed> {
+  const { data } = await api.get<GovOpportunityFeed>('/api/admin/factory/opportunities');
+  return data;
+}
+
+/** Pick a gov opportunity and start it — creates the contract (unassessed shell), returns its id. */
+export async function startGovOpportunity(uuid: string, body: { title?: string; agency?: string } = {}): Promise<StartOpportunityResult> {
+  const { data } = await api.post<StartOpportunityResult>(`/api/admin/factory/opportunities/${encodeURIComponent(uuid)}/start`, body);
+  return data;
+}

@@ -141,6 +141,9 @@ export const NAV_GROUPS: NavGroup[] = [
     // AI Project Factory Command Center (Phase 3). A delivery contract is program-domain work; the
     // backend mgmtSectionGate maps /api/admin/factory to 'program', so the nav and the API agree.
     { path: '/admin/factory', label: 'Project Factory', icon: 'node-tree' },
+    // Gov-contract entry page (Phase 5 slice 1): best-fit proposals -> start -> the Command Center.
+    // Same 'program' section as /admin/factory (backend mgmtSectionGate covers /api/admin/factory/*).
+    { path: '/admin/gov-opportunities', label: 'Gov Opportunities', icon: 'government-line' },
   ]},
   { label: 'Intelligence', section: 'intelligence', links: [
     { path: '/admin/ceo', label: 'CEO Command', icon: 'vip-crown-line' },

@@ -6,6 +6,7 @@ jest.mock('../utils/api', () => ({ __esModule: true, default: { get: jest.fn(), 
 import api from '../utils/api';
 import {
   getFactorySample, getFactoryContract, listFactoryContracts, approveFactoryContract, requestFactoryChanges,
+  listGovOpportunities, startGovOpportunity,
 } from './factoryApi';
 
 const mockGet = (api as unknown as { get: jest.Mock }).get;
@@ -51,5 +52,20 @@ describe('factoryApi', () => {
     const res = await requestFactoryChanges('dp-1', body);
     expect(mockPost).toHaveBeenCalledWith('/api/admin/factory/contract/dp-1/request-changes', body);
     expect(res.decision).toBe('changes_requested');
+  });
+
+  it('listGovOpportunities returns the feed with its source', async () => {
+    mockGet.mockResolvedValue({ data: { opportunities: [{ uuid: 'u1', title: 'A' }], source: 'snapshot', snapshotDate: '2026-06-08' } });
+    const feed = await listGovOpportunities();
+    expect(mockGet).toHaveBeenCalledWith('/api/admin/factory/opportunities');
+    expect(feed.source).toBe('snapshot');
+    expect(feed.opportunities[0].uuid).toBe('u1');
+  });
+
+  it('startGovOpportunity posts to the start endpoint with the uuid encoded and returns the id', async () => {
+    mockPost.mockResolvedValue({ data: { deliveryProjectId: 'dp-gov-1', created: true } });
+    const res = await startGovOpportunity('2e287828-9040-4948-98fe-a0250a5d66a5', { title: 'Agenda RFP', agency: 'Harris County' });
+    expect(mockPost).toHaveBeenCalledWith('/api/admin/factory/opportunities/2e287828-9040-4948-98fe-a0250a5d66a5/start', { title: 'Agenda RFP', agency: 'Harris County' });
+    expect(res.deliveryProjectId).toBe('dp-gov-1');
   });
 });
