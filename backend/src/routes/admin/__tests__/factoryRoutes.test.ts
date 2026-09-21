@@ -7,22 +7,38 @@
 import fs from 'fs';
 import path from 'path';
 
-const requireSection = jest.fn(() => (_req: any, _res: any, next: any) => next());
+const requireSection = jest.fn(() => (req: any, _res: any, next: any) => { req.admin = { email: 'admin@test' }; next(); });
 jest.mock('../../../middlewares/authMiddleware', () => ({ requireSection: (...a: any[]) => requireSection(...a) }));
 
 const docFindAll = jest.fn();
 const trackFindAll = jest.fn();
 const reqFindAll = jest.fn();
+const projectFindAll = jest.fn();
 jest.mock('../../../models/ContractProcessDocument', () => ({ __esModule: true, default: { findAll: (...a: any[]) => docFindAll(...a) } }));
 jest.mock('../../../models/ContractTrack', () => ({ __esModule: true, default: { findAll: (...a: any[]) => trackFindAll(...a) } }));
 jest.mock('../../../models/ContractRequirement', () => ({ __esModule: true, default: { findAll: (...a: any[]) => reqFindAll(...a) } }));
+jest.mock('../../../models/DeliveryProject', () => ({ __esModule: true, default: { findAll: (...a: any[]) => projectFindAll(...a) } }));
+
+// Partial mocks: override the write functions but KEEP the real error classes (instanceof must work).
+const approveProcessDocument = jest.fn();
+jest.mock('../../../services/factory/factoryApproval', () => {
+  const actual = jest.requireActual('../../../services/factory/factoryApproval');
+  return { ...actual, approveProcessDocument: (...a: any[]) => approveProcessDocument(...a) };
+});
+const requestChanges = jest.fn();
+jest.mock('../../../services/factory/factoryReview', () => {
+  const actual = jest.requireActual('../../../services/factory/factoryReview');
+  return { ...actual, requestChanges: (...a: any[]) => requestChanges(...a) };
+});
 
 import express from 'express';
 import request from 'supertest';
 import factoryRoutes from '../factoryRoutes';
 import { buildSampleContractProject } from '../../../services/factory/sample/sampleContractProject';
+import { ApprovalConflictError, ApprovalGateError } from '../../../services/factory/factoryApproval';
 
 const app = express();
+app.use(express.json());
 app.use(factoryRoutes);
 
 const s = buildSampleContractProject();
@@ -78,15 +94,89 @@ describe('GET /api/admin/factory/contract/:deliveryProjectId', () => {
     expect(res.body.compliance).toHaveLength(4);          // requirements reconstructed from the rows
     expect(res.body.allocation).toHaveLength(4);
     expect(res.body.approval).toEqual({
-      status: 'documented', level: 'documented', version: 2, enrichmentStatus: 'partial', contentHash: 'hash123',
+      status: 'documented', level: 'documented', version: 2, trackType: 'solution_build', enrichmentStatus: 'partial', contentHash: 'hash123',
     });
   });
 });
 
-describe('route-auth — both routes are section-gated (required CI lint)', () => {
+describe('POST /api/admin/factory/contract/:id/approve', () => {
+  const body = { trackType: 'solution_build', expectedVersion: 1, level: 'documented', enrichmentStatus: 'partial' };
+
+  it('approves and returns the dto; approvedBy + revisionId come from the token/params, not the body', async () => {
+    approveProcessDocument.mockResolvedValue({ id: 'doc-2', version: 2, status: 'documented' });
+    const res = await request(app).post(`/api/admin/factory/contract/${UUID}/approve`).send(body);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ version: 2, status: 'documented' });
+    const arg = approveProcessDocument.mock.calls[0][0];
+    expect(arg.approvedBy).toBe('admin@test');            // from the JWT, never the body
+    expect(arg.revisionId).toBe(`${UUID}:solution_build:1`);
+    expect(arg.level).toBe('documented');
+  });
+
+  it('maps a stale expected_version to 409 with currentVersion', async () => {
+    approveProcessDocument.mockRejectedValue(new ApprovalConflictError(5));
+    const res = await request(app).post(`/api/admin/factory/contract/${UUID}/approve`).send(body);
+    expect(res.status).toBe(409);
+    expect(res.body.currentVersion).toBe(5);
+  });
+
+  it('maps a gate-blocked document to 422 with the issues', async () => {
+    approveProcessDocument.mockRejectedValue(new ApprovalGateError([{ code: 'PERFORMER', message: 'x', severity: 'error' }]));
+    const res = await request(app).post(`/api/admin/factory/contract/${UUID}/approve`).send(body);
+    expect(res.status).toBe(422);
+    expect(res.body.issues[0].code).toBe('PERFORMER');
+  });
+
+  it('maps no-document to 404 and an illegal transition to 409', async () => {
+    approveProcessDocument.mockRejectedValueOnce(new Error('no process document to approve'));
+    let res = await request(app).post(`/api/admin/factory/contract/${UUID}/approve`).send(body);
+    expect(res.status).toBe(404);
+    approveProcessDocument.mockRejectedValueOnce(new Error('illegal approval transition draft -> full'));
+    res = await request(app).post(`/api/admin/factory/contract/${UUID}/approve`).send(body);
+    expect(res.status).toBe(409);
+  });
+
+  it('400s a bad body (missing level) without calling the engine', async () => {
+    const res = await request(app).post(`/api/admin/factory/contract/${UUID}/approve`).send({ trackType: 'x', expectedVersion: 1, enrichmentStatus: 'partial' });
+    expect(res.status).toBe(400);
+    expect(approveProcessDocument).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/admin/factory/contract/:id/request-changes', () => {
+  it('records a change request (201) with requestedBy from the token', async () => {
+    requestChanges.mockResolvedValue({ id: 'rev-1', decision: 'changes_requested' });
+    const res = await request(app).post(`/api/admin/factory/contract/${UUID}/request-changes`).send({ trackType: 'solution_build', reviewedVersion: 1, reason: 'tighten the oversight' });
+    expect(res.status).toBe(201);
+    expect(requestChanges.mock.calls[0][0].requestedBy).toBe('admin@test');
+  });
+
+  it('400s a blank reason (Zod) and records nothing', async () => {
+    const res = await request(app).post(`/api/admin/factory/contract/${UUID}/request-changes`).send({ trackType: 'solution_build', reviewedVersion: 1, reason: '' });
+    expect(res.status).toBe(400);
+    expect(requestChanges).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/admin/factory/contracts', () => {
+  it('lists projects with a persisted decomposition, latest per project, with names', async () => {
+    docFindAll.mockResolvedValue([
+      { delivery_project_id: 'dp-1', track_type: 'solution_build', version: 2, status: 'documented' },
+      { delivery_project_id: 'dp-1', track_type: 'proposal', version: 1, status: 'draft' },
+      { delivery_project_id: 'dp-2', track_type: 'solution_build', version: 1, status: 'draft' },
+    ]);
+    projectFindAll.mockResolvedValue([{ id: 'dp-1', name: 'Contract A' }, { id: 'dp-2', name: 'Contract B' }]);
+    const res = await request(app).get('/api/admin/factory/contracts');
+    expect(res.status).toBe(200);
+    expect(res.body.contracts).toHaveLength(2); // one row per project (latest)
+    expect(res.body.contracts.find((c: any) => c.deliveryProjectId === 'dp-1')).toMatchObject({ name: 'Contract A', version: 2 });
+  });
+});
+
+describe('route-auth — every route is section-gated (required CI lint)', () => {
   it('the source guards every route with requireSection(\'program\')', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'factoryRoutes.ts'), 'utf8');
     const guards = src.match(/requireSection\('program'\)/g) ?? [];
-    expect(guards.length).toBeGreaterThanOrEqual(2); // /sample and /contract/:id
+    expect(guards.length).toBeGreaterThanOrEqual(5); // sample, contract, contracts, approve, request-changes
   });
 });

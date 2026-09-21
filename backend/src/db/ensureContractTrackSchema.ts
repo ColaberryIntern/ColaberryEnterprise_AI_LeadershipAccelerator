@@ -25,6 +25,7 @@ export const REQUIRED_TABLES: ReadonlyArray<string> = [
   'requirement_proposal_sections',
   'requirement_solution_stories',
   'contract_process_documents',
+  'contract_process_reviews',
 ];
 
 /**
@@ -117,6 +118,23 @@ export const CONTRACT_TRACK_STATEMENTS: ReadonlyArray<string> = [
      )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS uq_contract_proc_doc_version
        ON contract_process_documents (delivery_project_id, track_type, version)`,
+
+    // A reviewer's "request changes" decision on a decomposition. A COMPANION record, not a mutation
+    // of the immutable contract_process_documents: the document is versioned + content-hashed and must
+    // never change under an approval, so a change request is recorded here against the version reviewed
+    // (mirrors DeliveryChangeRequest / InternshipDecision — a decision row, not a status PATCH).
+    `CREATE TABLE IF NOT EXISTS contract_process_reviews (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       delivery_project_id UUID NOT NULL REFERENCES delivery_projects(id) ON DELETE CASCADE,
+       track_type TEXT NOT NULL,
+       reviewed_version INTEGER NOT NULL,
+       decision TEXT NOT NULL,
+       reason TEXT,
+       requested_by TEXT,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_contract_reviews_project
+       ON contract_process_reviews (delivery_project_id, track_type)`,
 ];
 
 export async function ensureContractTrackSchema(): Promise<void> {

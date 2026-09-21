@@ -6,6 +6,10 @@ import {
   reconstructFactoryProject, factoryProjectView, sampleCommandCenterView,
   type FactoryDocJson, type FactoryCommandCenterView,
 } from '../../services/factory/factoryProjectView';
+// Phase 4 write path. factoryApproval / factoryReview lazy-load their models INSIDE their functions,
+// so these static imports never trigger ORM init at module load.
+import { approveProcessDocument, ApprovalConflictError, ApprovalGateError } from '../../services/factory/factoryApproval';
+import { requestChanges, ReviewValidationError } from '../../services/factory/factoryReview';
 
 /**
  * Admin — AI Project Factory Command Center (READ ONLY, Phase 3).
@@ -30,6 +34,8 @@ export interface FactoryApprovalInfo {
   status: string;
   level: string | null;
   version: number;
+  /** which track this approval state belongs to — the approve action targets this track + version. */
+  trackType: string;
   enrichmentStatus: string | null;
   contentHash: string | null;
 }
@@ -93,6 +99,7 @@ router.get('/api/admin/factory/contract/:deliveryProjectId', requireSection('pro
       ...factoryProjectView(project, { contractName: `Delivery contract ${deliveryProjectId.slice(0, 8)}` }),
       approval: {
         status: chosen.status, level: chosen.approval_level, version: chosen.version,
+        trackType: chosen.track_type,
         enrichmentStatus: chosen.enrichment_status, contentHash: chosen.content_sha256,
       },
     };
@@ -100,6 +107,90 @@ router.get('/api/admin/factory/contract/:deliveryProjectId', requireSection('pro
   } catch (err: any) {
     logFail('factory_contract_view_failed', err, { deliveryProjectId });
     res.status(500).json({ error: 'Could not load the contract.' });
+  }
+});
+
+/** GET /api/admin/factory/contracts — delivery projects that have a persisted decomposition, so the
+ *  page can default to a real contract instead of the sample. Latest document per project. */
+router.get('/api/admin/factory/contracts', requireSection('program'), async (_req: Request, res: Response) => {
+  try {
+    const { default: ContractProcessDocument } = await import('../../models/ContractProcessDocument');
+    const { default: DeliveryProject } = await import('../../models/DeliveryProject');
+    const docs = await ContractProcessDocument.findAll({ order: [['version', 'DESC']] });
+    const latestByProject = new Map<string, typeof docs[number]>();
+    for (const d of docs) if (!latestByProject.has(d.delivery_project_id)) latestByProject.set(d.delivery_project_id, d);
+    const ids = [...latestByProject.keys()];
+    const projects = ids.length ? await DeliveryProject.findAll({ where: { id: ids } }) : [];
+    const nameById = new Map<string, string>(projects.map((p: any) => [p.id, p.name]));
+    const contracts = [...latestByProject.values()].map((d) => ({
+      deliveryProjectId: d.delivery_project_id,
+      name: nameById.get(d.delivery_project_id) ?? null,
+      trackType: d.track_type, status: d.status, version: d.version,
+    }));
+    res.json({ contracts });
+  } catch (err: any) {
+    logFail('factory_contracts_list_failed', err, {});
+    res.status(500).json({ error: 'Could not list contracts.' });
+  }
+});
+
+const approveBody = z.object({
+  trackType: z.string().min(1),
+  expectedVersion: z.coerce.number().int().min(1),
+  level: z.enum(['documented', 'full']),
+  enrichmentStatus: z.enum(['pending', 'partial', 'resolved']),
+});
+
+/** POST /api/admin/factory/contract/:deliveryProjectId/approve — the gated, CAS-guarded approval. */
+router.post('/api/admin/factory/contract/:deliveryProjectId/approve', requireSection('program'), async (req: Request, res: Response) => {
+  const p = idParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid delivery project id.', issues: p.error.issues }); return; }
+  const b = approveBody.safeParse(req.body);
+  if (!b.success) { res.status(400).json({ error: 'Invalid approval request.', issues: b.error.issues }); return; }
+  const { deliveryProjectId } = p.data;
+  const approvedBy = String((req as any).admin?.email ?? (req as any).admin?.sub ?? 'unknown-admin');
+  const revisionId = `${deliveryProjectId}:${b.data.trackType}:${b.data.expectedVersion}`;
+  try {
+    const dto = await approveProcessDocument({
+      deliveryProjectId, trackType: b.data.trackType, expectedVersion: b.data.expectedVersion,
+      level: b.data.level, revisionId, approvedBy, enrichmentStatus: b.data.enrichmentStatus,
+    });
+    res.json(dto);
+  } catch (err: any) {
+    if (err instanceof ApprovalConflictError) { res.status(409).json({ error: err.message, currentVersion: err.currentVersion }); return; }
+    if (err instanceof ApprovalGateError) { res.status(422).json({ error: err.message, issues: err.issues }); return; }
+    const msg = String(err?.message ?? '');
+    if (/no process document/i.test(msg)) { res.status(404).json({ error: 'No decomposition to approve for this contract.' }); return; }
+    if (/illegal approval transition/i.test(msg)) { res.status(409).json({ error: msg }); return; }
+    logFail('factory_approve_failed', err, { deliveryProjectId });
+    res.status(500).json({ error: 'Could not approve the contract.' });
+  }
+});
+
+const requestChangesBody = z.object({
+  trackType: z.string().min(1),
+  reviewedVersion: z.coerce.number().int().min(1),
+  reason: z.string().min(1),
+});
+
+/** POST /api/admin/factory/contract/:deliveryProjectId/request-changes — a companion review record. */
+router.post('/api/admin/factory/contract/:deliveryProjectId/request-changes', requireSection('program'), async (req: Request, res: Response) => {
+  const p = idParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid delivery project id.', issues: p.error.issues }); return; }
+  const b = requestChangesBody.safeParse(req.body);
+  if (!b.success) { res.status(400).json({ error: 'Invalid request-changes body.', issues: b.error.issues }); return; }
+  const { deliveryProjectId } = p.data;
+  const requestedBy = String((req as any).admin?.email ?? (req as any).admin?.sub ?? 'unknown-admin');
+  try {
+    const dto = await requestChanges({
+      deliveryProjectId, trackType: b.data.trackType, reviewedVersion: b.data.reviewedVersion,
+      reason: b.data.reason, requestedBy,
+    });
+    res.status(201).json(dto);
+  } catch (err: any) {
+    if (err instanceof ReviewValidationError) { res.status(400).json({ error: err.message }); return; }
+    logFail('factory_request_changes_failed', err, { deliveryProjectId });
+    res.status(500).json({ error: 'Could not record the change request.' });
   }
 });
 

@@ -62,8 +62,17 @@ afterEach(() => {
   jest.clearAllMocks();
 });
 
+const realView: FactoryCommandCenterView = {
+  ...sampleView,
+  isSample: false,
+  deliveryProjectId: 'dp-real',
+  contractName: 'Demo contract',
+  approval: { status: 'draft', level: null, version: 1, trackType: 'solution_build', enrichmentStatus: 'partial', contentHash: 'h' },
+};
+
 describe('AdminFactoryCommandCenterPage', () => {
-  it('renders the sample contract with its key sections and the sample banner', async () => {
+  it('renders the sample (read-only) when there is no real contract, with Approve DISABLED', async () => {
+    (factoryApi.listFactoryContracts as jest.Mock).mockResolvedValue([]); // no real contract → fall back to the sample
     (factoryApi.getFactorySample as jest.Mock).mockResolvedValue(sampleView);
     await renderPage();
 
@@ -75,15 +84,33 @@ describe('AdminFactoryCommandCenterPage', () => {
     expect(text).toContain('Compliance Analyst');     // the agent's accountable human (oversight visible)
     expect(text).toContain('AI employee');            // roster badge for the agent
 
-    // the write action is present but DISABLED (Phase 4)
-    const approve = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Approve process'));
+    const approve = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Approve'));
     expect(approve).toBeDefined();
-    expect(approve!.disabled).toBe(true);
+    expect(approve!.disabled).toBe(true);             // the sample is read-only
   });
 
-  it('shows an error message when the sample fails to load', async () => {
+  it('enables Approve for a real contract and approves it (level defaults to documented for a draft)', async () => {
+    (factoryApi.listFactoryContracts as jest.Mock).mockResolvedValue([{ deliveryProjectId: 'dp-real', name: 'Demo', trackType: 'solution_build', status: 'draft', version: 1 }]);
+    (factoryApi.getFactoryContract as jest.Mock).mockResolvedValue(realView);
+    (factoryApi.approveFactoryContract as jest.Mock).mockResolvedValue({ id: 'd2', version: 2, status: 'documented' });
+    await renderPage();
+
+    const approve = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Approve'));
+    expect(approve).toBeDefined();
+    expect(approve!.disabled).toBe(false);            // enabled for a real contract
+
+    await act(async () => { approve!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await act(async () => { await Promise.resolve(); });
+
+    expect(factoryApi.approveFactoryContract).toHaveBeenCalledWith('dp-real', expect.objectContaining({
+      trackType: 'solution_build', expectedVersion: 1, level: 'documented',
+    }));
+  });
+
+  it('shows an error message when loading fails', async () => {
+    (factoryApi.listFactoryContracts as jest.Mock).mockResolvedValue([]);
     (factoryApi.getFactorySample as jest.Mock).mockRejectedValue(new Error('boom'));
     await renderPage();
-    expect(container.textContent ?? '').toContain('Could not load the factory sample');
+    expect(container.textContent ?? '').toContain('Could not load the factory command center');
   });
 });

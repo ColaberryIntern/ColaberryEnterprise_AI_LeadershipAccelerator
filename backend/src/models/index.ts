@@ -472,6 +472,7 @@ import DeliveryProject from './DeliveryProject';
 import ContractTrack from './ContractTrack';
 import ContractRequirement from './ContractRequirement';
 import ContractProcessDocument from './ContractProcessDocument';
+import ContractProcessReview from './ContractProcessReview';
 import CapstoneReviewApproval from './CapstoneReviewApproval';
 import CohortMembership from './CohortMembership';
 import InternshipApplication from './InternshipApplication';
@@ -1668,6 +1669,7 @@ export {
   ContractTrack,
   ContractRequirement,
   ContractProcessDocument,
+  ContractProcessReview,
 
   // Living Career Portfolio (Gate 10 — versioned publication)
   CapstoneReviewApproval,
