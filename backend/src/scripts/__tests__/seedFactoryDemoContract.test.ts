@@ -33,7 +33,8 @@ describe('seedFactoryDemoContract', () => {
     expect(orgCreate).toHaveBeenCalledTimes(1);
     expect(engCreate).toHaveBeenCalledTimes(1);
     expect(projCreate).toHaveBeenCalledTimes(1);
-    expect(persistSampleContract).toHaveBeenCalledWith('proj-1');
+    // Nulls the solution_build student-project link: the demo has no SBP project on prod (FK).
+    expect(persistSampleContract).toHaveBeenCalledWith('proj-1', { solutionStudentProjectId: null });
   });
 
   it('is idempotent: a re-run reuses existing rows and creates nothing new', async () => {
@@ -48,7 +49,7 @@ describe('seedFactoryDemoContract', () => {
     expect(orgCreate).not.toHaveBeenCalled();
     expect(engCreate).not.toHaveBeenCalled();
     expect(projCreate).not.toHaveBeenCalled();
-    expect(persistSampleContract).toHaveBeenCalledWith('proj-1'); // still (re)persists idempotently
+    expect(persistSampleContract).toHaveBeenCalledWith('proj-1', { solutionStudentProjectId: null }); // still (re)persists idempotently
   });
 
   it('refuses to invent a tenant (throws) when the refactored tenant is missing', async () => {
