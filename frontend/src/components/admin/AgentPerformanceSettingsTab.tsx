@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import type { TabKey } from './agentDetailV2/AgentDetailV2Header';
 import { AgentDetail } from '../../services/agentDetailApi';
 import AgentReportsTab from './AgentReportsTab';
 import AgentPerformanceTab from './AgentPerformanceTab';
@@ -36,9 +37,10 @@ const SUB_TABS: Array<{ key: SettingsSubTab; label: string }> = [
 interface Props {
   agentId: string;
   detail: AgentDetail;
+  onNavigate: (tab: TabKey) => void;
 }
 
-export default function AgentPerformanceSettingsTab({ agentId, detail }: Props) {
+export default function AgentPerformanceSettingsTab({ agentId, detail, onNavigate }: Props) {
   const [subTab, setSubTab] = useState<SettingsSubTab>('results');
 
   return (
@@ -70,7 +72,7 @@ export default function AgentPerformanceSettingsTab({ agentId, detail }: Props) 
       )}
       {subTab === 'authority' && (
         <div style={{ marginTop: 18 }}>
-          <AgentTrustControlTab agentId={agentId} detail={detail} />
+          <AgentTrustControlTab agentId={agentId} detail={detail} onNavigate={onNavigate} />
         </div>
       )}
     </div>

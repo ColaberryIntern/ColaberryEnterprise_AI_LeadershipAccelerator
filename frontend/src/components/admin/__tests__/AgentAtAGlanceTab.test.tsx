@@ -235,6 +235,9 @@ describe('AgentAtAGlanceTab — Role Charter tile', () => {
       kpis: ['Real KPI.'],
       updatedByEmail: 'ali@colaberry.com',
       updatedAt: '2026-09-10T15:48:53.702Z',
+      authorityAutonomous: null,
+      authorityApprovalRequired: null,
+      authorityForbidden: null,
     };
     getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-1', charter });
     await renderTab();
