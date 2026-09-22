@@ -38,6 +38,7 @@ function makeDetail(overrides: Partial<AgentDetail> = {}): AgentDetail {
     identity: null,
     live_status: 'unknown',
     open_ticket_count: 0,
+    completed_ticket_count_30d: 0,
     tickets: [],
     ticket_breakdown: [],
     related_tasks: [],

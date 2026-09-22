@@ -5,6 +5,7 @@ import { LEVEL_PILL_CLASS } from './AgentDetailV2Header';
 import { timeAgo } from '../shell/trust';
 import AgentOverviewV2Tickets from './AgentOverviewV2Tickets';
 import AgentOverviewV2WorkExplained from './AgentOverviewV2WorkExplained';
+import AgentOverviewV2AgenticExplainer from './AgentOverviewV2AgenticExplainer';
 import { scheduledWorkColors } from './agentDetailV2Correlation';
 import type { TabKey } from './AgentDetailV2Header';
 
@@ -198,6 +199,13 @@ export default function AgentOverviewV2MainColumn({ detail, onNavigate }: Props)
       </section>
 
       <AgentOverviewV2Tickets tickets={tickets} ticketBreakdown={ticket_breakdown} openTicketCount={detail.open_ticket_count} />
+
+      {/* Agent Detail redesign, Track A1 — the mockup's static "What makes
+          this agentic?" explainer, placed last in this column (same column
+          as "Work, explained" above) since this repo's real 2-column
+          assignment differs from the mockup's own left/right split — see
+          this run's own plan.md R67 for the reasoning. */}
+      <AgentOverviewV2AgenticExplainer onNavigate={onNavigate} />
 
     </div>
   );

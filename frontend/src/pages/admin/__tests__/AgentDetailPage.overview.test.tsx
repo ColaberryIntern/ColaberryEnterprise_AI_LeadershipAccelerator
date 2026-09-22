@@ -70,6 +70,7 @@ const DETAIL: AgentDetail = {
   identity: null,
   live_status: 'unknown',
   open_ticket_count: 1,
+  completed_ticket_count_30d: 0,
   tickets: [],
   ticket_breakdown: [],
   related_tasks: [],
@@ -134,10 +135,14 @@ afterEach(() => {
 });
 
 describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
-  it('is not shown on mount (At a Glance is the default)', async () => {
+  // Agent Detail redesign, Track A1 (2026-09-21) — Overview is now the
+  // default landing tab (was "At a Glance"/'glance'), so its content is
+  // visible on mount with no tab click needed — the inverse of what this
+  // test asserted before this run.
+  it('IS shown on mount — Overview is the new default tab', async () => {
     await renderAgentPage();
-    expect(container.textContent).not.toContain('Identity');
-    expect(container.textContent).not.toContain('You are CoryBrain.');
+    expect(container.textContent).toContain('Identity');
+    expect(container.textContent).toContain('You are CoryBrain.');
   });
 
   it('shows Identity, System prompt, and Trust content all at once — no sub-tab clicks needed', async () => {
@@ -155,11 +160,16 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
     expect(container.textContent).toContain('Trust evidence');
   });
 
-  it('never fetches the manager inbox — Overview has no dependency on pending-approval data', async () => {
+  // Agent Detail redesign, Track A1 (2026-09-21) — re-derived from real
+  // post-change behavior, not assumed to still hold: Overview now IS the
+  // default tab, and its own Needs Ali card + "Needs your decision" metric
+  // tile both need real inbox data — the inbox-fetch gate
+  // (AgentDetailPage.tsx) already included 'overview' before this run
+  // (built for the Needs Ali card in an earlier slice), so this fetch now
+  // fires on initial mount, not on a later click.
+  it('fetches the manager inbox on initial mount — Overview (the new default) needs it for Needs Ali + the metrics tile', async () => {
     await renderAgentPage();
-    getManagerInboxItems.mockClear();
-    await openOverviewTab();
-    expect(getManagerInboxItems).not.toHaveBeenCalled();
+    expect(getManagerInboxItems).toHaveBeenCalledTimes(1);
   });
 
   // AI Employee Consolidation Program (2026-09-15/16) — mission Section 13:

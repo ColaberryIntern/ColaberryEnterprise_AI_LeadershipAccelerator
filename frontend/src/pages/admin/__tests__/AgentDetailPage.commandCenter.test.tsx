@@ -75,6 +75,7 @@ const DETAIL: AgentDetail = {
   identity: null,
   live_status: 'unknown',
   open_ticket_count: 1,
+  completed_ticket_count_30d: 0,
   tickets: [
     { id: 't-1', ticket_number: 401, title: 'Ops Summary', description: null, status: 'done', priority: 'normal', type: 'ops_summary', created_at: null, updated_at: '2026-08-29T10:00:00Z', due_date: null, status_bucket: null },
     { id: 't-2', ticket_number: 398, title: 'Agent Escalation', description: null, status: 'in_progress', priority: 'high', type: 'agent_escalation', created_at: null, updated_at: '2026-08-28T10:00:00Z', due_date: null, status_bucket: 'open' },
@@ -155,21 +156,25 @@ afterEach(() => {
   container.remove();
 });
 
-// At a Glance, Checkpoint F (2026-09-03) — "At a Glance" is now the
-// default tab (Overview's old slot); Live Status's own content is
+// At a Glance, Checkpoint F (2026-09-03) — "At a Glance" was the default
+// tab (Overview's old slot) at the time; Live Status's own content was
 // additive, reached via a tab click, same as every other real tab.
 //
-// Checkpoint G (2026-09-10) — Identity content no longer lives here (it
-// unfolded back into its own "Overview" tab — see
-// AgentDetailPage.overview.test.tsx for that coverage). This test now
-// proves the negative: opening Live Status still never shows it.
-describe('AgentDetailPage — At a Glance is the default tab, Live Status is additive', () => {
-  it('renders At a Glance tiles on mount without any tab click, and Live Status never shows Overview\'s Identity content', async () => {
+// Checkpoint G (2026-09-10) — Identity content no longer lives in Command
+// Center (it unfolded back into its own "Overview" tab — see
+// AgentDetailPage.overview.test.tsx for that coverage).
+//
+// Agent Detail redesign, Track A1 (2026-09-21) — Overview (not "At a
+// Glance") is now the default landing tab. Re-pointed which tab this test
+// asserts is shown on mount; the real negative it was always really
+// proving — Live Status never shows Overview's own Identity content —
+// stays, since that's unchanged real behavior.
+describe('AgentDetailPage — Overview is the default tab, Live Status is additive', () => {
+  it('renders Overview content on mount without any tab click, and Live Status never shows Overview\'s Identity content', async () => {
     getAgentDetail.mockResolvedValue(DETAIL);
     getManagerInboxItems.mockResolvedValue([]);
     await renderAgentPage();
-    expect(container.textContent).toContain('At a glance');
-    expect(container.textContent).not.toContain('Identity');
+    expect(container.textContent).toContain('Identity');
 
     await openCommandCenterTab();
     expect(container.textContent).not.toContain('Identity');
