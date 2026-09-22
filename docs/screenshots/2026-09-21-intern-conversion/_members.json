@@ -1,0 +1,163 @@
+{
+  "base": "https://enterprise.colaberry.ai",
+  "captured_at": "2026-09-22T06:39:15.698Z",
+  "sections": [
+    {
+      "slug": "01-today",
+      "route": "/portal/today",
+      "label": "Today"
+    },
+    {
+      "slug": "02-internship",
+      "route": "/portal/internship",
+      "label": "Internship"
+    },
+    {
+      "slug": "03-path",
+      "route": "/portal/path",
+      "label": "Path"
+    },
+    {
+      "slug": "04-classroom",
+      "route": "/portal/classroom",
+      "label": "Classroom"
+    },
+    {
+      "slug": "05-projects",
+      "route": "/portal/projects",
+      "label": "Projects"
+    },
+    {
+      "slug": "06-schedule",
+      "route": "/portal/schedule",
+      "label": "Schedule"
+    },
+    {
+      "slug": "07-events",
+      "route": "/portal/events",
+      "label": "Events"
+    },
+    {
+      "slug": "08-points",
+      "route": "/portal/points",
+      "label": "Points"
+    },
+    {
+      "slug": "09-portfolio",
+      "route": "/portal/portfolio",
+      "label": "Portfolio"
+    },
+    {
+      "slug": "10-cert-prep",
+      "route": "/portal/cert-prep",
+      "label": "Cert Prep"
+    },
+    {
+      "slug": "11-community",
+      "route": "/portal/community",
+      "label": "Community"
+    },
+    {
+      "slug": "12-rooms",
+      "route": "/portal/rooms",
+      "label": "Rooms"
+    },
+    {
+      "slug": "13-library",
+      "route": "/portal/library",
+      "label": "Library"
+    },
+    {
+      "slug": "14-company",
+      "route": "/portal/company",
+      "label": "Company"
+    },
+    {
+      "slug": "15-settings",
+      "route": "/portal/settings",
+      "label": "Settings"
+    }
+  ],
+  "members": [
+    {
+      "member": "Harpreet Kaur",
+      "email": "harpreetbadwal6161@gmail.com",
+      "enrollment_id": "77747f54-a526-44d7-a7ad-40f81bc23df8",
+      "landing": 200,
+      "landedOn": "https://enterprise.colaberry.ai/portal/today",
+      "viewerOk": true,
+      "sectionsOk": 15,
+      "sections": 15
+    },
+    {
+      "member": "Akiwam",
+      "email": "akiwam.aps@gmail.com",
+      "enrollment_id": "31c8ae5f-eff4-413e-b614-2e79b8f2cf8d",
+      "landing": 200,
+      "landedOn": "https://enterprise.colaberry.ai/portal/today",
+      "viewerOk": true,
+      "sectionsOk": 15,
+      "sections": 15
+    },
+    {
+      "member": "Obi (Anamelechi Kingsley)",
+      "email": "obikings_obiadakc@yahoo.com",
+      "enrollment_id": "641e8a5c-ab7d-4c7a-bbbe-b226a3920d21",
+      "landing": 200,
+      "landedOn": "https://enterprise.colaberry.ai/portal/today",
+      "viewerOk": true,
+      "sectionsOk": 15,
+      "sections": 15
+    },
+    {
+      "member": "Omolola Makinde",
+      "email": "omolola@colaberry.com",
+      "enrollment_id": "1be232d7-8a56-4255-9cd0-05de5d504a00",
+      "landing": 200,
+      "landedOn": "https://enterprise.colaberry.ai/portal/today",
+      "viewerOk": true,
+      "sectionsOk": 15,
+      "sections": 15
+    },
+    {
+      "member": "Samrawit Mekonen",
+      "email": "makonen25@gmail.com",
+      "enrollment_id": "e2d8c6a2-3901-4d5c-916b-2675e0c7c045",
+      "landing": 200,
+      "landedOn": "https://enterprise.colaberry.ai/portal/today",
+      "viewerOk": true,
+      "sectionsOk": 15,
+      "sections": 15
+    },
+    {
+      "member": "Sarbjit Kaur",
+      "email": "sarbjitsaini83@yahoo.com",
+      "enrollment_id": "27a26689-7b78-42aa-956f-0e654a091136",
+      "landing": 200,
+      "landedOn": "https://enterprise.colaberry.ai/portal/today",
+      "viewerOk": true,
+      "sectionsOk": 15,
+      "sections": 15
+    },
+    {
+      "member": "Kalkidan Bezabeh",
+      "email": "kalkidankin@gmail.com",
+      "enrollment_id": "624be53e-c2ee-4d24-ae52-4a591da1787f",
+      "landing": 200,
+      "landedOn": "https://enterprise.colaberry.ai/portal/today",
+      "viewerOk": true,
+      "sectionsOk": 15,
+      "sections": 15
+    },
+    {
+      "member": "Megan Dimiyo-Mbenoun",
+      "email": "meganmbenoun17@gmail.com",
+      "enrollment_id": "65db107a-ba32-4b5f-951d-7fbf4262324b",
+      "landing": 200,
+      "landedOn": "https://enterprise.colaberry.ai/portal/today",
+      "viewerOk": true,
+      "sectionsOk": 15,
+      "sections": 15
+    }
+  ]
+}

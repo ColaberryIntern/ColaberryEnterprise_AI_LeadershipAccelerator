@@ -198,13 +198,15 @@ async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
   console.log(`[capture] base ${BASE}\n[capture] out  ${OUT_DIR}\n[capture] members ${members.length}`);
 
-  // Resolve everyone first so a bad email fails before any browser work.
+  // Resolve everyone first so a bad email fails before any browser work. A roster
+  // row may carry `enrollment_id` already (the students search matches names, not
+  // emails, so an email-only row can miss); use it when present.
   const resolved = [];
   for (const m of members) {
-    const hit = await resolveEnrollment(m.email);
-    const url = await viewAsUrl(hit.enrollment_id);
-    resolved.push({ email: m.email, label: m.label || m.full_name || hit.display_name || m.email, enrollmentId: hit.enrollment_id, viewAsUrl: url });
-    console.log(`[resolve] ${m.email.padEnd(32)} → ${hit.enrollment_id}`);
+    const enrollmentId = m.enrollment_id || (await resolveEnrollment(m.email)).enrollment_id;
+    const url = await viewAsUrl(enrollmentId);
+    resolved.push({ email: m.email, label: m.label || m.full_name || m.email, enrollmentId, viewAsUrl: url });
+    console.log(`[resolve] ${m.email.padEnd(32)} → ${enrollmentId}`);
   }
 
   const browser = await chromium.launch({ headless: true });
