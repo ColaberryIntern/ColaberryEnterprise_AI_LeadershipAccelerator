@@ -41,7 +41,13 @@ const opt = (name, fallback) => {
 const BASE = opt('base', process.env.CAPTURE_BASE || 'https://enterprise.colaberry.ai');
 const ROSTER_PATH = opt('roster', null);
 const OUT_DIR = path.resolve(opt('out', `docs/screenshots/${new Date().toISOString().slice(0, 10)}-view-as`));
-const ADMIN_JWT = (process.env.ADMIN_JWT || readIfExists(path.join(__dirname, '.ali_admin_jwt.txt')) || '').trim();
+/**
+ * Admin auth, in order: ADMIN_JWT env → scripts/.ali_admin_jwt.txt → bridged from
+ * scripts/.ali_jwt.txt. The bridge is `POST /api/portal/mgmt/enter`, the same call
+ * the portal's "Management" button makes for a staff member: it returns the 12h
+ * admin token scoped to their mgmt role. The bridged token lives in memory only.
+ */
+let ADMIN_JWT = (process.env.ADMIN_JWT || readIfExists(path.join(__dirname, '.ali_admin_jwt.txt')) || '').trim();
 
 /** The sections TodayShell links to, in nav order. */
 const SECTIONS = [
@@ -75,6 +81,29 @@ const ERROR_PATTERNS = [
 
 function readIfExists(p) {
   try { return fs.readFileSync(p, 'utf8'); } catch { return null; }
+}
+
+function jwtExpired(token) {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+    return !payload.exp || payload.exp * 1000 < Date.now() + 60_000;
+  } catch { return true; }
+}
+
+async function bridgeAdminFromPortalToken() {
+  const portalToken = (readIfExists(path.join(__dirname, '.ali_jwt.txt')) || '').trim();
+  if (!portalToken || jwtExpired(portalToken)) return null;
+  const res = await fetch(`${BASE}/api/portal/mgmt/enter`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${portalToken}`, 'Content-Type': 'application/json' },
+  });
+  if (res.status !== 200) {
+    console.error(`[auth] mgmt bridge refused: ${res.status} ${(await res.text()).slice(0, 120)}`);
+    return null;
+  }
+  const body = await res.json();
+  console.log(`[auth] bridged admin session from the portal token (role ${body.role}, ${body.sections?.length ?? '?'} sections, 12h)`);
+  return body.admin_token || null;
 }
 
 async function adminGet(pathname) {
@@ -159,7 +188,11 @@ async function captureMember(browser, member, index) {
 
 async function main() {
   if (!ROSTER_PATH) { console.error('--roster <file> is required'); process.exit(2); }
-  if (!ADMIN_JWT) { console.error('No admin JWT: put it in scripts/.ali_admin_jwt.txt or ADMIN_JWT env'); process.exit(2); }
+  if (!ADMIN_JWT || jwtExpired(ADMIN_JWT)) {
+    if (ADMIN_JWT) console.log('[auth] stored admin JWT is expired; trying the portal → management bridge');
+    ADMIN_JWT = await bridgeAdminFromPortalToken();
+  }
+  if (!ADMIN_JWT) { console.error('No usable admin JWT: refresh scripts/.ali_admin_jwt.txt, set ADMIN_JWT, or keep a valid scripts/.ali_jwt.txt for the bridge'); process.exit(2); }
   const roster = JSON.parse(fs.readFileSync(ROSTER_PATH, 'utf8'));
   const members = Array.isArray(roster) ? roster : roster.interns || roster.members || [];
   fs.mkdirSync(OUT_DIR, { recursive: true });
