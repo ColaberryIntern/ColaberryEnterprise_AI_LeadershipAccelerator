@@ -1,0 +1,37 @@
+WEBVTT
+
+1
+00:00:00.500 --> 00:00:11.320
+When a call ends, four things have to reach the CRM: the contact's fields, a task, the call in the conversation history, and the transcript as a staff note.
+
+2
+00:00:12.400 --> 00:00:23.170
+A job can be handed a phone number where a contact id should be. It searches by the number on file, and three of the four write jobs refuse to write when nothing resolves.
+
+3
+00:00:24.300 --> 00:00:36.650
+The operator's page for one contact, on a keyless local copy of the platform at the pinned commit with invented rows: one completed call, seven jobs, and the conversation-log write failed.
+
+4
+00:00:37.800 --> 00:00:50.580
+On 21 September 2026 the database said live and every worker's environment said shadow, so five write paths returned a shadow response while the dashboard showed live.
+
+5
+00:00:51.700 --> 00:01:06.670
+The proof rows beside the jobs, on a keyless local copy of the platform at the pinned commit with invented rows: a stored id for the task and the note, none for the summary, one failed write, and the retry pointing back at it.
+
+6
+00:01:07.800 --> 00:01:23.010
+Read from the platform's own tables on 21 September 2026: one path accounted for, one with no ids, one that completed 1,099 times with nothing written. No CRM was read.
+
+7
+00:01:24.100 --> 00:01:36.500
+Every failure is recorded with the call, the job and the error, so the dashboard can re-enqueue the same job. Nine such rows exist, because skips and shadow responses complete cleanly.
+
+8
+00:01:37.600 --> 00:01:51.440
+The product's own failure record, on a keyless local copy of the platform at the pinned commit with invented rows: the error, the job id and the call id a recovery needs; the retry was made through the product's API.
+
+9
+00:01:52.500 --> 00:02:04.060
+A completed job covers a live write, a shadow response and a clean skip alike. The record states each limit as observed, and claims nothing about the CRM's own side.
