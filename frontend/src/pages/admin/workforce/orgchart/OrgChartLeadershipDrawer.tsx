@@ -48,6 +48,12 @@ function OrgChartLeadershipDrawer({ leadershipAgent, human, staff, onClose }: Or
           <div>
             <b style={{ fontSize: 16 }}>{leadershipAgent.display_name}</b>
             <div className="wf-muted">AI Leadership · {leadershipAgent.open_ticket_count} open tickets</div>
+            {/* Track B (2026-09-22) — AI Leadership cards had no direct link
+                to their own /admin/agents/:id profile before this (only their
+                downstream Staff rows below did). Real gap, small fix. */}
+            <Link to={`/admin/agents/${leadershipAgent.id}`} className="wf-chip" style={{ display: 'inline-block', marginTop: 6, textDecoration: 'none' }}>
+              View full profile →
+            </Link>
           </div>
           <button className="wf-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
