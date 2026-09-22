@@ -360,7 +360,7 @@ export default function AgentDetailPage() {
       )}
       {activeTab === 'talk' && <div className="adv2-wrap"><AgentTalkTab agentId={id} /></div>}
       {activeTab === 'performance_settings' && (
-        <div className="adv2-wrap"><AgentPerformanceSettingsTab agentId={id} detail={detail} /></div>
+        <div className="adv2-wrap"><AgentPerformanceSettingsTab agentId={id} detail={detail} onNavigate={setActiveTab} /></div>
       )}
     </AgentDetailLayout>
   );

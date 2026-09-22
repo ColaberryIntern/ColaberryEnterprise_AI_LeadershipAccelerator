@@ -781,6 +781,22 @@ describe('AgentDetailPage — "Performance & Settings" consolidation', () => {
     expect(container.textContent).toContain('Governed Memory');
   });
 
+  // Track A2 (2026-09-22) — the new Work controls link card must navigate via the
+  // page's own real tab state, not a mocked/no-op handler.
+  it('"Authority & controls" Work controls card navigates to Overview on click', async () => {
+    await openPerformanceSettings();
+    await clickSubTab('Authority & controls');
+
+    expect(container.textContent).toContain('Work controls');
+    const goButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Go to Employee Facts')!;
+    await act(async () => { goButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+
+    // Real Overview-tab content — confirms the tab actually switched, not just
+    // that the button exists. This fixture's employee_facts is null so the
+    // Employee facts card itself doesn't render; the hero heading always does.
+    expect(container.textContent).toContain("Your employee's briefing");
+  });
+
   it('works for a non-Reese agent too — this is a generic page', async () => {
     getAgentDetail.mockResolvedValue({ ...DETAIL, agent: { ...DETAIL.agent, id: 'agent-cory', agent_name: 'cory-engine' } });
 

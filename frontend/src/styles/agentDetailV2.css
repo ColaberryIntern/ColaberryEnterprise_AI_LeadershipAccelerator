@@ -97,6 +97,9 @@
 .adv2-btn { border: 1px solid var(--adv2-rule-2); background: var(--adv2-panel); border-radius: 7px; padding: 7px 13px; font-weight: 500; color: var(--adv2-ink); }
 .adv2-btn:hover { border-color: var(--adv2-ink-3); }
 .adv2-btn.adv2-danger { color: var(--adv2-bad); }
+.adv2-btn.adv2-primary { background: var(--adv2-trust); color: #fff; border-color: var(--adv2-trust); }
+.adv2-btn.adv2-primary:hover { color: #fff; border-color: var(--adv2-trust); opacity: .92; }
+.adv2-btn:disabled { opacity: .6; cursor: default; }
 .adv2-facts { display: flex; gap: 24px; margin: 16px 0 0; flex-wrap: wrap; font-size: 14.5px; color: var(--adv2-ink-2); }
 .adv2-facts b { font-weight: 500; color: var(--adv2-ink); }
 .adv2-facts a.adv2-link { font-weight: 500; }
@@ -278,6 +281,26 @@
 .adv2-version { display: flex; justify-content: space-between; font-size: 15px; padding-bottom: 13px; margin-bottom: 13px; border-bottom: 1px solid var(--adv2-rule); }
 .adv2-version:last-of-type { border: 0; margin: 0; padding-bottom: 13px; }
 .adv2-version .adv2-mono { color: var(--adv2-ink); }
+
+/* Performance & Settings reflow (Track A2) — progress bar, switch pill, radio row, tier list.
+   None of these existed before this slice; each reuses the existing --adv2-* tokens rather than
+   introducing new hardcoded colors. */
+.adv2-progress { height: 6px; background: var(--adv2-rule); border-radius: 4px; overflow: hidden; margin-top: 8px; }
+.adv2-progress span { display: block; height: 100%; background: var(--adv2-ok); }
+.adv2-switch { border: 1px solid var(--adv2-rule); border-radius: 999px; padding: 5px 13px; font-size: 13px; font-weight: 500; background: var(--adv2-ok-soft); color: var(--adv2-ok); }
+.adv2-switch.adv2-off { background: var(--adv2-panel); color: var(--adv2-ink-3); }
+.adv2-radio-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-top: 1px solid var(--adv2-rule); }
+.adv2-radio-row:first-of-type { border-top: 0; }
+.adv2-radio-row input[type="radio"] { margin-top: 3px; flex: none; }
+.adv2-radio-row label { font-size: 15px; color: var(--adv2-ink); cursor: pointer; }
+.adv2-radio-row .adv2-radio-hint { display: block; font-size: 13.5px; color: var(--adv2-ink-3); margin-top: 2px; }
+.adv2-tier-list { display: flex; flex-direction: column; gap: 14px; }
+.adv2-tier { padding: 13px 15px; border-radius: 8px; background: var(--adv2-panel); border: 1px solid var(--adv2-rule); }
+.adv2-tier .adv2-pill { margin-bottom: 8px; }
+.adv2-tier ul { margin: 0; padding-left: 18px; font-size: 14.5px; color: var(--adv2-ink-2); }
+.adv2-tier ul li { margin-bottom: 4px; }
+.adv2-tier ul li:last-child { margin-bottom: 0; }
+.adv2-tier .adv2-muted { margin: 0; font-size: 14.5px; }
 
 @media (prefers-reduced-motion: reduce) { .adv2-page * { transition: none !important; } }
 @media (max-width: 980px) {

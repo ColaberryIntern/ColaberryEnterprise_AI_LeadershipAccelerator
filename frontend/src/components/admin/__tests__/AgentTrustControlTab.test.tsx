@@ -32,6 +32,11 @@ jest.mock('../../../services/agentDetailApi', () => {
   const actual = jest.requireActual('../../../services/agentDetailApi');
   return { ...actual, setAgentAbacOverride: jest.fn() };
 });
+// Track A2 — the new Independence with boundaries card (AgentTrustControlAuthority)
+// fetches the charter on its own; mocked here so this suite never makes a real call.
+jest.mock('../../../services/agentRoleCharterApi', () => ({
+  getAgentRoleCharter: jest.fn(),
+}));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { listMemoryProposals, proposeMemory, approveMemoryProposal, rejectMemoryProposal } =
@@ -42,6 +47,8 @@ const { listMemoryProposals, proposeMemory, approveMemoryProposal, rejectMemoryP
 const { listDirectives, revokeDirective } = require('../../../services/managerDirectiveApi') as {
   listDirectives: jest.Mock; revokeDirective: jest.Mock;
 };
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { getAgentRoleCharter } = require('../../../services/agentRoleCharterApi') as { getAgentRoleCharter: jest.Mock };
 
 function typeInto(el: HTMLTextAreaElement, value: string) {
   const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!;
@@ -117,6 +124,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   listMemoryProposals.mockResolvedValue([]);
   listDirectives.mockResolvedValue([]);
+  getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-1', charter: null });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -127,9 +135,11 @@ afterEach(() => {
   container.remove();
 });
 
+const noopNavigate = () => {};
+
 async function renderTab() {
   await act(async () => {
-    root.render(<AgentTrustControlTab agentId="agent-1" detail={DETAIL} />);
+    root.render(<AgentTrustControlTab agentId="agent-1" detail={DETAIL} onNavigate={noopNavigate} />);
     await new Promise((r) => setTimeout(r, 0));
   });
 }
@@ -146,9 +156,9 @@ describe('AgentTrustControlTab — GOALS score', () => {
     expect(container.textContent).toContain('Solid');
     // 2 dimensions are structurally declared, not freshly measured — must
     // read as "Declared," never presented as a live reading.
-    const declaredBadges = Array.from(container.querySelectorAll('.admin-status-badge')).filter((b) => b.textContent?.includes('Declared'));
+    const declaredBadges = Array.from(container.querySelectorAll('.adv2-pill')).filter((b) => b.textContent?.includes('Declared'));
     expect(declaredBadges.length).toBe(2);
-    const liveBadges = Array.from(container.querySelectorAll('.admin-status-badge')).filter((b) => b.textContent?.includes('Live'));
+    const liveBadges = Array.from(container.querySelectorAll('.adv2-pill')).filter((b) => b.textContent === 'Live');
     expect(liveBadges.length).toBe(3);
   });
 });
@@ -250,7 +260,7 @@ describe('AgentTrustControlTab — Architecture drawer', () => {
       agent: { ...DETAIL.agent, max_runs_per_hour: null, max_writes_per_execution: null, max_proposals_per_run: null },
     };
     await act(async () => {
-      root.render(<AgentTrustControlTab agentId="agent-1" detail={nullLimitsDetail} />);
+      root.render(<AgentTrustControlTab agentId="agent-1" detail={nullLimitsDetail} onNavigate={noopNavigate} />);
       await new Promise((r) => setTimeout(r, 0));
     });
     const expandButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Expand')!;
@@ -285,7 +295,7 @@ describe('AgentTrustControlTab — Authorization Enforcement', () => {
       },
     };
     await act(async () => {
-      root.render(<AgentTrustControlTab agentId="agent-1" detail={overriddenDetail} />);
+      root.render(<AgentTrustControlTab agentId="agent-1" detail={overriddenDetail} onNavigate={noopNavigate} />);
       await new Promise((r) => setTimeout(r, 0));
     });
     expect(container.textContent).toContain('Overridden to');
@@ -306,7 +316,7 @@ describe('AgentTrustControlTab — Authorization Enforcement', () => {
       },
     };
     await act(async () => {
-      root.render(<AgentTrustControlTab agentId="agent-1" detail={offDetail} />);
+      root.render(<AgentTrustControlTab agentId="agent-1" detail={offDetail} onNavigate={noopNavigate} />);
       await new Promise((r) => setTimeout(r, 0));
     });
     expect(container.textContent).toContain('Off (platform-wide)');
@@ -337,7 +347,7 @@ describe('AgentTrustControlTab — Authorization Enforcement', () => {
       override: null, setAt: '2026-09-20T18:05:00Z', setBy: 'ali@colaberry.com', error: null,
     });
     await act(async () => {
-      root.render(<AgentTrustControlTab agentId="agent-1" detail={overriddenDetail} />);
+      root.render(<AgentTrustControlTab agentId="agent-1" detail={overriddenDetail} onNavigate={noopNavigate} />);
       await new Promise((r) => setTimeout(r, 0));
     });
     const radios = Array.from(container.querySelectorAll('input[type="radio"]')) as HTMLInputElement[];
@@ -357,5 +367,67 @@ describe('AgentTrustControlTab — Authorization Enforcement', () => {
     const saveButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Save')!;
     await act(async () => { saveButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
     expect(container.textContent).toContain('Agent not found');
+  });
+});
+
+// Track A2 (2026-09-22) — the new "Independence with boundaries" card
+// (AgentTrustControlAuthority): real charter authority tiers, never
+// fetched/rendered anywhere before this slice.
+describe('AgentTrustControlTab — Independence with boundaries', () => {
+  it('shows the honest empty state when no charter has been written', async () => {
+    getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-1', charter: null });
+    await renderTab();
+    expect(container.textContent).toContain('No role charter has been written yet.');
+  });
+
+  it('renders the 3 real authority tiers from the charter', async () => {
+    getAgentRoleCharter.mockResolvedValue({
+      agentId: 'agent-1',
+      charter: {
+        roleTitle: 'Student Success', mission: 'Help students.', responsibilities: [], kpis: [],
+        updatedByEmail: 'ali@colaberry.com', updatedAt: '2026-09-18T00:00:00Z',
+        authorityAutonomous: ['respond_to_dm', 'read_learner_context'],
+        authorityApprovalRequired: ['adjust_deadline'],
+        authorityForbidden: ['financial_decisions'],
+      },
+    });
+    await renderTab();
+    expect(container.textContent).toContain('Can act');
+    expect(container.textContent).toContain('respond_to_dm');
+    expect(container.textContent).toContain('Ask Ali first');
+    expect(container.textContent).toContain('adjust_deadline');
+    expect(container.textContent).toContain('Outside role');
+    expect(container.textContent).toContain('financial_decisions');
+  });
+
+  it('shows "None recorded" for a tier with an empty array, never silently omitting it', async () => {
+    getAgentRoleCharter.mockResolvedValue({
+      agentId: 'agent-1',
+      charter: {
+        roleTitle: 'Student Success', mission: 'Help students.', responsibilities: [], kpis: [],
+        updatedByEmail: 'ali@colaberry.com', updatedAt: '2026-09-18T00:00:00Z',
+        authorityAutonomous: ['respond_to_dm'], authorityApprovalRequired: [], authorityForbidden: null,
+      },
+    });
+    await renderTab();
+    const noneRecorded = Array.from(container.querySelectorAll('.adv2-tier')).filter((el) => el.textContent?.includes('None recorded.'));
+    expect(noneRecorded.length).toBe(2);
+  });
+});
+
+// Track A2 (2026-09-22) — the new link-only "Work controls" card: no
+// duplicated switch state, just a real navigation to Employee Facts.
+describe('AgentTrustControlTab — Work controls link', () => {
+  it('navigates to Overview (Employee Facts) on click, without fetching or rendering any switch state', async () => {
+    const onNavigate = jest.fn();
+    await act(async () => {
+      root.render(<AgentTrustControlTab agentId="agent-1" detail={DETAIL} onNavigate={onNavigate} />);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(container.textContent).toContain('Work controls');
+    expect(container.textContent).not.toContain('Basecamp handoffs');
+    const goButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Go to Employee Facts')!;
+    await act(async () => { goButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(onNavigate).toHaveBeenCalledWith('overview');
   });
 });
