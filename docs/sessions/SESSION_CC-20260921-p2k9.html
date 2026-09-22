@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Tuesday, September 22, 2026 at 12:11 AM</div>
-    <div><span class="sid">CC-20260921-p2k9</span><span class="count">1 change</span></div>
+    <div class="meta">Generated Tuesday, September 22, 2026 at 7:14 AM</div>
+    <div><span class="sid">CC-20260921-p2k9</span><span class="count">2 changes</span></div>
   </header>
   <main>
     
@@ -72,6 +72,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">backend jest -c jest.ci.config.ts - factoryDecomposeRun 4/4 (loader maps rows; accepted-&gt;persist one-txn; rejected-&gt;no persist; disabled-&gt;no persist) + factoryRoutes 26/26 (generate 200/422/409/400; guard-count 9) = 30/30. Frontend react-scripts test - AdminFactoryCommandCenterPage 11/11 (5 new: generate control present-on-real/absent-on-sample, click-&gt;generateDecomposition+reload, 422 honest message, 409 engine-off) + factoryApi unchanged; frontend tsc --noEmit exit 0. Whole slice-3 diff (7 files) graded PASS 12/12 by loop-task-verifier (separate agent, re-ran both suites itself, never self-graded). Plan audited 20/20 (loop-plan-auditor, cycle 1). CI authoritative.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Additive - NO schema, NO new dependency (the engine already exists). This wires an existing dark capability; it changes nothing on prod until ENABLE_FACTORY_GENERATION=true. RISK logged (deferred): the slice-2 extractor can emit up to 200 requirements but the decompose prompt targets 5-14 tasks and the gate requires each requirement cited by a task (SOURCE_COVERAGE) - a LARGE solicitation may return accepted:false; this is honest by construction (no fake pass, nothing persisted), and the demo contract (3 reqs) is expected gate-clean; coverage-at-scale mitigation deferred to a later slice. SBP student build (the gov solution_build DRIVING an SBP build via solution_student_project_id) DEFERRED. Deploy backend+nginx + FLIP ENABLE_FACTORY_GENERATION on prod + one live generation on the demo contract (d898d2cf) + approve v1-&gt;v2 + prod-verify pending Ali&#39;s merge. PR https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/2791</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**Gov opportunities page: map the REAL Opportunity Pulse Bonfire list (cents-&gt;dollars, priority badge, pursuitStatus, sector tag)**</h2>
+          <span class="badge">2026-09-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali flagged the gov opportunities page showing the stale June snapshot instead of the live &quot;Top 10 Bonfire Contracts to Bid&quot; he sees in his Opportunity Pulse email. Discovery (cross-repo Explore of our gov-bid pipeline + the OP repo) found the live endpoint already exists and is deployed: GET https://op.colaberry.ai/api/v1/bonfire/opportunities?order=priority_desc&amp;limit=10 (Bearer admin token via /api/v1/auth/login; sourceUrl is returned ONLY for an admin account). No OP-repo code needed. Our slice-1 mapper (oppPulseClient.ts) had guessed the shape and had three real bugs against the actual BonfireOpportunity row: (1) estimatedValue arrives in BIGINT CENTS (ingest x100) -&gt; mapper now converts to dollars (was showing 100x, e.g. $50M for $500k); (2) priorityScore was never read -&gt; added priorityScore to GovOpportunity + mapper + the frontend &quot;Priority NN&quot; badge (the email&#39;s second badge, previously missing); (3) pursued read the wrong field -&gt; real field is pursuitStatus enum (&#39;none&#39;|&#39;pursuing&#39;|&#39;submitted&#39;), mapped as pursued = pursuitStatus !== &#39;none&#39;; also surface aiCategory as the sector tag (&quot;IT Services&quot;) beside the agency. Updated the header evidence-discipline note (shape is now KNOWN from the OP source). Frontend: priorityBadge helper (Bootstrap subtle tones, no hex), Priority badge next to Fit, &quot;agency . category&quot; line.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest -c jest.ci.config.ts oppPulseClient 9/9 (real-shape live mapping asserts cents-&gt;dollars $1.0M, priorityScore surfaced, pursuitStatus-&gt;pursued, aiCategory-&gt;category; degrade-dark + login-retry + all fallbacks unchanged). Frontend react-scripts AdminGovOpportunitiesPage 5/5 (NEW: live card renders &quot;Priority 79&quot; + &quot;IT Services&quot; + &quot;$1.0M&quot; not $100M) + factoryApi 7/7. CI authoritative.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Additive - NO schema, NO new dependency. The LIVE data only appears once prod .env has OP_ADMIN_EMAIL=ali@colaberry.com + OP_ADMIN_PASSWORD (Ali&#39;s OP admin secret; only he sets it) + OPPORTUNITY_PULSE_BASE=https://op.colaberry.ai + OPPORTUNITY_PULSE_LIST_PATH=/api/v1/bonfire/opportunities?order=priority_desc&amp;limit=10, then backend recreate. Until then the page keeps showing the labeled snapshot (honest). Not byte-for-byte the email: the email&#39;s topBonfire adds a &gt;=10-day close floor + biddable-first rerank + hides no_bid/needs_review; order=priority_desc gives the same rows in priority order (endpoint hides already-closed by default). Exact digest parity (client-side filter) deferred. Deploy + set env + verify-live pending Ali&#39;s merge + his OP password.</span></div>
           
         </div>
       </article>

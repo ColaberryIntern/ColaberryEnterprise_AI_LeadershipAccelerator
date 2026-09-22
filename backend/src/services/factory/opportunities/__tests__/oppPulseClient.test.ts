@@ -35,20 +35,23 @@ describe('fetchBestFitOpportunities — degrade-dark', () => {
     expect(errSpy).not.toHaveBeenCalled(); // unconfigured is a deliberate dark state, not a failure
   });
 
-  it('maps a live response, tolerating field-name variants, when configured', async () => {
+  it('maps a live Bonfire response — real shape (id/priorityScore/fitScore/estimatedValue cents/pursuitStatus/aiCategory)', async () => {
     configure();
     fetchMock
       .mockResolvedValueOnce(res(true, { data: { accessToken: 'tok' } })) // login
-      .mockResolvedValueOnce(res(true, { data: [                          // list
-        { uuid: 'u1', title: 'Alpha RFP', agency: 'Agency A', close_date: '2027-01-15', fit: 82, estimatedValue: 500000, bonfire: 'https://x.bonfirehub.com/opportunities/1' },
-        { id: 'u2', name: 'Beta RFP', agencyName: 'Agency B', deadline: '2027-02-01', score: '77', value: '250000', url: 'https://y' },
+      .mockResolvedValueOnce(res(true, { data: [                          // list — real BonfireOpportunity rows
+        { id: 'u1', title: 'AI-Assisted Digital Evidence Analysis Platform', agency: 'City of Dallas', closeDate: '2026-10-23', priorityScore: 79, fitScore: 80, estimatedValue: 100000000, aiCategory: 'IT Services', pursuitStatus: 'none', sourceUrl: 'https://dallascityhall.bonfirehub.com/opportunities/1' },
+        // variant field-names + pursuing status; value in cents as a string
+        { uuid: 'u2', name: 'Beta RFP', agencyName: 'Agency B', deadline: '2026-11-01', score: '77', value: '25000000', pursuitStatus: 'pursuing', url: 'https://y' },
       ] }));
     const feed = await fetchBestFitOpportunities();
     expect(feed.source).toBe('live');
     expect(feed.snapshotDate).toBeNull();
     expect(feed.opportunities).toHaveLength(2);
-    expect(feed.opportunities[0]).toMatchObject({ uuid: 'u1', title: 'Alpha RFP', agency: 'Agency A', closeDate: '2027-01-15', fitScore: 82, estimatedValue: 500000, sourceUrl: 'https://x.bonfirehub.com/opportunities/1' });
-    expect(feed.opportunities[1]).toMatchObject({ uuid: 'u2', title: 'Beta RFP', agency: 'Agency B', closeDate: '2027-02-01', fitScore: 77, estimatedValue: 250000, sourceUrl: 'https://y' });
+    // cents -> dollars ($1.0M), priority badge surfaced, sector tag, not pursued
+    expect(feed.opportunities[0]).toMatchObject({ uuid: 'u1', title: 'AI-Assisted Digital Evidence Analysis Platform', agency: 'City of Dallas', closeDate: '2026-10-23', priorityScore: 79, fitScore: 80, estimatedValue: 1000000, category: 'IT Services', pursued: false, sourceUrl: 'https://dallascityhall.bonfirehub.com/opportunities/1' });
+    // pursuitStatus 'pursuing' -> pursued true; 25000000 cents -> $250k
+    expect(feed.opportunities[1]).toMatchObject({ uuid: 'u2', title: 'Beta RFP', agency: 'Agency B', closeDate: '2026-11-01', fitScore: 77, estimatedValue: 250000, pursued: true });
     expect(fetchMock.mock.calls[0][0]).toBe('https://op.test/api/v1/auth/login');
   });
 
@@ -97,5 +100,12 @@ describe('mapOpportunity', () => {
   it('coerces numeric strings and null-fills unknowns', () => {
     expect(mapOpportunity({ uuid: 'u', title: 't', fitScore: '90', value: '', agency: undefined }))
       .toMatchObject({ uuid: 'u', title: 't', fitScore: 90, estimatedValue: null, agency: '' });
+  });
+  it('converts the cents value to dollars, surfaces priorityScore, and derives pursued from pursuitStatus', () => {
+    expect(mapOpportunity({ id: 'u', title: 't', priorityScore: 66, fitScore: 70, estimatedValue: 100000000, aiCategory: 'IT Services', pursuitStatus: 'submitted' }))
+      .toMatchObject({ uuid: 'u', priorityScore: 66, fitScore: 70, estimatedValue: 1000000, category: 'IT Services', pursued: true });
+    // 'none' -> not pursued; no value -> null
+    expect(mapOpportunity({ id: 'v', title: 't2', pursuitStatus: 'none' }))
+      .toMatchObject({ uuid: 'v', pursued: false, estimatedValue: null });
   });
 });

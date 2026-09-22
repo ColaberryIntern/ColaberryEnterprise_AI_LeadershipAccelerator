@@ -27,6 +27,12 @@ const fitBadge = (fit: number | null): string => {
   if (fit >= 70) return 'bg-info-subtle text-info-emphasis';
   return 'bg-secondary-subtle text-secondary-emphasis';
 };
+const priorityBadge = (p: number | null | undefined): string => {
+  if (p === null || p === undefined) return 'bg-secondary-subtle text-secondary-emphasis';
+  if (p >= 75) return 'bg-primary-subtle text-primary-emphasis';
+  if (p >= 65) return 'bg-info-subtle text-info-emphasis';
+  return 'bg-secondary-subtle text-secondary-emphasis';
+};
 
 export default function AdminGovOpportunitiesPage(): React.ReactElement {
   const navigate = useNavigate();
@@ -115,13 +121,22 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
               <div className="card h-100 border">
                 <div className="card-body d-flex flex-column">
                   <div className="d-flex justify-content-between align-items-start gap-2 mb-2">
-                    <span className={`badge ${fitBadge(opp.fitScore)}`}>
-                      Fit {opp.fitScore ?? '—'}
-                    </span>
+                    <div className="d-flex flex-wrap gap-1">
+                      {opp.priorityScore !== null && opp.priorityScore !== undefined && (
+                        <span className={`badge ${priorityBadge(opp.priorityScore)}`}>
+                          Priority {opp.priorityScore}
+                        </span>
+                      )}
+                      <span className={`badge ${fitBadge(opp.fitScore)}`}>
+                        Fit {opp.fitScore ?? '—'}
+                      </span>
+                    </div>
                     {opp.pursued && <span className="badge bg-light text-secondary">Pursued</span>}
                   </div>
                   <h3 className="h6 fw-semibold mb-1">{opp.title}</h3>
-                  <div className="text-secondary small mb-3">{opp.agency}</div>
+                  <div className="text-secondary small mb-3">
+                    {opp.agency}{opp.category ? ` · ${opp.category}` : ''}
+                  </div>
                   <div className="d-flex flex-wrap gap-3 small text-secondary mb-3">
                     <span><i className="ri-calendar-line me-1" aria-hidden="true" />Closes {opp.closeDate ?? 'TBD'}</span>
                     <span><i className="ri-money-dollar-circle-line me-1" aria-hidden="true" />{fmtValue(opp.estimatedValue)}</span>

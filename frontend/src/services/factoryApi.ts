@@ -132,7 +132,11 @@ export interface GovOpportunity {
   agency: string;
   closeDate: string | null;
   fitScore: number | null;
+  /** 0-100 priority score from Opportunity Pulse (the "priority" badge); absent on the snapshot. */
+  priorityScore?: number | null;
   estimatedValue: number | null;
+  /** AI category / sector tag (e.g. "IT Services"); absent on the snapshot. */
+  category?: string | null;
   sourceUrl: string | null;
   pursued?: boolean;
 }

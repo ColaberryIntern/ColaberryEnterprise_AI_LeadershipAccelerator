@@ -13,11 +13,15 @@ export interface GovOpportunity {
   closeDate: string | null;
   /** 0-100 best-fit score from Opportunity Pulse, or null. */
   fitScore: number | null;
-  /** Estimated contract value in USD, or null. */
+  /** 0-100 priority score from Opportunity Pulse (the "priority" badge), or null/absent (snapshot omits it). */
+  priorityScore?: number | null;
+  /** Estimated contract value in USD, or null. Note: the live Bonfire feed returns cents — the mapper converts. */
   estimatedValue: number | null;
+  /** AI category / sector tag from Opportunity Pulse (e.g. "IT Services"), or null/absent. */
+  category?: string | null;
   /** Link to the agency's Bonfire portal / source, or null. */
   sourceUrl: string | null;
-  /** Whether it is already being pursued (from the snapshot; live may omit). */
+  /** Whether it is already being pursued (live: pursuitStatus !== 'none'; snapshot: explicit flag). */
   pursued?: boolean;
 }
 
