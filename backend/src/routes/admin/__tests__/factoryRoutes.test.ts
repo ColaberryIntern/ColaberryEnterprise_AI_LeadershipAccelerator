@@ -27,6 +27,8 @@ const backfillUnassessedContract = jest.fn();
 jest.mock('../../../services/factory/factoryBackfill', () => ({ backfillUnassessedContract: (...a: any[]) => backfillUnassessedContract(...a) }));
 const resolveGovContractsContainer = jest.fn();
 jest.mock('../../../scripts/lib/factoryDemoContainer', () => ({ resolveGovContractsContainer: (...a: any[]) => resolveGovContractsContainer(...a) }));
+const ingestProposal = jest.fn();
+jest.mock('../../../services/factory/proposal/proposalIngest', () => ({ ingestProposal: (...a: any[]) => ingestProposal(...a) }));
 
 // Partial mocks: override the write functions but KEEP the real error classes (instanceof must work).
 const approveProcessDocument = jest.fn();
@@ -228,11 +230,37 @@ describe('POST /api/admin/factory/opportunities/:uuid/start — create the contr
   });
 });
 
+describe('POST /api/admin/factory/contract/:id/ingest-proposal — upload the solicitation zip', () => {
+  it('ingests a .zip and returns the counts (200)', async () => {
+    ingestProposal.mockResolvedValue({ requirements: 3, blocks: 5, fileName: 'RFP.zip' });
+    const res = await request(app)
+      .post(`/api/admin/factory/contract/${UUID}/ingest-proposal`)
+      .attach('proposal', Buffer.from('PK fake zip bytes'), 'RFP.zip');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ requirements: 3, blocks: 5, fileName: 'RFP.zip' });
+    expect(ingestProposal.mock.calls[0][0]).toBe(UUID);
+  });
+
+  it('rejects a non-zip file (400, never ingests)', async () => {
+    const res = await request(app)
+      .post(`/api/admin/factory/contract/${UUID}/ingest-proposal`)
+      .attach('proposal', Buffer.from('x'), 'RFP.pdf');
+    expect(res.status).toBe(400);
+    expect(ingestProposal).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing file (400)', async () => {
+    const res = await request(app).post(`/api/admin/factory/contract/${UUID}/ingest-proposal`);
+    expect(res.status).toBe(400);
+    expect(ingestProposal).not.toHaveBeenCalled();
+  });
+});
+
 describe('route-auth — every route is section-gated (required CI lint)', () => {
   it('the source guards every route with requireSection(\'program\')', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'factoryRoutes.ts'), 'utf8');
     const guards = src.match(/requireSection\('program'\)/g) ?? [];
-    expect(guards.length).toBeGreaterThanOrEqual(7); // sample, contract, contracts, approve, request-changes, opportunities, start
+    expect(guards.length).toBeGreaterThanOrEqual(8); // sample, contract, contracts, approve, request-changes, opportunities, start, ingest-proposal
   });
 });
 

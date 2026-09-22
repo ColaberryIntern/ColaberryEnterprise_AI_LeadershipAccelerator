@@ -155,3 +155,16 @@ export async function startGovOpportunity(uuid: string, body: { title?: string; 
   const { data } = await api.post<StartOpportunityResult>(`/api/admin/factory/opportunities/${encodeURIComponent(uuid)}/start`, body);
   return data;
 }
+
+export interface IngestProposalResult { requirements: number; blocks: number; fileName: string; }
+
+/** Upload a solicitation .zip; the factory extracts source-cited requirements and replaces the shell. */
+export async function ingestProposal(deliveryProjectId: string, file: File): Promise<IngestProposalResult> {
+  const form = new FormData();
+  form.append('proposal', file);
+  const { data } = await api.post<IngestProposalResult>(
+    `/api/admin/factory/contract/${encodeURIComponent(deliveryProjectId)}/ingest-proposal`, form,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  );
+  return data;
+}

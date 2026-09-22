@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { PageHeader, StatCard, SectionCard } from '../../components/admin/shell';
 import {
   getFactorySample, getFactoryContract, listFactoryContracts, approveFactoryContract, requestFactoryChanges,
+  ingestProposal,
   type FactoryCommandCenterView, type CcFlowNode,
 } from '../../services/factoryApi';
 
@@ -113,6 +114,22 @@ export default function AdminFactoryCommandCenterPage(): React.ReactElement {
     }
   }, [view]);
 
+  const handleIngest = useCallback(async (file: File) => {
+    if (!view || view.isSample) return;
+    setSaving(true);
+    setError(null);
+    setActionNote(null);
+    try {
+      const result = await ingestProposal(view.deliveryProjectId, file);
+      await load(); // reload first (load() clears actionNote), then post the note so it survives the refresh
+      setActionNote(`Extracted ${result.requirements} source-cited requirements from ${result.fileName}. They are unassessed until confirmed.`);
+    } catch (e: any) {
+      setError(e?.response?.data?.error ?? 'Could not ingest the proposal.');
+    } finally {
+      setSaving(false);
+    }
+  }, [view, load]);
+
   return (
     <div className="admin-page">
       <PageHeader
@@ -138,6 +155,26 @@ export default function AdminFactoryCommandCenterPage(): React.ReactElement {
               <i className="ri-information-line me-2" aria-hidden="true" />
               Sample preview — rendered from the Phase-1 factory sample. A real contract appears here once one is generated.
             </div>
+          )}
+
+          {!view.isSample && (
+            <SectionCard title="Proposal" subtitle="upload the solicitation .zip to extract its requirements" icon="upload-2-line" className="mb-3">
+              <div className="d-flex flex-wrap align-items-center gap-2">
+                <label className="btn btn-outline-primary btn-sm mb-0">
+                  <i className="ri-file-upload-line me-1" aria-hidden="true" />
+                  {saving ? 'Working…' : 'Upload proposal (.zip)'}
+                  <input
+                    type="file"
+                    accept=".zip"
+                    className="d-none"
+                    disabled={saving}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) { void handleIngest(f); } e.target.value = ''; }}
+                  />
+                </label>
+                <span className="small text-muted">Requirements are extracted verbatim from the proposal and stay unassessed until confirmed.</span>
+              </div>
+              {actionNote && <div className="alert alert-success mt-3 mb-0" role="status">{actionNote}</div>}
+            </SectionCard>
           )}
 
           <div className="row g-3 mb-1">
