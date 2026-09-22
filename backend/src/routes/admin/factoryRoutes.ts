@@ -15,6 +15,9 @@ import { requestChanges, ReviewValidationError } from '../../services/factory/fa
 import { fetchBestFitOpportunities } from '../../services/factory/opportunities/oppPulseClient';
 import { backfillUnassessedContract } from '../../services/factory/factoryBackfill';
 import { resolveGovContractsContainer } from '../../scripts/lib/factoryDemoContainer';
+// Slice 2: upload a solicitation zip -> deterministic source-cited requirements (no LLM).
+import multer from 'multer';
+import { ingestProposal } from '../../services/factory/proposal/proposalIngest';
 
 /**
  * Admin — AI Project Factory Command Center (READ ONLY, Phase 3).
@@ -253,6 +256,37 @@ router.post('/api/admin/factory/opportunities/:uuid/start', requireSection('prog
   } catch (err: any) {
     logFail('factory_opportunity_start_failed', err, { uuid, slug });
     res.status(500).json({ error: 'Could not start this opportunity.' });
+  }
+});
+
+// Solicitation upload: in-memory, 25 MB cap. Multer errors (e.g. size) are turned into a 400, not a 500.
+const proposalUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+function uploadProposalZip(req: Request, res: Response, next: (err?: any) => void): void {
+  proposalUpload.single('proposal')(req as any, res as any, (err: any) => {
+    if (err) { res.status(400).json({ error: 'Upload failed (file too large or malformed).' }); return; }
+    next();
+  });
+}
+
+/**
+ * POST /api/admin/factory/contract/:deliveryProjectId/ingest-proposal — upload the solicitation .zip; the
+ * factory extracts source-cited requirements (deterministic, no LLM) and replaces the UNASSESSED shell.
+ * Nested under /api/admin/factory, so mgmtSectionGate's 'program' mapping covers it.
+ */
+router.post('/api/admin/factory/contract/:deliveryProjectId/ingest-proposal', requireSection('program'), uploadProposalZip, async (req: Request, res: Response) => {
+  const parsed = idParam.safeParse(req.params);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid delivery project id.' }); return; }
+  const file: any = (req as any).file;
+  if (!file || !file.buffer) { res.status(400).json({ error: 'No proposal file uploaded (field "proposal").' }); return; }
+  const fileName: string = file.originalname || 'proposal.zip';
+  if (!/\.zip$/i.test(fileName)) { res.status(400).json({ error: 'Please upload a .zip of the solicitation.' }); return; }
+  const { deliveryProjectId } = parsed.data;
+  try {
+    const result = await ingestProposal(deliveryProjectId, file.buffer, fileName);
+    res.json(result);
+  } catch (err: any) {
+    logFail('factory_ingest_proposal_failed', err, { deliveryProjectId, fileName });
+    res.status(500).json({ error: 'Could not ingest the proposal.' });
   }
 });
 

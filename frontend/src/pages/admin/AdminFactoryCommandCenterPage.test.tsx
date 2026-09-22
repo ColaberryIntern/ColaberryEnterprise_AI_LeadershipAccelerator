@@ -113,4 +113,36 @@ describe('AdminFactoryCommandCenterPage', () => {
     await renderPage();
     expect(container.textContent ?? '').toContain('Could not load the factory command center');
   });
+
+  it('shows the proposal-upload control for a real contract but NOT on the sample', async () => {
+    (factoryApi.listFactoryContracts as jest.Mock).mockResolvedValue([{ deliveryProjectId: 'dp-real', name: 'Demo', trackType: 'solution_build', status: 'draft', version: 1 }]);
+    (factoryApi.getFactoryContract as jest.Mock).mockResolvedValue(realView);
+    await renderPage();
+    expect(container.querySelector('input[type="file"]')).toBeTruthy();
+    expect(container.textContent ?? '').toContain('Upload proposal');
+  });
+
+  it('does not show the upload control on the read-only sample', async () => {
+    (factoryApi.listFactoryContracts as jest.Mock).mockResolvedValue([]);
+    (factoryApi.getFactorySample as jest.Mock).mockResolvedValue(sampleView);
+    await renderPage();
+    expect(container.querySelector('input[type="file"]')).toBeNull();
+  });
+
+  it('uploading a proposal calls ingestProposal and reloads the contract', async () => {
+    (factoryApi.listFactoryContracts as jest.Mock).mockResolvedValue([{ deliveryProjectId: 'dp-real', name: 'Demo', trackType: 'solution_build', status: 'draft', version: 1 }]);
+    (factoryApi.getFactoryContract as jest.Mock).mockResolvedValue(realView);
+    (factoryApi.ingestProposal as jest.Mock).mockResolvedValue({ requirements: 3, blocks: 5, fileName: 'RFP.zip' });
+    await renderPage();
+
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(['zip'], 'RFP.zip', { type: 'application/zip' });
+    Object.defineProperty(input, 'files', { value: [file] });
+    await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })); });
+    await act(async () => { await Promise.resolve(); });
+
+    expect(factoryApi.ingestProposal).toHaveBeenCalledWith('dp-real', file);
+    expect((factoryApi.getFactoryContract as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(2); // reloaded
+    expect(container.textContent ?? '').toContain('Extracted 3 source-cited requirements');
+  });
 });
