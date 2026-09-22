@@ -168,3 +168,12 @@ export async function ingestProposal(deliveryProjectId: string, file: File): Pro
   );
   return data;
 }
+
+export interface GenerateDecompositionResult { accepted: boolean; errorCount: number; }
+
+/** Run the generation engine on the contract's requirements -> a task graph (approvable when gate-clean). */
+export async function generateDecomposition(deliveryProjectId: string): Promise<GenerateDecompositionResult> {
+  const { data } = await api.post<GenerateDecompositionResult>(
+    `/api/admin/factory/contract/${encodeURIComponent(deliveryProjectId)}/generate`, {});
+  return data;
+}

@@ -18,6 +18,8 @@ import { resolveGovContractsContainer } from '../../scripts/lib/factoryDemoConta
 // Slice 2: upload a solicitation zip -> deterministic source-cited requirements (no LLM).
 import multer from 'multer';
 import { ingestProposal } from '../../services/factory/proposal/proposalIngest';
+// Slice 3: run the (flag-gated) generation engine -> a task graph the contract can be approved on.
+import { generateDecomposition } from '../../services/factory/factoryDecomposeRun';
 
 /**
  * Admin — AI Project Factory Command Center (READ ONLY, Phase 3).
@@ -287,6 +289,32 @@ router.post('/api/admin/factory/contract/:deliveryProjectId/ingest-proposal', re
   } catch (err: any) {
     logFail('factory_ingest_proposal_failed', err, { deliveryProjectId, fileName });
     res.status(500).json({ error: 'Could not ingest the proposal.' });
+  }
+});
+
+/**
+ * POST /api/admin/factory/contract/:deliveryProjectId/generate — run the generation engine on the contract's
+ * requirements and, when the result is gate-clean, persist the task graph so the contract becomes approvable.
+ * A gate-dirty result is a 422 with the issue count (never persisted); the engine being off is a 409.
+ */
+router.post('/api/admin/factory/contract/:deliveryProjectId/generate', requireSection('program'), async (req: Request, res: Response) => {
+  const parsed = idParam.safeParse(req.params);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid delivery project id.' }); return; }
+  const { deliveryProjectId } = parsed.data;
+  try {
+    const out = await generateDecomposition(deliveryProjectId);
+    if (out.status === 'disabled') {
+      res.status(409).json({ error: 'The generation engine is off.', generationDisabled: true });
+      return;
+    }
+    if (out.status === 'rejected') {
+      res.status(422).json({ error: 'The generated decomposition did not pass the gate.', errorCount: out.errorCount, issues: out.issues });
+      return;
+    }
+    res.json({ accepted: true, errorCount: 0 });
+  } catch (err: any) {
+    logFail('factory_generate_failed', err, { deliveryProjectId });
+    res.status(500).json({ error: 'Could not generate the decomposition.' });
   }
 });
 
