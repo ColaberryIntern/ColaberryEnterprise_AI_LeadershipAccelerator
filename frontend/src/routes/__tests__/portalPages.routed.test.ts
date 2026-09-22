@@ -16,6 +16,12 @@
  * `import('...')` specifiers, resolved as CRA resolves them (`.tsx`, `.ts`,
  * `index.tsx`, `index.ts`). Package imports are ignored - nothing under
  * `pages/portal` is reachable through `node_modules`.
+ *
+ * Comments are stripped before the match, because a COMMENTED-OUT import is the
+ * one way this walk could call a dead file alive: the T603 verifier commented a
+ * page's lazy import out and the suite stayed green (the build caught it - TS2304
+ * on the name the route still used - but a check should not lean on another
+ * check for the one shape that fools it).
  */
 import fs from 'fs';
 import path from 'path';
@@ -55,8 +61,31 @@ function resolveSpec(fromFile: string, spec: string): string | null {
   return null;
 }
 
+/** The file's source with comments removed, so a specifier inside one is not an import. Strings keep their quotes. */
+export function codeOf(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .split(/\r?\n/)
+    .map((line) => {
+      // `//` outside a quoted string starts a comment; a quote toggles the string it opens.
+      let quote: string | null = null;
+      for (let i = 0; i < line.length; i += 1) {
+        const c = line[i];
+        if (quote) {
+          if (c === '\\') i += 1;
+          else if (c === quote) quote = null;
+          continue;
+        }
+        if (c === "'" || c === '"' || c === '`') { quote = c; continue; }
+        if (c === '/' && line[i + 1] === '/') return line.slice(0, i);
+      }
+      return line;
+    })
+    .join('\n');
+}
+
 const specifiersOf = (file: string): string[] =>
-  [...fs.readFileSync(file, 'utf8').matchAll(/from\s+'([^']+)'|import\('([^']+)'\)/g)].map((m) => m[1] || m[2]);
+  [...codeOf(fs.readFileSync(file, 'utf8')).matchAll(/from\s+'([^']+)'|import\('([^']+)'\)/g)].map((m) => m[1] || m[2]);
 
 /** Every source file reachable from `entry` by relative imports, transitively. */
 function reachableFrom(entry: string): Set<string> {
@@ -96,6 +125,15 @@ const portalFiles = sourceFilesUnder(PORTAL);
 const unreachable = portalFiles.filter((f) => !reachable.has(f)).map(rel);
 
 describe('the portal page tree is reachable from the route table', () => {
+  it('reads code, not comments: a specifier inside a comment is not an import', () => {
+    const line = "const X = lazy(() => import('../pages/portal/PortalLoginPage'));";
+    expect(codeOf(`// ${line}`)).not.toContain('PortalLoginPage');
+    expect(codeOf(`/* ${line} */`)).not.toContain('PortalLoginPage');
+    expect(codeOf(line)).toContain('PortalLoginPage');
+    // A `//` inside a string is not a comment, and the line survives whole.
+    expect(codeOf("const u = 'https://x/y'; // trailing")).toBe("const u = 'https://x/y'; ");
+  });
+
   it('the walk is not vacuous: it finds the route table, a routed page and a component the shell imports', () => {
     expect(portalFiles.length).toBeGreaterThan(100);
     expect(reachable.has(ENTRY)).toBe(true);
