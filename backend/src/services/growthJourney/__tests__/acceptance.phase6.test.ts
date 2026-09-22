@@ -56,7 +56,7 @@ import { runScheduledShadowDecisions } from '../runShadowDecisionsNightly';
 import { brandRow } from './fixtures/phase3Fixtures';
 import { learnerScenarios } from './fixtures/phase4Fixtures';
 import { handoffsOf, printTable, tally, writes } from './fixtures/phase4Harness';
-import { activeCampaign, applyStop, AS_OF_4, campaignByKey, clock, explorerFlags5, flags5, HOUR, m3, m5, receiptsOf, refusalsOf, rolloutRow, STOPS, T, T5, T5x, transitionsOf, transportCalls, type StopKind } from './fixtures/phase5Harness';
+import { activeCampaign, applyStop, AS_OF_4, campaignByKey, clock, explorerFlags5, flags5, HOUR, m3, m5, receiptsOf, refusalsOf, rolloutRow, sendStopReason, STOPS, T, T5, T5x, transitionsOf, transportCalls, type StopKind } from './fixtures/phase5Harness';
 import { approve, decide, decideLive, decideWithCandidates, enrol, plan, reconcile, sendStep } from './fixtures/phase5Drivers';
 import { arrive, candidatesOf, later, leadOf, learnerAssets, note, table, throughTransport, world, type Row } from './fixtures/phase6Drivers';
 import { BIZ_FLOW, foreignCtx, HUMAN, LEARNER_RESTART_KEY, memberCtxFor, scenarioA, scenarioB, scenarioBSend, scenarioC, scenarioD, scenarioE, scenarioF, scenarioH, scenarioJ, scenarioL, speaksForAService } from './fixtures/phase6Scenarios';
@@ -452,9 +452,9 @@ describe('K - the kill switch and the four pauses, for a Colaberry Training lear
       expect(await enrol(receiptId)).toMatchObject({ status: 'enrolled' });
       applyStop(stop, 'colaberry-training', 'email', subjectRef);
       const held = await sendStep();
-      expect(held).toEqual({ sent: [], blocked: [{ id: String(T5x.scheduled.rows[0].id), reason: `journey_hold:${stop}` }] });
+      expect(held).toEqual({ sent: [], blocked: [{ id: String(T5x.scheduled.rows[0].id), reason: sendStopReason(stop) }] });
       await reconcile();
-      expect(receiptsOf(lead)[0]).toMatchObject({ status: 'blocked', status_reason: `blocked:journey_hold:${stop}` });
+      expect(receiptsOf(lead)[0]).toMatchObject({ status: 'blocked', status_reason: `blocked:${sendStopReason(stop)}` });
     } else {
       expect(await enrol(receiptId)).toEqual({ status: 'blocked', receiptId, reason: stop });
       expect(receiptsOf(lead)[0]).toMatchObject({ status: 'approved', status_reason: `blocked:${stop}` });

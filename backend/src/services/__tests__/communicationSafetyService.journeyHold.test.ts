@@ -71,7 +71,8 @@ beforeEach(() => {
 describe('acceptance 1: every campaign in production today - no registered key - is untouched', () => {
   const cases: Array<[string, () => void, SendRequest, SendDecision]> = [
     ['a live send', () => undefined, { leadId: 1, channel: 'email', campaignId: 'c1' }, LIVE],
-    ['a paused scheduler', () => mockGetSetting.mockResolvedValue('true'), { leadId: 1, channel: 'email', campaignId: 'c1' }, BLOCKED('scheduler_paused')],
+    // Keyed since T602: the kill switch is read first through the same settings service, so "every key is true" would be the switch.
+    ['a paused scheduler', () => mockGetSetting.mockImplementation(async (key: string) => (key === 'scheduler_paused' ? 'true' : null)), { leadId: 1, channel: 'email', campaignId: 'c1' }, BLOCKED('scheduler_paused')],
     ['an inactive campaign', () => mockCampaignFindByPk.mockResolvedValue(campaign({ status: 'paused' })), { leadId: 1, channel: 'email', campaignId: 'c1' }, BLOCKED('campaign_paused')],
     ['an unsubscribed lead', () => mockLeadFindByPk.mockResolvedValue({ id: 1, status: 'unsubscribed', source: 'manual' }), { leadId: 1, channel: 'email', campaignId: 'c1' }, BLOCKED('lead_unsubscribed')],
     ['a brand preference block', () => mockBrandPref.mockResolvedValue({ allowed: false, reason: 'channel_paused' }), { leadId: 1, channel: 'email', campaignId: 'c1' }, BLOCKED('brand_channel_paused')],
@@ -151,9 +152,10 @@ describe('a registered key reaches the hold - and only then', () => {
 });
 
 describe('acceptance 7: the file stays small, and the journey tree is not a static import', () => {
-  it('communicationSafetyService.ts is under 410 lines and imports only the registry from the journey tree', () => {
+  it('communicationSafetyService.ts is under 420 lines and imports only the registry from the journey tree', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'communicationSafetyService.ts'), 'utf8');
-    expect(src.split(/\r?\n/).length).toBeLessThan(410);
+    // 410 until T602 added the kill-switch step (twelve lines, the plan's budget was 420); the bound moves with it, deliberately.
+    expect(src.split(/\r?\n/).length).toBeLessThan(420);
     const journeyImports = Array.from(src.matchAll(/^import .* from '([^']*growthJourney[^']*)';/gm)).map((m) => m[1]);
     expect(journeyImports).toEqual(['./growthJourney/execution/campaignKeys']);
     expect(src).toContain("require('./growthJourney/execution/sendHold')");

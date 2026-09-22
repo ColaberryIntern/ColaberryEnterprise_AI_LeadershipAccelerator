@@ -383,6 +383,17 @@ const EXISTING_TABLE_EXTENSIONS: string[] = [
   // --- audit -----------------------------------------------------------------------
   `ALTER TABLE event_ledger ADD COLUMN IF NOT EXISTS tenant_id UUID`,
   `ALTER TABLE event_ledger ADD COLUMN IF NOT EXISTS brand_id UUID`,
+  // Growth Journey Phase 6 (T602): `event_ledger` had no index at all, and the journey reads it
+  // three ways - by the entity a row describes (the executor's refusal memory, the 360 view), by
+  // event type over a window (the Command Center's measurement reads), and by tenant and brand
+  // (the columns just above). CONCURRENTLY, because the ledger is written on every event and a
+  // plain CREATE INDEX would hold writers for the build; legal here because each statement is
+  // its own top-level query, never inside a transaction (`ensureTicketIndexesSchema.ts` documents
+  // the same choice). An index whose build was interrupted is left INVALID under this name and
+  // IF NOT EXISTS then skips it: the production check reads `pg_index.indisvalid` for these three.
+  `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_event_ledger_entity_created ON event_ledger (entity_type, entity_id, created_at)`,
+  `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_event_ledger_type_created ON event_ledger (event_type, created_at)`,
+  `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_event_ledger_tenant_brand_created ON event_ledger (tenant_id, brand_id, created_at)`,
 ];
 
 /**

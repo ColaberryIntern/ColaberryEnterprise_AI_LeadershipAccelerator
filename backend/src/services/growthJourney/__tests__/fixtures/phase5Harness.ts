@@ -284,6 +284,11 @@ export function applyStop(kind: StopKind, brand: GjBrandSlug, channel: string, s
 
 /** The reason the ladder names for a stop - on a receipt, in the ledger, on a cancelled send. */
 export const stopReason = (kind: StopKind): string => kind;
+/**
+ * The reason the send chokepoint names for a stop applied AFTER enrolment. Since T602 the global kill switch is asked
+ * first, by every send, ahead of the journey's hold - so it answers by its own name; the four pauses are the hold's.
+ */
+export const sendStopReason = (kind: StopKind): string => (kind === 'kill_switch' ? 'kill_switch' : `journey_hold:${kind}`);
 
 /* ── reading the world back ─────────────────────────────────────────────────── */
 

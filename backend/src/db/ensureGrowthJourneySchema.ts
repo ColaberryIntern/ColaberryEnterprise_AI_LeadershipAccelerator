@@ -1,4 +1,5 @@
 import { sequelize } from '../config/database';
+import { ensureKillSwitchRow } from '../services/launchSafety';
 import { GROWTH_JOURNEY_PHASE4_STATEMENTS } from './growthJourneyPhase4Statements';
 import { GROWTH_JOURNEY_PHASE5_STATEMENTS } from './growthJourneyPhase5Statements';
 
@@ -490,10 +491,9 @@ export async function ensureGrowthJourneySchema(): Promise<void> {
       // Warn and continue, matching the sibling ensure modules. A single failed
       // statement must not abort boot, and re-running is a no-op, so the next
       // boot repairs it.
-      console.warn(
-        '[ensureGrowthJourneySchema] statement failed:',
-        (err as { message?: string })?.message,
-      );
+      console.warn('[ensureGrowthJourneySchema] statement failed:', (err as { message?: string })?.message);
     }
   }
+  // Phase 6 T602: the kill switch exists as a row once the schema does (never overwrites a present one; warns, never throws).
+  await ensureKillSwitchRow();
 }

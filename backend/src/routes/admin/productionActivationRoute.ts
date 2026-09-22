@@ -21,6 +21,7 @@ import {
 import { activateCampaign } from '../../services/campaignService';
 import { getSetting, setSetting } from '../../services/settingsService';
 import { isKillSwitchActive } from '../../services/launchSafety';
+import { isRegisteredJourneyCampaignKey } from '../../services/growthJourney/execution/campaignKeys';
 
 import { requireAdmin } from '../../middlewares/authMiddleware';
 
@@ -106,9 +107,15 @@ router.post('/api/admin/production-activate', async (req: Request, res: Response
       const leadCount = await CampaignLead.count({ where: { campaign_id: c.id } }).catch(() => 0);
       const settings = typeof c.settings === 'string' ? JSON.parse(c.settings) : (c.settings || {});
       const hasTestMode = settings.test_mode_enabled === true;
+      // Growth Journey Phase 6 (T602): a campaign carrying a REGISTERED journey key is the journey's, whatever its
+      // status. Its activation is a governed move (the setup script, an approval, a rollout row) that this route
+      // must never make for it - the T522 audit found this loop would have activated the journey's drafts.
+      const journeyKey = typeof settings.campaign_key === 'string' ? settings.campaign_key : null;
+      const isJourneyCampaign = isRegisteredJourneyCampaignKey(journeyKey);
 
       let action = 'no_action';
-      if (c.status === 'active') action = 'already_active';
+      if (isJourneyCampaign) action = 'skipped_journey';
+      else if (c.status === 'active') action = 'already_active';
       else if (c.status === 'draft' || c.status === 'paused') action = 'will_activate';
       else if (c.status === 'completed') action = 'skip';
       else action = 'skip';
@@ -127,6 +134,7 @@ router.post('/api/admin/production-activate', async (req: Request, res: Response
         leads: leadCount,
         action,
         test_mode_in_settings: hasTestMode,
+        ...(isJourneyCampaign ? { journey_key: journeyKey } : {}),
       });
     }
 
@@ -212,6 +220,13 @@ router.post('/api/admin/production-activate', async (req: Request, res: Response
             report.errors.push(`Failed to activate "${c.name}": ${err.message}`);
           }
 
+        } else if (c.action === 'skipped_journey') {
+          // Counted under its own key, present only when a journey campaign exists, so a database with none
+          // gets the report it always got. The log line carries the key and the id, never the name.
+          activationResults.skipped_journey = (activationResults.skipped_journey ?? 0) + 1;
+          activationResults.details.push({ name: c.name, result: 'skipped_journey' });
+          console.info(JSON.stringify({ service: 'backend', level: 'info', event: 'production_activate.journey_campaign_skipped', outcome: 'success', campaign_id: c.id, campaign_key: c.journey_key, status: c.status }));
+
         } else {
           activationResults.skipped++;
           activationResults.details.push({ name: c.name, result: 'skipped' });
@@ -235,6 +250,9 @@ router.post('/api/admin/production-activate', async (req: Request, res: Response
         already_active: campaignSummary.filter((c: any) => c.action === 'already_active').length,
         skip: campaignSummary.filter((c: any) => c.action === 'skip').length,
       };
+      // Listed only when there is one, so the preview of a database with no journey campaign is unchanged.
+      const skippedJourney = campaignSummary.filter((c: any) => c.action === 'skipped_journey').length;
+      if (skippedJourney > 0) preview.skipped_journey = skippedJourney;
       report.phase_3_campaigns = { status: 'dry-run preview', plan: preview };
     }
 
