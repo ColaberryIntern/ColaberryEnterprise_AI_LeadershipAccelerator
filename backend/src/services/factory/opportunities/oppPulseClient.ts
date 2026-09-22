@@ -8,11 +8,14 @@
  * Configuration (all read from env at call time):
  *   OP_ADMIN_EMAIL, OP_ADMIN_PASSWORD  — Opportunity Pulse admin login (secrets; env only)
  *   OPPORTUNITY_PULSE_BASE             — default https://op.colaberry.ai
- *   OPPORTUNITY_PULSE_LIST_PATH        — the ranked best-fit list endpoint (unknown in-repo; set to light up)
+ *   OPPORTUNITY_PULSE_LIST_PATH        — the ranked best-fit list endpoint. Set to the Bonfire list:
+ *                                        /api/v1/bonfire/opportunities?order=priority_desc&limit=10
  *
- * NOTE (evidence discipline): the LIVE list response shape is NOT known in this repo — our code only ever
- * fetched a single opportunity by uuid. `mapOpportunity` is a best-effort tolerant mapper to be VERIFIED
- * once the real endpoint is configured; until then the snapshot is what ships.
+ * The LIVE list is the Opportunity Pulse Bonfire endpoint `GET /api/v1/bonfire/opportunities` (Bearer admin
+ * token). Each row is a BonfireOpportunity: { id(uuid), title, agency, priorityScore, fitScore,
+ * estimatedValue (BIGINT CENTS), closeDate, sourceUrl, aiCategory, pursuitStatus, ... }. `sourceUrl` is
+ * returned only for an ADMIN token (redacted otherwise), so OP_ADMIN_EMAIL must be an OP admin account.
+ * `mapOpportunity` converts the cents value to dollars and reads the priority/category/pursuit fields.
  */
 import { GovOpportunity, GovOpportunityFeed, GOV_OPPORTUNITY_SNAPSHOT, SNAPSHOT_DATE } from './govOpportunity';
 
@@ -40,24 +43,32 @@ const toNum = (v: unknown): number | null =>
   v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? null : Number(v);
 
 /**
- * Tolerant mapper for a single raw opportunity from the (unknown-shape) live list. Reads common field-name
- * variants; returns null when the two required anchors (uuid + title) are absent, so junk rows are dropped
- * rather than rendered.
+ * Maps a raw BonfireOpportunity row from the live list to a GovOpportunity. Tolerant of field-name variants,
+ * but grounded in the real shape: `estimatedValue` arrives in CENTS (converted to dollars here), the priority
+ * and fit badges are `priorityScore`/`fitScore`, and pursuit is the `pursuitStatus` enum ('none' | 'pursuing'
+ * | 'submitted'). Returns null when the two required anchors (uuid + title) are absent, so junk rows drop out.
  */
 export function mapOpportunity(raw: any): GovOpportunity | null {
   if (!raw || typeof raw !== 'object') return null;
   const uuid = raw.uuid ?? raw.id ?? raw.opportunityId ?? raw.opportunity_id ?? null;
   const title = raw.title ?? raw.name ?? raw.opportunityTitle ?? raw.opportunity_title ?? null;
   if (!uuid || !title) return null;
+  // The Bonfire feed stores value as BIGINT cents (ingest multiplies dollars x100); convert back to dollars.
+  const cents = toNum(raw.estimatedValue ?? raw.estimated_value ?? raw.value);
+  const pursuitStatus = raw.pursuitStatus ?? raw.pursuit_status;
   return {
     uuid: String(uuid),
     title: String(title),
     agency: String(raw.agency ?? raw.agencyName ?? raw.agency_name ?? raw.buyer ?? ''),
     closeDate: raw.closeDate ?? raw.close_date ?? raw.deadline ?? raw.dueDate ?? raw.due_date ?? null,
-    fitScore: toNum(raw.fit ?? raw.fitScore ?? raw.fit_score ?? raw.score ?? raw.matchScore),
-    estimatedValue: toNum(raw.value ?? raw.estimatedValue ?? raw.estimated_value),
+    fitScore: toNum(raw.fitScore ?? raw.fit_score ?? raw.fit ?? raw.score ?? raw.matchScore),
+    priorityScore: toNum(raw.priorityScore ?? raw.priority_score ?? raw.priority),
+    estimatedValue: cents === null ? null : Math.round(cents / 100),
+    category: raw.aiCategory ?? raw.category ?? raw.categoryRaw ?? null,
     sourceUrl: raw.sourceUrl ?? raw.source_url ?? raw.bonfire ?? raw.url ?? null,
-    pursued: raw.pursued === undefined ? undefined : !!raw.pursued,
+    pursued: pursuitStatus !== undefined && pursuitStatus !== null
+      ? pursuitStatus !== 'none'
+      : (raw.pursued === undefined ? undefined : !!raw.pursued),
   };
 }
 

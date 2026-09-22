@@ -55,6 +55,21 @@ describe('AdminGovOpportunitiesPage', () => {
     expect(container.textContent ?? '').toContain('Live from Opportunity Pulse');
   });
 
+  it('renders the priority badge, sector tag, and dollar value on a live card', async () => {
+    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({
+      opportunities: [
+        { uuid: 'u9', title: 'Digital Evidence Platform', agency: 'City of Dallas', closeDate: '2026-10-23', fitScore: 80, priorityScore: 79, estimatedValue: 1000000, category: 'IT Services', sourceUrl: 'https://dallascityhall.bonfirehub.com/opportunities/1', pursued: false },
+      ],
+      source: 'live', snapshotDate: null,
+    });
+    await renderPage();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Priority 79');       // the badge that was missing before
+    expect(text).toContain('Fit 80');
+    expect(text).toContain('IT Services');        // sector tag beside the agency
+    expect(text).toContain('$1.0M');              // dollars, not $100.0M (cents bug would show that)
+  });
+
   it('Start working creates the contract and navigates into the Command Center', async () => {
     (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue(snapshotFeed);
     (factoryApi.startGovOpportunity as jest.Mock).mockResolvedValue({ deliveryProjectId: 'dp-gov-1', created: true });
