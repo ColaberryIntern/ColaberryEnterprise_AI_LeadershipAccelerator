@@ -93,8 +93,15 @@ export interface OrgChartResponse {
   generated_at: string;
 }
 
-export async function getOrgChart(): Promise<OrgChartResponse> {
-  const res = await api.get<OrgChartResponse>('/api/admin/workforce/org-chart');
+// Track B (2026-09-22) — additive `?scope=mine` boolean flag: when passed,
+// the response is scoped to the caller's own downstream (their own human
+// row, real AI Leadership, real AI Staff). Omitted entirely when not
+// requested (never sent as an empty `?scope=`), matching the backend's own
+// optional-only Zod validation.
+export async function getOrgChart(scope?: 'mine'): Promise<OrgChartResponse> {
+  const res = await api.get<OrgChartResponse>('/api/admin/workforce/org-chart', {
+    params: scope ? { scope } : undefined,
+  });
   return res.data;
 }
 

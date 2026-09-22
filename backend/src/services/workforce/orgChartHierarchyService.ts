@@ -1,7 +1,7 @@
 import { Op } from 'sequelize';
 import OrgMember from '../../models/OrgMember';
 import AiAgent from '../../models/AiAgent';
-import { NAMED_DEPARTMENTS } from './orgChartService';
+import { NAMED_DEPARTMENTS, OrgChartResponse } from './orgChartService';
 
 /**
  * orgChartHierarchyService — org-chart admin write actions (Org Chart v3,
@@ -138,4 +138,83 @@ export async function resolveHumanDownstreamAgents(orgMemberId: string): Promise
 export async function isAgentInHumanDownstream(orgMemberId: string, agentId: string): Promise<boolean> {
   const { leadership, staff } = await resolveHumanDownstreamAgents(orgMemberId);
   return leadership.some((a) => a.id === agentId) || staff.some((a) => a.id === agentId);
+}
+
+/**
+ * Org chart "My team" view (Track B, 2026-09-22) — scopes an already-built
+ * OrgChartResponse down to one human's own downstream, given the ids
+ * resolveHumanDownstreamAgents() already returned. Pure and synchronous: no
+ * new query, no re-derivation of the hierarchy itself — a post-hoc filter
+ * over the SAME response the unscoped path already builds, so the two paths
+ * can never silently drift on what "downstream" means.
+ *
+ * Real composition gotcha this function exists to get right (caught in
+ * plan-audit before any code was written): resolveHumanDownstreamAgents()'s
+ * own leadership/staff split is structural (level-1 direct reports vs.
+ * level-2+), but orgChartService.ts's getOrgChart() (Org Chart v5) re-splits
+ * chart.leadership/chart.staff by whether an agent HAS SUBORDINATES of its
+ * own — an individual-contributor agent reporting straight to a human with
+ * no subordinates is level-1 (so it's in downstream.leadership) but lands in
+ * chart.staff, not chart.leadership (Taiwo's real FinanceIntelligenceArchitect/
+ * StudentSuccessArchitect are exactly this shape). Filtering chart.leadership
+ * against downstream.leadership and chart.staff against downstream.staff as
+ * two SEPARATE comparisons would silently drop these agents from both output
+ * arrays. Building one combined id set and testing both chart arrays against
+ * it avoids that entirely.
+ */
+export function scopeOrgChartToHuman(
+  chart: OrgChartResponse,
+  human: OrgMember,
+  downstream: HumanDownstreamAgents,
+): OrgChartResponse {
+  const downstreamIds = new Set([...downstream.leadership, ...downstream.staff].map((a) => a.id));
+
+  return {
+    organization: chart.organization,
+    humans: chart.humans.filter((h) => h.id === human.id),
+    leadership: chart.leadership.filter((l) => downstreamIds.has(l.id)),
+    staff: chart.staff.filter((s) => downstreamIds.has(s.id)),
+    // An unresolved agent has no resolvable chain to any human by
+    // definition, so it can never belong to anyone's "my team" — always
+    // empty in the scoped view, never re-derived from the unscoped list.
+    unresolved: [],
+    generated_at: chart.generated_at,
+  };
+}
+
+/**
+ * Resolves "who is asking" for the "My team" toggle: the real org_members
+ * row matching the authenticated admin's own JWT-verified email — the exact
+ * one-line pattern already proven in agentManagerAuthMiddleware.ts's
+ * requireAgentManagerOrAdmin(), copied here rather than reused directly
+ * since that middleware's job is authorization (403 on a mismatch), and
+ * this one is a display filter with an honest-empty-state fallback instead.
+ * Returns null (never throws) when no org_members row matches — the caller
+ * decides how to render that as an honest empty state, not an error.
+ */
+export async function resolveDownstreamForAdminEmail(
+  email: string,
+): Promise<{ human: OrgMember; downstream: HumanDownstreamAgents } | null> {
+  const human = await OrgMember.findOne({ where: { email } });
+  if (!human) return null;
+  const downstream = await resolveHumanDownstreamAgents(human.id);
+  return { human, downstream };
+}
+
+/**
+ * The honest empty-arrays response for an admin whose email matches no real
+ * org_members row — same OrgChartResponse shape as every other path, never
+ * an error, never a fabricated placeholder. Built directly rather than by
+ * calling scopeOrgChartToHuman() with a fake human, since there is no real
+ * human row to scope from.
+ */
+export function emptyOrgChartResponse(chart: OrgChartResponse): OrgChartResponse {
+  return {
+    organization: chart.organization,
+    humans: [],
+    leadership: [],
+    staff: [],
+    unresolved: [],
+    generated_at: chart.generated_at,
+  };
 }

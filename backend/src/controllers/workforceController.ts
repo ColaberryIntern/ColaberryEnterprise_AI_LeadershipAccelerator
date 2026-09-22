@@ -12,7 +12,12 @@ import { listLiveAgents, listLiveAgentActivity } from '../services/workforce/liv
 import { listLiveAgentTimeline } from '../services/workforce/liveAgentsTimelineService';
 import { getOrgChart, NAMED_DEPARTMENTS } from '../services/workforce/orgChartService';
 import { workforceOrgChartResponseSchema } from '../schemas/workforceOrgChartSchema';
-import { updateOrgMemberTeam } from '../services/workforce/orgChartHierarchyService';
+import {
+  updateOrgMemberTeam,
+  resolveDownstreamForAdminEmail,
+  scopeOrgChartToHuman,
+  emptyOrgChartResponse,
+} from '../services/workforce/orgChartHierarchyService';
 import { assignTaskToAgent } from '../services/workforce/orgChartTaskAssignmentService';
 import { resetAgents } from '../services/workforce/agentResetService';
 import { reactivateAgent, AUTONOMY_LEVELS } from '../services/workforce/agentReactivationService';
@@ -93,22 +98,49 @@ export async function handleListLiveAgentTimeline(req: Request, res: Response, n
 
 /**
  * Org-chart hierarchy build (2026-08-19) — GET /api/admin/workforce/org-chart.
- * Real 3-tier tree (Human Employees -> AI Leadership -> AI Staff), no request
- * body/query to validate. Response shape checked against
- * workforceOrgChartResponseSchema before sending: fail loud (console.warn,
- * structured) in dev, log-and-continue in production — same pattern as
- * capePortalController.ts::handleGetSkillProfile().
+ * Real 3-tier tree (Human Employees -> AI Leadership -> AI Staff). Response
+ * shape checked against workforceOrgChartResponseSchema before sending: fail
+ * loud (console.warn, structured) in dev, log-and-continue in production —
+ * same pattern as capePortalController.ts::handleGetSkillProfile().
+ *
+ * Track B (2026-09-22) — additive `?scope=mine` boolean flag: when set, the
+ * response is scoped down to the caller's own downstream (themselves as the
+ * one human, their real AI Leadership, their real AI Staff). The unscoped
+ * path stays byte-for-byte identical to before this slice — every admin
+ * still sees the whole org chart by default; "my team" is a display filter
+ * on top, never a new authorization boundary. The caller's identity is
+ * ALWAYS derived server-side from the JWT-verified req.admin.email, never
+ * from a client-supplied id, deliberately avoiding the client-supplied-id
+ * vulnerability class agentManagerAuthMiddleware.ts's own header comment
+ * flags elsewhere in this codebase.
  */
-export async function handleOrgChart(_req: Request, res: Response, _next: NextFunction) {
+const orgChartQuerySchema = z.object({ scope: z.enum(['mine']).optional() });
+
+export async function handleOrgChart(req: Request, res: Response, _next: NextFunction) {
   try {
+    const { scope } = orgChartQuerySchema.parse(req.query);
     const chart = await getOrgChart();
+
+    let responseChart = chart;
+    if (scope === 'mine') {
+      const resolved = await resolveDownstreamForAdminEmail(req.admin!.email);
+      responseChart = resolved
+        ? scopeOrgChartToHuman(chart, resolved.human, resolved.downstream)
+        : emptyOrgChartResponse(chart);
+    }
+
     // Validates the WIRE shape (post-JSON-serialization - Dates become ISO strings),
     // not the raw service object, since that is what the frontend contract promises to
     // consume. A check against the raw object can pass while what is actually sent does
-    // not match, which reports success about a payload nobody looked at.
-    checkWireContract('workforce_org_chart_contract_violation', workforceOrgChartResponseSchema, chart);
-    res.json(chart);
+    // not match, which reports success about a payload nobody looked at. The scoped
+    // response is a strict subset of the same shape, so the same schema applies unchanged.
+    checkWireContract('workforce_org_chart_contract_violation', workforceOrgChartResponseSchema, responseChart);
+    res.json(responseChart);
   } catch (e: any) {
+    if (e instanceof z.ZodError) {
+      res.status(400).json({ error: 'Invalid input', issues: e.issues });
+      return;
+    }
     // Deliberately does NOT fall through to fail()'s next(err) path for an
     // unclassified error (real BREAK-phase finding, org-chart hierarchy build,
     // 2026-08-19): Express's own default error handler renders a full HTML
