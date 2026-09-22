@@ -1,0 +1,79 @@
+{
+  "slug": "the-conversation-happened-the-crm-needs-the-right-record",
+  "output": "cora-crm-record-walkthrough.mp4",
+  "slides": [
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "The Conversation Happened. The CRM Needs the Right Record.",
+      "subtitle": "An admissions team's calling platform, read on 21 September 2026",
+      "caption": "When a call ends, four things have to reach the CRM: the contact's fields, a task, the call in the conversation history, and the transcript as a staff note."
+    },
+    {
+      "kind": "title",
+      "seconds": 10,
+      "title": "Resolve the contact first.",
+      "subtitle": "A phone-shaped id is searched; the first hit wins.",
+      "caption": "A job can be handed a phone number where a contact id should be. It searches by the number on file, and three of the four write jobs refuse to write when nothing resolves."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 12,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/frontend/public/site-v2/shot-cora-crm-contact-drilldown.png",
+      "caption": "The operator's page for one contact, on a keyless local copy of the platform at the pinned commit with invented rows: one completed call, seven jobs, and the conversation-log write failed."
+    },
+    {
+      "kind": "title",
+      "seconds": 10,
+      "title": "A switch on every write. Two definitions of it.",
+      "subtitle": "Six sites read the dashboard flag; five read the environment.",
+      "caption": "On 21 September 2026 the database said live and every worker's environment said shadow, so five write paths returned a shadow response while the dashboard showed live."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 12,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/frontend/public/site-v2/shot-cora-crm-job-rows-sql.png",
+      "caption": "The proof rows beside the jobs, on a keyless local copy of the platform at the pinned commit with invented rows: a stored id for the task and the note, none for the summary, one failed write, and the retry pointing back at it."
+    },
+    {
+      "kind": "cards",
+      "seconds": 12,
+      "accent_index": 2,
+      "rows": [
+        [
+          "1,181 of 1,181",
+          "staff-note rows carry the CRM's message id, one per call, against 1,184 completed jobs"
+        ],
+        [
+          "0 of 2,453",
+          "task rows carry a task id; the row is written whether or not a task was requested"
+        ],
+        [
+          "0 of 1,099",
+          "completed conversation-log jobs wrote an evidence row; the token on file sits under another location id"
+        ]
+      ],
+      "caption": "Read from the platform's own tables on 21 September 2026: one path accounted for, one with no ids, one that completed 1,099 times with nothing written. No CRM was read."
+    },
+    {
+      "kind": "title",
+      "seconds": 11,
+      "title": "A failed write becomes something a person can retry.",
+      "subtitle": "An exception with the job id; Retry Now re-enqueues it.",
+      "caption": "Every failure is recorded with the call, the job and the error, so the dashboard can re-enqueue the same job. Nine such rows exist, because skips and shadow responses complete cleanly."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 12,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/frontend/public/site-v2/shot-cora-crm-exceptions-monitor.png",
+      "caption": "The product's own failure record, on a keyless local copy of the platform at the pinned commit with invented rows: the error, the job id and the call id a recovery needs; the retry was made through the product's API."
+    },
+    {
+      "kind": "title",
+      "seconds": 11,
+      "title": "What \"completed\" does not prove.",
+      "subtitle": "A row, a switch, a token, and a CRM that was not read.",
+      "caption": "A completed job covers a live write, a shadow response and a clean skip alike. The record states each limit as observed, and claims nothing about the CRM's own side."
+    }
+  ]
+}
