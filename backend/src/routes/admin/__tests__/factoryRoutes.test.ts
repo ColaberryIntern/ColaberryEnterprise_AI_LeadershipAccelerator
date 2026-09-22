@@ -29,6 +29,8 @@ const resolveGovContractsContainer = jest.fn();
 jest.mock('../../../scripts/lib/factoryDemoContainer', () => ({ resolveGovContractsContainer: (...a: any[]) => resolveGovContractsContainer(...a) }));
 const ingestProposal = jest.fn();
 jest.mock('../../../services/factory/proposal/proposalIngest', () => ({ ingestProposal: (...a: any[]) => ingestProposal(...a) }));
+const generateDecomposition = jest.fn();
+jest.mock('../../../services/factory/factoryDecomposeRun', () => ({ generateDecomposition: (...a: any[]) => generateDecomposition(...a) }));
 
 // Partial mocks: override the write functions but KEEP the real error classes (instanceof must work).
 const approveProcessDocument = jest.fn();
@@ -256,11 +258,42 @@ describe('POST /api/admin/factory/contract/:id/ingest-proposal — upload the so
   });
 });
 
+describe('POST /api/admin/factory/contract/:id/generate — run the generation engine', () => {
+  it('returns 200 accepted when the decomposition is gate-clean', async () => {
+    generateDecomposition.mockResolvedValue({ status: 'generated', errorCount: 0 });
+    const res = await request(app).post(`/api/admin/factory/contract/${UUID}/generate`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ accepted: true, errorCount: 0 });
+    expect(generateDecomposition).toHaveBeenCalledWith(UUID);
+  });
+
+  it('returns 422 with the issue count when the result is gate-dirty (never a fake pass)', async () => {
+    generateDecomposition.mockResolvedValue({ status: 'rejected', errorCount: 2, issues: [{ code: 'START' }, { code: 'END' }] });
+    const res = await request(app).post(`/api/admin/factory/contract/${UUID}/generate`);
+    expect(res.status).toBe(422);
+    expect(res.body.errorCount).toBe(2);
+    expect(Array.isArray(res.body.issues)).toBe(true);
+  });
+
+  it('returns 409 when the generation engine is off', async () => {
+    generateDecomposition.mockResolvedValue({ status: 'disabled' });
+    const res = await request(app).post(`/api/admin/factory/contract/${UUID}/generate`);
+    expect(res.status).toBe(409);
+    expect(res.body.generationDisabled).toBe(true);
+  });
+
+  it('400s an invalid delivery project id (never generates)', async () => {
+    const res = await request(app).post('/api/admin/factory/contract/not-a-uuid/generate');
+    expect(res.status).toBe(400);
+    expect(generateDecomposition).not.toHaveBeenCalled();
+  });
+});
+
 describe('route-auth — every route is section-gated (required CI lint)', () => {
   it('the source guards every route with requireSection(\'program\')', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'factoryRoutes.ts'), 'utf8');
     const guards = src.match(/requireSection\('program'\)/g) ?? [];
-    expect(guards.length).toBeGreaterThanOrEqual(8); // sample, contract, contracts, approve, request-changes, opportunities, start, ingest-proposal
+    expect(guards.length).toBeGreaterThanOrEqual(9); // sample, contract, contracts, approve, request-changes, opportunities, start, ingest-proposal, generate
   });
 });
 
