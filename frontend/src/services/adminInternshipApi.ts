@@ -9,7 +9,10 @@ export type QueueBucket =
   | 'interview_incomplete'
   | 'calls_failed'
   | 'approved_awaiting_documents'
-  | 'all_open';
+  | 'onboarding'
+  | 'active_interns'
+  | 'converted'
+  | 'in_review';
 
 export interface QueueRow {
   application_id: string;
