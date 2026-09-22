@@ -47,7 +47,8 @@ const router = Router();
 
 const BUCKETS: QueueBucket[] = [
   'awaiting_review', 'information_requested', 'waitlisted',
-  'interview_incomplete', 'calls_failed', 'approved_awaiting_documents', 'all_open',
+  'interview_incomplete', 'calls_failed', 'approved_awaiting_documents',
+  'onboarding', 'active_interns', 'converted', 'in_review',
 ];
 
 const queueQuerySchema = z.object({

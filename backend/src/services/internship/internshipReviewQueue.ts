@@ -35,7 +35,41 @@ import { orderedQuestions } from './internshipQuestionBank';
  * missing data and a bad student.
  */
 
-const OPEN_STATES_EXCLUDED = ['rejected', 'withdrawn', 'removed', 'completed'];
+/**
+ * Finished, one way or another. Never in any queue bucket.
+ */
+const CLOSED_STATES = ['rejected', 'withdrawn', 'removed', 'completed'];
+
+/**
+ * ── WHY "OPEN" STOPS AT THE DECISION ───────────────────────────────────────
+ *
+ * This used to have a single `all_open` bucket meaning "not closed", so an
+ * ACTIVE intern sat in the same list as someone who had not been interviewed
+ * yet. Ali, reading the queue on 2026-09-22: "Open makes me think they are
+ * still going through the enrollment process."
+ *
+ * He is right, and the fix is not a label. `in_review` now ends where the
+ * human decision is made. After `approved` the reviewer has decided and the
+ * remaining states are the applicant's own onboarding, so they get their own
+ * buckets and stop counting as work waiting on a reviewer.
+ *
+ * The four state buckets below PARTITION every non-closed state: each one
+ * appears in exactly one, and none is left without a home. A test asserts it,
+ * because the failure mode of hand-maintained lists like these is an
+ * application that quietly belongs to no bucket and is therefore invisible.
+ */
+const IN_REVIEW_STATES = [
+  'not_started',
+  'started',
+  'administrative_intake_complete',
+  'interview_channel_selected',
+  'interview_scheduled',
+  'interview_in_progress',
+  'interview_complete',
+  'under_review',
+  'information_requested',
+  'waitlisted',
+];
 
 export interface QueueRow {
   application_id: string;
@@ -59,15 +93,34 @@ export type QueueBucket =
   | 'interview_incomplete'
   | 'calls_failed'
   | 'approved_awaiting_documents'
-  | 'all_open';
+  | 'onboarding'
+  | 'active_interns'
+  | 'converted'
+  | 'in_review';
 
-const BUCKET_STATES: Record<Exclude<QueueBucket, 'calls_failed' | 'all_open'>, string[]> = {
+/**
+ * `calls_failed` and `converted` are cross-cutting (a session property and a
+ * flag), so they are not state buckets and take no part in the partition.
+ */
+export const BUCKET_STATES: Record<Exclude<QueueBucket, 'calls_failed' | 'converted'>, string[]> = {
+  in_review: IN_REVIEW_STATES,
   awaiting_review: ['under_review'],
   information_requested: ['information_requested'],
   waitlisted: ['waitlisted'],
   interview_incomplete: ['interview_channel_selected', 'interview_scheduled', 'interview_in_progress', 'interview_complete'],
   approved_awaiting_documents: ['approved', 'offer_letter_ready', 'signed_documents_uploaded'],
+  onboarding: ['documents_verified', 'payment_pending', 'activation_pending'],
+  active_interns: ['active', 'paused'],
 };
+
+/**
+ * The buckets that partition the non-closed states, in reading order. The
+ * others (`awaiting_review`, `waitlisted`, …) are narrower views INSIDE
+ * `in_review`, so they are deliberately not part of the partition.
+ */
+export const PARTITION_BUCKETS = ['in_review', 'approved_awaiting_documents', 'onboarding', 'active_interns'] as const;
+
+export { CLOSED_STATES };
 
 export async function queueCounts(): Promise<Record<QueueBucket, number>> {
   const counts = {} as Record<QueueBucket, number>;
@@ -88,8 +141,10 @@ export async function queueCounts(): Promise<Record<QueueBucket, number>> {
   });
   counts.calls_failed = failedSessions.length;
 
-  counts.all_open = await InternshipApplication.count({
-    where: { state: { [Op.notIn]: OPEN_STATES_EXCLUDED } },
+  // Converted existing interns, which is a flag rather than a state. Counted
+  // over the non-closed rows so a withdrawn conversion does not inflate it.
+  counts.converted = await InternshipApplication.count({
+    where: { converted_from_existing_intern: true, state: { [Op.notIn]: CLOSED_STATES } },
   });
 
   return counts;
@@ -102,8 +157,8 @@ export async function queue(params: {
 }): Promise<{ rows: QueueRow[]; total: number }> {
   let where: any;
 
-  if (params.bucket === 'all_open') {
-    where = { state: { [Op.notIn]: OPEN_STATES_EXCLUDED } };
+  if (params.bucket === 'converted') {
+    where = { converted_from_existing_intern: true, state: { [Op.notIn]: CLOSED_STATES } };
   } else if (params.bucket === 'calls_failed') {
     const failed = await InternshipInterviewSession.findAll({
       where: { channel: 'phone', status: 'failed' },
@@ -114,7 +169,7 @@ export async function queue(params: {
     // An empty IN () is a SQL error in some dialects and an always-false in
     // others. Short-circuit rather than depend on which.
     if (!ids.length) return { rows: [], total: 0 };
-    where = { id: { [Op.in]: ids }, state: { [Op.notIn]: OPEN_STATES_EXCLUDED } };
+    where = { id: { [Op.in]: ids }, state: { [Op.notIn]: CLOSED_STATES } };
   } else {
     where = { state: { [Op.in]: BUCKET_STATES[params.bucket] } };
   }
