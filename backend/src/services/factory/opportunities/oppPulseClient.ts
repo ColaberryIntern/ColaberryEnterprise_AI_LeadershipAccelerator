@@ -24,6 +24,18 @@ function snapshotFeed(): GovOpportunityFeed {
   return { opportunities: [...GOV_OPPORTUNITY_SNAPSHOT], source: 'snapshot', snapshotDate: SNAPSHOT_DATE };
 }
 
+/**
+ * A LIVE-path failure fell back to the snapshot. Structured, classified, and creds-free, so a configured
+ * live pull never fails silently (CLAUDE.md Observability). The unconfigured path does NOT log — that is a
+ * deliberate dark state, not a failure.
+ */
+function logDegraded(event: string, context: Record<string, unknown>): void {
+  console.error(JSON.stringify({
+    timestamp: new Date().toISOString(), level: 'warn', service: 'opp-pulse',
+    event, outcome: 'degraded', context,
+  }));
+}
+
 const toNum = (v: unknown): number | null =>
   v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? null : Number(v);
 
@@ -93,16 +105,16 @@ export async function fetchBestFitOpportunities(): Promise<GovOpportunityFeed> {
 
   try {
     const token = await login(base, email, password);
-    if (!token) return snapshotFeed();
+    if (!token) { logDegraded('opp_pulse_login_failed', { base }); return snapshotFeed(); }
 
     const listR = await fetchWithTimeout(`${base}${listPath}`, {
       headers: { Authorization: `Bearer ${token}` },
     }, TIMEOUT_MS);
-    if (!listR.ok) return snapshotFeed();
+    if (!listR.ok) { logDegraded('opp_pulse_list_http', { status: listR.status }); return snapshotFeed(); }
 
     const body: any = await listR.json().catch(() => null);
     const rows = Array.isArray(body) ? body : (body?.data ?? body?.opportunities ?? body?.items ?? null);
-    if (!Array.isArray(rows)) return snapshotFeed(); // unexpected shape → fall back
+    if (!Array.isArray(rows)) { logDegraded('opp_pulse_list_shape', {}); return snapshotFeed(); } // unexpected shape
 
     // A successful, well-shaped response IS the live truth — even if it maps to zero (the one-time mapping
     // verification when Ali configures the endpoint would catch a shape mismatch here).
@@ -110,7 +122,8 @@ export async function fetchBestFitOpportunities(): Promise<GovOpportunityFeed> {
       .map(mapOpportunity)
       .filter((o): o is GovOpportunity => o !== null);
     return { opportunities, source: 'live', snapshotDate: null };
-  } catch {
+  } catch (err: any) {
+    logDegraded('opp_pulse_error', { error_class: err?.constructor?.name ?? 'Error', message: err?.message });
     return snapshotFeed(); // any error → snapshot; never throw
   }
 }

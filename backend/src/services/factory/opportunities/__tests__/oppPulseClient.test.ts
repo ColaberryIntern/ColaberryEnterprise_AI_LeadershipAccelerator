@@ -14,11 +14,15 @@ const CONFIG = {
 };
 
 let fetchMock: jest.Mock;
+let errSpy: jest.SpyInstance;
 const clearConfig = () => { for (const k of Object.keys(CONFIG)) delete (process.env as any)[k]; };
 const configure = () => Object.assign(process.env, CONFIG);
 const res = (ok: boolean, body: any) => ({ ok, json: async () => body });
 
-beforeEach(() => { fetchMock = jest.fn(); (global as any).fetch = fetchMock; clearConfig(); });
+beforeEach(() => {
+  fetchMock = jest.fn(); (global as any).fetch = fetchMock; clearConfig();
+  errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+});
 afterEach(() => { clearConfig(); jest.restoreAllMocks(); });
 
 describe('fetchBestFitOpportunities — degrade-dark', () => {
@@ -28,6 +32,7 @@ describe('fetchBestFitOpportunities — degrade-dark', () => {
     expect(feed.snapshotDate).toBe(SNAPSHOT_DATE);
     expect(feed.opportunities).toHaveLength(GOV_OPPORTUNITY_SNAPSHOT.length);
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(errSpy).not.toHaveBeenCalled(); // unconfigured is a deliberate dark state, not a failure
   });
 
   it('maps a live response, tolerating field-name variants, when configured', async () => {
@@ -47,10 +52,12 @@ describe('fetchBestFitOpportunities — degrade-dark', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('https://op.test/api/v1/auth/login');
   });
 
-  it('falls back to the snapshot when login fails', async () => {
+  it('falls back to the snapshot when login fails, and LOGS the degradation (never silent on the live path)', async () => {
     configure();
     fetchMock.mockResolvedValue(res(false, {}));
     expect((await fetchBestFitOpportunities()).source).toBe('snapshot');
+    expect(errSpy).toHaveBeenCalled();
+    expect(String(errSpy.mock.calls[0][0])).toContain('opp_pulse_login_failed');
   });
 
   it('retries login once, then succeeds', async () => {
