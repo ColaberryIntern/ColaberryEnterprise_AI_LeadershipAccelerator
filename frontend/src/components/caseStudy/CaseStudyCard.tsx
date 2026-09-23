@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import CaseStudyVerificationBadge from './CaseStudyVerificationBadge';
-import { BUILT_BY_LABELS } from '../../config/caseStudySurfaces';
+import { BUILT_BY_LABELS, DELIVERY_CONTEXT_LABELS } from '../../config/caseStudySurfaces';
 import type { PublicCaseStudySummary } from '../../services/caseStudyPublicTypes';
 import './caseStudy.css';
 
@@ -168,6 +168,15 @@ export function CaseStudyCard({
           <span className="cbv2-cs-note">
             <span className="cbv2-cs-sr-only">Built by: </span>
             {BUILT_BY_LABELS[caseStudy.builtBy]}
+          </span>
+        ) : null}
+        {/* Optional on the wire (an older server omits it), so the lookup is
+            guarded twice: absent renders nothing, and an unrecognised value
+            renders nothing rather than `undefined` as text. */}
+        {caseStudy.deliveryContext && DELIVERY_CONTEXT_LABELS[caseStudy.deliveryContext] ? (
+          <span className="cbv2-cs-note" data-testid="case-study-delivery-context">
+            <span className="cbv2-cs-sr-only">Delivery context: </span>
+            {DELIVERY_CONTEXT_LABELS[caseStudy.deliveryContext]}
           </span>
         ) : null}
       </div>

@@ -16,6 +16,7 @@ import {
   buildCaseStudyTaxonomy,
   getCaseStudySurfaceProfile,
   isCandidatePubliclyVisible,
+  isGovernmentChapterCandidate,
   matchesCaseStudyFilters,
   mergeCaseStudyFilters,
   normalizeFacetSlug,
@@ -43,6 +44,10 @@ function candidate(over: Partial<CaseStudyFilterCandidate> = {}): CaseStudyFilte
     builtBy: 'colaberry_team',
     deliverables: ['architecture'],
     projectStatus: 'shipped',
+    // The default record is NOT on the Government chapter: neither field is set,
+    // which is exactly the state every record published before the chapter is in.
+    govCapabilities: [],
+    deliveryContext: null,
     verificationClass: 'verified',
     verificationMethod: 'repo',
     repoVisibilities: ['public', 'private'],
@@ -294,11 +299,67 @@ describe('pagination', () => {
 
 /* ----------------------------------------------------- taxonomy + ledger --- */
 
+describe('the Government chapter (gov_capability + delivery_context)', () => {
+  const onChapter = candidate({
+    slug: 'gov-1',
+    govCapabilities: ['ai-workforce-enablement', 'ai-strategy-readiness'],
+    deliveryContext: 'capability_demonstration',
+  });
+
+  it('a record published before the chapter existed is not on it', () => {
+    expect(isGovernmentChapterCandidate(candidate())).toBe(false);
+  });
+
+  it('needs BOTH a category and a delivery context - one without the other is unfinished review', () => {
+    expect(isGovernmentChapterCandidate(candidate({
+      govCapabilities: ['ai-strategy-readiness'], deliveryContext: null,
+    }))).toBe(false);
+    expect(isGovernmentChapterCandidate(candidate({
+      govCapabilities: [], deliveryContext: 'client_delivery',
+    }))).toBe(false);
+    expect(isGovernmentChapterCandidate(onChapter)).toBe(true);
+  });
+
+  it('gov_capability ORs within the axis and ignores a record with no mapping', () => {
+    expect(matchesCaseStudyFilters(onChapter, { govCapability: ['ai-strategy-readiness'] })).toBe(true);
+    expect(matchesCaseStudyFilters(onChapter, {
+      govCapability: ['rag-document-intelligence', 'ai-workforce-enablement'],
+    })).toBe(true);
+    expect(matchesCaseStudyFilters(onChapter, { govCapability: ['rag-document-intelligence'] })).toBe(false);
+    expect(matchesCaseStudyFilters(candidate(), { govCapability: ['ai-strategy-readiness'] })).toBe(false);
+  });
+
+  it('delivery_context is exact, and an unset context matches no value - a demonstration can never pass as past performance', () => {
+    expect(matchesCaseStudyFilters(onChapter, { deliveryContext: ['capability_demonstration'] })).toBe(true);
+    expect(matchesCaseStudyFilters(onChapter, { deliveryContext: ['client_delivery'] })).toBe(false);
+    expect(matchesCaseStudyFilters(candidate(), { deliveryContext: ['client_delivery'] })).toBe(false);
+  });
+
+  it('chapter facets are counted over chapter records only, so the menu matches the cards', () => {
+    const facets = buildCaseStudyTaxonomy([
+      onChapter,
+      candidate({ slug: 'gov-2', govCapabilities: ['ai-strategy-readiness'], deliveryContext: 'internal_platform' }),
+      // Mapped but unlabelled: off the chapter, so it must not inflate the count.
+      candidate({ slug: 'half', govCapabilities: ['ai-strategy-readiness'], deliveryContext: null }),
+      candidate({ slug: 'plain' }),
+    ]);
+    expect(facets.govCapabilities).toEqual([
+      { slug: 'ai-strategy-readiness', count: 2 },
+      { slug: 'ai-workforce-enablement', count: 1 },
+    ]);
+    expect(facets.deliveryContexts).toEqual([
+      { slug: 'capability_demonstration', count: 1 },
+      { slug: 'internal_platform', count: 1 },
+    ]);
+  });
+});
+
 describe('taxonomy and ledger are derived, never hardcoded', () => {
   it('an empty surface yields empty facets and a zero ledger', () => {
     expect(buildCaseStudyTaxonomy([])).toEqual({
       capabilities: [], industries: [], stack: [], programs: [],
       builtBy: [], verificationClasses: [],
+      govCapabilities: [], deliveryContexts: [],
     });
     expect(buildCaseStudyLedger([]))
       .toEqual({ projects: 0, verifiedOutcomes: 0, publicRepositories: 0, shipped: 0 });

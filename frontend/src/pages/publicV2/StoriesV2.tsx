@@ -24,16 +24,12 @@ import { trackCaseStudyCardClick, trackCaseStudyFilter } from '../../utils/caseS
 import StoriesStandardBand from './StoriesStandardBand';
 import StoriesCta from './StoriesCta';
 import StoriesFilterAside from './StoriesFilterAside';
+import StoriesGovernmentChapter from './StoriesGovernmentChapter';
 import StoriesSearch from './StoriesSearch';
 import StoriesWordCloud from './StoriesWordCloud';
 import {
-  MASTHEAD_FALLBACK,
-  WIDE_VIEWPORT,
-  countSentence,
-  emptyStateFor,
-  filterGroupsFrom,
-  hiddenVerificationCount,
-  withDefaultVerification,
+  MASTHEAD_FALLBACK, WIDE_VIEWPORT, countSentence, emptyStateFor,
+  filterGroupsFrom, hiddenVerificationCount, withDefaultVerification,
 } from './storiesV2Model';
 import type { IndexState } from './storiesV2Model';
 import './storiesV2.css';
@@ -281,6 +277,7 @@ function StoriesV2(): React.ReactElement {
 
       {/* The vocabulary before the cards that use it - see `StoriesStandardBand`. */}
       <StoriesStandardBand />
+      <StoriesGovernmentChapter facets={facets} value={filters} onToggle={onToggleFacet} />
 
       <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-stories-results-title">
         <div className="cbv2-wrap cbv2-stories">

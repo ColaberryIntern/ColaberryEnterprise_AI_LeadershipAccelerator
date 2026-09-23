@@ -13,6 +13,8 @@
 
 import type {
   CaseStudyBuiltByType,
+  CaseStudyDeliveryContext,
+  CaseStudyGovCapability,
   CaseStudyRepoVisibility,
   CaseStudyRoadmapStatus,
   CaseStudySectionKey,
@@ -55,6 +57,10 @@ export interface CaseStudyFilterInput {
   readonly verificationMethod?: readonly CaseStudyVerificationMethod[];
   readonly deliverable?: readonly string[];
   readonly projectStatus?: readonly CaseStudyRoadmapStatus[];
+  /** The Government chapter's axis: any of these procurement categories. */
+  readonly govCapability?: readonly CaseStudyGovCapability[];
+  /** Past performance vs. demonstration. A record with no context matches no value. */
+  readonly deliveryContext?: readonly CaseStudyDeliveryContext[];
   /**
    * An ADMIN-only facet. It filters on the source repositories' visibility and
    * must never be honoured on a public request — answering "show me the ones

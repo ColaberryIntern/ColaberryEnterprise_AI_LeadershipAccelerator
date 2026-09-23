@@ -1,5 +1,6 @@
-import { BUILT_BY_LABELS } from '../../config/caseStudySurfaces';
+import { BUILT_BY_LABELS, DELIVERY_CONTEXT_LABELS } from '../../config/caseStudySurfaces';
 import { humanizeFacetLabel } from './facetLabels';
+import { GOV_CAPABILITY_LABELS } from './storiesGovernment';
 
 /* Re-exported: this module is where callers already look for facet-group
    helpers, and the humaniser is one. Its home is `facetLabels.ts` so the
@@ -223,7 +224,8 @@ const toOptions = (facets: readonly PublicCaseStudyFacet[]): CaseStudyFilterOpti
   }));
 
 /**
- * The six facet groups, in the order spec section 22 lists them.
+ * The facet groups: spec section 22's six, in its order, then the Government
+ * chapter's two.
  *
  * Every group is built from the taxonomy the server derived from published
  * records, so a facet that matches nothing is never offered and an empty library
@@ -260,6 +262,27 @@ export function filterGroupsFrom(
       options: facets.verificationClasses.map((facet) => ({
         value: facet.slug,
         label: VERIFICATION_CLASS_LABELS[facet.slug],
+        count: facet.count,
+      })),
+    },
+    // The Government chapter's two closed vocabularies. Both are OPTIONAL on the
+    // wire (an older server omits them), and the component drops an empty group,
+    // so a server without the chapter simply produces a six-group sidebar.
+    {
+      field: 'govCapability',
+      legend: 'Government category',
+      options: (facets.govCapabilities ?? []).map((facet) => ({
+        value: facet.slug,
+        label: GOV_CAPABILITY_LABELS[facet.slug] ?? humanizeFacetLabel(facet.slug),
+        count: facet.count,
+      })),
+    },
+    {
+      field: 'deliveryContext',
+      legend: 'Delivery context',
+      options: (facets.deliveryContexts ?? []).map((facet) => ({
+        value: facet.slug,
+        label: DELIVERY_CONTEXT_LABELS[facet.slug] ?? humanizeFacetLabel(facet.slug),
         count: facet.count,
       })),
     },

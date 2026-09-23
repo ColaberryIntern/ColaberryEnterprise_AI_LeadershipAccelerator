@@ -1,5 +1,7 @@
 import type {
   CaseStudyBuiltByType,
+  CaseStudyDeliveryContext,
+  CaseStudyGovCapability,
   CaseStudySortKey,
   CaseStudyVerificationMethod,
   PublicCaseStudyDetailResponse,
@@ -132,6 +134,9 @@ export interface CaseStudyFilterState {
   readonly verification: readonly PublicVerificationClass[];
   readonly verificationMethod: readonly CaseStudyVerificationMethod[];
   readonly status: readonly string[];
+  /** The Government chapter's two axes. */
+  readonly govCapability: readonly CaseStudyGovCapability[];
+  readonly deliveryContext: readonly CaseStudyDeliveryContext[];
   /** Free text. Empty string means no search, so the field is never null. */
   readonly q: string;
   readonly featured: boolean | null;
@@ -150,6 +155,8 @@ export const EMPTY_CASE_STUDY_FILTERS: CaseStudyFilterState = Object.freeze({
   verification: [],
   verificationMethod: [],
   status: [],
+  govCapability: [],
+  deliveryContext: [],
   q: '',
   featured: null,
   sort: null,
@@ -169,6 +176,8 @@ const PARAM_OF: Record<keyof CaseStudyFilterState, string> = {
   verification: 'verification',
   verificationMethod: 'verification_method',
   status: 'status',
+  govCapability: 'gov_capability',
+  deliveryContext: 'delivery_context',
   q: 'q',
   featured: 'featured',
   sort: 'sort',
@@ -179,6 +188,7 @@ const PARAM_OF: Record<keyof CaseStudyFilterState, string> = {
 const LIST_FIELDS = [
   'capability', 'industry', 'stack', 'program', 'deliverable',
   'builtBy', 'verification', 'verificationMethod', 'status',
+  'govCapability', 'deliveryContext',
 ] as const;
 
 type ListField = (typeof LIST_FIELDS)[number];
@@ -240,6 +250,8 @@ export function parseCaseStudyFilters(search: string | URLSearchParams): CaseStu
     verification: lists.verification as PublicVerificationClass[],
     verificationMethod: lists.verificationMethod as CaseStudyVerificationMethod[],
     status: lists.status,
+    govCapability: lists.govCapability as CaseStudyGovCapability[],
+    deliveryContext: lists.deliveryContext as CaseStudyDeliveryContext[],
     q: params.get(PARAM_OF.q) ?? '',
     featured: featured === 'true' ? true : featured === 'false' ? false : null,
     sort: sort ? (sort as CaseStudySortKey) : null,
