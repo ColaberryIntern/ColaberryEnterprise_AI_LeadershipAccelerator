@@ -21,6 +21,7 @@ import caseStudyStudioRoutes from './admin/caseStudyStudioRoutes';
 import caseStudyMetricRoutes from './admin/caseStudyMetricRoutes';
 import explorerGrowthRoutes from './admin/explorerGrowthRoutes';
 import growthJourneyStatusRoutes from './admin/growthJourneyStatusRoutes';
+import growthJourneyReadRoutes from './admin/growthJourneyReadRoutes';
 import growthJourneyRoutes from './admin/growthJourneyRoutes';
 import campaignRoutes from './admin/campaignRoutes';
 import insightRoutes from './admin/insightRoutes';
@@ -200,6 +201,10 @@ router.use(explorerGrowthRoutes);
 // only from in front of it. Express matches in mount order; `adminRoutes.order.test.ts` pins
 // these two lines' relative position, and the status access suite proves the consequence.
 router.use(growthJourneyStatusRoutes);
+// The performance reads (T605) carry the master flag themselves, so their position relative to
+// `growthJourneyRoutes` does not matter - either mount answers 404 while the journey is dark. They
+// sit here so the three journey routers read in one place: status (always), performance, queues.
+router.use(growthJourneyReadRoutes);
 router.use(growthJourneyRoutes);
 router.use(campaignRoutes);
 router.use(insightRoutes);
