@@ -1,29 +1,64 @@
 /**
- * A government-contract opportunity as the Factory entry page needs it — the card fields the admin picks
- * from. The live source is the external Opportunity Pulse (Bonfire) feed; when that is not configured the
- * page shows GOV_OPPORTUNITY_SNAPSHOT, a curated in-app snapshot clearly labeled with its date. The `source`
- * on the feed says which it is, so a snapshot is never presented as live.
+ * A government-contract opportunity as the Factory entry page needs it — a DISCOVERED CANDIDATE that still
+ * requires qualification, never a recommended pursuit. This is the explicit browser allowlist: we map only
+ * these fields from the (much richer) upstream Opportunity Pulse row and never forward the whole response.
+ *
+ * Evidence discipline (Phase 1): the source's free-text overview/strategy/submissionRequirements/rawText are
+ * UNVERIFIED and are deliberately NOT surfaced here — they must not become confirmed requirements. A null
+ * vetVerdict means UNASSESSED (never approved). A value with no verified provenance is shown as unverified and
+ * never counted as forecast revenue. `enrichedAt` is freshness of enrichment, NOT proof the portal/amendments
+ * were re-checked.
  */
+export type PursuitStatus = 'none' | 'pursuing' | 'submitted' | 'declined';
+
+/** Opportunity Pulse's own vetting verdict. Shape is tolerant (OP owns it); `status` drives our review view. */
+export interface VetVerdict {
+  status?: string | null;
+  reason?: string | null;
+  method?: string | null;
+  [key: string]: unknown;
+}
+
+/** Provenance of estimatedValue. OP does not yet send a basis, so a live value defaults to 'unverified'. */
+export type ValueBasis = 'published_ceiling' | 'estimated' | 'unverified';
+
 export interface GovOpportunity {
   /** Bonfire opportunity id (the external id space — distinct from delivery_projects.id). */
   uuid: string;
+  /** Stable upstream source record id when provided (may be a title-derived ALIAS, not a dependable canonical key). */
+  externalId?: string | null;
   title: string;
   agency: string;
-  /** ISO date (YYYY-MM-DD) when the solicitation closes, or null if unknown. */
+  /** Display date (YYYY-MM-DD) derived from closeAt; null if unknown. */
   closeDate: string | null;
+  /** FULL source close timestamp, preserved verbatim. NOT silently shifted — OP flagged a tz-stripping parser. */
+  closeAt?: string | null;
   /** 0-100 best-fit score from Opportunity Pulse, or null. */
   fitScore: number | null;
   /** 0-100 priority score from Opportunity Pulse (the "priority" badge), or null/absent (snapshot omits it). */
   priorityScore?: number | null;
-  /** Estimated contract value in USD, or null. Note: the live Bonfire feed returns cents — the mapper converts. */
+  /** Estimated contract value in USD, or null. NEVER forecast revenue — see valueBasis. */
   estimatedValue: number | null;
+  /** Provenance of estimatedValue; absent/'unverified' => display "Value unverified". */
+  valueBasis?: ValueBasis | null;
   /** AI category / sector tag from Opportunity Pulse (e.g. "IT Services"), or null/absent. */
   category?: string | null;
-  /** Link to the agency's Bonfire portal / source, or null. */
+  /** Link to the agency's Bonfire portal / source, or null. Never invent a submission portal. */
   sourceUrl: string | null;
-  /** Whether it is already being pursued (live: pursuitStatus !== 'none'; snapshot: explicit flag). */
+  /** Full pursuit status, preserved (none|pursuing|submitted|declined). declined MUST stay distinct from none. */
+  pursuitStatus?: PursuitStatus | null;
+  /** Whether it is actively pursued — derived convenience (pursuing|submitted). Not a substitute for pursuitStatus. */
   pursued?: boolean;
+  /** OP's vetting verdict object, or null when present-but-unassessed. */
+  vetVerdict?: VetVerdict | null;
+  /** Distinguishes ABSENT (field not returned) from null (returned, unassessed). true => the field was present. */
+  vetVerdictPresent?: boolean;
+  /** Freshness signals — enrichment/attachment fetch times. Not proof the live portal was just checked. */
+  freshness?: { enrichedAt: string | null; attachmentsFetchedAt: string | null } | null;
 }
+
+/** Why a feed degraded to the snapshot: a deliberate dark state vs a configured feed that actually FAILED. */
+export type SnapshotReason = 'not_configured' | 'source_failed';
 
 export interface GovOpportunityFeed {
   opportunities: GovOpportunity[];
@@ -31,6 +66,8 @@ export interface GovOpportunityFeed {
   source: 'live' | 'snapshot';
   /** The snapshot's vintage (YYYY-MM-DD) when source === 'snapshot'; null when live. */
   snapshotDate: string | null;
+  /** When source==='snapshot': 'not_configured' (dark) vs 'source_failed' (configured but errored). null when live. */
+  snapshotReason?: SnapshotReason | null;
 }
 
 /**

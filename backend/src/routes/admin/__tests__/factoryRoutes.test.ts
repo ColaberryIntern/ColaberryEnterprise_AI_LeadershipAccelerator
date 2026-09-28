@@ -200,29 +200,27 @@ describe('GET /api/admin/factory/opportunities', () => {
   });
 });
 
-describe('POST /api/admin/factory/opportunities/:uuid/start — create the contract + open it', () => {
+describe('POST /api/admin/factory/opportunities/:uuid/start — PHASE 1 qualification guard (server-enforced)', () => {
   const uuid = '2e287828-9040-4948-98fe-a0250a5d66a5';
-  const container = { brandId: 'b1', org: { id: 'org-1' }, engagement: { id: 'eng-1', tenant_id: 'ten-1' } };
 
-  it('creates a government_public_sector contract (slug gov-<uuid>) + backfills, returns 201', async () => {
-    resolveGovContractsContainer.mockResolvedValue(container);
-    govProjFindOne.mockResolvedValue(null);
-    govProjCreate.mockResolvedValue({ id: 'dp-gov-1' });
+  it('BLOCKS a NEW government pursuit: 409 qualificationRequired, creates NO project and NO tracks', async () => {
+    govProjFindOne.mockResolvedValue(null); // no existing gov-<uuid> project
     const res = await request(app).post(`/api/admin/factory/opportunities/${uuid}/start`).send({ title: 'Agenda RFP', agency: 'Harris County' });
-    expect(res.status).toBe(201);
-    expect(res.body).toEqual({ deliveryProjectId: 'dp-gov-1', created: true });
-    expect(govProjCreate.mock.calls[0][0]).toMatchObject({ slug: `gov-${uuid}`, project_class: 'government_public_sector', name: 'Agenda RFP' });
-    expect(backfillUnassessedContract).toHaveBeenCalledWith('dp-gov-1');
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ qualificationRequired: true });
+    expect(res.body.error).toMatch(/qualification/i);
+    // the whole point: a direct POST cannot create a new government project or backfill tracks
+    expect(govProjCreate).not.toHaveBeenCalled();
+    expect(backfillUnassessedContract).not.toHaveBeenCalled();
   });
 
-  it('is idempotent: an existing gov-<uuid> project is reused (200, no create) and still backfills', async () => {
-    resolveGovContractsContainer.mockResolvedValue(container);
-    govProjFindOne.mockResolvedValue({ id: 'dp-gov-1' });
+  it('PRESERVES access to an EXISTING gov project: returns it (200, created:false), creates/changes nothing', async () => {
+    govProjFindOne.mockResolvedValue({ id: 'dp-gov-1' }); // one of the two existing government projects
     const res = await request(app).post(`/api/admin/factory/opportunities/${uuid}/start`).send({});
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ deliveryProjectId: 'dp-gov-1', created: false });
-    expect(govProjCreate).not.toHaveBeenCalled();
-    expect(backfillUnassessedContract).toHaveBeenCalledWith('dp-gov-1');
+    expect(govProjCreate).not.toHaveBeenCalled();          // never creates
+    expect(backfillUnassessedContract).not.toHaveBeenCalled(); // never re-backfills / mutates the existing project
   });
 
   it('400s an invalid opportunity id (never creates)', async () => {

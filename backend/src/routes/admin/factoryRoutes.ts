@@ -13,8 +13,9 @@ import { requestChanges, ReviewValidationError } from '../../services/factory/fa
 // Gov-entry (Phase 5 slice 1): the best-fit opportunity feed (degrade-dark) + create-on-pick. The backfill
 // + gov container lazy-load their models inside their functions, so these imports don't init the ORM here.
 import { fetchBestFitOpportunities } from '../../services/factory/opportunities/oppPulseClient';
-import { backfillUnassessedContract } from '../../services/factory/factoryBackfill';
-import { resolveGovContractsContainer } from '../../scripts/lib/factoryDemoContainer';
+// NOTE (Phase 1 gov-qualification guard): backfillUnassessedContract + resolveGovContractsContainer were used
+// by POST /opportunities/:uuid/start to create an unassessed shell. That auto-creation is temporarily disabled
+// until the Phase 2 qualification flow lands, so those imports were removed; Phase 2 restores the create path.
 // Slice 2: upload a solicitation zip -> deterministic source-cited requirements (no LLM).
 import multer from 'multer';
 import { ingestProposal } from '../../services/factory/proposal/proposalIngest';
@@ -223,11 +224,16 @@ const startBody = z.object({ title: z.string().max(300).optional(), agency: z.st
 const uuidParam = z.object({ uuid: z.string().uuid() });
 
 /**
- * POST /api/admin/factory/opportunities/:uuid/start — pick a gov opportunity and start working on it.
- * findOrCreate a `government_public_sector` delivery project on a deterministic slug (`gov-<uuid>`, so a
- * re-pick reuses it) under the Government Contracts container, then backfill an honest `unassessed` shell
- * (Phase 6) so the Command Center opens on it. The real requirements come from the proposal zip in a later
- * slice; for now the contract exists and renders as unassessed.
+ * POST /api/admin/factory/opportunities/:uuid/start — PHASE 1 TEMPORARY GUARD.
+ *
+ * Until the Phase 2 qualification record + approval flow lands, this route MUST NOT create a new government
+ * project or its tracks — an opportunity is a discovered candidate that still needs qualification. Enforced
+ * server-side (defense in depth, not just the UI):
+ *   - if the deterministic `gov-<uuid>` project ALREADY exists, return it (created:false) so the two existing
+ *     government projects stay navigable — this route neither creates nor modifies them here;
+ *   - otherwise return 409 { qualificationRequired: true } and create NOTHING (no project, no backfill).
+ * This is a narrowly-scoped control; Phase 2 replaces it with a usable research/qualification workflow. It does
+ * not touch commercial-client workflows, existing-project editing, or any other factory action.
  */
 router.post('/api/admin/factory/opportunities/:uuid/start', requireSection('program'), async (req: Request, res: Response) => {
   const p = uuidParam.safeParse(req.params);
@@ -238,23 +244,17 @@ router.post('/api/admin/factory/opportunities/:uuid/start', requireSection('prog
   const slug = `gov-${uuid}`;
   try {
     const { default: DeliveryProject } = await import('../../models/DeliveryProject');
-    const { brandId, org, engagement } = await resolveGovContractsContainer();
-
-    let created = false;
-    let project: any = await DeliveryProject.findOne({ where: { slug } });
-    if (!project) {
-      project = await DeliveryProject.create({
-        engagement_id: engagement.id, tenant_id: engagement.tenant_id, organization_id: org.id,
-        brand_id: brandId,
-        name: (b.data.title && b.data.title.trim()) ? b.data.title.trim() : `Government contract ${uuid}`,
-        slug, status: 'building', project_class: 'government_public_sector',
-        business_problem: b.data.agency ? `Government solicitation from ${b.data.agency}.` : 'Government contract opportunity.',
-      });
-      created = true;
+    const existing: any = await DeliveryProject.findOne({ where: { slug } });
+    if (existing) {
+      // Existing government projects remain reachable; Phase 1 creates and changes nothing here.
+      res.status(200).json({ deliveryProjectId: existing.id, created: false });
+      return;
     }
-
-    await backfillUnassessedContract(project.id); // honest unassessed shell so /contract/:id renders
-    res.status(created ? 201 : 200).json({ deliveryProjectId: project.id, created });
+    // No project yet → do NOT create an unqualified shell. Qualification (Phase 2) must come first.
+    res.status(409).json({
+      qualificationRequired: true,
+      error: 'Government pursuits now require qualification before a project is created. Review the source, then use the qualification step (coming in the next phase).',
+    });
   } catch (err: any) {
     logFail('factory_opportunity_start_failed', err, { uuid, slug });
     res.status(500).json({ error: 'Could not start this opportunity.' });

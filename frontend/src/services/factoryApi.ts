@@ -125,36 +125,57 @@ export async function requestFactoryChanges(deliveryProjectId: string, body: Req
   return data;
 }
 
-// ── Gov-entry (Phase 5 slice 1) ──────────────────────────────────────────────
+// ── Gov-entry (Phase 5 slice 1; qualification Phase 1) ───────────────────────
+export type PursuitStatus = 'none' | 'pursuing' | 'submitted' | 'declined';
+export interface VetVerdict { status?: string | null; reason?: string | null; method?: string | null; [k: string]: unknown; }
+export type ValueBasis = 'published_ceiling' | 'estimated' | 'unverified';
 export interface GovOpportunity {
   uuid: string;
+  /** Stable upstream source id when provided (may be a title-derived alias, not a canonical key). */
+  externalId?: string | null;
   title: string;
   agency: string;
+  /** Display date (YYYY-MM-DD). */
   closeDate: string | null;
+  /** Full source close timestamp — verify against the portal (OP flagged a tz-stripping parser). */
+  closeAt?: string | null;
   fitScore: number | null;
-  /** 0-100 priority score from Opportunity Pulse (the "priority" badge); absent on the snapshot. */
   priorityScore?: number | null;
   estimatedValue: number | null;
-  /** AI category / sector tag (e.g. "IT Services"); absent on the snapshot. */
+  /** Provenance of estimatedValue; absent/'unverified' => show "Value unverified", never forecast revenue. */
+  valueBasis?: ValueBasis | null;
   category?: string | null;
   sourceUrl: string | null;
+  /** Full pursuit status; 'declined' stays distinct from 'none'. */
+  pursuitStatus?: PursuitStatus | null;
   pursued?: boolean;
+  /** OP's vetting verdict object, or null when present-but-unassessed. */
+  vetVerdict?: VetVerdict | null;
+  /** true => the verdict field was returned (even if null); false => absent. null verdict = unassessed. */
+  vetVerdictPresent?: boolean;
+  freshness?: { enrichedAt: string | null; attachmentsFetchedAt: string | null } | null;
 }
+export type SnapshotReason = 'not_configured' | 'source_failed';
 export interface GovOpportunityFeed {
   opportunities: GovOpportunity[];
   /** 'live' = pulled from Opportunity Pulse; 'snapshot' = the labeled in-app fallback. */
   source: 'live' | 'snapshot';
   snapshotDate: string | null;
+  /** When snapshot: 'not_configured' (dark) vs 'source_failed' (configured feed that errored). */
+  snapshotReason?: SnapshotReason | null;
 }
 export interface StartOpportunityResult { deliveryProjectId: string; created: boolean; }
 
-/** The ranked best-fit government proposals (live from Opportunity Pulse, or the labeled snapshot). */
+/** The discovered government candidates (live from Opportunity Pulse, or the labeled snapshot). */
 export async function listGovOpportunities(): Promise<GovOpportunityFeed> {
   const { data } = await api.get<GovOpportunityFeed>('/api/admin/factory/opportunities');
   return data;
 }
 
-/** Pick a gov opportunity and start it — creates the contract (unassessed shell), returns its id. */
+/**
+ * Phase 1: reachability of an EXISTING gov project only. New pursuits now require qualification, so the server
+ * returns 409 { qualificationRequired } and creates nothing; the entry page no longer offers a create action.
+ */
 export async function startGovOpportunity(uuid: string, body: { title?: string; agency?: string } = {}): Promise<StartOpportunityResult> {
   const { data } = await api.post<StartOpportunityResult>(`/api/admin/factory/opportunities/${encodeURIComponent(uuid)}/start`, body);
   return data;
