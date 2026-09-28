@@ -11,7 +11,7 @@ jest.mock('../../../models/InboxVip', () => ({ findOne: jest.fn() }));
 jest.mock('../../../models/InboxRule', () => ({ findAll: jest.fn() }));
 jest.mock('../senderHistory', () => ({ countPriorEmailsFromSender: jest.fn() }));
 
-import { isBasecampDirectMention, isBasecampDirectComment, isBasecampSender, isSlackSender, evaluateHardRules } from '../hardRuleEngine';
+import { isBasecampDirectMention, isBasecampDirectComment, isBasecampSender, isSlackSender, isSchoolNotificationSender, isAccountSecurityMail, evaluateHardRules } from '../hardRuleEngine';
 import InboxVip from '../../../models/InboxVip';
 import InboxRule from '../../../models/InboxRule';
 
@@ -342,5 +342,164 @@ describe('evaluateHardRules — Cora support inbox rule (cora_0c)', () => {
     } finally {
       process.env.CORA_SUPPORT_ADDRESS = original;
     }
+  });
+});
+
+/**
+ * Account-security and K-12 school routing (account_security_0g / school_0h).
+ *
+ * Every subject and sender below is copied from a row in inbox_emails that
+ * production had already classified AUTOMATION, so each assertion pins a real
+ * archived message rather than an invented one. The engine call is what is
+ * asserted, not the helper alone, because the bug these fix was one of rule
+ * ORDER: the helpers would have matched all along, but sections 4 and 5 were
+ * reached first.
+ */
+describe('isAccountSecurityMail', () => {
+  it.each([
+    ['Wylie ISD Connect: Reset Password'],
+    ['Your Hetzner Verification Code is 469164'],
+    ['Your verification code'],
+    ['Reset Password OTP'],
+    ['Your HeyGen Magic Link'],
+    ['Portal Verification Code'],
+    ['994253 is your verification code'],
+    ['Su codigo de verificacion(Verification Code)'],
+    ['Verify your Opportunity Pulse account'],
+  ])('matches the archived security subject %s', (subject) => {
+    expect(isAccountSecurityMail(subject)).toBe(true);
+  });
+
+  it.each([
+    ['Verify your subscription preferences to keep getting our newsletter'],
+    ['September 25 Parent Newsletter'],
+    ['Book Fair is Coming!  - Volunteers Needed'],
+    ['Your order has shipped'],
+    ['Password protection tips for your small business'],
+  ])('does not match ordinary bulk mail %s', (subject) => {
+    expect(isAccountSecurityMail(subject)).toBe(false);
+  });
+
+  it('handles an absent subject without throwing', () => {
+    expect(isAccountSecurityMail(null)).toBe(false);
+    expect(isAccountSecurityMail(undefined)).toBe(false);
+    expect(isAccountSecurityMail('   ')).toBe(false);
+  });
+});
+
+describe('isSchoolNotificationSender', () => {
+  it('matches the rotating ParentSquare per-message sender', () => {
+    expect(isSchoolNotificationSender('donotreply+277399fa-d6cf-5b23-b1ab-d6c6325a458c@parentsquare.com')).toBe(true);
+    expect(isSchoolNotificationSender('pleasereply+chat_thread-352795651@parentsquare.com')).toBe(true);
+  });
+
+  it('matches the district sender in both stored spellings', () => {
+    // Production stores this address both bare and angle-bracketed.
+    expect(isSchoolNotificationSender('do.not.reply@WylieISD.net')).toBe(true);
+    expect(isSchoolNotificationSender('<do.not.reply@wylieisd.net>')).toBe(true);
+  });
+
+  it('does not match a look-alike domain', () => {
+    expect(isSchoolNotificationSender('phish@notparentsquare.com')).toBe(false);
+    expect(isSchoolNotificationSender('x@parentsquare.com.evil.io')).toBe(false);
+  });
+
+  it('handles an absent address without throwing', () => {
+    expect(isSchoolNotificationSender(null)).toBe(false);
+    expect(isSchoolNotificationSender(undefined)).toBe(false);
+  });
+});
+
+describe('evaluateHardRules - account security and school mail', () => {
+  const schoolEmail = (overrides: Record<string, any> = {}) => ({
+    id: 'email-school',
+    from_address: 'donotreply+277399fa-d6cf-5b23-b1ab-d6c6325a458c@parentsquare.com',
+    from_name: 'Wylie ISD Connect',
+    to_addresses: ['ali_muwwakkil@hotmail.com'],
+    cc_addresses: [],
+    subject: 'Sep 16, 2026 Digest: 2 new messages from Watkins Elementary today',
+    body_text: 'Watkins Elementary Daily digest created for Alimayu Muwwakkil.',
+    headers: { 'List-Unsubscribe': '<https://www.parentsquare.com/unsubscribe/x>' },
+    ...overrides,
+  });
+
+  it('routes the password reset Ali was waiting on to the inbox (was AUTOMATION: sent from noreply address)', async () => {
+    const result = await evaluateHardRules(schoolEmail({ subject: 'Wylie ISD Connect: Reset Password' }));
+    expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'account_security_0g', classified_by: 'hard_rule' });
+  });
+
+  it('routes a Hetzner verification code to the inbox - an unrelated sender, same archived class', async () => {
+    const result = await evaluateHardRules(
+      schoolEmail({ from_address: 'noreply@hetzner.com', subject: 'Your Hetzner Verification Code is 469164', headers: {} })
+    );
+    expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'account_security_0g' });
+  });
+
+  it('routes a school digest to the inbox whether or not a priority keyword happens to appear', async () => {
+    // The Sep 24 digest reached the inbox only because "field trip" was in its
+    // body; the Sep 16 digest, same sender and kind, was archived without it.
+    const withKeyword = await evaluateHardRules(schoolEmail({ body_text: 'Field trip TOMORROW!' }));
+    const withoutKeyword = await evaluateHardRules(schoolEmail({ body_text: 'Kona Ice orders close tonight.' }));
+    expect(withKeyword.state).toBe('INBOX');
+    expect(withoutKeyword).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'school_0h' });
+  });
+
+  it('routes an absence notification and a grade update to the inbox', async () => {
+    for (const subject of ['Wylie ISD Absence Notification | Addison', 'Wylie ISD | Weekly Grade Update for Addison']) {
+      const result = await evaluateHardRules(schoolEmail({ subject, body_text: 'See Skyward Family Access.' }));
+      expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'school_0h' });
+    }
+  });
+
+  it('beats the List-Unsubscribe and noreply rules that archived these (rule-order regression guard)', async () => {
+    const result = await evaluateHardRules(schoolEmail());
+    expect(result.state).toBe('INBOX');
+    expect(result.reason).not.toMatch(/List-Unsubscribe|noreply address/);
+  });
+
+  it('records that the message arrived over the Hotmail forward', async () => {
+    const result = await evaluateHardRules(schoolEmail());
+    expect(result.forwarded_from_hotmail).toBe(true);
+  });
+
+  it('leaves unrelated noreply bulk mail archived', async () => {
+    const result = await evaluateHardRules(
+      schoolEmail({ from_address: 'noreply@marketing.example.com', subject: 'Our fall sale ends tonight', body_text: 'Shop now.' })
+    );
+    expect(result).toMatchObject({ matched: true, state: 'AUTOMATION' });
+  });
+
+  it('is idempotent: the same email evaluates to the same result twice', async () => {
+    const a = await evaluateHardRules(schoolEmail());
+    const b = await evaluateHardRules(schoolEmail());
+    expect(a).toEqual(b);
+  });
+});
+
+describe('evaluateHardRules - priority keyword separators', () => {
+  const keywordEmail = (body: string) => ({
+    id: 'email-keyword',
+    from_address: 'teacher@example.com',
+    from_name: 'A Teacher',
+    to_addresses: ['ali@colaberry.com'],
+    cc_addresses: [],
+    subject: 'A note home',
+    body_text: body,
+    headers: {},
+  });
+
+  it.each([
+    ['parent teacher conference is Monday'],
+    ['Parent/Teacher conference is Monday'],
+    ['parent-teacher conference is Monday'],
+  ])('matches %s so punctuation cannot hide a conference notice', async (body) => {
+    const result = await evaluateHardRules(keywordEmail(body));
+    expect(result).toMatchObject({ matched: true, state: 'INBOX' });
+    expect(result.reason).toMatch(/priority keyword: parent teacher/);
+  });
+
+  it('still requires a word boundary, so a substring does not fire', async () => {
+    const result = await evaluateHardRules(keywordEmail('The transplantation study is attached.'));
+    expect(result.state).not.toBe('INBOX');
   });
 });
