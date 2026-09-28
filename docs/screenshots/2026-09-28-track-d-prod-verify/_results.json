@@ -1,0 +1,40 @@
+{
+  "consoleErrors": [],
+  "pageErrors": [],
+  "checks": {
+    "httpStatus": 200,
+    "defaultActiveTab": "Overview",
+    "clickedLiveStatusTab": true,
+    "operationalStateCardFound": true,
+    "operationalStateBodyText": "live_status is \"online\" (real-time presence)",
+    "operationalStateFullCardText": "Operational state Workinglive_status is \"online\" (real-time presence)",
+    "attentionCardFound": true,
+    "attentionCardText": "Attention RequiredEvery item cites the real evidence it's derived from.InfoAuthorization enforcement is partial14 of 35 authorization checks in the last 30 days were under real enforcement; the rest were shadow-only.authorization_summary: total=35, enforced_count=14",
+    "currentWorkCardFound": true,
+    "currentWorkText": "Current WorkCurrent work is not yet instrumented. No concept of \"the task this agent is doing right now\" is persisted in the backend today — this is intentionally not inferred from unrelated recent events.",
+    "recentOutcomeCardFound": true,
+    "recentOutcomeText": "Recent OutcomeThe most recent verified outcome, not just recent activity.What changedTicket #a18cae1f-15d7-4316-931f-f095fd30043c — Reese autonomous outreach — inactivity (SANZHARKHAN ZHANAIDAR)VerificationDone — ticket closedUpdated8d ago",
+    "metricsRowFound": true,
+    "metricsTileCount": 3,
+    "metricsText": "Cost (30d)$0.03Real, ai_events sumNext scheduled actionNoneOpen items needing you0Pending approvals, from the manager inbox",
+    "opStateCardComputedStyle": {
+      "border": "1px solid rgb(228, 229, 224)",
+      "borderWidth": "1px",
+      "boxShadow": "rgba(23, 53, 44, 0.06) 0px 8px 24px 0px",
+      "background": "rgb(255, 255, 255)"
+    },
+    "toggledDarkMode": true,
+    "shellHasDarkClass": 1,
+    "opStateCardComputedStyleDark": {
+      "boxShadow": "rgba(0, 0, 0, 0.35) 0px 8px 24px 0px",
+      "background": "rgb(24, 49, 42)"
+    },
+    "backToAdminHref": "/admin/workforce",
+    "clickedWorkTab": true,
+    "workTabBodyLength": 3725,
+    "clickedPerformanceSettingsTab": true,
+    "perfTabBodyLength": 1062,
+    "unauthHttpStatus": 200,
+    "unauthFinalUrl": "https://enterprise.colaberry.ai/admin/login"
+  }
+}
