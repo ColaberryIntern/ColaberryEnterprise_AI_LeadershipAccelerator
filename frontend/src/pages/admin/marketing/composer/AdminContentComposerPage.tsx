@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PageHeader, SectionCard } from '../../../../components/admin/shell';
 import { listBrands, type Brand } from '../../../../services/adminBrandApi';
 import api from '../../../../utils/api';
@@ -12,6 +12,12 @@ import ComposerPreview from './ComposerPreview';
 import ComposerConfirmation from './ComposerConfirmation';
 import ComposerPublishing from './ComposerPublishing';
 import { fromCentralInput, toCentralInput } from '../centralTime';
+import ComposerStepRail from './ComposerStepRail';
+import ComposerSummaryRail from './ComposerSummaryRail';
+import {
+  blockedReason, firstOpenStep, isStepKey, nextOpenStep, previousStep, stepDefinition, stepStates,
+  type StepFacts, type StepKey,
+} from './composerSteps';
 
 /**
  * The marketing composer (spec 8.1). One page, five sections, in the order the work happens:
@@ -35,6 +41,11 @@ function trimPoll(poll: NonNullable<SetupValues['poll']>): NonNullable<SetupValu
 
 const EMPTY_SETUP: SetupValues = { brand_id: '', campaign_id: '', title: '', destination_url: '', canonical_body: '', content_type: 'text', is_paid: false, has_offer: false, poll: null };
 
+/** The next step in order, blocked or not - so the nav can say WHY there is no Next button. */
+const STEP_AFTER: Record<StepKey, StepKey | null> = {
+  setup: 'channels', channels: 'preview', preview: 'confirm', confirm: 'publishing', publishing: null,
+};
+
 export default function AdminContentComposerPage() {
   const { id: routeId } = useParams<{ id?: string }>();
   const navigate = useNavigate();
@@ -56,6 +67,24 @@ export default function AdminContentComposerPage() {
   const [scheduledFor, setScheduledFor] = useState<string>('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'success' | 'danger' | 'info'; text: string } | null>(null);
+
+  /**
+   * Which step is on screen. It lives in the URL (`?step=confirm`) so a reload, a bookmark, or a
+   * link in a message all land where they say they do - and so "open the composer at Confirm"
+   * from another page is a link rather than a click path.
+   */
+  const [params, setParams] = useSearchParams();
+  const [step, setStep] = useState<StepKey>(() => (isStepKey(params.get('step')) ? params.get('step') as StepKey : 'setup'));
+  // Set once, when an existing draft first loads: a half-finished post opens where the work is,
+  // not back at Setup. A step named in the URL always wins.
+  const landed = useRef(false);
+
+  const goToStep = useCallback((next: StepKey) => {
+    setStep(next);
+    const q = new URLSearchParams(params);
+    q.set('step', next);
+    setParams(q, { replace: true });
+  }, [params, setParams]);
 
   const say = (tone: 'success' | 'danger' | 'info', text: string) => setNotice({ tone, text });
   const fail = (err: unknown, fallback: string) => say('danger', composer.errorMessage(err, fallback));
@@ -267,6 +296,29 @@ export default function AdminContentComposerPage() {
     say(r.halted ? 'danger' : 'info', r.halted ? `Queue halted: ${r.haltReason}.` : `Queue ran: ${r.published} published, ${r.retried} retrying, ${r.failed + r.deadLettered} failed.`);
   }, 'The queue could not be run.');
 
+  /** What the rail reads. Plain values, so the rules stay testable away from this page. */
+  const facts: StepFacts = {
+    hasItem: Boolean(item),
+    selectedCount: selected.length,
+    variantCount: variants.length,
+    validation: confirmation ? confirmation.validation : null,
+    approved: confirmation?.approval.humanApproved ?? false,
+    jobCount: jobs.length,
+    itemStatus: item?.status ?? null,
+  };
+
+  useEffect(() => {
+    if (landed.current || !item) return;
+    landed.current = true;
+    if (!isStepKey(params.get('step'))) goToStep(firstOpenStep(facts));
+    // facts is rebuilt every render; this runs once, on the first render that has an item.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item, params, goToStep]);
+
+  const back = previousStep(step);
+  const forward = nextOpenStep(step, facts);
+  const nextKey = STEP_AFTER[step];
+
   return (
     <div className="admin-page">
       <PageHeader
@@ -281,60 +333,93 @@ export default function AdminContentComposerPage() {
         <div className={`alert alert-${notice.tone} py-2 small`} role="status">{notice.text}</div>
       )}
 
-      <SectionCard title="1. Setup" subtitle="Brand, campaign, landing page and the canonical message." icon="settings-3-line">
-        <ComposerSetup values={setup} brands={brands} campaigns={campaigns} locked={Boolean(item)} busy={busy} onChange={setSetup} onSubmit={saveSetup} onAssignSlug={assignSlug} onDraftMessage={draftMessage} draftNotes={draftNotes} />
-      </SectionCard>
+      <ComposerStepRail states={stepStates(facts, step)} facts={facts} onGo={goToStep} />
 
-      <SectionCard title="2. Channels and variants" subtitle="Pick networks, generate, edit, add tracked links, validate." icon="share-line">
-        <div className="d-flex flex-wrap gap-3 mb-3">
-          {providers.map((p) => (
-            <label key={p.provider} className="form-check small">
-              <input className="form-check-input" type="checkbox" disabled={!item || busy}
-                checked={selected.includes(p.provider)}
-                onChange={(e) => setSelected((s) => e.target.checked ? [...s, p.provider] : s.filter((x) => x !== p.provider))} />
-              <span className="form-check-label ms-1">{p.displayName}{p.mode === 'handoff' ? ' (handoff)' : ''}</span>
-            </label>
-          ))}
-        </div>
-        <ComposerMedia media={media} busy={busy} enabled={Boolean(item)} upload={upload} onAttach={attachMedia} onDetach={detachMedia} />
-        <div className="d-flex flex-wrap gap-2 mb-3">
-          <button type="button" className="btn btn-sm btn-primary" disabled={!item || busy || selected.length === 0} onClick={generate}>Generate variants</button>
-          <button type="button" className="btn btn-sm btn-outline-primary" disabled={!item || busy || variants.length === 0 || !setup.destination_url} onClick={makeLinks}>Generate tracked links</button>
-          <button type="button" className="btn btn-sm btn-outline-dark" disabled={!item || busy || variants.length === 0} onClick={validate}>Validate</button>
-        </div>
-        <ComposerVariants variants={variants} providers={providers} links={links} problems={problems} busy={busy} onSave={saveVariant} onRevert={revertVariant} />
-      </SectionCard>
+      <div className="row g-3">
+        <div className="col-12 col-xl-8">
+        {step === 'setup' && (
+        <SectionCard title="1. Setup" subtitle="Brand, campaign, landing page and the canonical message." icon="settings-3-line">
+          <ComposerSetup values={setup} brands={brands} campaigns={campaigns} locked={Boolean(item)} busy={busy} onChange={setSetup} onSubmit={saveSetup} onAssignSlug={assignSlug} onDraftMessage={draftMessage} draftNotes={draftNotes} />
+        </SectionCard>
+        )}
 
-      <SectionCard title="3. Preview" subtitle="Desktop and mobile, per network." icon="eye-line">
-        <ComposerPreview variants={variants} providers={providers} links={links} mediaCount={confirmation?.assets.length ?? 0} brandName={brand?.name ?? 'Brand'} poll={setup.content_type === 'poll' ? setup.poll : null} />
-      </SectionCard>
+        {step === 'channels' && (
+        <SectionCard title="2. Channels and variants" subtitle="Pick networks, generate, edit, add tracked links, validate." icon="share-line">
+          <div className="d-flex flex-wrap gap-3 mb-3">
+            {providers.map((p) => (
+              <label key={p.provider} className="form-check small">
+                <input className="form-check-input" type="checkbox" disabled={!item || busy}
+                  checked={selected.includes(p.provider)}
+                  onChange={(e) => setSelected((s) => e.target.checked ? [...s, p.provider] : s.filter((x) => x !== p.provider))} />
+                <span className="form-check-label ms-1">{p.displayName}{p.mode === 'handoff' ? ' (handoff)' : ''}</span>
+              </label>
+            ))}
+          </div>
+          <ComposerMedia media={media} busy={busy} enabled={Boolean(item)} upload={upload} onAttach={attachMedia} onDetach={detachMedia} />
+          <div className="d-flex flex-wrap gap-2 mb-3">
+            <button type="button" className="btn btn-sm btn-primary" disabled={!item || busy || selected.length === 0} onClick={generate}>Generate variants</button>
+            <button type="button" className="btn btn-sm btn-outline-primary" disabled={!item || busy || variants.length === 0 || !setup.destination_url} onClick={makeLinks}>Generate tracked links</button>
+            <button type="button" className="btn btn-sm btn-outline-dark" disabled={!item || busy || variants.length === 0} onClick={validate}>Validate</button>
+          </div>
+          <ComposerVariants variants={variants} providers={providers} links={links} problems={problems} busy={busy} onSave={saveVariant} onRevert={revertVariant} />
+        </SectionCard>
+        )}
 
-      <SectionCard title="4. Confirm" subtitle="What will go out, where, and when (Central time)." icon="checkbox-circle-line">
-        {item && (
-          <div className="d-flex flex-wrap gap-2 align-items-end mb-3">
-            <div>
-              <label className="form-label small mb-1" htmlFor="composer-scheduled-for">Scheduled time (Central)</label>
-              <input id="composer-scheduled-for" type="datetime-local" className="form-control form-control-sm" value={scheduledFor} disabled={busy} onChange={(e) => setScheduledFor(e.target.value)} />
+        {step === 'preview' && (
+        <SectionCard title="3. Preview" subtitle="Desktop and mobile, per network." icon="eye-line">
+          <ComposerPreview variants={variants} providers={providers} links={links} mediaCount={confirmation?.assets.length ?? 0} brandName={brand?.name ?? 'Brand'} poll={setup.content_type === 'poll' ? setup.poll : null} />
+        </SectionCard>
+        )}
+
+        {step === 'confirm' && (
+        <SectionCard title="4. Confirm" subtitle="What will go out, where, and when (Central time)." icon="checkbox-circle-line">
+          {item && (
+            <div className="d-flex flex-wrap gap-2 align-items-end mb-3">
+              <div>
+                <label className="form-label small mb-1" htmlFor="composer-scheduled-for">Scheduled time (Central)</label>
+                <input id="composer-scheduled-for" type="datetime-local" className="form-control form-control-sm" value={scheduledFor} disabled={busy} onChange={(e) => setScheduledFor(e.target.value)} />
+              </div>
+              <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={setTime}>Set time</button>
             </div>
-            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={setTime}>Set time</button>
-          </div>
+          )}
+          {confirmation
+            ? <ComposerConfirmation summary={confirmation} busy={busy} onAction={act} />
+            : <p className="text-muted mb-0">Create the draft to see the confirmation.</p>}
+          {item?.status === 'ready_for_review' && (
+            <div className="d-flex flex-wrap gap-2 align-items-center mt-3 pt-3 border-top" data-testid="reviewer-actions">
+              <span className="small text-muted">Reviewer:</span>
+              <button type="button" className="btn btn-sm btn-success" disabled={busy} onClick={() => decide('approved')}>Approve</button>
+              <button type="button" className="btn btn-sm btn-outline-warning" disabled={busy} onClick={() => decide('changes_requested')}>Request changes</button>
+              <button type="button" className="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => decide('rejected')}>Reject</button>
+            </div>
+          )}
+        </SectionCard>
         )}
-        {confirmation
-          ? <ComposerConfirmation summary={confirmation} busy={busy} onAction={act} />
-          : <p className="text-muted mb-0">Create the draft to see the confirmation.</p>}
-        {item?.status === 'ready_for_review' && (
-          <div className="d-flex flex-wrap gap-2 align-items-center mt-3 pt-3 border-top" data-testid="reviewer-actions">
-            <span className="small text-muted">Reviewer:</span>
-            <button type="button" className="btn btn-sm btn-success" disabled={busy} onClick={() => decide('approved')}>Approve</button>
-            <button type="button" className="btn btn-sm btn-outline-warning" disabled={busy} onClick={() => decide('changes_requested')}>Request changes</button>
-            <button type="button" className="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => decide('rejected')}>Reject</button>
-          </div>
-        )}
-      </SectionCard>
 
-      <SectionCard title="5. Publishing" subtitle="The queue per network, handoff packages to post by hand, and receipts." icon="send-plane-line">
-        <ComposerPublishing jobs={jobs} publications={publications} busy={busy} onRetry={retry} onCancel={cancel} onCompleteHandoff={complete} onRunNow={runNow} />
-      </SectionCard>
+        {step === 'publishing' && (
+        <SectionCard title="5. Publishing" subtitle="The queue per network, handoff packages to post by hand, and receipts." icon="send-plane-line">
+          <ComposerPublishing jobs={jobs} publications={publications} busy={busy} onRetry={retry} onCancel={cancel} onCompleteHandoff={complete} onRunNow={runNow} />
+        </SectionCard>
+        )}
+
+          <div className="d-flex justify-content-between align-items-center mt-3" data-testid="step-nav">
+            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={!back} onClick={() => back && goToStep(back)}>
+              {back ? `Back: ${stepDefinition(back).label}` : 'Back'}
+            </button>
+            {forward
+              ? (
+                <button type="button" className="btn btn-sm btn-primary" onClick={() => goToStep(forward)} data-testid="step-next">
+                  Next: {stepDefinition(forward).label}
+                </button>
+              )
+              : <span className="small text-muted">{blockedReason(nextKey ?? 'publishing', facts) ?? 'Last step.'}</span>}
+          </div>
+        </div>
+
+        <div className="col-12 col-xl-4">
+          <ComposerSummaryRail summary={confirmation} media={media} empty={!item} />
+        </div>
+      </div>
     </div>
   );
 }

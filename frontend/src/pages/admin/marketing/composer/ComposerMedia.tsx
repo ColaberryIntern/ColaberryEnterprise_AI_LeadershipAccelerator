@@ -74,6 +74,23 @@ export default function ComposerMedia({ media, busy, enabled, upload = null, onA
 
   const canAttach = enabled && !busy && file !== null && altText.trim().length >= 3;
 
+  /**
+   * Why Attach is disabled, in words, next to the button.
+   *
+   * Ali chose a file on 2026-09-18, pressed nothing that worked, and asked where the upload was.
+   * The button was disabled because the description was empty - correct, and completely silent.
+   * CLAUDE.md's own rule: a disabled button with no reason is a support ticket.
+   */
+  const attachBlockedBecause = !enabled
+    ? 'Save the setup first, then attach.'
+    : file === null
+      ? 'Choose a file first.'
+      : altText.trim().length < 3
+        ? (file.type === 'application/pdf'
+          ? 'Add a title for the document - LinkedIn shows it above the carousel.'
+          : 'Add a short description - it is what a screen reader reads out, and it is required.')
+        : null;
+
   const submit = () => {
     if (!file || !canAttach) return;
     onAttach(file, altText.trim());
@@ -84,7 +101,7 @@ export default function ComposerMedia({ media, busy, enabled, upload = null, onA
 
   return (
     <div className="mb-3" data-testid="composer-media">
-      <div className="small fw-semibold mb-1">Media</div>
+      <div className="small fw-semibold mb-1">Attach a photo, video or PDF</div>
       {media.length > 0 && (
         <ul className="list-unstyled mb-2 d-flex flex-column gap-1">
           {media.map((m) => (
@@ -135,6 +152,9 @@ export default function ComposerMedia({ media, busy, enabled, upload = null, onA
           Attach
         </button>
       </div>
+      {attachBlockedBecause && !upload && (
+        <div className="form-text text-warning-emphasis" data-testid="media-attach-blocked">{attachBlockedBecause}</div>
+      )}
       <div className="form-text">
         {enabled
           ? 'PNG, JPEG or GIF up to 10 MB; MP4 up to 200 MB; PDF up to 100 MB (LinkedIn document posts). Location and camera data is removed from images automatically.'

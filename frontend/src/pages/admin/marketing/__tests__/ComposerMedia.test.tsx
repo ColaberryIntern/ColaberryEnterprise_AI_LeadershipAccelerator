@@ -146,3 +146,31 @@ describe('ComposerMedia attached list', () => {
     expect(buttons.every((b) => b.disabled)).toBe(true);
   });
 });
+describe('why Attach is disabled is said out loud', () => {
+  // 2026-09-18: Ali chose a video, found nothing happened, and asked where the upload was. The
+  // button was correctly disabled - the description was empty - and said nothing about it.
+  it('with nothing chosen, it asks for a file', () => {
+    render();
+    expect(container.querySelector('[data-testid="media-attach-blocked"]')!.textContent).toMatch(/Choose a file first/);
+  });
+
+  it('with a file but no description, it says a description is required and why', () => {
+    render();
+    pickFile(fileInput(), new File(['x'], 'clip.mp4', { type: 'video/mp4' }));
+    expect(container.querySelector('[data-testid="media-attach-blocked"]')!.textContent).toMatch(/screen reader/);
+  });
+
+  it('a PDF asks for a title instead, because that is what LinkedIn shows', () => {
+    render();
+    pickFile(fileInput(), new File(['x'], 'deck.pdf', { type: 'application/pdf' }));
+    expect(container.querySelector('[data-testid="media-attach-blocked"]')!.textContent).toMatch(/title for the document/);
+  });
+
+  it('once both halves exist the explanation goes away and the button works', () => {
+    render();
+    pickFile(fileInput(), new File(['x'], 'class.png', { type: 'image/png' }));
+    setNativeValue(altInput(), 'Two people at a whiteboard');
+    expect(container.querySelector('[data-testid="media-attach-blocked"]')).toBeNull();
+    expect(attachButton().disabled).toBe(false);
+  });
+});
