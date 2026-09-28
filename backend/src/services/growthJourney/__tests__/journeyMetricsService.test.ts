@@ -1,8 +1,9 @@
-const m = { decisions: jest.fn(), executions: jest.fn(), agents: jest.fn(), rates: jest.fn() };
+const m = { decisions: jest.fn(), executions: jest.fn(), agents: jest.fn(), rates: jest.fn(), handoffs: jest.fn() };
 
 jest.mock('../../../models', () => ({
   GrowthJourneyDecision: { findAll: (...a: unknown[]) => m.decisions(...a) },
   GrowthJourneyExecution: { findAll: (...a: unknown[]) => m.executions(...a) },
+  GrowthJourneyHandoff: { findAll: (...a: unknown[]) => m.handoffs(...a) },
   AiAgent: { findAll: (...a: unknown[]) => m.agents(...a) },
 }));
 jest.mock('../outcomes/handoffRatesQuery', () => ({
@@ -11,9 +12,9 @@ jest.mock('../outcomes/handoffRatesQuery', () => ({
 }));
 
 import { Op } from 'sequelize';
-import { brandsInScope, computeJourneyMetrics, DEFAULT_WINDOW_DAYS, MAX_WINDOW_DAYS, rateOf, type JourneyMetricsResult, type ServedMetric } from '../performance/journeyMetricsService';
+import { brandsInScope, computeJourneyMetrics, DEFAULT_WINDOW_DAYS, MAX_ACCEPT_SAMPLES, MAX_WINDOW_DAYS, pooledMedian, rateOf, type JourneyMetricsResult, type ServedMetric } from '../performance/journeyMetricsService';
 import { JOURNEY_METRICS } from '../../adminOs/metrics/journeyMetrics';
-import { NO_DENOMINATOR } from '../outcomes/handoffRates';
+import { BELOW_MIN_SAMPLES, MIN_MEDIAN_SAMPLES, NO_DENOMINATOR } from '../outcomes/handoffRates';
 
 /**
  * T605 — the journey metrics computed for one scope.
@@ -48,6 +49,12 @@ const ratesFor = (over: Record<string, unknown> = {}) => ({
   by_queue: {},
 });
 
+/** A handoff row as the pooled accept-time read projects it: two timestamps, nothing else. */
+const handoffRow = (createdAgoHours: number, waitedSeconds: number | null) => ({
+  created_at: new Date(NOW.getTime() - createdAgoHours * 3_600_000),
+  accepted_at: waitedSeconds === null ? null : new Date(NOW.getTime() - createdAgoHours * 3_600_000 + waitedSeconds * 1_000),
+});
+
 const metric = (result: JourneyMetricsResult, key: string): ServedMetric => result.metrics.find((x) => x.key === key)!;
 
 beforeEach(() => {
@@ -55,6 +62,7 @@ beforeEach(() => {
   m.decisions.mockResolvedValue([]);
   m.executions.mockResolvedValue([]);
   m.agents.mockResolvedValue([]);
+  m.handoffs.mockResolvedValue([]);
   m.rates.mockResolvedValue(ratesFor());
 });
 
@@ -138,10 +146,90 @@ describe('the numerators and denominators, by name', () => {
     expect(m.rates).toHaveBeenCalledTimes(2);
   });
 
-  it('a median below Phase 4\'s sample floor stays null, and never becomes a zero', async () => {
-    m.rates.mockResolvedValue(ratesFor({ handoffs: 2, accepted: 1, verdicts: 1, time_to_accept_hours: { value: null, samples: 1, reason: 'below_min_samples' } }));
+  it('Phase 4\'s per-brand median is NOT what the served median reads - the pooled sample is', async () => {
+    // Phase 4 computes a median per brand; this service reads the accepted handoffs itself and pools
+    // them (see the pooled-median block below). So a per-brand median of 4h with a one-row sample
+    // does not become the served figure, and with no accept sample the answer is the floor's.
+    m.rates.mockResolvedValue(ratesFor({ handoffs: 2, accepted: 1, verdicts: 1, time_to_accept_hours: { value: 4, samples: 1, reason: 'below_min_samples' } }));
+    m.handoffs.mockResolvedValue([]);
     const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
-    expect(metric(result, 'journey.time_to_first_human_touch_hours')).toMatchObject({ value: null, reason: NO_DENOMINATOR });
+    expect(metric(result, 'journey.time_to_first_human_touch_seconds')).toMatchObject({ value: null, denominator: 0, reason: BELOW_MIN_SAMPLES });
+  });
+});
+
+describe('the median wait is POOLED over the scope, and its denominator is the sample count', () => {
+  it('two brands, unequal volumes: the median is over every accepted handoff, not a mean of the brands\' medians', async () => {
+    // The defect this cell exists for: the first version of this service averaged Phase 4's per-brand
+    // MEDIANS, so a brand with 4 accepted handoffs weighed the same as one with 40, and the served
+    // `denominator` was the BRAND COUNT (2). The registry formula says median over accepted handoffs.
+    const busy = Array.from({ length: 40 }, () => handoffRow(10, 4 * 3_600));
+    const quiet = Array.from({ length: 4 }, () => handoffRow(5, 1 * 3_600));
+    m.handoffs.mockResolvedValue([...busy, ...quiet]);
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A, BRAND_B], asOf: NOW });
+    const served = metric(result, 'journey.time_to_first_human_touch_seconds');
+    // The pooled median of forty 14400s waits and four 3600s waits is 14400s - not the mean of the
+    // two medians (9000s), which is what the averaged version served.
+    expect(served.value).toBe(14_400);
+    expect(served.denominator).toBe(44);
+    expect(served.unit).toBe('duration_seconds');
+  });
+
+  it('counts only the handoffs a human accepted, and the rest are not zeros', async () => {
+    m.handoffs.mockResolvedValue([handoffRow(9, 600), handoffRow(8, 1_200), handoffRow(7, 1_800), handoffRow(6, null), handoffRow(5, null)]);
+    const served = metric(await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW }), 'journey.time_to_first_human_touch_seconds');
+    expect(served).toMatchObject({ value: 1_200, denominator: 3 });
+  });
+
+  it('under Phase 4\'s sample floor it is null with below_min_samples - a sample, not a distribution', async () => {
+    m.handoffs.mockResolvedValue([handoffRow(9, 600), handoffRow(8, 6_000)]);
+    const served = metric(await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A, BRAND_B], asOf: NOW }), 'journey.time_to_first_human_touch_seconds');
+    expect(MIN_MEDIAN_SAMPLES).toBe(3);
+    expect(served).toMatchObject({ value: null, denominator: 2, reason: BELOW_MIN_SAMPLES });
+  });
+
+  it('pooledMedian itself: the floor, the sample count, and two decimals', () => {
+    expect(pooledMedian([])).toEqual({ value: null, denominator: 0, reason: BELOW_MIN_SAMPLES });
+    expect(pooledMedian([10, 20])).toEqual({ value: null, denominator: 2, reason: BELOW_MIN_SAMPLES });
+    expect(pooledMedian([10, 20, 30])).toEqual({ value: 20, denominator: 3 });
+    expect(pooledMedian([10, 20, 30, 41])).toEqual({ value: 25, denominator: 4 });
+  });
+
+  it('reads the accept sample bounded, newest first, over two timestamp columns only', async () => {
+    await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
+    const [query] = m.handoffs.mock.calls[0] as [Record<string, unknown>];
+    expect(query.attributes).toEqual(['created_at', 'accepted_at']);
+    expect(query.order).toEqual([['created_at', 'DESC']]);
+    expect(query.limit).toBe(MAX_ACCEPT_SAMPLES);
+    expect(query.raw).toBe(true);
+    expect(JSON.stringify(query.attributes)).not.toContain('subject_ref');
+  });
+});
+
+describe('the nightly count is the nightly pass\'s own, not the total', () => {
+  it('isolates trigger = nightly, so two registered metrics do not render the same figure', async () => {
+    m.decisions.mockResolvedValue([
+      { mode: 'shadow', trigger: 'nightly', n: '7', newest: '2026-09-28T04:20:00Z' },
+      { mode: 'live', trigger: 'reply', n: '2', newest: '2026-09-28T11:00:00Z' },
+      { mode: 'shadow', trigger: 'form', n: '5', newest: '2026-09-28T10:00:00Z' },
+    ]);
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
+    expect(metric(result, 'journey.decisions_recorded').value).toBe(14);
+    expect(metric(result, 'journey.nightly_recorded_decisions').value).toBe(7);
+    expect(metric(result, 'journey.live_decision_share')).toMatchObject({ numerator: 2, denominator: 14 });
+  });
+
+  it('groups by mode AND trigger, which is what makes the two counts separable', async () => {
+    await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
+    const [query] = m.decisions.mock.calls[0] as [Record<string, unknown>];
+    expect(query.group).toEqual(['mode', 'trigger']);
+    expect(JSON.stringify(query.attributes)).toContain('trigger');
+  });
+
+  it('a window with no nightly run at all reports 0 for it while the total stands', async () => {
+    m.decisions.mockResolvedValue([{ mode: 'live', trigger: 'manual', n: '3', newest: '2026-09-28T11:00:00Z' }]);
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
+    expect(metric(result, 'journey.decisions_recorded').value).toBe(3);
+    expect(metric(result, 'journey.nightly_recorded_decisions').value).toBe(0);
   });
 });
 
@@ -162,6 +250,29 @@ describe('freshness comes from the input each metric declares', () => {
     expect(metric(result, 'journey.decisions_recorded').freshness).toMatchObject({ verdict: 'fresh' });
   });
 
+  it('a handoff metric\'s freshness is MEASURED from the newest handoff, so it can go stale', async () => {
+    // The defect this cell exists for: the first version passed `now` whenever any handoff existed,
+    // so a brand whose last handoff was 300 days ago still read "newest row is 0h old" and no handoff
+    // metric could ever be stale - in the one task whose deliverable is telling fresh from stale.
+    m.handoffs.mockResolvedValue([handoffRow(300 * 24, 3_600), handoffRow(301 * 24, 3_600), handoffRow(302 * 24, 3_600)]);
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], windowDays: 365, asOf: NOW });
+    for (const key of ['journey.handoff_acceptance_rate', 'journey.false_positive_handoff_rate', 'journey.qualified_opportunity_rate', 'journey.time_to_first_human_touch_seconds']) {
+      expect(metric(result, key).freshness).toMatchObject({ verdict: 'stale' });
+      expect(metric(result, key).freshness.age_hours).toBeGreaterThan(7_000);
+    }
+  });
+
+  it('and fresh when a handoff arrived inside the rule\'s window', async () => {
+    m.handoffs.mockResolvedValue([handoffRow(2, 3_600)]);
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
+    expect(metric(result, 'journey.handoff_acceptance_rate').freshness).toMatchObject({ verdict: 'fresh', age_hours: 2 });
+  });
+
+  it('never when the scope holds no handoff at all - not a zero-aged fresh', async () => {
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
+    expect(metric(result, 'journey.handoff_acceptance_rate').freshness).toMatchObject({ verdict: 'never', age_hours: null });
+  });
+
   it('an agent row that exists but never ran is never, not stale', async () => {
     m.agents.mockResolvedValue([{ get: (k: string) => ({ agent_name: 'GrowthJourneyExecutor', last_run_at: null }[k]) }]);
     const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
@@ -174,17 +285,24 @@ describe('what it reads, and what it refuses to read', () => {
     await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], programId: 'program-1', asOf: NOW });
     const [decisionQuery] = m.decisions.mock.calls[0] as [Record<string, unknown>];
     const [executionQuery] = m.executions.mock.calls[0] as [Record<string, unknown>];
+    const [handoffQuery] = m.handoffs.mock.calls[0] as [Record<string, unknown>];
     for (const query of [decisionQuery, executionQuery]) {
       const attributes = JSON.stringify(query.attributes);
       expect(attributes).toContain('COUNT');
       expect(attributes).toContain('MAX');
       expect(query.raw).toBe(true);
+    }
+    // The handoff read is the one row-level read this service makes (the pooled accept sample), so
+    // the banned-column rule is asserted across all three rather than only the two aggregates.
+    for (const query of [decisionQuery, executionQuery, handoffQuery]) {
+      const attributes = JSON.stringify(query.attributes);
       for (const banned of ['candidates', 'evidence', 'selected_content', 'metadata', 'payload', 'subject_ref', 'lead_id']) {
         expect(attributes).not.toContain(banned);
       }
     }
-    expect(decisionQuery.group).toEqual(['mode']);
+    expect(decisionQuery.group).toEqual(['mode', 'trigger']);
     expect(executionQuery.group).toEqual(['status']);
+    expect(handoffQuery.limit).toBe(MAX_ACCEPT_SAMPLES);
   });
 
   it('bounds every read by the scope, the window and the programme', async () => {
@@ -211,6 +329,7 @@ describe('what it reads, and what it refuses to read', () => {
     expect(m.decisions).not.toHaveBeenCalled();
     expect(m.executions).not.toHaveBeenCalled();
     expect(m.rates).not.toHaveBeenCalled();
+    expect(m.handoffs).not.toHaveBeenCalled();
     expect(metric(result, 'journey.decisions_recorded').value).toBe(0);
     expect(metric(result, 'journey.handoff_acceptance_rate').value).toBeNull();
   });

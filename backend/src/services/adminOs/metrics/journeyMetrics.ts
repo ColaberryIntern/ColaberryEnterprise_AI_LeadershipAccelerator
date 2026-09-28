@@ -83,10 +83,11 @@ export const JOURNEY_METRICS: Record<string, MetricDef> = {
     name: 'Decisions recorded by the nightly pass',
     domain: 'journey',
     unit: 'count',
-    definition: 'Decisions the scheduled shadow pass recorded on its last run, as opposed to those a request produced.',
+    definition: 'Decisions the scheduled shadow pass recorded, as opposed to those a request or a reply produced.',
     formula:
-      'COUNT(*) FROM growth_journey_decisions WHERE created_at IN window, reported beside the last_run_at of ' +
-      'the nightly agent, so that a zero can be read as nothing-ran rather than nothing-to-do',
+      "COUNT(*) FROM growth_journey_decisions WHERE created_at IN window AND trigger = 'nightly' - the column " +
+      'the nightly pass stamps (`runShadowDecisionsNightly`), reported beside that agent\'s last_run_at so a zero ' +
+      'can be read as nothing-ran rather than nothing-to-do',
     sources: ['growth_journey_decisions', `ai_agents (${JOURNEY_NIGHTLY_AGENT})`],
     grain: 'event',
     dimensions: ['brand', 'program', 'period'],
@@ -124,13 +125,15 @@ export const JOURNEY_METRICS: Record<string, MetricDef> = {
     drilldown: { target: 'journey.handoffs', requiredFilters: ['brand_id', 'disposition', 'period'] },
   },
 
-  'journey.time_to_first_human_touch_hours': {
-    key: 'journey.time_to_first_human_touch_hours',
+  'journey.time_to_first_human_touch_seconds': {
+    key: 'journey.time_to_first_human_touch_seconds',
     name: 'Time to first human touch',
     domain: 'journey',
     unit: 'duration_seconds',
-    definition: 'Median hours between a handoff being raised and a human accepting it.',
-    formula: 'median(accepted_at - created_at) over accepted handoffs; null below MIN_MEDIAN_SAMPLES',
+    definition: 'Median seconds between a handoff being raised and a human accepting it, over every accepted handoff in the scope.',
+    formula:
+      'median(accepted_at - created_at) over the accepted handoffs of EVERY brand in scope, pooled (never a mean of ' +
+      'per-brand medians); null with below_min_samples under MIN_MEDIAN_SAMPLES accepted handoffs',
     sources: ['growth_journey_handoffs'],
     grain: 'person',
     dimensions: ['brand', 'owner_queue', 'period'],

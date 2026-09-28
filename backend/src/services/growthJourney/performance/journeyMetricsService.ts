@@ -1,9 +1,9 @@
-import { Op, fn, col, literal } from 'sequelize';
-import { AiAgent, GrowthJourneyDecision, GrowthJourneyExecution } from '../../../models';
+import { Op, fn, col } from 'sequelize';
+import { AiAgent, GrowthJourneyDecision, GrowthJourneyExecution, GrowthJourneyHandoff } from '../../../models';
 import { getMetric } from '../../adminOs/metricRegistry';
 import { metricFreshness, freshnessAgentOf, type MetricFreshness } from '../../adminOs/metricFreshness';
 import { JOURNEY_EXECUTOR_AGENT, JOURNEY_METRICS, JOURNEY_NIGHTLY_AGENT } from '../../adminOs/metrics/journeyMetrics';
-import { NO_DENOMINATOR, type Rate } from '../outcomes/handoffRates';
+import { medianHours, NO_DENOMINATOR, type Rate } from '../outcomes/handoffRates';
 import { loadHandoffRates } from '../outcomes/handoffRatesQuery';
 
 /**
@@ -45,6 +45,10 @@ import { loadHandoffRates } from '../outcomes/handoffRatesQuery';
 
 export const DEFAULT_WINDOW_DAYS = 30;
 export const MAX_WINDOW_DAYS = 365;
+/** The trigger `runShadowDecisionsNightly` stamps; the nightly count is the decisions carrying it. */
+export const NIGHTLY_TRIGGER = 'nightly';
+/** A bound on the accept-time sample, so a 365-day window on a busy brand is still one bounded read. */
+export const MAX_ACCEPT_SAMPLES = 5_000;
 const DAY = 86_400_000;
 
 export interface JourneyMetricsScope {
@@ -82,6 +86,20 @@ export function rateOf(numerator: number, denominator: number): Rate {
   return { value: Math.round((numerator / denominator) * 10_000) / 100, numerator, denominator };
 }
 
+/**
+ * The median of the POOLED sample, in the seconds the metric's unit declares, with Phase 4's own
+ * sample floor: under `MIN_MEDIAN_SAMPLES` accepted handoffs there is no distribution, and the
+ * answer is null with `below_min_samples` rather than a number one data point produced.
+ * `denominator` is the SAMPLE count - not, as the first version had it, the brand count.
+ */
+export function pooledMedian(seconds: readonly number[]): Partial<ServedMetric> {
+  // `medianHours` is unit-agnostic - it applies Phase 4's sample floor to whatever numbers it is
+  // handed - so the seconds go in directly rather than through a round trip via hours.
+  const median = medianHours(seconds);
+  if (median.value === null) return { value: null, denominator: median.samples, reason: median.reason };
+  return { value: Math.round(median.value * 100) / 100, denominator: median.samples };
+}
+
 function clampWindow(days: number | undefined): number {
   if (!days || !Number.isFinite(days)) return DEFAULT_WINDOW_DAYS;
   return Math.min(Math.max(1, Math.floor(days)), MAX_WINDOW_DAYS);
@@ -94,29 +112,34 @@ export function brandsInScope(scope: JourneyMetricsScope): string[] {
   return allowed.includes(scope.brandId) ? [scope.brandId] : [];
 }
 
-interface DecisionCounts { total: number; live: number; newest: Date | null }
+interface DecisionCounts { total: number; live: number; nightly: number; newest: Date | null }
 
 async function decisionCounts(brandIds: string[], programId: string | null, from: Date, to: Date): Promise<DecisionCounts> {
-  if (brandIds.length === 0) return { total: 0, live: 0, newest: null };
+  if (brandIds.length === 0) return { total: 0, live: 0, nightly: 0, newest: null };
   const where: Record<string, unknown> = { brand_id: { [Op.in]: brandIds }, created_at: { [Op.gte]: from, [Op.lt]: to } };
   if (programId) where.program_id = programId;
+  // Grouped by mode AND trigger, because `journey.nightly_recorded_decisions` is the count the
+  // SCHEDULED pass produced - `trigger = 'nightly'` (`runShadowDecisionsNightly`) - and the whole
+  // point of registering it separately is that it must not be the same number as the total.
   const rows = (await GrowthJourneyDecision.findAll({
     where,
-    attributes: ['mode', [fn('COUNT', col('id')), 'n'], [fn('MAX', col('created_at')), 'newest']],
-    group: ['mode'],
+    attributes: ['mode', 'trigger', [fn('COUNT', col('id')), 'n'], [fn('MAX', col('created_at')), 'newest']],
+    group: ['mode', 'trigger'],
     raw: true,
-  })) as unknown as Array<{ mode: string; n: string | number; newest: string | Date | null }>;
+  })) as unknown as Array<{ mode: string; trigger: string | null; n: string | number; newest: string | Date | null }>;
   let total = 0;
   let live = 0;
+  let nightly = 0;
   let newest: Date | null = null;
   for (const row of rows) {
     const n = Number(row.n);
     total += n;
     if (row.mode === 'live') live += n;
+    if (row.trigger === NIGHTLY_TRIGGER) nightly += n;
     const at = row.newest ? new Date(row.newest) : null;
     if (at && (!newest || at > newest)) newest = at;
   }
-  return { total, live, newest };
+  return { total, live, nightly, newest };
 }
 
 interface ReceiptCounts { completed: number; blocked: number; failed: number; newest: Date | null }
@@ -141,6 +164,39 @@ async function receiptCounts(brandIds: string[], programId: string | null, from:
     if (at && (!counts.newest || at > counts.newest)) counts.newest = at;
   }
   return counts;
+}
+
+interface AcceptSample { seconds: number[]; newest: Date | null }
+
+/**
+ * Every accepted handoff's wait, for the scope, as ONE pooled sample - and the newest handoff
+ * timestamp, which is what makes a handoff metric's freshness a measurement rather than a guess.
+ *
+ * Phase 4's `loadHandoffRates` returns a per-brand MEDIAN, and medians cannot be pooled: a mean of
+ * two brands' medians weights three handoffs the same as three hundred, which is the error the
+ * rates' own header forbids and which the first version of this service committed. So the samples
+ * are read here, bounded (`MAX_ACCEPT_SAMPLES`, newest first) and projected to two timestamp
+ * columns - never `subject_ref`, never a payload.
+ */
+async function acceptSamples(brandIds: string[], from: Date, to: Date): Promise<AcceptSample> {
+  if (brandIds.length === 0) return { seconds: [], newest: null };
+  const rows = (await GrowthJourneyHandoff.findAll({
+    where: { brand_id: { [Op.in]: brandIds }, created_at: { [Op.gte]: from, [Op.lt]: to } },
+    attributes: ['created_at', 'accepted_at'],
+    order: [['created_at', 'DESC']],
+    limit: MAX_ACCEPT_SAMPLES,
+    raw: true,
+  })) as unknown as Array<{ created_at: string | Date; accepted_at: string | Date | null }>;
+  const seconds: number[] = [];
+  let newest: Date | null = null;
+  for (const row of rows) {
+    const created = new Date(row.created_at);
+    if (!newest || created > newest) newest = created;
+    if (!row.accepted_at) continue;
+    const waited = (new Date(row.accepted_at).getTime() - created.getTime()) / 1_000;
+    if (waited >= 0) seconds.push(waited);
+  }
+  return { seconds, newest };
 }
 
 /** `last_run_at` for the agents the journey metrics declare; absent row => never run. */
@@ -181,10 +237,11 @@ export async function computeJourneyMetrics(scope: JourneyMetricsScope): Promise
   const brandIds = brandsInScope(scope);
   const programId = scope.programId ?? null;
 
-  const [decisions, receipts, runs] = await Promise.all([
+  const [decisions, receipts, runs, accepts] = await Promise.all([
     decisionCounts(brandIds, programId, from, now),
     receiptCounts(brandIds, programId, from, now),
     agentRuns(),
+    acceptSamples(brandIds, from, now),
   ]);
 
   // The handoff rates are Phase 4's per-brand computation, asked once per brand in scope and summed
@@ -195,7 +252,6 @@ export async function computeJourneyMetrics(scope: JourneyMetricsScope): Promise
   let verdicts = 0;
   let falsePositives = 0;
   let qualified = 0;
-  const acceptMedians: number[] = [];
   for (const brandId of brandIds) {
     const rates = await loadHandoffRates({ brandId, asOf: now, windowDays });
     handoffs += rates.all.handoffs;
@@ -203,29 +259,25 @@ export async function computeJourneyMetrics(scope: JourneyMetricsScope): Promise
     verdicts += rates.all.verdicts;
     falsePositives += rates.all.false_positive_handoff_rate.numerator;
     qualified += rates.all.qualification_rate.numerator;
-    if (rates.all.time_to_accept_hours.value !== null) acceptMedians.push(rates.all.time_to_accept_hours.value);
   }
   const sendReached = receipts.completed + receipts.blocked + receipts.failed;
   const live = { sourceMaxAt: decisions.newest };
   const nightly = { agentLastRunAt: runs[JOURNEY_NIGHTLY_AGENT] ?? null };
   const executor = { agentLastRunAt: runs[JOURNEY_EXECUTOR_AGENT] ?? null };
-  const handoffFresh = { sourceMaxAt: handoffs > 0 ? now : null };
+  // MEASURED, not synthesized: the newest handoff in the scope. The first version of this service
+  // passed `now` whenever any handoff existed, so a brand whose last handoff was 300 days ago -
+  // inside a 365-day window - still read "newest row is 0h old" and no handoff metric could ever
+  // go stale, in the one task whose deliverable is telling fresh from stale.
+  const handoffFresh = { sourceMaxAt: accepts.newest };
 
   const metrics: ServedMetric[] = [
     serve('journey.decisions_recorded', { value: decisions.total }, live, now),
     serve('journey.live_decision_share', rateOf(decisions.live, decisions.total), live, now),
-    serve('journey.nightly_recorded_decisions', { value: decisions.total }, nightly, now),
+    serve('journey.nightly_recorded_decisions', { value: decisions.nightly }, nightly, now),
     serve('journey.handoff_acceptance_rate', rateOf(accepted, handoffs), handoffFresh, now),
     serve('journey.false_positive_handoff_rate', rateOf(falsePositives, verdicts), handoffFresh, now),
     serve('journey.qualified_opportunity_rate', rateOf(qualified, verdicts), handoffFresh, now),
-    serve(
-      'journey.time_to_first_human_touch_hours',
-      acceptMedians.length > 0
-        ? { value: Math.round((acceptMedians.reduce((a, b) => a + b, 0) / acceptMedians.length) * 100) / 100, denominator: acceptMedians.length }
-        : { value: null, denominator: 0, reason: NO_DENOMINATOR },
-      handoffFresh,
-      now,
-    ),
+    serve('journey.time_to_first_human_touch_seconds', pooledMedian(accepts.seconds), handoffFresh, now),
     serve('journey.receipts_completed', { value: receipts.completed }, executor, now),
     serve('journey.send_block_rate', rateOf(receipts.blocked, sendReached), executor, now),
     // The two this service does not compute, returned WITH their reason rather than omitted: a
