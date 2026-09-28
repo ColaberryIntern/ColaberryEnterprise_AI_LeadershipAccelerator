@@ -263,6 +263,10 @@
 .adv2-io-grid li { padding: 6px 0; border-top: 1px solid var(--adv2-rule); }
 .adv2-io-grid li .adv2-src { display: block; font-size: 13px; color: var(--adv2-ink-3); }
 
+/* Track E (2026-09-28) — numbered quadrant badge, matching the mockup's own
+ * .number recipe (a small filled circle preceding a quadrant heading). */
+.adv2-number { display: inline-grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: var(--adv2-trust-soft); color: var(--adv2-trust); font-size: 12px; font-weight: 600; margin-right: 8px; }
+
 /* Task row */
 .adv2-task { padding: 16px 19px; display: grid; grid-template-columns: 1fr auto; gap: 19px; align-items: start; }
 .adv2-task h3 { margin: 0; font-size: 16px; font-weight: 600; font-family: var(--adv2-sans); color: var(--adv2-ink); }
