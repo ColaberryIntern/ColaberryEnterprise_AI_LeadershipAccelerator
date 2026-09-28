@@ -69,6 +69,31 @@ const DEFAULT_WORKING_BLOCK = [
  * @throws PromptAssemblyError when a repo exists but a path this prompt would
  *         cite is absent from the manifest.
  */
+/**
+ * What comes before and after one story, by DEPENDENCY where the plan declares
+ * one and by plan order otherwise.
+ *
+ * `byDependency` is what the caller needs to say which it is: telling a student
+ * that a numerically adjacent story is a prerequisite is the bug this replaced.
+ * Pure, so both readings are testable without a plan fixture.
+ */
+export function whereThisSits(
+  stories: readonly PlanStory[],
+  story: PlanStory,
+): { before: PlanStory[]; after: PlanStory[]; byDependency: boolean } {
+  const byId = new Map(stories.map((s) => [s.id, s]));
+  const deps = (story.blocked_by ?? [])
+    .map((id) => byId.get(id))
+    .filter((s): s is PlanStory => !!s && s.id !== story.id);
+  const dependents = stories.filter((s) => (s.blocked_by ?? []).includes(story.id));
+  if (deps.length || dependents.length) {
+    return { before: deps, after: dependents, byDependency: true };
+  }
+  const all = [...stories].sort((a, b) => a.id.localeCompare(b.id));
+  const here = all.findIndex((s) => s.id === story.id);
+  if (here < 0) return { before: [], after: [], byDependency: false };
+  return { before: all.slice(Math.max(0, here - 2), here), after: all.slice(here + 1, here + 3), byDependency: false };
+}
 export function buildStoryPrompt(
   plan: BuildPlan,
   story: PlanStory,
@@ -185,20 +210,34 @@ export function buildStoryPrompt(
 
   // ── 5b. Where this sits. Without it every story reads like the only story,
   // and a student rebuilds what the previous one already delivered.
-  const all = [...plan.stories].sort((a, b) => a.id.localeCompare(b.id));
-  const here = all.findIndex((s) => s.id === story.id);
-  const before = all.slice(Math.max(0, here - 2), here);
-  const after = all.slice(here + 1, here + 3);
-  if (before.length || after.length) {
+  //
+  // DERIVED FROM THE DEPENDENCY GRAPH, NOT FROM STORY NUMBERING. This block used
+  // to take the two stories either side of this one in id order, so a story that
+  // declared `blocked_by: [STORY-003]` was told to reuse STORY-018 and STORY-019
+  // instead — contradicting the "waits on" line the portal shows for the same
+  // story. A learner testing Add-a-Story on a 50-story plan found it, reported
+  // both readings, and correctly guessed the cause (2026-09-27). One story, one
+  // dependency answer, everywhere.
+  //
+  // Id order stays as the FALLBACK, because a plan whose stories declare no
+  // dependencies at all would otherwise lose the section entirely — and the
+  // wording says which of the two it is, so the prompt never implies a
+  // dependency the plan does not carry.
+  const wheresits = whereThisSits(plan.stories, story);
+  if (wheresits.before.length || wheresits.after.length) {
     sections.push([
       '## Where this sits in the build',
-      ...(before.length
-        ? ['Already specified before this one — reuse it, do not rebuild it:',
-           ...before.map((s) => `- ${s.id} · ${s.title}`)]
+      ...(wheresits.before.length
+        ? [wheresits.byDependency
+            ? 'This story waits on these — they are already specified, reuse them, do not rebuild them:'
+            : 'Specified before this one in the plan (no declared dependency) — reuse it, do not rebuild it:',
+           ...wheresits.before.map((s) => `- ${s.id} · ${s.title}`)]
         : ['This is the first story. Nothing exists yet — you are laying the foundation.']),
-      ...(after.length
-        ? ['', 'Coming next — leave room for it, but do NOT build it now:',
-           ...after.map((s) => `- ${s.id} · ${s.title}`)]
+      ...(wheresits.after.length
+        ? ['', wheresits.byDependency
+            ? 'Waiting on this one — leave room for it, but do NOT build it now:'
+            : 'Coming next in the plan — leave room for it, but do NOT build it now:',
+           ...wheresits.after.map((s) => `- ${s.id} · ${s.title}`)]
         : ['', 'This is the last story in the plan.']),
     ].join('\n'));
   }
