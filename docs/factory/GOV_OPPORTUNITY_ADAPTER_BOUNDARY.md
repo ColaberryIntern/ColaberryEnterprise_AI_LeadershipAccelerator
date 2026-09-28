@@ -71,3 +71,44 @@ records them. An old payload is **never** silently presented as fully qualified.
 `noticeType`, `procurementType`, `contractVehicle` (three separate fields), `setAside`, `naics`/`psc`,
 `valueBasis` (published-ceiling vs estimate), `amendmentVersion` + history, and `vetVerdict` populated with
 `reason` + `method`. Everything else Enterprise needs is already present upstream (see the allowlist).
+
+## Ingestion boundary — where the deadline flows (Phase 1 finding) and the Phase 2 persistence requirement
+
+The deadline **parser lives in Opportunity Pulse**, not in the accelerator — there is no `parseDeadline` /
+`deadlineParser` / `validateRow` in this repo. Enterprise consumes OP's already-parsed `closeDate`. The chain
+on the Enterprise side is:
+
+- **parse** — OP-owned (upstream). Whatever string OP sends is treated as source-of-record.
+- **normalize** — `oppPulseClient.mapOpportunity`. `closeAt` keeps OP's timestamp **verbatim** (never reparsed,
+  never shifted; seconds/precision preserved because we do not re-derive it); `closeDate` is a display-only
+  truncation. So an OP parser defect (dropped seconds, wrong instant) is carried through **unchanged**, not
+  masked — the fix belongs upstream.
+- **validate** — `factoryRoutes` validates only the `uuid` param + request body (Zod). It does **not** read,
+  validate, or touch the deadline; the deadline is not part of the start request.
+- **persist** — **nothing.** The Phase 1 `/start` route persists no opportunity field, and there is **no
+  deadline/close/due column** on `delivery_projects`, `contract_tracks`, `contract_requirements`, or
+  `contract_process_documents` (verified against the live schema).
+
+Answers to the ingestion-boundary questions:
+1. **Does a corrected `closeDate` reach persistence?** No. It reaches the browser (read path) but is never
+   written; no column exists to hold it.
+2. **What do null/uncertain deadlines do to an existing row?** Nothing. No deadline is persisted on any row;
+   an unknown deadline is a display state only (`Closes TBD` + the source-verification warning). The two
+   existing gov rows are untouched.
+3. **Which provenance fields are lost, and where?** At the **persistence boundary** (the `/start` route, which
+   never reads the opportunity payload) — externalId, closeAt, valueBasis, vetVerdict, freshness, pursuitStatus.
+   At the **read/normalization layer** none are lost (the allowlist carries them verbatim to the browser). The
+   loss point is the start route, not a `validateRow`.
+4. **Is "no downstream behavior changes" accurate?** Precisely: **persisted data and existing rows are
+   unchanged** (no writes, no schema change). Two behaviors *did* change by design — the `/start` route now
+   blocks new-project creation (409), and the browser-facing payload widened. So it is accurate for
+   persistence and existing rows, but not a blanket "nothing changed."
+
+**Phase 2 persistence requirement (precise; no historical correction of existing rows):** at pursuit approval,
+persist the deadline from the server-side source snapshot as a tz-aware `closeAt` plus `deadline_provenance`
+(source + parser method) and `deadline_confidence` (`high` | `ambiguous` | `null`). An **ambiguous or null**
+deadline (e.g. a local time that occurs twice under a DST fold, or conflicting "10am EST" = 15:00Z vs
+"10am UTC-04:00" = 14:00Z) persists as **explicitly uncertain with both candidate instants retained** — it must
+**not** be silently resolved to one instant. An unresolved deadline **blocks the submission gate**, not the
+research stage. If an earlier instant is chosen for internal planning, it is labeled a **conservative planning
+choice, not a verified buyer deadline**.
