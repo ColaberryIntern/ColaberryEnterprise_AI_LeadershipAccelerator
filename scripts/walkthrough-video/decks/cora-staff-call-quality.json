@@ -1,0 +1,79 @@
+{
+  "slug": "the-call-was-already-over-the-review-had-to-be-fair",
+  "output": "cora-staff-call-quality-walkthrough.mp4",
+  "slides": [
+    {
+      "kind": "title",
+      "seconds": 8,
+      "title": "The Call Was Already Over. The Review Had to Be Fair.",
+      "subtitle": "An admissions team's calling platform, read on 28 September 2026",
+      "caption": "A calling platform sees every call it places. It cannot see the ones staff placed by hand through the CRM's own dialer, and those are the calls a lead remembers."
+    },
+    {
+      "kind": "title",
+      "seconds": 8,
+      "title": "Go and get the calls nobody logged.",
+      "subtitle": "Searched on a schedule, gated on two things at once",
+      "caption": "A scheduled scan asks the vendor for calls this system never placed, skips any it has examined, and decides whether each connected: the vendor's status, and twenty seconds."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 8,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/.loop-architect/runs/20260928-cora-08-build/imagery/captures/scq-empty-default-off-1440.png",
+      "caption": "The page before the scan has ever run, on a keyless local copy of the platform, with invented rows. It is off by default, because examining a call spends credit."
+    },
+    {
+      "kind": "title",
+      "seconds": 8,
+      "title": "Get the words, two ways.",
+      "subtitle": "The vendor's transcript, or transcribe the recording",
+      "caption": "Where the vendor has a transcript, the job takes it. Where it does not, it transcribes the recording. 5,147 of 6,260 came from the fallback."
+    },
+    {
+      "kind": "title",
+      "seconds": 8,
+      "title": "Ask the model last.",
+      "subtitle": "Tags, three picklist fields, an enrolment date, then this system's own history",
+      "caption": "Sales or support is decided by four deterministic signals before a model is asked. The first of them, the vendor's tags, decided 6,109 of 6,257."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 8,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/.loop-architect/runs/20260928-cora-08-build/imagery/captures/scq-db-picklist-never-populated-1440.png",
+      "caption": "Three near-duplicate vendor columns were kept on every row, to settle from data which one was authoritative. 0 of 8,820 carry a value in any of them. On a keyless local copy, with invented rows."
+    },
+    {
+      "kind": "cards",
+      "seconds": 8,
+      "accent_index": 0,
+      "rows": [
+        [
+          "0 of 8,820",
+          "rows carry a value in any of the three vendor fields kept to settle the question from data"
+        ],
+        [
+          "6,109 of 6,257",
+          "classifications decided by the tags alone, with no model call spent"
+        ],
+        [
+          "6,246 of 8,820",
+          "examined calls produced a score, and every remaining row says why it did not"
+        ]
+      ],
+      "caption": "Read from the platform's own tables on 28 September 2026, each figure with the number it is out of. No transcript, summary or flag text is quoted."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 8,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/.loop-architect/runs/20260928-cora-08-build/imagery/captures/scq-db-four-branch-partition-1440.png",
+      "caption": "Every examined call lands in exactly one of four branches, so a missing score is explained by the row. On a keyless local copy of the platform, with invented rows."
+    },
+    {
+      "kind": "title",
+      "seconds": 8,
+      "title": "A flag is a label, not a review.",
+      "subtitle": "Stored, and never rendered",
+      "caption": "The model writes a flag; nothing records anyone opening the row. The five dimensions behind each score are stored and never rendered. The rows with no score make the rest trustworthy."
+    }
+  ]
+}
