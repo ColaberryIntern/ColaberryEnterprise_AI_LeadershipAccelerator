@@ -58,5 +58,10 @@
 .aint-dbody{padding:18px 20px}
 .aint-empty{text-align:center;color:var(--text-muted,#6b7280);padding:70px 24px}
 .aint-empty .ic{font-size:32px;margin-bottom:8px}
+/* Two ways out, one per layout. Narrow: the queue is off-screen, so leaving the
+   applicant is a navigation back to it. Wide: the queue is already beside the
+   pane, so the action is closing the open file. Exactly one is visible at a
+   time, which is why neither is a plain `display:inline-flex` default. */
 .aint-back{display:none}
-@media(max-width:960px){ .aint-back{display:inline-flex} }
+.aint-close{display:inline-flex}
+@media(max-width:960px){ .aint-back{display:inline-flex} .aint-close{display:none} }

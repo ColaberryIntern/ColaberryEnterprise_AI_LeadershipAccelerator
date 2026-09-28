@@ -32,6 +32,27 @@ const InternshipDetailPanel: React.FC<{ onBack?: () => void }> = ({ onBack }) =>
   // A new applicant always opens on Overview.
   useEffect(() => { setTab('overview'); }, [r.selected]);
 
+  /**
+   * Escape closes the open applicant.
+   *
+   * Guarded on the event target: a reviewer typing the message an applicant will
+   * read verbatim must not lose it to a stray Escape, and browsers send Escape
+   * from inside a field like any other key. So a keystroke that starts in an
+   * input, a textarea, a select or anything contentEditable is left alone.
+   */
+  useEffect(() => {
+    if (!r.selected || !onBack) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return;
+      onBack();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [r.selected, onBack]);
+
   if (!r.selected) {
     return (
       <div className="aint-detail">
@@ -75,6 +96,20 @@ const InternshipDetailPanel: React.FC<{ onBack?: () => void }> = ({ onBack }) =>
           <div className="aint-dactions">
             {onBack && <button type="button" className="btn btn-sm btn-outline-secondary aint-back" onClick={onBack}>← Queue</button>}
             <button type="button" className={`btn btn-sm ${headerAction.cls}`} onClick={() => setTab(headerAction.to)}>{headerAction.label}</button>
+            {/* Desktop's way out. `aint-back` is mobile-only (the queue is off-screen
+                there, so "← Queue" is a navigation); on a wide screen the queue is
+                already beside us, so the action is closing the file, not going back. */}
+            {onBack && (
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary aint-close"
+                onClick={onBack}
+                title="Close this applicant (Esc)"
+                aria-label="Close this applicant"
+              >
+                ✕ Close
+              </button>
+            )}
           </div>
         </div>
         <div className="aint-tabs" role="tablist">
