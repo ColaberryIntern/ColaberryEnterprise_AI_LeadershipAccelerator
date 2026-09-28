@@ -1433,7 +1433,7 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
     },
     thursday: {
       resultPreview: 'A Governance Engine over your system: an ABAC policy that blocks a disallowed action, a HITL gate that escalates and resumes, and audit reconstruction from one correlation ID.',
-      readinessCheck: 'Your Intensive 1–3 system, with the reliability layer from Week 9.',
+      readinessCheck: 'A laptop, Claude Code open inside your project repository, and either Monday’s governance-lab/ folder or nothing at all. Nothing from earlier weeks is needed.',
       buildMap: ['CP0: baseline system', 'CP1: ABAC blocks an action', 'CP2: HITL escalation + resume', 'CP3: audit reconstruction'],
       checkpoints: [
         { n: 0, label: 'Baseline', detail: 'The system runs without governance.' },
