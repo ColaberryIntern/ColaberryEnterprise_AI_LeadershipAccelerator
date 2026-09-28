@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Tuesday, September 22, 2026 at 7:14 AM</div>
-    <div><span class="sid">CC-20260921-p2k9</span><span class="count">2 changes</span></div>
+    <div class="meta">Generated Monday, September 28, 2026 at 9:57 AM</div>
+    <div><span class="sid">CC-20260921-p2k9</span><span class="count">3 changes</span></div>
   </header>
   <main>
     
@@ -87,6 +87,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">backend jest -c jest.ci.config.ts oppPulseClient 9/9 (real-shape live mapping asserts cents-&gt;dollars $1.0M, priorityScore surfaced, pursuitStatus-&gt;pursued, aiCategory-&gt;category; degrade-dark + login-retry + all fallbacks unchanged). Frontend react-scripts AdminGovOpportunitiesPage 5/5 (NEW: live card renders &quot;Priority 79&quot; + &quot;IT Services&quot; + &quot;$1.0M&quot; not $100M) + factoryApi 7/7. CI authoritative.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Additive - NO schema, NO new dependency. The LIVE data only appears once prod .env has OP_ADMIN_EMAIL=ali@colaberry.com + OP_ADMIN_PASSWORD (Ali&#39;s OP admin secret; only he sets it) + OPPORTUNITY_PULSE_BASE=https://op.colaberry.ai + OPPORTUNITY_PULSE_LIST_PATH=/api/v1/bonfire/opportunities?order=priority_desc&amp;limit=10, then backend recreate. Until then the page keeps showing the labeled snapshot (honest). Not byte-for-byte the email: the email&#39;s topBonfire adds a &gt;=10-day close floor + biddable-first rerank + hides no_bid/needs_review; order=priority_desc gives the same rows in priority order (endpoint hides already-closed by default). Exact digest parity (client-side filter) deferred. Deploy + set env + verify-live pending Ali&#39;s merge + his OP password.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>**oppPulseClient: X-API-Key auth against /api/v1/bonfire/best-fit + 3 contract corrections from the OP team**</h2>
+          <span class="badge">2026-09-28</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The Opportunity Pulse Claude Code built exactly what we asked, but chose the cleaner design: instead of us logging in as Ali&#39;s personal admin (which would have handed a service account every admin write surface), they added a NARROW read-only scope: GET /api/v1/bonfire/best-fit?limit=10 authenticated by X-API-Key: op_&lt;64 hex&gt; (no login/refresh/expiry; writes stay 401 by construction; admin-level READ so sourceUrl is un-redacted). /best-fit delegates to richDigest.topBonfire, so it matches the &quot;Top 10 Bonfire Contracts to Bid&quot; email STRUCTURALLY (no client-side filter needed). Rewrote oppPulseClient.ts to that model: dropped the login()+Bearer flow and OP_ADMIN_EMAIL/PASSWORD; reads OPPORTUNITY_PULSE_API_KEY and sends X-API-Key; default OPPORTUNITY_PULSE_LIST_PATH=/api/v1/bonfire/best-fit?limit=10; one retry on network error; a 404 is logged as &#39;engine off / bad path&#39; (BONFIRE_ENGINE_ENABLED off returns 404 for all /bonfire/*), degrade not crash. Also applied the OP team&#39;s 3 contract corrections to mapOpportunity: (1) estimatedValue is BIGINT cents returned as a STRING -&gt; toNum coerces then /100 (comparisons on the raw would break); (2) pursuitStatus has FOUR values - only &#39;pursuing&#39;/&#39;submitted&#39; count as pursued (&#39;none&#39; and &#39;declined&#39; do not; was mapping &#39;declined&#39; as pursued); (3) closeDate is a full ISO timestamptz -&gt; truncate to YYYY-MM-DD for display. Trust body.data, not pagination.limit. .env.example documents the new keys.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest -c jest.ci.config.ts oppPulseClient 11/11 (X-API-Key header sent to the /best-fit URL, no login round-trip; string-cents-&gt;dollars; declined &amp; none -&gt; not pursued, pursuing -&gt; pursued; timestamptz-&gt;date; 404-&gt;engine-off log; retry-once; all degrade-dark fallbacks). Frontend unchanged (page already renders priority/category/date). CI authoritative.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Additive - NO schema, NO new dependency. Ships degrade-dark: unset OPPORTUNITY_PULSE_API_KEY -&gt; labeled snapshot, so merging changes nothing until the key is configured. REMAINING (OP side, cannot do from our repo): OP must deploy their branch to op.colaberry.ai, confirm the api_keys table exists (migration defined but sync({alter:false}) won&#39;t create it), confirm BONFIRE_ENGINE_ENABLED=true, then MINT the key under a dedicated non-admin service user and hand it to Ali once (unrecoverable). THEN accelerator side: set OPPORTUNITY_PULSE_API_KEY on prod .env (replace the earlier OP_ADMIN_* attempt) + point list path at /best-fit + recreate backend + verify source:&#39;live&#39; matches the email. Rate limit 500/15min per IP, server-to-server allowed, no IP allowlist. Deploy + set key + verify-live pending Ali&#39;s merge + OP deploy + key mint.</span></div>
           
         </div>
       </article>
