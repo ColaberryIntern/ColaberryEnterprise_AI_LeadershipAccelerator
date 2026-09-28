@@ -336,31 +336,23 @@ export default function AgentDetailPage() {
       onReactivate={handleReactivate}
     >
       {activeTab === 'glance' && (
-        <div className="adv2-wrap">
-          <AgentAtAGlanceTab agentId={id} detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} onNavigate={setActiveTab} />
-        </div>
+        <AgentAtAGlanceTab agentId={id} detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} onNavigate={setActiveTab} />
       )}
       {activeTab === 'command' && (
-        <div className="adv2-wrap">
-          <AgentLiveStatusTab detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} />
-        </div>
+        <AgentLiveStatusTab detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} />
       )}
       {activeTab === 'overview' && (
         <AgentOverviewV2 detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} onNavigate={setActiveTab} />
       )}
       {activeTab === 'work' && (
-        <div className="adv2-wrap">
-          <AgentWorkV2 detail={detail} onNavigate={setActiveTab} />
-        </div>
+        <AgentWorkV2 detail={detail} onNavigate={setActiveTab} />
       )}
       {activeTab === 'decisions' && (
-        <div className="adv2-wrap">
-          <AgentWorkDecisionsTab agentId={id} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} onInboxChanged={fetchInbox} />
-        </div>
+        <AgentWorkDecisionsTab agentId={id} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} onInboxChanged={fetchInbox} />
       )}
-      {activeTab === 'talk' && <div className="adv2-wrap"><AgentTalkTab agentId={id} /></div>}
+      {activeTab === 'talk' && <AgentTalkTab agentId={id} />}
       {activeTab === 'performance_settings' && (
-        <div className="adv2-wrap"><AgentPerformanceSettingsTab agentId={id} detail={detail} onNavigate={setActiveTab} /></div>
+        <AgentPerformanceSettingsTab agentId={id} detail={detail} onNavigate={setActiveTab} />
       )}
     </AgentDetailLayout>
   );

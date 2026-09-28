@@ -16,20 +16,32 @@ import type { TabKey } from './AgentDetailV2Header';
 // execution-contract.md). No 5-step narrative ladder either, for the same
 // reason — the real ticket `status` is shown plainly instead
 // (AgentWorkV2CaseDetail.tsx).
+//
+// Track C (2026-09-28) — defaulting to 'overdue' meant Work read as empty
+// on first load for most agents most of the time (no "All" option existed).
+// WorkBucketKey is a LOCAL type, layered on top of the real backend contract
+// type AgentDetailTicketStatusBucket — 'all' is a frontend-only pseudo-
+// bucket aggregating the 4 real ones; it is never a real per-ticket
+// status_bucket value, so the exported contract type itself is never
+// widened to include it.
 
 interface Props {
   detail: AgentDetail;
   onNavigate: (tab: TabKey) => void;
 }
 
-export const BUCKETS: Array<{ key: AgentDetailTicketStatusBucket; label: string; tone: Tone }> = [
+type WorkBucketKey = AgentDetailTicketStatusBucket | 'all';
+
+export const BUCKETS: Array<{ key: WorkBucketKey; label: string; tone: Tone }> = [
+  { key: 'all', label: 'All', tone: 'neutral' },
   { key: 'overdue', label: 'Overdue', tone: 'danger' },
   { key: 'ready_to_verify', label: 'Ready to verify', tone: 'info' },
   { key: 'needs_reply', label: 'Needs a reply', tone: 'warning' },
   { key: 'open', label: 'Open', tone: 'neutral' },
 ];
 
-export const EMPTY_STATE_LABEL: Record<AgentDetailTicketStatusBucket, string> = {
+export const EMPTY_STATE_LABEL: Record<WorkBucketKey, string> = {
+  all: 'No open cases right now.',
   overdue: 'No tickets are overdue right now.',
   ready_to_verify: 'No tickets are waiting to be verified right now.',
   needs_reply: 'No tickets are waiting on a reply right now.',
@@ -37,7 +49,7 @@ export const EMPTY_STATE_LABEL: Record<AgentDetailTicketStatusBucket, string> = 
 };
 
 export default function AgentWorkV2({ detail, onNavigate }: Props) {
-  const [activeBucket, setActiveBucket] = useState<AgentDetailTicketStatusBucket>('overdue');
+  const [activeBucket, setActiveBucket] = useState<WorkBucketKey>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // A closed ticket (status_bucket: null — done/cancelled) fits none of
@@ -47,13 +59,16 @@ export default function AgentWorkV2({ detail, onNavigate }: Props) {
   const actionable = useMemo(() => detail.tickets.filter((t) => t.status_bucket !== null), [detail.tickets]);
 
   const counts = useMemo(() => {
-    const c: Record<AgentDetailTicketStatusBucket, number> = { overdue: 0, ready_to_verify: 0, needs_reply: 0, open: 0 };
+    const c: Record<WorkBucketKey, number> = { all: actionable.length, overdue: 0, ready_to_verify: 0, needs_reply: 0, open: 0 };
     for (const t of actionable) c[t.status_bucket as AgentDetailTicketStatusBucket] += 1;
     return c;
   }, [actionable]);
 
+  // 'all' is a frontend-only aggregate, never a real per-ticket status_bucket
+  // value — compared separately rather than via status_bucket === 'all',
+  // which could never match anything real.
   const filtered = useMemo(
-    () => actionable.filter((t) => t.status_bucket === activeBucket),
+    () => (activeBucket === 'all' ? actionable : actionable.filter((t) => t.status_bucket === activeBucket)),
     [actionable, activeBucket],
   );
 
