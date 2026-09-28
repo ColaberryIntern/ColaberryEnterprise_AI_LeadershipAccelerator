@@ -1,0 +1,29 @@
+{
+  "unauthApiStatus": 401,
+  "pageLoadStatus": 200,
+  "overviewLoaded": true,
+  "hasPendingApprovalsHeader": true,
+  "hasDecisionJournalHeader": true,
+  "hasEmptyPendingState": true,
+  "hasEmptyJournalState": false,
+  "adv2CardInfo": {
+    "totalAdv2Cards": 2,
+    "headerTexts": [
+      "Pending ApprovalsBefore you approve anything, this shows exa",
+      "Decision JournalReal recorded facts — business rationale and"
+    ]
+  },
+  "hasPendingItem": false,
+  "emptyStateConfirmed": true,
+  "fabricationSmellsFound": [],
+  "tab_Work_rendered": true,
+  "tab_LiveStatus_rendered": true,
+  "tab_PerformanceSettings_rendered": true,
+  "darkModeToggled": true,
+  "backToAdminLinkPresent": true,
+  "backToAdminHref": "/admin/workforce",
+  "consoleErrorCount": 0,
+  "pageErrorCount": 0,
+  "consoleErrors": [],
+  "pageErrors": []
+}
