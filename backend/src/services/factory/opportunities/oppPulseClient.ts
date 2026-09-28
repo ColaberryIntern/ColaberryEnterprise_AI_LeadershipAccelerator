@@ -20,14 +20,22 @@
  * NOTE: when BONFIRE_ENGINE_ENABLED is off, every /api/v1/bonfire/* route returns 404 — treated here as a
  * degrade, not a crash.
  */
-import { GovOpportunity, GovOpportunityFeed, GOV_OPPORTUNITY_SNAPSHOT, SNAPSHOT_DATE } from './govOpportunity';
+import {
+  GovOpportunity, GovOpportunityFeed, GOV_OPPORTUNITY_SNAPSHOT, SNAPSHOT_DATE,
+  PursuitStatus, SnapshotReason,
+} from './govOpportunity';
 
 const DEFAULT_BASE = 'https://op.colaberry.ai';
 const DEFAULT_LIST_PATH = '/api/v1/bonfire/best-fit?limit=10';
 const TIMEOUT_MS = 8000;
+const VALID_PURSUIT: readonly string[] = ['none', 'pursuing', 'submitted', 'declined'];
 
-function snapshotFeed(): GovOpportunityFeed {
-  return { opportunities: [...GOV_OPPORTUNITY_SNAPSHOT], source: 'snapshot', snapshotDate: SNAPSHOT_DATE };
+/**
+ * The labeled fallback. `reason` separates a deliberate dark state ('not_configured') from a configured feed
+ * that actually FAILED ('source_failed') — the page must not describe a real outage as merely "not configured".
+ */
+function snapshotFeed(reason: SnapshotReason): GovOpportunityFeed {
+  return { opportunities: [...GOV_OPPORTUNITY_SNAPSHOT], source: 'snapshot', snapshotDate: SNAPSHOT_DATE, snapshotReason: reason };
 }
 
 /**
@@ -50,12 +58,17 @@ const toDateOnly = (v: unknown): string | null =>
   v === null || v === undefined || v === '' ? null : String(v).slice(0, 10);
 
 /**
- * Maps a raw BonfireOpportunity row to a GovOpportunity, grounded in the confirmed OP contract:
- *  - `estimatedValue` is BIGINT cents returned as a STRING; `toNum` coerces it, then we convert to dollars.
- *  - the badges are `priorityScore` / `fitScore` (0-100 ints, nullable until enriched).
- *  - `pursuitStatus` has FOUR values: only 'pursuing' and 'submitted' count as pursued ('none' and 'declined'
- *    do not).
- *  - `closeDate` is a full timestamptz, truncated to a date for display.
+ * Maps a raw BonfireOpportunity row to a GovOpportunity via an EXPLICIT ALLOWLIST — we never forward the whole
+ * upstream row to the browser, and we deliberately omit the source's unverified free text (overview, strategy,
+ * submissionRequirements, rawText) so it can't become a confirmed requirement. Grounded in the confirmed OP
+ * contract:
+ *  - `estimatedValue` is BIGINT cents as a STRING; coerced then converted to dollars, and tagged `valueBasis`
+ *    ('unverified' when OP sends no provenance) — the page renders it as unverified, never forecast revenue.
+ *  - `pursuitStatus` (none|pursuing|submitted|declined) is preserved verbatim; `declined` stays distinct from
+ *    `none`. `pursued` is only a derived convenience.
+ *  - `vetVerdict` is preserved with the ABSENT vs null distinction (`vetVerdictPresent`); null == unassessed.
+ *  - `closeAt` keeps the FULL source timestamp verbatim (OP flagged a tz-stripping parser — never silently
+ *    shifted); `closeDate` is a display-only truncation.
  * Returns null when the two required anchors (uuid + title) are absent, so junk rows drop out.
  */
 export function mapOpportunity(raw: any): GovOpportunity | null {
@@ -64,20 +77,32 @@ export function mapOpportunity(raw: any): GovOpportunity | null {
   const title = raw.title ?? raw.name ?? raw.opportunityTitle ?? raw.opportunity_title ?? null;
   if (!uuid || !title) return null;
   const cents = toNum(raw.estimatedValue ?? raw.estimated_value ?? raw.value);
-  const pursuitStatus = raw.pursuitStatus ?? raw.pursuit_status;
+  const closeRaw = raw.closeDate ?? raw.close_date ?? raw.deadline ?? raw.dueDate ?? raw.due_date ?? null;
+  const rawStatus = raw.pursuitStatus ?? raw.pursuit_status;
+  const pursuitStatus: PursuitStatus | null =
+    typeof rawStatus === 'string' && VALID_PURSUIT.includes(rawStatus) ? (rawStatus as PursuitStatus) : null;
+  const vetVerdictPresent = Object.prototype.hasOwnProperty.call(raw, 'vetVerdict');
+  const hasFreshness = raw.enrichedAt !== undefined || raw.attachmentsFetchedAt !== undefined;
   return {
     uuid: String(uuid),
+    externalId: raw.externalId ?? raw.external_id ?? null,
     title: String(title),
     agency: String(raw.agency ?? raw.agencyName ?? raw.agency_name ?? raw.buyer ?? ''),
-    closeDate: toDateOnly(raw.closeDate ?? raw.close_date ?? raw.deadline ?? raw.dueDate ?? raw.due_date),
+    closeAt: closeRaw === null || closeRaw === undefined || closeRaw === '' ? null : String(closeRaw),
+    closeDate: toDateOnly(closeRaw),
     fitScore: toNum(raw.fitScore ?? raw.fit_score ?? raw.fit ?? raw.score ?? raw.matchScore),
     priorityScore: toNum(raw.priorityScore ?? raw.priority_score ?? raw.priority),
     estimatedValue: cents === null ? null : Math.round(cents / 100),
+    valueBasis: raw.valueBasis ?? raw.value_basis ?? (cents !== null ? 'unverified' : null),
     category: raw.aiCategory ?? raw.category ?? raw.categoryRaw ?? null,
     sourceUrl: raw.sourceUrl ?? raw.source_url ?? raw.bonfire ?? raw.url ?? null,
-    pursued: pursuitStatus !== undefined && pursuitStatus !== null
+    pursuitStatus,
+    pursued: pursuitStatus !== null
       ? (pursuitStatus === 'pursuing' || pursuitStatus === 'submitted')
       : (raw.pursued === undefined ? undefined : !!raw.pursued),
+    vetVerdict: vetVerdictPresent ? (raw.vetVerdict ?? null) : null,
+    vetVerdictPresent,
+    freshness: hasFreshness ? { enrichedAt: raw.enrichedAt ?? null, attachmentsFetchedAt: raw.attachmentsFetchedAt ?? null } : null,
   };
 }
 
@@ -100,35 +125,36 @@ export async function fetchBestFitOpportunities(): Promise<GovOpportunityFeed> {
   const listPath = process.env.OPPORTUNITY_PULSE_LIST_PATH || DEFAULT_LIST_PATH;
   const apiKey = process.env.OPPORTUNITY_PULSE_API_KEY;
 
-  // Not configured → degrade dark, no network call.
-  if (!apiKey) return snapshotFeed();
+  // Not configured → degrade dark, no network call. This is the ONLY 'not_configured' path.
+  if (!apiKey) return snapshotFeed('not_configured');
 
   const url = `${base}${listPath}`;
   const headers = { 'X-API-Key': apiKey };
 
-  // One retry on a network/timeout error (not on an HTTP error — a 4xx/5xx is authoritative).
+  // One retry on a network/timeout error (not on an HTTP error — a 4xx/5xx is authoritative). A CONFIGURED
+  // feed that fails degrades with reason 'source_failed', never 'not_configured'.
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const listR = await fetchWithTimeout(url, { headers }, TIMEOUT_MS);
       if (!listR.ok) {
         // BONFIRE_ENGINE_ENABLED off returns 404 for every /api/v1/bonfire/* route — a degrade, not a bug.
         logDegraded(listR.status === 404 ? 'opp_pulse_engine_off_or_path' : 'opp_pulse_list_http', { status: listR.status });
-        return snapshotFeed();
+        return snapshotFeed('source_failed');
       }
       const body: any = await listR.json().catch(() => null);
       // Confirmed envelope is { data: [...] }; trust `data`, not pagination.limit (which echoes the raw query).
       const rows = Array.isArray(body) ? body : (body?.data ?? body?.opportunities ?? body?.items ?? null);
-      if (!Array.isArray(rows)) { logDegraded('opp_pulse_list_shape', {}); return snapshotFeed(); }
+      if (!Array.isArray(rows)) { logDegraded('opp_pulse_list_shape', {}); return snapshotFeed('source_failed'); }
 
       const opportunities = rows
         .map(mapOpportunity)
         .filter((o): o is GovOpportunity => o !== null);
-      return { opportunities, source: 'live', snapshotDate: null };
+      return { opportunities, source: 'live', snapshotDate: null, snapshotReason: null };
     } catch (err: any) {
       if (attempt === 0) continue; // retry once on network/timeout
       logDegraded('opp_pulse_error', { error_class: err?.constructor?.name ?? 'Error', message: err?.message });
-      return snapshotFeed(); // any error → snapshot; never throw
+      return snapshotFeed('source_failed'); // any error → snapshot; never throw
     }
   }
-  return snapshotFeed(); // unreachable; belt-and-suspenders
+  return snapshotFeed('source_failed'); // unreachable; belt-and-suspenders
 }

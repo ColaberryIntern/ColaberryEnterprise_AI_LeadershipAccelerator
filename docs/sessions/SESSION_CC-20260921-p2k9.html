@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, September 28, 2026 at 9:57 AM</div>
-    <div><span class="sid">CC-20260921-p2k9</span><span class="count">3 changes</span></div>
+    <div class="meta">Generated Monday, September 28, 2026 at 5:15 PM</div>
+    <div><span class="sid">CC-20260921-p2k9</span><span class="count">4 changes</span></div>
   </header>
   <main>
     
@@ -102,6 +102,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">backend jest -c jest.ci.config.ts oppPulseClient 11/11 (X-API-Key header sent to the /best-fit URL, no login round-trip; string-cents-&gt;dollars; declined &amp; none -&gt; not pursued, pursuing -&gt; pursued; timestamptz-&gt;date; 404-&gt;engine-off log; retry-once; all degrade-dark fallbacks). Frontend unchanged (page already renders priority/category/date). CI authoritative.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Additive - NO schema, NO new dependency. Ships degrade-dark: unset OPPORTUNITY_PULSE_API_KEY -&gt; labeled snapshot, so merging changes nothing until the key is configured. REMAINING (OP side, cannot do from our repo): OP must deploy their branch to op.colaberry.ai, confirm the api_keys table exists (migration defined but sync({alter:false}) won&#39;t create it), confirm BONFIRE_ENGINE_ENABLED=true, then MINT the key under a dedicated non-admin service user and hand it to Ali once (unrecoverable). THEN accelerator side: set OPPORTUNITY_PULSE_API_KEY on prod .env (replace the earlier OP_ADMIN_* attempt) + point list path at /best-fit + recreate backend + verify source:&#39;live&#39; matches the email. Rate limit 500/15min per IP, server-to-server allowed, no IP allowlist. Deploy + set key + verify-live pending Ali&#39;s merge + OP deploy + key mint.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>**GOV-BUILD-PHASE-01-ENTERPRISE: preserve upstream source facts, reframe the entry page as discovered candidates, block new unqualified shells (server-enforced)**</h2>
+          <span class="badge">2026-09-28</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Coordinator-authorized Phase 1 (3-party gov effort; research rounds ENTERPRISE-RESEARCH-01/02 preceded). Additive, no schema, NOT deployed. (1) PRESERVE upstream: oppPulseClient.mapOpportunity now maps an EXPLICIT ALLOWLIST (never forwards the whole upstream row) retaining externalId, closeAt (full source timestamp, verbatim - never silently shifted; OP flagged a tz-stripping parser) alongside closeDate (display), the full pursuitStatus enum (none|pursuing|submitted|declined - declined stays DISTINCT from none, not collapsed to a boolean), vetVerdict + vetVerdictPresent (distinguishes ABSENT from null from populated; null = unassessed), valueBasis (defaults &#39;unverified&#39; - OP sends no provenance), and freshness (enrichedAt/attachmentsFetchedAt). Deliberately does NOT surface overview/strategy/submissionRequirements/rawText (unverified free text -&gt; must not become confirmed requirements). govOpportunity.ts widened (PursuitStatus/VetVerdict/ValueBasis/SnapshotReason types). GovOpportunityFeed gains snapshotReason so a configured feed that FAILED (&#39;source_failed&#39;) is not described as merely &#39;not_configured&#39;. (2) PAGE MEANING: AdminGovOpportunitiesPage reframed as &quot;discovered candidates requiring qualification&quot;; a &quot;Flagged for review - not recommended&quot; section holds vetVerdict no_bid/needs_review + pursuitStatus declined (never in candidates); null verdict shows &quot;Unassessed&quot;; value shows &quot;Value unverified&quot; (+ labeled legacy estimate, never revenue); deadline carries a source-verification warning; &quot;Start working&quot; (create) REPLACED with &quot;Review source&quot; (sourceUrl) + a pending-qualification note; three distinct source banners. (3) SERVER GUARD: POST /opportunities/:uuid/start now returns 409 {qualificationRequired:true} for a NEW pursuit (creates NOTHING - no project, no backfill) and 200 {created:false} for an EXISTING gov project (stays navigable); the auto-create imports (backfillUnassessedContract, resolveGovContractsContainer) were removed until Phase 2 restores them. (4) docs/factory/GOV_OPPORTUNITY_ADAPTER_BOUNDARY.md documents the allowlist, canonical-id-vs-title-alias, separate schema/snapshot/enrichment versions, the server-side snapshot-at-approval trust boundary (Phase 2, same phase as approval), and backward-compat (partial payload can be researched but not approved).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest -c jest.ci.config.ts oppPulseClient + factoryRoutes = 39/39 (verdict populated survives all layers; null vs absent verdict; declined != none; valueBasis unverified; snapshotReason not_configured vs source_failed; closeAt preserved; DIRECT POST to legacy start -&gt; NEW=409 no-create/no-backfill, EXISTING=200 no-create). Frontend react-scripts AdminGovOpportunitiesPage + factoryApi = 12/12 (discovered framing; flagged-&gt;review section; unassessed; Value unverified; Review source not Start working; source_failed vs not_configured banners; deadline warning). Fixture-labeled visual preview in the run dir. loop-task-verifier graded the diff. CI authoritative. NOT deployed - stops at the Phase 1 checkpoint before merge/deploy/prod-data-change.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Additive only; the two existing gov projects (gov-e2935b8f Dallas, gov-2e287828 Harris) + their tracks are untouched; commercial-client workflows, existing-project editing, and unrelated factory actions unchanged; marketing claims + historical engagement labels NOT modified (later corrections documented in the research handoffs). Temporary control - Phase 2 replaces the start guard with the real research/qualification workflow (+ the qualification record, notice/procurement/vehicle fields, server-side evidence snapshot at approval). PRODUCTION IMPACT: NONE - nothing deployed, no prod data changed. Autonomous builder remains parked.</span></div>
           
         </div>
       </article>
