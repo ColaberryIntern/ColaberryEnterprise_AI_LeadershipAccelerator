@@ -261,3 +261,66 @@ describe('SBP_AUTO_PUBLISH=off', () => {
     expect(finalStatus()).toBe('drafted');
   });
 });
+
+// ── 4. holdForReview: the same plan, waiting on a person ─────────────────────
+//
+// The admin door onto this pipeline (internshipProjectGeneration) generates a
+// project FOR someone. Auto-publishing it would mean the reviewer approves a
+// plan the intern is already looking at, which is not a review. `holdForReview`
+// is the per-build version of the kill switch `autoPublishEnabled`'s own comment
+// anticipated, and these hold the line that it changes WHO publishes and nothing
+// else about the plan.
+describe('a build held for review', () => {
+  it('does NOT publish, so nobody sees it before the reviewer does', async () => {
+    await startBuild({ ...INPUT, holdForReview: true } as any);
+    await flush();
+    expect(mockPublishPlan).not.toHaveBeenCalled();
+    expect(mockMaterialize).not.toHaveBeenCalled();
+  });
+
+  it('rests at drafted — the one reading of that status which is not a defect', async () => {
+    await startBuild({ ...INPUT, holdForReview: true } as any);
+    await flush();
+    expect(finalStatus()).toBe('drafted');
+  });
+
+  it('still writes the plan, so the reviewer has something to read', async () => {
+    await startBuild({ ...INPUT, holdForReview: true } as any);
+    await flush();
+    expect(mockSaveDraft).toHaveBeenCalledTimes(1);
+    const [, plan] = mockSaveDraft.mock.calls[0];
+    expect(plan).toEqual(goodPlan);
+  });
+
+  it('is distinguishable in the log from a publish that FAILED', async () => {
+    const logged: string[] = [];
+    (console.log as jest.Mock).mockImplementation((line: string) => {
+      try { logged.push(JSON.parse(line).event); } catch { /* not our line */ }
+    });
+    await startBuild({ ...INPUT, holdForReview: true } as any);
+    await flush();
+    // A build resting at `drafted` is otherwise ambiguous: held on purpose, or
+    // auto-publish threw? The sweep that finds stranded plans has to tell them
+    // apart, so the hold says so explicitly.
+    expect(logged).toContain('sbp_held_for_review');
+    expect(logged).not.toContain('sbp_autopublish_failed');
+  });
+
+  it('leaves the student path untouched when the flag is absent', async () => {
+    await startBuild(INPUT as any);
+    await flush();
+    expect(mockPublishPlan).toHaveBeenCalledTimes(1);
+    expect(finalStatus()).toBe('published');
+  });
+
+  it('holds a blocking-gated plan exactly as it would without the flag', async () => {
+    // Belt and braces: the hold must not become a way to publish something the
+    // gate refused. A gapped plan is not publishable either way.
+    mockDecompose.mockResolvedValue({ plan: gappedPlan, attempts: 1, model: 'gpt-4o', client: { create: mockRepairCreate } });
+    mockRepairCreate.mockResolvedValue({ choices: [{ message: { content: JSON.stringify({ stories: [] }) } }] });
+    await startBuild({ ...INPUT, holdForReview: true } as any);
+    await flush();
+    expect(mockPublishPlan).not.toHaveBeenCalled();
+    expect(finalStatus()).toBe('gate_failed');
+  });
+});

@@ -119,6 +119,19 @@ export interface StartBuildInput {
    * rather than losing the one thing that made the short interview honest.
    */
   covered?: Array<{ angle: string; evidence: string }>;
+  /**
+   * Hold the finished plan at `drafted` for a human to read before anyone else
+   * sees it. Default (undefined) keeps the student path exactly as it was:
+   * auto-publish on, governed by `SBP_AUTO_PUBLISH`.
+   *
+   * This is the review step `autoPublishEnabled`'s own comment anticipated, per
+   * build rather than per deployment. A reviewer-initiated build must not
+   * materialise onto the person's Projects page the moment generation ends,
+   * because then the reviewer is approving something the intern is already
+   * looking at. The publish route is how the reviewer says yes, and it takes
+   * `expected_sha256` so the plan they read is provably the plan that ships.
+   */
+  holdForReview?: boolean;
 }
 
 /**
@@ -350,7 +363,15 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
     // actually see. A plan with blocking violations deliberately falls through:
     // it stays `gate_failed` with its violations stored, and the poll endpoint
     // hands the student the reason.
-    if (publishable) {
+    if (publishable && input.holdForReview) {
+      // Deliberately NOT a failure. The plan is gate-clean and durable; it is
+      // waiting on a person, which is the one reading of `drafted` that is not
+      // a defect. Logged so a build resting here is distinguishable from the
+      // `sbp_autopublish_failed` kind at a glance.
+      log('sbp_held_for_review', correlationId, 'success', {
+        projectId: input.projectId, version: draft.version, sha256: draft.plan_sha256,
+      });
+    } else if (publishable) {
       await autoPublish(input.projectId, input.enrollmentId, draft.plan_sha256, correlationId);
     }
   } catch (err: any) {

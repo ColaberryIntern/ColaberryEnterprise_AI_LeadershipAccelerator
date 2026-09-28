@@ -310,6 +310,103 @@ export async function authorInternshipProject(
   return data;
 }
 
+// ── Generated projects (the Student Build Pipeline, driven by a reviewer) ───
+
+export type InternProjectSize = 'workflow' | 'project' | 'autonomous';
+
+export interface IntakeQuestion {
+  id: string;
+  question: string;
+  why: string;
+  placeholder: string;
+  suggestions?: string[];
+  kind?: 'text' | 'single' | 'multi';
+  angle?: string;
+}
+
+export interface IntakeQuestionsResponse {
+  questions: IntakeQuestion[];
+  covered: Array<{ angle: string; evidence: string }>;
+  /** false = the model failed and the GENERIC set was substituted. Say so. */
+  generated: boolean;
+  model: string | null;
+  attempts: number;
+}
+
+export interface GeneratedPlanRelease { key: string; name: string; goal: string; demo: string; week_start: number; week_end: number }
+export interface GeneratedPlanStory {
+  id: string; release: string; title: string; narrative: string;
+  fulfills: string[]; owner_agent: string; acceptance: string[];
+  task_guidance?: string; failure_paths?: string[]; blocked_by?: string[];
+}
+export interface GeneratedPlan {
+  project_name: string;
+  descriptor: string;
+  requirements: Array<{ id: string; statement: string; kind: string; priority: string; cluster?: string }>;
+  releases: GeneratedPlanRelease[];
+  stories: GeneratedPlanStory[];
+  agents?: Array<{ name: string; role?: string }>;
+}
+
+export interface GateViolation { rule: string; message: string; subject?: string }
+
+export interface InternProjectBuildView {
+  project_id: string;
+  enrollment_id: string;
+  status: string | null;
+  plan: GeneratedPlan | null;
+  version: number | null;
+  /** Reasons it cannot be assigned. Empty means it can. */
+  blocking: GateViolation[];
+  /** Warnings that do NOT stop an assignment. */
+  advisory: GateViolation[];
+  plan_sha256: string | null;
+  assigned: boolean;
+}
+
+export async function internProjectQuestions(
+  applicationId: string,
+  body: { idea: string; size?: InternProjectSize; name?: string | null },
+): Promise<IntakeQuestionsResponse> {
+  const { data } = await api.post<IntakeQuestionsResponse>(
+    `/api/admin/internship/applications/${applicationId}/project/questions`, body,
+  );
+  return data;
+}
+
+export async function generateInternProject(
+  applicationId: string,
+  body: {
+    idea: string; size?: InternProjectSize; name?: string | null; industry?: string | null;
+    answers?: Array<{ id: string; question: string; answer: string; angle?: string }>;
+    covered?: Array<{ angle: string; evidence: string }>;
+  },
+): Promise<{ project_id: string; enrollment_id: string; correlation_id: string; status: string }> {
+  const { data } = await api.post(
+    `/api/admin/internship/applications/${applicationId}/project/generate`, body,
+  );
+  return data;
+}
+
+export async function internProjectBuild(
+  applicationId: string, projectId: string,
+): Promise<InternProjectBuildView> {
+  const { data } = await api.get<InternProjectBuildView>(
+    `/api/admin/internship/applications/${applicationId}/project/${projectId}/build`,
+  );
+  return data;
+}
+
+export async function assignInternProject(
+  applicationId: string,
+  body: { project_id: string; expected_sha256?: string | null },
+): Promise<{ status: string; planVersion: number; commitSha: string | null; filesWritten: number; repoUrl: string | null }> {
+  const { data } = await api.post(
+    `/api/admin/internship/applications/${applicationId}/project/assign`, body,
+  );
+  return data;
+}
+
 // ── Documents ───────────────────────────────────────────────────────────────
 
 export interface AdminDocumentRow {
