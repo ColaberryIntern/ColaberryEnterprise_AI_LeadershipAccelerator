@@ -8,6 +8,10 @@ import { assessApplicant } from '../../services/internship/internshipApplicantAs
 import { internActivity } from '../../services/internship/internshipActivityService';
 import { internshipProjectReview } from '../../services/internship/internshipProjectReview';
 import { authorAndAssignInternshipProject } from '../../services/internship/internshipProjectAuthoring';
+import {
+  internProjectQuestions, startInternProjectBuild, internProjectBuild,
+  assignGeneratedProject, assertNotGeneratedProject,
+} from '../../services/internship/internshipProjectGeneration';
 import { internshipProjectReadiness } from '../../services/internship/internshipProjectReadiness';
 import { InvalidInternshipTransitionError } from '../../services/internship/internshipStateMachine';
 import { REASON_CODES } from '../../services/internship/internshipReasonCodes';
@@ -211,9 +215,18 @@ router.post('/api/admin/internship/applications/:id/author-project', requireSect
     if (!application) { res.status(404).json({ error: 'Application not found.' }); return; }
     const parsed = authorProjectSchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: 'Invalid project.', issues: parsed.error.issues }); return; }
+    // The manual form is the escape hatch, not a second writer. `importProject`
+    // writes NOTHING to a project that already has a published plan and returns
+    // the existing tree, so without this the reviewer is told their stories were
+    // saved when none were. Refuse loudly instead.
+    await assertNotGeneratedProject((application as any).enrollment_id);
     const result = await authorAndAssignInternshipProject((application as any).enrollment_id, parsed.data);
     res.json(result);
   } catch (err: any) {
+    if (typeof err?.status === 'number' && err.status < 500) {
+      res.status(err.status).json({ error: String(err.message) });
+      return;
+    }
     console.error(JSON.stringify({
       timestamp: new Date().toISOString(),
       level: 'error', service: 'backend', event: 'internship_author_project_failed',
@@ -221,6 +234,123 @@ router.post('/api/admin/internship/applications/:id/author-project', requireSect
       context: { message: err?.message },
     }));
     res.status(500).json({ error: 'Could not author the project.' });
+  }
+});
+
+/**
+ * ── GENERATED PROJECTS ─────────────────────────────────────────────────────
+ *
+ * The admin door onto the Student Build Pipeline. Ali, 2026-09-28: "We will
+ * never build projects like this, one story at a time... This is where I need
+ * to put my idea process in here. The same process that already exists for
+ * creating projects."
+ *
+ * Every SBP route is participant-scoped and derives the enrollment from the
+ * student's own JWT, so a reviewer could not run one on an intern's behalf.
+ * These four are that entry, `requireSection('internship')` like the rest of
+ * this file, and they call the pipeline's own stages in the pipeline's own
+ * order. The sequence is: questions -> generate -> build (poll/review) ->
+ * assign.
+ */
+const projectQuestionsSchema = z.object({
+  idea: z.string().min(20).max(6000),
+  size: z.enum(['workflow', 'project', 'autonomous']).optional(),
+  name: z.string().max(200).nullish(),
+}).strict();
+
+const generateProjectSchema = projectQuestionsSchema.extend({
+  industry: z.string().max(120).nullish(),
+  answers: z.array(z.object({
+    id: z.string().max(60),
+    question: z.string().max(1000),
+    answer: z.string().max(6000),
+    angle: z.string().max(60).optional(),
+  })).max(20).optional(),
+  covered: z.array(z.object({
+    angle: z.string().max(60),
+    evidence: z.string().max(2000),
+  })).max(20).optional(),
+}).strict();
+
+const assignProjectSchema = z.object({
+  project_id: z.string().uuid(),
+  /** The hash of the plan the reviewer actually read. */
+  expected_sha256: z.string().regex(/^[0-9a-f]{64}$/).nullish(),
+}).strict();
+
+/** Log + answer, with the service's own status when it set one. */
+function generationFailure(res: Response, event: string, err: any, fallback: string): void {
+  const status = typeof err?.status === 'number' ? err.status : 500;
+  console.error(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level: status >= 500 ? 'error' : 'warn', service: 'backend', event,
+    outcome: 'failure', error_class: err?.error_class ?? err?.constructor?.name ?? 'Error',
+    context: { message: err?.message },
+  }));
+  res.status(status).json({ error: status >= 500 ? fallback : String(err?.message ?? fallback) });
+}
+
+/**
+ * POST /api/admin/internship/applications/:id/project/questions
+ * The sharpening interview, for the reviewer. Creates nothing.
+ */
+router.post('/api/admin/internship/applications/:id/project/questions', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = projectQuestionsSchema.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: 'Describe the project first.', issues: parsed.error.issues }); return; }
+  try {
+    res.json(await internProjectQuestions(parsed.data));
+  } catch (err: any) {
+    generationFailure(res, 'internship_project_questions_failed', err, 'Could not generate the questions.');
+  }
+});
+
+/**
+ * POST /api/admin/internship/applications/:id/project/generate
+ * Creates the project and starts generation, HELD FOR REVIEW. 202: the plan is
+ * not ready when this returns, and the intern cannot see anything yet.
+ */
+router.post('/api/admin/internship/applications/:id/project/generate', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = generateProjectSchema.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid project brief.', issues: parsed.error.issues }); return; }
+  try {
+    const result = await startInternProjectBuild({ applicationId: String(req.params.id), ...parsed.data });
+    res.status(202).json(result);
+  } catch (err: any) {
+    generationFailure(res, 'internship_project_generate_failed', err, 'Could not start the generation.');
+  }
+});
+
+/**
+ * GET /api/admin/internship/applications/:id/project/:projectId/build
+ * Poll while it generates, then read what the reviewer is being asked to
+ * approve: the plan, its blocking violations and its advisory ones, split here
+ * rather than in the browser.
+ */
+router.get('/api/admin/internship/applications/:id/project/:projectId/build', requireSection('internship'), async (req: Request, res: Response) => {
+  try {
+    res.json(await internProjectBuild(String(req.params.projectId)));
+  } catch (err: any) {
+    generationFailure(res, 'internship_project_build_failed', err, 'Could not load the generated plan.');
+  }
+});
+
+/**
+ * POST /api/admin/internship/applications/:id/project/assign
+ * The reviewer says yes: publish the reviewed plan, materialise the tasks, make
+ * it the intern's active project. `expected_sha256` makes "the plan I read is
+ * the plan that shipped" enforced rather than assumed.
+ */
+router.post('/api/admin/internship/applications/:id/project/assign', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = assignProjectSchema.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request.', issues: parsed.error.issues }); return; }
+  try {
+    const result = await assignGeneratedProject({
+      projectId: parsed.data.project_id,
+      expectedSha: parsed.data.expected_sha256,
+    });
+    res.json(result);
+  } catch (err: any) {
+    generationFailure(res, 'internship_project_assign_failed', err, 'Could not assign the project.');
   }
 });
 
