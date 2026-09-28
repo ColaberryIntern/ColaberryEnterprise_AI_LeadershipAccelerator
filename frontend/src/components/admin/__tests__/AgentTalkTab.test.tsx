@@ -4,6 +4,8 @@ import { act } from 'react-dom/test-utils';
 import AgentTalkTab from '../AgentTalkTab';
 import { Conversation } from '../../../services/agentManagerConversationApi';
 import { ManagerDirective } from '../../../services/managerDirectiveApi';
+import { AgentDetail } from '../../../services/agentDetailApi';
+import type { TabKey } from '../agentDetailV2/AgentDetailV2Header';
 
 // AI Agent Dashboard redesign, Checkpoint C (2026-09-02) — Talk tab: real
 // conversation + Ask/Direct composer, where Direct creates a real
@@ -11,6 +13,16 @@ import { ManagerDirective } from '../../../services/managerDirectiveApi';
 // the honest alternative: the real active-directive count/list shown before
 // every Direct submission, and the real "can only narrow" guarantee text —
 // never a fabricated "no conflicts found" claim.
+//
+// Agent Detail redesign, Track F (2026-09-28) — composer upgraded from a
+// single-line <input> to a <textarea> (Enter sends, Shift+Enter inserts a
+// newline), plus a new real "Shared working context" sidebar backed by the
+// role charter + trust_contract. Ports every real assertion from the
+// pre-Track-F file, rewrites the 4 real classname-coupled `input.form-
+// control` queries to the new `textarea` element, and adds explicit
+// regression tests for the 2 real bugs plan-audit caught before any code
+// was written: a stray newline left behind on a failed send, and the
+// idempotent-send guard (!sending) surviving the composer upgrade.
 
 (Element.prototype as any).scrollIntoView = () => { /* no layout in jsdom */ };
 
@@ -23,6 +35,9 @@ jest.mock('../../../services/managerDirectiveApi', () => ({
   createDirective: jest.fn(),
   revokeDirective: jest.fn(),
 }));
+jest.mock('../../../services/agentRoleCharterApi', () => ({
+  getAgentRoleCharter: jest.fn(),
+}));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getConversation, sendMessage } = require('../../../services/agentManagerConversationApi') as {
@@ -32,6 +47,8 @@ const { getConversation, sendMessage } = require('../../../services/agentManager
 const { listDirectives, createDirective, revokeDirective } = require('../../../services/managerDirectiveApi') as {
   listDirectives: jest.Mock; createDirective: jest.Mock; revokeDirective: jest.Mock;
 };
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { getAgentRoleCharter } = require('../../../services/agentRoleCharterApi') as { getAgentRoleCharter: jest.Mock };
 
 const EMPTY_CONVERSATION: Conversation = { conversationId: 'c1', agentId: 'agent-1', messages: [] };
 const REAL_CONVERSATION: Conversation = {
@@ -48,25 +65,66 @@ const ACTIVE_DIRECTIVE: ManagerDirective = {
   revokedAt: null, revokedByEmail: null,
 };
 
+const BASE_AGENT: AgentDetail['agent'] = {
+  id: 'agent-1', agent_name: 'Reese', agent_type: 'ai_staff_mentor', category: null,
+  description: null, system_prompt: null, tools_granted: [], persona_version: null,
+  enabled: true, created_at: null, autonomy_level: null,
+  department: null, module: null, source_file: null,
+  max_runs_per_hour: 60, max_writes_per_execution: 100, max_proposals_per_run: 50,
+  autonomy_level_set_at: null, autonomy_level_source: null,
+  abac_mode_override: null, abac_mode_override_set_at: null, abac_mode_override_set_by: null,
+  abac_effective_mode: 'shadow', abac_global_default: 'shadow',
+};
+
+function buildDetail(overrides: Partial<AgentDetail> = {}): AgentDetail {
+  return {
+    agent: BASE_AGENT,
+    identity: null,
+    live_status: 'unknown',
+    open_ticket_count: 0,
+    completed_ticket_count_30d: 0,
+    tickets: [],
+    ticket_breakdown: [],
+    related_tasks: [],
+    owned_behaviors: [],
+    persona_version_history: [],
+    cost_summary: null,
+    authorization_summary: { window_days: 30, total: 0, allow: 0, approval: 0, block: 0, enforced_count: 0 },
+    capabilities: { reads: [], produces: [], undocumented_tools: [], produced_ticket_types: [], by_tool: [] },
+    autonomy_explanation: { level: 'observe', reason: 'No tools_granted recorded for this agent — the safe, honest default, not a guess.', matched_tool: null },
+    reports_to: null,
+    trust_contract: {
+      trigger_type: 'on_demand', schedule: null, status: 'idle', last_run_at: null, run_count: 0,
+      error_count: 0, avg_duration_ms: null, last_error: null, last_error_at: null, last_activity_at: null,
+    },
+    goals: [],
+    goals_overall: 0,
+    employee_facts: null,
+    ...overrides,
+  };
+}
+
 let container: HTMLDivElement;
 let root: Root;
 let confirmSpy: jest.SpyInstance;
 
-// React 18 tracks an input's previous value on the DOM node itself; setting
-// `.value` directly and dispatching a plain Event bypasses the native
-// setter React's change-detection relies on, so the synthetic onChange
-// never fires. Going through the native prototype setter first is the
-// standard workaround.
-function typeInto(input: HTMLInputElement, value: string) {
-  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
-  setter.call(input, value);
-  input.dispatchEvent(new Event('input', { bubbles: true }));
+// React 18 tracks a textarea's previous value on the DOM node itself;
+// setting `.value` directly and dispatching a plain Event bypasses the
+// native setter React's change-detection relies on, so the synthetic
+// onChange never fires. Going through the native prototype setter first is
+// the standard workaround — same pattern as AgentTrustControlTab.test.tsx's
+// own typeInto() for its 2 real textareas.
+function typeInto(el: HTMLTextAreaElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!;
+  setter.call(el, value);
+  el.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
   getConversation.mockResolvedValue(EMPTY_CONVERSATION);
   listDirectives.mockResolvedValue([]);
+  getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-1', charter: null });
   confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -79,9 +137,11 @@ afterEach(() => {
   container.remove();
 });
 
-async function renderTab() {
+const noopNavigate = (_tab: TabKey) => {};
+
+async function renderTab(detail: AgentDetail = buildDetail()) {
   await act(async () => {
-    root.render(<AgentTalkTab agentId="agent-1" />);
+    root.render(<AgentTalkTab agentId="agent-1" detail={detail} onNavigate={noopNavigate} />);
     await new Promise((r) => setTimeout(r, 0));
   });
 }
@@ -116,8 +176,8 @@ describe('AgentTalkTab — Ask mode', () => {
     sendMessage.mockResolvedValue(REAL_CONVERSATION);
     await renderTab();
 
-    const input = container.querySelector('input.form-control') as HTMLInputElement;
-    await act(async () => { typeInto(input, 'Should I hold escalations this week?'); });
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    await act(async () => { typeInto(textarea, 'Should I hold escalations this week?'); });
     const sendButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Send')!;
     await act(async () => {
       sendButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -132,11 +192,89 @@ describe('AgentTalkTab — Ask mode', () => {
   it('never calls createDirective in Ask mode', async () => {
     sendMessage.mockResolvedValue(REAL_CONVERSATION);
     await renderTab();
-    const input = container.querySelector('input.form-control') as HTMLInputElement;
-    await act(async () => { typeInto(input, 'hello'); });
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    await act(async () => { typeInto(textarea, 'hello'); });
     const sendButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Send')!;
     await act(async () => { sendButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
     expect(createDirective).not.toHaveBeenCalled();
+  });
+
+  it('a quick-prompt button pre-fills the composer without sending anything', async () => {
+    await renderTab();
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const quickButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'What needs my decision?')!;
+    await act(async () => { quickButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(textarea.value).toBe('What needs my decision?');
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(createDirective).not.toHaveBeenCalled();
+  });
+
+  it('quick-prompt buttons are hidden in Direct mode', async () => {
+    await renderTab();
+    const directButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Direct')!;
+    await act(async () => { directButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(container.textContent).not.toContain('What needs my decision?');
+  });
+});
+
+// Track F (2026-09-28) — the composer's new keyboard handling. Both real
+// bugs plan-audit caught before any code was written, now pinned as tests.
+describe('AgentTalkTab — composer keyboard handling (Track F)', () => {
+  it('plain Enter sends and leaves no stray trailing newline in the composer, even on a FAILED send', async () => {
+    sendMessage.mockRejectedValue({ response: { data: { error: 'Model unavailable' } } });
+    await renderTab();
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    await act(async () => { typeInto(textarea, 'hello'); });
+
+    await act(async () => {
+      textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: false, bubbles: true, cancelable: true }));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(sendMessage).toHaveBeenCalledWith('agent-1', 'hello');
+    expect(container.textContent).toContain('Model unavailable');
+    expect(textarea.value.endsWith('\n')).toBe(false);
+  });
+
+  it('Shift+Enter inserts a real newline and does not send anything', async () => {
+    await renderTab();
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    await act(async () => { typeInto(textarea, 'line one'); });
+
+    await act(async () => {
+      const evt = new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true });
+      const prevented = !textarea.dispatchEvent(evt);
+      // jsdom does not perform the native textarea newline-insert on an
+      // unprevented keydown (no real layout engine) — assert the REAL,
+      // load-bearing behavior instead: this app's own handler never calls
+      // preventDefault() for Shift+Enter, so the native browser action (a
+      // newline) is left free to occur, and no send fires.
+      expect(prevented).toBe(false);
+    });
+
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(createDirective).not.toHaveBeenCalled();
+  });
+
+  it('a second plain Enter while a send is still in flight never calls sendMessage a second time', async () => {
+    let resolveSend: (c: Conversation) => void = () => {};
+    sendMessage.mockReturnValue(new Promise((resolve) => { resolveSend = resolve; }));
+    await renderTab();
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    await act(async () => { typeInto(textarea, 'hello'); });
+
+    await act(async () => {
+      textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: false, bubbles: true, cancelable: true }));
+    });
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(textarea.disabled).toBe(true);
+
+    await act(async () => {
+      textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: false, bubbles: true, cancelable: true }));
+    });
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+
+    await act(async () => { resolveSend(REAL_CONVERSATION); await new Promise((r) => setTimeout(r, 0)); });
   });
 });
 
@@ -144,7 +282,7 @@ describe('AgentTalkTab — Direct mode', () => {
   it('shows the real active-directive count before submission, never a fabricated conflict check', async () => {
     listDirectives.mockResolvedValue([ACTIVE_DIRECTIVE]);
     await renderTab();
-    const directButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Direct'))!;
+    const directButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Direct')!;
     await act(async () => { directButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
     expect(container.textContent).toContain('1 other directive is already active');
   });
@@ -153,11 +291,11 @@ describe('AgentTalkTab — Direct mode', () => {
     createDirective.mockResolvedValue(ACTIVE_DIRECTIVE);
     await renderTab();
 
-    const directButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Direct'))!;
+    const directButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Direct')!;
     await act(async () => { directButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
 
-    const input = container.querySelector('input.form-control') as HTMLInputElement;
-    await act(async () => { typeInto(input, 'Hold anything under $50.'); });
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    await act(async () => { typeInto(textarea, 'Hold anything under $50.'); });
     const addButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Add Directive')!;
     await act(async () => { addButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
 
@@ -169,10 +307,10 @@ describe('AgentTalkTab — Direct mode', () => {
   it('does not create a directive if the manager cancels the confirmation', async () => {
     confirmSpy.mockReturnValue(false);
     await renderTab();
-    const directButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Direct'))!;
+    const directButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Direct')!;
     await act(async () => { directButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-    const input = container.querySelector('input.form-control') as HTMLInputElement;
-    await act(async () => { typeInto(input, 'x'); });
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    await act(async () => { typeInto(textarea, 'x'); });
     const addButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Add Directive')!;
     await act(async () => { addButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
     expect(createDirective).not.toHaveBeenCalled();
@@ -202,5 +340,48 @@ describe('AgentTalkTab — Standing Directives', () => {
 
     expect(revokeDirective).toHaveBeenCalledWith('agent-1', 'd1');
     expect(listDirectives).toHaveBeenCalledTimes(2); // once on mount, once after revoke
+  });
+});
+
+// Track F (2026-09-28) — the new "Shared working context" sidebar. Every
+// field is real data already fetched elsewhere on this page; each gets its
+// own honest empty state, never a fabricated placeholder.
+describe('AgentTalkTab — Shared working context sidebar (Track F)', () => {
+  it('shows the real mission as Objective, the real active-directive count, the real approval-required list, and the real schedule', async () => {
+    getAgentRoleCharter.mockResolvedValue({
+      agentId: 'agent-1',
+      charter: {
+        roleTitle: 'Student Success', mission: 'Help students move forward.', responsibilities: [], kpis: [],
+        updatedByEmail: 'ali@colaberry.com', updatedAt: '2026-09-18T00:00:00Z',
+        authorityAutonomous: [], authorityApprovalRequired: ['adjust_deadline'], authorityForbidden: [],
+      },
+    });
+    listDirectives.mockResolvedValue([ACTIVE_DIRECTIVE]);
+    await renderTab(buildDetail({ trust_contract: { ...buildDetail().trust_contract, schedule: 'Daily, 8am' } }));
+
+    expect(container.textContent).toContain('Help students move forward.');
+    expect(container.textContent).toContain('1 active — see below.');
+    expect(container.textContent).toContain('adjust_deadline');
+    expect(container.textContent).toContain('Daily, 8am');
+  });
+
+  it('shows honest empty states for every field when nothing real backs them', async () => {
+    getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-1', charter: null });
+    await renderTab();
+
+    expect(container.textContent).toContain('No role charter has been written yet.');
+    expect(container.textContent).toContain('None active right now.');
+    expect(container.textContent).toContain('None'); // Next scheduled check, schedule: null
+  });
+
+  it('"Inspect work records" navigates to the Work tab', async () => {
+    const onNavigate = jest.fn();
+    await act(async () => {
+      root.render(<AgentTalkTab agentId="agent-1" detail={buildDetail()} onNavigate={onNavigate} />);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    const link = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Inspect work records →')!;
+    await act(async () => { link.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(onNavigate).toHaveBeenCalledWith('work');
   });
 });
