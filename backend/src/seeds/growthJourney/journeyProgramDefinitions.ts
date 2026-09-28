@@ -71,6 +71,12 @@ export const PROGRAM_SLUGS = {
   aiFlotation: 'service-growth',
 } as const;
 
+// T604's terminology map lives in `services/growthJourney/journeyTerminology.ts`, not here: the
+// status registry reads it too, and a controller importing this file would pull the whole
+// offer-policy/model chain (and a real database connection) in to learn three nouns. Re-exported
+// so a reader who looks for it beside the programme definitions still finds it.
+export { TERMINOLOGY, TERMINOLOGY_METADATA_KEY, terminologyOf, type JourneyTerminology } from '../../services/growthJourney/journeyTerminology';
+
 export const JOURNEY_PROGRAMS: readonly JourneyProgramDefinition[] = [
   {
     tenant_slug: 'cpn',

@@ -5,6 +5,7 @@ import {
   resolveGrowthJourneyFlags,
   isGrowthJourneyCapabilityEnabled,
   enabledGrowthJourneyCapabilities,
+  growthJourneyFlagSummary,
   type GrowthJourneyFlags,
   type GrowthJourneyCapability,
 } from '../growthJourneyFlags';
@@ -179,6 +180,48 @@ describe('the property names do not collide with Explorer’s sub-flags', () => 
       expect(MODULE_SRC).not.toMatch(new RegExp(`\\.${prop}\\b`));
       expect(ENV_SRC).not.toMatch(new RegExp(`\\.${prop}\\b`));
     }
+  });
+});
+
+/**
+ * T604 — the switchboard summary an admin surface reads.
+ *
+ * It exists because the dark-launch guard below refuses a sub-flag read in any
+ * other file, and the status registry has to report all six switches. So the
+ * naming stays here, and these cells hold the two properties that matter: the
+ * summary says what is SET (not what may run), and its keys are the response
+ * shape rather than the flag names.
+ */
+describe('growthJourneyFlagSummary', () => {
+  const all = (value: boolean): GrowthJourneyFlags => Object.freeze({
+    growthJourneyEnabled: value,
+    journeySignalIngest: value,
+    journeyClassification: value,
+    journeyDecisions: value,
+    journeyHandoffs: value,
+    journeyExecution: value,
+  });
+
+  it('reports the six switches under the response keys, not the flag names', () => {
+    expect(growthJourneyFlagSummary(all(false))).toEqual({ master: false, signal_ingest: false, classification: false, decisions: false, handoffs: false, execution: false });
+    expect(growthJourneyFlagSummary(all(true))).toEqual({ master: true, signal_ingest: true, classification: true, decisions: true, handoffs: true, execution: true });
+  });
+
+  it('covers every flag exactly once: as many keys as there are flags', () => {
+    expect(Object.keys(growthJourneyFlagSummary(all(false))).length).toBe(FLAG_KEYS.length);
+  });
+
+  it('says what is SET, never what may RUN - the master does not mask a sub-flag here', () => {
+    const masterOffSubOn = { ...all(false), journeyDecisions: true } as GrowthJourneyFlags;
+    // The summary reports the sub-flag as the operator set it...
+    expect(growthJourneyFlagSummary(masterOffSubOn).decisions).toBe(true);
+    // ...while the permission answer is still false, because the master is off.
+    expect(isGrowthJourneyCapabilityEnabled('journeyDecisions', masterOffSubOn)).toBe(false);
+    expect(enabledGrowthJourneyCapabilities(masterOffSubOn)).toEqual([]);
+  });
+
+  it('is frozen, so a caller cannot edit the switchboard it was handed', () => {
+    expect(Object.isFrozen(growthJourneyFlagSummary(all(true)))).toBe(true);
   });
 });
 

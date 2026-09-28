@@ -52,6 +52,14 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // Classified paths fail predictably. The case-studies row below is the
   // receipt for learning that the expensive way.
   ['/api/admin/explorer-growth', 'campaigns'],
+  // Growth Journey OS (Phase 6, T604): the multi-brand framework Explorer Growth became the
+  // first programme on, so it is the same section for the same reason - it governs who may be
+  // contacted on behalf of which brand, which is campaigns work. DEFENSIVE in the same way as
+  // the row above: no scoped role holds 'campaigns' today, so this admits nobody new, and the
+  // day one does, a classified path fails predictably rather than 403ing for a reason nothing
+  // in the code explains. It covers `/status` too (the matcher is '/'-delimited), which is
+  // deliberate - an always-readable registry is still campaigns data.
+  ['/api/admin/growth-journey', 'campaigns'],
   ['/api/admin/sources', 'lead_ingestion'], ['/api/admin/ingest-logs', 'lead_ingestion'],
   ['/api/admin/routing-rules', 'lead_ingestion'], ['/api/admin/autonomous', 'lead_ingestion'],
   ['/api/admin/inbox', 'inbox_content'], ['/api/admin/content-queue', 'inbox_content'],
