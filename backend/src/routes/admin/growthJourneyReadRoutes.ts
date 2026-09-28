@@ -2,7 +2,13 @@ import { Router } from 'express';
 import { Request, Response, NextFunction } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import { env } from '../../config/env';
-import { getJourneyMetricsHandler } from '../../controllers/growthJourneyPerformanceController';
+import {
+  getJourneyByJourneyHandler,
+  getJourneyMetricsHandler,
+  getJourneyOutcomesHandler,
+  getJourneyRatesHandler,
+  getJourneyReceiptsHandler,
+} from '../../controllers/growthJourneyPerformanceController';
 
 /**
  * The journey's performance reads (Phase 6, T605).
@@ -42,6 +48,13 @@ function requireGrowthJourneyEnabled(_req: Request, res: Response, next: NextFun
 }
 router.use(BASE, requireGrowthJourneyEnabled);
 
+// Five GETs, no write path. `/metrics` is the registry's figures (T605); the other four are what
+// those figures drill into (T606): the per-brand handoff rates behind the pooled ones, the receipts,
+// the outcomes, and the Marketing Ops brand x programme x path roll-up through its own service.
 router.get(`${BASE}/metrics`, getJourneyMetricsHandler);
+router.get(`${BASE}/rates`, getJourneyRatesHandler);
+router.get(`${BASE}/receipts`, getJourneyReceiptsHandler);
+router.get(`${BASE}/outcomes`, getJourneyOutcomesHandler);
+router.get(`${BASE}/by-journey`, getJourneyByJourneyHandler);
 
 export default router;

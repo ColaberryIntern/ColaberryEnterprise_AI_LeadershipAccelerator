@@ -31,6 +31,16 @@ jest.mock('../../../services/growthJourney/performance/journeyMetricsService', (
   DEFAULT_WINDOW_DAYS: 30,
   MAX_WINDOW_DAYS: 365,
 }));
+// T606 added the by-journey handler to this controller, which imports the Marketing Ops roll-up;
+// that module loads `config/database`, so it is mocked at its boundary like the metrics service.
+jest.mock('../../../services/marketingAnalyticsService', () => ({ getCampaignMetricsByJourney: jest.fn().mockResolvedValue([]) }));
+jest.mock('../../../services/growthJourney/performance/performanceReads', () => ({
+  readReceipts: jest.fn().mockResolvedValue({ rows: [], total: 0, limit: 25, offset: 0 }),
+  readOutcomes: jest.fn().mockResolvedValue({ rows: [], total: 0, limit: 25, offset: 0 }),
+  readRates: jest.fn().mockResolvedValue({ brands: [], window_days: 30 }),
+  MAX_PAGE: 100,
+  DEFAULT_PAGE: 25,
+}));
 jest.mock('../../../models', () => ({
   Brand: { findAll: (...a: unknown[]) => m.brands(...a) },
   JourneyProgram: { findAll: (...a: unknown[]) => m.programs(...a) },
@@ -187,6 +197,8 @@ describe('the query is validated at the boundary', () => {
     m.compute.mockRejectedValue(Object.assign(new Error('connection reset'), { name: 'SequelizeConnectionError' }));
     const res = await auth(request(app()).get(METRICS));
     expect(res.status).toBe(500);
-    expect(res.body).toEqual({ error: 'Journey metrics read failed', error_class: 'SequelizeConnectionError' });
+    // T606 gave the five performance handlers ONE failure path, so the message is the shared one;
+    // the per-route detail is the `event` in the log line, not the body a caller sees.
+    expect(res.body).toEqual({ error: 'Journey performance read failed', error_class: 'SequelizeConnectionError' });
   });
 });

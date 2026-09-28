@@ -219,3 +219,87 @@ export type ControlsQuery = z.infer<typeof controlsQuerySchema>;
 export type PauseBody = z.infer<typeof pauseBodySchema>;
 export type RolloutBody = z.infer<typeof rolloutBodySchema>;
 export type ClearControlBody = z.infer<typeof clearControlBodySchema>;
+
+/* ── Phase 6 (T605, T606): the performance reads ─────────────────────────────────────────────── */
+
+/**
+ * Every list read is BOUNDED at the boundary: `limit` at most 100, `offset` a whole number,
+ * `window_days` at most a year. The clamp exists in the service too (a caller is not the only way
+ * in), and these schemas make a bad request a 400 before any query runs rather than a silently
+ * truncated page.
+ *
+ * `tenant_id` / `brand_id` are a SCOPE REQUEST, not a filter - the same rule as the read schemas
+ * above: `scopedContext` grants them only against a real membership and refuses anything else with
+ * a 403, so a caller cannot widen their own scope through a query string.
+ */
+
+export const PERFORMANCE_MAX_LIMIT = 100;
+export const PERFORMANCE_MAX_WINDOW_DAYS = 365;
+
+const performanceScope = {
+  tenant_id: z.string().uuid().optional(),
+  brand_id: z.string().uuid().optional(),
+  program_id: z.string().uuid().optional(),
+};
+
+const performancePaging = {
+  limit: z.coerce.number().int().min(1).max(PERFORMANCE_MAX_LIMIT).default(25),
+  offset: z.coerce.number().int().min(0).default(0),
+};
+
+export const metricsQuerySchema = z.object({
+  ...performanceScope,
+  window_days: z.coerce.number().int().min(1).max(PERFORMANCE_MAX_WINDOW_DAYS).optional(),
+});
+
+export const ratesQuerySchema = z.object({
+  ...performanceScope,
+  window_days: z.coerce.number().int().min(1).max(PERFORMANCE_MAX_WINDOW_DAYS).default(30),
+});
+
+/** The statuses and channels a receipt can carry - the model's own vocabulary, not a free string. */
+export const RECEIPT_STATUSES = [
+  'pending_review', 'approved', 'enrolling', 'enrolled', 'in_progress',
+  'completed', 'blocked', 'failed', 'cancelled', 'expired', 'rejected',
+] as const;
+export const RECEIPT_CHANNELS = ['email', 'in_app', 'ali_outreach'] as const;
+
+export const receiptsQuerySchema = z.object({
+  ...performanceScope,
+  ...performancePaging,
+  status: z.enum(RECEIPT_STATUSES).optional(),
+  channel: z.enum(RECEIPT_CHANNELS).optional(),
+});
+
+/** The outcome vocabulary, likewise the model's: an unknown type is a 400, never an empty list. */
+export const OUTCOME_TYPES = [
+  'reply', 'meeting_booked', 'meeting_completed', 'meeting_no_show', 'declined',
+  'opportunity_stage', 'enrolled_paid', 'subscription_active', 'project_started',
+  'handoff_accepted', 'handoff_dispositioned',
+  'contact_sent', 'contact_blocked', 'contact_failed', 'contact_replied',
+] as const;
+export const OUTCOME_SOURCES = [
+  'interaction_outcomes', 'appointments', 'strategy_calls', 'leads.pipeline_stage',
+  'enrollments', 'subscriptions', 'delivery_engagements', 'growth_journey_handoffs',
+  'growth_journey_executions',
+] as const;
+
+export const outcomesQuerySchema = z.object({
+  ...performanceScope,
+  ...performancePaging,
+  outcome_type: z.enum(OUTCOME_TYPES).optional(),
+  source: z.enum(OUTCOME_SOURCES).optional(),
+});
+
+/** The by-journey roll-up takes a date range, like the Marketing Ops route it re-exposes. */
+export const byJourneyQuerySchema = z.object({
+  ...performanceScope,
+  start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+export type MetricsQuery = z.infer<typeof metricsQuerySchema>;
+export type RatesQuery = z.infer<typeof ratesQuerySchema>;
+export type ReceiptsQuery = z.infer<typeof receiptsQuerySchema>;
+export type OutcomesQuery = z.infer<typeof outcomesQuerySchema>;
+export type ByJourneyQuery = z.infer<typeof byJourneyQuerySchema>;
