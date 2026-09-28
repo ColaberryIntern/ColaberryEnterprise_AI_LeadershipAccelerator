@@ -285,7 +285,7 @@ describe('AgentDetailPage — Live Status: stat row', () => {
     getManagerInboxItems.mockResolvedValue([]);
     await renderAgentPage();
     await openCommandCenterTab();
-    const costCard = Array.from(container.querySelectorAll('.admin-stat-card')).find((el) => el.textContent?.includes('Cost (30d)'));
+    const costCard = Array.from(container.querySelectorAll('.adv2-metric')).find((el) => el.textContent?.includes('Cost (30d)'));
     expect(costCard?.textContent).toContain('—');
   });
 });
