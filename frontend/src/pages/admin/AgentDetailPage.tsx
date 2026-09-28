@@ -350,7 +350,7 @@ export default function AgentDetailPage() {
       {activeTab === 'decisions' && (
         <AgentWorkDecisionsTab agentId={id} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} onInboxChanged={fetchInbox} />
       )}
-      {activeTab === 'talk' && <AgentTalkTab agentId={id} />}
+      {activeTab === 'talk' && <AgentTalkTab agentId={id} detail={detail} onNavigate={setActiveTab} />}
       {activeTab === 'performance_settings' && (
         <AgentPerformanceSettingsTab agentId={id} detail={detail} onNavigate={setActiveTab} />
       )}

@@ -267,6 +267,19 @@
  * .number recipe (a small filled circle preceding a quadrant heading). */
 .adv2-number { display: inline-grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: var(--adv2-trust-soft); color: var(--adv2-trust); font-size: 12px; font-weight: 600; margin-right: 8px; }
 
+/* Track F (2026-09-28) — Talk's chat/composer, matching the mockup's own
+ * .chat/.msg/.bubble/.composer/.chatprompts recipes translated to this
+ * file's --adv2-* tokens. None of these existed before this slice. */
+.adv2-chat { max-height: 540px; overflow-y: auto; padding-right: 8px; }
+.adv2-msg { max-width: 80%; margin-bottom: 18px; }
+.adv2-msg.adv2-user { margin-left: auto; max-width: 75%; }
+.adv2-msg .adv2-who { font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--adv2-ink-3); margin-bottom: 6px; }
+.adv2-bubble { padding: 14px 16px; background: var(--adv2-paper); border: 1px solid var(--adv2-rule); border-radius: 0 12px 12px 12px; font-size: 14.5px; }
+.adv2-msg.adv2-user .adv2-bubble { background: var(--adv2-trust-soft); border-color: var(--adv2-trust); border-radius: 12px 0 12px 12px; }
+.adv2-composer { border: 1px solid var(--adv2-rule); border-radius: 10px; padding: 12px; }
+.adv2-composer textarea { width: 100%; resize: vertical; min-height: 56px; border: 0; background: transparent; color: var(--adv2-ink); outline: 0; font: inherit; }
+.adv2-chatprompts { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+
 /* Task row */
 .adv2-task { padding: 16px 19px; display: grid; grid-template-columns: 1fr auto; gap: 19px; align-items: start; }
 .adv2-task h3 { margin: 0; font-size: 16px; font-weight: 600; font-family: var(--adv2-sans); color: var(--adv2-ink); }
