@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StatCard } from '../../../components/admin/shell';
 import InternshipProjectAuthor from '../components/InternshipProjectAuthor';
+import InternshipProjectGenerator from '../components/InternshipProjectGenerator';
 import { useReview } from './reviewContext';
 import { StandingBadge } from './badges';
 
@@ -15,6 +16,9 @@ const eyebrow: React.CSSProperties = { fontSize: 11, fontWeight: 700, letterSpac
 const TabActivity: React.FC = () => {
   const r = useReview();
   const { activity, activityError, selected } = r;
+  // Generated is the way projects are made; the hand-authoring form is the
+  // escape hatch behind it, not the default it used to be.
+  const [manual, setManual] = useState(false);
 
   if (activityError) return <div className="alert alert-warning py-2 mb-0" role="alert">{activityError}</div>;
   if (!activity) return <p className="text-muted mb-0">Loading activity…</p>;
@@ -80,9 +84,23 @@ const TabActivity: React.FC = () => {
           </div>
         ) : <span className="text-muted" style={{ fontSize: 13.5 }}>No project assigned yet.</span>}
 
-        {!activity.project && selected && (
-          <InternshipProjectAuthor applicationId={selected} onAuthored={r.reloadActivity} />
-        )}
+        {!activity.project && selected && (manual ? (
+          <div className="mt-2 pt-2" style={{ borderTop: '1px solid #f1f3f5' }}>
+            <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
+              <span className="text-muted" style={eyebrow}>Author manually</span>
+              <button type="button" className="btn btn-sm btn-link p-0" style={{ fontSize: 12.5 }} onClick={() => setManual(false)}>
+                Generate it instead
+              </button>
+            </div>
+            <InternshipProjectAuthor applicationId={selected} onAuthored={r.reloadActivity} />
+          </div>
+        ) : (
+          <InternshipProjectGenerator
+            applicationId={selected}
+            onAssigned={r.reloadActivity}
+            onManual={() => setManual(true)}
+          />
+        ))}
 
         {activity.project && (
           <div className="mt-2 pt-2" style={{ borderTop: '1px solid #f1f3f5' }}>
