@@ -45,6 +45,12 @@
   --adv2-nav-2: #163A33;
   --adv2-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --adv2-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Track C (2026-09-28) — the mockup's own --shadow:0 8px 24px #17352c06
+   * (preview (3).html), a very subtle dark-green-tinted card shadow. .adv2-
+   * card never had one, which reads as flat against the near-identical
+   * --adv2-paper/--adv2-panel tones — Ali: "boxes aren't so close to the
+   * edge" even where a 1px border technically exists. */
+  --adv2-shadow: 0 8px 24px rgba(23, 53, 44, 0.06);
 
   background: var(--adv2-paper);
   color: var(--adv2-ink);
@@ -80,6 +86,10 @@
   --adv2-warn-soft: #3A2E1A;
   --adv2-bad: #E0857D;
   --adv2-bad-soft: #3A211E;
+  /* Track C (2026-09-28) — a light shadow reads as invisible against a dark
+   * panel; a real, more opaque black shadow gives cards the same visible
+   * lift dark-mode UIs need. */
+  --adv2-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 /* Header */
@@ -145,9 +155,16 @@
 
 /* Body */
 .adv2-wrap { max-width: 1180px; margin: 0 auto; padding: 24px 28px 60px; }
-.adv2-wrap.adv2-grid { display: grid; grid-template-columns: minmax(0, 1fr) 375px; gap: 24px; align-items: start; }
+/* Track C (2026-09-28) — real bug: this was `.adv2-wrap.adv2-grid` (a
+ * compound selector requiring BOTH classes on one element), but the only
+ * real usage (AgentOverviewV2.tsx) always puts `adv2-grid` on a SEPARATE,
+ * nested div from `adv2-wrap` — so this rule never matched, and Overview's
+ * Main Column/Sidebar have stacked as plain blocks, not a 2-column grid,
+ * since Track A1 shipped. */
+.adv2-grid { display: grid; grid-template-columns: minmax(0, 1fr) 375px; gap: 24px; align-items: start; }
 .adv2-col { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
-.adv2-card { background: var(--adv2-panel); border: 1px solid var(--adv2-rule); border-radius: 10px; }
+.adv2-card { background: var(--adv2-panel); border: 1px solid var(--adv2-rule); border-radius: 10px; box-shadow: var(--adv2-shadow); }
+.adv2-evidence { background: var(--adv2-paper); padding: 14px; border-radius: 8px; }
 .adv2-card > h2 { font-size: 17px; font-weight: 600; margin: 0; padding: 16px 19px; border-bottom: 1px solid var(--adv2-rule); display: flex; align-items: baseline; gap: 10px; font-family: var(--adv2-sans); color: var(--adv2-ink); }
 .adv2-card > h2 .adv2-hint { font-weight: 400; font-size: 14px; color: var(--adv2-ink-3); }
 .adv2-card > h2 .adv2-right { margin-left: auto; font-weight: 400; font-size: 14px; color: var(--adv2-ink-3); }
@@ -304,7 +321,7 @@
 
 @media (prefers-reduced-motion: reduce) { .adv2-page * { transition: none !important; } }
 @media (max-width: 980px) {
-  .adv2-wrap.adv2-grid { grid-template-columns: 1fr; }
+  .adv2-grid { grid-template-columns: 1fr; }
   .adv2-strip { grid-template-columns: repeat(3, 1fr); }
   .adv2-stat:nth-child(3) { border-right: 0; }
   .adv2-stat:nth-child(n+4) { border-top: 1px solid var(--adv2-rule); }

@@ -78,7 +78,11 @@ afterEach(() => {
 });
 
 describe('AgentWorkV2', () => {
-  it('happy path: default view (Overdue) shows the right subset, the right live count on every bucket button, and auto-selects the first case for the detail panel', async () => {
+  // Track C (2026-09-28) — rewritten: the default changed from 'overdue' to
+  // 'all' (real, live bug — a manager with real open work but nothing
+  // literally overdue saw an empty-looking Work tab on first load). "All"
+  // aggregates every real bucket; it is never a real per-ticket value.
+  it('happy path: default view (All) shows every actionable ticket across all 4 buckets, the right live count on every button including All, and auto-selects the first case for the detail panel', async () => {
     await renderTab([
       ticket({ id: 't-overdue', title: 'Overdue ticket', status_bucket: 'overdue' }),
       ticket({ id: 't-verify', title: 'Ready ticket', status_bucket: 'ready_to_verify' }),
@@ -87,8 +91,11 @@ describe('AgentWorkV2', () => {
     ]);
 
     expect(container.textContent).toContain('Overdue ticket');
-    expect(container.textContent).not.toContain('Ready ticket');
+    expect(container.textContent).toContain('Ready ticket');
+    expect(container.textContent).toContain('Needs reply ticket');
+    expect(container.textContent).toContain('Open ticket');
     const buttons = Array.from(container.querySelectorAll('button'));
+    expect(buttons.some((b) => b.textContent?.includes('All') && b.textContent?.includes('4'))).toBe(true);
     expect(buttons.some((b) => b.textContent?.includes('Overdue') && b.textContent?.includes('1'))).toBe(true);
     expect(buttons.some((b) => b.textContent?.includes('Ready to verify') && b.textContent?.includes('1'))).toBe(true);
     expect(buttons.some((b) => b.textContent?.includes('Needs a reply') && b.textContent?.includes('1'))).toBe(true);
@@ -111,8 +118,21 @@ describe('AgentWorkV2', () => {
     expect(container.textContent).not.toContain('Overdue ticket');
   });
 
-  it('honest empty state per bucket, not a blank list', async () => {
+  // Track C (2026-09-28) — rewritten for the new 'all' default; the honest
+  // per-bucket empty state (e.g. "No tickets are overdue right now.") is
+  // still real and still covered, just reached by clicking into that
+  // specific bucket now rather than seeing it on load.
+  it('honest empty state on load (All, no tickets at all), not a blank list', async () => {
     await renderTab([]);
+    expect(container.textContent).toContain('No open cases right now.');
+  });
+
+  it('honest empty state for a specific bucket once selected, not a blank list', async () => {
+    await renderTab([ticket({ id: 't-open', title: 'Open ticket', status_bucket: 'open' })]);
+
+    const overdueBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Overdue'));
+    await act(async () => { overdueBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+
     expect(container.textContent).toContain('No tickets are overdue right now.');
   });
 

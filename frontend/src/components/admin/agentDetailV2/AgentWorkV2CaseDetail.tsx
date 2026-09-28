@@ -29,7 +29,7 @@ interface Props {
 
 export default function AgentWorkV2CaseDetail({ ticket, onNavigate }: Props) {
   return (
-    <div>
+    <div className="adv2-card" style={{ padding: 19 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
         <div>
           <div className="adv2-eyebrow">
