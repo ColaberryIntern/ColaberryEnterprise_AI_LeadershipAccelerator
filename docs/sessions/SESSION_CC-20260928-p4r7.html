@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, September 28, 2026 at 10:14 AM</div>
-    <div><span class="sid">CC-20260928-p4r7</span><span class="count">1 change</span></div>
+    <div class="meta">Generated Monday, September 28, 2026 at 1:05 PM</div>
+    <div><span class="sid">CC-20260928-p4r7</span><span class="count">2 changes</span></div>
   </header>
   <main>
     
@@ -71,7 +71,22 @@
           <div class="row"><span class="k">What changed</span><span class="v">Added two hard rules to `backend/src/services/inbox/hardRuleEngine.ts`, both placed ahead of the List-Unsubscribe (section 4) and noreply (section 5) rules that were archiving the mail. `0g account_security_0g` routes password resets, verification/one-time codes and magic sign-in links to INBOX for any sender, matching on subject only. `0h school_0h` routes `parentsquare.com` and `wylieisd.net` to INBOX. Also fixed section 3&#39;s keyword builder so a multi-word priority keyword tolerates any separator — &quot;Parent/Teacher&quot; and &quot;parent-teacher&quot; previously did not match `parent teacher`.</span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">`hardRuleEngine.test.ts` 67/67 pass (31 new). Each of the three changes proved by mutation, failing tests named, not counted — neutralising `isAccountSecurityMail` failed 11 (the 9 subject cases plus `routes the password reset Ali was waiting on to the inbox` and `routes a Hetzner verification code to the inbox`); neutralising `isSchoolNotificationSender` failed 5 (incl. `routes an absence notification and a grade update to the inbox` and `beats the List-Unsubscribe and noreply rules that archived these`); reverting the keyword separator failed 2 (`Parent/Teacher` and `parent-teacher`). Mutations reverted by edit, never by `git checkout`. Backend `tsc --noEmit` clean with a pinned TypeScript 5.9.3 (the hoisted 4.9.5 cannot parse this tree). Full `src/services/inbox` suite: 947/949 pass; the 2 failures are in `autoArchiveFalseSuccess.test.ts` and `autoArchiveGraphClient.test.ts` and were confirmed pre-existing by running both against pristine `origin/main` with my changes removed — identical 2 failures, and neither suite references the changed code.</span></div>
           
-        <div class="row"><span class="k">Notes</span><span class="v">Every test subject and sender is copied from a real archived row in `inbox_emails`, not invented. Test assertions run through `evaluateHardRules`, not just the helpers, because the defect was one of rule ORDER — the helpers would have matched all along. School mail is routed wholesale rather than filtered by message type: it runs 1-3 messages a day, which is not enough volume to justify the cost of silently dropping one. The school rule lists only the two domains that have actually sent mail; no speculative K-12 platforms. **Not deployed** — needs a production deploy to take effect, and the rules only affect mail classified after that.</span></div>
+        <div class="row"><span class="k">Notes</span><span class="v">Every test subject and sender is copied from a real archived row in `inbox_emails`, not invented. Test assertions run through `evaluateHardRules`, not just the helpers, because the defect was one of rule ORDER — the helpers would have matched all along. School mail is routed wholesale rather than filtered by message type: it runs 1-3 messages a day, which is not enough volume to justify the cost of silently dropping one. The school rule lists only the two domains that have actually sent mail; no speculative K-12 platforms. Deployed to production the same day (see the deploy record below); the rules only affect mail classified after that point.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Deploy to production and verify the live behaviour</h2>
+          <span class="badge">2026-09-28</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">PR #2804 merged (approved, all 8 checks green), then `backend` deployed from `origin/main` at `cfe8698d` via `DEPLOY_MODE=registry … bash scripts/deploy-prod.sh backend`. No raw `compose up`. The host tree was clean at `d5561f1b` beforehand and fast-forwarded; the stale lock from the 15:06 deploy was confirmed dead (no `deploy-prod.sh` or `compose up` process) before starting. The deploy also carried PRs #2805 and #2806 from other tabs, which were already merged to main.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Registry mode confirmed the published image digest equals `sha-cfe8698d…`; container recreated and answering after 5s; marker `account_security_0g` present in `backend:/app/dist/services/inbox/hardRuleEngine.js` — and confirmed **absent** (`grep -c` = 0) in the running build beforehand, so the marker actually proves the swap. The deploy script prints &quot;Not proved: the surface itself&quot;, so behaviour was then checked directly: a script run inside the production container against the **deployed** `dist` evaluated 8 real cases through `evaluateHardRules` — the ParentSquare reset, a Hetzner code, a Ceipal OTP, the keyword-free Sep 16 digest, an absence notification and the angle-bracketed district sender all returned INBOX with the expected `rule_id`; both controls (unrelated noreply marketing, look-alike `notparentsquare.com`) correctly stayed AUTOMATION. All 8 as expected.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Deployed during business hours at Ali&#39;s explicit instruction, against the standing after-hours rule.</span></div>
           
         </div>
       </article>
