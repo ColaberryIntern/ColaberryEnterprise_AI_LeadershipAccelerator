@@ -104,10 +104,28 @@ function delimited(tag: string, body: string, max: number): string {
 export function buildDecomposeUserPrompt(inputs: DecomposeInputs): string {
   const t = { ...DEFAULT_TARGETS, ...(inputs.targets ?? {}) };
   return [
-    `Decompose this into ${t.requirements[0]}-${t.requirements[1]} requirements, ` +
-      `${t.releases} releases (r0..r${t.releases - 1}), and ${t.stories[0]}-${t.stories[1]} vertical-slice stories.`,
+    // Requirements have NO ceiling. Ali, 2026-09-29, after a detailed brief came
+    // back missing requirements: "I think we should build out all of the
+    // requirements - no matter how big. We can always decide which release they
+    // will demo. I would rather have all the requirements there." The tier band
+    // used to be sent as an instruction, so a brief stating 35 requirements was
+    // told to produce 18-24 and complied. Releases stay the demo unit and the
+    // story count follows the requirements rather than capping them.
+    `Capture EVERY requirement stated in the brief and the document. Do not merge, drop, `
+      + `generalise or summarise requirements to reach a smaller number: completeness matters `
+      + `more than brevity, and a requirement left out is a failure of this task. `
+      + `A build of this size typically has around ${t.requirements[0]}-${t.requirements[1]}, `
+      + `but if the material states more, include ALL of them.`,
+    `Organise them into ${t.releases} releases (r0..r${t.releases - 1}). Scope is chosen by which `
+      + `release a requirement lands in, never by leaving it out.`,
+    `Write enough vertical-slice stories to cover every requirement — typically `
+      + `${t.stories[0]}-${t.stories[1]} for this size, and more when there are more requirements.`,
     `Cover every 'must' requirement with at least one story on the first pass.`,
-    `Spread the stories across releases: no release may hold more than ${(2 * (t.stories[0] / t.releases)).toFixed(1)} of them.`,
+    // Stated as the RATIO the gate actually enforces (`release_unbalanced` is
+    // 2x the mean of the real story count), not an absolute derived from the
+    // tier minimum — which, now that stories follow the requirements, would
+    // be a tighter number than the gate asks for and read as a story cap.
+    `Spread the stories across releases: no release may hold more than twice the average per release.`,
     '',
     delimited('ORIGINAL_BRIEF', inputs.brief, MAX_BRIEF_CHARS),
     '',
