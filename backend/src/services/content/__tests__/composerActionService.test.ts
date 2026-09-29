@@ -24,7 +24,9 @@ jest.mock('../../../models', () => ({
   ContentVariant: { findAll: jest.fn(async () => mockVariants) },
   ContentApprovalRequest: { update: mockApprovalUpdate, create: mockApprovalCreate, findOne: mockApprovalFindOne },
   // No account connected. Both providers here are handoff, so the scheduler must not complain.
-  ChannelAccount: { findOne: jest.fn(async () => null) },
+  // `resolveAccountFor` reads findAll, not findOne: since 2026-09-29 it counts the candidates so
+  // it can log when it has to choose between two accounts on one brand rather than pick silently.
+  ChannelAccount: { findOne: jest.fn(async () => null), findAll: jest.fn(async () => []) },
   PublishingJob: {
     findOrCreate: jest.fn(async ({ where }: { where: { idempotency_key: string } }) => {
       const key = where.idempotency_key;

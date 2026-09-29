@@ -210,6 +210,9 @@ export default function ChannelAccountsPanel(props: ChannelAccountsPanelProps) {
         <ConnectNetworks
           connectors={props.connectors}
           error={props.connectorsError ?? null}
+          connectedByProvider={new Map(
+            accounts.filter((a) => !a.revoked_at).map((a) => [a.provider, a.display_name] as const),
+          )}
           // Disabled for a reason the operator can read, rather than absent (which looks like a
           // missing feature) or enabled (which fails).
           blockedReason={vaultUnavailable

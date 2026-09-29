@@ -207,3 +207,23 @@ describe('rotation and interaction', () => {
     expect(onRetry).toHaveBeenCalled();
   });
 });
+describe('one account per network, per brand', () => {
+  // Adopted from Loomly on 2026-09-29: connecting a different account for a network the brand
+  // already has REPLACES the old one. Being told afterwards would feel like a bug, so the row
+  // says so before the click.
+  it('warns which account connecting will replace', () => {
+    render({ accounts: [account({ provider: 'linkedin_member', display_name: 'Ali Muwwakkil' })] });
+    const warning = container.querySelector('[data-testid="connect-replaces-linkedin"]');
+    expect(warning!.textContent).toBe('Connecting replaces Ali Muwwakkil');
+  });
+
+  it('says nothing for a network with nothing on it yet', () => {
+    render({ accounts: [account({ provider: 'linkedin_member' })] });
+    expect(container.querySelector('[data-testid="connect-replaces-meta"]')).toBeNull();
+  });
+
+  it('a revoked account is not something you are replacing', () => {
+    render({ accounts: [account({ provider: 'linkedin_member', status: 'revoked', revoked_at: '2026-09-01T00:00:00.000Z' })] });
+    expect(container.querySelector('[data-testid="connect-replaces-linkedin"]')).toBeNull();
+  });
+});

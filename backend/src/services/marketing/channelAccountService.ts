@@ -84,6 +84,11 @@ export interface AccountView {
   health: AccountHealth;
   /** When this account stops being usable, by the same rule. Null: no stated end. */
   usable_until: Date | null;
+  /**
+   * Set only by `connectAccount`, when connecting REPLACED an existing account for the same
+   * network on the same brand. The operator is told what was disconnected on their behalf.
+   */
+  replaced?: Array<{ id: string; display_name: string }>;
 }
 
 function log(level: 'info' | 'warn' | 'error', event: string, context: Record<string, unknown>, outcome = 'success'): void {
@@ -152,6 +157,16 @@ function assertExactlyOneOwner(input: Pick<ConnectInput, 'brandId' | 'ownerMembe
  * Idempotent on `(tenant, provider, provider_account_id)` among non-revoked rows: reconnecting
  * the same page updates it and replaces the credentials rather than creating a second account
  * that would publish a duplicate of every post.
+ *
+ * ONE ACCOUNT PER NETWORK PER BRAND (Loomly's rule, adopted 2026-09-29). Connecting a DIFFERENT
+ * account for a network the brand already has replaces the old one: it is revoked and its
+ * credentials destroyed, and the returned view names what was replaced so the operator is told
+ * rather than left to notice. Before this, two accounts could sit on one brand and
+ * `resolveAccountFor` silently published from whichever was connected most recently - the same
+ * family of confusion that stopped Ali's first real post on 2026-09-18.
+ *
+ * The replacement happens AFTER the new account is sealed, so a failure to seal leaves the brand
+ * with the connection it already had rather than with none.
  */
 export async function connectAccount(input: ConnectInput): Promise<AccountView> {
   assertExactlyOneOwner(input);
@@ -209,6 +224,32 @@ export async function connectAccount(input: ConnectInput): Promise<AccountView> 
     await writeCredential(account, 'refresh_token', input.refreshToken, input.refreshTokenExpiresAt ?? null);
   }
 
+  // One per network per brand: whatever else was on this network for this owner steps aside.
+  const ownerWhere = input.brandId
+    ? { brand_id: input.brandId }
+    : { owner_member_id: input.ownerMemberId ?? null };
+  const superseded = await ChannelAccount.findAll({
+    where: {
+      tenant_id: input.tenantId,
+      provider: input.provider,
+      ...ownerWhere,
+      revoked_at: { [Op.is]: null } as any,
+      id: { [Op.ne]: account.id } as any,
+    },
+  });
+  const replaced: Array<{ id: string; display_name: string }> = [];
+  for (const old of superseded) {
+    const destroyed = await ConnectorCredential.destroy({ where: { channel_account_id: old.id } });
+    await old.update({ status: 'revoked', revoked_at: new Date(), revoked_by: input.connectedBy ?? null });
+    replaced.push({ id: old.id, display_name: old.display_name });
+    log('info', 'account_superseded', {
+      account_id: old.id,
+      replaced_by: account.id,
+      provider: old.provider,
+      credentials_destroyed: destroyed,
+    });
+  }
+
   log('info', existing ? 'account_reconnected' : 'account_connected', {
     account_id: account.id,
     provider: account.provider,
@@ -217,7 +258,7 @@ export async function connectAccount(input: ConnectInput): Promise<AccountView> 
     missing_scope_count: (input.missingScopes ?? []).length,
   });
 
-  return toView(account, await credentialsFor(account.id));
+  return { ...toView(account, await credentialsFor(account.id)), ...(replaced.length ? { replaced } : {}) };
 }
 
 async function writeCredential(
