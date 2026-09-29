@@ -3,6 +3,7 @@ import {
   InternProjectSize, IntakeQuestion, IntakeQuestionsResponse, InternProjectBuildView,
   internProjectQuestions, generateInternProject, internProjectBuild, assignInternProject,
 } from '../../../services/adminInternshipApi';
+import RequirementCoveragePanel from './RequirementCoveragePanel';
 
 /**
  * Assign an intern a project by generating it.
@@ -323,6 +324,10 @@ const InternshipProjectGenerator: React.FC<{
                 {build!.advisory.map((v, i) => <li key={`${v.rule}-${i}`}>{v.message}</li>)}
               </ul>
             </details>
+          )}
+
+          {build?.coverage && (
+            <RequirementCoveragePanel coverage={build.coverage} summary={build.coverage_summary} />
           )}
 
           <div className="d-flex align-items-center gap-2 flex-wrap">

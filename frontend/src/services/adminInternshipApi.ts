@@ -350,6 +350,25 @@ export interface GeneratedPlan {
 
 export interface GateViolation { rule: string; message: string; subject?: string }
 
+export interface DimensionCoverage {
+  dimension: string;
+  label: string;
+  /** What the customer actually said here, verbatim. */
+  stated: string[];
+  requirement_ids: string[];
+  /** They said something here and nothing in the plan cites it. */
+  unaccounted: boolean;
+}
+
+export interface RequirementCoverage {
+  stated_items: number;
+  planned_requirements: number;
+  dimensions: DimensionCoverage[];
+  unaccounted_dimensions: string[];
+  requirements_without_provenance: string[];
+  dropped: Array<{ dimension: string; value: string; reason: string }>;
+}
+
 export interface InternProjectBuildView {
   project_id: string;
   enrollment_id: string;
@@ -362,6 +381,9 @@ export interface InternProjectBuildView {
   advisory: GateViolation[];
   plan_sha256: string | null;
   assigned: boolean;
+  /** Null when the project was not built from a recorded conversation. */
+  coverage: RequirementCoverage | null;
+  coverage_summary: string | null;
 }
 
 export async function internProjectQuestions(
