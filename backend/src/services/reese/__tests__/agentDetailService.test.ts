@@ -744,6 +744,25 @@ describe('getAgentDetail', () => {
       expect(result!.tickets[1].due_date).toBeNull();
     });
 
+    // Regression (2026-09-29 production incident): a real Sequelize DATEONLY
+    // column comes back from an actual DB read as a plain string (e.g.
+    // "2026-10-02"), NEVER a JS Date, no matter what the model's own
+    // `declare due_date: Date | null` claims. Every other test in this file
+    // mocks due_date as a real Date object, which never exercised this path
+    // and let a real `dueDate.getTime is not a function` crash reach
+    // production the moment every ticket started carrying a real due_date
+    // (the system-wide ticket due-date fix backfill). This test mocks the
+    // real runtime shape, not the model's aspirational type.
+    it('never throws when due_date comes back as a raw date string (the real Sequelize DATEONLY shape), and still computes a correct status_bucket', async () => {
+      mockTicketFindAll.mockResolvedValue([
+        { id: 't1', ticket_number: 1, title: 'String due_date', status: 'in_progress', priority: 'medium', type: 'student_support', created_at: new Date(), updated_at: new Date(), due_date: '2020-01-01' },
+      ]);
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.tickets[0].status_bucket).toBe('overdue');
+    });
+
     it("status_bucket: 'overdue' when due_date is past and status is non-terminal, taking priority over the agent's own latest activity", async () => {
       mockTicketFindAll.mockResolvedValue([
         { id: 't1', ticket_number: 1, title: 'Overdue', status: 'in_progress', priority: 'medium', type: 'student_support', created_at: new Date(), updated_at: new Date(), due_date: new Date('2020-01-01T00:00:00Z') },

@@ -327,6 +327,17 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
     tickets: tickets.map((t: any) => {
       const latestActivity = latestActivityByTicketId.get(t.id) ?? null;
       const needsReply = computeNeedsReply(latestActivity?.actor_id ?? null, ownIdentityIds);
+      // Ticket due-date validation gap fix (2026-09-28) surfaced a real,
+      // pre-existing bug here: Ticket.due_date is a Sequelize DATEONLY
+      // column, which comes back from a real DB read as a plain string
+      // (e.g. "2026-10-02"), never a JS Date, regardless of the model's
+      // own `declare due_date: Date | null` claiming otherwise. Before this
+      // session's fix, almost no ticket had a due_date at all, so
+      // computeStatusBucket()'s `dueDate.getTime()` call almost never ran
+      // against a real value — now every open ticket has one, so it ran on
+      // every ticket and crashed this page's tickets mapping outright.
+      // Coerce once, here, rather than trusting the model's own type.
+      const dueDate = t.due_date ? new Date(t.due_date) : null;
       return {
         id: t.id,
         ticket_number: t.ticket_number ?? null,
@@ -341,7 +352,7 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
         // never surfaced in this response (response-shape change only, no
         // schema change; see models/Ticket.ts's real due_date column).
         due_date: t.due_date ?? null,
-        status_bucket: computeStatusBucket({ status: t.status, dueDate: t.due_date ?? null, needsReply }),
+        status_bucket: computeStatusBucket({ status: t.status, dueDate, needsReply }),
       };
     }),
     ticket_breakdown: ticketBreakdown,
