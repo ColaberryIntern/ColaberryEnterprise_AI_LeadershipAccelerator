@@ -6,6 +6,15 @@ import AgentDetailPage from '../AgentDetailPage';
 import { AgentDetail } from '../../../services/agentDetailApi';
 import { ManagerInboxItem } from '../../../services/managerInboxApi';
 
+// Chat formatting fix (2026-09-29) — AgentTalkTab (rendered by this page's
+// Talk tab) now imports react-markdown, which is pure ESM with a large
+// transitive dependency tree Jest can't resolve under this repo's pinned
+// react-scripts 5 (a real, pre-existing gap — see AgentTalkTab.test.tsx's
+// own comment for the full explanation). Mocked here too since this file
+// imports AgentDetailPage, which imports AgentTalkTab transitively.
+jest.mock('react-markdown', () => ({ __esModule: true, default: ({ children }: { children: string }) => children }));
+jest.mock('remark-gfm', () => ({ __esModule: true, default: () => {} }));
+
 // AI Workforce Management, Checkpoint A of the Command Center redesign
 // (2026-09-01) — dedicated test file for the new "Command Center" tab, kept
 // separate from the existing ~1000-line AgentDetailPage.smoke.test.tsx

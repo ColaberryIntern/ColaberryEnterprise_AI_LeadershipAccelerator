@@ -1,54 +1,8 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { remarkPreserveGeneratedLineBreaks } from '../../utils/remarkPreserveGeneratedLineBreaks';
 import './recordProse.css';
-
-/**
- * Preserve the single newlines the generator wrote.
- *
- * CommonMark collapses a lone newline into a space, which is right for prose a human
- * typed and wrong for these fields. The executive deliverable is GENERATED, and the
- * generator emits line-oriented content:
- *
- *     **Organization:** Colaberry Enterprise AI Accelerator
- *     **Industry:** Education Technology / AI Training
- *     **Date:** May 22, 2026
- *
- * Rendered by the book, those four labelled facts run together into one unreadable
- * line. The real production record has 35 such breaks. This walks the mdast and turns
- * a soft break inside a PARAGRAPH into a hard one.
- *
- * Paragraph-only is deliberate. Table cells hold inline nodes directly rather than a
- * paragraph, and a fenced block is a `code` node carrying a string value, so neither is
- * reachable from here — table layout and code whitespace are left exactly as parsed.
- *
- * This is a local plugin rather than `remark-breaks` so the fix costs no new dependency.
- */
-function remarkPreserveGeneratedLineBreaks() {
-  return (tree: any) => {
-    const walk = (node: any): void => {
-      if (!node || !Array.isArray(node.children)) return;
-
-      if (node.type === 'paragraph') {
-        const next: any[] = [];
-        for (const child of node.children) {
-          if (child?.type === 'text' && typeof child.value === 'string' && child.value.includes('\n')) {
-            child.value.split('\n').forEach((part: string, i: number) => {
-              if (i > 0) next.push({ type: 'break' });
-              if (part) next.push({ type: 'text', value: part });
-            });
-          } else {
-            next.push(child);
-          }
-        }
-        node.children = next;
-      }
-
-      node.children.forEach(walk);
-    };
-    walk(tree);
-  };
-}
 
 /**
  * RecordProse — renders a Capstone Record's long-form fields as the Markdown they are.

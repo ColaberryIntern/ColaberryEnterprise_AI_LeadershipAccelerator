@@ -5,6 +5,15 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import AgentDetailPage from '../AgentDetailPage';
 import { AgentDetail } from '../../../services/agentDetailApi';
 
+// Chat formatting fix (2026-09-29) — AgentTalkTab (rendered by this page's
+// Talk tab) now imports react-markdown, which is pure ESM with a large
+// transitive dependency tree Jest can't resolve under this repo's pinned
+// react-scripts 5 (a real, pre-existing gap — see AgentTalkTab.test.tsx's
+// own comment for the full explanation). Mocked here too since this file
+// imports AgentDetailPage, which imports AgentTalkTab transitively.
+jest.mock('react-markdown', () => ({ __esModule: true, default: ({ children }: { children: string }) => children }));
+jest.mock('remark-gfm', () => ({ __esModule: true, default: () => {} }));
+
 // Checkpoint I (2026-09-11) — Ali pasted a full mockup and asked to match
 // its format for Overview. Replaces the Checkpoint H sub-tabbed version:
 // Overview is now one flowing page (AgentOverviewV2), so every section's

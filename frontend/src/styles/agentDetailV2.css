@@ -121,7 +121,15 @@
  * used inside `.adv2-shell-content` for the identity/facts block, not for a
  * page-wide header — the sidebar+topbar replace that role.
  */
-.adv2-shell { display: grid; grid-template-columns: 210px 1fr; min-height: 100vh; margin: -1.5rem -1.5rem 0; }
+/* Layout bug fix (2026-09-29, Ali live: content clashing with the left
+ * sidebar and the top edge). This negative margin was written to cancel
+ * AdminLayout's old `container-fluid px-4 py-4` (1.5rem) padding around the
+ * immersive route — but AdminLayout.tsx:215 already gives `/admin/agents/*`
+ * ZERO padding today (`className={isImmersive ? '' : 'container-fluid
+ * px-4 py-4'}`), so this margin had nothing left to cancel and was instead
+ * pulling the whole shell into negative space, clipping it against the true
+ * viewport edges. */
+.adv2-shell { display: grid; grid-template-columns: 210px 1fr; min-height: 100vh; }
 .adv2-sidebar { background: linear-gradient(180deg, var(--adv2-nav), var(--adv2-nav-2)); color: #C9DED5; padding: 24px 16px; display: flex; flex-direction: column; }
 .adv2-sidebar-brand { color: #fff; font-size: 19px; font-weight: 700; letter-spacing: -0.5px; padding: 0 6px; }
 .adv2-sidebar-brand span { color: #6DD7B4; }
@@ -190,7 +198,16 @@
  */
 .adv2-hero { background: linear-gradient(115deg, var(--adv2-nav), var(--adv2-nav-2)); border-radius: 14px; padding: 27px 29px; color: #fff; display: grid; grid-template-columns: 1fr 280px; gap: 25px; }
 .adv2-hero .adv2-eyebrow { font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; font-weight: 700; color: #96D9BD; }
-.adv2-hero h2 { font-size: 24px; line-height: 1.35; margin: 8px 0 12px; letter-spacing: -0.5px; font-weight: 600; }
+/* Contrast bug fix (2026-09-29, Ali live: hero sentence unreadable — dark
+ * text on the dark green hero background). This h2 never set its own
+ * `color`, so it was inheriting the hero's white UNTIL a global `h1..h6`
+ * rule (global.css / brand-bridge.css / base.css each set one) matched it
+ * directly — CSS inheritance always loses to any rule that targets the
+ * element itself, however low that rule's specificity, so the global dark
+ * heading color won over the hero's inherited white. `.adv2-hero p` and
+ * `.adv2-hero .adv2-btn` right below already defend against this same
+ * class of override; this heading never did. */
+.adv2-hero h2 { font-size: 24px; line-height: 1.35; margin: 8px 0 12px; letter-spacing: -0.5px; font-weight: 600; color: #fff; }
 .adv2-hero p { color: #BED8CB; font-size: 14px; margin: 0 0 14px; max-width: 62ch; }
 .adv2-hero .adv2-btn { background: #E6F4ED; color: #154E3E; border: 0; }
 .adv2-hero-next { border-left: 1px solid #FFFFFF25; padding-left: 25px; align-self: center; }
@@ -275,6 +292,19 @@
 .adv2-msg.adv2-user { margin-left: auto; max-width: 75%; }
 .adv2-msg .adv2-who { font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--adv2-ink-3); margin-bottom: 6px; }
 .adv2-bubble { padding: 14px 16px; background: var(--adv2-paper); border: 1px solid var(--adv2-rule); border-radius: 0 12px 12px 12px; font-size: 14.5px; }
+/* Chat formatting fix (2026-09-29, Ali live: a numbered-list reply with
+ * **bold** markers rendered as one unbroken wall of literal text). The
+ * bubble now renders real markdown (react-markdown, same library and
+ * line-break-preserving plugin as RecordProse.tsx); these rules normalize
+ * the default browser paragraph/list margins for a compact bubble, not a
+ * full page. */
+.adv2-bubble p { margin: 0 0 8px; }
+.adv2-bubble p:last-child { margin-bottom: 0; }
+.adv2-bubble ul, .adv2-bubble ol { margin: 0 0 8px; padding-left: 22px; }
+.adv2-bubble ul:last-child, .adv2-bubble ol:last-child { margin-bottom: 0; }
+.adv2-bubble li { margin: 3px 0; }
+.adv2-bubble strong { font-weight: 700; }
+.adv2-bubble a { color: inherit; text-decoration: underline; }
 .adv2-msg.adv2-user .adv2-bubble { background: var(--adv2-trust-soft); border-color: var(--adv2-trust); border-radius: 12px 0 12px 12px; }
 .adv2-composer { border: 1px solid var(--adv2-rule); border-radius: 10px; padding: 12px; }
 .adv2-composer textarea { width: 100%; resize: vertical; min-height: 56px; border: 0; background: transparent; color: var(--adv2-ink); outline: 0; font: inherit; }
