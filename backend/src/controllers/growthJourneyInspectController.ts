@@ -91,7 +91,7 @@ export async function getJourneyQueuePoliciesHandler(req: Request, res: Response
 /**
  * The holdout policies in scope and what each has measured (T608).
  *
- * A read, like its six siblings: it reports the policy an operator wrote and the arithmetic
+ * A read, like its seven siblings: it reports the policy an operator wrote and the arithmetic
  * `computeLift` derives from the decision rows. It cannot create, pause or change an experiment -
  * a policy row is written deliberately, outside this surface.
  */
