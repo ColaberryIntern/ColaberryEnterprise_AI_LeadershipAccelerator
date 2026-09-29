@@ -144,6 +144,9 @@ export const NAV_GROUPS: NavGroup[] = [
     // Gov-contract entry page (Phase 5 slice 1): best-fit proposals -> start -> the Command Center.
     // Same 'program' section as /admin/factory (backend mgmtSectionGate covers /api/admin/factory/*).
     { path: '/admin/gov-opportunities', label: 'Gov Opportunities', icon: 'government-line' },
+    // Gov qualification workspace (Phase 2): review an opportunity's source evidence before a bid pursuit is
+    // approved. Same 'program' section (backend mgmtSectionGate covers /api/admin/factory/qualification/*).
+    { path: '/admin/gov-qualification', label: 'Gov Qualification', icon: 'shield-check-line' },
   ]},
   { label: 'Intelligence', section: 'intelligence', links: [
     { path: '/admin/ceo', label: 'CEO Command', icon: 'vip-crown-line' },

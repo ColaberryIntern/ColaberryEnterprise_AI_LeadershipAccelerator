@@ -68,6 +68,7 @@ import { ensureCertPrepSchema } from './db/ensureCertPrepSchema';
 import { ensureProjectArchiveSchema } from './db/ensureProjectArchiveSchema';
 import { ensureProjectApprovalSchema } from './db/ensureProjectApprovalSchema';
 import { ensureContractTrackSchema } from './db/ensureContractTrackSchema';
+import { ensureGovQualificationSchema } from './db/ensureGovQualificationSchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
 import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
 import { ensureInternshipSchema } from './db/ensureInternshipSchema';
@@ -2716,6 +2717,11 @@ async function start(): Promise<void> {
   // the requirement link tables, and the versioned contract_process_documents). Additive NEW
   // tables that FK to delivery_projects (and projects) — no existing table is altered.
   await ensureContractTrackSchema();
+  // AI Project Factory Phase 2: the Enterprise-owned gov qualification model (gov_qualifications,
+  // build_authorizations, gov_opportunity_aliases). Additive NEW tables that FK to delivery_projects
+  // (and the qualification table itself) — no existing table is altered; placed after the contract
+  // tables since build_authorizations references delivery_projects.
+  await ensureGovQualificationSchema();
   // AI Project Factory: the executor/accountable/skills/judgment/confidence/source-evidence
   // attributes, added to student_tasks as new nullable columns (the archived_at/approval_state
   // pattern). Existing rows are untouched and unset until the factory populates them.

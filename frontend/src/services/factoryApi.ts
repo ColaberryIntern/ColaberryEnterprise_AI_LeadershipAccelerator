@@ -211,3 +211,52 @@ export async function generateDecomposition(deliveryProjectId: string): Promise<
     `/api/admin/factory/contract/${encodeURIComponent(deliveryProjectId)}/generate`, {});
   return data;
 }
+
+// ── Gov Qualification Workspace (Phase 2) ────────────────────────────────────
+/** One evaluated requirement: the server decides whether it BLOCKS a bid pursuit (missing evidence never passes). */
+export interface QualRequirementEval { id: string; dueStage: string; applicability: string; blocking: boolean; reason: string | null; }
+export interface QualRequirementsEvaluation {
+  evals: QualRequirementEval[];
+  blocking: QualRequirementEval[];
+  deliveryObligations: QualRequirementEval[];
+  byDueStage: Record<string, QualRequirementEval[]>;
+  canApproveBid: boolean;
+}
+/** The server-authoritative source detail (a gov-opportunity.v1 subset). Advisory-only fields (legacy fit,
+ *  legacyVerdict) are shown labeled as advisory — the qualification depends on evidence, not on OP's verdict. */
+export interface QualSourceDetail {
+  canonicalOpportunityId: string;
+  sourceSnapshotVersion: number;
+  isFixture?: boolean;
+  notice: { noticeType: { value: string; isBindingSolicitation: boolean }; procurementType: { value: string }; contractVehicle: string | null };
+  publisher: { leadBuyer: { name: string; jurisdiction: string }; officialSourceUrl: string | null };
+  deadline: { originalText: string | null; utc: string | null; utcConfidence: string; conflicts: Array<{ originalText: string; utc: string | null; source: string }> };
+  value: { published: { amountMinorUnits: number | null; currency: string; valueType: string } | null; modelEstimate: { amountMinorUnits: number | null; currency: string; notForRevenuePlanning: boolean } | null };
+  documents: { coverage: string; counts: { listed: number; downloaded: number; parsed: number; inaccessible: number } };
+  requirements: Array<{ id: string; text: string; category: string; applicability: string; responsibleParty: string; dueStage: string; bindingStatus: string; evidenceRef?: { docId: string } | null }>;
+  sourceAssessment: { legacyVerdict: { status: string | null; method: string | null; evidence: string | null } | null };
+  legacy: { fitScore: number | null; priorityScore: number | null; pursuitStatus: string | null };
+}
+export interface QualificationRecord {
+  id: string; bidding_entity: string; decision: string; version: number;
+  rationale: string | null; source_snapshot_version: number | null; reviewer_identity_id: string | null;
+}
+export interface GovQualificationWorkspace {
+  canonicalOpportunityId: string;
+  /** false today: OP's live v2 detail endpoint is not wired, so the source is a labeled fixture. */
+  sourceLive: boolean;
+  sourceAvailable: boolean;
+  source: QualSourceDetail | null;
+  evaluation: QualRequirementsEvaluation | null;
+  qualification: QualificationRecord | null;
+  changedSource: boolean;
+  /** Server's verdict on whether an approval is currently permitted (no blocking requirement, source unchanged). */
+  canApprove: boolean;
+}
+
+/** The read-only qualification workspace for one opportunity (source facts + requirement evaluation + record). */
+export async function getGovQualificationWorkspace(canonicalOpportunityId: string, biddingEntity?: string): Promise<GovQualificationWorkspace> {
+  const q = biddingEntity ? `?biddingEntity=${encodeURIComponent(biddingEntity)}` : '';
+  const { data } = await api.get<GovQualificationWorkspace>(`/api/admin/factory/qualification/${encodeURIComponent(canonicalOpportunityId)}${q}`);
+  return data;
+}

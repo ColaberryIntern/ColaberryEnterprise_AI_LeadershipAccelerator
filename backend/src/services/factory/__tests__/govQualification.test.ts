@@ -1,0 +1,207 @@
+/**
+ * The Enterprise-owned qualification: requirement evaluation never lets missing evidence pass, a decision forks
+ * a new version under CAS, and a server-side approval binds to the RE-FETCHED source snapshot + version
+ * (fail-closed when the source is unavailable, rejected when the source changed under the reviewer, and browser
+ * facts are never consulted). The detail client is the REAL fixture-backed one — this proves the service reads
+ * OP through opDetailClient, not through anything the caller supplied.
+ */
+const findOne = jest.fn();
+const create = jest.fn();
+jest.mock('../../../models/GovQualification', () => ({
+  __esModule: true,
+  default: { findOne: (...a: any[]) => findOne(...a), create: (...a: any[]) => create(...a) },
+}));
+
+import {
+  evaluateRequirements, createQualification, recordDecision, approveGovQualification,
+  QualificationConflictError, QualificationBlockedError, ChangedSourceError, SourceUnavailableError,
+  QualificationNotFoundError, SelfApprovalError,
+} from '../govQualification';
+import { CLEAN_CANONICAL, BLOCKING_CANONICAL, UNAVAILABLE_CANONICAL, GOV_OPPORTUNITY_FIXTURES } from '../opportunities/govOpportunityFixtures';
+
+beforeEach(() => jest.clearAllMocks());
+
+// A requirement builder so each case shows only the fields it exercises.
+const req = (o: Partial<Record<string, any>> = {}) => ({
+  id: 'R', text: 't', category: 'c', applicability: 'always', responsibleParty: 'bidder',
+  dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement', evidenceRef: { docId: 'D1' }, ...o,
+});
+
+describe('evaluateRequirements (PURE) — missing evidence never silently passes', () => {
+  it('applicability "unknown" is blocking (never treated as false/not-applicable)', () => {
+    const e = evaluateRequirements([req({ applicability: 'unknown' })]);
+    expect(e.canApproveBid).toBe(false);
+    expect(e.blocking[0].reason).toBe('applicability_unknown');
+  });
+
+  it('a "not_applicable" with no applicabilityEvidenceRef is blocking', () => {
+    const e = evaluateRequirements([req({ applicability: 'not_applicable', evidenceRef: null })]);
+    expect(e.canApproveBid).toBe(false);
+    expect(e.blocking[0].reason).toBe('not_applicable_unevidenced');
+  });
+
+  it('a "not_applicable" WITH applicabilityEvidenceRef passes (evidenced dismissal is allowed)', () => {
+    const e = evaluateRequirements([req({ applicability: 'not_applicable', evidenceRef: null, applicabilityEvidenceRef: { docId: 'D9' } })]);
+    expect(e.canApproveBid).toBe(true);
+  });
+
+  it('an applicable binding submission requirement with NO evidenceRef is a blocking prerequisite', () => {
+    const e = evaluateRequirements([req({ evidenceRef: null })]);
+    expect(e.canApproveBid).toBe(false);
+    expect(e.blocking[0].reason).toBe('submission_prerequisite_no_evidence');
+  });
+
+  it('mandatory_response_instruction counts as binding for the submission-evidence rule', () => {
+    const e = evaluateRequirements([req({ bindingStatus: 'mandatory_response_instruction', evidenceRef: null })]);
+    expect(e.canApproveBid).toBe(false);
+  });
+
+  it('a binding submission requirement WITH evidence passes', () => {
+    expect(evaluateRequirements([req()]).canApproveBid).toBe(true);
+  });
+
+  it('a delivery-stage obligation with no evidence is FLAGGED but does NOT block a bid pursuit', () => {
+    const e = evaluateRequirements([req({ dueStage: 'delivery', bindingStatus: 'draft_future_obligation', evidenceRef: null })]);
+    expect(e.canApproveBid).toBe(true);
+    expect(e.deliveryObligations).toHaveLength(1);
+    expect(e.byDueStage.delivery).toHaveLength(1);
+  });
+
+  it('the CLEAN fixture is approvable; the BLOCKING fixture is not', () => {
+    expect(evaluateRequirements(GOV_OPPORTUNITY_FIXTURES[CLEAN_CANONICAL].requirements).canApproveBid).toBe(true);
+    expect(evaluateRequirements(GOV_OPPORTUNITY_FIXTURES[BLOCKING_CANONICAL].requirements).canApproveBid).toBe(false);
+  });
+});
+
+describe('createQualification (idempotent, version 1, pending_review)', () => {
+  const input = {
+    tenantId: 'ten-1', biddingEntity: 'colaberry', canonicalOpportunityId: CLEAN_CANONICAL,
+    reviewerIdentityId: 'rev-1', sourceSnapshot: GOV_OPPORTUNITY_FIXTURES[CLEAN_CANONICAL],
+    sourceSnapshotVersion: 3, sourceAvailable: true, requirements: GOV_OPPORTUNITY_FIXTURES[CLEAN_CANONICAL].requirements,
+  };
+
+  it('creates a version-1 pending_review record with a content hash and the bound snapshot version', async () => {
+    findOne.mockResolvedValue(null);
+    create.mockImplementation(async (row: any) => ({ ...row, id: 'q1', get: () => ({ ...row, id: 'q1' }) }));
+    const q = await createQualification(input);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(q.version).toBe(1);
+    expect(q.decision).toBe('pending_review');
+    expect(q.bidding_entity).toBe('colaberry');
+    expect(q.source_snapshot_version).toBe(3);
+    expect(q.content_sha256).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('is idempotent: an existing active record is returned instead of a second row', async () => {
+    findOne.mockResolvedValue({ id: 'q1', version: 1, get: () => ({ id: 'q1', version: 1 }) });
+    const q = await createQualification(input);
+    expect(create).not.toHaveBeenCalled();
+    expect(q.id).toBe('q1');
+  });
+});
+
+describe('recordDecision (CAS + fork-on-edit, non-approval states)', () => {
+  it('refuses a stale expectedVersion with a QualificationConflictError', async () => {
+    findOne.mockResolvedValue({ version: 3, save: jest.fn() });
+    await expect(recordDecision({
+      canonicalOpportunityId: CLEAN_CANONICAL, biddingEntity: 'colaberry', expectedVersion: 1,
+      decision: 'needs_evidence', reviewerIdentityId: 'rev-1',
+    })).rejects.toBeInstanceOf(QualificationConflictError);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('forks a new version and supersedes the prior (never mutates in place)', async () => {
+    const current: any = { version: 1, status: 'active', tenant_id: 't', bidding_entity: 'colaberry', canonical_opportunity_id: CLEAN_CANONICAL, source_snapshot: {}, save: jest.fn().mockResolvedValue(undefined) };
+    findOne.mockResolvedValue(current);
+    create.mockImplementation(async (row: any) => ({ ...row, id: 'q2', get: () => ({ ...row, id: 'q2' }) }));
+    const q = await recordDecision({
+      canonicalOpportunityId: CLEAN_CANONICAL, biddingEntity: 'colaberry', expectedVersion: 1,
+      decision: 'no_bid', rationale: 'out of scope', reviewerIdentityId: 'rev-1',
+    });
+    expect(q.version).toBe(2);
+    expect(q.decision).toBe('no_bid');
+    expect(current.status).toBe('superseded');
+    expect(current.save).toHaveBeenCalled();
+  });
+
+  it('refuses an approval decision (those must go through approveGovQualification)', async () => {
+    findOne.mockResolvedValue({ version: 1, save: jest.fn() });
+    await expect(recordDecision({
+      canonicalOpportunityId: CLEAN_CANONICAL, biddingEntity: 'colaberry', expectedVersion: 1,
+      decision: 'approved_bid_pursuit', reviewerIdentityId: 'rev-1',
+    })).rejects.toThrow(/approveGovQualification/);
+  });
+
+  it('throws QualificationNotFoundError when no active record exists', async () => {
+    findOne.mockResolvedValue(null);
+    await expect(recordDecision({
+      canonicalOpportunityId: CLEAN_CANONICAL, biddingEntity: 'colaberry', expectedVersion: 1,
+      decision: 'needs_evidence', reviewerIdentityId: 'rev-1',
+    })).rejects.toBeInstanceOf(QualificationNotFoundError);
+  });
+});
+
+describe('approveGovQualification (server-side, source-snapshot bound)', () => {
+  const base = (over: Partial<Record<string, any>> = {}) => ({
+    version: 1, status: 'active', tenant_id: 't', bidding_entity: 'colaberry',
+    canonical_opportunity_id: CLEAN_CANONICAL, source_snapshot_version: 3, reviewer_identity_id: 'rev-1',
+    source_snapshot: { stale: 'browser-supplied-and-ignored' }, save: jest.fn().mockResolvedValue(undefined), ...over,
+  });
+  const approveInput = (over: Partial<Record<string, any>> = {}) => ({
+    canonicalOpportunityId: CLEAN_CANONICAL, biddingEntity: 'colaberry', expectedVersion: 1,
+    decision: 'approved_bid_pursuit' as const, approverIdentityId: 'app-2', ...over,
+  });
+
+  it('binds the approval to the RE-FETCHED snapshot/version, not to the stored (browser) snapshot', async () => {
+    findOne.mockResolvedValue(base());
+    create.mockImplementation(async (row: any) => ({ ...row, id: 'q2', get: () => ({ ...row, id: 'q2' }) }));
+    const q = await approveGovQualification(approveInput());
+    expect(q.decision).toBe('approved_bid_pursuit');
+    expect(q.version).toBe(2);
+    expect(q.source_snapshot).toEqual(GOV_OPPORTUNITY_FIXTURES[CLEAN_CANONICAL]); // server-fetched, not the stored stale one
+    expect(q.source_snapshot_version).toBe(3);
+    expect(q.source_available).toBe(true);
+  });
+
+  it('fails CLOSED when the source is unavailable (SourceUnavailableError, no write)', async () => {
+    findOne.mockResolvedValue(base({ canonical_opportunity_id: UNAVAILABLE_CANONICAL }));
+    await expect(approveGovQualification(approveInput({ canonicalOpportunityId: UNAVAILABLE_CANONICAL })))
+      .rejects.toBeInstanceOf(SourceUnavailableError);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a changed-source approval (reviewed v2, source now v3) pending renewed review', async () => {
+    findOne.mockResolvedValue(base({ source_snapshot_version: 2 }));
+    await expect(approveGovQualification(approveInput())).rejects.toBeInstanceOf(ChangedSourceError);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('refuses an approval with a blocking requirement (BLOCKING fixture -> QualificationBlockedError)', async () => {
+    findOne.mockResolvedValue(base({ canonical_opportunity_id: BLOCKING_CANONICAL, source_snapshot_version: 1 }));
+    await expect(approveGovQualification(approveInput({ canonicalOpportunityId: BLOCKING_CANONICAL })))
+      .rejects.toBeInstanceOf(QualificationBlockedError);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('refuses a stale expectedVersion before ever touching the source', async () => {
+    findOne.mockResolvedValue(base({ version: 4 }));
+    await expect(approveGovQualification(approveInput({ expectedVersion: 1 })))
+      .rejects.toBeInstanceOf(QualificationConflictError);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('refuses self-approval: the reviewer may not approve their own pursuit (SelfApprovalError)', async () => {
+    findOne.mockResolvedValue(base({ reviewer_identity_id: 'rev-1' }));
+    await expect(approveGovQualification(approveInput({ approverIdentityId: 'rev-1' })))
+      .rejects.toBeInstanceOf(SelfApprovalError);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('records the approver in the immutable evidence, distinct from the reviewer', async () => {
+    findOne.mockResolvedValue(base());
+    create.mockImplementation(async (row: any) => ({ ...row, id: 'q2', get: () => ({ ...row, id: 'q2' }) }));
+    const q = await approveGovQualification(approveInput({ approverIdentityId: 'app-2' }));
+    expect(q.reviewer_identity_id).toBe('rev-1');
+    expect(q.evidence_json.approvedBy).toBe('app-2');
+  });
+});
