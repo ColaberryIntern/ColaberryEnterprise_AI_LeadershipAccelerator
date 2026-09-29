@@ -13,9 +13,10 @@ import { requestChanges, ReviewValidationError } from '../../services/factory/fa
 // Gov-entry (Phase 5 slice 1): the best-fit opportunity feed (degrade-dark) + create-on-pick. The backfill
 // + gov container lazy-load their models inside their functions, so these imports don't init the ORM here.
 import { fetchBestFitOpportunities } from '../../services/factory/opportunities/oppPulseClient';
-// NOTE (Phase 1 gov-qualification guard): backfillUnassessedContract + resolveGovContractsContainer were used
-// by POST /opportunities/:uuid/start to create an unassessed shell. That auto-creation is temporarily disabled
-// until the Phase 2 qualification flow lands, so those imports were removed; Phase 2 restores the create path.
+// NOTE (Phase 1 gov-qualification guard): backfillUnassessedContract (auto-create of an unassessed shell) stays
+// disabled until the Phase 2 qualification flow lands. resolveGovContractsContainer is retained NOT to create
+// but to SCOPE the start-route lookup to the Government Contracts container (record-level tenant isolation).
+import { resolveGovContractsContainer } from '../../scripts/lib/factoryDemoContainer';
 // Slice 2: upload a solicitation zip -> deterministic source-cited requirements (no LLM).
 import multer from 'multer';
 import { ingestProposal } from '../../services/factory/proposal/proposalIngest';
@@ -244,7 +245,19 @@ router.post('/api/admin/factory/opportunities/:uuid/start', requireSection('prog
   const slug = `gov-${uuid}`;
   try {
     const { default: DeliveryProject } = await import('../../models/DeliveryProject');
-    const existing: any = await DeliveryProject.findOne({ where: { slug } });
+    // Record-level tenant isolation: `slug` is unique only PER TENANT and the request carries no tenant claim,
+    // so a bare findOne({where:{slug}}) could resolve a gov-<uuid> project in another tenant. Scope the lookup
+    // to the resolved Government Contracts container (tenant + org) and the government class, so only a genuine
+    // government project in that container can ever be returned.
+    const { engagement, org } = await resolveGovContractsContainer();
+    const existing: any = await DeliveryProject.findOne({
+      where: {
+        slug,
+        tenant_id: engagement.tenant_id,
+        organization_id: org.id,
+        project_class: 'government_public_sector',
+      },
+    });
     if (existing) {
       // Existing government projects remain reachable; Phase 1 creates and changes nothing here.
       res.status(200).json({ deliveryProjectId: existing.id, created: false });

@@ -200,11 +200,13 @@ describe('GET /api/admin/factory/opportunities', () => {
   });
 });
 
-describe('POST /api/admin/factory/opportunities/:uuid/start — PHASE 1 qualification guard (server-enforced)', () => {
+describe('POST /api/admin/factory/opportunities/:uuid/start — PHASE 1 qualification guard + tenant isolation (server-enforced)', () => {
   const uuid = '2e287828-9040-4948-98fe-a0250a5d66a5';
+  const container = { brandId: 'b1', org: { id: 'org-1' }, engagement: { id: 'eng-1', tenant_id: 'ten-1' } };
+  beforeEach(() => { resolveGovContractsContainer.mockResolvedValue(container); });
 
   it('BLOCKS a NEW government pursuit: 409 qualificationRequired, creates NO project and NO tracks', async () => {
-    govProjFindOne.mockResolvedValue(null); // no existing gov-<uuid> project
+    govProjFindOne.mockResolvedValue(null); // no existing gov-<uuid> project in the gov container
     const res = await request(app).post(`/api/admin/factory/opportunities/${uuid}/start`).send({ title: 'Agenda RFP', agency: 'Harris County' });
     expect(res.status).toBe(409);
     expect(res.body).toMatchObject({ qualificationRequired: true });
@@ -223,7 +225,32 @@ describe('POST /api/admin/factory/opportunities/:uuid/start — PHASE 1 qualific
     expect(backfillUnassessedContract).not.toHaveBeenCalled(); // never re-backfills / mutates the existing project
   });
 
-  it('400s an invalid opportunity id (never creates)', async () => {
+  it('RECORD-LEVEL ISOLATION: the lookup is scoped to the gov container tenant/org + government class', async () => {
+    govProjFindOne.mockResolvedValue({ id: 'dp-gov-1' });
+    await request(app).post(`/api/admin/factory/opportunities/${uuid}/start`).send({});
+    // slug alone is unique only per tenant; the query MUST also pin tenant_id + organization_id + class,
+    // so a same-slug project in another tenant/org/class can never be resolved by this route.
+    const where = govProjFindOne.mock.calls[0][0].where;
+    expect(where).toMatchObject({
+      slug: `gov-${uuid}`,
+      tenant_id: 'ten-1',
+      organization_id: 'org-1',
+      project_class: 'government_public_sector',
+    });
+  });
+
+  it('CROSS-TENANT NEGATIVE: a gov-<uuid> project in a different tenant is NOT returned (scoped query misses it -> 409)', async () => {
+    // Simulate the DB: a project with this slug exists in ANOTHER tenant, so the tenant/org/class-scoped
+    // findOne returns null. The route must 409, never leak the other tenant's project id.
+    govProjFindOne.mockResolvedValue(null);
+    const res = await request(app).post(`/api/admin/factory/opportunities/${uuid}/start`).send({});
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ qualificationRequired: true });
+    // and it was a SCOPED lookup, not a bare slug lookup
+    expect(govProjFindOne.mock.calls[0][0].where).toMatchObject({ tenant_id: 'ten-1', organization_id: 'org-1', project_class: 'government_public_sector' });
+  });
+
+  it('400s an invalid opportunity id (never creates, never looks up)', async () => {
     const res = await request(app).post('/api/admin/factory/opportunities/not-a-uuid/start').send({});
     expect(res.status).toBe(400);
     expect(govProjCreate).not.toHaveBeenCalled();

@@ -127,7 +127,16 @@ export async function requestFactoryChanges(deliveryProjectId: string, body: Req
 
 // ── Gov-entry (Phase 5 slice 1; qualification Phase 1) ───────────────────────
 export type PursuitStatus = 'none' | 'pursuing' | 'submitted' | 'declined';
-export interface VetVerdict { status?: string | null; reason?: string | null; method?: string | null; [k: string]: unknown; }
+export interface VetVerdict {
+  status?: string | null;
+  label?: string | null;
+  reason?: string | null;
+  disqualifier?: string | null;
+  /** 'title_regex' is weak evidence; 'document_deep_vet' | 'manual' | 'auto_signal'. */
+  method?: string | null;
+  /** null => asserted without evidence. */
+  evidence?: string | null;
+}
 export type ValueBasis = 'published_ceiling' | 'estimated' | 'unverified';
 export interface GovOpportunity {
   uuid: string;

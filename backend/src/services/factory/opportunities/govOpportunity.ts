@@ -11,12 +11,22 @@
  */
 export type PursuitStatus = 'none' | 'pursuing' | 'submitted' | 'declined';
 
-/** Opportunity Pulse's own vetting verdict. Shape is tolerant (OP owns it); `status` drives our review view. */
+/**
+ * Opportunity Pulse's own vetting verdict — an EXPLICIT allowlist (no index signature), so unexpected nested
+ * upstream properties can never reach the browser. `status` drives our review view; `method` + `evidence` let
+ * the UI mark a weak/unevidenced legacy assessment (e.g. a title-regex verdict) clearly. This is a SOURCE
+ * assessment, never an eligibility or approval decision.
+ */
 export interface VetVerdict {
   status?: string | null;
+  /** Verbatim upstream label, when the source printed one. */
+  label?: string | null;
   reason?: string | null;
+  disqualifier?: string | null;
+  /** How it was assessed — 'title_regex' is weak evidence; 'document_deep_vet' | 'manual' | 'auto_signal'. */
   method?: string | null;
-  [key: string]: unknown;
+  /** Supporting evidence; null means the verdict was asserted WITHOUT evidence. */
+  evidence?: string | null;
 }
 
 /** Provenance of estimatedValue. OP does not yet send a basis, so a live value defaults to 'unverified'. */

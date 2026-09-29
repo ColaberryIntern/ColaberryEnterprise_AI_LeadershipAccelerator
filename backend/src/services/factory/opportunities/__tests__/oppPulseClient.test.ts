@@ -56,7 +56,7 @@ describe('fetchBestFitOpportunities — degrade-dark', () => {
     });
     // declined stays declined (not collapsed to none); populated verdict survives; not pursued
     expect(feed.opportunities[1]).toMatchObject({ uuid: 'u2', pursuitStatus: 'declined', pursued: false });
-    expect(feed.opportunities[1].vetVerdict).toEqual({ status: 'no_bid', reason: 'out of domain' });
+    expect(feed.opportunities[1].vetVerdict).toMatchObject({ status: 'no_bid', reason: 'out of domain' });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe('https://op.test/api/v1/bonfire/best-fit?limit=10');
     expect((fetchMock.mock.calls[0][1] as any).headers['X-API-Key']).toBe('op_testkey');
@@ -128,9 +128,21 @@ describe('mapOpportunity', () => {
     const nulled = mapOpportunity({ id: 'b', title: 't', vetVerdict: null })!; // present, unassessed
     expect(nulled.vetVerdictPresent).toBe(true);
     expect(nulled.vetVerdict).toBeNull();
-    const populated = mapOpportunity({ id: 'c', title: 't', vetVerdict: { status: 'needs_review', method: 'llm' } })!;
+    const populated = mapOpportunity({ id: 'c', title: 't', vetVerdict: { status: 'needs_review', method: 'title_regex', evidence: null } })!;
     expect(populated.vetVerdictPresent).toBe(true);
-    expect(populated.vetVerdict).toEqual({ status: 'needs_review', method: 'llm' });
+    expect(populated.vetVerdict).toMatchObject({ status: 'needs_review', method: 'title_regex', evidence: null });
+  });
+  it('verdict is an EXPLICIT nested allowlist — unexpected nested props are dropped; a malformed verdict is unassessed', () => {
+    // only supported fields cross; an injected nested prop must not reach the browser
+    const v = mapOpportunity({ id: 'a', title: 't', vetVerdict: { status: 'no_bid', label: 'Construction', reason: 'r', disqualifier: 'd', method: 'manual', evidence: 'doc §3', secret: 'LEAK', nested: { x: 1 } } })!.vetVerdict!;
+    expect(v).toEqual({ status: 'no_bid', label: 'Construction', reason: 'r', disqualifier: 'd', method: 'manual', evidence: 'doc §3' });
+    expect((v as any).secret).toBeUndefined();
+    expect((v as any).nested).toBeUndefined();
+    // malformed shapes -> null (unassessed), never a verdict/approval; vetVerdictPresent still records presence
+    expect(mapOpportunity({ id: 'b', title: 't', vetVerdict: 'no_bid' })!.vetVerdict).toBeNull();
+    expect(mapOpportunity({ id: 'c', title: 't', vetVerdict: ['no_bid'] })!.vetVerdict).toBeNull();
+    expect(mapOpportunity({ id: 'd', title: 't', vetVerdict: { note: 'no status/label/reason' } })!.vetVerdict).toBeNull();
+    expect(mapOpportunity({ id: 'e', title: 't', vetVerdict: 'no_bid' })!.vetVerdictPresent).toBe(true);
   });
   it('preserves the full close timestamp (closeAt) verbatim and never silently shifts it', () => {
     const o = mapOpportunity({ id: 'a', title: 't', closeDate: '2026-10-23T13:00:00.000Z' })!;
