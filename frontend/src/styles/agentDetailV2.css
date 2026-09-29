@@ -133,14 +133,22 @@
 .adv2-sidebar { background: linear-gradient(180deg, var(--adv2-nav), var(--adv2-nav-2)); color: #C9DED5; padding: 24px 16px; display: flex; flex-direction: column; }
 .adv2-sidebar-brand { color: #fff; font-size: 19px; font-weight: 700; letter-spacing: -0.5px; padding: 0 6px; }
 .adv2-sidebar-brand span { color: #6DD7B4; }
-.adv2-sidebar-section-label { font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; font-weight: 700; margin: 26px 6px 12px; color: #8FAC9F; }
-.adv2-sidebar-profile { display: flex; gap: 10px; padding: 10px 8px; background: #FFFFFF12; border: 1px solid #FFFFFF1F; border-radius: 10px; color: #fff; }
+.adv2-sidebar-section-label { font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700; margin: 33px 10px 14px; color: #8FAC9F; }
+.adv2-sidebar-profile { display: flex; gap: 10px; padding: 12px 10px; background: #ffffff09; border: 1px solid #ffffff12; border-radius: 10px; color: #fff; }
 .adv2-sidebar-profile b { font-weight: 600; font-size: 14px; }
 .adv2-sidebar-sub { font-size: 12px; color: #9FBEAF; }
-.adv2-sidebar-nav { display: grid; gap: 4px; margin-top: 18px; }
-.adv2-sidebar-navbtn { text-align: left; background: transparent; border: 0; color: #B4CEC2; padding: 10px 10px; border-radius: 7px; font-size: 13.5px; }
+.adv2-sidebar-nav { display: grid; gap: 6px; margin-top: 22px; }
+/* Sidebar spacing + active-dot fix (2026-09-29, Ali live: "we should have
+ * an active tab that is shown"). The active state's background was already
+ * byte-identical to the mockup's — the real gap was the mockup's own lit
+ * dot marker (`.nav button:before`/`.nav button.active:before`), which this
+ * markup never had at all, so the plain background-only highlight read as
+ * too subtle. Pure CSS :before, no markup change needed. */
+.adv2-sidebar-navbtn { text-align: left; background: transparent; border: 0; color: #B4CEC2; padding: 12px 13px; border-radius: 7px; font-size: 13px; display: flex; align-items: center; gap: 12px; }
+.adv2-sidebar-navbtn:before { content: ''; width: 6px; height: 6px; border: 1px solid #799F8D; border-radius: 50%; flex-shrink: 0; }
 .adv2-sidebar-navbtn:hover { background: #FFFFFF0D; color: #fff; }
 .adv2-sidebar-navbtn.active { background: #FFFFFF12; color: #fff; font-weight: 500; }
+.adv2-sidebar-navbtn.active:before { background: #63D7AD; border-color: #63D7AD; }
 .adv2-sidebar-footer { margin-top: auto; padding-top: 18px; border-top: 1px solid #FFFFFF1F; display: flex; gap: 10px; align-items: center; }
 .adv2-avatar-sm { width: 30px; height: 30px; font-size: 13px; border-radius: 8px; }
 .adv2-topbar { background: var(--adv2-panel); border-bottom: 1px solid var(--adv2-rule); padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
