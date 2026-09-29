@@ -16,6 +16,8 @@ import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
 import { MemoryRouter } from 'react-router-dom';
+import { MarketingBrandProvider } from '../MarketingBrandContext';
+import { BRAND_STORAGE_KEY, type BrandStore } from '../brandScope';
 import AdminMarketingOverviewPage from '../AdminMarketingOverviewPage';
 
 // CRA's jest config resets mock implementations before every test, so they are primed in
@@ -58,14 +60,26 @@ function prime(o: MarketingOverview = overview()) {
 
 const flush = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
 
-async function render() {
+function memoryStore(initial: Record<string, string> = {}): BrandStore {
+  const data = { ...initial };
+  return { getItem: (k) => (k in data ? data[k] : null), setItem: (k, v) => { data[k] = v; }, removeItem: (k) => { delete data[k]; } };
+}
+
+/** The page as it is actually routed: inside the marketing frame that holds the brand. */
+async function render(store: BrandStore = memoryStore()) {
   act(() => {
     root.render(
       <MemoryRouter initialEntries={['/admin/marketing']}>
-        <AdminMarketingOverviewPage />
+        <MarketingBrandProvider store={store} load={brandApi.listBrands as never}>
+          <AdminMarketingOverviewPage />
+        </MarketingBrandProvider>
       </MemoryRouter>,
     );
   });
+  // Twice: one settle for the brand list, one for the page's own fetches. The page no longer
+  // refetches when the list arrives - MarketingBrandContext keeps `params` identity stable -
+  // but settling both keeps this suite off the machine's timing under a loaded parallel run.
+  await flush();
   await flush();
 }
 
@@ -179,17 +193,11 @@ describe('failure', () => {
 });
 
 describe('brand scope', () => {
-  it('choosing a brand refetches both the overview and the attention queue for that brand', async () => {
-    await render();
-    const select = container.querySelector('#overview-brand') as HTMLSelectElement;
-    expect(select).not.toBeNull();
-
-    await act(async () => {
-      select.value = BRAND;
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-    await flush();
-
+  it('reads the brand from the marketing frame, not from a picker of its own', async () => {
+    // Until 2026-09-29 this page carried its own <select>, and the Brands page carried another
+    // that disagreed with it. The frame holds the brand now; the page only reads it.
+    await render(memoryStore({ [BRAND_STORAGE_KEY]: BRAND }));
+    expect(container.querySelector('#overview-brand')).toBeNull();
     expect(opsApi.getMarketingOverview).toHaveBeenLastCalledWith({ brand_id: BRAND });
     expect(opsApi.getNeedsAttention).toHaveBeenLastCalledWith({ brand_id: BRAND });
   });

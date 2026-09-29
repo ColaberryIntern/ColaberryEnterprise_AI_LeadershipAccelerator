@@ -4,6 +4,7 @@ import { PageHeader, SectionCard } from '../../../components/admin/shell';
 import { TrustSignal } from '../../../components/admin/shell/trust';
 import api from '../../../utils/api';
 import { groupByDay, type CalendarItem } from './calendarTime';
+import { useMarketingBrand } from './MarketingBrandContext';
 import { CENTRAL, toCentralInput } from './centralTime';
 
 /**
@@ -25,6 +26,7 @@ function isoDate(d: Date): string {
 }
 
 function AdminMarketingCalendarPage() {
+  const { params } = useMarketingBrand();
   const [start, setStart] = useState(() => isoDate(new Date()));
   const [end, setEnd] = useState(() => isoDate(new Date(Date.now() + 13 * 86_400_000)));
   const [items, setItems] = useState<CalendarItem[]>([]);
@@ -36,7 +38,8 @@ function AdminMarketingCalendarPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get('/api/admin/marketing/calendar', { params: { start, end } });
+      // The endpoint has always accepted brand_id; nothing sent it until the tab had one brand.
+      const res = await api.get('/api/admin/marketing/calendar', { params: { start, end, ...(params ?? {}) } });
       const rows = (res.data.items ?? []) as Array<CalendarItem & { channels: string[]; scheduledFor: string | null }>;
       setItems(rows
         .filter((r) => r.scheduledFor)
@@ -49,7 +52,7 @@ function AdminMarketingCalendarPage() {
     } finally {
       setLoading(false);
     }
-  }, [start, end]);
+  }, [start, end, params]);
 
   useEffect(() => { load(); }, [load]);
 

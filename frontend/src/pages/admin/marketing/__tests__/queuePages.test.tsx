@@ -13,12 +13,23 @@ jest.mock('../../../../utils/api', () => ({ __esModule: true, default: { get: (.
 
 import AdminContentQueuePage from '../AdminContentQueuePage';
 import AdminPublishingQueuePage from '../AdminPublishingQueuePage';
+import { MarketingBrandProvider } from '../MarketingBrandContext';
 
 let container: HTMLDivElement;
 let root: Root;
 
 async function renderAt(url: string, el: React.ReactElement): Promise<void> {
-  await act(async () => { root.render(<MemoryRouter initialEntries={[url]}>{el}</MemoryRouter>); });
+  // Both queues are routed inside the marketing frame, which is where their brand comes from;
+  // `store: null` is a browser with no storage, so these tests stay on "all brands".
+  await act(async () => {
+    root.render(
+      <MemoryRouter initialEntries={[url]}>
+        <MarketingBrandProvider store={null} load={async () => ({ brands: [], scope_mode: 'migration_open' } as never)}>
+          {el}
+        </MarketingBrandProvider>
+      </MemoryRouter>,
+    );
+  });
 }
 
 beforeEach(() => {

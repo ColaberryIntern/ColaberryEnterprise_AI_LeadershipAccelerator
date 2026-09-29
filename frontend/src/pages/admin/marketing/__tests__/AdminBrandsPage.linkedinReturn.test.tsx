@@ -15,6 +15,7 @@ import { act } from 'react-dom/test-utils';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import AdminBrandsPage from '../AdminBrandsPage';
 import { RedirectKeepingQuery } from '../../../../routes/adminRoutes';
+import { MarketingBrandProvider } from '../MarketingBrandContext';
 
 /** Kept in step with backend/src/routes/linkedInCallbackRoutes.ts DEFAULT_RETURN_PATH by hand; a mismatch fails the route assertion below. */
 const BACKEND_RETURN_PATH = '/admin/marketing/brands';
@@ -54,11 +55,15 @@ function renderAt(url: string) {
   act(() => {
     root.render(
       <MemoryRouter initialEntries={[url]}>
+        {/* The page is routed inside the marketing frame that holds the brand, so the test
+            mounts it the same way. */}
+        <MarketingBrandProvider store={null} load={brandApi.listBrands as never}>
         <Routes>
           <Route path="/admin/marketing/brands" element={<AdminBrandsPage />} />
           <Route path="/admin/brands" element={<RedirectKeepingQuery to="/admin/marketing/brands" />} />
           <Route path="*" element={<div data-testid="not-found">404</div>} />
         </Routes>
+        </MarketingBrandProvider>
       </MemoryRouter>,
     );
   });
