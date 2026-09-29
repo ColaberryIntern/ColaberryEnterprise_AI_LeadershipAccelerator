@@ -75,6 +75,9 @@ export interface GrowthJourneyDecisionAttributes {
   ai_involved?: boolean;
   model_version?: string | null;
   ruleset_version: string;
+  /** T608: which holdout experiment applied, and which arm. Null on every row until one does. */
+  experiment_key?: string | null;
+  holdout_group?: string | null;
   executed?: boolean;
   execution_receipt?: Record<string, unknown> | null;
   decided_by: string;
@@ -118,6 +121,8 @@ class GrowthJourneyDecision
   declare ai_involved: boolean;
   declare model_version: string | null;
   declare ruleset_version: string;
+  declare experiment_key: string | null;
+  declare holdout_group: string | null;
   declare executed: boolean;
   declare execution_receipt: Record<string, unknown> | null;
   declare decided_by: string;
@@ -159,6 +164,8 @@ GrowthJourneyDecision.init(
     ai_involved: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     model_version: { type: DataTypes.STRING(64), allowNull: true },
     ruleset_version: { type: DataTypes.STRING(32), allowNull: false },
+    experiment_key: { type: DataTypes.STRING(64), allowNull: true },
+    holdout_group: { type: DataTypes.STRING(24), allowNull: true },
     executed: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     execution_receipt: { type: DataTypes.JSONB, allowNull: true },
     decided_by: { type: DataTypes.TEXT, allowNull: false },

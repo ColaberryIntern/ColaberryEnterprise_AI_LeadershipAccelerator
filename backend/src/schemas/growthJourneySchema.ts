@@ -324,7 +324,7 @@ export const OFFER_FAMILY_SLUGS = [
 ] as const satisfies readonly OfferFamilySlug[];
 export const POLICY_DECISIONS = ['allow', 'deny'] as const satisfies readonly PolicyDecision[];
 export const POLICY_STATUSES = ['active', 'paused', 'retired'] as const satisfies readonly PolicyStatus[];
-export const JOURNEY_POLICY_TYPES = ['queue_capacity', 'queue_assignee', 'cooldown'] as const satisfies readonly GrowthJourneyPolicyType[];
+export const JOURNEY_POLICY_TYPES = ['queue_capacity', 'queue_assignee', 'cooldown', 'holdout_experiment'] as const satisfies readonly GrowthJourneyPolicyType[];
 export const RUN_RESULTS = ['success', 'failed', 'skipped', 'pending'] as const satisfies readonly AgentActivityResult[];
 
 /**
@@ -400,6 +400,17 @@ export const queuePoliciesQuerySchema = z.object({
   owner_queue: z.enum(HANDOFF_OWNER_QUEUES).optional(),
 });
 
+/**
+ * T608's holdout lift. `window_days` defaults to 90 rather than the reads' 30: an experiment needs
+ * 100 decisions per arm before `computeLift` will answer at all, and a month of a dark journey has
+ * none. The cap is the same 365 as every other window on this surface.
+ */
+export const experimentsQuerySchema = z.object({
+  tenant_id: performanceScope.tenant_id,
+  brand_id: performanceScope.brand_id,
+  window_days: z.coerce.number().int().min(1).max(PERFORMANCE_MAX_WINDOW_DAYS).default(90),
+});
+
 export const ownershipQuerySchema = z.object({
   tenant_id: performanceScope.tenant_id,
   brand_id: performanceScope.brand_id,
@@ -433,3 +444,4 @@ export type OfferPoliciesQuery = z.infer<typeof offerPoliciesQuerySchema>;
 export type ContentRulesQuery = z.infer<typeof contentRulesQuerySchema>;
 export type QueuePoliciesQuery = z.infer<typeof queuePoliciesQuerySchema>;
 export type OwnershipQuery = z.infer<typeof ownershipQuerySchema>;
+export type ExperimentsQuery = z.infer<typeof experimentsQuerySchema>;

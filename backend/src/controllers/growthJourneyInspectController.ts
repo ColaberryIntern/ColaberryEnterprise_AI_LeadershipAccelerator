@@ -2,9 +2,11 @@ import { Request, Response } from 'express';
 import { readContentRules, readOfferPolicies } from '../services/growthJourney/reads/contentReads';
 import { readScoreSnapshots, readTransitions } from '../services/growthJourney/reads/decisionReadsAdmin';
 import { readOwnership, readQueuePolicies } from '../services/growthJourney/reads/handoffPolicyReads';
+import { readExperiments } from '../services/growthJourney/experiments/liftRead';
 import { readShadowRuns } from '../services/growthJourney/reads/shadowRunsRead';
 import {
   contentRulesQuerySchema,
+  experimentsQuerySchema,
   offerPoliciesQuerySchema,
   ownershipQuerySchema,
   queuePoliciesQuerySchema,
@@ -82,6 +84,20 @@ export async function getJourneyQueuePoliciesHandler(req: Request, res: Response
       brandIds: scope.brandIds, policyType: query.policy_type, ownerQueue: query.owner_queue,
       limit: query.limit, offset: query.offset,
     })),
+    scope: { tenant_id: scope.tenantId, brand_id: scope.brandId, program_id: null },
+  }));
+}
+
+/**
+ * The holdout policies in scope and what each has measured (T608).
+ *
+ * A read, like its six siblings: it reports the policy an operator wrote and the arithmetic
+ * `computeLift` derives from the decision rows. It cannot create, pause or change an experiment -
+ * a policy row is written deliberately, outside this surface.
+ */
+export async function getJourneyExperimentsHandler(req: Request, res: Response): Promise<void> {
+  await serveRead(req, res, experimentsQuerySchema, 'journey_experiments_read_failed', async (query, scope) => ({
+    ...(await readExperiments({ brandIds: scope.brandIds, windowDays: query.window_days })),
     scope: { tenant_id: scope.tenantId, brand_id: scope.brandId, program_id: null },
   }));
 }

@@ -30,6 +30,7 @@ const m = {
   snapshots: jest.fn(), transitions: jest.fn(), runs: jest.fn(), policies: jest.fn(),
   rules: jest.fn(), queuePolicies: jest.fn(), handoffs: jest.fn(), conversations: jest.fn(),
   receipts: jest.fn(), outcomes: jest.fn(), handoffCount: jest.fn(), outcomeCount: jest.fn(),
+  holdoutPolicy: jest.fn(), decisionCount: jest.fn(), decisionFindAll: jest.fn(), conversionCount: jest.fn(),
   decisions: jest.fn(), executions: jest.fn(), agents: jest.fn(),
 };
 jest.mock('../../../models', () => ({
@@ -38,7 +39,10 @@ jest.mock('../../../models', () => ({
   AiAgentActivityLog: { findAndCountAll: (...a: unknown[]) => m.runs(...a) },
   BrandOfferPolicy: { findAndCountAll: (...a: unknown[]) => m.policies(...a) },
   GrowthJourneyContentRule: { findAndCountAll: (...a: unknown[]) => m.rules(...a) },
-  GrowthJourneyPolicy: { findAndCountAll: (...a: unknown[]) => m.queuePolicies(...a) },
+  GrowthJourneyPolicy: {
+    findAndCountAll: (...a: unknown[]) => m.queuePolicies(...a),
+    findOne: (...a: unknown[]) => m.holdoutPolicy(...a),
+  },
   GrowthJourneyHandoff: {
     findAndCountAll: (...a: unknown[]) => m.handoffs(...a),
     findAll: (...a: unknown[]) => m.handoffs(...a),
@@ -46,8 +50,14 @@ jest.mock('../../../models', () => ({
   },
   GrowthJourneyConversationOwnership: { findAndCountAll: (...a: unknown[]) => m.conversations(...a) },
   GrowthJourneyExecution: { findAndCountAll: (...a: unknown[]) => m.receipts(...a), findAll: (...a: unknown[]) => m.executions(...a) },
-  GrowthJourneyOutcome: { findAndCountAll: (...a: unknown[]) => m.outcomes(...a), count: (...a: unknown[]) => m.outcomeCount(...a) },
-  GrowthJourneyDecision: { findAll: (...a: unknown[]) => m.decisions(...a) },
+  GrowthJourneyOutcome: {
+    findAndCountAll: (...a: unknown[]) => m.outcomes(...a),
+    count: (...a: unknown[]) => m.conversionCount(...a),
+  },
+  GrowthJourneyDecision: {
+    findAll: (...a: unknown[]) => m.decisionFindAll(...a),
+    count: (...a: unknown[]) => m.decisionCount(...a),
+  },
   AiAgent: { findAll: (...a: unknown[]) => m.agents(...a) },
 }));
 jest.mock('../../../services/growthJourney/outcomes/handoffRatesQuery', () => ({
@@ -73,6 +83,7 @@ const ROUTES = [
   ['content/rules', true],
   ['handoffs/policies', true],
   ['handoffs/ownership', true],
+  ['experiments', true],
 ] as const;
 const PATHS = ROUTES.map(([p]) => p);
 const SCOPED = ROUTES.filter(([, scoped]) => scoped).map(([p]) => p);
@@ -106,7 +117,10 @@ beforeEach(() => {
   }
   m.handoffCount.mockResolvedValue(0);
   m.outcomeCount.mockResolvedValue(0);
-  m.decisions.mockResolvedValue([]);
+  m.holdoutPolicy.mockResolvedValue(null);
+  m.decisionCount.mockResolvedValue(0);
+  m.decisionFindAll.mockResolvedValue([]);
+  m.conversionCount.mockResolvedValue(0);
   m.executions.mockResolvedValue([]);
   m.agents.mockResolvedValue([]);
   contextFromAdminRequest.mockResolvedValue(memberOf(null, [BRAND]));
@@ -191,7 +205,6 @@ describe('the query is validated at the boundary', () => {
     ['content/policies?decision=maybe', 'a decision outside allow/deny'],
     ['content/policies?status=archived', 'a status outside the model union'],
     ['content/rules?approval_status=aaaaaaaaaaaaaaaaaaa', 'an over-long approval status'],
-    ['handoffs/policies?policy_type=holdout_experiment', 'a policy type that does not exist yet'],
     ['handoffs/policies?owner_queue=marketing', 'a queue outside the six'],
     ['handoffs/ownership?offset=-1', 'a negative offset'],
   ])('400 on %s (%s), before anything is read', async (qs) => {
@@ -209,6 +222,10 @@ describe('the query is validated at the boundary', () => {
       'content/policies?offer_family=business_training&decision=deny&status=active',
       'content/rules?approval_status=draft',
       'handoffs/policies?policy_type=queue_capacity&owner_queue=sales',
+      // T608 added this type to the union, so T607's cell asserting it was a 400 became wrong.
+      // The queue-policy read filters by it like any other type; the holdout row simply has no
+      // `owner_queue`, so it answers an empty page rather than a refusal.
+      'handoffs/policies?policy_type=holdout_experiment',
     ]) {
       expect((await auth(request(app()).get(`${JOURNEY}/${qs}`))).status).toBe(200);
     }
@@ -314,6 +331,51 @@ describe('the privacy property, end to end through the real services', () => {
     const res = await auth(request(app()).get(`${JOURNEY}/content/rules`));
     expect(Object.keys(res.body.rows[0])).not.toContain('source_evidence');
     expect(res.body.rows[0]).toMatchObject({ version: 2, claims_count: 1, approved_by: 'ops' });
+  });
+});
+
+describe('the experiments read (T608)', () => {
+  it('a brand with no policy answers a named absence and counts nothing', async () => {
+    const res = await auth(request(app()).get(`${JOURNEY}/experiments`));
+    expect(res.status).toBe(200);
+    expect(res.body.brands).toEqual([{ brand_id: BRAND, status: 'no_policy', policy: null, lift: null }]);
+    // No experiment key to count by, so the decision counts are never asked for.
+    expect(m.decisionCount).not.toHaveBeenCalled();
+    expect(m.conversionCount).not.toHaveBeenCalled();
+    expect(res.body.conversion_outcomes).toEqual(['enrolled_paid', 'subscription_active', 'project_started']);
+  });
+
+  it('an active policy reports the lift as UNAVAILABLE below the floor of 100 per arm', async () => {
+    m.holdoutPolicy.mockResolvedValue({
+      get: (k: string) => ({ brand_id: BRAND, status: 'active', settings: { experiment_key: 'gj_lift', control_share: 0.5 } })[k],
+    });
+    m.decisionCount.mockResolvedValue(12);
+    m.decisionFindAll.mockResolvedValue([{ get: () => 'd-1' }]);
+    m.conversionCount.mockResolvedValue(3);
+    const res = await auth(request(app()).get(`${JOURNEY}/experiments`));
+    expect(res.status).toBe(200);
+    const brand = res.body.brands[0];
+    expect(brand.status).toBe('active');
+    expect(brand.lift).toMatchObject({ experiment_key: 'gj_lift', min_arm_n: 100, capped: false });
+    expect(brand.lift.treatment).toEqual({ n: 12, converted: 3 });
+    expect(brand.lift.lift.known).toBe(false);
+    expect(brand.lift.lift.reason).toContain('needs 100 per arm');
+  });
+
+  it('an arm larger than the cap is refused rather than counted over a slice', async () => {
+    m.holdoutPolicy.mockResolvedValue({
+      get: (k: string) => ({ brand_id: BRAND, status: 'active', settings: { experiment_key: 'gj_lift', control_share: 0.5 } })[k],
+    });
+    m.decisionCount.mockResolvedValue(5_001);
+    const res = await auth(request(app()).get(`${JOURNEY}/experiments`));
+    expect(res.body.brands[0].lift).toMatchObject({ capped: true, max_arm_decisions: 5_000 });
+    expect(m.conversionCount).not.toHaveBeenCalled();
+  });
+
+  it('a `window_days` beyond the cap is a 400, and the default is 90', async () => {
+    expect((await auth(request(app()).get(`${JOURNEY}/experiments?window_days=366`))).status).toBe(400);
+    const res = await auth(request(app()).get(`${JOURNEY}/experiments`));
+    expect(res.body.window_days).toBe(90);
   });
 });
 

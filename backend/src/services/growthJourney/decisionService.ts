@@ -3,6 +3,7 @@ import type { GrowthJourneyDecisionAttributes } from '../../models/GrowthJourney
 import { isGrowthJourneyCapabilityEnabled, type GrowthJourneyFlags } from '../../config/growthJourneyFlags';
 import type { ExplorerGrowthFlags } from '../../config/explorerGrowthFlags';
 import { classifyError } from '../../utils/errorClassifier';
+import { holdoutPolicyFor } from './experiments/holdoutPolicy';
 import { redactForLogs } from '../../utils/piiRedaction';
 import { isUniqueViolation } from '../../utils/uniqueViolation';
 import { computeIdempotencyKey } from '../inboxCase/textNormalization';
@@ -12,7 +13,7 @@ import { loadDecisionContext, type LoadedDecisionContext } from './decision/load
 import { resolveDecisionExecutionMode, withExecutionMode } from './decision/executionModeStamp';
 import { evaluateFreshness } from '../explorerGrowth/governor/freshness';
 import { decideForSubject } from './governor/decideForSubject';
-import type { DecideDeps, JourneyCandidate, JourneyDecision, JourneySubjectContext } from './governor/types';
+import type { DecideDeps, HoldoutPolicyInput, JourneyCandidate, JourneyDecision, JourneySubjectContext } from './governor/types';
 import { resolveJourneyContent } from './journeyContent';
 import { assertOfferAllowed, resolveOfferEligibility } from './offerEligibility';
 import { upsertProfile, type UpsertProfileResult } from './profileService';
@@ -112,6 +113,7 @@ function log(event: string, fields: Record<string, unknown>): void {
 
 /** The pipeline's production dependencies: the real offer gate, T304's evidence re-shaped for the contact policy, T305's content gate. */
 export function productionDeps(): DecideDeps {
+  const holdoutByBrand = new Map<string, Promise<HoldoutPolicyInput | null>>();
   return {
     assertOfferAllowed: (args) => assertOfferAllowed(args),
     contactPolicyFor: (candidate: JourneyCandidate, ctx: JourneySubjectContext) => {
@@ -130,6 +132,24 @@ export function productionDeps(): DecideDeps {
       };
     },
     resolveContent: (candidate, ctx) => resolveJourneyContent(candidate, ctx),
+    // T608. Wired, and inert: there is no `holdout_experiment` policy row in any database, so this
+    // answers null for every brand and the decision is the one Phase 3 shipped. Wired rather than
+    // left unwired on purpose - an arm-assignment mechanism nothing calls is a producer with no
+    // consumer, and the first time anybody wanted it they would have to trust untested wiring.
+    // A row appearing is an operator's deliberate act, and `status: 'paused'` on it stops
+    // assignment again without a deploy.
+    //
+    // MEMOISED PER BRAND, per `productionDeps()` instance. The nightly decides many subjects per
+    // brand, and the arm depends on the policy, not on the subject's turn in the queue - so one
+    // read per brand per run is both cheaper than one per decision and more correct: a policy
+    // edited half way through a run cannot move subjects between arms mid-run.
+    holdoutPolicyFor: (brandId: string) => {
+      const cached = holdoutByBrand.get(brandId);
+      if (cached) return cached;
+      const pending = holdoutPolicyFor(brandId);
+      holdoutByBrand.set(brandId, pending);
+      return pending;
+    },
   };
 }
 
@@ -221,6 +241,11 @@ export function decisionRow(
     ai_involved: decision.ai_involved,
     model_version: decision.model_version ?? MODEL_VERSION,
     ruleset_version: decision.ruleset_version,
+    // T608. `?? null` rather than omitted: an absent key would leave the column at whatever the
+    // model's default is, and the lift read counts rows by arm - a row that should have no arm
+    // must say so explicitly.
+    experiment_key: decision.experiment_key ?? null,
+    holdout_group: decision.holdout_group ?? null,
     executed: false,
     execution_receipt: null,
     decided_by: `governor:${decision.ruleset_version}`,

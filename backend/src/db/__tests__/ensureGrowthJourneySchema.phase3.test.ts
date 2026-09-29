@@ -52,6 +52,9 @@ const EXPECTED_DECISION_COLUMNS = [
   'ai_involved',
   'model_version',
   'ruleset_version',
+  // T608's holdout arm. Nullable and inert until an operator writes a policy row.
+  'experiment_key',
+  'holdout_group',
   'executed',
   'execution_receipt',
   'decided_by',

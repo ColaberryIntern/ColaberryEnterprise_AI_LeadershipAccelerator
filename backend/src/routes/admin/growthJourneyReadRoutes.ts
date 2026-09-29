@@ -11,6 +11,7 @@ import {
 } from '../../controllers/growthJourneyPerformanceController';
 import {
   getJourneyContentRulesHandler,
+  getJourneyExperimentsHandler,
   getJourneyOfferPoliciesHandler,
   getJourneyOwnershipHandler,
   getJourneyQueuePoliciesHandler,
@@ -84,6 +85,7 @@ const INSPECT_GROUPS = [
   '/api/admin/growth-journey/shadow',
   '/api/admin/growth-journey/content',
   '/api/admin/growth-journey/handoffs',
+  '/api/admin/growth-journey/experiments',
 ] as const;
 for (const prefix of INSPECT_GROUPS) {
   router.use(prefix, requireAdmin);
@@ -105,5 +107,7 @@ router.get(`${JOURNEY}/content/policies`, getJourneyOfferPoliciesHandler);
 router.get(`${JOURNEY}/content/rules`, getJourneyContentRulesHandler);
 router.get(`${JOURNEY}/handoffs/policies`, getJourneyQueuePoliciesHandler);
 router.get(`${JOURNEY}/handoffs/ownership`, getJourneyOwnershipHandler);
+// T608. A read: the policies in scope and the lift each has measured. Nothing here writes one.
+router.get(`${JOURNEY}/experiments`, getJourneyExperimentsHandler);
 
 export default router;

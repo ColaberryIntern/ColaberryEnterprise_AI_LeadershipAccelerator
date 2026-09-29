@@ -394,6 +394,30 @@ const EXISTING_TABLE_EXTENSIONS: string[] = [
   `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_event_ledger_entity_created ON event_ledger (entity_type, entity_id, created_at)`,
   `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_event_ledger_type_created ON event_ledger (event_type, created_at)`,
   `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_event_ledger_tenant_brand_created ON event_ledger (tenant_id, brand_id, created_at)`,
+  // Growth Journey Phase 6 (T608): the holdout arm on a decision row.
+  //
+  // WHY HERE, AND NOT IN THE JOURNEY'S OWN STATEMENT LIST. That list is pinned by
+  // `ensureGrowthJourneySchema.statements.test.ts` at "all CREATE except exactly ONE additive
+  // ALTER", and that one must match a single FK-column shape. Its comment says a second ALTER
+  // "is a decision somebody should have to make" - so this is that decision, made in the open
+  // rather than by loosening the pin. T602 set the precedent when its `event_ledger` work hit
+  // the same wall, which is why these sit beside those three indexes.
+  //
+  // The columns are ALSO declared inline in the journey's `CREATE TABLE`, so a fresh database
+  // gets them from the create and these two ALTERs are no-ops. This file runs BEFORE the journey
+  // ensure, so on a brand-new database the table does not exist yet and both statements are
+  // warned and skipped by the runner - which is the honest cost of being visible to
+  // `ensureMultiTenantSchema.modelParity.test.ts`. `ALTER TABLE IF EXISTS` would silence the
+  // warning and make these invisible to that parser, so the columns would stop being checked
+  // against the model at all. A warning line is worth more than a silent hole.
+  //
+  // Both nullable with no default: every decision written before an operator creates a holdout
+  // policy carries NULL for both, which is what makes the rollback "the columns are inert".
+  `ALTER TABLE growth_journey_decisions ADD COLUMN IF NOT EXISTS experiment_key VARCHAR(64)`,
+  `ALTER TABLE growth_journey_decisions ADD COLUMN IF NOT EXISTS holdout_group VARCHAR(24)`,
+  // Partial, exactly as Explorer's own `idx_explorer_decisions_experiment` is: the index exists
+  // to find the arms of a running experiment, and NULL is every other row in the table.
+  `CREATE INDEX IF NOT EXISTS idx_gj_decisions_experiment ON growth_journey_decisions (experiment_key, holdout_group) WHERE experiment_key IS NOT NULL`,
 ];
 
 /**
