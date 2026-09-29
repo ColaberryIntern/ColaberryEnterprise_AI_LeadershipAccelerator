@@ -6,8 +6,9 @@ import {
   getNeedsAttention, getMarketingOverview,
   type MarketingOverview, type OverviewAccount, type UpcomingPost,
 } from '../../../services/marketingOpsApi';
-import { listBrands, type Brand } from '../../../services/adminBrandApi';
 import { expiryPhrase, presentHealth, providerLabel, pluralPosts, scheduleLabel } from './overviewFormat';
+import { useMarketingBrand } from './MarketingBrandContext';
+import { ALL_BRANDS } from './brandScope';
 
 /**
  * Marketing Overview - the landing page, rebuilt around the work instead of the numbers.
@@ -29,8 +30,6 @@ import { expiryPhrase, presentHealth, providerLabel, pluralPosts, scheduleLabel 
  * Every block is a door into the page behind it. That is the property the old landing page
  * lacked entirely, and it is why the tab read as a pile of loose parts.
  */
-
-const ALL = '__all__';
 
 function HealthDot({ tone }: { tone: string }) {
   return (
@@ -89,8 +88,8 @@ function AccountRow({ account }: { account: OverviewAccount }) {
 }
 
 export default function AdminMarketingOverviewPage() {
-  const [brand, setBrand] = useState<string>(ALL);
-  const [brands, setBrands] = useState<Brand[]>([]);
+  // The brand comes from the frame every marketing page shares, not from a picker of its own.
+  const { brandId: brand } = useMarketingBrand();
 
   const [overview, setOverview] = useState<MarketingOverview | null>(null);
   const [overviewError, setOverviewError] = useState<string | null>(null);
@@ -101,21 +100,11 @@ export default function AdminMarketingOverviewPage() {
   const [attentionLoading, setAttentionLoading] = useState(true);
   const [attentionError, setAttentionError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    listBrands()
-      // A failed brand list leaves the selector on "All brands", which narrows nothing and
-      // claims nothing - the right fallback rather than an error the operator cannot act on.
-      .then((r) => { if (!cancelled) setBrands(r.brands); })
-      .catch(() => { if (!cancelled) setBrands([]); });
-    return () => { cancelled = true; };
-  }, []);
-
   const loadOverview = useCallback(async (b: string) => {
     setOverviewLoading(true);
     setOverviewError(null);
     try {
-      setOverview(await getMarketingOverview(b === ALL ? undefined : { brand_id: b }));
+      setOverview(await getMarketingOverview(b === ALL_BRANDS ? undefined : { brand_id: b }));
     } catch {
       // Cleared, not left stale: the previous brand's schedule under the new brand's label is
       // worse than an honest error, because it looks like an answer.
@@ -130,7 +119,7 @@ export default function AdminMarketingOverviewPage() {
     setAttentionLoading(true);
     setAttentionError(null);
     try {
-      const q = await getNeedsAttention(b === ALL ? undefined : { brand_id: b });
+      const q = await getNeedsAttention(b === ALL_BRANDS ? undefined : { brand_id: b });
       setAttentionItems(q.items);
       setAttentionExcluded(q.excluded);
     } catch {
@@ -162,20 +151,6 @@ export default function AdminMarketingOverviewPage() {
       />
 
       <div className="px-3 py-3">
-        <div className="d-flex align-items-center gap-2 mb-3">
-          <label htmlFor="overview-brand" className="small text-muted mb-0">Brand</label>
-          <select
-            id="overview-brand"
-            className="form-select form-select-sm"
-            style={{ maxWidth: '18rem' }}
-            value={brand}
-            onChange={(e) => setBrand(e.target.value)}
-          >
-            <option value={ALL}>All brands</option>
-            {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
-        </div>
-
         <div className="row g-3">
           <div className="col-12 col-xl-7">
             <SectionCard title="Needs you" icon="alarm-warning-line" padded={false} className="mb-3">

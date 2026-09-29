@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { PageHeader, SectionCard, StatusBadge } from '../../../components/admin/shell';
 import { errorMessage, listItems, type ContentItem, type ContentItemStatus } from '../../../services/contentComposerApi';
+import { useMarketingBrand } from './MarketingBrandContext';
 import { formatCentral } from './centralTime';
 
 /**
@@ -32,6 +33,7 @@ function tone(status: ContentItemStatus): 'success' | 'warning' | 'danger' | 'in
 }
 
 export default function AdminContentQueuePage() {
+  const { params: brandParams } = useMarketingBrand();
   const [params, setParams] = useSearchParams();
   const statusParam = params.get('status');
   const status: ContentItemStatus | 'all' = isStatus(statusParam) ? statusParam : 'all';
@@ -44,14 +46,14 @@ export default function AdminContentQueuePage() {
     setLoading(true);
     setError(null);
     try {
-      setItems(await listItems({ ...(status === 'all' ? {} : { status }), limit: 200 }));
+      setItems(await listItems({ ...(status === 'all' ? {} : { status }), ...(brandParams ?? {}), limit: 200 }));
     } catch (err) {
       setItems([]);
       setError(errorMessage(err, 'The content queue could not be loaded. This is a failed request, not an empty queue.'));
     } finally {
       setLoading(false);
     }
-  }, [status]);
+  }, [status, brandParams]);
 
   useEffect(() => { void load(); }, [load]);
 

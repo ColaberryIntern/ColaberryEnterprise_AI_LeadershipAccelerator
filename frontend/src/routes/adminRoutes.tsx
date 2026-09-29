@@ -47,6 +47,7 @@ const IntelligenceDiscoveryPage = lazy(() => import('../pages/admin/intelligence
 const IntelligenceSettingsPage = lazy(() => import('../pages/admin/intelligence/IntelligenceSettingsPage'));
 const MissedOpportunitiesPage = lazy(() => import('../pages/admin/MissedOpportunitiesPage'));
 const AgentOrphansPage = lazy(() => import('../pages/admin/AgentOrphansPage'));
+const MarketingShell = lazy(() => import('../pages/admin/marketing/MarketingShell'));
 const AdminMarketingOverviewPage = lazy(() => import('../pages/admin/marketing/AdminMarketingOverviewPage'));
 const AdminMarketingPerformancePage = lazy(() => import('../pages/admin/marketing/AdminMarketingPerformancePage'));
 const AdminBrandsPage = lazy(() => import('../pages/admin/marketing/AdminBrandsPage'));
@@ -216,27 +217,33 @@ const adminRoutes = (
         <Route path="/admin/intelligence/settings" element={<IntelligenceSettingsPage />} />
         <Route path="/admin/agent-orphans" element={<AgentOrphansPage />} />
         <Route path="/admin/communications" element={<AdminCommunicationsPage />} />
-        <Route path="/admin/marketing" element={<AdminMarketingOverviewPage />} />
-        <Route path="/admin/marketing/performance" element={<AdminMarketingPerformancePage />} />
-        {/* Brands is a marketing surface and now lives under the marketing prefix with its
-            siblings. `/admin/brands` stays as a redirect rather than a deletion: it is in
-            bookmarks, it is where the LinkedIn OAuth callback returns the browser, and the
-            redirect preserves that callback's query string. */}
-        <Route path="/admin/marketing/brands" element={<AdminBrandsPage />} />
+        {/* Every marketing page sits inside one frame that holds the chosen brand, the way
+            Loomly scopes every screen to a calendar. A layout route rather than a component
+            each page renders, so a new marketing page inherits the frame by being routed
+            here instead of by remembering to include it. */}
+        <Route element={<MarketingShell />}>
+          <Route path="/admin/marketing" element={<AdminMarketingOverviewPage />} />
+          <Route path="/admin/marketing/performance" element={<AdminMarketingPerformancePage />} />
+          {/* Brands is a marketing surface and now lives under the marketing prefix with its
+              siblings. `/admin/brands` stays as a redirect rather than a deletion: it is in
+              bookmarks, it is where the LinkedIn OAuth callback returns the browser, and the
+              redirect preserves that callback's query string. */}
+          <Route path="/admin/marketing/brands" element={<AdminBrandsPage />} />
+          {/* Campaign 360 (spec section 4). Deliberately the SAME component as /admin/campaigns/:id -
+              the detail page already carries the tabs the spec describes, and a second page would
+              be the duplicate destination the spec forbids. The marketing path exists so the IA
+              in the spec resolves; the canonical page is unchanged. */}
+          <Route path="/admin/marketing/campaigns/:id" element={<AdminCampaignDetailPage />} />
+          <Route path="/admin/marketing/calendar" element={<AdminMarketingCalendarPage />} />
+          {/* Marketing composer (spec 8.1). Inherits section `campaigns` from /admin/marketing by
+              longest prefix; the API side maps /api/admin/content the same way. */}
+          <Route path="/admin/marketing/composer" element={<AdminContentComposerPage />} />
+          <Route path="/admin/marketing/composer/:id" element={<AdminContentComposerPage />} />
+          {/* The two queues the needs-attention signals link to (T015). Same section by prefix. */}
+          <Route path="/admin/marketing/content" element={<AdminContentQueuePage />} />
+          <Route path="/admin/marketing/publishing" element={<AdminPublishingQueuePage />} />
+        </Route>
         <Route path="/admin/brands" element={<RedirectKeepingQuery to="/admin/marketing/brands" />} />
-        {/* Campaign 360 (spec section 4). Deliberately the SAME component as /admin/campaigns/:id -
-            the detail page already carries the tabs the spec describes, and a second page would
-            be the duplicate destination the spec forbids. The marketing path exists so the IA
-            in the spec resolves; the canonical page is unchanged. */}
-        <Route path="/admin/marketing/campaigns/:id" element={<AdminCampaignDetailPage />} />
-        <Route path="/admin/marketing/calendar" element={<AdminMarketingCalendarPage />} />
-        {/* Marketing composer (spec 8.1). Inherits section `campaigns` from /admin/marketing by
-            longest prefix; the API side maps /api/admin/content the same way. */}
-        <Route path="/admin/marketing/composer" element={<AdminContentComposerPage />} />
-        <Route path="/admin/marketing/composer/:id" element={<AdminContentComposerPage />} />
-        {/* The two queues the needs-attention signals link to (T015). Same section by prefix. */}
-        <Route path="/admin/marketing/content" element={<AdminContentQueuePage />} />
-        <Route path="/admin/marketing/publishing" element={<AdminPublishingQueuePage />} />
         <Route path="/admin/tickets" element={<AdminTicketBoardPage />} />
         <Route path="/admin/agents/:id" element={<AgentDetailPage />} />
         <Route path="/admin/governance" element={<GovernanceCommandCenter />} />

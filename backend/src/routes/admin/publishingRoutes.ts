@@ -23,6 +23,8 @@ const NOT_FOUND = { error: 'Not found', error_class: 'NotFound' };
 
 const JobsQuery = z.object({
   item_id: UUID.optional(),
+  /** The Marketing tab scopes every screen to one brand; the queue is one of them. */
+  brand_id: UUID.optional(),
   state: z.enum(PUBLISHING_JOB_STATES as unknown as [string, ...string[]]).optional(),
   dead_lettered: z.enum(['true', 'false']).optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -55,6 +57,7 @@ router.get('/api/admin/publishing/jobs', requireAdmin, async (req: Request, res:
     const where: Record<string, unknown> = {};
     if (scope.mode === 'scoped') where.tenant_id = scope.tenantIds;
     if (parsed.data.item_id) where.content_item_id = parsed.data.item_id;
+    if (parsed.data.brand_id) where.brand_id = parsed.data.brand_id;
     if (parsed.data.state) where.state = parsed.data.state;
     const jobs = await PublishingJob.findAll({ where, order: [['publish_at', 'DESC']], limit: parsed.data.limit });
     const filtered = parsed.data.dead_lettered === undefined ? jobs

@@ -23,6 +23,8 @@ import {
   type BrandSendReadiness,
   type ScopeMode,
 } from '../../../services/adminBrandApi';
+import { useMarketingBrand } from './MarketingBrandContext';
+import { ALL_BRANDS } from './brandScope';
 
 /**
  * Brand administration — brands, their sending domains, and whether they can actually send.
@@ -41,7 +43,21 @@ function AdminBrandsPage() {
   const [scopeMode, setScopeMode] = useState<ScopeMode | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
+  const [selectedBrandId, setSelectedBrandIdLocal] = useState<string | null>(null);
+
+  /**
+   * This page needs ONE brand - an account connects to a brand, not to "all of them" - while the
+   * tab's shared scope may be all. So the two are kept in step rather than merged: choosing a
+   * brand here sets the tab's scope, and choosing one in the bar above selects it here.
+   */
+  const { brandId: scopeBrandId, setBrandId: setScopeBrand } = useMarketingBrand();
+  const setSelectedBrandId = useCallback((next: string | null) => {
+    setSelectedBrandIdLocal(next);
+    if (next) setScopeBrand(next);
+  }, [setScopeBrand]);
+  useEffect(() => {
+    if (scopeBrandId !== ALL_BRANDS) setSelectedBrandIdLocal(scopeBrandId);
+  }, [scopeBrandId]);
   const [readiness, setReadiness] = useState<BrandSendReadiness | null>(null);
   const [readinessLoading, setReadinessLoading] = useState(false);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
@@ -150,7 +166,7 @@ function AdminBrandsPage() {
       setFetchedAt(new Date().toISOString());
       // Select the first brand so the panel has something to show, but only when the operator
       // has not already chosen one - re-selecting on every refresh would fight the user.
-      setSelectedBrandId((current) => current ?? rows[0]?.id ?? null);
+      setSelectedBrandIdLocal((current) => current ?? (scopeBrandId !== ALL_BRANDS ? scopeBrandId : rows[0]?.id ?? null));
     } catch {
       // The message matters: "could not load" and "you have no brands" are different facts and
       // the panel renders them differently.
