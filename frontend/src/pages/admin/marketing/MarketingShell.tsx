@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { MarketingBrandProvider, useMarketingBrand } from './MarketingBrandContext';
 import { ALL_BRANDS } from './brandScope';
+import ConnectionBanner from './ConnectionBanner';
+import { listChannelAccounts, type ChannelAccount } from '../../../services/channelAccountApi';
 
 /**
  * The frame every Marketing page sits in.
@@ -43,9 +45,33 @@ function BrandBar() {
   );
 }
 
+/**
+ * Connection trouble, on every marketing screen.
+ *
+ * Accounts are read ONCE here rather than per page, and across every brand: a LinkedIn that
+ * stopped working on another brand is still a post that will not go out. A failed read shows
+ * nothing at all - a banner that cannot say what is wrong is worse than no banner.
+ */
+function ConnectionWatch() {
+  const { brands } = useMarketingBrand();
+  const [accounts, setAccounts] = useState<ChannelAccount[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    listChannelAccounts({})
+      .then((rows) => { if (!cancelled) setAccounts(rows); })
+      .catch(() => { if (!cancelled) setAccounts([]); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const brandNames = useMemo(() => new Map(brands.map((b) => [b.id, b.name])), [brands]);
+  return <ConnectionBanner accounts={accounts} brandNames={brandNames} />;
+}
+
 export default function MarketingShell() {
   return (
     <MarketingBrandProvider>
+      <ConnectionWatch />
       <BrandBar />
       <Outlet />
     </MarketingBrandProvider>
