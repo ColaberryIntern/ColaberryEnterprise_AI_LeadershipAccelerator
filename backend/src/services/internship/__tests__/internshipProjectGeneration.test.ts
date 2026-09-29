@@ -21,6 +21,10 @@ const mockHasPublished = jest.fn();
 const mockRepoFor = jest.fn();
 const mockApplication = { findByPk: jest.fn() };
 const mockProject = { findByPk: jest.fn(), findOne: jest.fn() };
+// The review payload now also reports requirement coverage, which loads the
+// understanding this project was built from. Mocked to "no record" by default:
+// a typed brief has no conversation behind it, which is the common case here.
+const mockUnderstanding = { findAll: jest.fn() };
 
 jest.mock('../../sbp/sbpOrchestrator', () => ({
   startBuild: (...a: unknown[]) => mockStartBuild(...a),
@@ -39,6 +43,7 @@ jest.mock('../../projects/projectWriteService', () => ({
 jest.mock('../../sbp/workspaceRepo', () => ({ repoForProject: (...a: unknown[]) => mockRepoFor(...a) }));
 jest.mock('../../../models/InternshipApplication', () => ({ __esModule: true, default: mockApplication }));
 jest.mock('../../../models/Project', () => ({ __esModule: true, default: mockProject }));
+jest.mock('../../../models/ProjectUnderstandingRecord', () => ({ __esModule: true, default: mockUnderstanding }));
 
 import {
   internProjectQuestions, startInternProjectBuild, internProjectBuild,
@@ -63,6 +68,7 @@ beforeEach(() => {
   mockQuestions.mockResolvedValue({ questions: [{ id: 'q1' }], covered: [], generated: true, model: 'gpt-4o', attempts: 1 });
   mockHasPublished.mockResolvedValue(false);
   mockRepoFor.mockResolvedValue(null);
+  mockUnderstanding.findAll.mockResolvedValue([]);
 });
 
 describe('the tier', () => {
@@ -183,6 +189,60 @@ describe('what the reviewer is shown', () => {
     mockGetBuildState.mockResolvedValue(null);
     const view = await internProjectBuild(PROJECT);
     expect(view).toEqual(expect.objectContaining({ status: null, plan: null, blocking: [], advisory: [] }));
+  });
+});
+
+describe('requirement coverage reaches the reviewer', () => {
+  const PLAN = {
+    project_name: 'Bid assistant', descriptor: 'd', releases: [], stories: [],
+    requirements: [{ id: 'REQ-001', statement: 's', kind: 'FUNC', priority: 'must', cluster: 'c', from_dimensions: ['constraints'] }],
+  };
+  const record = (over: Record<string, unknown> = {}) => ({
+    title: 'Bid assistant', proposed_surfaces: [],
+    items: [
+      { dimension: 'constraints', value: 'Never auto-submit.', classification: 'FACT', provenance: 'customer_stated' },
+      { dimension: 'approval_points', value: 'A director signs off.', classification: 'FACT', provenance: 'customer_stated' },
+    ],
+    build_handoff: { project_id: PROJECT },
+    ...over,
+  });
+
+  it('names the area nothing in the plan cites', async () => {
+    // The whole point of the report: Ali asked to be shown what did not make
+    // it, and a silent plan is what cost Swati her requirements.
+    mockGetBuildState.mockResolvedValue({ status: 'drafted', plan: { plan: PLAN, plan_sha256: 'a'.repeat(64), version: 1 }, gate: { ok: true, violations: [] } });
+    mockUnderstanding.findAll.mockResolvedValue([record()]);
+
+    const view = await internProjectBuild(PROJECT);
+    expect(view.coverage?.unaccounted_dimensions).toEqual(['approval_points']);
+    expect(view.coverage_summary).toContain('nothing cites: approval_points');
+  });
+
+  it('carries what the customer actually said, so it can be read', async () => {
+    mockGetBuildState.mockResolvedValue({ status: 'drafted', plan: { plan: PLAN, plan_sha256: 'a'.repeat(64), version: 1 }, gate: { ok: true, violations: [] } });
+    mockUnderstanding.findAll.mockResolvedValue([record()]);
+
+    const view = await internProjectBuild(PROJECT);
+    const constraints = view.coverage!.dimensions.find((d) => d.dimension === 'constraints')!;
+    expect(constraints.stated).toEqual(['Never auto-submit.']);
+  });
+
+  it('reports null rather than an empty report when there was no conversation', async () => {
+    // An empty report reads as "nothing was said", which is a different and
+    // false claim about a project typed straight in.
+    mockGetBuildState.mockResolvedValue({ status: 'drafted', plan: { plan: PLAN, plan_sha256: 'a'.repeat(64), version: 1 }, gate: { ok: true, violations: [] } });
+    mockUnderstanding.findAll.mockResolvedValue([]);
+
+    const view = await internProjectBuild(PROJECT);
+    expect(view.coverage).toBeNull();
+    expect(view.coverage_summary).toBeNull();
+  });
+
+  it('ignores an understanding that produced a different project', async () => {
+    mockGetBuildState.mockResolvedValue({ status: 'drafted', plan: { plan: PLAN, plan_sha256: 'a'.repeat(64), version: 1 }, gate: { ok: true, violations: [] } });
+    mockUnderstanding.findAll.mockResolvedValue([record({ build_handoff: { project_id: 'some-other-project' } })]);
+
+    expect((await internProjectBuild(PROJECT)).coverage).toBeNull();
   });
 });
 
