@@ -7,6 +7,9 @@ import {
   startBuild, getBuildState, publishBuild, type BuildState, type PublishResult,
 } from '../sbp/sbpOrchestrator';
 import { blockingViolations, advisoryViolations, type GateViolation } from '../sbp/planGate';
+import ProjectUnderstandingRecord from '../../models/ProjectUnderstandingRecord';
+import type { ProjectUnderstanding } from '../delivery/projectUnderstanding';
+import { requirementCoverage, coverageSummary, type RequirementCoverage } from '../delivery/requirementCoverage';
 import type { BuildPlan } from '../sbp/planContract';
 
 /**
@@ -180,6 +183,15 @@ export interface InternProjectBuildView {
   plan_sha256: string | null;
   /** Already assigned: publish has run and the intern can see it. */
   assigned: boolean;
+  /**
+   * What the customer said, against what the plan contains. Null when this
+   * project did not come from a recorded understanding — a typed brief has
+   * nothing to compare against, and inventing a comparison would be worse than
+   * admitting there is none.
+   */
+  coverage: RequirementCoverage | null;
+  /** The one line for a reviewer who is not opening the detail. */
+  coverage_summary: string | null;
 }
 
 /**
@@ -198,6 +210,7 @@ export async function internProjectBuild(projectId: string): Promise<InternProje
   const state = await getBuildState(projectId);
   const violations = state?.gate?.violations ?? [];
   const assigned = await hasPublishedBuild(projectId);
+  const coverage = await coverageForProject(projectId, state?.plan?.plan ?? null);
 
   return {
     project_id: projectId,
@@ -211,7 +224,39 @@ export async function internProjectBuild(projectId: string): Promise<InternProje
     // will compare against, so it has to be the row's own value.
     plan_sha256: state?.plan?.plan_sha256 ?? null,
     assigned,
+    coverage,
+    coverage_summary: coverage ? coverageSummary(coverage) : null,
   };
+}
+
+/**
+ * Load the understanding this project was built from, and compare it.
+ *
+ * The link is `build_handoff.project_id`, written once by the build bridge when
+ * it hands an understanding to `startBuild`. A project with no such record was
+ * not built from a conversation, so there is no stated-requirements list to
+ * compare against and this returns null rather than an empty report — an empty
+ * report reads as "nothing was said", which is a different and false claim.
+ */
+async function coverageForProject(
+  projectId: string, plan: BuildPlan | null,
+): Promise<RequirementCoverage | null> {
+  const records = await ProjectUnderstandingRecord.findAll({
+    where: { status: 'extracted' },
+    order: [['updated_at', 'DESC']],
+    limit: 200,
+  });
+  const record = records.find((r) => (r.build_handoff as { project_id?: string } | null)?.project_id === projectId);
+  if (!record) return null;
+
+  // Built the same way the build bridge builds it (buildFromUnderstanding.ts:105),
+  // so the coverage is computed against exactly what was decomposed.
+  const understanding: ProjectUnderstanding = {
+    title: record.title || 'Your project',
+    proposed_surfaces: record.proposed_surfaces || [],
+    items: record.items || [],
+  };
+  return requirementCoverage({ understanding, plan });
 }
 
 /**
