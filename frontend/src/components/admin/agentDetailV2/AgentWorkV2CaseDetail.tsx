@@ -48,7 +48,7 @@ export default function AgentWorkV2CaseDetail({ ticket, onNavigate }: Props) {
           </div>
           <h3 style={{ fontSize: 19, margin: '6px 0 0' }}>{ticket.title}</h3>
         </div>
-        <span className={adv2PillClass(getTicketStatusTone(ticket.status))}>{getTicketStatusLabel(ticket.status)}</span>
+        <span className={`${adv2PillClass(getTicketStatusTone(ticket.status))} adv2-pill-outline`}>{getTicketStatusLabel(ticket.status)}</span>
       </div>
 
       <AgentWorkV2Stepper status={ticket.status} />
@@ -73,6 +73,7 @@ export default function AgentWorkV2CaseDetail({ ticket, onNavigate }: Props) {
       <div className="adv2-actions" style={{ marginTop: 18 }}>
         <button className="adv2-btn" onClick={() => onNavigate('decisions')}>Explain this decision</button>
         <button className="adv2-btn" onClick={() => onNavigate('talk')}>Discuss with Reese</button>
+        <a className="adv2-btn" style={{ textDecoration: 'none' }} href={`/admin/tickets?open=${ticket.id}`} target="_blank" rel="noopener noreferrer">Open ticket ↗</a>
       </div>
     </div>
   );

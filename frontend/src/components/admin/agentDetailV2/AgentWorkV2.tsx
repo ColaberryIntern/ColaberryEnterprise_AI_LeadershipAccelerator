@@ -89,7 +89,7 @@ export default function AgentWorkV2({ detail, onNavigate }: Props) {
     <div className="adv2-card">
       <h2>
         Work & commitments
-        <span className="adv2-hint">Real tickets this agent owns or was assigned, filtered by what actually needs attention.</span>
+        <span className="adv2-hint">Real tickets this agent owns or was assigned, filtered by what actually needs attention. The filled pill shows why it needs attention now; the outlined pill shows where it really is in its workflow.</span>
       </h2>
       <div style={{ padding: '13px 19px 0', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {BUCKETS.map((b) => (

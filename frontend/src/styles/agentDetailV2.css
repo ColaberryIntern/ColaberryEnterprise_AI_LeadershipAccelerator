@@ -194,6 +194,14 @@
 .adv2-pill.adv2-info { background: #E3ECFB; color: #2A5AA8; }
 .adv2-pill.adv2-violet { background: #EEE6FA; color: #6B3FA0; }
 .adv2-pill.adv2-teal { background: #DFF4F1; color: #147A70; }
+/* Agent Detail polish round 3 (2026-09-29) — Ali, live: "explain why things
+   get on the backlog, in progress etc." Work tab's status pill gets this
+   outline treatment so it reads as visually distinct from the solid-fill
+   bucket pill next to it (bucket = why it's actionable, status = where it
+   really is) without requiring a legend to be read every time. Higher
+   selector specificity than a bare tone rule so it reliably overrides
+   background regardless of source order. */
+.adv2-pill.adv2-pill-outline { background: transparent; border: 1px solid currentColor; }
 .adv2-link { color: var(--adv2-trust); text-decoration: none; font-weight: 500; }
 .adv2-link:hover { text-decoration: underline; }
 .adv2-muted { color: var(--adv2-ink-3); }

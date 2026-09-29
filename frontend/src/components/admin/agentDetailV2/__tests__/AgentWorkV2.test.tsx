@@ -193,6 +193,52 @@ describe('AgentWorkV2', () => {
     expect(onNavigate).toHaveBeenCalledWith('talk');
   });
 
+  // Agent Detail polish round 3 (2026-09-29) — Ali, live: "we need a link to
+  // open the actual ticket in another tab down below with the two other
+  // buttons." Copies the exact target/rel/href pattern already proven twice
+  // elsewhere on this page (AgentOverviewV2MainColumn.tsx,
+  // AgentOverviewV2Sidebar.tsx's own last-ticket links).
+  it('"Open ticket" opens the exact selected ticket in a new tab, and changes when a different ticket is selected', async () => {
+    await renderTab([
+      ticket({ id: 't-a', title: 'First ticket', status_bucket: 'overdue' }),
+      ticket({ id: 't-b', title: 'Second ticket', status_bucket: 'overdue' }),
+    ]);
+
+    const openLink = () => Array.from(container.querySelectorAll('a')).find((a) => a.textContent?.includes('Open ticket'));
+    expect(openLink()?.getAttribute('href')).toBe('/admin/tickets?open=t-a');
+    expect(openLink()?.getAttribute('target')).toBe('_blank');
+    expect(openLink()?.getAttribute('rel')).toBe('noopener noreferrer');
+
+    const secondRow = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Second ticket'));
+    await act(async () => { secondRow!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+
+    expect(openLink()?.getAttribute('href')).toBe('/admin/tickets?open=t-b');
+  });
+
+  // Agent Detail polish round 3 (2026-09-29) — Ali, live: "we need to explain
+  // why things get on the backlog, in progress etc... that should be clear
+  // in the layout." The filled bucket pill and the outlined status pill are
+  // now visually distinct, and the header hint explains the distinction in
+  // words too.
+  it('the status pill is visually outlined and distinct from the solid bucket pill, in both the list row and the detail view', async () => {
+    await renderTab([ticket({ id: 't-1', status_bucket: 'open', status: 'in_review' })]);
+
+    const pills = Array.from(container.querySelectorAll('.adv2-pill'));
+    const statusPills = pills.filter((p) => p.textContent === 'In Review');
+    const bucketPills = pills.filter((p) => p.textContent === 'Open');
+    expect(statusPills.length).toBe(2); // one list row + one detail view
+    expect(bucketPills.length).toBeGreaterThan(0);
+    for (const p of statusPills) expect(p.className).toContain('adv2-pill-outline');
+    for (const p of bucketPills) expect(p.className).not.toContain('adv2-pill-outline');
+  });
+
+  it('explains the bucket-vs-status distinction in the header hint', async () => {
+    await renderTab([ticket({ id: 't-1', status_bucket: 'open' })]);
+
+    expect(container.textContent).toContain('The filled pill shows why it needs attention now');
+    expect(container.textContent).toContain('the outlined pill shows where it really is in its workflow');
+  });
+
   // Required, run-specific hard-stop checks (this run's own plan.md R68 and
   // execution-contract.md) — neither the mockup's FICTIONAL 5-step ladder
   // (Assess/Plan/Handoff/Verify/Complete — invented stage names with no

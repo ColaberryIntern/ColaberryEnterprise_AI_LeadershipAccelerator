@@ -273,118 +273,16 @@ async function renderAgentPage() {
   }
 }
 
-describe('AgentDetailPage — Ticket activity table: colored status badges + CST timestamps', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    getManagerInboxItems.mockResolvedValue([]);
-    listDirectives.mockResolvedValue([]);
-    listReportSubscriptions.mockResolvedValue([]);
-    listGoals.mockResolvedValue([]);
-    listOneOnOnes.mockResolvedValue([]);
-    getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
-    getAgentExplainability.mockResolvedValue({ agentId: 'agent-reese', agentName: 'Reese', events: [], proposedActions: [] });
-    getAgentDetail.mockResolvedValue(DETAIL);
-    container = document.createElement('div');
-    document.body.appendChild(container);
-    root = createRoot(container);
-  });
-
-  afterEach(() => {
-    act(() => { root.unmount(); });
-    container.remove();
-  });
-
-  it('renders the Status pill with the humanized label, not the raw plain-text status', async () => {
-    await renderAgentPage();
-
-    // Checkpoint I (2026-09-11) — AgentOverviewV2Tickets.tsx replaced the old
-    // Bootstrap StatusBadge table with adv2-pill spans; tone DISTINCTNESS
-    // itself is pinned at the data level in ticketTypeMeta.test.ts. This
-    // test proves getTicketStatusLabel is actually wired into the JSX
-    // (humanized label present), not just imported.
-    const pills = Array.from(container.querySelectorAll('.adv2-pill'));
-    expect(pills.some((b) => b.textContent === 'In Progress')).toBe(true);
-    expect(pills.some((b) => b.textContent === 'Done')).toBe(true);
-    expect(container.textContent).not.toContain('in_progress');
-  });
-
-  it('renders the Type pill too, reusing the same type-tone helper the ticket board uses', async () => {
-    await renderAgentPage();
-
-    const pills = Array.from(container.querySelectorAll('.adv2-pill'));
-    expect(pills.some((b) => b.textContent === 'Reese Outreach')).toBe(true);
-    expect(pills.some((b) => b.textContent === 'Student Support')).toBe(true);
-  });
-
-  it('renders the ticket timestamp with a CST/CDT label, never the browser-local unlabeled toLocaleString() shape', async () => {
-    await renderAgentPage();
-
-    // 2026-08-12T15:00:00Z is 10:00 AM Central during CDT (summer).
-    expect(container.textContent).toContain('10:00 AM CDT');
-    // 2026-01-15T15:00:00Z is 9:00 AM Central during CST (winter) — different
-    // instant, different DST side, proving BOTH rows convert correctly rather
-    // than one shared coincidental string.
-    expect(container.textContent).toContain('9:00 AM CST');
-    expect(container.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/);
-  });
-
-  // Ticket Count Sync fix (2026-08-21, session CC-20260818-x4nk continued) —
-  // the "Open tickets" fact used to be tickets.filter(open).length, which
-  // undercounts once an agent's true ticket volume exceeds the capped tickets
-  // array. Proves it now renders the server's independent open_ticket_count.
-  it('renders "open tickets" from open_ticket_count, not from counting the (capped) tickets array', async () => {
-    getAgentDetail.mockResolvedValue({ ...DETAIL, open_ticket_count: 294 }); // far more than the 2-row tickets fixture
-    await renderAgentPage();
-
-    expect(container.textContent).toContain('294 open tickets');
-  });
-});
-
-// T010 (ticket-ux-fixes run) — "We should also be able to see how long it's
-// been since a ticket has been worked on." (Ali, live feedback.)
-describe('AgentDetailPage — "last activity" indicator on the ticket-activity table', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    getManagerInboxItems.mockResolvedValue([]);
-    listDirectives.mockResolvedValue([]);
-    listReportSubscriptions.mockResolvedValue([]);
-    listGoals.mockResolvedValue([]);
-    listOneOnOnes.mockResolvedValue([]);
-    getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
-    getAgentExplainability.mockResolvedValue({ agentId: 'agent-reese', agentName: 'Reese', events: [], proposedActions: [] });
-    container = document.createElement('div');
-    document.body.appendChild(container);
-    root = createRoot(container);
-  });
-
-  afterEach(() => {
-    act(() => { root.unmount(); });
-    container.remove();
-  });
-
-  it('renders a real, computed "X ago" value next to each ticket, not a static string', async () => {
-    const fiveHoursAgo = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString();
-    getAgentDetail.mockResolvedValue({
-      ...DETAIL,
-      tickets: [{ ...DETAIL.tickets[0], updated_at: fiveHoursAgo }],
-    });
-
-    await renderAgentPage();
-
-    expect(container.textContent).toContain('5h ago');
-  });
-
-  it('boundary: a ticket with no updated_at ever recorded shows "unknown" rather than crashing or showing blank', async () => {
-    getAgentDetail.mockResolvedValue({
-      ...DETAIL,
-      tickets: [{ ...DETAIL.tickets[0], updated_at: null }],
-    });
-
-    await renderAgentPage();
-
-    expect(container.textContent).toContain('unknown');
-  });
-});
+// Agent Detail polish round 3 (2026-09-29) — Ali, live: "let's remove ticket
+// activity since it's redundant and we already have it in the work
+// category." Retired 3 describe blocks (10 tests) that exercised
+// AgentOverviewV2Tickets.tsx's own Overview mount, which this round removes:
+// "Ticket activity table: colored status badges + CST timestamps",
+// "'last activity' indicator on the ticket-activity table", and (further
+// below) "'Ticket activity' table: Why column and ticket_breakdown summary".
+// A deliberate, disclosed consequence of Ali's own removal instruction —
+// same precedent as AgentDetailPage.commandCenter.test.tsx's full deletion
+// in polish round 2 when its tab was removed.
 
 // Agent Detail transparency, part 2 (2026-08-18, session CC-20260818-wf9k) —
 // "what it reads / what it produces", derived from real tools_granted + real
@@ -925,72 +823,10 @@ describe('AgentDetailPage — "Scheduled tasks" section', () => {
   });
 });
 
-// Task visibility (2026-08-26) — "which tickets each [task] creates, so I
-// can see which task is creating the most tickets" + "why they triggered."
-describe('AgentDetailPage — "Ticket activity" table: Why column and ticket_breakdown summary', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    getManagerInboxItems.mockResolvedValue([]);
-    listDirectives.mockResolvedValue([]);
-    listReportSubscriptions.mockResolvedValue([]);
-    listGoals.mockResolvedValue([]);
-    listOneOnOnes.mockResolvedValue([]);
-    getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-reese', charter: null });
-    getAgentExplainability.mockResolvedValue({ agentId: 'agent-reese', agentName: 'Reese', events: [], proposedActions: [] });
-    getAgentDetail.mockResolvedValue(DETAIL);
-    container = document.createElement('div');
-    document.body.appendChild(container);
-    root = createRoot(container);
-  });
-
-  afterEach(() => {
-    act(() => { root.unmount(); });
-    container.remove();
-  });
-
-  it('renders the real ticket.description in the Why column, verbatim', async () => {
-    await renderAgentPage();
-
-    expect(container.textContent).toContain('Signal: inactivity. Goal: Confirm the student is unblocked');
-  });
-
-  it("boundary: a ticket with no description shows an em dash, never a blank cell or a fabricated reason", async () => {
-    await renderAgentPage();
-
-    // t-2 (the fixture's second ticket) has description: null.
-    const whyParagraphs = Array.from(container.querySelectorAll('[data-testid="ticket-why"]'));
-    const alexWhy = whyParagraphs.find((p) => p.closest('div')?.textContent?.includes('Alex Chen'));
-    expect(alexWhy?.textContent).toBe('—');
-  });
-
-  it('renders the ticket_breakdown summary grouped by type and real signal_type, above the table', async () => {
-    getAgentDetail.mockResolvedValue({
-      ...DETAIL,
-      ticket_breakdown: [
-        {
-          type: 'reese_autonomous_outreach', count: 3,
-          by_signal: [{ signal_type: 'inactivity', count: 2 }, { signal_type: 'behavior_anomaly', count: 1 }],
-        },
-        { type: 'student_support', count: 5, by_signal: [] },
-      ],
-    });
-
-    await renderAgentPage();
-
-    expect(container.textContent).toContain('Reese Outreach: 3');
-    expect(container.textContent).toContain('inactivity: 2');
-    expect(container.textContent).toContain('behavior_anomaly: 1');
-    expect(container.textContent).toContain('Student Support: 5');
-  });
-
-  it('boundary: no ticket_breakdown summary rendered when it is empty (no tickets yet)', async () => {
-    getAgentDetail.mockResolvedValue({ ...DETAIL, ticket_breakdown: [] });
-
-    await renderAgentPage();
-
-    expect(container.textContent).not.toContain('Reese Outreach: ');
-  });
-});
+// Agent Detail polish round 3 (2026-09-29) — retired here too, see the
+// disclosure comment near the top of this file: this described the same
+// removed AgentOverviewV2Tickets.tsx Overview mount (Why column,
+// ticket_breakdown summary), 4 tests.
 
 // Trust Contract Phase 1 (2026-08-26) — real cost, real authorization
 // verdicts, real version history. Closes the "declared autonomy_level vs.
