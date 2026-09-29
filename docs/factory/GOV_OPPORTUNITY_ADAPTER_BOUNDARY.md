@@ -90,6 +90,23 @@ Precise scope, without overclaiming:
   `ba25060462b45af46e10cc30b9769f41a1c03e6c`; `2c13057b…` is the branch head that merge brought in (not the
   merge commit itself).
 
+## Start-route access policy (record-level isolation)
+
+`POST /api/admin/factory/opportunities/:uuid/start` is **navigation-only** and **platform-administrator only**
+(`requireSection('program')`; there is no tenant-user path to `/admin/factory`). It only ever targets the FIXED
+`refactored` government container ("Colaberry Government Contracts"). The admin JWT carries **no tenant claim**
+(`req.admin` = `{sub,email,role,mgmt_role?,portal_enrollment_id?}`), so the trusted tenant is the `refactored`
+tenant resolved **by slug** — never derived from a request field or an unscoped name match.
+
+The route resolves the container through `lookupGovContractsContainer` (read-only, tenant-scoped, **fail-closed,
+creates nothing** — distinct from the provisioning `resolveFactoryContainer`/`resolveGovContractsContainer` used
+only by the seed scripts): the organization is looked up scoped to the resolved tenant + name (a same-named org
+in another tenant can never be selected), the engagement is validated against that tenant + organization, and a
+missing/mismatched piece returns null → the route responds `503` ("not configured") and creates nothing. The
+project lookup is then scoped to `tenant_id` + `organization_id` + `project_class='government_public_sector'` +
+`slug`, so a same-slug project in any other tenant/org/class can never be returned. Provisioning (creating the
+container or a project) stays out of this route until the Phase 2 gated create path.
+
 ## gov-opportunity.v1 — field-to-consumer mapping and concrete incompatibilities (Phase 2 compat review)
 
 Read against OP `ColaberryIntern/OpportunityPulse` commit `73f4e56a…` (NOT pinned as final — OP is finishing

@@ -58,3 +58,39 @@ export function resolveFactoryDemoContainer(): Promise<FactoryContainer> {
 export function resolveGovContractsContainer(): Promise<FactoryContainer> {
   return resolveFactoryContainer(GOV_ORG_NAME, GOV_ENGAGEMENT_NAME);
 }
+
+/** A read-only view of the government container for navigation lookups (no create, tenant-scoped). */
+export interface GovContainerLookup {
+  tenant: { id: string; name: string };
+  org: { id: string; tenant_id: string };
+  engagement: { id: string; tenant_id: string; organization_id: string };
+}
+
+/**
+ * READ-ONLY, tenant-scoped resolution of the government container for the navigation-only start route.
+ *
+ * Policy: the start route is platform-admin only (requireSection('program')) and only ever accesses the FIXED
+ * `refactored` government container — there is no tenant-user path. So the trusted tenant is the `refactored`
+ * tenant resolved BY SLUG (a fixed, known value), NEVER derived from a request field or an unscoped name match.
+ *
+ * Unlike resolveFactoryContainer, this never creates anything and fails CLOSED: it returns null if the tenant,
+ * organization, or engagement is missing, or if their tenant/organization relationship does not hold. The org
+ * lookup is scoped to the resolved tenant (a same-named organization in another tenant can never be selected),
+ * and the engagement is scoped to that tenant + organization.
+ */
+export async function lookupGovContractsContainer(): Promise<GovContainerLookup | null> {
+  const { default: Organization } = await import('../../models/Organization');
+  const { default: DeliveryEngagement } = await import('../../models/DeliveryEngagement');
+
+  const [tenant] = await sequelize.query<{ id: string; name: string }>(
+    "SELECT id, name FROM tenants WHERE slug = 'refactored' LIMIT 1", { type: QueryTypes.SELECT });
+  if (!tenant) return null; // fail closed: no fixed gov tenant, resolve nothing
+
+  const org: any = await Organization.findOne({ where: { tenant_id: tenant.id, name: GOV_ORG_NAME } });
+  if (!org || org.tenant_id !== tenant.id) return null; // scoped to the tenant; a same-name org elsewhere is ignored
+
+  const engagement: any = await DeliveryEngagement.findOne({ where: { tenant_id: tenant.id, organization_id: org.id } });
+  if (!engagement || engagement.tenant_id !== tenant.id || engagement.organization_id !== org.id) return null;
+
+  return { tenant, org, engagement };
+}

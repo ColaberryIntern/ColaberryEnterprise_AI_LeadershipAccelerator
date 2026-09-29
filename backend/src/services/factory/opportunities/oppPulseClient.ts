@@ -57,8 +57,11 @@ const toNum = (v: unknown): number | null =>
 const toDateOnly = (v: unknown): string | null =>
   v === null || v === undefined || v === '' ? null : String(v).slice(0, 10);
 
+// Verdict fields are text-only. A non-string (object, array, boolean, number) is INVALID and becomes null —
+// never String()-coerced into "[object Object]" / "true" / "1", so malformed data can never masquerade as a
+// real verdict, evidence, or method label.
 const toStrOrNull = (v: unknown): string | null =>
-  v === null || v === undefined ? null : (typeof v === 'string' ? v : String(v));
+  typeof v === 'string' && v.trim() !== '' ? v : null;
 
 /**
  * Explicit nested allowlist for the verdict object — only known fields cross to the browser; every other nested

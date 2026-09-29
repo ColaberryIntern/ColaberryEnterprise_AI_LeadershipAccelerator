@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, September 28, 2026 at 10:27 PM</div>
-    <div><span class="sid">CC-20260921-p2k9</span><span class="count">5 changes</span></div>
+    <div class="meta">Generated Tuesday, September 29, 2026 at 6:45 AM</div>
+    <div><span class="sid">CC-20260921-p2k9</span><span class="count">6 changes</span></div>
   </header>
   <main>
     
@@ -132,6 +132,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">backend jest -c jest.ci.config.ts oppPulseClient + factoryRoutes = 42/42 (nested-allowlist drops injected props + malformed-&gt;null; CROSS-TENANT NEGATIVE: scoped lookup misses an other-tenant slug -&gt; 409; existing -&gt; 200 scoped; new -&gt; 409 no-create/no-backfill). Frontend react-scripts AdminGovOpportunitiesPage + factoryApi = 15/15 (verdict reason+method+weak-legacy; absent AND null -&gt; Unassessed; legacy score labels + no &quot;best fits&quot;; Open project navigate vs 409 note; source_failed banner). REAL-component screenshots (rendered via react-dom + fixtures) for unassessed/rejected-with-reason/source-failure/existing-project-nav in the run dir. loop-task-verifier graded the diff. NOT deployed - stops at the checkpoint before merging the follow-up.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Additive; the two existing gov projects + tracks untouched; commercial-client workflows, existing-project editing, unrelated factory actions unchanged; marketing claims + historical engagement labels NOT modified. Supersedes the inaccurate statements in PR #2818 (docs). Autonomous builder parked. Follow-up PR from current main; stop before merge/deploy.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>**Enterprise Phase 1 fix2: read-only fail-closed container lookup (no provisioning in a nav route) + real (unmocked) lookup tests + stricter verdict field validation**</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Coordinator flagged that PR #2822&#39;s tenant-isolation used resolveGovContractsContainer(), a PROVISIONING helper whose Organization.findOne filters only by name, whose engagement lookup filters only by organization_id, and whose missing branches CREATE records - and the route tests mocked it away, leaving that untested. (1) NEW lookupGovContractsContainer() in factoryDemoContainer.ts: READ-ONLY, tenant-scoped, FAIL-CLOSED, creates nothing. Resolves the FIXED refactored tenant by slug (trusted anchor - the request carries no tenant claim), looks up the gov org SCOPED to that tenant (a same-name org in another tenant can never be selected), validates the engagement&#39;s tenant+org relationship, and returns null on any missing/mismatched piece. The provisioning resolveFactoryContainer/resolveGovContractsContainer stays intact for the seed scripts (their only callers). (2) POST /opportunities/:uuid/start now uses lookupGovContractsContainer; a null container -&gt; 503 &quot;not configured&quot; + logFail, creating nothing and not even looking up a project; else the project findOne is scoped to container.tenant.id + container.org.id + project_class + slug. (3) Policy documented (code + adapter doc): the route is platform-admin only (requireSection(&#39;program&#39;)), no tenant-user path, fixed refactored container. (4) mapVetVerdict field coercion tightened: toStrOrNull now accepts STRINGS only (non-empty) - objects/arrays/booleans/numbers -&gt; null, never String()-coerced into &quot;[object Object]&quot;/&quot;true&quot;/&quot;1&quot;, so invalid data can never acquire an &quot;evidenced&quot;/verdict label.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest -c jest.ci.config.ts oppPulseClient + factoryRoutes + factoryDemoContainer = 51/51. NEW factoryDemoContainer.test.ts tests the REAL lookup (only models mocked, never the lookup): same-name org across tenants (scoped miss -&gt; null), org tenant_id mismatch -&gt; null, mismatched engagement tenant/org -&gt; null, missing tenant/org/engagement -&gt; null, valid -&gt; container; asserts Organization.create/DeliveryEngagement.create NEVER called (no provisioning). Route tests (lookup mocked at the boundary; the lookup itself unit-tested separately): NEW -&gt; 409 no create/backfill; EXISTING -&gt; 200 scoped; CROSS-TENANT -&gt; 409 scoped where; CONTAINER-UNAVAILABLE -&gt; 503 fail-closed, no findOne/create. Verdict tests: object/array/boolean field values -&gt; null (not stringified), all-junk verdict -&gt; null. loop-task-verifier graded the diff. CI authoritative.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Backend-only (frontend consumes the same shape - a 503 on a missing container shows the generic &quot;could not open&quot; note; no frontend change). Additive - no schema change; provisioning helpers + their seed callers untouched. DEPLOYMENT EVIDENCE (observed running code, NOT an HTTP test): #2822&#39;s merge c0063337 is NOT an ancestor of prod HEAD f505649c and the running dist has no project_class in the lookup, so #2822 (and this fix) are merged-to-main but NOT deployed to prod; only the earlier Phase-1 GUARD (409, from ba250604) is in the running dist. Autonomous builder parked. Follow-up PR from current main; stop before merge/deploy.</span></div>
           
         </div>
       </article>
