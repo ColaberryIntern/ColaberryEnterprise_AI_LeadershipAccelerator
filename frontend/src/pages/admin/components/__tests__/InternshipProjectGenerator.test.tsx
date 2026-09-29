@@ -50,6 +50,10 @@ const PLAN: api.GeneratedPlan = {
 const buildView = (over: Partial<api.InternProjectBuildView> = {}): api.InternProjectBuildView => ({
   project_id: PROJECT, enrollment_id: 'enr-1', status: 'drafted',
   plan: PLAN, version: 1, blocking: [], advisory: [], plan_sha256: SHA, assigned: false,
+  // Null by default: this suite's builds come from a typed brief, which has no
+  // recorded conversation to compare the plan against. The coverage panel's own
+  // suite covers the populated case.
+  coverage: null, coverage_summary: null,
   ...over,
 });
 
