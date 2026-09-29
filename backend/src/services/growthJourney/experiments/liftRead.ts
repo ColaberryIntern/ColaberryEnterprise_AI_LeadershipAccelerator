@@ -1,6 +1,7 @@
 import { Op } from 'sequelize';
 import { GrowthJourneyDecision, GrowthJourneyOutcome } from '../../../models';
-import { computeLift, MIN_ARM_N, type ArmOutcome, type LiftResult } from '../../explorerGrowth/explorerExperimentService';
+import { insufficient, type Measured } from '../../explorerGrowth/explorerForecastService';
+import { computeLift, MIN_ARM_N } from '../../explorerGrowth/explorerExperimentService';
 import { HOLDOUT_POLICY_TYPE, lookupHoldoutPolicy, type HoldoutAbsence } from './holdoutPolicy';
 
 /**
@@ -8,10 +9,10 @@ import { HOLDOUT_POLICY_TYPE, lookupHoldoutPolicy, type HoldoutAbsence } from '.
  *
  * ─── THE ARITHMETIC IS EXPLORER'S, IMPORTED ─────────────────────────────────
  *
- * `computeLift` and `MIN_ARM_N` come from `explorerExperimentService`. This file
- * supplies four numbers - n and converted, per arm - and does no statistics of
- * its own: the Wilson interval, the floor at 100 per arm and the "an arm could
- * not be measured" case are all already written and already tested there.
+ * `computeLift`, `MIN_ARM_N` and `insufficient` come from Explorer. This file
+ * supplies four numbers - people and conversions, per arm - and does no
+ * statistics of its own: the Wilson interval, the floor at 100 per arm and the
+ * "an arm could not be measured" case are all already written and tested there.
  *
  * The plan asked for `{known:false, reason:'below_min_arm_n'}` below the floor.
  * That is not what `computeLift` answers: it returns the full
@@ -20,16 +21,33 @@ import { HOLDOUT_POLICY_TYPE, lookupHoldoutPolicy, type HoldoutAbsence } from '.
  * second shape would have meant a second thing for a screen to understand, so
  * the read passes Explorer's result through unchanged.
  *
- * ─── WHAT COUNTS AS A CONVERSION IS CODE, AND IT IS NARROW ──────────────────
+ * ─── AN UNCOUNTED ARM IS NEVER A ZERO ──────────────────────────────────────
  *
- * `CONVERSION_OUTCOMES` is a deliberate allowlist, like the eligibility one in
- * `assignJourneyArm.ts`. Only the three commercial commitments count. A
- * `meeting_booked` is a step toward one, not one; `reply` and the `contact_*`
- * types are engagement, and counting engagement as conversion would make every
- * promotional holdout look like it worked - a message sent gets replies, and
- * the arm that was sent nothing cannot reply to it. That is the measurement
- * error the whole experiment exists to avoid, so it is closed off here rather
- * than left to whoever builds the screen.
+ * The T608 verifier caught this and it was the right catch. An earlier version
+ * answered `{ n, converted: 0 }` for an arm over the cap and handed that to
+ * `computeLift` - and `wilsonInterval(0, n)` with `n >= 100` answers
+ * `{ known: true, point: 0 }`. So a capped arm served a MEASURED zero, and a
+ * capped treatment arm against a real control served a known NEGATIVE lift:
+ * the read would have reported that the message made things worse, from a
+ * numerator nobody counted. That is the "null never zero" rule, and the class
+ * of defect Explorer's own header names: "say 'insufficient data', not a
+ * plausible-looking number."
+ *
+ * So a capped arm reports `converted: null` - never 0 - and the lift is
+ * `insufficient('arm_capped: ...')`. `computeLift` is not called at all when
+ * either arm is capped, because there is no numerator to give it.
+ *
+ * ─── THE UNIT IS PEOPLE, NOT ROWS ──────────────────────────────────────────
+ *
+ * `ArmOutcome.n` upstream means "learners in this arm" and `MIN_ARM_N = 100` is
+ * a floor on people. `growth_journey_decisions` is APPEND-ONLY - one row per
+ * subject per `decision_date` - so counting rows over a 90-day window would
+ * inflate `n` by roughly the number of days a subject stays eligible. Worse, it
+ * would inflate the arms UNEVENLY: a control subject keeps receiving `WAIT`
+ * rows every night, while a treatment subject who is sent to and converts stops
+ * producing them, so the control denominator would grow faster and the rate
+ * would be biased in treatment's favour. Both counts are therefore DISTINCT
+ * `subject_ref`.
  *
  * ─── BOUNDED, AND PARAMETERISED - NO SQL IS BUILT FROM A STRING ────────────
  *
@@ -37,45 +55,60 @@ import { HOLDOUT_POLICY_TYPE, lookupHoldoutPolicy, type HoldoutAbsence } from '.
  * declared between these models. The obvious shortcut is a `literal` subquery
  * with the brand and the experiment key interpolated into it. This file did
  * that for one draft and it was wrong: "untrusted input is never interpolated
- * into SQL" has no validated-input exemption, and the moment a reader sees one
- * interpolation they have to re-derive whether every caller validates.
+ * into SQL" has no validated-input exemption.
  *
- * So: `count` the arm's decisions (served by `idx_gj_decisions_experiment`, on
- * exactly `(experiment_key, holdout_group)`), then read that arm's ids with an
- * explicit `LIMIT` and count outcomes with `decision_id IN (:ids)` - every value
- * a bound parameter. An arm larger than `MAX_ARM_DECISIONS` answers
- * `capped: true` with its size rather than a number computed over a truncated
- * arm, which is T606's shape for the same problem: a rate over part of the
- * population is a different number wearing the same name.
+ * So: count the arm's distinct subjects (served by `idx_gj_decisions_experiment`
+ * on `(experiment_key, holdout_group)`); read the brand's CONVERSION outcomes'
+ * `decision_id`s in the window, bounded; then count the arm's distinct subjects
+ * among those decisions. Every value is a bound parameter, and each read has an
+ * explicit `LIMIT`. Anything over a cap answers `capped: true` rather than a
+ * number computed over part of the population.
  */
 
-/** The outcomes that count as a conversion. Allowlist; see the header. */
+/**
+ * What counts as a conversion: a deliberate allowlist, like the eligibility one in
+ * `assignJourneyArm.ts`. Only the three commercial commitments.
+ *
+ * A `meeting_booked` is a step toward one, not one. `reply` and the `contact_*` types are
+ * ENGAGEMENT, and counting engagement as conversion would make every promotional holdout look
+ * like it worked - a message sent gets replies, and the arm that was sent nothing cannot reply to
+ * it. That is the measurement error the whole experiment exists to avoid, so it is closed off here
+ * rather than left to whoever builds the screen.
+ */
 export const CONVERSION_OUTCOMES = ['enrolled_paid', 'subscription_active', 'project_started'] as const;
 
 export const DEFAULT_LIFT_WINDOW_DAYS = 90;
 export const MAX_LIFT_WINDOW_DAYS = 365;
 
+/**
+ * How many people per arm, and how many conversion rows per brand, this read
+ * will count before refusing to.
+ *
+ * Generous next to `MIN_ARM_N = 100`: an arm this big is a very large
+ * experiment, and the answer then is a narrower window rather than a count over
+ * an arbitrary slice of it.
+ */
+export const MAX_ARM_DECISIONS = 5_000;
+
+export interface ArmCount {
+  /** Distinct subjects in this arm. */
+  n: number;
+  /** Distinct subjects in this arm who converted - NULL when the arm was not counted. */
+  converted: number | null;
+  capped: boolean;
+}
+
 export interface ArmLift {
   experiment_key: string;
   window_days: number;
-  treatment: ArmOutcome;
-  control: ArmOutcome;
-  lift: LiftResult['lift'];
+  treatment: ArmCount;
+  control: ArmCount;
+  lift: Measured;
   /** Explorer's floor, echoed so a screen can say how far off it is. */
   min_arm_n: number;
-  /** True when either arm holds more decisions than this read will count. */
   capped: boolean;
   max_arm_decisions: number;
 }
-
-/**
- * How many decisions per arm this read will count before refusing to.
- *
- * Generous next to `MIN_ARM_N = 100`: an arm this big is a very large
- * experiment, and the answer then is a narrower window rather than a conversion
- * count over an arbitrary slice of it.
- */
-export const MAX_ARM_DECISIONS = 5_000;
 
 export interface BrandExperiment {
   brand_id: string;
@@ -88,28 +121,41 @@ export interface BrandExperiment {
 /** `^[a-z0-9_]+$` by the policy schema - re-checked here so this file cannot be mis-called. */
 const SAFE_KEY = /^[a-z0-9_]+$/;
 
-async function armOutcome(
+/** The decision ids of this brand's conversions in the window, bounded. */
+async function convertedDecisionIds(brandId: string, from: Date): Promise<string[] | null> {
+  const rows = await GrowthJourneyOutcome.findAll({
+    where: {
+      brand_id: brandId,
+      outcome_type: { [Op.in]: [...CONVERSION_OUTCOMES] },
+      occurred_at: { [Op.gte]: from },
+      decision_id: { [Op.ne]: null },
+    },
+    attributes: ['decision_id'],
+    limit: MAX_ARM_DECISIONS + 1,
+  });
+  if (rows.length > MAX_ARM_DECISIONS) return null; // too many to count honestly
+  return rows.map((r) => String(r.get('decision_id')));
+}
+
+async function armCount(
   brandId: string,
   experimentKey: string,
   arm: 'treatment' | 'control',
   from: Date,
-): Promise<{ outcome: ArmOutcome; capped: boolean }> {
+  convertedIds: string[] | null,
+): Promise<ArmCount> {
   const where = { brand_id: brandId, experiment_key: experimentKey, holdout_group: arm, created_at: { [Op.gte]: from } };
-  const n = await GrowthJourneyDecision.count({ where });
-  if (n === 0) return { outcome: { n: 0, converted: 0 }, capped: false };
-  if (n > MAX_ARM_DECISIONS) return { outcome: { n, converted: 0 }, capped: true };
-  const rows = await GrowthJourneyDecision.findAll({ where, attributes: ['id'], limit: MAX_ARM_DECISIONS });
-  const ids = rows.map((r) => String(r.get('id')));
-  const converted = await GrowthJourneyOutcome.count({
-    distinct: true,
-    col: 'decision_id',
-    where: {
-      brand_id: brandId,
-      outcome_type: { [Op.in]: [...CONVERSION_OUTCOMES] },
-      decision_id: { [Op.in]: ids },
-    },
+  const n = await GrowthJourneyDecision.count({ where, distinct: true, col: 'subject_ref' });
+  if (n === 0) return { n: 0, converted: 0, capped: false };
+  // An uncounted arm reports null, never 0 - see the header.
+  if (n > MAX_ARM_DECISIONS || convertedIds === null) return { n, converted: null, capped: true };
+  if (convertedIds.length === 0) return { n, converted: 0, capped: false };
+  const rows = await GrowthJourneyDecision.findAll({
+    where: { ...where, id: { [Op.in]: convertedIds } },
+    attributes: ['subject_ref'],
+    limit: MAX_ARM_DECISIONS,
   });
-  return { outcome: { n, converted }, capped: false };
+  return { n, converted: new Set(rows.map((r) => String(r.get('subject_ref')))).size, capped: false };
 }
 
 /**
@@ -126,13 +172,23 @@ export async function readBrandExperiment(brandId: string, windowDays = DEFAULT_
     return { brand_id: brandId, status: policy ? 'settings_invalid' : reason, policy: null, lift: null };
   }
   const from = new Date(Date.now() - days * 86_400_000);
-  const [t, c] = await Promise.all([
-    armOutcome(brandId, policy.experiment_key, 'treatment', from),
-    armOutcome(brandId, policy.experiment_key, 'control', from),
-  ]);
-  const treatment = t.outcome;
-  const control = c.outcome;
-  const computed = computeLift(treatment, control);
+  const convertedIds = await convertedDecisionIds(brandId, from);
+  const treatment = await armCount(brandId, policy.experiment_key, 'treatment', from, convertedIds);
+  const control = await armCount(brandId, policy.experiment_key, 'control', from, convertedIds);
+  const capped = treatment.capped || control.capped;
+
+  // `computeLift` is not called at all when an arm is capped: it would be handed a numerator
+  // nobody counted, and would answer a point estimate that reads as measured.
+  const lift: Measured = capped
+    ? insufficient(
+      `arm_capped: treatment n=${treatment.n}, control n=${control.n}, this read counts at most `
+      + `${MAX_ARM_DECISIONS} per arm - narrow the window`,
+    )
+    : computeLift(
+      { n: treatment.n, converted: treatment.converted as number },
+      { n: control.n, converted: control.converted as number },
+    ).lift;
+
   return {
     brand_id: brandId,
     status: 'active',
@@ -146,9 +202,9 @@ export async function readBrandExperiment(brandId: string, windowDays = DEFAULT_
       window_days: days,
       treatment,
       control,
-      lift: computed.lift,
+      lift,
       min_arm_n: MIN_ARM_N,
-      capped: t.capped || c.capped,
+      capped,
       max_arm_decisions: MAX_ARM_DECISIONS,
     },
   };

@@ -13,7 +13,7 @@ import { loadDecisionContext, type LoadedDecisionContext } from './decision/load
 import { resolveDecisionExecutionMode, withExecutionMode } from './decision/executionModeStamp';
 import { evaluateFreshness } from '../explorerGrowth/governor/freshness';
 import { decideForSubject } from './governor/decideForSubject';
-import type { DecideDeps, HoldoutPolicyInput, JourneyCandidate, JourneyDecision, JourneySubjectContext } from './governor/types';
+import type { DecideDeps, JourneyCandidate, JourneyDecision, JourneySubjectContext } from './governor/types';
 import { resolveJourneyContent } from './journeyContent';
 import { assertOfferAllowed, resolveOfferEligibility } from './offerEligibility';
 import { upsertProfile, type UpsertProfileResult } from './profileService';
@@ -113,7 +113,6 @@ function log(event: string, fields: Record<string, unknown>): void {
 
 /** The pipeline's production dependencies: the real offer gate, T304's evidence re-shaped for the contact policy, T305's content gate. */
 export function productionDeps(): DecideDeps {
-  const holdoutByBrand = new Map<string, Promise<HoldoutPolicyInput | null>>();
   return {
     assertOfferAllowed: (args) => assertOfferAllowed(args),
     contactPolicyFor: (candidate: JourneyCandidate, ctx: JourneySubjectContext) => {
@@ -139,17 +138,22 @@ export function productionDeps(): DecideDeps {
     // A row appearing is an operator's deliberate act, and `status: 'paused'` on it stops
     // assignment again without a deploy.
     //
-    // MEMOISED PER BRAND, per `productionDeps()` instance. The nightly decides many subjects per
-    // brand, and the arm depends on the policy, not on the subject's turn in the queue - so one
-    // read per brand per run is both cheaper than one per decision and more correct: a policy
-    // edited half way through a run cannot move subjects between arms mid-run.
-    holdoutPolicyFor: (brandId: string) => {
-      const cached = holdoutByBrand.get(brandId);
-      if (cached) return cached;
-      const pending = holdoutPolicyFor(brandId);
-      holdoutByBrand.set(brandId, pending);
-      return pending;
-    },
+    // ONE READ PER DECISION, and the first version of this claimed otherwise.
+    //
+    // It wrapped this in a per-brand `Map` and the comment said "one read per brand per run", so
+    // "a policy edited half way through a run cannot move subjects between arms mid-run". Both were
+    // false as wired: `productionDeps()` is called per SUBJECT, inside `decideForSubjectAndRecord`
+    // below, so the Map never held more than one entry and was discarded every time. The T608
+    // verifier caught it. The Map is gone rather than the call being hoisted, because the property
+    // it claimed is not one this feature needs: the arm is a pure function of
+    // `(experiment_key, subject_ref)`, so a policy edited mid-run can pause the experiment or change
+    // the share but cannot reshuffle anybody already assigned.
+    //
+    // What remains is one indexed `findOne` per decision against a table holding 24 rows, for a
+    // feature that answers `null` for every brand today. If that ever matters, the fix is to build
+    // the deps once in the batch runner and pass them down - not to re-add a cache that cannot see
+    // more than one subject.
+    holdoutPolicyFor: (brandId: string) => holdoutPolicyFor(brandId),
   };
 }
 

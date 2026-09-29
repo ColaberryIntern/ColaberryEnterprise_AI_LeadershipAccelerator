@@ -30,7 +30,7 @@ const m = {
   snapshots: jest.fn(), transitions: jest.fn(), runs: jest.fn(), policies: jest.fn(),
   rules: jest.fn(), queuePolicies: jest.fn(), handoffs: jest.fn(), conversations: jest.fn(),
   receipts: jest.fn(), outcomes: jest.fn(), handoffCount: jest.fn(), outcomeCount: jest.fn(),
-  holdoutPolicy: jest.fn(), decisionCount: jest.fn(), decisionFindAll: jest.fn(), conversionCount: jest.fn(),
+  holdoutPolicy: jest.fn(), decisionCount: jest.fn(), decisionFindAll: jest.fn(), conversionOutcomes: jest.fn(),
   decisions: jest.fn(), executions: jest.fn(), agents: jest.fn(),
 };
 jest.mock('../../../models', () => ({
@@ -52,7 +52,7 @@ jest.mock('../../../models', () => ({
   GrowthJourneyExecution: { findAndCountAll: (...a: unknown[]) => m.receipts(...a), findAll: (...a: unknown[]) => m.executions(...a) },
   GrowthJourneyOutcome: {
     findAndCountAll: (...a: unknown[]) => m.outcomes(...a),
-    count: (...a: unknown[]) => m.conversionCount(...a),
+    findAll: (...a: unknown[]) => m.conversionOutcomes(...a),
   },
   GrowthJourneyDecision: {
     findAll: (...a: unknown[]) => m.decisionFindAll(...a),
@@ -120,7 +120,7 @@ beforeEach(() => {
   m.holdoutPolicy.mockResolvedValue(null);
   m.decisionCount.mockResolvedValue(0);
   m.decisionFindAll.mockResolvedValue([]);
-  m.conversionCount.mockResolvedValue(0);
+  m.conversionOutcomes.mockResolvedValue([]);
   m.executions.mockResolvedValue([]);
   m.agents.mockResolvedValue([]);
   contextFromAdminRequest.mockResolvedValue(memberOf(null, [BRAND]));
@@ -341,7 +341,7 @@ describe('the experiments read (T608)', () => {
     expect(res.body.brands).toEqual([{ brand_id: BRAND, status: 'no_policy', policy: null, lift: null }]);
     // No experiment key to count by, so the decision counts are never asked for.
     expect(m.decisionCount).not.toHaveBeenCalled();
-    expect(m.conversionCount).not.toHaveBeenCalled();
+    expect(m.conversionOutcomes).not.toHaveBeenCalled();
     expect(res.body.conversion_outcomes).toEqual(['enrolled_paid', 'subscription_active', 'project_started']);
   });
 
@@ -350,14 +350,24 @@ describe('the experiments read (T608)', () => {
       get: (k: string) => ({ brand_id: BRAND, status: 'active', settings: { experiment_key: 'gj_lift', control_share: 0.5 } })[k],
     });
     m.decisionCount.mockResolvedValue(12);
-    m.decisionFindAll.mockResolvedValue([{ get: () => 'd-1' }]);
-    m.conversionCount.mockResolvedValue(3);
+    // Three conversion outcomes, all landing on decisions in the arm - so `converted` is the number
+    // of distinct SUBJECTS, which is the unit `MIN_ARM_N` is a floor on.
+    m.conversionOutcomes.mockResolvedValue([{ get: () => 'd-1' }, { get: () => 'd-2' }, { get: () => 'd-3' }]);
+    m.decisionFindAll.mockResolvedValue([
+      { get: () => 'lead:1' }, { get: () => 'lead:2' }, { get: () => 'lead:2' },
+    ]);
     const res = await auth(request(app()).get(`${JOURNEY}/experiments`));
     expect(res.status).toBe(200);
     const brand = res.body.brands[0];
     expect(brand.status).toBe('active');
     expect(brand.lift).toMatchObject({ experiment_key: 'gj_lift', min_arm_n: 100, capped: false });
-    expect(brand.lift.treatment).toEqual({ n: 12, converted: 3 });
+    // THE UNIT IS PEOPLE. `growth_journey_decisions` is append-only - one row per subject per
+    // decision_date - so counting rows would inflate `n` by the number of days a subject stays
+    // eligible, and would inflate the arms unevenly (a control subject keeps getting WAIT rows).
+    // `MIN_ARM_N = 100` is a floor on people, so the count must be DISTINCT subject_ref.
+    expect(m.decisionCount.mock.calls[0][0]).toMatchObject({ distinct: true, col: 'subject_ref' });
+    // Two distinct subjects out of three conversion rows.
+    expect(brand.lift.treatment).toEqual({ n: 12, converted: 2, capped: false });
     expect(brand.lift.lift.known).toBe(false);
     expect(brand.lift.lift.reason).toContain('needs 100 per arm');
   });
@@ -368,8 +378,32 @@ describe('the experiments read (T608)', () => {
     });
     m.decisionCount.mockResolvedValue(5_001);
     const res = await auth(request(app()).get(`${JOURNEY}/experiments`));
-    expect(res.body.brands[0].lift).toMatchObject({ capped: true, max_arm_decisions: 5_000 });
-    expect(m.conversionCount).not.toHaveBeenCalled();
+    const lift = res.body.brands[0].lift;
+    expect(lift).toMatchObject({ capped: true, max_arm_decisions: 5_000 });
+    // An UNCOUNTED arm reports null, never 0 - and the lift is not a number at all.
+    expect(lift.treatment).toEqual({ n: 5_001, converted: null, capped: true });
+    expect(lift.lift.known).toBe(false);
+    expect(lift.lift.reason).toContain('arm_capped');
+    expect(m.decisionFindAll).not.toHaveBeenCalled();
+  });
+
+  it('a capped arm against a real one NEVER serves a negative lift from an uncounted numerator', async () => {
+    // The defect this replaced: `converted: 0` on the capped arm went into `computeLift`, and
+    // `wilsonInterval(0, n)` answers `known: true, point: 0` - so a capped treatment arm against a
+    // converting control reported that the message made things WORSE, from a numerator nobody
+    // counted. "Say insufficient data, not a plausible-looking number."
+    m.holdoutPolicy.mockResolvedValue({
+      get: (k: string) => ({ brand_id: BRAND, status: 'active', settings: { experiment_key: 'gj_lift', control_share: 0.5 } })[k],
+    });
+    m.decisionCount.mockImplementation(async (q: { where: { holdout_group: string } }) => (q.where.holdout_group === 'treatment' ? 5_001 : 200));
+    m.conversionOutcomes.mockResolvedValue(Array.from({ length: 20 }, (_, i) => ({ get: () => `d-${i}` })));
+    m.decisionFindAll.mockResolvedValue(Array.from({ length: 20 }, (_, i) => ({ get: () => `lead:${i}` })));
+    const res = await auth(request(app()).get(`${JOURNEY}/experiments`));
+    const lift = res.body.brands[0].lift;
+    expect(lift.treatment).toEqual({ n: 5_001, converted: null, capped: true });
+    expect(lift.lift.known).toBe(false);
+    expect(lift.lift).not.toHaveProperty('point');
+    expect(JSON.stringify(lift.lift)).not.toContain('-0.');
   });
 
   it('a `window_days` beyond the cap is a 400, and the default is 90', async () => {

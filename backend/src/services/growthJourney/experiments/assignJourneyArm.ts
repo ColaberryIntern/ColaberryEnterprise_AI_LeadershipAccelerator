@@ -68,7 +68,7 @@ export const JOURNEY_HOLDOUT_PURPOSES = ['capability_education', 'case_study'] a
 export interface ArmInput {
   experimentKey: string;
   subjectRef: string;
-  /** 0..0.5, already validated by the policy schema. */
+  /** Must be in `(0, 0.5]`. Validated by the policy schema AND re-checked here - see `assignJourneyArm`. */
   controlShare: number;
   candidate: JourneyCandidate;
   /** The policy's optional narrowing of the code allowlist. Absent means "the whole allowlist". */
@@ -102,5 +102,12 @@ export function isJourneyHoldoutEligible(candidate: JourneyCandidate, candidateT
  */
 export function assignJourneyArm(input: ArmInput): JourneyArm | null {
   if (!isJourneyHoldoutEligible(input.candidate, input.candidateTypes)) return null;
-  return bucket(input.experimentKey, input.subjectRef) < input.controlShare ? 'control' : 'treatment';
+  // The bound is re-checked HERE, not just trusted from the policy schema, for the reason Explorer's
+  // own `assignArm` gives for doing the same: "the caller's judgment is exercised at 3am by a cron".
+  // `control_share` is the one parameter that decides how many people get withheld, and a share
+  // outside `(0, 0.5]` - from a hand-edited JSONB, a future caller, a refactor that drops the schema -
+  // must not be able to hold anyone back. Out of bounds means TREATMENT: nobody is withheld.
+  const share = input.controlShare;
+  if (!Number.isFinite(share) || share <= 0 || share > 0.5) return 'treatment';
+  return bucket(input.experimentKey, input.subjectRef) < share ? 'control' : 'treatment';
 }

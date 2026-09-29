@@ -13,6 +13,7 @@ import { bucket } from '../../explorerGrowth/explorerExperimentService';
 import { decideForSubject } from '../governor/decideForSubject';
 import { assignJourneyArm, isJourneyHoldoutEligible, JOURNEY_HOLDOUT_PURPOSES } from '../experiments/assignJourneyArm';
 import { holdoutSettingsSchema, lookupHoldoutPolicy } from '../experiments/holdoutPolicy';
+import { productionDeps } from '../decisionService';
 import type { GrowthJourneyFlags } from '../../../config/growthJourneyFlags';
 import type { DecideDeps, JourneyCandidate, JourneyStrategy, JourneySubjectContext } from '../governor/types';
 
@@ -213,6 +214,20 @@ describe('eligibility is a code allowlist, and a policy may only narrow it', () 
 /* ── 2. the arm is stable, and it is Explorer's bucket ──────────────────────── */
 
 describe('assignment is deterministic and per experiment', () => {
+  it('DEFENDS ITS OWN control share: out of bounds withholds nobody', () => {
+    // The policy schema validates the bound, and this re-checks it for the reason Explorer's own
+    // `assignArm` gives for doing the same: "the caller's judgment is exercised at 3am by a cron".
+    // `control_share` is the one parameter that decides how many people get withheld, so a share
+    // outside (0, 0.5] - a hand-edited JSONB, a future caller, a refactor that drops the schema -
+    // means TREATMENT: nobody is held back.
+    const args = { experimentKey: KEY, subjectRef: CONTROL_SUBJECT, candidate: candidate() };
+    for (const bad of [0, -1, 0.51, 1, 2, NaN, Infinity]) {
+      expect(assignJourneyArm({ ...args, controlShare: bad })).toBe('treatment');
+    }
+    // And the legal upper bound still holds this subject back.
+    expect(assignJourneyArm({ ...args, controlShare: 0.5 })).toBe('control');
+  });
+
   it('the same subject and key always land in the same arm, over many draws', () => {
     const args = { experimentKey: KEY, subjectRef: 'lead:501', controlShare: 0.5, candidate: candidate() };
     const arms = new Set(Array.from({ length: 50 }, () => assignJourneyArm(args)));
@@ -329,6 +344,23 @@ describe('the hook, in the decision path', () => {
   });
 });
 
+describe('what the production wiring actually does', () => {
+  it('reads the policy ONCE PER DECISION - no cache, and the code says so', async () => {
+    // The first version wrapped this in a per-brand Map and claimed "one read per brand per run",
+    // so "a policy edited half way through a run cannot move subjects between arms". Both were
+    // false: `productionDeps()` is called per SUBJECT, so the Map never held more than one entry
+    // and was discarded every time. The T608 verifier caught it. The Map is gone, and this cell
+    // pins what the wiring really does so the claim and the code cannot drift apart again.
+    m.policy.mockResolvedValue(null);
+    const deps1 = productionDeps();
+    await deps1.holdoutPolicyFor!('b-ent');
+    await deps1.holdoutPolicyFor!('b-ent');
+    const deps2 = productionDeps();
+    await deps2.holdoutPolicyFor!('b-ent');
+    expect(m.policy).toHaveBeenCalledTimes(3);
+  });
+});
+
 /* ── 4. the policy row is validated, and every absence is a named absence ───── */
 
 describe('the policy read', () => {
@@ -358,9 +390,23 @@ describe('the policy read', () => {
     expect(await lookupHoldoutPolicy('b-ent')).toEqual({ policy: null, reason: 'settings_invalid' });
   });
 
-  it('FAILS CLOSED: a lookup that throws is an absence, never an escaping error', async () => {
+  it('FAILS CLOSED, but NOT SILENTLY: the absence is logged with an error class', async () => {
+    // Failing closed is right; failing closed with no log is how a renamed column or a dead
+    // connection becomes indistinguishable from "this brand has no experiment".
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
     m.policy.mockRejectedValue(new Error('connection reset'));
     await expect(lookupHoldoutPolicy('b-ent')).resolves.toEqual({ policy: null, reason: 'lookup_failed' });
+    expect(warn).toHaveBeenCalledTimes(1);
+    const line = JSON.parse(warn.mock.calls[0][0] as string) as Record<string, unknown>;
+    expect(line).toMatchObject({
+      service: 'growth-journey',
+      event: 'growth_journey.holdout.lookup_failed',
+      outcome: 'failure',
+      brand_id: 'b-ent',
+    });
+    expect(typeof line.error_class).toBe('string');
+    expect(line.error_class).not.toBe('');
+    warn.mockRestore();
   });
 
   it('the schema refuses a control share that is not a holdout', () => {

@@ -305,8 +305,8 @@ export const GROWTH_JOURNEY_STATEMENTS: readonly string[] = [
   // module (statements test) — and because every table below references
   // journey_programs, which is created at the top.
   // `growth_journey_decisions` is APPEND-ONLY (no updated_at): a re-decision is a new row.
-  // `growth_journey_profiles` is the one MUTABLE table the run owns - a projection of current
-  // state, not a ledger, and every state change it records also writes a transitions row.
+  // `growth_journey_profiles` is the one MUTABLE table the run owns - a projection of current state,
+  // not a ledger, and every state change it records also writes an append-only transitions row.
   `CREATE TABLE IF NOT EXISTS growth_journey_decisions (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
      tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,

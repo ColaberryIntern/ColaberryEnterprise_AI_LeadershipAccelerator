@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { GrowthJourneyPolicy } from '../../../models';
+import { classifyError } from '../../../utils/errorClassifier';
 
 /**
  * The holdout policy for one brand, or nothing (Phase 6, T608).
@@ -82,6 +83,14 @@ export interface HoldoutLookup {
  * decide at all, for a feature that is switched off. The reason is reported so
  * `/experiments` can show that the lookup failed rather than that no policy
  * exists; the governor only ever sees `null`.
+ *
+ * Failing closed SILENTLY would be a different thing, and the first version of
+ * this file did that. On the governor's path the reason is discarded, so a
+ * genuine programming error - a bad `where`, a renamed column, a persistently
+ * dead connection - was indistinguishable from "this brand has no experiment"
+ * and produced no log line and no `error_class` anywhere. It is logged with its
+ * class now, which is the repo's rule for every caught exception and the shape
+ * `decisionService` already uses 250 lines from where it wires this in.
  */
 export async function lookupHoldoutPolicy(brandId: string): Promise<HoldoutLookup> {
   let row;
@@ -90,7 +99,15 @@ export async function lookupHoldoutPolicy(brandId: string): Promise<HoldoutLooku
       where: { brand_id: brandId, policy_type: HOLDOUT_POLICY_TYPE },
       attributes: ['brand_id', 'status', 'settings'],
     });
-  } catch {
+  } catch (err: unknown) {
+    console.warn(JSON.stringify({
+      service: 'growth-journey',
+      level: 'warn',
+      event: 'growth_journey.holdout.lookup_failed',
+      outcome: 'failure',
+      error_class: classifyError(err),
+      brand_id: brandId,
+    }));
     return { policy: null, reason: 'lookup_failed' };
   }
   if (!row) return { policy: null, reason: 'no_policy' };
