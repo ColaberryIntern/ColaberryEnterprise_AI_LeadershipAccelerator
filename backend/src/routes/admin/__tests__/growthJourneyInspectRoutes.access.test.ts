@@ -3,7 +3,7 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 
 /**
- * T607 — the seven inspect routes' access matrix, the boundary, and the privacy
+ * T607/T608 — the EIGHT inspect routes' access matrix, the boundary, and the privacy
  * property end to end.
  *
  * `requireAdmin`, the router, the controllers, the Zod schemas and the four read
@@ -11,7 +11,7 @@ import jwt from 'jsonwebtoken';
  * are mocked. So the adversarial values below travel the whole way out: a score
  * JSONB whose factors quote an address, a transition reason and requester
  * carrying one, an approver, a queue assignee and a conversation owner - and no
- * `@` reaches any of the seven responses.
+ * `@` reaches any of the eight responses.
  *
  * The last describe is the one that would have caught a real bug rather than a
  * regression: `/handoffs/policies` only works because this router is mounted
@@ -74,7 +74,7 @@ import growthJourneyReadRoutes from '../growthJourneyReadRoutes';
 import { getJourneyQueuePoliciesHandler } from '../../../controllers/growthJourneyInspectController';
 
 const JOURNEY = '/api/admin/growth-journey';
-/** The seven, and whether the read is brand-scoped (shadow runs is not — its table has no brand). */
+/** The eight, and whether the read is brand-scoped (shadow runs is not — its table has no brand). */
 const ROUTES = [
   ['decisions/snapshots', true],
   ['decisions/transitions', true],

@@ -21,14 +21,14 @@ import { serveRead } from './growthJourneyController';
  * what it changed, whether the crons ran, what the brand is allowed to offer,
  * what content has been approved, and who is holding a person right now.
  *
- * Seven handlers, each three lines, over the ONE `serveRead` every journey read
+ * Eight handlers, each three lines, over the ONE `serveRead` every journey read
  * shares (moved to `growthJourneyController.ts` by this task). That helper owns
  * the parse, the scope narrowing, the 403 and the single 500 body; a handler's
  * only job is to name its schema, its log event and its read.
  *
  * Each `event` string is distinct, because the log line is the only place the
  * five hundred bodies differ - the response says `Journey read failed` for all
- * twelve routes, and the event says which one.
+ * thirteen routes, and the event says which one.
  *
  * The shadow-runs handler is the one that ignores `scope`: its table has no
  * `brand_id`, so there is nothing to narrow. See `shadowRunsRead.ts` for why
