@@ -4,6 +4,7 @@ import { AgentDetail, ReeseBehaviourKey, setReeseBehaviourSwitch } from '../../.
 import { AgentRoleCharter, getAgentRoleCharter, saveAgentRoleCharter, AgentRoleCharterInput } from '../../../services/agentRoleCharterApi';
 import { timeAgo } from '../shell/trust';
 import { scheduledWorkColors, toolColors } from './agentDetailV2Correlation';
+import TruncatedText from './TruncatedText';
 
 // Reese Product Phase 1 follow-up (2026-09-18) — Ali, live: "reactive_dm_reply
 // and health_assessment share Reese's own ai_agents.enabled column, a real
@@ -200,7 +201,7 @@ export default function AgentOverviewV2Sidebar({ detail, agentId, agentDisplayNa
           ) : charter ? (
             <>
               <div style={{ fontWeight: 600, marginBottom: 4 }}>{charter.roleTitle}</div>
-              <p style={{ margin: 0, color: 'var(--adv2-ink-2)' }}>{charter.mission}</p>
+              <p style={{ margin: 0, color: 'var(--adv2-ink-2)' }}><TruncatedText text={charter.mission} /></p>
               <p className="adv2-muted" style={{ marginTop: 10, marginBottom: 0, fontSize: 12.5 }}>Last updated by {charter.updatedByEmail} on {new Date(charter.updatedAt).toLocaleDateString()}</p>
             </>
           ) : charter === null ? (
