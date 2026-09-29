@@ -42,6 +42,18 @@ jest.mock('../../../services/growthJourney/offerEligibility', () => {
   return { OfferNotEligibleError };
 });
 jest.mock('../../../services/growthJourney/classificationService', () => ({ overrideClassification: jest.fn() }));
+// T609: `/health` mounts here, and its handler imports the journey health reader, which
+// reaches `ledgerRead` -> `config/database` -> a real Sequelize built from `env.databaseUrl`.
+// This suite mocks `config/env` without one, so the import alone took the whole file from
+// green to "failed to run". The reader is stubbed because this suite tests ACCESS and mount
+// order, not health arithmetic - `journeyHealth.test.ts` owns the numbers.
+jest.mock('../../../services/growthJourney/health/journeyHealth', () => ({
+  buildJourneyHealth: jest.fn().mockResolvedValue({
+    receipts: [], stuck_pending_review: { count: 0, over_hours: 72 }, held: { total: 0, by_reason: {} },
+    refused: { total: 0, by_reason: {}, capped: false }, crons: [], controls: { pause: 0, rollout: 0 },
+    journey_hold_rows: 0, ledger_read: 'ok', window_hours: 24,
+  }),
+}));
 
 const m = {
   brands: jest.fn(),
@@ -73,6 +85,7 @@ import { TERMINOLOGY } from '../../../services/growthJourney/journeyTerminology'
 import { pathToSection } from '../../../middlewares/mgmtSectionGate';
 
 const REGISTRY = '/api/admin/growth-journey/status/registry';
+const HEALTH = '/api/admin/growth-journey/status/health';
 const PARTICIPATIONS = '/api/admin/growth-journey/participations';
 const TENANT = '10000000-0000-4000-8000-000000000002';
 const BRAND = '20000000-0000-4000-8000-000000000002';
@@ -264,5 +277,30 @@ describe('the RBAC classification of the status prefix', () => {
     expect(pathToSection(REGISTRY)).toBe('campaigns');
     expect(pathToSection('/api/admin/growth-journey/status')).toBe('campaigns');
     expect(pathToSection(PARTICIPATIONS)).toBe('campaigns');
+  });
+});
+
+describe('T609: /health joins the same always-readable surface, behind the same guard', () => {
+  it('is reachable with the master flag OFF, which is the whole point of mounting it here', async () => {
+    const a = app();
+    setMaster(false);
+    const res = await auth(request(a).get(HEALTH));
+    expect(res.status).toBe(200);
+    expect(res.body.ledger_read).toBe('ok');
+  });
+
+  it('refuses an unauthenticated caller', async () => {
+    const res = await request(app()).get(HEALTH);
+    expect(res.status).toBe(401);
+  });
+
+  it('validates the window rather than quietly reading a different one', async () => {
+    const a = app();
+    const bad = await auth(request(a).get(`${HEALTH}?window_hours=abc`));
+    expect(bad.status).toBe(400);
+    const tooBig = await auth(request(a).get(`${HEALTH}?window_hours=99999`));
+    expect(tooBig.status).toBe(400);
+    const ok = await auth(request(a).get(`${HEALTH}?window_hours=48`));
+    expect(ok.status).toBe(200);
   });
 });

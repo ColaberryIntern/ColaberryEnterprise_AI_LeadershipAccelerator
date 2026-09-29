@@ -15,6 +15,11 @@ const m = {
   transaction: jest.fn(),
   query: jest.fn(),
 };
+// T609: runExecutor now emits one ai_events row per run. `aiEventService` imports the AiEvent
+// MODEL directly rather than through the barrel this suite mocks, so without this the model's
+// `Model.init` runs against an undefined sequelize and the whole suite fails to load. The event
+// itself is asserted in runExecutor.aiEvents.test.ts; here it is only stubbed out of the way.
+jest.mock('../../../aiEventService', () => ({ emitAiEvent: jest.fn(), logAiEvent: jest.fn() }));
 jest.mock('../../../../models', () => {
   const { phase5ModelsMock } = require('../../__tests__/fixtures/phase5Tables');
   const { Table } = require('../../__tests__/fixtures/phase4Tables');

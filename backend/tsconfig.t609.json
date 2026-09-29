@@ -14,10 +14,21 @@
   "_why_tests": "The root tsconfig EXCLUDES __tests__, and ts-jest runs with isolatedModules (transpile, no typecheck), so a suite can pass while its file does not compile - T605 lost a pass to exactly that, and T608's it.each tuple widening was caught here and nowhere else. The new suites are listed on purpose.",
   "include": [],
   "files": [
+    "src/controllers/growthJourneyStatusController.ts",
+    "src/routes/admin/__tests__/growthJourneyStatusRoutes.access.test.ts",
+    "src/routes/admin/growthJourneyStatusRoutes.ts",
+    "src/routes/healthRoutes.ts",
+    "src/services/growthJourney/execution/__tests__/runExecutor.aiEvents.test.ts",
+    "src/services/growthJourney/execution/__tests__/runExecutor.test.ts",
+    "src/services/growthJourney/execution/executorRunEvent.ts",
+    "src/services/growthJourney/execution/runExecutor.ts",
+    "src/services/growthJourney/health/__tests__/journeyHealth.test.ts",
+    "src/services/growthJourney/health/journeyHealth.ts",
     "src/services/health/__tests__/sequenceProgressionCheck.characterization.test.ts",
+    "src/services/health/__tests__/systemHealth.journey.test.ts",
     "src/services/health/campaignHealthCheck.ts",
+    "src/services/health/growthJourneyCheck.ts",
     "src/services/health/sequenceProgressionCheck.ts",
-    "src/services/systemHealthService.ts",
-    "src/routes/healthRoutes.ts"
+    "src/services/systemHealthService.ts"
   ]
 }

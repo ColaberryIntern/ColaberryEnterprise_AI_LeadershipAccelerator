@@ -12,6 +12,7 @@ import { readJourneyEvents } from '../ledgerRead';
 import { ALI_DAILY_CAP } from '../../explorerGrowth/explorerAliOutreachService';
 import { aliSendsToday } from './aliOutreachContext';
 import { readLiveDecisionViews } from './decisionReads';
+import { emitRunEvent } from './executorRunEvent';
 import { executeApproved, type ExecuteApprovedResult } from './enrollmentAdapter';
 import { MAX_DECISION_AGE_HOURS, type ExecutionDecisionView } from './planChecks';
 import { planExecution } from './planExecution';
@@ -277,5 +278,6 @@ export async function runExecutor(args: RunExecutorArgs = {}): Promise<ExecutorS
   log(s.stage_errors.length ? 'warn' : 'info', 'growth_journey.executor.run', { correlation_id, duration_ms: Date.now() - started, outcome: s.stage_errors.length ? 'partial' : 'success' }, {
     plan: s.plan, execute: s.execute, reconcile: s.reconcile, stage_errors: s.stage_errors,
   });
+  await emitRunEvent(s, correlation_id, Date.now() - started);
   return s;
 }

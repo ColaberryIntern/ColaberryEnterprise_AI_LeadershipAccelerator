@@ -3,7 +3,9 @@ import { AiAgent, Brand, JourneyPath, JourneyProgram, TenantMembership } from '.
 import { growthJourneyFlagSummary, resolveGrowthJourneyFlags, type GrowthJourneyFlagSummary } from '../config/growthJourneyFlags';
 import { GROWTH_JOURNEY_AGENT_ENTRIES } from '../services/agentRegistry/growthJourneyAgents';
 import { terminologyOf, type JourneyTerminology } from '../services/growthJourney/journeyTerminology';
+import { buildJourneyHealth } from '../services/growthJourney/health/journeyHealth';
 import { logReadFailure } from './growthJourneyController';
+import { z } from 'zod';
 
 /**
  * The Growth Journey's CONFIGURATION registry (Phase 6, T604).
@@ -139,5 +141,42 @@ export async function getStatusRegistryHandler(req: Request, res: Response): Pro
   } catch (err) {
     const errorClass = logReadFailure(req, err, 'status_registry_read_failed');
     res.status(500).json({ error: 'Status registry read failed', error_class: errorClass });
+  }
+}
+
+/**
+ * `GET /api/admin/growth-journey/status/health` (Phase 6, T609).
+ *
+ * The counts-and-reasons report from `buildJourneyHealth`, behind the same
+ * always-readable guard as the registry beside it and for the same reason: the
+ * question "did anything move, and which part stopped" has to be answerable
+ * BEFORE the master flag goes on, and every other journey route 404s while it
+ * is off.
+ *
+ * The window is validated rather than trusted - `coerce` because a query string
+ * is text, `int` and a range because the reader clamps anyway and a route that
+ * silently accepted `window_hours=abc` would be lying about what it read. The
+ * reader's own clamp stays as the second line of defence; this one exists so a
+ * bad request is a 400 and not a quietly different answer.
+ *
+ * The response body carries no subject, no lead and no address; see the
+ * reader's header for the rule and the test that holds it.
+ */
+const healthQuerySchema = z.object({
+  window_hours: z.coerce.number().int().min(1).max(720).optional(),
+});
+
+export async function getJourneyHealthHandler(req: Request, res: Response): Promise<void> {
+  const parsed = healthQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid query', issues: parsed.error.issues.map((i) => ({ path: i.path.join('.'), code: i.code })) });
+    return;
+  }
+  try {
+    const health = await buildJourneyHealth({ now: new Date(), ledgerWindowHours: parsed.data.window_hours });
+    res.json(health);
+  } catch (err) {
+    const errorClass = logReadFailure(req, err, 'journey_health_read_failed');
+    res.status(500).json({ error: 'Journey health read failed', error_class: errorClass });
   }
 }

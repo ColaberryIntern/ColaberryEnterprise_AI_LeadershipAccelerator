@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
-import { getStatusRegistryHandler } from '../../controllers/growthJourneyStatusController';
+import { getJourneyHealthHandler, getStatusRegistryHandler } from '../../controllers/growthJourneyStatusController';
 
 /**
  * The Growth Journey's always-readable status surface (Phase 6, T604).
@@ -29,13 +29,13 @@ import { getStatusRegistryHandler } from '../../controllers/growthJourneyStatusC
  * platform's own configuration (see the controller's header for the rule about
  * what may and may not appear in the response).
  *
- * ─── WHAT WILL JOIN IT ──────────────────────────────────────────────────────
+ * ─── WHAT HAS JOINED IT, AND WHAT STILL WILL ────────────────────────────────
  *
- * `GET /readiness` (T610) and `GET /health` (T609) mount here, for the same
- * reason and behind the same guard: a readiness score and a health verdict that
- * only appear once the system is live would answer the question too late. They
- * are separate tasks; this file ships with the registry alone rather than with
- * a placeholder that returns nothing.
+ * `GET /health` (T609) is mounted here now, for the same reason and behind the
+ * same guard: a health verdict that only appears once the system is live would
+ * answer the question too late. `GET /readiness` (T610) joins it next, on the
+ * same argument. They are separate tasks, so each mounts when it is built
+ * rather than as a placeholder that returns nothing.
  */
 
 const router = Router();
@@ -44,5 +44,6 @@ const BASE = '/api/admin/growth-journey/status';
 router.use(BASE, requireAdmin);
 
 router.get(`${BASE}/registry`, getStatusRegistryHandler);
+router.get(`${BASE}/health`, getJourneyHealthHandler);
 
 export default router;
