@@ -42,7 +42,21 @@ const newSessionId = (): string =>
         return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
       });
 
-export default function StartProjectForStudent() {
+export default function StartProjectForStudent({ startFor, onConsumed }: {
+  /**
+   * Skip the search and open straight on the two options for this student.
+   *
+   * Ali, 2026-09-29, from the roster above: "I want to be able to create a
+   * project by clicking on a button in the intern category... so it's easy for
+   * me to just click one button and I'm already setting up a project." The
+   * search step exists for a student nobody is looking at; when the roster row
+   * IS the student, searching for a name already on screen is a step for its
+   * own sake.
+   */
+  startFor?: IntakeStudent | null;
+  /** Called once the hand-off has been taken, so the parent can clear it. */
+  onConsumed?: () => void;
+} = {}) {
   // If a phone call was in flight before a page refresh, re-open straight on the
   // talk step for that student — SpokenIntake then re-attaches to the live call.
   const [resume] = useState(() => readActiveIntake());
@@ -131,6 +145,20 @@ export default function StartProjectForStudent() {
     setError(null);
     setFinished(null);
   };
+
+  // A roster hand-off lands here. Guarded on `phase === 'pick'` so it can never
+  // interrupt a conversation already under way: clicking another intern mid
+  // interview would otherwise discard the transcript with no warning.
+  useEffect(() => {
+    if (!startFor) return;
+    if (phase === 'pick') {
+      setStudent(startFor);
+      setMatches([]);
+      setQuery('');
+      setPhase('choose');
+    }
+    onConsumed?.();
+  }, [startFor, phase, onConsumed]);
 
   const viewAs = async () => {
     if (!student) return;
