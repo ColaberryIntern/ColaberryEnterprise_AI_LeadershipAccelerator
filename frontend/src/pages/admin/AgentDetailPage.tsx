@@ -7,8 +7,6 @@ import '../../styles/agentDetailV2.css';
 import { TabKey } from '../../components/admin/agentDetailV2/AgentDetailV2Header';
 import AgentDetailLayout from '../../components/admin/agentDetailV2/AgentDetailLayout';
 import AgentOverviewV2 from '../../components/admin/agentDetailV2/AgentOverviewV2';
-import AgentAtAGlanceTab from '../../components/admin/AgentAtAGlanceTab';
-import AgentLiveStatusTab from '../../components/admin/AgentLiveStatusTab';
 import AgentWorkDecisionsTab from '../../components/admin/AgentWorkDecisionsTab';
 import AgentWorkV2 from '../../components/admin/agentDetailV2/AgentWorkV2';
 import AgentTalkTab from '../../components/admin/AgentTalkTab';
@@ -174,6 +172,16 @@ export default function AgentDetailPage() {
   // its landing tab, not just Reese's, same disclosed characteristic as
   // Track A0's shell change.
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  // Agent Detail polish round 2 (2026-09-29) — Ali, live: clicking a
+  // cross-tab link (e.g. Talk's "Inspect work records") switched tabs
+  // correctly but landed wherever the window happened to be scrolled,
+  // often the bottom of whatever tab was open before — no scroll container
+  // exists anywhere in this shell (.adv2-shell-content sets no `overflow`,
+  // so the window/document itself scrolls), and nothing reset scroll
+  // position on tab change. Every tab switch now starts at the top.
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [activeTab]);
   // AI Workforce Reset (2026-08-24) — Ali, live: deactivate an agent and
   // cancel its open tickets, reversible (enabled:false, real ticket
   // cancellation) — see workforceOrgChartApi.ts::resetAgents().
@@ -241,7 +249,7 @@ export default function AgentDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    if ((activeTab !== 'glance' && activeTab !== 'command' && activeTab !== 'decisions' && activeTab !== 'overview') || !id || inboxFetchedFor === id) return;
+    if ((activeTab !== 'decisions' && activeTab !== 'overview') || !id || inboxFetchedFor === id) return;
     fetchInbox();
   }, [activeTab, id, inboxFetchedFor, fetchInbox]);
 
@@ -324,7 +332,6 @@ export default function AgentDetailPage() {
       activeTab={activeTab}
       onTabChange={setActiveTab}
       onDeactivate={handleDeactivate}
-      onTalk={() => setActiveTab('talk')}
       resetting={resetting}
       resetMessage={resetMessage}
       refreshing={loading}
@@ -335,14 +342,8 @@ export default function AgentDetailPage() {
       onSelectAutonomyLevel={setSelectedAutonomyLevel}
       onReactivate={handleReactivate}
     >
-      {activeTab === 'glance' && (
-        <AgentAtAGlanceTab agentId={id} detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} onNavigate={setActiveTab} />
-      )}
-      {activeTab === 'command' && (
-        <AgentLiveStatusTab detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} />
-      )}
       {activeTab === 'overview' && (
-        <AgentOverviewV2 detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} onNavigate={setActiveTab} />
+        <AgentOverviewV2 detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} onNavigate={setActiveTab} />
       )}
       {activeTab === 'work' && (
         <AgentWorkV2 detail={detail} onNavigate={setActiveTab} />

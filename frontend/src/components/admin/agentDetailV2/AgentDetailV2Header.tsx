@@ -23,16 +23,23 @@ import { AutonomyLevel } from '../../../services/workforceOrgChartApi';
 // list + detail (AgentWorkTab.tsx, new), and 'decisions' is the EXISTING
 // Pending Approvals + Decision Journal content (AgentWorkDecisionsTab.tsx,
 // relocated unchanged, not rewritten).
-export type TabKey = 'glance' | 'command' | 'overview' | 'work' | 'decisions' | 'talk' | 'performance_settings';
+//
+// Agent Detail polish round 2 (2026-09-29) — Ali, live: "Remove tabs 'At a
+// Glance' and 'Live Status'... Make all the tab names match" the mockup.
+// 'glance'/'command' retired from the nav (the 2 real pieces of content
+// they alone carried — Operational state + reason, the evidenced Attention
+// Required list — folded into Overview, see AgentOverviewV2.tsx; nothing
+// silently lost). Remaining 5 keys reordered and relabeled to match the
+// mockup's own real sidebar exactly: Overview, Talk to Reese, Work &
+// commitments, Decisions & evidence, Performance & settings.
+export type TabKey = 'overview' | 'talk' | 'work' | 'decisions' | 'performance_settings';
 
 export const TABS: Array<{ key: TabKey; label: string }> = [
-  { key: 'glance', label: 'At a Glance' },
-  { key: 'command', label: 'Live Status' },
   { key: 'overview', label: 'Overview' },
-  { key: 'work', label: 'Work' },
-  { key: 'decisions', label: 'Decisions' },
-  { key: 'talk', label: 'Talk' },
-  { key: 'performance_settings', label: 'Performance & Settings' },
+  { key: 'talk', label: 'Talk to Reese' },
+  { key: 'work', label: 'Work & commitments' },
+  { key: 'decisions', label: 'Decisions & evidence' },
+  { key: 'performance_settings', label: 'Performance & settings' },
 ];
 
 export const STATUS_LABEL: Record<AgentDetail['live_status'], string> = {

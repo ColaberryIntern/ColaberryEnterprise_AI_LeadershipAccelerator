@@ -598,8 +598,8 @@ async function renderToolsChannelsTab() {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
   const findButton = (label: string) => Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.trim() === label);
-  const performanceSettingsTab = findButton('Performance & Settings');
-  if (!performanceSettingsTab) throw new Error('Performance & Settings tab button not found');
+  const performanceSettingsTab = findButton('Performance & settings');
+  if (!performanceSettingsTab) throw new Error('Performance & settings tab button not found');
   await act(async () => {
     performanceSettingsTab.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -738,8 +738,8 @@ describe('AgentDetailPage — "Performance & Settings" consolidation', () => {
       );
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    const tab = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Performance & Settings');
-    if (!tab) throw new Error('Performance & Settings tab button not found');
+    const tab = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Performance & settings');
+    if (!tab) throw new Error('Performance & settings tab button not found');
     await act(async () => {
       tab.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -761,7 +761,7 @@ describe('AgentDetailPage — "Performance & Settings" consolidation', () => {
     expect(labels).not.toContain('Reports');
     expect(labels).not.toContain('Performance');
     expect(labels).not.toContain('Trust & Control');
-    expect(labels).toContain('Performance & Settings');
+    expect(labels).toContain('Performance & settings');
   });
 
   it('lands on "Results & reports" by default, showing real Reports and Performance content', async () => {
