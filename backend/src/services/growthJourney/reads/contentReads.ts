@@ -1,6 +1,6 @@
 import { BrandOfferPolicy, GrowthJourneyContentRule } from '../../../models';
 import { safeField } from '../handoffs/assigneeDigest';
-import { brandWhere, emptyPage, paging, type Page, type ReadScope } from './readPaging';
+import { brandWhere, emptyPage, paging, safeKeyList, type Page, type ReadScope } from './readPaging';
 
 /**
  * What a brand is allowed to offer, and what content has been approved to say
@@ -37,7 +37,9 @@ import { brandWhere, emptyPage, paging, type Page, type ReadScope } from './read
  * Claims and CTAs are reported as COUNTS. The copy itself is approved marketing
  * text rather than anything a person wrote to us, but an admin list has no use
  * for the wording and a count is what the plan asked for; the wording stays
- * where it is authored.
+ * where it is authored. The two lists that ARE projected go through
+ * `safeKeyList`, so even operator-authored config cannot put an address in a
+ * response.
  *
  * `approved_by` on a content rule is a `STRING(128)` that in practice holds
  * whoever approved it — which may well be an address — so it goes through
@@ -48,11 +50,15 @@ const URL_CAP = 300;
 const LIST_CAP = 25;
 const countOf = (v: unknown): number => (Array.isArray(v) ? v.length : 0);
 
-/** Strings out of a JSONB array, capped in both length and number. */
-const stringList = (v: unknown): string[] =>
-  Array.isArray(v)
-    ? v.filter((s): s is string => typeof s === 'string').slice(0, LIST_CAP).map((s) => s.slice(0, URL_CAP))
-    : [];
+/**
+ * Strings out of a JSONB array: capped in length and number, and never an address.
+ *
+ * These two lists (`approved_landing_pages`, `required_approvals`) are operator-authored config
+ * rather than anything a subject wrote, so this is belt and braces - but a `mailto:` in a landing
+ * page list would otherwise have put an address in the response, which the phase's hard stop
+ * forbids without qualification. It reads `redacted`, visibly.
+ */
+const stringList = (v: unknown): string[] => safeKeyList(v, LIST_CAP, URL_CAP);
 
 /* ── brand offer policies ───────────────────────────────────────────────────── */
 

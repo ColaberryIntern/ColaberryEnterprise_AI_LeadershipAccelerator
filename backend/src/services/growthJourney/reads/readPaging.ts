@@ -1,9 +1,11 @@
 import { Op, type WhereOptions } from 'sequelize';
+import { safeField } from '../handoffs/assigneeDigest';
 
 /**
- * The paging and brand-scoping rule shared by every Growth Journey admin read
- * (Phase 6, T607 — moved VERBATIM out of `performance/performanceReads.ts`,
- * which now imports it and re-exports the two caps).
+ * The paging, brand-scoping and JSONB-string rules shared by every Growth
+ * Journey admin read (Phase 6, T607 — the paging half moved VERBATIM out of
+ * `performance/performanceReads.ts`, which now imports it and re-exports the
+ * two caps).
  *
  * It lives in one file because it is ONE rule. T606 shipped it for three reads;
  * T607 adds seven more, and four copies of `Math.min(Math.max(1, …), MAX_PAGE)`
@@ -54,4 +56,38 @@ export function scopeWhere(scope: ReadScope): WhereOptions {
   const where = brandWhere(scope.brandIds);
   if (scope.programId) where.program_id = scope.programId;
   return where;
+}
+
+/* ── strings that come out of an unvalidated JSONB ──────────────────────────── */
+
+/**
+ * A KEY or slug copied out of a JSONB column, capped and never an address.
+ *
+ * T607's first pass sent the free-text VALUE columns through `safeField` and
+ * capped the JSONB-derived keys and lists for length only - a score dimension's
+ * key, a `score_gaps` entry, an approved landing page, a required approval.
+ * The T607 verifier sliced those helpers out and ran them: a key of
+ * `ali@example.com` came straight back. Nothing writes such a key today (the
+ * snapshot table has no writer at all, and the two policy lists are
+ * operator-authored config), so it was a latent hole rather than a live leak -
+ * but "no address reaches a response" is the phase's hard stop, and a rule that
+ * holds for the values and not the keys is not the rule.
+ *
+ * So both go through `safeField` now: ONE address rule for this whole surface,
+ * with only the length cap differing. A key carrying an `@` reads `redacted`,
+ * exactly as a reason or an approver does.
+ */
+export function safeKey(v: unknown, cap = 64): string {
+  return safeField(v).value.slice(0, cap);
+}
+
+/**
+ * The strings out of a JSONB array: non-strings dropped (rather than becoming
+ * `safeField`'s `unknown` placeholder, which would invent list entries), the
+ * count bounded, and each survivor through `safeKey`.
+ */
+export function safeKeyList(v: unknown, maxItems: number, cap: number): string[] {
+  return Array.isArray(v)
+    ? v.filter((s): s is string => typeof s === 'string' && s.length > 0).slice(0, maxItems).map((s) => safeKey(s, cap))
+    : [];
 }

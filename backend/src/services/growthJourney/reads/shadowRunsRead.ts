@@ -9,12 +9,20 @@ import { DEFAULT_PAGE, MAX_PAGE, paging } from './readPaging';
  * ─── WHAT THE TABLE ACTUALLY HOLDS ──────────────────────────────────────────
  *
  * The plan described this read as "counts from `details` numeric keys only".
- * There are none: the one writer, `instrumentCronJob`, sets `details: null` on
+ * There are none in the rows this read can return: `instrumentCronJob` — the
+ * only writer that logs under a journey agent's name — sets `details: null` on
  * every row, and the only number it records is `duration_ms`. So this read
- * reports what exists — when a run started, how long it took, whether it
- * succeeded — and no counts, rather than inventing a field to fill a column.
- * Making the crons record per-run counts is a change to the crons, not to this
- * read, and it is recorded as deferred rather than faked here.
+ * reports what exists (when a run started, how long it took, whether it
+ * succeeded) and no counts, rather than inventing a field to fill a column.
+ *
+ * `counts_available: false` is therefore a statement about THIS FILTERED SET,
+ * not about the table: `aiEventService.logAgentActivity` and
+ * `agentBlueprint/agentActivityLogService` also insert here and can set
+ * `details`, and neither writes an `action` equal to any of the three journey
+ * names today. If one ever does, this literal has to become a real check —
+ * flagged here because a hard-coded `false` cannot learn that on its own.
+ * (T607's first pass said "the one writer", which was true of these rows and
+ * false of the table; the verifier caught the overstatement.)
  *
  * The table also has no `agent_name`: that lives on `ai_agents`. What it has is
  * `action`, and `instrumentCronJob` writes the agent's name into it verbatim,

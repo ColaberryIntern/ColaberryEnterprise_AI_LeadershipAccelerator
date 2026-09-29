@@ -216,14 +216,15 @@ describe('the query is validated at the boundary', () => {
 });
 
 describe('the privacy property, end to end through the real services', () => {
-  it('no `@` reaches any of the seven responses, however adversarial the rows', async () => {
+  it('no `@` reaches any of the seven responses - values, JSONB keys and JSONB lists alike', async () => {
     m.snapshots.mockResolvedValue({
       count: 1,
       rows: [row({
         id: 's1', brand_id: BRAND, subject_ref: 'lead:9', as_of_date: '2026-09-27', state: 'ACTIVATING',
         // The JSONB nothing validates: a factor quoting a reply, and a non-numeric dimension.
-        scores: { summary: 40, dimensions: [{ key: 'engagement', label: 'Engagement', value: 9, source: 'reply', factors: ['replied from ali@example.com'] }, { key: 'note', value: 'call bob@example.org' }] },
-        score_gaps: ['fit'], created_at: AT,
+        // Poisoned in four places at once: a factor, a dimension KEY, a non-numeric value, and a gap.
+        scores: { summary: 40, dimensions: [{ key: 'engagement', label: 'Engagement', value: 9, source: 'reply', factors: ['replied from ali@example.com'] }, { key: 'owner ali@example.com', value: 2 }, { key: 'note', value: 'call bob@example.org' }] },
+        score_gaps: ['fit', 'no_reply_from bob@example.org'], created_at: AT,
       })],
     });
     m.transitions.mockResolvedValue({
@@ -242,8 +243,9 @@ describe('the privacy property, end to end through the real services', () => {
       count: 1,
       rows: [row({
         id: 'p1', brand_id: BRAND, offer_family: 'business_training', decision: 'deny', status: 'active',
-        effective_from: AT, effective_to: null, approved_landing_pages: ['https://x.test/a'],
-        approved_claims: ['c'], approved_ctas: [], required_approvals: ['legal'],
+        effective_from: AT, effective_to: null,
+        approved_landing_pages: ['https://x.test/a', 'mailto:sales@colaberry.com'],
+        approved_claims: ['c'], approved_ctas: [], required_approvals: ['legal', 'sign-off ali@example.com'],
         notes: 'spoke to ali@example.com about this',
       })],
     });
@@ -287,12 +289,16 @@ describe('the privacy property, end to end through the real services', () => {
       count: 1,
       rows: [row({
         id: 's1', brand_id: BRAND, subject_ref: 'lead:9', as_of_date: '2026-09-27', state: null,
-        scores: { summary: 40, dimensions: [{ key: 'engagement', value: 9, factors: ['replied from ali@example.com'] }, { key: 'note', value: 'call bob@example.org' }] },
+        scores: { summary: 40, dimensions: [{ key: 'engagement', value: 9, factors: ['replied from ali@example.com'] }, { key: 'rep@example.com', value: 4 }, { key: 'note', value: 'call bob@example.org' }] },
         score_gaps: [], created_at: AT,
       })],
     });
     const res = await auth(request(app()).get(`${JOURNEY}/decisions/snapshots`));
-    expect(res.body.rows[0].scores).toEqual({ summary: 40, dimensions: [{ key: 'engagement', value: 9 }], non_numeric_keys: ['note'] });
+    expect(res.body.rows[0].scores).toEqual({
+      summary: 40,
+      dimensions: [{ key: 'engagement', value: 9 }, { key: 'redacted', value: 4 }],
+      non_numeric_keys: ['note'],
+    });
     expect(Object.keys(res.body.rows[0])).toEqual(['id', 'brand_id', 'subject_ref', 'as_of_date', 'state', 'scores', 'score_gaps', 'created_at']);
   });
 

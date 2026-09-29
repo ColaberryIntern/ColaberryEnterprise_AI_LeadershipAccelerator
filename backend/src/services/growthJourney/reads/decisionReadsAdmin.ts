@@ -1,6 +1,6 @@
 import { GrowthJourneyScoreSnapshot, GrowthJourneyTransition } from '../../../models';
 import { safeField } from '../handoffs/assigneeDigest';
-import { brandWhere, emptyPage, paging, scopeWhere, type Page, type ReadScope } from './readPaging';
+import { brandWhere, emptyPage, paging, safeKey, safeKeyList, scopeWhere, type Page, type ReadScope } from './readPaging';
 
 /**
  * The two reads behind a decision: the score snapshot it was taken on, and the
@@ -20,7 +20,11 @@ import { brandWhere, emptyPage, paging, scopeWhere, type Page, type ReadScope } 
  * the JSONB, keeps a dimension only when its `value` is a finite number, and
  * reports the keys it refused in `non_numeric_keys` so a screen can say "this
  * dimension is not a number" rather than render a silent zero. Nothing else
- * from the JSONB leaves — no `label`, no `source`, no `factors`.
+ * from the JSONB leaves — no `label`, no `source`, no `factors` — and the keys
+ * that DO leave go through `safeKey`, so a key carrying an address reads
+ * `redacted` just as a reason does. (T607's first pass capped those keys for
+ * length only; the verifier proved a key of `ali@example.com` came straight
+ * back, and this is that fix.)
  *
  * ─── THE TABLE HAS NO WRITER YET ────────────────────────────────────────────
  *
@@ -65,7 +69,7 @@ export function numericScores(raw: unknown): NumericScores {
       if (!d || typeof d !== 'object') continue;
       const dim = d as Record<string, unknown>;
       if (typeof dim.key !== 'string' || dim.key.length === 0) continue;
-      const key = dim.key.slice(0, KEY_CAP);
+      const key = safeKey(dim.key, KEY_CAP);
       if (finite(dim.value)) out.dimensions.push({ key, value: dim.value });
       else out.non_numeric_keys.push(key);
     }
@@ -75,7 +79,7 @@ export function numericScores(raw: unknown): NumericScores {
   // A flat map, which is what the plan expected: keep the numbers, name the rest.
   for (const [k, v] of Object.entries(obj)) {
     if (k === 'summary') continue;
-    const key = k.slice(0, KEY_CAP);
+    const key = safeKey(k, KEY_CAP);
     if (finite(v)) out.dimensions.push({ key, value: v });
     else out.non_numeric_keys.push(key);
   }
@@ -97,8 +101,9 @@ export interface SubjectFilters extends ReadScope {
   subjectRef?: string;
 }
 
-const gapsOf = (v: unknown): string[] =>
-  Array.isArray(v) ? v.filter((g): g is string => typeof g === 'string').map((g) => g.slice(0, KEY_CAP)) : [];
+/** Gap keys are written by the scorer, but they live in the same unvalidated JSONB as everything else. */
+const MAX_GAPS = 50;
+const gapsOf = (v: unknown): string[] => safeKeyList(v, MAX_GAPS, KEY_CAP);
 
 export async function readScoreSnapshots(filters: SubjectFilters): Promise<Page<SnapshotRow>> {
   const { limit, offset } = paging(filters);
