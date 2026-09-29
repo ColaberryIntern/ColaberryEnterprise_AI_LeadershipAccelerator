@@ -85,10 +85,18 @@ export async function getJourneyReceiptsHandler(req: Request, res: Response): Pr
   }));
 }
 
+/**
+ * Outcomes, brand-scoped and NEVER programme-scoped.
+ *
+ * `growth_journey_outcomes` carries no `program_id` column, so `outcomesQuerySchema` does not accept
+ * one and the echoed scope says `program_id: null` - the same shape the by-journey handler uses. The
+ * alternative, echoing back the programme the caller asked for, labels brand-wide rows with a filter
+ * that was never applied, which is a wrong answer rather than a missing feature.
+ */
 export async function getJourneyOutcomesHandler(req: Request, res: Response): Promise<void> {
   await serveRead(req, res, outcomesQuerySchema, 'journey_outcomes_read_failed', async (query, scope) => ({
     ...(await readOutcomes({ brandIds: scope.brandIds, limit: query.limit, offset: query.offset, outcomeType: query.outcome_type, source: query.source })),
-    scope: { tenant_id: scope.tenantId, brand_id: scope.brandId, program_id: scope.programId },
+    scope: { tenant_id: scope.tenantId, brand_id: scope.brandId, program_id: null },
   }));
 }
 

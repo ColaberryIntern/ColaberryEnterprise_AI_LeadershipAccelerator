@@ -21,10 +21,10 @@ jest.mock('../../../config/env', () => ({ env: { jwtSecret: 'test-secret', nodeE
 jest.mock('../../../services/aiEventService', () => ({ emitAiEvent: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../../services/ledgerService', () => ({ logEvent: jest.fn().mockResolvedValue(undefined) }));
 
-const m = { receipts: jest.fn(), outcomes: jest.fn(), rates: jest.fn(), byJourney: jest.fn(), decisions: jest.fn(), executions: jest.fn(), handoffs: jest.fn(), handoffCount: jest.fn(), agents: jest.fn() };
+const m = { receipts: jest.fn(), outcomes: jest.fn(), rates: jest.fn(), byJourney: jest.fn(), decisions: jest.fn(), executions: jest.fn(), handoffs: jest.fn(), handoffCount: jest.fn(), outcomeCount: jest.fn(), agents: jest.fn() };
 jest.mock('../../../models', () => ({
   GrowthJourneyExecution: { findAndCountAll: (...a: unknown[]) => m.receipts(...a), findAll: (...a: unknown[]) => m.executions(...a) },
-  GrowthJourneyOutcome: { findAndCountAll: (...a: unknown[]) => m.outcomes(...a) },
+  GrowthJourneyOutcome: { findAndCountAll: (...a: unknown[]) => m.outcomes(...a), count: (...a: unknown[]) => m.outcomeCount(...a) },
   GrowthJourneyDecision: { findAll: (...a: unknown[]) => m.decisions(...a) },
   GrowthJourneyHandoff: { findAll: (...a: unknown[]) => m.handoffs(...a), count: (...a: unknown[]) => m.handoffCount(...a) },
   AiAgent: { findAll: (...a: unknown[]) => m.agents(...a) },
@@ -106,6 +106,7 @@ beforeEach(() => {
   m.executions.mockResolvedValue([]);
   m.handoffs.mockResolvedValue([]);
   m.handoffCount.mockResolvedValue(0);
+  m.outcomeCount.mockResolvedValue(0);
   m.agents.mockResolvedValue([]);
   contextFromAdminRequest.mockResolvedValue(memberOf(null, [BRAND]));
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -204,7 +205,27 @@ describe('the query is validated at the boundary', () => {
     const res = await auth(request(app()).get(`${BASE}/rates?window_days=365`));
     expect(res.status).toBe(200);
     expect(res.body.brands[0]).toMatchObject({ capped: true, reason: 'window_too_large', handoffs_in_window: 5_001, rates: null });
+    expect(res.body.max_handoffs_per_brand).toBe(5_000);
     expect(m.rates).not.toHaveBeenCalled();
+  });
+
+  it('a brand with more OUTCOMES than the cap is refused the same way - the JSONB read is bounded too', async () => {
+    m.outcomeCount.mockResolvedValue(10_001);
+    const res = await auth(request(app()).get(`${BASE}/rates?window_days=365`));
+    expect(res.status).toBe(200);
+    expect(res.body.brands[0]).toMatchObject({ capped: true, reason: 'window_too_large', handoffs_in_window: 0, outcomes_in_window: 10_001, rates: null });
+    expect(res.body.max_outcomes_per_brand).toBe(10_000);
+    expect(m.rates).not.toHaveBeenCalled();
+  });
+
+  it('/outcomes never claims a programme filter it cannot apply', async () => {
+    // `growth_journey_outcomes` has no `program_id` column, so the parameter is not accepted and the
+    // answer says `program_id: null` - rather than labelling brand-wide rows with a filter that was
+    // never applied.
+    const res = await auth(request(app()).get(`${BASE}/outcomes?program_id=30000000-0000-4000-8000-000000000007`));
+    expect(res.status).toBe(200);
+    expect(res.body.scope.program_id).toBeNull();
+    expect((m.outcomes.mock.calls[0][0] as { where: Record<string, unknown> }).where.program_id).toBeUndefined();
   });
 
   it('the rates window defaults to 30 days and honours a smaller one', async () => {

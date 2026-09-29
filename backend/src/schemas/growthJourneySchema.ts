@@ -284,8 +284,13 @@ export const OUTCOME_SOURCES = [
   'growth_journey_executions',
 ] as const;
 
+/**
+ * No `program_id`: `growth_journey_outcomes` has no such column, so the parameter cannot be honoured
+ * and is not accepted. The handler echoes `program_id: null` to say so in the answer.
+ */
 export const outcomesQuerySchema = z.object({
-  ...performanceScope,
+  tenant_id: performanceScope.tenant_id,
+  brand_id: performanceScope.brand_id,
   ...performancePaging,
   outcome_type: z.enum(OUTCOME_TYPES).optional(),
   source: z.enum(OUTCOME_SOURCES).optional(),

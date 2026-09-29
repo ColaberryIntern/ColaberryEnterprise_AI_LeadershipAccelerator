@@ -26,10 +26,11 @@ import { loadHandoffRates, type BrandHandoffRates } from '../outcomes/handoffRat
  * Each list read takes `limit` (≤ `MAX_PAGE`) and `offset`, and answers with a
  * `total` from `count` so a page can say "25 of 312" without loading 312 rows.
  * `findAndCountAll` issues both in one call. The window on the rates read is
- * clamped by its own schema, and the rates read COUNTS before it computes so
- * Phase 4's own unbounded row read is never reached with a window too large -
- * see `MAX_RATE_HANDOFFS`. The rates themselves come from Phase 4's
- * computation, which this module does not reimplement.
+ * clamped by its own schema, and the rates read COUNTS BOTH of Phase 4's row
+ * reads before it computes either, so neither is ever reached with a window
+ * too large - see `MAX_RATE_HANDOFFS` and `MAX_RATE_OUTCOMES`. The rates
+ * themselves come from Phase 4's computation, which this module does not
+ * reimplement.
  *
  * ─── THE SCOPE IS THE CALLER'S, AND AN EMPTY SCOPE READS NOTHING ────────────
  *
@@ -185,20 +186,38 @@ export async function readOutcomes(filters: OutcomeFilters): Promise<Page<Outcom
 /* ── rates ──────────────────────────────────────────────────────────────────── */
 
 /**
- * How many handoffs this read will load for one brand before it refuses to.
+ * How many rows this read will load for one brand before it refuses to - BOTH halves of them.
  *
- * Phase 4's `loadHandoffRates` is the computation, and it reads ROWS - every handoff in the window
- * and every outcome from the window's start, with no `LIMIT`, because the nightly that wrote it runs
- * once per brand per day over 30 days. This admin route can ask for 365 days across every brand in
- * scope, so it is the caller that made that read unbounded, and it is this file's job to bound it.
+ * Phase 4's `loadHandoffRates` is the computation, and it reads ROWS in two queries, neither with a
+ * `LIMIT`: every handoff CREATED in the window, and every outcome that OCCURRED in it, the latter
+ * carrying `metadata`. That was written for the nightly, which reads one brand's own 30 days once a
+ * day; this admin route can ask for 365 days across every brand in scope, so it is the caller that
+ * made those reads unbounded and it is this file's job to bound them.
  *
- * The bound is a COUNT first, not a truncated sample: a rate computed over the newest N handoffs is
- * a different number wearing the same name, which is exactly the defect the metric registry exists
- * to prevent. So a brand over the cap answers `{ rates: null, capped: true, handoffs_in_window }`
- * with the reason, and the caller narrows the window - a refusal a screen can render, rather than a
- * figure nobody can defend or a request that pulls a year of rows into memory.
+ * BOTH are counted, because the two are not proportional and the smaller one is the handoff half:
+ * an outcome is written on every send, reply, disposition, appointment and pipeline advance, and for
+ * subjects that never produced a handoff at all, so a brand with ten handoffs can still have a year
+ * of outcome rows. Bounding only the handoffs would have left the heavier read - the one carrying
+ * the JSONB - wide open, which is the read the T605 verdict actually named.
+ *
+ * Each count runs on the EXACT predicate its own row read uses - `created_at` in `[from, to)` for
+ * handoffs, `occurred_at` in `[from, to]` for outcomes, off the same `from`/`to` arithmetic - so a
+ * count can never disagree with the set that would be loaded. If either is over its cap the brand
+ * answers `{ rates: null, capped: true, handoffs_in_window, outcomes_in_window }` with the reason,
+ * and the caller narrows the window.
+ *
+ * It refuses rather than truncating: a rate computed over the newest N rows is a different number
+ * wearing the same name, which is exactly the defect the metric registry exists to prevent. A
+ * refusal a screen can render beats a figure nobody can defend, or a request that pulls a year of
+ * rows into memory.
  */
 export const MAX_RATE_HANDOFFS = 5_000;
+/**
+ * Twice the handoff cap, not the same number: outcomes are the more numerous side (several per
+ * handoff, plus those with no handoff), so a single shared cap would either refuse ordinary windows
+ * or leave the JSONB read effectively unbounded. Past this the answer is a narrower window.
+ */
+export const MAX_RATE_OUTCOMES = 10_000;
 export const WINDOW_TOO_LARGE = 'window_too_large';
 
 export interface BrandRates {
@@ -207,6 +226,7 @@ export interface BrandRates {
   rates: BrandHandoffRates | null;
   capped: boolean;
   handoffs_in_window: number;
+  outcomes_in_window: number;
   reason?: typeof WINDOW_TOO_LARGE;
 }
 
@@ -214,6 +234,7 @@ export interface RatesResult {
   brands: BrandRates[];
   window_days: number;
   max_handoffs_per_brand: number;
+  max_outcomes_per_brand: number;
 }
 
 /**
@@ -228,10 +249,17 @@ export async function readRates(scope: { brandIds: readonly string[]; windowDays
   const from = new Date(to.getTime() - scope.windowDays * 86_400_000);
   const brands: BrandRates[] = [];
   for (const brandId of scope.brandIds) {
-    // One indexed COUNT per brand, on the same predicate the rates query uses, before any row is read.
-    const handoffs = await GrowthJourneyHandoff.count({ where: { brand_id: brandId, created_at: { [Op.gte]: from, [Op.lt]: to } } });
-    if (handoffs > MAX_RATE_HANDOFFS) {
-      brands.push({ brand_id: brandId, rates: null, capped: true, handoffs_in_window: handoffs, reason: WINDOW_TOO_LARGE });
+    // Two indexed COUNTs per brand, each mirroring the predicate of the row read it guards, before
+    // any row is read - and issued together, as Phase 4 issues the two reads they stand in for.
+    const [handoffs, outcomes] = await Promise.all([
+      GrowthJourneyHandoff.count({ where: { brand_id: brandId, created_at: { [Op.gte]: from, [Op.lt]: to } } }),
+      GrowthJourneyOutcome.count({ where: { brand_id: brandId, occurred_at: { [Op.gte]: from, [Op.lte]: to } } }),
+    ]);
+    if (handoffs > MAX_RATE_HANDOFFS || outcomes > MAX_RATE_OUTCOMES) {
+      brands.push({
+        brand_id: brandId, rates: null, capped: true,
+        handoffs_in_window: handoffs, outcomes_in_window: outcomes, reason: WINDOW_TOO_LARGE,
+      });
       continue;
     }
     brands.push({
@@ -239,7 +267,13 @@ export async function readRates(scope: { brandIds: readonly string[]; windowDays
       rates: await loadHandoffRates({ brandId, asOf: scope.asOf, windowDays: scope.windowDays }),
       capped: false,
       handoffs_in_window: handoffs,
+      outcomes_in_window: outcomes,
     });
   }
-  return { brands, window_days: scope.windowDays, max_handoffs_per_brand: MAX_RATE_HANDOFFS };
+  return {
+    brands,
+    window_days: scope.windowDays,
+    max_handoffs_per_brand: MAX_RATE_HANDOFFS,
+    max_outcomes_per_brand: MAX_RATE_OUTCOMES,
+  };
 }

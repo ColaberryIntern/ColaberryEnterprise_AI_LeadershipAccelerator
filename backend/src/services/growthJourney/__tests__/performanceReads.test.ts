@@ -1,8 +1,8 @@
-const m = { receipts: jest.fn(), outcomes: jest.fn(), rates: jest.fn(), handoffCount: jest.fn() };
+const m = { receipts: jest.fn(), outcomes: jest.fn(), rates: jest.fn(), handoffCount: jest.fn(), outcomeCount: jest.fn() };
 
 jest.mock('../../../models', () => ({
   GrowthJourneyExecution: { findAndCountAll: (...a: unknown[]) => m.receipts(...a) },
-  GrowthJourneyOutcome: { findAndCountAll: (...a: unknown[]) => m.outcomes(...a) },
+  GrowthJourneyOutcome: { findAndCountAll: (...a: unknown[]) => m.outcomes(...a), count: (...a: unknown[]) => m.outcomeCount(...a) },
   GrowthJourneyHandoff: { count: (...a: unknown[]) => m.handoffCount(...a) },
 }));
 jest.mock('../outcomes/handoffRatesQuery', () => ({
@@ -11,7 +11,7 @@ jest.mock('../outcomes/handoffRatesQuery', () => ({
 }));
 
 import { Op } from 'sequelize';
-import { DEFAULT_PAGE, MAX_PAGE, MAX_RATE_HANDOFFS, readOutcomes, readRates, readReceipts, WINDOW_TOO_LARGE } from '../performance/performanceReads';
+import { DEFAULT_PAGE, MAX_PAGE, MAX_RATE_HANDOFFS, MAX_RATE_OUTCOMES, readOutcomes, readRates, readReceipts, WINDOW_TOO_LARGE } from '../performance/performanceReads';
 
 /**
  * T606 — the three list reads and the rates roll-up.
@@ -53,6 +53,7 @@ beforeEach(() => {
   m.outcomes.mockResolvedValue({ rows: [], count: 0 });
   m.rates.mockResolvedValue({ all: { handoffs: 0 }, by_queue: {} });
   m.handoffCount.mockResolvedValue(0);
+  m.outcomeCount.mockResolvedValue(0);
 });
 
 describe('receipts: scalars, and the reason through safeField', () => {
@@ -188,31 +189,80 @@ describe('an empty scope reads nothing, without a query', () => {
 });
 
 describe('rates: Phase 4\'s computation, per brand, and bounded before it runs', () => {
-  it('COUNTS first, on the same predicate, and only then computes', async () => {
+  it('COUNTS BOTH of Phase 4\'s reads first, each on that read\'s own predicate', async () => {
+    // Phase 4 reads handoffs by `created_at` in [from, to) and outcomes by `occurred_at` in
+    // [from, to]. A count on any other predicate measures a different set from the one that would
+    // be loaded, so the gate would not be a gate.
     m.handoffCount.mockResolvedValue(12);
+    m.outcomeCount.mockResolvedValue(40);
     m.rates.mockResolvedValue({ all: { handoffs: 12 }, by_queue: {} });
     const result = await readRates({ brandIds: [BRAND_A], windowDays: 30, asOf: AT });
-    const [countQuery] = m.handoffCount.mock.calls[0] as [{ where: Record<string, unknown> }];
-    expect(countQuery.where.brand_id).toBe(BRAND_A);
-    const window = countQuery.where.created_at as Record<symbol, Date>;
-    expect(window[Op.gte]).toEqual(new Date('2026-08-29T12:00:00Z'));
-    expect(window[Op.lt]).toEqual(AT);
-    expect(result.brands[0]).toMatchObject({ brand_id: BRAND_A, capped: false, handoffs_in_window: 12 });
+    const [handoffQuery] = m.handoffCount.mock.calls[0] as [{ where: Record<string, unknown> }];
+    expect(handoffQuery.where.brand_id).toBe(BRAND_A);
+    const created = handoffQuery.where.created_at as Record<symbol, Date>;
+    expect(created[Op.gte]).toEqual(new Date('2026-08-29T12:00:00Z'));
+    expect(created[Op.lt]).toEqual(AT);
+    const [outcomeQuery] = m.outcomeCount.mock.calls[0] as [{ where: Record<string, unknown> }];
+    expect(outcomeQuery.where.brand_id).toBe(BRAND_A);
+    const occurred = outcomeQuery.where.occurred_at as Record<symbol, Date>;
+    expect(occurred[Op.gte]).toEqual(new Date('2026-08-29T12:00:00Z'));
+    expect(occurred[Op.lte]).toEqual(AT);
+    expect(result.brands[0]).toMatchObject({ brand_id: BRAND_A, capped: false, handoffs_in_window: 12, outcomes_in_window: 40 });
     expect(result.brands[0].rates).not.toBeNull();
+  });
+
+  it('counts the window it was ASKED for, not a default one - at 365 days too', async () => {
+    // The agreement between the count and the read has to hold at every window, not just the
+    // default: a count pinned to 30 days would wave a brand through and then load a year.
+    m.handoffCount.mockResolvedValue(1);
+    m.outcomeCount.mockResolvedValue(1);
+    m.rates.mockResolvedValue({ all: { handoffs: 1 }, by_queue: {} });
+    await readRates({ brandIds: [BRAND_A], windowDays: 365, asOf: AT });
+    const yearAgo = new Date('2025-09-28T12:00:00Z');
+    const created = (m.handoffCount.mock.calls[0][0] as { where: { created_at: Record<symbol, Date> } }).where.created_at;
+    const occurred = (m.outcomeCount.mock.calls[0][0] as { where: { occurred_at: Record<symbol, Date> } }).where.occurred_at;
+    expect(created[Op.gte]).toEqual(yearAgo);
+    expect(created[Op.lt]).toEqual(AT);
+    expect(occurred[Op.gte]).toEqual(yearAgo);
+    expect(occurred[Op.lte]).toEqual(AT);
+    expect(m.rates).toHaveBeenCalledWith({ brandId: BRAND_A, asOf: AT, windowDays: 365 });
   });
 
   it('a brand over the cap is REFUSED with its reason - never a rate over a truncated sample', async () => {
     // A rate computed over the newest N handoffs is a different number wearing the same name, which
     // is the defect the registry exists to prevent. So the answer is null with `window_too_large`.
     m.handoffCount.mockResolvedValue(MAX_RATE_HANDOFFS + 1);
+    m.outcomeCount.mockResolvedValue(7);
     const result = await readRates({ brandIds: [BRAND_A], windowDays: 365, asOf: AT });
     expect(result.brands[0]).toEqual({
       brand_id: BRAND_A, rates: null, capped: true,
-      handoffs_in_window: MAX_RATE_HANDOFFS + 1, reason: WINDOW_TOO_LARGE,
+      handoffs_in_window: MAX_RATE_HANDOFFS + 1, outcomes_in_window: 7, reason: WINDOW_TOO_LARGE,
     });
-    // And Phase 4's unbounded row read is never reached for that brand.
+    // And neither of Phase 4's unbounded row reads is reached for that brand.
     expect(m.rates).not.toHaveBeenCalled();
     expect(result.max_handoffs_per_brand).toBe(MAX_RATE_HANDOFFS);
+    expect(result.max_outcomes_per_brand).toBe(MAX_RATE_OUTCOMES);
+  });
+
+  it('a brand UNDER the handoff cap but over the OUTCOME cap is refused too', async () => {
+    // The two are not proportional: an outcome is written on every send, reply, disposition,
+    // appointment and pipeline advance, and for subjects with no handoff at all. Bounding only the
+    // handoffs would leave the heavier read - the one carrying `metadata` - wide open.
+    m.handoffCount.mockResolvedValue(10);
+    m.outcomeCount.mockResolvedValue(MAX_RATE_OUTCOMES + 1);
+    const result = await readRates({ brandIds: [BRAND_A], windowDays: 365, asOf: AT });
+    expect(result.brands[0]).toEqual({
+      brand_id: BRAND_A, rates: null, capped: true,
+      handoffs_in_window: 10, outcomes_in_window: MAX_RATE_OUTCOMES + 1, reason: WINDOW_TOO_LARGE,
+    });
+    expect(m.rates).not.toHaveBeenCalled();
+  });
+
+  it('exactly at the OUTCOME cap still computes', async () => {
+    m.outcomeCount.mockResolvedValue(MAX_RATE_OUTCOMES);
+    m.rates.mockResolvedValue({ all: { handoffs: 1 }, by_queue: {} });
+    expect((await readRates({ brandIds: [BRAND_A], windowDays: 365, asOf: AT })).brands[0].capped).toBe(false);
+    expect(m.rates).toHaveBeenCalledTimes(1);
   });
 
   it('the cap is per brand: one brand over it does not stop the others', async () => {
@@ -240,9 +290,13 @@ describe('rates: Phase 4\'s computation, per brand, and bounded before it runs',
     expect(result.window_days).toBe(14);
   });
 
-  it('an empty scope asks nothing - not even the count - and returns no brands', async () => {
-    expect(await readRates({ brandIds: [], windowDays: 30 })).toEqual({ brands: [], window_days: 30, max_handoffs_per_brand: MAX_RATE_HANDOFFS });
+  it('an empty scope asks nothing - not even the counts - and returns no brands', async () => {
+    expect(await readRates({ brandIds: [], windowDays: 30 })).toEqual({
+      brands: [], window_days: 30,
+      max_handoffs_per_brand: MAX_RATE_HANDOFFS, max_outcomes_per_brand: MAX_RATE_OUTCOMES,
+    });
     expect(m.handoffCount).not.toHaveBeenCalled();
+    expect(m.outcomeCount).not.toHaveBeenCalled();
     expect(m.rates).not.toHaveBeenCalled();
   });
 });
