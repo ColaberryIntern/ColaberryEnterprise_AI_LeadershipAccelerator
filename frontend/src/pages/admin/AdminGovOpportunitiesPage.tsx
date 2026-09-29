@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader, StatCard, SectionCard } from '../../components/admin/shell';
-import { listGovOpportunities, type GovOpportunity, type GovOpportunityFeed } from '../../services/factoryApi';
+import { listGovOpportunities, startGovOpportunity, type GovOpportunity, type GovOpportunityFeed } from '../../services/factoryApi';
 
 /**
  * AdminGovOpportunitiesPage — the government-contract entry page.
@@ -21,18 +22,9 @@ const fmtValue = (v: number | null): string => {
   if (v >= 1_000) return `$${Math.round(v / 1_000)}K`;
   return `$${v}`;
 };
-const fitBadge = (fit: number | null): string => {
-  if (fit === null) return 'bg-secondary-subtle text-secondary-emphasis';
-  if (fit >= 75) return 'bg-success-subtle text-success-emphasis';
-  if (fit >= 70) return 'bg-info-subtle text-info-emphasis';
-  return 'bg-secondary-subtle text-secondary-emphasis';
-};
-const priorityBadge = (p: number | null | undefined): string => {
-  if (p === null || p === undefined) return 'bg-secondary-subtle text-secondary-emphasis';
-  if (p >= 75) return 'bg-primary-subtle text-primary-emphasis';
-  if (p >= 65) return 'bg-info-subtle text-info-emphasis';
-  return 'bg-secondary-subtle text-secondary-emphasis';
-};
+// Fit/Priority are LEGACY, title-derived discovery scores from Opportunity Pulse — advisory only, not verified
+// company fit. Rendered in a single neutral tone so styling never implies a good/verified match.
+const LEGACY_SCORE_BADGE = 'bg-secondary-subtle text-secondary-emphasis';
 
 /** An opportunity Opportunity Pulse flagged (no_bid / needs_review) or that was declined — never a candidate. */
 const isFlaggedForReview = (o: GovOpportunity): boolean => {
@@ -41,9 +33,11 @@ const isFlaggedForReview = (o: GovOpportunity): boolean => {
 };
 
 export default function AdminGovOpportunitiesPage(): React.ReactElement {
+  const navigate = useNavigate();
   const [feed, setFeed] = useState<GovOpportunityFeed | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -59,14 +53,35 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
 
   useEffect(() => { void load(); }, [load]);
 
+  // Open an EXISTING government project. Reuses the guarded start route, which resolves an existing project
+  // (200) or refuses a new one (409) — it never creates. So this navigates to a started project or explains
+  // that qualification is still required; it does NOT restore unqualified new-project creation.
+  const handleOpen = useCallback(async (opp: GovOpportunity) => {
+    setNote(null);
+    try {
+      const { deliveryProjectId } = await startGovOpportunity(opp.uuid, {});
+      navigate(`/admin/factory?contract=${encodeURIComponent(deliveryProjectId)}`);
+    } catch (err: any) {
+      if (err?.response?.status === 409) {
+        setNote('No project exists for this opportunity yet — qualification is required before one is created (next phase).');
+      } else {
+        setNote('Could not open this project.');
+      }
+    }
+  }, [navigate]);
+
   const opportunities = feed?.opportunities ?? [];
   const isLive = feed?.source === 'live';
   const candidates = opportunities.filter((o) => !isFlaggedForReview(o));
   const flagged = opportunities.filter(isFlaggedForReview);
 
   const renderCard = (opp: GovOpportunity): React.ReactElement => {
-    const verdictStatus = opp.vetVerdict?.status ?? null;
-    const unassessed = opp.vetVerdictPresent === true && (opp.vetVerdict == null);
+    const v = opp.vetVerdict;
+    // Both an ABSENT and an explicitly-null verdict are Unassessed (the absent/null distinction is kept in the
+    // data via vetVerdictPresent). A null verdict is NEVER approved.
+    const unassessed = v == null;
+    // A legacy assessment is weak when it is title-regex-derived or carries no evidence — mark it clearly.
+    const weakLegacy = v != null && (v.method === 'title_regex' || v.evidence == null);
     return (
       <div className="col-12 col-md-6 col-xl-4" key={opp.uuid}>
         <div className="card h-100 border">
@@ -74,24 +89,39 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
             <div className="d-flex justify-content-between align-items-start gap-2 mb-2">
               <div className="d-flex flex-wrap gap-1">
                 {opp.priorityScore !== null && opp.priorityScore !== undefined && (
-                  <span className={`badge ${priorityBadge(opp.priorityScore)}`}>Priority {opp.priorityScore}</span>
+                  <span className={`badge ${LEGACY_SCORE_BADGE}`}>Priority {opp.priorityScore} (legacy)</span>
                 )}
-                <span className={`badge ${fitBadge(opp.fitScore)}`}>Fit {opp.fitScore ?? '—'}</span>
+                <span className={`badge ${LEGACY_SCORE_BADGE}`}>Fit {opp.fitScore ?? '—'} (legacy)</span>
               </div>
               <div className="d-flex flex-wrap gap-1 justify-content-end">
-                {verdictStatus && (
-                  <span className="badge bg-warning-subtle text-warning-emphasis" title="Opportunity Pulse review verdict">
-                    {verdictStatus.replace(/_/g, ' ')}
+                {v && (
+                  <span className="badge bg-warning-subtle text-warning-emphasis" title="Opportunity Pulse source assessment (not an eligibility decision)">
+                    {(v.label ?? v.status ?? 'flagged').replace(/_/g, ' ')}
                   </span>
                 )}
                 {unassessed && (
-                  <span className="badge bg-secondary-subtle text-secondary-emphasis" title="No review verdict yet">Unassessed</span>
+                  <span className="badge bg-secondary-subtle text-secondary-emphasis" title="No review verdict (absent or null) — unassessed, never approved">Unassessed</span>
                 )}
                 {opp.pursuitStatus && opp.pursuitStatus !== 'none' && (
-                  <span className="badge bg-light text-secondary">{opp.pursuitStatus}</span>
+                  <span className="badge bg-light text-secondary" title="Opportunity Pulse operator status — not an authoritative pursuit decision">{opp.pursuitStatus}</span>
                 )}
               </div>
             </div>
+            <div className="small text-secondary mb-2" style={{ marginTop: '-0.25rem' }}>
+              Legacy discovery scores — advisory, not verified company fit.
+            </div>
+            {v && (
+              <div className="small text-warning-emphasis mb-2">
+                <i className="ri-alert-line me-1" aria-hidden="true" />
+                {(v.label ?? v.status ?? 'flagged').replace(/_/g, ' ')}
+                {v.reason ? ` — ${v.reason}` : ''}
+                {v.disqualifier ? ` (disqualifier: ${v.disqualifier})` : ''}
+                <div className="text-secondary">
+                  method: {v.method ?? 'unknown'}
+                  {weakLegacy ? ' — legacy, unevidenced (weak)' : (v.evidence ? ' — evidenced' : '')}
+                </div>
+              </div>
+            )}
             <h3 className="h6 fw-semibold mb-1">{opp.title}</h3>
             <div className="text-secondary small mb-2">
               {opp.agency}{opp.category ? ` · ${opp.category}` : ''}
@@ -110,17 +140,27 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
                 <span className="text-secondary ms-2">source estimate {fmtValue(opp.estimatedValue)} (not verified)</span>
               )}
             </div>
-            <div className="mt-auto d-flex flex-column gap-1">
-              {opp.sourceUrl ? (
-                <a className="btn btn-outline-secondary btn-sm align-self-start" href={opp.sourceUrl} target="_blank" rel="noopener noreferrer">
-                  <i className="ri-external-link-line me-1" aria-hidden="true" />Review source
-                </a>
-              ) : (
-                <span className="small text-secondary"><i className="ri-links-line me-1" aria-hidden="true" />No source link provided</span>
-              )}
+            <div className="mt-auto d-flex flex-column gap-2">
+              <div className="d-flex flex-wrap gap-2">
+                {opp.sourceUrl ? (
+                  <a className="btn btn-outline-secondary btn-sm" href={opp.sourceUrl} target="_blank" rel="noopener noreferrer">
+                    <i className="ri-external-link-line me-1" aria-hidden="true" />Review source
+                  </a>
+                ) : (
+                  <span className="small text-secondary align-self-center"><i className="ri-links-line me-1" aria-hidden="true" />No source link</span>
+                )}
+                <button
+                  type="button"
+                  className="btn btn-outline-primary btn-sm"
+                  onClick={() => { void handleOpen(opp); }}
+                  title="Open the existing government project, if this opportunity was already started"
+                >
+                  <i className="ri-folder-open-line me-1" aria-hidden="true" />Open project
+                </button>
+              </div>
               <span className="small text-secondary">
                 <i className="ri-lock-2-line me-1" aria-hidden="true" />
-                Qualification required before this becomes a pursuit (coming in the next phase).
+                Qualification required before a new pursuit is created (coming in the next phase).
               </span>
             </div>
           </div>
@@ -169,12 +209,13 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
           <i className="ri-information-line mt-1" aria-hidden="true" />
           <div>
             <strong>Snapshot{feed.snapshotDate ? ` as of ${feed.snapshotDate}` : ''}.</strong>{' '}
-            The live Opportunity Pulse pull is not configured yet, so these are saved candidates. Configure it to see current best fits.
+            The live Opportunity Pulse pull is not configured yet, so these are saved candidates. Configure it to see current discovered candidates.
           </div>
         </div>
       )}
 
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
+      {note && <div className="alert alert-info d-flex align-items-center gap-2" role="status"><i className="ri-information-line" aria-hidden="true" />{note}</div>}
 
       {loading ? (
         <SectionCard title="Loading">

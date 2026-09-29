@@ -22,7 +22,7 @@
  */
 import {
   GovOpportunity, GovOpportunityFeed, GOV_OPPORTUNITY_SNAPSHOT, SNAPSHOT_DATE,
-  PursuitStatus, SnapshotReason,
+  PursuitStatus, SnapshotReason, VetVerdict,
 } from './govOpportunity';
 
 const DEFAULT_BASE = 'https://op.colaberry.ai';
@@ -56,6 +56,31 @@ const toNum = (v: unknown): number | null =>
 /** ISO-8601 timestamptz (or date) -> YYYY-MM-DD for display; null/empty stays null. */
 const toDateOnly = (v: unknown): string | null =>
   v === null || v === undefined || v === '' ? null : String(v).slice(0, 10);
+
+const toStrOrNull = (v: unknown): string | null =>
+  v === null || v === undefined ? null : (typeof v === 'string' ? v : String(v));
+
+/**
+ * Explicit nested allowlist for the verdict object — only known fields cross to the browser; every other nested
+ * property is dropped. A non-object (or array, or a bare string) is MALFORMED and maps to null (unassessed), so
+ * a malformed verdict can never be mistaken for a real assessment. `status`/`label`/`reason`/`disqualifier`/
+ * `method`/`evidence` are the supported fields (aligned with gov-opportunity.v1 sourceAssessment.legacyVerdict).
+ */
+function mapVetVerdict(raw: unknown): VetVerdict | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  const out: VetVerdict = {
+    status: toStrOrNull(r.status),
+    label: toStrOrNull(r.label),
+    reason: toStrOrNull(r.reason),
+    disqualifier: toStrOrNull(r.disqualifier),
+    method: toStrOrNull(r.method),
+    evidence: toStrOrNull(r.evidence),
+  };
+  // A verdict with no status/label/reason/disqualifier carries no assessable signal -> treat as unassessed.
+  if (out.status === null && out.label === null && out.reason === null && out.disqualifier === null) return null;
+  return out;
+}
 
 /**
  * Maps a raw BonfireOpportunity row to a GovOpportunity via an EXPLICIT ALLOWLIST — we never forward the whole
@@ -100,7 +125,7 @@ export function mapOpportunity(raw: any): GovOpportunity | null {
     pursued: pursuitStatus !== null
       ? (pursuitStatus === 'pursuing' || pursuitStatus === 'submitted')
       : (raw.pursued === undefined ? undefined : !!raw.pursued),
-    vetVerdict: vetVerdictPresent ? (raw.vetVerdict ?? null) : null,
+    vetVerdict: mapVetVerdict(raw.vetVerdict),
     vetVerdictPresent,
     freshness: hasFreshness ? { enrichedAt: raw.enrichedAt ?? null, attachmentsFetchedAt: raw.attachmentsFetchedAt ?? null } : null,
   };
