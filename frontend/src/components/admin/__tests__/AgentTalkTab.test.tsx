@@ -23,6 +23,23 @@ import type { TabKey } from '../agentDetailV2/AgentDetailV2Header';
 // regression tests for the 2 real bugs plan-audit caught before any code
 // was written: a stray newline left behind on a failed send, and the
 // idempotent-send guard (!sending) surviving the composer upgrade.
+//
+// Chat formatting fix (2026-09-29, Ali live: a numbered-list reply with
+// **bold** markers rendered as one unbroken wall of literal text) — bubbles
+// now render through react-markdown (same library RecordProse.tsx already
+// used, pre-existing this fix). react-markdown v10 / remark-gfm v4 are
+// pure ESM with a large transitive dependency tree; CRA's default Jest
+// config (this repo has no transformIgnorePatterns override — a real,
+// pre-existing gap RecordProse.tsx's own untested consumers never
+// surfaced) cannot transform them, so they're mocked here as passthrough
+// components. The real markdown rendering behavior (bold, numbered lists,
+// preserved line breaks) is verified live in production, not here — same
+// as any other pure-CSS/visual behavior this test suite can't assert on.
+jest.mock('react-markdown', () => ({
+  __esModule: true,
+  default: ({ children }: { children: string }) => children,
+}));
+jest.mock('remark-gfm', () => ({ __esModule: true, default: () => {} }));
 
 (Element.prototype as any).scrollIntoView = () => { /* no layout in jsdom */ };
 

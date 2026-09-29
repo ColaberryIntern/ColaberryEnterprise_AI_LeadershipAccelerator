@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { TabKey } from './agentDetailV2/AgentDetailV2Header';
 import { timeAgo } from './shell/trust';
 import { adv2PillClass } from './agentDetailV2/adv2PillTone';
@@ -6,6 +8,7 @@ import { Conversation, getConversation, sendMessage } from '../../services/agent
 import { ManagerDirective, listDirectives, createDirective, revokeDirective } from '../../services/managerDirectiveApi';
 import { AgentRoleCharter, getAgentRoleCharter } from '../../services/agentRoleCharterApi';
 import { AgentDetail } from '../../services/agentDetailApi';
+import { remarkPreserveGeneratedLineBreaks } from '../../utils/remarkPreserveGeneratedLineBreaks';
 
 // AI Agent Dashboard redesign, Checkpoint C (2026-09-02) — Talk: a real
 // conversation (GPT-4o-mini round trip, both turns persisted) plus Ask vs.
@@ -192,7 +195,11 @@ export default function AgentTalkTab({ agentId, detail, onNavigate }: Props) {
                   conversation.messages.map((m) => (
                     <div key={m.id} className={`adv2-msg${m.role === 'manager' ? ' adv2-user' : ''}`}>
                       <div className="adv2-who">{m.role === 'manager' ? 'You' : 'Agent'} · {timeAgo(m.createdAt)}</div>
-                      <div className="adv2-bubble">{m.content}</div>
+                      <div className="adv2-bubble">
+                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkPreserveGeneratedLineBreaks]}>
+                          {m.content}
+                        </ReactMarkdown>
+                      </div>
                     </div>
                   ))
                 )}
