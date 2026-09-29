@@ -74,6 +74,16 @@ export function MarketingBrandProvider({ children, store, load = listBrands }: M
     rememberBrand(storeRef.current, next);
   }, []);
 
+  /**
+   * Memoised on the brand ALONE, so its identity survives the brand list arriving.
+   *
+   * Pages put `params` in the dependency list of the callback that fetches. When it was rebuilt
+   * with the rest of the value, `{ brand_id }` was a new object on every provider render, so
+   * every page refetched each time anything here changed - and the tests raced with the second
+   * request. One stable object per brand; nothing refetches unless the brand actually changed.
+   */
+  const params = useMemo(() => brandParam(brandId), [brandId]);
+
   const value = useMemo<MarketingBrandValue>(() => ({
     brandId,
     setBrandId,
@@ -81,9 +91,9 @@ export function MarketingBrandProvider({ children, store, load = listBrands }: M
     brandsLoading,
     brandsError,
     label: brandLabel(brandId, brands),
-    params: brandParam(brandId),
+    params,
     brand: brands.find((b) => b.id === brandId) ?? null,
-  }), [brandId, setBrandId, brands, brandsLoading, brandsError]);
+  }), [brandId, setBrandId, brands, brandsLoading, brandsError, params]);
 
   return <MarketingBrandContext.Provider value={value}>{children}</MarketingBrandContext.Provider>;
 }

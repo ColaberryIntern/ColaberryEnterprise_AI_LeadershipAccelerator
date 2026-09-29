@@ -76,7 +76,9 @@ async function render(store: BrandStore = memoryStore()) {
       </MemoryRouter>,
     );
   });
-  // Twice: the first settles the brand list, whose arrival re-runs the page's own fetches.
+  // Twice: one settle for the brand list, one for the page's own fetches. The page no longer
+  // refetches when the list arrives - MarketingBrandContext keeps `params` identity stable -
+  // but settling both keeps this suite off the machine's timing under a loaded parallel run.
   await flush();
   await flush();
 }
