@@ -9,6 +9,7 @@ import { ManagerDirective, listDirectives, createDirective, revokeDirective } fr
 import { AgentRoleCharter, getAgentRoleCharter } from '../../services/agentRoleCharterApi';
 import { AgentDetail } from '../../services/agentDetailApi';
 import { remarkPreserveGeneratedLineBreaks } from '../../utils/remarkPreserveGeneratedLineBreaks';
+import TruncatedText from './agentDetailV2/TruncatedText';
 
 // AI Agent Dashboard redesign, Checkpoint C (2026-09-02) — Talk: a real
 // conversation (GPT-4o-mini round trip, both turns persisted) plus Ask vs.
@@ -260,7 +261,7 @@ export default function AgentTalkTab({ agentId, detail, onNavigate }: Props) {
                 {charter === undefined && !charterError && 'Loading…'}
                 {charterError && charterError}
                 {charter === null && 'No role charter has been written yet.'}
-                {charter && (charter.mission || 'No mission text recorded.')}
+                {charter && <TruncatedText text={charter.mission || 'No mission text recorded.'} />}
               </dd>
               <dt>Standing direction</dt>
               <dd>
