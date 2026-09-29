@@ -25,8 +25,8 @@ const fetchBestFitOpportunities = jest.fn();
 jest.mock('../../../services/factory/opportunities/oppPulseClient', () => ({ fetchBestFitOpportunities: (...a: any[]) => fetchBestFitOpportunities(...a) }));
 const backfillUnassessedContract = jest.fn();
 jest.mock('../../../services/factory/factoryBackfill', () => ({ backfillUnassessedContract: (...a: any[]) => backfillUnassessedContract(...a) }));
-const resolveGovContractsContainer = jest.fn();
-jest.mock('../../../scripts/lib/factoryDemoContainer', () => ({ resolveGovContractsContainer: (...a: any[]) => resolveGovContractsContainer(...a) }));
+const lookupGovContractsContainer = jest.fn();
+jest.mock('../../../scripts/lib/factoryDemoContainer', () => ({ lookupGovContractsContainer: (...a: any[]) => lookupGovContractsContainer(...a) }));
 const ingestProposal = jest.fn();
 jest.mock('../../../services/factory/proposal/proposalIngest', () => ({ ingestProposal: (...a: any[]) => ingestProposal(...a) }));
 const generateDecomposition = jest.fn();
@@ -202,8 +202,9 @@ describe('GET /api/admin/factory/opportunities', () => {
 
 describe('POST /api/admin/factory/opportunities/:uuid/start — PHASE 1 qualification guard + tenant isolation (server-enforced)', () => {
   const uuid = '2e287828-9040-4948-98fe-a0250a5d66a5';
-  const container = { brandId: 'b1', org: { id: 'org-1' }, engagement: { id: 'eng-1', tenant_id: 'ten-1' } };
-  beforeEach(() => { resolveGovContractsContainer.mockResolvedValue(container); });
+  // The read-only lookup's return shape: fixed refactored tenant + scoped org + engagement.
+  const container = { tenant: { id: 'ten-1', name: 'refactored' }, org: { id: 'org-1', tenant_id: 'ten-1' }, engagement: { id: 'eng-1', tenant_id: 'ten-1', organization_id: 'org-1' } };
+  beforeEach(() => { lookupGovContractsContainer.mockResolvedValue(container); });
 
   it('BLOCKS a NEW government pursuit: 409 qualificationRequired, creates NO project and NO tracks', async () => {
     govProjFindOne.mockResolvedValue(null); // no existing gov-<uuid> project in the gov container
@@ -248,6 +249,16 @@ describe('POST /api/admin/factory/opportunities/:uuid/start — PHASE 1 qualific
     expect(res.body).toMatchObject({ qualificationRequired: true });
     // and it was a SCOPED lookup, not a bare slug lookup
     expect(govProjFindOne.mock.calls[0][0].where).toMatchObject({ tenant_id: 'ten-1', organization_id: 'org-1', project_class: 'government_public_sector' });
+  });
+
+  it('FAILS CLOSED when the gov container is not configured: 503, creates nothing, does not even look up a project', async () => {
+    lookupGovContractsContainer.mockResolvedValue(null); // read-only lookup returns null (missing tenant/org/engagement)
+    const res = await request(app).post(`/api/admin/factory/opportunities/${uuid}/start`).send({});
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/not configured/i);
+    expect(govProjFindOne).not.toHaveBeenCalled();   // no project lookup once the container is unresolved
+    expect(govProjCreate).not.toHaveBeenCalled();
+    expect(backfillUnassessedContract).not.toHaveBeenCalled();
   });
 
   it('400s an invalid opportunity id (never creates, never looks up)', async () => {

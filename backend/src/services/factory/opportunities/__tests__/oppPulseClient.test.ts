@@ -144,6 +144,15 @@ describe('mapOpportunity', () => {
     expect(mapOpportunity({ id: 'd', title: 't', vetVerdict: { note: 'no status/label/reason' } })!.vetVerdict).toBeNull();
     expect(mapOpportunity({ id: 'e', title: 't', vetVerdict: 'no_bid' })!.vetVerdictPresent).toBe(true);
   });
+  it('never STRINGIFIES a non-string field value (object/array/boolean/number) into fake verdict/evidence text', () => {
+    const v = mapOpportunity({ id: 'a', title: 't', vetVerdict: { status: { foo: 1 }, evidence: ['leak'], method: true, label: 42, disqualifier: {}, reason: 'a real reason' } })!.vetVerdict!;
+    // the only string field survives; every non-string becomes null (NOT "[object Object]" / "leak" / "true" / "42")
+    expect(v).toEqual({ status: null, label: null, reason: 'a real reason', disqualifier: null, method: null, evidence: null });
+    // and a verdict whose only "content" is non-string junk -> null (unassessed), never an "evidenced" verdict
+    expect(mapOpportunity({ id: 'b', title: 't', vetVerdict: { status: true, evidence: { doc: 1 } } })!.vetVerdict).toBeNull();
+    // an empty/whitespace string is not a real value either
+    expect(mapOpportunity({ id: 'c', title: 't', vetVerdict: { status: '   ' } })!.vetVerdict).toBeNull();
+  });
   it('preserves the full close timestamp (closeAt) verbatim and never silently shifts it', () => {
     const o = mapOpportunity({ id: 'a', title: 't', closeDate: '2026-10-23T13:00:00.000Z' })!;
     expect(o.closeAt).toBe('2026-10-23T13:00:00.000Z'); // full source timestamp retained

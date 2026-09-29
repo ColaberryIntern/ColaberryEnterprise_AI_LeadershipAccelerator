@@ -14,9 +14,10 @@ import { requestChanges, ReviewValidationError } from '../../services/factory/fa
 // + gov container lazy-load their models inside their functions, so these imports don't init the ORM here.
 import { fetchBestFitOpportunities } from '../../services/factory/opportunities/oppPulseClient';
 // NOTE (Phase 1 gov-qualification guard): backfillUnassessedContract (auto-create of an unassessed shell) stays
-// disabled until the Phase 2 qualification flow lands. resolveGovContractsContainer is retained NOT to create
-// but to SCOPE the start-route lookup to the Government Contracts container (record-level tenant isolation).
-import { resolveGovContractsContainer } from '../../scripts/lib/factoryDemoContainer';
+// disabled until the Phase 2 qualification flow lands. The navigation-only start route uses the READ-ONLY,
+// tenant-scoped, fail-closed lookupGovContractsContainer (NOT the provisioning resolveGovContractsContainer,
+// which creates records) to scope the lookup to the fixed Government Contracts container.
+import { lookupGovContractsContainer } from '../../scripts/lib/factoryDemoContainer';
 // Slice 2: upload a solicitation zip -> deterministic source-cited requirements (no LLM).
 import multer from 'multer';
 import { ingestProposal } from '../../services/factory/proposal/proposalIngest';
@@ -246,15 +247,20 @@ router.post('/api/admin/factory/opportunities/:uuid/start', requireSection('prog
   try {
     const { default: DeliveryProject } = await import('../../models/DeliveryProject');
     // Record-level tenant isolation: `slug` is unique only PER TENANT and the request carries no tenant claim,
-    // so a bare findOne({where:{slug}}) could resolve a gov-<uuid> project in another tenant. Scope the lookup
-    // to the resolved Government Contracts container (tenant + org) and the government class, so only a genuine
-    // government project in that container can ever be returned.
-    const { engagement, org } = await resolveGovContractsContainer();
+    // so a bare findOne({where:{slug}}) could resolve a gov-<uuid> project in another tenant. Resolve the fixed
+    // Government Contracts container READ-ONLY (no create) and scope the lookup to its tenant + org + the
+    // government class. If the container is not configured, FAIL CLOSED and create nothing.
+    const container = await lookupGovContractsContainer();
+    if (!container) {
+      logFail('factory_gov_container_unavailable', new Error('gov container not resolvable'), { uuid, slug });
+      res.status(503).json({ error: 'The government contracts workspace is not configured; cannot resolve or start a pursuit here.' });
+      return;
+    }
     const existing: any = await DeliveryProject.findOne({
       where: {
         slug,
-        tenant_id: engagement.tenant_id,
-        organization_id: org.id,
+        tenant_id: container.tenant.id,
+        organization_id: container.org.id,
         project_class: 'government_public_sector',
       },
     });
