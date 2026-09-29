@@ -114,12 +114,13 @@ export function buildDecomposeUserPrompt(inputs: DecomposeInputs): string {
     `Capture EVERY requirement stated in the brief and the document. Do not merge, drop, `
       + `generalise or summarise requirements to reach a smaller number: completeness matters `
       + `more than brevity, and a requirement left out is a failure of this task. `
-      + `A build of this size typically has around ${t.requirements[0]}-${t.requirements[1]}, `
+      + `A build of this size typically has around ${t.requirements[0]}-${t.requirements[1]} requirements, `
       + `but if the material states more, include ALL of them.`,
     `Organise them into ${t.releases} releases (r0..r${t.releases - 1}). Scope is chosen by which `
       + `release a requirement lands in, never by leaving it out.`,
-    `Write enough vertical-slice stories to cover every requirement — typically `
-      + `${t.stories[0]}-${t.stories[1]} for this size, and more when there are more requirements.`,
+    `Write enough vertical-slice stories to cover every requirement: typically `
+      + `${t.stories[0]}-${t.stories[1]} vertical-slice stories for this size, and more when there `
+      + `are more requirements.`,
     `Cover every 'must' requirement with at least one story on the first pass.`,
     // Stated as the RATIO the gate actually enforces (`release_unbalanced` is
     // 2x the mean of the real story count), not an absolute derived from the
