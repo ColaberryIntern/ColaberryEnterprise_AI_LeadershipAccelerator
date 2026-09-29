@@ -40,6 +40,8 @@ const DARK = {
   journey_hold_rows: 0,
   ledger_read: 'ok' as const,
   window_hours: 24,
+  as_of: '2026-09-29T18:00:00.000Z',
+  truncated: [] as string[],
 };
 
 const run = async (health: unknown): Promise<Check[]> => {
@@ -121,6 +123,12 @@ describe('what counts as a problem, one axis at a time', () => {
     const checks = await run({ ...DARK, receipts: [{ status: 'failed', count: 2, max_age_hours: 5 }] });
     expect(checks[0].severity).toBe('warning');
     expect(checks[0].detail).toContain('2 receipt(s) in failed');
+  });
+
+  it('a TRUNCATED read is a problem: the numbers under it are floors, not totals', async () => {
+    const checks = await run({ ...DARK, truncated: ['held', 'refused'] });
+    expect(checks[0].severity).toBe('warning');
+    expect(checks[0].detail).toContain('hit their row cap and report a floor, not a total: held, refused');
   });
 
   it('receipts in a NON-failed status are not a problem', async () => {

@@ -294,6 +294,15 @@ describe('T609: /health joins the same always-readable surface, behind the same 
     expect(res.status).toBe(401);
   });
 
+  it('403 for a scoped management role (curriculum)', async () => {
+    // `router.use(BASE, requireAdmin)` covers the whole prefix, so this is structurally
+    // the same guard /registry is asserted against - but "structurally identical" is the
+    // kind of claim that stops being true the moment someone registers a route above the
+    // guard, so the new route gets its own cell rather than inheriting the argument.
+    const res = await auth(request(app()).get(HEALTH), 'curriculum');
+    expect(res.status).toBe(403);
+  });
+
   it('validates the window rather than quietly reading a different one', async () => {
     const a = app();
     const bad = await auth(request(a).get(`${HEALTH}?window_hours=abc`));

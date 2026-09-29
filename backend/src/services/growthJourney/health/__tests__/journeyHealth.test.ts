@@ -23,12 +23,18 @@ jest.mock('../../../../models', () => ({
 }));
 
 const readJourneyEvents = jest.fn();
-jest.mock('../../ledgerRead', () => ({ readJourneyEvents: (...a: unknown[]) => readJourneyEvents(...a) }));
+// The real LEDGER_READ_DEFAULT_ROWS travels with the mock: the cap cells compare against it, and a
+// mock that omitted it would leave them comparing against `undefined` and passing for the wrong reason.
+jest.mock('../../ledgerRead', () => ({
+  readJourneyEvents: (...a: unknown[]) => readJourneyEvents(...a),
+  LEDGER_READ_DEFAULT_ROWS: 500,
+}));
 
 import { Op } from 'sequelize';
 
 import { PROPOSAL_TTL_HOURS } from '../../execution/proposalFiler';
-import { buildJourneyHealth, CRON_SLACK_MINUTES, MAX_HEALTH_DECISIONS, periodMinutes } from '../journeyHealth';
+import { LEDGER_READ_DEFAULT_ROWS } from '../../ledgerRead';
+import { buildJourneyHealth, CRON_SLACK_MINUTES, MAX_HEALTH_CONTROLS, MAX_HEALTH_DECISIONS, MAX_HEALTH_ROWS, periodMinutes } from '../journeyHealth';
 
 const NOW = new Date('2026-09-29T18:00:00.000Z');
 const HOUR = 3_600_000;
@@ -272,7 +278,7 @@ describe('the window is clamped, never trusted', () => {
 });
 
 describe('no address reaches the report, including as an object key', () => {
-  it('an address in a JSONB reason is redacted in the KEY, not merely shortened', async () => {
+  it('an address anywhere in a JSONB reason never reaches the report, key or value', async () => {
     scheduledFindAll.mockResolvedValue([row({ metadata: { blocked_reason: 'journey_hold:someone@example.com' } })]);
     decisionFindAll.mockResolvedValue([row({ id: 'd1' })]);
     readJourneyEvents.mockResolvedValue({
@@ -287,11 +293,102 @@ describe('no address reaches the report, including as an object key', () => {
     expect(serialised).not.toContain('person@');
   });
 
+  it('a held row whose reason carries an address is still COUNTED, under a safe key', async () => {
+    // The bug this cell exists for: `safeKey` answers the bare word 'redacted' for
+    // anything holding an address, so testing the `journey_hold:` prefix on the
+    // SCRUBBED value dropped the row from the count entirely - an under-count caused
+    // by the privacy rule rather than by a cap. The prefix is tested on the raw value
+    // and the key is built afterwards, so the hold is counted and the key is safe.
+    scheduledFindAll.mockResolvedValue([
+      row({ metadata: { blocked_reason: 'journey_hold:someone@example.com' } }),
+      row({ metadata: { blocked_reason: 'journey_hold:pause:brand' } }),
+    ]);
+    const h = await buildJourneyHealth({ now: NOW });
+    expect(h.held.total).toBe(2);
+    expect(h.journey_hold_rows).toBe(2);
+    expect(h.held.by_reason).toEqual({ 'journey_hold:redacted': 1, 'journey_hold:pause:brand': 1 });
+    expect(JSON.stringify(h)).not.toContain('@');
+  });
+
   it('a very long JSONB reason is capped, so one row cannot bloat the response', async () => {
     scheduledFindAll.mockResolvedValue([row({ metadata: { blocked_reason: `journey_hold:${'x'.repeat(5_000)}` } })]);
     const h = await buildJourneyHealth({ now: NOW });
     const keys = Object.keys(h.held.by_reason);
     expect(keys).toHaveLength(1);
     expect(keys[0].length).toBeLessThanOrEqual(64);
+  });
+});
+
+describe('freshness: the report says when it was computed', () => {
+  it('carries as_of, the exact `now` it was given', async () => {
+    const h = await buildJourneyHealth({ now: NOW });
+    expect(h.as_of).toBe(NOW.toISOString());
+  });
+});
+
+describe('every bounded read declares itself when it hits its cap', () => {
+  it('nothing capped -> truncated is empty, which is the normal answer', async () => {
+    const h = await buildJourneyHealth({ now: NOW });
+    expect(h.truncated).toEqual([]);
+    expect(h.refused.capped).toBe(false);
+  });
+
+  it('receipts at the row cap -> truncated names it, because the OLDEST rows are the dropped ones', async () => {
+    // DESC + a cap means max_age_hours understates too, not just the count.
+    executionFindAll.mockResolvedValue(
+      Array.from({ length: MAX_HEALTH_ROWS }, () => row({ status: 'completed', created_at: NOW })),
+    );
+    const h = await buildJourneyHealth({ now: NOW });
+    expect(h.truncated).toContain('receipts');
+  });
+
+  it('held at the row cap -> truncated names it', async () => {
+    scheduledFindAll.mockResolvedValue(
+      Array.from({ length: MAX_HEALTH_ROWS }, () => row({ metadata: { blocked_reason: 'journey_hold:pause:brand' } })),
+    );
+    const h = await buildJourneyHealth({ now: NOW });
+    expect(h.truncated).toContain('held');
+    expect(h.held.total).toBe(MAX_HEALTH_ROWS);
+  });
+
+  it('controls at the row cap -> truncated names it', async () => {
+    controlFindAll.mockResolvedValue(Array.from({ length: MAX_HEALTH_CONTROLS }, () => row({ kind: 'pause' })));
+    const h = await buildJourneyHealth({ now: NOW });
+    expect(h.truncated).toContain('controls');
+  });
+
+  it('THE LEDGER ROW CAP counts as capped, even when the decision cap was not reached', async () => {
+    // The defect this cell exists for. 3 decisions is far under MAX_HEALTH_DECISIONS,
+    // so the decision cap is not hit - but the ledger returned its own full page, so
+    // `total` is exactly the limit and `by_reason` is truncated. Reporting capped:false
+    // here served a floor as a total, in the one field whose comment denied it.
+    decisionFindAll.mockResolvedValue([row({ id: 'd1' }), row({ id: 'd2' }), row({ id: 'd3' })]);
+    readJourneyEvents.mockResolvedValue({
+      rows: Array.from({ length: LEDGER_READ_DEFAULT_ROWS }, () => ({ entity_id: 'd1', payload: { reason: 'contact_policy:cooldown' } })),
+      timed_out: false,
+    });
+    const h = await buildJourneyHealth({ now: NOW });
+    expect(h.refused.total).toBe(LEDGER_READ_DEFAULT_ROWS);
+    expect(h.refused.capped).toBe(true);
+    expect(h.truncated).toContain('refused');
+  });
+
+  it('the ledger limit is passed EXPLICITLY, so the comparison is against a number this file chose', async () => {
+    decisionFindAll.mockResolvedValue([row({ id: 'd1' })]);
+    await buildJourneyHealth({ now: NOW });
+    expect(readJourneyEvents.mock.calls[0][0].limit).toBe(LEDGER_READ_DEFAULT_ROWS);
+  });
+
+  it('several caps at once -> every one is named, in report order', async () => {
+    executionFindAll.mockResolvedValue(Array.from({ length: MAX_HEALTH_ROWS }, () => row({ status: 'completed', created_at: NOW })));
+    scheduledFindAll.mockResolvedValue(Array.from({ length: MAX_HEALTH_ROWS }, () => row({ metadata: { blocked_reason: 'journey_hold:x' } })));
+    controlFindAll.mockResolvedValue(Array.from({ length: MAX_HEALTH_CONTROLS }, () => row({ kind: 'rollout' })));
+    const h = await buildJourneyHealth({ now: NOW });
+    expect(h.truncated).toEqual(['receipts', 'held', 'controls']);
+  });
+
+  it('held is read NEWEST FIRST, so a floor is at least a recent floor', async () => {
+    await buildJourneyHealth({ now: NOW });
+    expect(scheduledFindAll.mock.calls[0][0].order).toEqual([['created_at', 'DESC']]);
   });
 });

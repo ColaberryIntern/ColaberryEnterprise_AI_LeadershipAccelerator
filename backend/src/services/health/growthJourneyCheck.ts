@@ -51,6 +51,10 @@ export async function checkGrowthJourney(checks: HealthCheck[]): Promise<void> {
     if (lateCrons.length > 0) problems.push(`late cron(s): ${lateCrons.join(', ')}`);
     if (ledgerUnavailable) problems.push(`the event ledger answered ${health.ledger_read}, so refusal counts are unavailable`);
     if (failed > 0) problems.push(`${failed} receipt(s) in failed`);
+    // A truncated read is the same class of thing as an unreadable ledger: the
+    // report is not wrong, it is INCOMPLETE, and the numbers below it are floors.
+    // Saying so here is what stops a floor being read off the dashboard as a total.
+    if (health.truncated.length > 0) problems.push(`these reads hit their row cap and report a floor, not a total: ${health.truncated.join(', ')}`);
 
     const dark = health.crons.every((c) => c.state === 'disabled');
     const detail = problems.length > 0

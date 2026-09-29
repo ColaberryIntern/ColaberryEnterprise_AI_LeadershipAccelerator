@@ -3,7 +3,7 @@ import { AiAgent, GrowthJourneyDecision, GrowthJourneyExecution, GrowthJourneyEx
 import type { GrowthJourneyControlKind } from '../../../models/GrowthJourneyExecutionControl';
 import { GROWTH_JOURNEY_AGENT_ENTRIES } from '../../agentRegistry/growthJourneyAgents';
 import { PROPOSAL_TTL_HOURS } from '../execution/proposalFiler';
-import { readJourneyEvents } from '../ledgerRead';
+import { LEDGER_READ_DEFAULT_ROWS, readJourneyEvents } from '../ledgerRead';
 import { safeKey } from '../reads/readPaging';
 
 /**
@@ -72,13 +72,25 @@ import { safeKey } from '../reads/readPaging';
  *    An agent with NO row is `disabled` rather than `never`: an unregistered
  *    agent is not scheduled, so it is dark, not overdue.
  *
- * 4. The refusal read is CAPPED, and says so. `readJourneyEvents` is keyed on
- *    `entityIds` and answers nothing without them, so refusals can only be read
- *    for a known set of decisions. This takes the most recent
- *    `MAX_HEALTH_DECISIONS` in the window; if the window holds more, the answer
- *    carries `capped: true` and the caller is told the count is a floor. A capped
- *    number served as a total is the defect T608 was docked for, and it is not
- *    repeated here.
+ * 4. The refusal read is CAPPED TWICE, and says so on both. `readJourneyEvents`
+ *    is keyed on `entityIds` and answers nothing without them, so refusals can
+ *    only be read for a known set of decisions: this takes the most recent
+ *    `MAX_HEALTH_DECISIONS` in the window. That is the cap the plan implied and
+ *    the only one the first version of this file reported — which made the field
+ *    dishonest in exactly the way its own comment denied, because the LEDGER read
+ *    has a row cap of its own. With 500 or fewer decisions producing more than
+ *    500 refusals it returned exactly 500 rows and `capped: false`. Both caps
+ *    are now reported, the ledger limit is passed explicitly rather than
+ *    inherited, and `truncated` names every capped read on the report.
+ *
+ * ─── EVERY CAP ON THIS SURFACE IS DECLARED ──────────────────────────────────
+ *
+ * Four reads here are bounded by a row limit rather than by the window, and a
+ * bounded read that does not say when it hit its bound serves a floor as a total
+ * — the defect T608 was docked for. So each reports itself in `truncated`:
+ * `receipts` and `held` at `MAX_HEALTH_ROWS`, `controls` at
+ * `MAX_HEALTH_CONTROLS`, `refused` at either of its two. `stuck_pending_review`
+ * is a `COUNT(*)` and needs no cap; `crons` reads at most three rows.
  */
 
 /** The most recent decisions a refusal read will span. A window with more is reported `capped`. */
@@ -106,6 +118,9 @@ export interface StatusAge {
   max_age_hours: number | null;
 }
 
+/** A read whose row cap was reached, so its numbers are a FLOOR and not a total. */
+export type TruncatedRead = 'receipts' | 'held' | 'refused' | 'controls';
+
 export interface JourneyHealth {
   receipts: StatusAge[];
   stuck_pending_review: { count: number; over_hours: number };
@@ -116,6 +131,28 @@ export interface JourneyHealth {
   journey_hold_rows: number;
   ledger_read: 'ok' | 'timed_out' | 'failed';
   window_hours: number;
+  /**
+   * When this report was computed. The Phase 6 contract makes a number served
+   * without freshness a phase-failing condition, and every count below is a
+   * point-in-time answer, so the report carries the `now` it used. `/health/full`
+   * already stamps its own `timestamp`; this is for the route that serves the
+   * report on its own.
+   */
+  as_of: string;
+  /**
+   * Every read above whose row cap was reached, so a caller can tell a total
+   * from a floor. Empty is the normal answer and means every number is complete.
+   *
+   * This exists because the first version of this file had `refused.capped`
+   * reflecting only the DECISION cap: with 500 or fewer decisions producing more
+   * than 500 refusal events the ledger read returned exactly its own default of
+   * 500 rows, `total` was reported as 500, `by_reason` was truncated, and
+   * `capped` said false - a floor served as a total, in the one field whose
+   * comment claimed the caller would be told. Three other reads capped with no
+   * flag at all. A count that might be a floor and does not say so is the exact
+   * defect T608 was docked for, so every capped read now names itself here.
+   */
+  truncated: TruncatedRead[];
 }
 
 export interface JourneyHealthArgs {
@@ -149,11 +186,19 @@ export function periodMinutes(schedule: string): number | null {
 /** `[from, to)` on a column, as every other journey read spells it. */
 const since = (now: Date, hours: number): Date => new Date(now.getTime() - hours * HOUR);
 
-async function readReceipts(now: Date, windowHours: number): Promise<StatusAge[]> {
+/** The row cap every unbounded-by-nature read here carries. Reaching it is reported, never hidden. */
+export const MAX_HEALTH_ROWS = 10_000;
+export const MAX_HEALTH_CONTROLS = 1_000;
+
+async function readReceipts(now: Date, windowHours: number): Promise<{ rows: StatusAge[]; capped: boolean }> {
+  // `DESC` with a cap means the OLDEST rows are the ones dropped, so at the cap
+  // both `count` AND `max_age_hours` understate - the age most of all, since the
+  // oldest row is exactly the one that sets it. Hence the flag: the alternative
+  // is a report that quietly gets younger as the table grows.
   const rows = await GrowthJourneyExecution.findAll({
     where: { created_at: { [Op.gte]: since(now, windowHours) } },
     attributes: ['status', 'created_at'],
-    limit: 10_000,
+    limit: MAX_HEALTH_ROWS,
     order: [['created_at', 'DESC']],
   });
   const by = new Map<string, { count: number; oldest: number }>();
@@ -168,13 +213,16 @@ async function readReceipts(now: Date, windowHours: number): Promise<StatusAge[]
       by.set(status, { count: 1, oldest: at });
     }
   }
-  return [...by.entries()]
-    .map(([status, v]) => ({
-      status,
-      count: v.count,
-      max_age_hours: Math.round(((now.getTime() - v.oldest) / HOUR) * 10) / 10,
-    }))
-    .sort((a, b) => a.status.localeCompare(b.status));
+  return {
+    rows: [...by.entries()]
+      .map(([status, v]) => ({
+        status,
+        count: v.count,
+        max_age_hours: Math.round(((now.getTime() - v.oldest) / HOUR) * 10) / 10,
+      }))
+      .sort((a, b) => a.status.localeCompare(b.status)),
+    capped: rows.length >= MAX_HEALTH_ROWS,
+  };
 }
 
 async function readStuckPendingReview(now: Date): Promise<{ count: number; over_hours: number }> {
@@ -184,22 +232,36 @@ async function readStuckPendingReview(now: Date): Promise<{ count: number; over_
   return { count, over_hours: PROPOSAL_TTL_HOURS };
 }
 
-async function readHeld(now: Date, windowHours: number): Promise<{ total: number; by_reason: Record<string, number> }> {
+async function readHeld(now: Date, windowHours: number): Promise<{ total: number; by_reason: Record<string, number>; capped: boolean }> {
+  // ORDERED, because without it which rows the cap drops is undefined - and this
+  // read is the widest here: `scheduled_emails` is platform-wide and NOT
+  // brand-scoped (a journey hold is recognised by its reason, not by a column),
+  // so one cancelled bulk campaign in the window can reach the cap on its own.
+  // Newest-first plus the flag means a floor is at least a recent, stated floor.
   const rows = await ScheduledEmail.findAll({
     where: { status: 'cancelled', created_at: { [Op.gte]: since(now, windowHours) } },
     attributes: ['metadata'],
-    limit: 10_000,
+    limit: MAX_HEALTH_ROWS,
+    order: [['created_at', 'DESC']],
   });
   const by_reason: Record<string, number> = {};
   let total = 0;
   for (const r of rows) {
     const raw = (r.get('metadata') as { blocked_reason?: unknown } | null)?.blocked_reason;
-    const reason = safeKey(raw);
-    if (!reason.startsWith(HOLD_PREFIX)) continue;
+    // The PREFIX is tested on the raw value and the KEY is built after. The
+    // other way round drops the row: `safeKey` answers the bare word `redacted`
+    // for anything holding an address, which fails `startsWith(HOLD_PREFIX)`, so
+    // a hold whose reason happened to carry an address vanished from the count
+    // entirely - an under-count caused by the privacy rule rather than by a cap.
+    // Now the row is counted and the key is still safe.
+    const rawReason = typeof raw === 'string' ? raw : '';
+    if (!rawReason.startsWith(HOLD_PREFIX)) continue;
     total += 1;
+    const safe = safeKey(rawReason);
+    const reason = safe.startsWith(HOLD_PREFIX) ? safe : `${HOLD_PREFIX}redacted`;
     by_reason[reason] = (by_reason[reason] ?? 0) + 1;
   }
-  return { total, by_reason };
+  return { total, by_reason, capped: rows.length >= MAX_HEALTH_ROWS };
 }
 
 async function readRefused(
@@ -213,26 +275,35 @@ async function readRefused(
     order: [['created_at', 'DESC']],
     limit: MAX_HEALTH_DECISIONS + 1,
   });
-  const capped = decisions.length > MAX_HEALTH_DECISIONS;
+  const decisionsCapped = decisions.length > MAX_HEALTH_DECISIONS;
   const ids = decisions.slice(0, MAX_HEALTH_DECISIONS).map((d) => String(d.get('id')));
-  if (ids.length === 0) return { refused: { total: 0, by_reason: {}, capped }, ledger_read: 'ok' };
+  if (ids.length === 0) return { refused: { total: 0, by_reason: {}, capped: decisionsCapped }, ledger_read: 'ok' };
 
+  // TWO caps sit on this answer, and the first version of this file only reported
+  // one. The decision cap above is the obvious one. The second is the ledger's own
+  // row limit: `readJourneyEvents` defaults to LEDGER_READ_DEFAULT_ROWS and returns
+  // the newest, so 500 decisions that produced 600 refusals came back as exactly
+  // 500 rows - `total: 500`, `by_reason` truncated, `capped: false`. The limit is
+  // passed explicitly now so the comparison is against a number this file chose
+  // rather than one it inherited, and reaching it counts as capped.
   const read = await readJourneyEvents({
     entityType: 'growth_journey_decision',
     entityIds: ids,
     eventType: 'growth_journey.execution.refused',
     since: from,
+    limit: LEDGER_READ_DEFAULT_ROWS,
   });
   if ('error_class' in read) {
     // Fail open with the reason named, exactly as `rememberedRefusals` does: an
     // unreadable ledger is reported, never guessed at and never thrown.
-    return { refused: { total: 0, by_reason: {}, capped }, ledger_read: read.timed_out ? 'timed_out' : 'failed' };
+    return { refused: { total: 0, by_reason: {}, capped: decisionsCapped }, ledger_read: read.timed_out ? 'timed_out' : 'failed' };
   }
   const by_reason: Record<string, number> = {};
   for (const row of read.rows) {
     const reason = safeKey((row.payload as { reason?: unknown } | null)?.reason) || 'unknown';
     by_reason[reason] = (by_reason[reason] ?? 0) + 1;
   }
+  const capped = decisionsCapped || read.rows.length >= LEDGER_READ_DEFAULT_ROWS;
   return { refused: { total: read.rows.length, by_reason, capped }, ledger_read: 'ok' };
 }
 
@@ -261,14 +332,14 @@ async function readCrons(now: Date): Promise<CronHealth[]> {
   });
 }
 
-async function readControls(): Promise<Record<GrowthJourneyControlKind, number>> {
-  const rows = await GrowthJourneyExecutionControl.findAll({ where: { cleared_at: null }, attributes: ['kind'], limit: 1_000 });
+async function readControls(): Promise<{ counts: Record<GrowthJourneyControlKind, number>; capped: boolean }> {
+  const rows = await GrowthJourneyExecutionControl.findAll({ where: { cleared_at: null }, attributes: ['kind'], limit: MAX_HEALTH_CONTROLS });
   const counts: Record<GrowthJourneyControlKind, number> = { pause: 0, rollout: 0 };
   for (const r of rows) {
     const kind = r.get('kind') as GrowthJourneyControlKind;
     if (kind in counts) counts[kind] += 1;
   }
-  return counts;
+  return { counts, capped: rows.length >= MAX_HEALTH_CONTROLS };
 }
 
 /** Counts and reasons for the journey's moving parts. Reads only; never writes, never decides. */
@@ -285,15 +356,23 @@ export async function buildJourneyHealth(args: JourneyHealthArgs): Promise<Journ
     readControls(),
   ]);
 
+  const truncated: TruncatedRead[] = [];
+  if (receipts.capped) truncated.push('receipts');
+  if (held.capped) truncated.push('held');
+  if (refusal.refused.capped) truncated.push('refused');
+  if (controls.capped) truncated.push('controls');
+
   return {
-    receipts,
+    receipts: receipts.rows,
     stuck_pending_review,
-    held,
+    held: { total: held.total, by_reason: held.by_reason },
     refused: refusal.refused,
     crons,
-    controls,
+    controls: controls.counts,
     journey_hold_rows: held.total,
     ledger_read: refusal.ledger_read,
     window_hours,
+    as_of: now.toISOString(),
+    truncated,
   };
 }
