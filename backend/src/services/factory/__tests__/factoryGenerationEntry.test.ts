@@ -7,9 +7,18 @@
 const FLAGS = { factoryGeneration: false };
 jest.mock('../../../config/featureFlags', () => ({ FLAGS }));
 
+// The build gate reads BuildAuthorization; mock it so a build with the flag ON still requires a live
+// authorization (a pursuit approval is not a build authorization).
+const buildAuthFindOne = jest.fn();
+jest.mock('../../../models/BuildAuthorization', () => ({
+  __esModule: true,
+  default: { findOne: (...a: any[]) => buildAuthFindOne(...a) },
+}));
+
 import {
   factoryGenerateIfEnabled, isFactoryGenerationEnabled, FACTORY_GENERATION_DISABLED,
 } from '../factoryGenerationEntry';
+import { BuildNotAuthorizedError } from '../buildAuthorization';
 import type { FactoryGenerateInput } from '../factoryGenerate';
 import type { FactoryDecomposition } from '../factoryDecompose';
 import type { ContractRequirement, ContractTrack } from '../contracts/factoryContract';
@@ -49,10 +58,12 @@ function goldenClient() {
   return { client: { create } as any, create };
 }
 
-beforeEach(() => { FLAGS.factoryGeneration = false; });
+const liveAuth = { get: () => ({ approver_identity_id: 'app-1', scope: 'proposal-solution', resource_limit: '2 agents / 8h', revoked_at: null }) };
+
+beforeEach(() => { FLAGS.factoryGeneration = false; buildAuthFindOne.mockReset(); });
 
 describe('factoryGenerateIfEnabled — ship dark', () => {
-  it('is INERT when the flag is off: no model call, refuses with FACTORY_GENERATION_DISABLED', async () => {
+  it('is INERT when the flag is off: no model call, no build-gate lookup, refuses with FACTORY_GENERATION_DISABLED', async () => {
     const { client, create } = goldenClient();
     expect(isFactoryGenerationEnabled()).toBe(false);
     const res = await factoryGenerateIfEnabled(input(), { client });
@@ -60,10 +71,20 @@ describe('factoryGenerateIfEnabled — ship dark', () => {
     expect(res.issues).toEqual([FACTORY_GENERATION_DISABLED]);
     expect(res.decomposeAttempts).toBe(0);
     expect(create).not.toHaveBeenCalled(); // the dark switch made no call
+    expect(buildAuthFindOne).not.toHaveBeenCalled(); // inert: the build gate is not even consulted
   });
 
-  it('delegates to the real pipeline when the flag is on', async () => {
+  it('REFUSES a build when the flag is on but the project has no build authorization (pursuit approval != build)', async () => {
     FLAGS.factoryGeneration = true;
+    buildAuthFindOne.mockResolvedValue(null); // no live authorization for this project
+    const { client, create } = goldenClient();
+    await expect(factoryGenerateIfEnabled(input(), { client, model: 'test' })).rejects.toBeInstanceOf(BuildNotAuthorizedError);
+    expect(create).not.toHaveBeenCalled(); // no model call, no build work
+  });
+
+  it('delegates to the real pipeline when the flag is on AND a live build authorization exists', async () => {
+    FLAGS.factoryGeneration = true;
+    buildAuthFindOne.mockResolvedValue(liveAuth);
     const { client, create } = goldenClient();
     expect(isFactoryGenerationEnabled()).toBe(true);
     const res = await factoryGenerateIfEnabled(input(), { client, model: 'test' });
