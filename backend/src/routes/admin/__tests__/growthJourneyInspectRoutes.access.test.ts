@@ -133,7 +133,7 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-describe('the status matrix, on all seven routes', () => {
+describe('the status matrix, on all eight routes', () => {
   it.each(PATHS)('401 unauthenticated: %s', async (path) => {
     expect((await request(app()).get(`${JOURNEY}/${path}`)).status).toBe(401);
   });
@@ -159,7 +159,8 @@ describe('the status matrix, on all seven routes', () => {
     const res = await auth(request(app()).get(`${JOURNEY}/${path}?brand_id=${OTHER_BRAND}`));
     expect(res.status).toBe(403);
     expect(res.body).toMatchObject({ error: 'Brand not in scope', error_class: 'AuthorizationError' });
-    for (const spy of [m.snapshots, m.transitions, m.policies, m.rules, m.queuePolicies, m.handoffs, m.conversations]) {
+    for (const spy of [m.snapshots, m.transitions, m.policies, m.rules, m.queuePolicies, m.handoffs,
+      m.conversations, m.holdoutPolicy, m.decisionCount, m.conversionOutcomes]) {
       expect(spy).not.toHaveBeenCalled();
     }
   });
@@ -168,7 +169,8 @@ describe('the status matrix, on all seven routes', () => {
     contextFromAdminRequest.mockResolvedValue(memberOf(null, []));
     const res = await auth(request(app()).get(`${JOURNEY}/${path}`));
     expect(res.status).toBe(200);
-    for (const spy of [m.snapshots, m.transitions, m.policies, m.rules, m.queuePolicies, m.handoffs, m.conversations]) {
+    for (const spy of [m.snapshots, m.transitions, m.policies, m.rules, m.queuePolicies, m.handoffs,
+      m.conversations, m.holdoutPolicy, m.decisionCount, m.conversionOutcomes]) {
       expect(spy).not.toHaveBeenCalled();
     }
   });
@@ -233,7 +235,7 @@ describe('the query is validated at the boundary', () => {
 });
 
 describe('the privacy property, end to end through the real services', () => {
-  it('no `@` reaches any of the seven responses - values, JSONB keys and JSONB lists alike', async () => {
+  it('no `@` reaches any of the eight responses - values, JSONB keys and JSONB lists alike', async () => {
     m.snapshots.mockResolvedValue({
       count: 1,
       rows: [row({
@@ -293,12 +295,41 @@ describe('the privacy property, end to end through the real services', () => {
       count: 1,
       rows: [row({ id: 'c1', brand_id: BRAND, lead_id: 9, owner_type: 'human', owner_id: 'rep@example.com', channel: 'email', source: 'handoff_accepted', since_at: AT })],
     });
+    // `/experiments` was in PATHS from the moment it existed, but `beforeEach` leaves the policy
+    // null - so this cell walked that route over an empty body and could not have failed whatever
+    // the code did. An ACTIVE policy now, with an address in the one operator-authored list the
+    // response carries. (T608's second verifier pass caught exactly this.)
+    m.holdoutPolicy.mockResolvedValue({
+      get: (k: string) => ({
+        brand_id: BRAND,
+        status: 'active',
+        settings: { experiment_key: 'gj_lift', control_share: 0.25, candidate_types: ['SEND_EMAIL', 'ali@example.com'] },
+      })[k],
+    });
+    m.decisionCount.mockResolvedValue(12);
+    m.conversionOutcomes.mockResolvedValue([{ get: () => 'd-1' }]);
+    m.decisionFindAll.mockResolvedValue([{ get: () => 'lead:9' }]);
 
     for (const path of PATHS) {
       const res = await auth(request(app()).get(`${JOURNEY}/${path}`));
       expect(res.status).toBe(200);
       expect(JSON.stringify(res.body)).not.toContain('@');
     }
+  });
+
+  it('an operator-authored `candidate_types` carrying an address is REDACTED, not echoed', async () => {
+    m.holdoutPolicy.mockResolvedValue({
+      get: (k: string) => ({
+        brand_id: BRAND,
+        status: 'active',
+        settings: { experiment_key: 'gj_lift', control_share: 0.25, candidate_types: ['SEND_EMAIL', 'ali@example.com'] },
+      })[k],
+    });
+    const res = await auth(request(app()).get(`${JOURNEY}/experiments`));
+    expect(res.status).toBe(200);
+    // The real action type survives; the address does not.
+    expect(res.body.brands[0].policy.candidate_types).toEqual(['SEND_EMAIL', 'redacted']);
+    expect(JSON.stringify(res.body)).not.toContain('@');
   });
 
   it('the snapshot row keeps the numbers and drops the factors that carried the text', async () => {

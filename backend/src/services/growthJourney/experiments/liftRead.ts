@@ -2,7 +2,9 @@ import { Op } from 'sequelize';
 import { GrowthJourneyDecision, GrowthJourneyOutcome } from '../../../models';
 import { insufficient, type Measured } from '../../explorerGrowth/explorerForecastService';
 import { computeLift, MIN_ARM_N } from '../../explorerGrowth/explorerExperimentService';
+import type { GrowthJourneyOutcomeType } from '../../../models/GrowthJourneyOutcome';
 import { HOLDOUT_POLICY_TYPE, lookupHoldoutPolicy, type HoldoutAbsence } from './holdoutPolicy';
+import { safeKeyList } from '../reads/readPaging';
 
 /**
  * What a holdout experiment measured, per brand (Phase 6, T608).
@@ -75,7 +77,7 @@ import { HOLDOUT_POLICY_TYPE, lookupHoldoutPolicy, type HoldoutAbsence } from '.
  * it. That is the measurement error the whole experiment exists to avoid, so it is closed off here
  * rather than left to whoever builds the screen.
  */
-export const CONVERSION_OUTCOMES = ['enrolled_paid', 'subscription_active', 'project_started'] as const;
+export const CONVERSION_OUTCOMES = ['enrolled_paid', 'subscription_active', 'project_started'] as const satisfies readonly GrowthJourneyOutcomeType[];
 
 export const DEFAULT_LIFT_WINDOW_DAYS = 90;
 export const MAX_LIFT_WINDOW_DAYS = 365;
@@ -120,6 +122,27 @@ export interface BrandExperiment {
 
 /** `^[a-z0-9_]+$` by the policy schema - re-checked here so this file cannot be mis-called. */
 const SAFE_KEY = /^[a-z0-9_]+$/;
+
+/**
+ * `candidate_types` is OPERATOR-AUTHORED JSONB with no charset constraint
+ * (`z.array(z.string().min(1).max(48))`), and this read puts it in an HTTP response. So it goes
+ * through the same `safeKeyList` every other JSONB-derived string list on this surface uses - a
+ * value carrying an `@` reads `redacted`.
+ *
+ * The T608 verifier caught this on the second pass and was right to: T607's fix pass established
+ * the rule one commit earlier, and `contentReads.ts` states it in terms for its own two lists -
+ * "operator-authored config rather than anything a subject wrote, so this is belt and braces - but a
+ * `mailto:` ... would otherwise have put an address in the response, which the phase's hard stop
+ * forbids without qualification". `experiment_key` was protected by its own regex; its sibling was
+ * not, and it was the only list on the surface that was not.
+ *
+ * Scrubbed on the way OUT rather than rejected at the schema, deliberately: a `candidate_types`
+ * entry that is not an action type is already harmless behaviourally - it narrows the allowlist to
+ * nothing, so no candidate is eligible and nobody is withheld - and rejecting the whole row would
+ * turn a cosmetic typo into a silently absent experiment. Scrubbing makes it visible instead.
+ */
+const safeCandidateTypes = (v: readonly string[] | undefined): string[] | undefined =>
+  (v === undefined ? undefined : safeKeyList(v, 12, 48));
 
 /** The decision ids of this brand's conversions in the window, bounded. */
 async function convertedDecisionIds(brandId: string, from: Date): Promise<string[] | null> {
@@ -179,9 +202,13 @@ export async function readBrandExperiment(brandId: string, windowDays = DEFAULT_
 
   // `computeLift` is not called at all when an arm is capped: it would be handed a numerator
   // nobody counted, and would answer a point estimate that reads as measured.
+  // The reason names WHICH read hit its cap: an arm over the cap is a different problem from this
+  // brand's conversion read being over it, and an operator narrowing the window wants to know which.
+  const armsOver = [treatment.capped && 'treatment', control.capped && 'control'].filter(Boolean).join(' and ');
   const lift: Measured = capped
     ? insufficient(
-      `arm_capped: treatment n=${treatment.n}, control n=${control.n}, this read counts at most `
+      `${convertedIds === null ? 'conversions_over_cap' : `arm_capped:${armsOver}`}: `
+      + `treatment n=${treatment.n}, control n=${control.n}, this read counts at most `
       + `${MAX_ARM_DECISIONS} per arm - narrow the window`,
     )
     : computeLift(
@@ -195,7 +222,7 @@ export async function readBrandExperiment(brandId: string, windowDays = DEFAULT_
     policy: {
       experiment_key: policy.experiment_key,
       control_share: policy.control_share,
-      candidate_types: policy.candidate_types,
+      candidate_types: safeCandidateTypes(policy.candidate_types),
     },
     lift: {
       experiment_key: policy.experiment_key,
