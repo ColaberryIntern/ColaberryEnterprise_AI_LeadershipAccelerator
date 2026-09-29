@@ -9,6 +9,15 @@ import {
   getJourneyRatesHandler,
   getJourneyReceiptsHandler,
 } from '../../controllers/growthJourneyPerformanceController';
+import {
+  getJourneyContentRulesHandler,
+  getJourneyOfferPoliciesHandler,
+  getJourneyOwnershipHandler,
+  getJourneyQueuePoliciesHandler,
+  getJourneyShadowRunsHandler,
+  getJourneySnapshotsHandler,
+  getJourneyTransitionsHandler,
+} from '../../controllers/growthJourneyInspectController';
 
 /**
  * The journey's performance reads (Phase 6, T605).
@@ -34,7 +43,8 @@ import {
  */
 
 const router = Router();
-const BASE = '/api/admin/growth-journey/performance';
+const JOURNEY = '/api/admin/growth-journey';
+const BASE = `${JOURNEY}/performance`;
 
 router.use(BASE, requireAdmin);
 
@@ -56,5 +66,44 @@ router.get(`${BASE}/rates`, getJourneyRatesHandler);
 router.get(`${BASE}/receipts`, getJourneyReceiptsHandler);
 router.get(`${BASE}/outcomes`, getJourneyOutcomesHandler);
 router.get(`${BASE}/by-journey`, getJourneyByJourneyHandler);
+
+/* ── T607: the inspect reads, four more groups under the same journey prefix ─── */
+
+/**
+ * The guards are registered per GROUP, not once over `/api/admin/growth-journey`.
+ *
+ * A single `router.use('/api/admin/growth-journey', …)` here would be shorter and would also run
+ * for every request that falls THROUGH this router to the ones mounted after it - `growthJourneyRoutes`
+ * (harmless, it applies the same two itself) but also anything a later task mounts under this prefix
+ * expecting to set its own rules. T604's status registry is only exempt from the master-flag 404
+ * because it is mounted ABOVE this file; a broad guard here is one mount-order change away from
+ * taking that exemption back. Four narrow prefixes cannot.
+ */
+const INSPECT_GROUPS = [
+  '/api/admin/growth-journey/decisions',
+  '/api/admin/growth-journey/shadow',
+  '/api/admin/growth-journey/content',
+  '/api/admin/growth-journey/handoffs',
+] as const;
+for (const prefix of INSPECT_GROUPS) {
+  router.use(prefix, requireAdmin);
+  router.use(prefix, requireGrowthJourneyEnabled);
+}
+
+/**
+ * MOUNT ORDER IS NOW LOAD-BEARING between this router and `growthJourneyRoutes`.
+ *
+ * That router registers `GET /api/admin/growth-journey/handoffs/:id` (Phase 4). Express matches in
+ * mount order, so if this file were mounted after it, `/handoffs/policies` and `/handoffs/ownership`
+ * would both be swallowed as a handoff id - a 404 for a route that exists, or worse a 200 for the
+ * wrong thing. `adminRoutes.ts` mounts this file first and `adminRoutes.order.test.ts` pins it.
+ */
+router.get(`${JOURNEY}/decisions/snapshots`, getJourneySnapshotsHandler);
+router.get(`${JOURNEY}/decisions/transitions`, getJourneyTransitionsHandler);
+router.get(`${JOURNEY}/shadow/runs`, getJourneyShadowRunsHandler);
+router.get(`${JOURNEY}/content/policies`, getJourneyOfferPoliciesHandler);
+router.get(`${JOURNEY}/content/rules`, getJourneyContentRulesHandler);
+router.get(`${JOURNEY}/handoffs/policies`, getJourneyQueuePoliciesHandler);
+router.get(`${JOURNEY}/handoffs/ownership`, getJourneyOwnershipHandler);
 
 export default router;

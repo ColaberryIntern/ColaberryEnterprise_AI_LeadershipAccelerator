@@ -17,7 +17,11 @@ import jwt from 'jsonwebtoken';
  */
 
 const growthJourney = { growthJourneyEnabled: true, journeySignalIngest: false, journeyClassification: false, journeyDecisions: false, journeyHandoffs: false, journeyExecution: false };
-jest.mock('../../../config/env', () => ({ env: { jwtSecret: 'test-secret', nodeEnv: 'test', growthJourney } }));
+// `databaseUrl` is here because the read router now reaches two model FILES for their exported
+// constants (`OPEN_HANDOFF_STATUSES`, `subjectRef`), and a model file pulls in `config/database`,
+// which constructs a Sequelize instance at load. It never connects - the models themselves are
+// mocked below - but `new Sequelize(undefined)` throws, so the mocked env has to carry a URL.
+jest.mock('../../../config/env', () => ({ env: { jwtSecret: 'test-secret', nodeEnv: 'test', databaseUrl: 'postgres://test:test@localhost:5432/test', growthJourney } }));
 jest.mock('../../../services/aiEventService', () => ({ emitAiEvent: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../../services/ledgerService', () => ({ logEvent: jest.fn().mockResolvedValue(undefined) }));
 
@@ -288,6 +292,6 @@ describe('the privacy property, end to end through the real services', () => {
     m.receipts.mockRejectedValue(Object.assign(new Error('connection reset'), { name: 'SequelizeConnectionError' }));
     const res = await auth(request(app()).get(`${BASE}/receipts`));
     expect(res.status).toBe(500);
-    expect(res.body).toEqual({ error: 'Journey performance read failed', error_class: 'SequelizeConnectionError' });
+    expect(res.body).toEqual({ error: 'Journey read failed', error_class: 'SequelizeConnectionError' });
   });
 });

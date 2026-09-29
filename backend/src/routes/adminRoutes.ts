@@ -202,7 +202,10 @@ router.use(explorerGrowthRoutes);
 // these two lines' relative position, and the status access suite proves the consequence.
 router.use(growthJourneyStatusRoutes);
 // The performance reads (T605) carry the master flag themselves, so their position relative to
-// `growthJourneyRoutes` does not matter - either mount answers 404 while the journey is dark. They
+// `growthJourneyRoutes` DOES matter as of T607: the read router owns `/handoffs/policies` and
+// `/handoffs/ownership`, which `growthJourneyRoutes` would otherwise swallow with its
+// `/handoffs/:id`. It must stay above. (Before T607 either order answered the same, which is what
+// the previous note said.) They
 // sit here so the three journey routers read in one place: status (always), performance, queues.
 router.use(growthJourneyReadRoutes);
 router.use(growthJourneyRoutes);

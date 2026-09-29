@@ -1,5 +1,4 @@
 import { Request, Response } from 'express';
-import type { z } from 'zod';
 import { getCampaignMetricsByJourney } from '../services/marketingAnalyticsService';
 import { computeJourneyMetrics } from '../services/growthJourney/performance/journeyMetricsService';
 import { readOutcomes, readRates, readReceipts } from '../services/growthJourney/performance/performanceReads';
@@ -10,7 +9,7 @@ import {
   ratesQuerySchema,
   receiptsQuerySchema,
 } from '../schemas/growthJourneySchema';
-import { badRequest, logReadFailure, scopedContext } from './growthJourneyController';
+import { serveRead } from './growthJourneyController';
 
 /**
  * The journey's performance reads (T605 the metrics, T606 the rest).
@@ -34,37 +33,6 @@ import { badRequest, logReadFailure, scopedContext } from './growthJourneyContro
  * the access suite for the adversarial control.
  */
 
-/** One shape for all five handlers: parse, scope, read, answer - with one failure path. */
-async function serveRead<S extends z.ZodTypeAny>(
-  req: Request,
-  res: Response,
-  schema: S,
-  event: string,
-  read: (query: z.infer<S>, scope: { tenantId: string; brandIds: string[]; brandId: string | null; programId: string | null }) => Promise<unknown>,
-): Promise<void> {
-  const parsed = schema.safeParse(req.query);
-  if (!parsed.success) {
-    badRequest(res, parsed.error);
-    return;
-  }
-  const query = parsed.data as z.infer<S> & { tenant_id?: string; brand_id?: string; program_id?: string };
-  try {
-    const ctx = await scopedContext(req, res, query);
-    if (!ctx) return; // scopedContext has already answered 403/404.
-    const brandIds = ctx.authorizedBrandIds ?? (ctx.brandId ? [ctx.brandId] : []);
-    const brandId = query.brand_id ?? ctx.brandId ?? null;
-    const scoped = brandId ? brandIds.filter((b) => b === brandId) : brandIds;
-    res.json(await read(query, {
-      tenantId: ctx.tenantId ?? '',
-      brandIds: scoped,
-      brandId,
-      programId: query.program_id ?? null,
-    }));
-  } catch (err) {
-    const errorClass = logReadFailure(req, err, event);
-    res.status(500).json({ error: 'Journey performance read failed', error_class: errorClass });
-  }
-}
 
 export async function getJourneyMetricsHandler(req: Request, res: Response): Promise<void> {
   await serveRead(req, res, metricsQuerySchema, 'journey_metrics_read_failed', (query, scope) =>

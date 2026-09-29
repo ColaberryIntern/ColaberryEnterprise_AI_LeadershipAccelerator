@@ -1,7 +1,16 @@
-import { Op, type WhereOptions } from 'sequelize';
+import { Op } from 'sequelize';
 import { GrowthJourneyExecution, GrowthJourneyHandoff, GrowthJourneyOutcome } from '../../../models';
 import { safeField } from '../handoffs/assigneeDigest';
 import { loadHandoffRates, type BrandHandoffRates } from '../outcomes/handoffRatesQuery';
+import {
+  DEFAULT_PAGE,
+  MAX_PAGE,
+  emptyPage,
+  paging,
+  scopeWhere,
+  type Page,
+  type ReadScope,
+} from '../reads/readPaging';
 
 /**
  * The journey's three list reads and the rates roll-up (Phase 6, T606).
@@ -41,36 +50,14 @@ import { loadHandoffRates, type BrandHandoffRates } from '../outcomes/handoffRat
  * that is every admin.
  */
 
-export const MAX_PAGE = 100;
-export const DEFAULT_PAGE = 25;
-
-export interface ReadScope {
-  brandIds: readonly string[];
-  programId?: string | null;
-  limit?: number;
-  offset?: number;
-}
-
-export interface Page<T> {
-  rows: T[];
-  total: number;
-  limit: number;
-  offset: number;
-}
-
-const emptyPage = <T>(limit: number, offset: number): Page<T> => ({ rows: [], total: 0, limit, offset });
-
-function paging(scope: ReadScope): { limit: number; offset: number } {
-  const limit = Math.min(Math.max(1, Math.floor(scope.limit ?? DEFAULT_PAGE)), MAX_PAGE);
-  const offset = Math.max(0, Math.floor(scope.offset ?? 0));
-  return { limit, offset };
-}
-
-function scopeWhere(scope: ReadScope): WhereOptions {
-  const where: Record<string, unknown> = { brand_id: { [Op.in]: [...scope.brandIds] } };
-  if (scope.programId) where.program_id = scope.programId;
-  return where;
-}
+/**
+ * The page cap, the clamp and the brand clause now live in `../reads/readPaging.ts` (T607), because
+ * seven more admin reads landed beside these three and four copies of the clamp is four places for
+ * the cap to drift. They are re-exported here so every existing importer - and T606's own suite -
+ * keeps naming them where they were first declared.
+ */
+export { MAX_PAGE, DEFAULT_PAGE };
+export type { ReadScope, Page };
 
 /* ── receipts ───────────────────────────────────────────────────────────────── */
 
