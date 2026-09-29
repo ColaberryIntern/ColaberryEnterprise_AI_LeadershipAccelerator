@@ -48,7 +48,7 @@ export default function AgentWorkV2CaseList({ tickets, selectedId, onSelect }: P
               </span>
               <span style={{ display: 'flex', gap: 6 }}>
                 <span className={adv2PillClass(bucketMeta.tone)}>{bucketMeta.label}</span>
-                <span className={adv2PillClass(getTicketStatusTone(t.status))}>{getTicketStatusLabel(t.status)}</span>
+                <span className={`${adv2PillClass(getTicketStatusTone(t.status))} adv2-pill-outline`}>{getTicketStatusLabel(t.status)}</span>
               </span>
             </div>
             <strong style={{ display: 'block', margin: '6px 0 2px' }}>{t.title}</strong>
