@@ -236,6 +236,14 @@
 .adv2-case-row { display: block; width: 100%; text-align: left; background: var(--adv2-panel); border: 1px solid var(--adv2-rule); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; }
 .adv2-case-row:hover { border-color: var(--adv2-rule-2); }
 .adv2-case-row.adv2-active { border-color: var(--adv2-trust); box-shadow: inset 3px 0 var(--adv2-trust); }
+/* Honest real-status stepper (2026-09-29) — same visual shape as the
+ * mockup's own .steps/.step/.step.done/.step.current, using real
+ * getTicketStatusLabel() strings, never the mockup's fictional stage
+ * names (see AgentWorkV2Stepper.tsx's own header comment). */
+.adv2-steps { display: flex; margin: 18px 0; gap: 6px; }
+.adv2-step { flex: 1; border-top: 3px solid var(--adv2-rule); padding-top: 9px; font-size: 11px; color: var(--adv2-ink-3); }
+.adv2-step-done { border-color: var(--adv2-ok); color: var(--adv2-ok); }
+.adv2-step-current { border-color: var(--adv2-warn); color: var(--adv2-warn); }
 
 @media (max-width: 900px) {
   .adv2-hero { grid-template-columns: 1fr; }

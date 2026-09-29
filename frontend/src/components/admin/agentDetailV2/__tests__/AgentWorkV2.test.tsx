@@ -194,16 +194,86 @@ describe('AgentWorkV2', () => {
   });
 
   // Required, run-specific hard-stop checks (this run's own plan.md R68 and
-  // execution-contract.md) — neither the mockup's 5-step narrative ladder
-  // nor its 3-way "waiting on Ali/staff/student" split has any real backing
-  // anywhere in this codebase; building either, even in reduced form, would
-  // misrepresent a real kanban `status` as an invented narrative stage.
-  it('never renders the mockup-only 5-step ladder (Assess/Plan/Handoff/Verify/Complete) — no real backing exists', async () => {
+  // execution-contract.md) — neither the mockup's FICTIONAL 5-step ladder
+  // (Assess/Plan/Handoff/Verify/Complete — invented stage names with no
+  // real backing field) nor its 3-way "waiting on Ali/staff/student" split
+  // has any real backing anywhere in this codebase. Polish round 2
+  // (2026-09-29) DOES now render a real 5-step stepper (see below) — the
+  // honest version, using real getTicketStatusLabel() strings, confirmed
+  // via AskUserQuestion — so this test is scoped precisely to the
+  // mockup's own fabricated stage NAMES, never generalized to "no stepper
+  // at all."
+  it('never renders the mockup\'s fictional stage names (Assess/Handoff/Verify/Complete) — the real stepper uses honest status labels instead', async () => {
     await renderTab([ticket({ id: 't-1', status_bucket: 'overdue' })]);
 
     for (const step of ['Assess', 'Handoff', 'Verify', 'Complete']) {
       expect(container.textContent).not.toContain(step);
     }
+  });
+
+  it('renders the honest real-status stepper for a non-cancelled ticket, with the real current status marked', async () => {
+    await renderTab([ticket({ id: 't-1', status_bucket: 'overdue', status: 'in_progress' })]);
+
+    const steps = Array.from(container.querySelectorAll('.adv2-step'));
+    expect(steps.map((s) => s.textContent)).toEqual(['✓ Backlog', '✓ To Do', 'In Progress', 'In Review', 'Done']);
+    expect(steps[2].className).toContain('adv2-step-current');
+    expect(steps[0].className).toContain('adv2-step-done');
+  });
+
+  it('a cancelled ticket shows a plain Cancelled badge, never a stepper implying it reached a fixed stage', async () => {
+    await renderTab([ticket({ id: 't-1', status_bucket: 'open', status: 'cancelled' })]);
+
+    expect(container.querySelector('.adv2-steps')).toBeNull();
+    expect(container.textContent).toContain('Cancelled');
+  });
+
+  it('every list row shows its own real status pill, distinct from the bucket pill', async () => {
+    await renderTab([
+      ticket({ id: 't-1', status_bucket: 'open', status: 'in_review' }),
+    ]);
+
+    expect(container.textContent).toContain('In Review');
+  });
+
+  it('every ticket shows its real due date as "Next commitment", both in the list row and the detail view', async () => {
+    await renderTab([ticket({ id: 't-1', status_bucket: 'overdue', due_date: '2026-10-05' })]);
+
+    const occurrences = container.textContent?.split('Next commitment').length! - 1;
+    expect(occurrences).toBe(2); // one list row + one detail view
+  });
+
+  it('paginates the list to the first 10 tickets by default, with a working "show older" control', async () => {
+    const tickets = Array.from({ length: 14 }, (_, i) => ticket({ id: `t-${i}`, title: `Ticket ${i}`, status_bucket: 'open' }));
+    await renderTab(tickets);
+
+    for (let i = 0; i < 10; i++) expect(container.textContent).toContain(`Ticket ${i}`);
+    for (let i = 10; i < 14; i++) expect(container.textContent).not.toContain(`Ticket ${i}`);
+
+    const showMore = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Show 4 older ticket'));
+    expect(showMore).toBeTruthy();
+    await act(async () => { showMore!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+
+    for (let i = 10; i < 14; i++) expect(container.textContent).toContain(`Ticket ${i}`);
+    expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent?.includes('older ticket'))).toBe(false);
+  });
+
+  it('switching buckets resets pagination back to the default page size', async () => {
+    const overdueTickets = Array.from({ length: 12 }, (_, i) => ticket({ id: `t-od-${i}`, title: `Overdue ${i}`, status_bucket: 'overdue' }));
+    await renderTab([...overdueTickets, ticket({ id: 't-open', title: 'Open one', status_bucket: 'open' })]);
+
+    const showMore = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('older ticket'));
+    await act(async () => { showMore!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(container.textContent).toContain('Overdue 11'); // all 12 now visible
+
+    const openBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Open') && !b.textContent?.includes('Overdue'));
+    await act(async () => { openBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(container.textContent).toContain('Open one');
+
+    const overdueBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Overdue') && b.textContent?.includes('12'));
+    await act(async () => { overdueBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    // Back to the default page size — only the first 10 of the 12 overdue tickets.
+    expect(container.textContent).toContain('Overdue 9');
+    expect(container.textContent).not.toContain('Overdue 11');
   });
 
   it('never renders the mockup-only 3-way "waiting on a person" split — only the 4 real buckets exist', async () => {

@@ -3,6 +3,8 @@ import { AgentDetailTicket } from '../../../services/agentDetailApi';
 import { getTicketStatusLabel, getTicketStatusTone } from '../../../utils/ticketTypeMeta';
 import { adv2PillClass } from './adv2PillTone';
 import { timeAgo } from '../shell/trust';
+import { formatDueDate } from './AgentWorkV2CaseList';
+import AgentWorkV2Stepper from './AgentWorkV2Stepper';
 import type { TabKey } from './AgentDetailV2Header';
 
 // Agent Detail redesign, Track A1 (2026-09-21) — the right column of Work's
@@ -21,6 +23,15 @@ import type { TabKey } from './AgentDetailV2Header';
 // ticket-scoping parameter (confirmed, agentExplainabilityApi.ts:36).
 // "Discuss with Reese" reuses the real onNavigate('talk') handler, same as
 // the Hero's own CTA button.
+//
+// Agent Detail polish round 2 (2026-09-29) — Ali, live: "I'd like to see
+// the stages in a ticket kinda like the screenshot... I need to know when
+// the next commitment is so I can see when the ticket will be checked on
+// the next time. Every ticket should have that." AgentWorkV2Stepper.tsx
+// resolves the tension with the note directly above it (honest, real-status
+// version — confirmed via AskUserQuestion, not the mockup's fabricated
+// stages). "Next commitment" reuses the exact same formatDueDate() already
+// shown on every list row, not a new date-format convention.
 
 interface Props {
   ticket: AgentDetailTicket;
@@ -39,6 +50,12 @@ export default function AgentWorkV2CaseDetail({ ticket, onNavigate }: Props) {
         </div>
         <span className={adv2PillClass(getTicketStatusTone(ticket.status))}>{getTicketStatusLabel(ticket.status)}</span>
       </div>
+
+      <AgentWorkV2Stepper status={ticket.status} />
+
+      <p className="adv2-muted" style={{ margin: '0 0 4px', fontSize: 13 }}>
+        Next commitment: <strong style={{ color: 'var(--adv2-ink)' }}>{formatDueDate(ticket.due_date)}</strong>
+      </p>
 
       <dl className="adv2-rows" style={{ marginTop: 18 }}>
         <dt>Description</dt>

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { AgentDetail, AgentDetailTicketStatusBucket } from '../../../services/agentDetailApi';
 import type { Tone } from '../shell/StatusBadge';
 import AgentWorkV2CaseList from './AgentWorkV2CaseList';
@@ -48,9 +48,18 @@ export const EMPTY_STATE_LABEL: Record<WorkBucketKey, string> = {
   open: 'No open tickets right now.',
 };
 
+const PAGE_SIZE = 10;
+
 export default function AgentWorkV2({ detail, onNavigate }: Props) {
   const [activeBucket, setActiveBucket] = useState<WorkBucketKey>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Agent Detail polish round 2 (2026-09-29) — Ali, live: "for the tickets,
+  // only show the 1st 10 and allow the user to click to see older
+  // tickets." Resets to the default page size whenever the active bucket
+  // changes — a filter switch shouldn't silently carry over a stale
+  // "show more" state from a different bucket's own ticket count.
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [activeBucket]);
 
   // A closed ticket (status_bucket: null — done/cancelled) fits none of
   // the 4 real action buckets and is excluded from this action-focused
@@ -73,11 +82,13 @@ export default function AgentWorkV2({ detail, onNavigate }: Props) {
   );
 
   const selected = filtered.find((t) => t.id === selectedId) ?? filtered[0] ?? null;
+  const visibleTickets = filtered.slice(0, visibleCount);
+  const remainingCount = filtered.length - visibleTickets.length;
 
   return (
     <div className="adv2-card">
       <h2>
-        Work
+        Work & commitments
         <span className="adv2-hint">Real tickets this agent owns or was assigned, filtered by what actually needs attention.</span>
       </h2>
       <div style={{ padding: '13px 19px 0', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -97,7 +108,18 @@ export default function AgentWorkV2({ detail, onNavigate }: Props) {
         <p className="adv2-muted" style={{ textAlign: 'center', padding: '32px 0' }}>{EMPTY_STATE_LABEL[activeBucket]}</p>
       ) : (
         <div className="adv2-worklayout" style={{ padding: 19 }}>
-          <AgentWorkV2CaseList tickets={filtered} selectedId={selected?.id ?? null} onSelect={setSelectedId} />
+          <div>
+            <AgentWorkV2CaseList tickets={visibleTickets} selectedId={selected?.id ?? null} onSelect={setSelectedId} />
+            {remainingCount > 0 && (
+              <button
+                className="adv2-btn"
+                style={{ width: '100%', marginTop: 10 }}
+                onClick={() => setVisibleCount((v) => v + PAGE_SIZE)}
+              >
+                Show {remainingCount} older ticket{remainingCount === 1 ? '' : 's'}
+              </button>
+            )}
+          </div>
           {selected && <AgentWorkV2CaseDetail ticket={selected} onNavigate={onNavigate} />}
         </div>
       )}
