@@ -153,12 +153,24 @@ export async function uploadBuildArtifact(
  * Resolve the enrollment's project and mirror its artifacts. Returns a
  * classified outcome; never throws.
  */
-async function syncArtifactsForEnrollment(
+export async function syncArtifactsForEnrollment(
   enrollmentId: string,
 ): Promise<{ outcome: string; reason?: string; repo?: { owner: string; name: string } }> {
   try {
-    const { default: Project } = await import('../../models/Project');
-    const project: any = await Project.findOne({ where: { enrollment_id: enrollmentId } });
+    // THE ACTIVE PROJECT, not whichever row the database returns first.
+    //
+    // This was `Project.findOne({ where: { enrollment_id } })` with no order and
+    // no archived filter. One project per student made that invisible; a student
+    // with two builds would have had each artifact synced to an arbitrary one of
+    // their repos, and an archived project could still have won. A learner asked
+    // on 2026-09-28 whether his second project should have its own repo (it
+    // should), which is the moment this starts mattering.
+    //
+    // `getProjectByEnrollment` is the platform's own answer to "which build is
+    // this student on": the active pointer, ignoring archived rows, with a
+    // deterministic newest-first fallback for accounts that predate the pointer.
+    const { getProjectByEnrollment } = await import('../projectService');
+    const project: any = await getProjectByEnrollment(enrollmentId);
     if (!project) return { outcome: 'no_repo', reason: 'No project yet.' };
 
     const { syncArtifactsToRepo } = await import('../artifacts/artifactRepoSync');
