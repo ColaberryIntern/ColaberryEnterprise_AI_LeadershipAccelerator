@@ -82,6 +82,11 @@ interface GanttTask {
   id: string; title: string; status: string; release_key: string | null;
   due_on: string | null; due_baseline_on: string | null;
   slipped: boolean; overdue: boolean; blocked_by: string[];
+  /** The plan's own traceability: which requirements this story fulfils. */
+  fulfills?: string[];
+  /** What "done" means for it, in the plan's words. */
+  acceptance?: string[];
+  narrative?: string | null;
 }
 interface GanttRelease extends ReleaseSummaryLike {
   lands_when?: string | null;
@@ -92,8 +97,16 @@ interface GanttRelease extends ReleaseSummaryLike {
 interface Gantt {
   project_id: string;
   releases: GanttRelease[];
+  /** REQ id -> statement, from the published plan. Empty for a project that has none. */
+  requirements?: Record<string, string>;
   totals: { tasks: number; complete: number; overdue: number; undated: number };
 }
+
+/** The small uppercase label above a story's requirement and acceptance lists. */
+const STORY_LABEL: React.CSSProperties = {
+  color: 'var(--text-muted)', fontWeight: 600, fontSize: 11,
+  textTransform: 'uppercase', letterSpacing: '.04em',
+};
 
 interface Props {
   /** Scope to one cohort when opened from a drill-down; undefined = all cohorts. */
@@ -138,6 +151,10 @@ export default function ProjectDeliveryView({ cohortId, internsOnly, hideWithout
   /** Which release row is expanded, keyed `projectId::releaseKey` so two projects
    *  cannot both think their R0 is open. */
   const [openRelease, setOpenRelease] = useState<string | null>(null);
+  /** The story whose requirements are open, keyed by task id. One at a time:
+   *  this sits inside an already-expanded release, and two open at once turns a
+   *  readable list into a wall. */
+  const [openStory, setOpenStory] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -411,28 +428,91 @@ export default function ProjectDeliveryView({ cohortId, internsOnly, hideWithout
                                   Lands when: {(rel as any).lands_when}
                                 </div>
                               )}
-                              {rel.tasks.map((t) => (
-                                <div key={t.id} style={{
-                                  fontSize: 12, color: 'var(--text-body)', padding: '3px 10px 3px 46px',
-                                  display: 'flex', justifyContent: 'space-between', gap: 12,
-                                }}>
-                                  <span style={t.status === 'complete'
-                                    ? { textDecoration: 'line-through', color: 'var(--text-muted)' } : undefined}>
-                                    {t.title}
-                                    {t.blocked_by.length > 0 && (
-                                      <span style={{ color: 'var(--text-muted)' }}> · blocked by {t.blocked_by.length}</span>
+                              {rel.tasks.map((t) => {
+                                // Normalised once: both columns are JSONB and absent on any
+                                // task the manual import path wrote, and reading them
+                                // through `?.` at five call sites invites exactly one of
+                                // them to be missed.
+                                const fulfills = t.fulfills ?? [];
+                                const acceptance = t.acceptance ?? [];
+                                // Only clickable when there is something behind it. A row
+                                // that opens to nothing teaches people the arrow lies.
+                                const hasDetail = Boolean(fulfills.length || acceptance.length || t.narrative);
+                                const storyOpen = openStory === t.id;
+                                return (
+                                  <React.Fragment key={t.id}>
+                                    <div
+                                      style={{
+                                        fontSize: 12, color: 'var(--text-body)', padding: '3px 10px 3px 46px',
+                                        display: 'flex', justifyContent: 'space-between', gap: 12,
+                                        cursor: hasDetail ? 'pointer' : undefined,
+                                      }}
+                                      onClick={hasDetail ? () => setOpenStory(storyOpen ? null : t.id) : undefined}
+                                      title={hasDetail ? 'Show what this story has to satisfy' : undefined}
+                                    >
+                                      <span style={t.status === 'complete'
+                                        ? { textDecoration: 'line-through', color: 'var(--text-muted)' } : undefined}>
+                                        {hasDetail && (
+                                          <i
+                                            className={storyOpen ? 'ri-arrow-down-s-line' : 'ri-arrow-right-s-line'}
+                                            aria-hidden="true"
+                                            style={{ fontSize: 14, color: 'var(--text-muted)', marginRight: 2 }}
+                                          />
+                                        )}
+                                        {t.title}
+                                        {fulfills.length > 0 && (
+                                          <span style={{ color: 'var(--text-muted)' }}> · {fulfills.length} req</span>
+                                        )}
+                                        {t.blocked_by.length > 0 && (
+                                          <span style={{ color: 'var(--text-muted)' }}> · blocked by {t.blocked_by.length}</span>
+                                        )}
+                                      </span>
+                                      <span style={{
+                                        whiteSpace: 'nowrap',
+                                        color: t.overdue ? 'var(--status-danger)'
+                                          : t.status === 'complete' ? 'var(--text-muted)' : 'var(--text-body)',
+                                      }}>
+                                        {fmtReleaseDay(t.due_on)}
+                                        {t.slipped && <span title="moved later than its baseline"> &#9873;</span>}
+                                      </span>
+                                    </div>
+
+                                    {storyOpen && (
+                                      <div style={{ padding: '2px 10px 8px 62px', fontSize: 12 }}>
+                                        {t.narrative && (
+                                          <div style={{ color: 'var(--text-body)', fontStyle: 'italic', marginBottom: 6 }}>
+                                            {t.narrative}
+                                          </div>
+                                        )}
+                                        {fulfills.length > 0 && (
+                                          <div style={{ marginBottom: 6 }}>
+                                            <div style={STORY_LABEL}>Requirements it fulfils</div>
+                                            <ul style={{ margin: '2px 0 0', paddingLeft: 18 }}>
+                                              {fulfills.map((reqId) => (
+                                                <li key={reqId}>
+                                                  <strong>{reqId}</strong>
+                                                  {/* The statement when the published plan carries one; the id
+                                                      alone otherwise, which is the honest answer for a
+                                                      hand-authored or pre-pipeline project rather than a blank. */}
+                                                  {g.requirements?.[reqId] ? ` — ${g.requirements[reqId]}` : ''}
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        )}
+                                        {acceptance.length > 0 && (
+                                          <div>
+                                            <div style={STORY_LABEL}>Done when</div>
+                                            <ul style={{ margin: '2px 0 0', paddingLeft: 18 }}>
+                                              {acceptance.map((line, i) => <li key={i}>{line}</li>)}
+                                            </ul>
+                                          </div>
+                                        )}
+                                      </div>
                                     )}
-                                  </span>
-                                  <span style={{
-                                    whiteSpace: 'nowrap',
-                                    color: t.overdue ? 'var(--status-danger)'
-                                      : t.status === 'complete' ? 'var(--text-muted)' : 'var(--text-body)',
-                                  }}>
-                                    {fmtReleaseDay(t.due_on)}
-                                    {t.slipped && <span title="moved later than its baseline"> &#9873;</span>}
-                                  </span>
-                                </div>
-                              ))}
+                                  </React.Fragment>
+                                );
+                              })}
                             </div>
                           )}
                         </React.Fragment>
