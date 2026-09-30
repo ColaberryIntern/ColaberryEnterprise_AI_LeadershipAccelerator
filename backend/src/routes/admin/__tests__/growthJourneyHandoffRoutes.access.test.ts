@@ -164,6 +164,16 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
+/**
+ * Headers that differ between two responses for reasons that carry NO scope
+ * information, and so must not break the 404-indistinguishability cells below.
+ * `ratelimit-remaining` joined the list in T612: it decrements on every request, so
+ * two consecutive 404s legitimately differ by one. `ratelimit-limit` and
+ * `ratelimit-policy` are deliberately NOT here - they are constants, so a limiter
+ * configured differently for one tenant would still fail those cells.
+ */
+const VOLATILE_HEADERS = new Set(['date', 'etag', 'ratelimit-remaining']);
+
 describe('the status matrix, on all five routes', () => {
   it('401 unauthenticated', async () => {
     expect((await request(app()).get(LIST)).status).toBe(401);
@@ -222,8 +232,8 @@ describe('the status matrix, on all five routes', () => {
       const missing = await post(url, body);
       expect([foreign.status, missing.status]).toEqual([404, 404]);
       expect(foreign.text).toBe(missing.text);
-      expect(Object.fromEntries(Object.entries(foreign.headers).filter(([k]) => k !== 'date' && k !== 'etag'))).toEqual(
-        Object.fromEntries(Object.entries(missing.headers).filter(([k]) => k !== 'date' && k !== 'etag')),
+      expect(Object.fromEntries(Object.entries(foreign.headers).filter(([k]) => !VOLATILE_HEADERS.has(k)))).toEqual(
+        Object.fromEntries(Object.entries(missing.headers).filter(([k]) => !VOLATILE_HEADERS.has(k))),
       );
       expect(row.update).not.toHaveBeenCalled();
       expect(row.status).toBe('accepted');

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
+import { growthJourneyAdminLimiter } from '../growthJourneyRateLimit';
 import { getJourneyHealthHandler, getJourneyReadinessHandler, getStatusRegistryHandler } from '../../controllers/growthJourneyStatusController';
 
 /**
@@ -42,6 +43,10 @@ import { getJourneyHealthHandler, getJourneyReadinessHandler, getStatusRegistryH
 const router = Router();
 const BASE = '/api/admin/growth-journey/status';
 
+// T612. Path-scoped (never bare - it would gate unrelated routers) and ahead of
+// `requireAdmin` so unauthenticated floods count too. Why one shared instance:
+// `growthJourneyRateLimit.ts`.
+router.use(BASE, growthJourneyAdminLimiter);
 router.use(BASE, requireAdmin);
 
 router.get(`${BASE}/registry`, getStatusRegistryHandler);

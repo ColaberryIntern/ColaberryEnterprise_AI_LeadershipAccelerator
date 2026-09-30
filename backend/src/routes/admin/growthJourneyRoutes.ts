@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { Request, Response, NextFunction } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
+import { growthJourneyAdminLimiter } from '../growthJourneyRateLimit';
 import { env } from '../../config/env';
 import {
   getParticipationHandler,
@@ -73,6 +74,10 @@ import {
 const router = Router();
 const BASE = '/api/admin/growth-journey';
 
+// T612. Path-scoped (never bare - it would gate unrelated routers) and ahead of
+// `requireAdmin` so unauthenticated floods count too. Why one shared instance:
+// `growthJourneyRateLimit.ts`.
+router.use(BASE, growthJourneyAdminLimiter);
 router.use(BASE, requireAdmin);
 
 /** Master off => the routes do not exist. Resolved per request so a test can flip it. */
