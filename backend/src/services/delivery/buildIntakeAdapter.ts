@@ -181,20 +181,38 @@ export function toBuildIntake(u: ProjectUnderstanding): BuildIntake {
     const items = itemsFor(u, dimension);
     if (!items.length) continue;
 
-    if (answers.length >= ANSWERS_MAX) {
-      items.forEach((it) => dropped.push({ dimension, value: it.value, reason: `more than ${ANSWERS_MAX} answers` }));
-      continue;
-    }
+    // PACKED, not clipped. A dimension with more detail than one answer holds
+    // arrives as several rather than losing its tail — this is the call that
+    // makes Swati's detailed requirements survive the crossing, and leaving it
+    // out is precisely how they went missing.
+    const { chunks, clipped } = packItems(items.map(phraseForBrief));
 
-    const answer = items.map(phraseForBrief).join('\n');
-    if (answer.length > ANSWER_MAX) {
-      dropped.push({ dimension, value: `(${items.length} items)`, reason: `answer over ${ANSWER_MAX} chars; clipped` });
-    }
+    // The only content loss left: one item too long to pack with anything. It is
+    // named by its own text, because a count says THAT something was lost and
+    // never WHICH.
+    clipped.forEach((value) => dropped.push({
+      dimension, value, reason: `single item over ${ANSWER_MAX} chars; clipped`,
+    }));
 
-    answers.push({
-      id: dimension,
-      question: clip(`${DIMENSION_LABELS[dimension]}?`, QUESTION_MAX),
-      answer: clip(answer, ANSWER_MAX),
+    chunks.forEach((chunk, i) => {
+      if (answers.length >= ANSWERS_MAX) {
+        dropped.push({ dimension, value: chunk, reason: `more than ${ANSWERS_MAX} answers` });
+        return;
+      }
+      answers.push({
+        // `constraints`, then `constraints_2`, … so the ids stay readable and a
+        // reader can see at a glance that one dimension ran long.
+        id: i === 0 ? dimension : `${dimension}_${i + 1}`,
+        question: clip(
+          // "(continued)" so the decomposer reads chunk two as more of the same
+          // question rather than as a different topic that happens to repeat.
+          i === 0 ? `${DIMENSION_LABELS[dimension]}?` : `${DIMENSION_LABELS[dimension]}? (continued)`,
+          QUESTION_MAX,
+        ),
+        // Already within ANSWER_MAX by construction; clipping here would hide a
+        // bug in `packItems` rather than fix one.
+        answer: chunk,
+      });
     });
   }
 
