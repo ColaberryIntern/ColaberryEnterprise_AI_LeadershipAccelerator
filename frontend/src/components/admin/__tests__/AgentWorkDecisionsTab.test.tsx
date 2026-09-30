@@ -279,6 +279,34 @@ describe('AgentWorkDecisionsTab — Decision Journal', () => {
     expect(container.textContent).toContain('confidence 0.74');
   });
 
+  // Agent Detail polish round 4 (2026-09-30) — Ali, live: "I don't
+  // understand Decision Journal - can we get more details on this so we can
+  // make sense... this page is pretty confusing." Purely additive labeling/
+  // framing of already-real data — zero change to the fetch or data shape.
+  it('labels an agent.authorization event as "Authorization check"', async () => {
+    await renderTab();
+    const pills = Array.from(container.querySelectorAll('.adv2-pill'));
+    expect(pills.some((p) => p.textContent === 'Authorization check')).toBe(true);
+  });
+
+  it('labels a non-authorization event as "System event"', async () => {
+    await renderTab();
+    const pills = Array.from(container.querySelectorAll('.adv2-pill'));
+    expect(pills.some((p) => p.textContent === 'System event')).toBe(true);
+  });
+
+  it('labels a proposed-action entry as "Proposal outcome"', async () => {
+    await renderTab();
+    const pills = Array.from(container.querySelectorAll('.adv2-pill'));
+    expect(pills.some((p) => p.textContent === 'Proposal outcome')).toBe(true);
+  });
+
+  it('the header hint plainly states this journal is agent-wide, not ticket-specific', async () => {
+    await renderTab();
+    expect(container.textContent).toContain('not specific to any one ticket');
+    expect(container.textContent).toContain('real recorded fact');
+  });
+
   it('shows the honest empty state when there are zero events and zero proposed actions', async () => {
     getAgentExplainability.mockResolvedValue({ agentId: 'agent-1', agentName: 'X', events: [], proposedActions: [] });
     await renderTab();

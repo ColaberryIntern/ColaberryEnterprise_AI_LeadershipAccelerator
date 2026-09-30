@@ -237,7 +237,7 @@ export default function AgentWorkDecisionsTab({ agentId, inboxItems, inboxLoadin
       <div className="adv2-card">
         <h2>
           Decision Journal
-          <span className="adv2-hint">Real recorded facts — business rationale and policy evidence, never a generated narrative or hidden reasoning trace.</span>
+          <span className="adv2-hint">A chronological log of Reese's own automated checks and proposals across all of her work — not specific to any one ticket. Every line is a real recorded fact, never a generated narrative or hidden reasoning trace.</span>
         </h2>
         {journalLoading && <p className="adv2-body adv2-muted">Loading the decision journal…</p>}
         {journalError && <p className="adv2-body" style={{ color: 'var(--adv2-warn)' }}>Could not load the decision journal: {journalError}</p>}
@@ -252,11 +252,13 @@ export default function AgentWorkDecisionsTab({ agentId, inboxItems, inboxLoadin
                 <div style={{ minWidth: 0 }}>
                   {event.authorization ? (
                     <>
+                      <span className="adv2-pill adv2-neutral" style={{ marginRight: 8 }}>Authorization check</span>
                       <span className={adv2PillClass(event.authorization.verdict === 'block' ? 'danger' : event.authorization.verdict === 'approval' ? 'warning' : 'success')}>{event.authorization.verdict}</span>
                       <span style={{ marginLeft: 8 }}>{shadowEnforceLine(event.authorization)}</span>
                     </>
                   ) : (
                     <>
+                      <span className="adv2-pill adv2-neutral" style={{ marginRight: 8 }}>System event</span>
                       <span className={adv2PillClass(event.outcome === 'success' ? 'success' : event.outcome === 'failure' ? 'danger' : 'neutral')}>{event.outcome}</span>
                       <span className="adv2-muted" style={{ marginLeft: 8 }}>{event.eventType}{event.model ? ` · ${event.model}` : ''}{event.costUsd !== null ? ` · $${event.costUsd.toFixed(4)}` : ''}{event.durationMs !== null ? ` · ${event.durationMs}ms` : ''}</span>
                     </>
@@ -268,6 +270,7 @@ export default function AgentWorkDecisionsTab({ agentId, inboxItems, inboxLoadin
               <div key={`p${i}`} className="adv2-body" style={{ display: 'flex', gap: 12, borderTop: '1px solid var(--adv2-rule)' }}>
                 <span className="adv2-mono adv2-muted" style={{ flex: 'none', minWidth: 88, fontSize: 12.5 }}>{timeAgo(action.createdAt)}</span>
                 <div style={{ minWidth: 0 }}>
+                  <span className="adv2-pill adv2-neutral" style={{ marginRight: 8 }}>Proposal outcome</span>
                   <span className={adv2PillClass(action.status === 'approved' || action.status === 'applied' ? 'success' : action.status === 'rejected' ? 'danger' : 'warning')}>{action.status}</span>
                   <span style={{ marginLeft: 8 }}>{action.actionType} — "{action.reason}" (confidence {action.confidence})</span>
                 </div>
