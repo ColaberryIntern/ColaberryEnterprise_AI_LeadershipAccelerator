@@ -76,22 +76,33 @@ describe('an unsupported action yields Handoff, and never a Publish button', () 
 });
 
 describe('an unapproved app yields Handoff even for a supported action', () => {
-  it('Facebook Page supports publish, but the app is not submitted - so Handoff', () => {
-    // The state of the world today: the App Review package exists and Ali has not submitted
-    // it. A Publish button here would be the fake button spec 8.2 forbids.
+  it('Facebook Page is approved self-serve, so only the env switch stands between it and direct', () => {
+    // This test asserted TWO handoff reasons until 2026-09-30 - "not approved" and "switched
+    // off" - because Facebook was recorded as `not_submitted`. A real post to the Agent Cory
+    // Page from the stored Page token then returned HTTP 200 with the app unpublished and no
+    // App Review: Standard Access lets an app-role user post to a Page they administer, so
+    // approval was never a gate here. One reason remains, and it names the thing to go and do.
     const caps = getProviderCapabilities('meta_facebook_page');
     expect(caps.supports.publish).toBe(true);
+    expect(caps.appReview.status).toBe('self_serve');
     const mode = decidePublishMode(caps, 'publish');
     expect(mode.mode).toBe('handoff');
     if (mode.mode === 'handoff') {
-      // Two problems with two fixes: submit the app, and switch the connector on. The second
-      // reason changed wording on 2026-09-18, when the Meta adapter landed: it is no longer
-      // "not built" but "built and switched off", which is a different thing to go and do.
-      expect(mode.reasons).toHaveLength(2);
-      expect(mode.reasons[0]).toMatch(/not approved/);
-      expect(mode.reasons[0]).toMatch(/not_submitted/);
-      expect(mode.reasons[1]).toMatch(/built but switched off/);
+      expect(mode.reasons).toHaveLength(1);
+      expect(mode.reasons[0]).toMatch(/built but switched off/);
+      // And it must NOT claim approval is missing, or the fix gets looked for in the wrong place.
+      expect(mode.reasons[0]).not.toMatch(/not approved/);
     }
+  });
+
+  it('Instagram IS still unapproved, and says so - its sibling passing is not evidence', () => {
+    // Instagram publishes through a container/publish flow and needs media; nothing has proved
+    // it end to end. Promoting it because Facebook worked is the inference this guards against.
+    const caps = getProviderCapabilities('meta_instagram');
+    expect(caps.appReview.status).toBe('not_submitted');
+    const mode = decidePublishMode(caps, 'publish');
+    expect(mode.mode).toBe('handoff');
+    if (mode.mode === 'handoff') expect(mode.reasons.some((r) => /not approved/.test(r))).toBe(true);
   });
 
   it('reports BOTH reasons when both apply, as separate problems with separate fixes', () => {

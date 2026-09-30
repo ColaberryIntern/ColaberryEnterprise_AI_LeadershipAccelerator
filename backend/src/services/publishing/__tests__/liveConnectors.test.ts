@@ -42,12 +42,56 @@ it('drops a typo and a provider with no adapter, each with a warning, rather tha
 it('Meta CAN be switched on now that its adapter exists - and is off until someone does', () => {
   const on = liveConnectorsFromEnv({ LIVE_CONNECTORS: 'meta_facebook_page,meta_instagram' });
   expect([...on].sort()).toEqual(['meta_facebook_page', 'meta_instagram']);
-  // Still handoff for Facebook: its app review has not been submitted, which is a separate gate
-  // from the switch. Both must be satisfied.
-  expect(decidePublishMode(getProviderCapabilities('meta_facebook_page'), 'publish', on).mode).toBe('handoff');
+  // Facebook now publishes directly with the switch on. This assertion said `handoff` until
+  // 2026-09-30, when a real post to the Agent Cory Page returned HTTP 200 and a post id with the
+  // app unpublished and no App Review - so approval was never the gate for Pages we administer,
+  // and treating it as one was quietly costing us direct publishing.
+  expect(decidePublishMode(getProviderCapabilities('meta_facebook_page'), 'publish', on).mode).toBe('direct');
+  // Instagram is NOT promoted on its sibling's evidence: different flow, not yet proved.
+  expect(decidePublishMode(getProviderCapabilities('meta_instagram'), 'publish', on).mode).toBe('handoff');
   expect(liveConnectorsFromEnv({}).has('meta_facebook_page')).toBe(false);
 });
 
 it('IMPLEMENTED_CONNECTORS is exactly the set of adapters the registry can build', () => {
   expect([...IMPLEMENTED_CONNECTORS].sort()).toEqual([...LIVE_ADAPTER_KEYS].sort());
+});
+
+
+/**
+ * Meta, after the live check on 2026-09-30.
+ *
+ * A real post to the Agent Cory Page from the stored Page token returned HTTP 200 and a post id
+ * with the app UNPUBLISHED and no App Review submitted - so `not_submitted` was the wrong gate
+ * for Facebook Pages, and it was silently costing us direct publishing while every other part of
+ * the setup was correct. Instagram was NOT proved and is deliberately still gated.
+ */
+describe('Meta publish mode', () => {
+  const on = (keys: string[]) => new Set(keys as never[]);
+
+  it('a Facebook Page publishes directly once the env switch is on', () => {
+    const caps = getProviderCapabilities('meta_facebook_page');
+    expect(caps.appReview.status).toBe('self_serve');
+    expect(decidePublishMode(caps, 'publish', on(['meta_facebook_page'])).mode).toBe('direct');
+  });
+
+  it('and still hands off when the env switch is off - approval alone is not enough', () => {
+    const mode = decidePublishMode(getProviderCapabilities('meta_facebook_page'), 'publish', new Set());
+    expect(mode.mode).toBe('handoff');
+    // The reason must point at the switch, not at approval, or the fix gets looked for in the
+    // wrong place - which is exactly what happened tonight, in reverse.
+    expect(JSON.stringify(mode)).toMatch(/switched off on this server/);
+  });
+
+  it('INSTAGRAM stays handoff, because nothing has proved it', () => {
+    // Its sibling working is not evidence: Instagram publishes through a container/publish flow
+    // and needs media. Promoting it on inference is the failure this asserts against.
+    const caps = getProviderCapabilities('meta_instagram');
+    expect(caps.appReview.status).toBe('not_submitted');
+    expect(decidePublishMode(caps, 'publish', on(['meta_instagram'])).mode).toBe('handoff');
+  });
+
+  it('and says approval is what is missing for Instagram, not the switch', () => {
+    const mode = decidePublishMode(getProviderCapabilities('meta_instagram'), 'publish', on(['meta_instagram']));
+    expect(JSON.stringify(mode)).toMatch(/not approved/);
+  });
 });
