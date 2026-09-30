@@ -2,6 +2,7 @@ import React from 'react';
 import type { Brand } from '../../../../services/adminBrandApi';
 import type { ContentType, Poll } from '../../../../services/contentComposerApi';
 import ComposerPollEditor, { EMPTY_POLL } from './ComposerPollEditor';
+import { blockerSentence, canCreate } from './setupGate';
 
 /**
  * Steps 1, 3 and 4: the choices that fix WHAT is being said and FOR WHOM.
@@ -59,7 +60,8 @@ export default function ComposerSetup({
   const set = <K extends keyof SetupValues>(k: K, v: SetupValues[K]) => onChange({ ...values, [k]: v });
   const visibleCampaigns = campaigns.filter((c) => !values.brand_id || !c.brand_id || c.brand_id === values.brand_id);
   const chosen = campaigns.find((c) => c.id === values.campaign_id);
-  const canSubmit = values.brand_id !== '' && values.title.trim() !== '' && !busy;
+  const canSubmit = canCreate(values, busy);
+  const blocker = blockerSentence(values);
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (canSubmit) onSubmit(); }}>
@@ -108,8 +110,14 @@ export default function ComposerSetup({
           )}
         </div>
         <div className="col-md-6">
-          <label className="form-label small mb-1" htmlFor="composer-title">Title (internal)</label>
-          <input id="composer-title" className="form-control form-control-sm" value={values.title} disabled={busy} maxLength={200} onChange={(e) => set('title', e.target.value)} />
+          <label className="form-label small mb-1" htmlFor="composer-title">
+            Title (internal) <span className="text-danger" aria-hidden="true">*</span>
+            <span className="text-muted ms-1">required</span>
+          </label>
+          {/* Internal only - it never appears in a post, which is exactly why it gets left
+              blank and why the button has to say it is waiting on this. */}
+          <input id="composer-title" className="form-control form-control-sm" value={values.title} disabled={busy} maxLength={200} required aria-required="true" onChange={(e) => set('title', e.target.value)} />
+          <div className="form-text small">Names the post in the queue and the calendar. Not published.</div>
         </div>
         <div className="col-md-6">
           <label className="form-label small mb-1" htmlFor="composer-destination">Landing page (destination for tracked links)</label>
@@ -179,7 +187,12 @@ export default function ComposerSetup({
             <input className="form-check-input" type="checkbox" checked={values.has_offer} disabled={busy} onChange={(e) => set('has_offer', e.target.checked)} />
             <span className="form-check-label ms-1">Contains an offer or price</span>
           </label>
-          <button type="submit" className="btn btn-sm btn-primary ms-auto" disabled={!canSubmit}>{locked ? 'Save changes' : 'Create draft'}</button>
+          {/* A disabled button has to say what would enable it. Same source as `canSubmit`,
+              so the sentence and the button can never disagree. */}
+          {blocker && !busy && (
+            <span className="small text-warning-emphasis ms-auto" data-testid="setup-blocker">{blocker}</span>
+          )}
+          <button type="submit" className={`btn btn-sm btn-primary ${blocker && !busy ? '' : 'ms-auto'}`} disabled={!canSubmit} title={blocker ?? undefined}>{locked ? 'Save changes' : 'Create draft'}</button>
         </div>
       </div>
     </form>
