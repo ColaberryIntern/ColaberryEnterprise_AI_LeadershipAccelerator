@@ -4,6 +4,10 @@ import { act } from 'react-dom/test-utils';
 import AgentWorkV2 from '../AgentWorkV2';
 import { AgentDetail, AgentDetailTicket } from '../../../../services/agentDetailApi';
 
+jest.mock('../../../../services/ticketSummaryApi', () => ({ getTicketSummary: jest.fn() }));
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { getTicketSummary } = require('../../../../services/ticketSummaryApi') as { getTicketSummary: jest.Mock };
+
 // Agent Detail redesign, Track A1 (2026-09-21) — replaces
 // AgentWorkTab.test.tsx (deleted alongside the flat-list component it
 // tested). Ports every real assertion from that file to the new
@@ -63,14 +67,22 @@ function buildDetail(tickets: AgentDetailTicket[]): AgentDetail {
 let container: HTMLDivElement;
 let root: Root;
 
-async function renderTab(tickets: AgentDetailTicket[], onNavigate: (tab: any) => void = () => {}) {
+async function renderTab(
+  tickets: AgentDetailTicket[],
+  onNavigate: (tab: any) => void = () => {},
+  onDraftTalk: (ticket: AgentDetailTicket) => void = () => {},
+) {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => {
-    root.render(<AgentWorkV2 detail={buildDetail(tickets)} onNavigate={onNavigate} />);
+    root.render(<AgentWorkV2 detail={buildDetail(tickets)} onNavigate={onNavigate} onDraftTalk={onDraftTalk} />);
   });
 }
+
+beforeEach(() => {
+  jest.clearAllMocks();
+});
 
 afterEach(() => {
   act(() => { root.unmount(); });
@@ -173,24 +185,94 @@ describe('AgentWorkV2', () => {
     expect(container.textContent).toContain('No due date');
   });
 
-  it('"Explain this decision" navigates to the Decisions tab (never a fake per-ticket explanation)', async () => {
-    const onNavigate = jest.fn();
-    await renderTab([ticket({ id: 't-1', status_bucket: 'overdue' })], onNavigate);
+  // Agent Detail polish round 4 (2026-09-30) — Ali, live: "when I click on
+  // Explain this decision, the results doesn't tell me anything
+  // beneficial." Rewritten (plan-audit cycle 1 finding, this run): no
+  // longer navigates anywhere — fetches and shows the real, ticket-specific
+  // summary inline instead.
+  describe('"Explain this decision" (inline, real per-ticket summary)', () => {
+    async function clickExplain() {
+      const btn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Explain this decision' || b.textContent === 'Hide explanation');
+      await act(async () => { btn!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    }
 
-    const btn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Explain this decision');
-    await act(async () => { btn!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    it('fetches and renders the real Outcome/Proof/Human-action summary, and never calls onNavigate', async () => {
+      getTicketSummary.mockResolvedValue({ outcome: 'Real outcome text.', proof: 'Real proof text.', humanAction: 'Real human action text.', hasEvidence: true });
+      const onNavigate = jest.fn();
+      await renderTab([ticket({ id: 't-1', status_bucket: 'overdue' })], onNavigate);
 
-    expect(onNavigate).toHaveBeenCalledWith('decisions');
+      await clickExplain();
+
+      expect(getTicketSummary).toHaveBeenCalledWith('t-1');
+      expect(container.textContent).toContain('Real outcome text.');
+      expect(container.textContent).toContain('Real proof text.');
+      expect(container.textContent).toContain('Real human action text.');
+      expect(onNavigate).not.toHaveBeenCalled();
+    });
+
+    it('clicking again hides the panel without a second fetch', async () => {
+      getTicketSummary.mockResolvedValue({ outcome: 'O', proof: 'P', humanAction: 'H', hasEvidence: true });
+      await renderTab([ticket({ id: 't-1', status_bucket: 'overdue' })]);
+
+      await clickExplain();
+      expect(getTicketSummary).toHaveBeenCalledTimes(1);
+      await clickExplain();
+      expect(container.textContent).not.toContain('Human action');
+      await clickExplain();
+      expect(getTicketSummary).toHaveBeenCalledTimes(1);
+    });
+
+    it('an error response renders an honest unavailable message, not a crash', async () => {
+      getTicketSummary.mockRejectedValue(new Error('boom'));
+      await renderTab([ticket({ id: 't-1', status_bucket: 'overdue' })]);
+
+      await clickExplain();
+
+      expect(container.textContent).toContain('Summary unavailable right now');
+    });
+
+    it('switching to a different ticket fetches THAT ticket\'s own summary, not a stale one', async () => {
+      getTicketSummary.mockImplementation((id: string) =>
+        Promise.resolve({ outcome: `Outcome for ${id}`, proof: 'P', humanAction: 'H', hasEvidence: true }));
+      await renderTab([
+        ticket({ id: 't-a', title: 'First ticket', status_bucket: 'overdue' }),
+        ticket({ id: 't-b', title: 'Second ticket', status_bucket: 'overdue' }),
+      ]);
+
+      await clickExplain();
+      expect(container.textContent).toContain('Outcome for t-a');
+
+      const secondRow = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Second ticket'));
+      await act(async () => { secondRow!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+
+      // Switching cases closes any open explanation — never carries the
+      // previous ticket's panel/content over.
+      expect(container.textContent).not.toContain('Outcome for t-a');
+
+      await clickExplain();
+      expect(getTicketSummary).toHaveBeenCalledWith('t-b');
+      expect(container.textContent).toContain('Outcome for t-b');
+    });
   });
 
-  it('"Discuss with Reese" navigates to the Talk tab', async () => {
+  // Agent Detail polish round 4 (2026-09-30) — Ali, live: "Discuss with
+  // Reese... should send a message about that case." Confirmed via
+  // AskUserQuestion: pre-fill the draft, never auto-send.
+  it('"Discuss with Reese" drafts a real, ticket-specific message, then navigates to the Talk tab', async () => {
     const onNavigate = jest.fn();
-    await renderTab([ticket({ id: 't-1', status_bucket: 'overdue' })], onNavigate);
+    const onDraftTalk = jest.fn();
+    const t = ticket({ id: 't-1', ticket_number: 7, title: 'Student support case', status: 'in_progress', status_bucket: 'overdue' });
+    await renderTab([t], onNavigate, onDraftTalk);
 
     const btn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Discuss with Reese');
     await act(async () => { btn!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
 
+    expect(onDraftTalk).toHaveBeenCalledWith(t);
     expect(onNavigate).toHaveBeenCalledWith('talk');
+    // Draft happens before the tab switch, matching AgentDetailPage.tsx's own
+    // ordering — the compose box must already have real content by the time
+    // Talk actually renders.
+    expect(onDraftTalk.mock.invocationCallOrder[0]).toBeLessThan(onNavigate.mock.invocationCallOrder[0]);
   });
 
   // Agent Detail polish round 3 (2026-09-29) — Ali, live: "we need a link to
@@ -286,6 +368,36 @@ describe('AgentWorkV2', () => {
 
     const occurrences = container.textContent?.split('Next commitment').length! - 1;
     expect(occurrences).toBe(2); // one list row + one detail view
+  });
+
+  // Agent Detail polish round 4 (2026-09-30) — Ali, live: "next commitment
+  // should show relative time as well. 6 hours ... 2 days etc." Appends to,
+  // never replaces, the existing absolute date.
+  describe('"Next commitment" relative time', () => {
+    it('a future due date 2 days out shows "in 2 days"', async () => {
+      const dueDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+      await renderTab([ticket({ id: 't-1', status_bucket: 'overdue', due_date: dueDate })]);
+      expect(container.textContent).toContain('(in 2 days)');
+    });
+
+    it('a future due date 6 hours out shows "in 6 hours"', async () => {
+      const dueDate = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+      await renderTab([ticket({ id: 't-1', status_bucket: 'overdue', due_date: dueDate })]);
+      expect(container.textContent).toContain('(in 6 hours)');
+    });
+
+    it('an overdue due date shows "N days overdue", never a naive negative count', async () => {
+      const dueDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+      await renderTab([ticket({ id: 't-1', status_bucket: 'overdue', due_date: dueDate })]);
+      expect(container.textContent).toContain('(3 days overdue)');
+      expect(container.textContent).not.toContain('(-3');
+    });
+
+    it('a null due date shows no relative suffix at all — just "No due date"', async () => {
+      await renderTab([ticket({ id: 't-1', status_bucket: 'overdue', due_date: null })]);
+      expect(container.textContent).toContain('No due date');
+      expect(container.textContent).not.toContain('No due date (');
+    });
   });
 
   it('paginates the list to the first 10 tickets by default, with a working "show older" control', async () => {

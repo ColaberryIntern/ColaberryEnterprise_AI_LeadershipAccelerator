@@ -43,6 +43,12 @@ interface Props {
   agentId: string;
   detail: AgentDetail;
   onNavigate: (tab: TabKey) => void;
+  /** Agent Detail polish round 4 (2026-09-30) — a real, ticket-specific
+   * message from the Work tab's "Discuss with Reese" button, pre-filled
+   * into the composer below (never auto-sent). Kept separate from
+   * `onNavigate` deliberately — see AgentDetailPage.tsx's own comment. */
+  initialDraft?: string | null;
+  onDraftConsumed?: () => void;
 }
 
 type ComposerMode = 'ask' | 'direct';
@@ -53,7 +59,7 @@ const QUICK_PROMPTS = [
   'Summarize your recent activity.',
 ];
 
-export default function AgentTalkTab({ agentId, detail, onNavigate }: Props) {
+export default function AgentTalkTab({ agentId, detail, onNavigate, initialDraft, onDraftConsumed }: Props) {
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [conversationLoading, setConversationLoading] = useState(true);
   const [conversationError, setConversationError] = useState<string | null>(null);
@@ -117,6 +123,20 @@ export default function AgentTalkTab({ agentId, detail, onNavigate }: Props) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: 'end' });
   }, [conversation?.messages.length]);
+
+  // Agent Detail polish round 4 (2026-09-30) — Ali, live: "Discuss with
+  // Reese... should send a message about that case." Copies a real,
+  // ticket-specific draft into the composer, resets the mode to 'ask'
+  // (never let a drafted message about a ticket go out as a standing Direct
+  // instruction if the composer was last left in Direct mode), then clears
+  // the parent's one-shot state so leaving and returning to Talk — or
+  // drafting about a different ticket — never repopulates/duplicates it.
+  useEffect(() => {
+    if (!initialDraft) return;
+    setText(initialDraft);
+    setMode('ask');
+    onDraftConsumed?.();
+  }, [initialDraft, onDraftConsumed]);
 
   const activeDirectives = directives.filter((d) => d.status === 'active');
 
