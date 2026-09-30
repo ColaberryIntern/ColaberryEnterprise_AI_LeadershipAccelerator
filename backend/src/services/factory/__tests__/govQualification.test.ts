@@ -14,12 +14,14 @@ jest.mock('../../../models/GovQualification', () => ({
 
 import {
   evaluateRequirements, evaluateEvidenceCoverage, createQualification, recordDecision, approveGovQualification,
+  recordDocumentReview,
   QualificationConflictError, QualificationBlockedError, ChangedSourceError, SourceUnavailableError,
   QualificationNotFoundError, SelfApprovalError, SourceNotApprovableError, EvidenceInsufficientError,
+  DocumentNotListedError,
 } from '../govQualification';
 import {
   CLEAN_CANONICAL, BLOCKING_CANONICAL, UNAVAILABLE_CANONICAL, DEGRADED_CANONICAL, UNRECORDED_CANONICAL,
-  GOV_OPPORTUNITY_FIXTURES,
+  BONFIRE_GATED_CANONICAL, GOV_OPPORTUNITY_FIXTURES,
 } from '../opportunities/govOpportunityFixtures';
 
 beforeEach(() => jest.clearAllMocks());
@@ -294,5 +296,90 @@ describe('approveGovQualification (server-side, source-snapshot bound)', () => {
       (process.env as any).NODE_ENV = prevEnv;
       if (prevBase === undefined) delete process.env.OPPORTUNITY_PULSE_V2_BASE; else process.env.OPPORTUNITY_PULSE_V2_BASE = prevBase;
     }
+  });
+});
+
+// ── Manual Bonfire-ZIP document review (MDR) ──────────────────────────────────
+const BF = GOV_OPPORTUNITY_FIXTURES[BONFIRE_GATED_CANONICAL];
+const someReq = [{ id: 'R1', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement', evidenceRef: { docId: 'X' } }];
+
+describe('evaluateEvidenceCoverage — manual review of Bonfire-gated (listed-but-not-downloaded) docs', () => {
+  it('listed authoritative docs that are NOT downloaded → authoritative_package_unreviewed (not no_authoritative_source)', () => {
+    const c = evaluateEvidenceCoverage(BF, someReq);
+    expect(c.sufficient).toBe(false);
+    expect(c.reasons).toContain('authoritative_package_unreviewed');
+    expect(c.reasons).not.toContain('no_authoritative_source');
+  });
+  it('manual review of the listed solicitation + amendment clears coverage', () => {
+    expect(evaluateEvidenceCoverage(BF, someReq, new Set(['DS1', 'DA1'])).sufficient).toBe(true);
+  });
+  it('covering only some authoritative docs is not enough (amendment still unreviewed)', () => {
+    const c = evaluateEvidenceCoverage(BF, someReq, ['DS1']);
+    expect(c.sufficient).toBe(false);
+    expect(c.reasons).toContain('authoritative_package_unreviewed');
+  });
+  it('a reviewedDocId that is not an authoritative item does not help', () => {
+    expect(evaluateEvidenceCoverage(BF, someReq, ['NOPE']).sufficient).toBe(false);
+  });
+});
+
+describe('recordDocumentReview (attestation, non-weakening + revoke recovery)', () => {
+  const rec = (over: any = {}) => ({ version: 1, status: 'active', tenant_id: 't', bidding_entity: 'colaberry', canonical_opportunity_id: BONFIRE_GATED_CANONICAL, source_snapshot: BF, requirements_json: {}, save: jest.fn().mockResolvedValue(undefined), ...over });
+  const input = (over: any = {}) => ({ canonicalOpportunityId: BONFIRE_GATED_CANONICAL, biddingEntity: 'colaberry', expectedVersion: 1, reviewerIdentityId: 'rev-1', mode: 'add' as const, coveredDocIds: ['DS1', 'DA1'], filename: 'pkg.zip', sha256: 'abc123', sizeBytes: 4096, ...over });
+
+  it('add stores reviewedDocuments (fork) for listed authoritative docIds with sha256 + reviewer + method', async () => {
+    findOne.mockResolvedValue(rec());
+    create.mockImplementation(async (row: any) => ({ ...row, id: 'q2', get: () => ({ ...row, id: 'q2' }) }));
+    const q = await recordDocumentReview(input());
+    const rd = q.requirements_json.reviewedDocuments;
+    expect(rd.map((e: any) => e.docId).sort()).toEqual(['DA1', 'DS1']);
+    expect(rd[0].method).toBe('manual_upload');
+    expect(rd[0].reviewedBy).toBe('rev-1');
+    expect(rd[0].sha256).toBe('abc123');
+  });
+  it('rejects a docId the source did NOT list as authoritative (DocumentNotListedError, no write)', async () => {
+    findOne.mockResolvedValue(rec());
+    await expect(recordDocumentReview(input({ coveredDocIds: ['DS1', 'NOPE'] }))).rejects.toBeInstanceOf(DocumentNotListedError);
+    expect(create).not.toHaveBeenCalled();
+  });
+  it('rejects a non-authoritative attachment docId even if the source listed it', async () => {
+    // BF lists only authoritative docs; use CLEAN's non-authoritative delivery doc via a spliced snapshot.
+    const snap = { ...BF, documents: { ...BF.documents, items: [...BF.documents.items, { docId: 'ATT1', filename: 'a.pdf', role: 'attachment', retrieval: { status: 'failed' } }] } };
+    findOne.mockResolvedValue(rec({ source_snapshot: snap }));
+    await expect(recordDocumentReview(input({ coveredDocIds: ['ATT1'] }))).rejects.toBeInstanceOf(DocumentNotListedError);
+    expect(create).not.toHaveBeenCalled();
+  });
+  it('CAS conflict on a stale expectedVersion', async () => {
+    findOne.mockResolvedValue(rec({ version: 3 }));
+    await expect(recordDocumentReview(input({ expectedVersion: 1 }))).rejects.toBeInstanceOf(QualificationConflictError);
+  });
+  it('revoke removes an attestation (recovery), keeping the others', async () => {
+    findOne.mockResolvedValue(rec({ requirements_json: { reviewedDocuments: [{ docId: 'DS1', role: 'solicitation' }, { docId: 'DA1', role: 'amendment' }] } }));
+    create.mockImplementation(async (row: any) => ({ ...row, id: 'q2', get: () => ({ ...row, id: 'q2' }) }));
+    const q = await recordDocumentReview(input({ mode: 'revoke', coveredDocIds: ['DA1'] }));
+    expect(q.requirements_json.reviewedDocuments.map((e: any) => e.docId)).toEqual(['DS1']);
+  });
+});
+
+describe('approveGovQualification — Bonfire-gated end-to-end (manual review unblocks; non-weakening)', () => {
+  const bfReq = [{ id: 'RE1', text: 'SAM', category: 'registration', applicability: 'always', responsibleParty: 'bidder', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement', evidenceRef: { docId: 'DS1' } }];
+  const base = (over: any = {}) => ({ version: 1, status: 'active', tenant_id: 't', bidding_entity: 'colaberry', canonical_opportunity_id: BONFIRE_GATED_CANONICAL, source_snapshot_version: 2, reviewer_identity_id: 'rev-1', source_snapshot: BF, requirements_json: { established: bfReq }, save: jest.fn().mockResolvedValue(undefined), ...over });
+  const input = (over: any = {}) => ({ canonicalOpportunityId: BONFIRE_GATED_CANONICAL, biddingEntity: 'colaberry', expectedVersion: 1, decision: 'approved_bid_pursuit' as const, approverIdentityId: 'app-2', ...over });
+
+  it('BLOCKS (EvidenceInsufficientError) when the authoritative docs are only LISTED, not reviewed', async () => {
+    findOne.mockResolvedValue(base());
+    await expect(approveGovQualification(input())).rejects.toBeInstanceOf(EvidenceInsufficientError);
+    expect(create).not.toHaveBeenCalled();
+  });
+  it('SUCCEEDS after manual review of the listed solicitation + amendment (through the real resolver)', async () => {
+    findOne.mockResolvedValue(base({ requirements_json: { established: bfReq, reviewedDocuments: [{ docId: 'DS1' }, { docId: 'DA1' }] } }));
+    create.mockImplementation(async (row: any) => ({ ...row, id: 'q2', get: () => ({ ...row, id: 'q2' }) }));
+    const q = await approveGovQualification(input());
+    expect(q.decision).toBe('approved_bid_pursuit');
+  });
+  it('empty established still blocks even with the documents reviewed (non-weakening)', async () => {
+    findOne.mockResolvedValue(base({ requirements_json: { established: [], reviewedDocuments: [{ docId: 'DS1' }, { docId: 'DA1' }] } }));
+    await expect(approveGovQualification(input())).rejects.toBeInstanceOf(EvidenceInsufficientError);
+    expect(create).not.toHaveBeenCalled();
   });
 });

@@ -1,15 +1,19 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import multer from 'multer';
+import crypto from 'crypto';
 import { requireSection } from '../../middlewares/authMiddleware';
 // READ-ONLY, tenant-scoped, fail-closed container resolution (NOT the provisioning helper). Every route scopes
 // to the fixed Government Contracts container's tenant/org; if it is not configured, the route FAILS CLOSED.
 import { lookupGovContractsContainer } from '../../scripts/lib/factoryDemoContainer';
 // The qualification services lazy-load their models inside their functions, so these imports never init the ORM.
 import {
-  createQualification, recordDecision, approveGovQualification, evaluateRequirements, evaluateEvidenceCoverage,
+  createQualification, recordDecision, approveGovQualification, recordDocumentReview,
+  evaluateRequirements, evaluateEvidenceCoverage, reviewedDocIdsFrom,
   QUALIFICATION_DECISIONS, APPROVAL_DECISIONS,
   QualificationConflictError, QualificationBlockedError, ChangedSourceError, SourceUnavailableError,
   QualificationNotFoundError, SelfApprovalError, SourceNotApprovableError, EvidenceInsufficientError,
+  DocumentNotListedError,
 } from '../../services/factory/govQualification';
 import { authorizeBuild, BuildNotAuthorizedError } from '../../services/factory/buildAuthorization';
 import { linkGovOpportunity, AliasProjectNotFoundError, AliasProjectNotGovernmentError, AliasConflictError } from '../../services/factory/opportunities/govOpportunityAlias';
@@ -65,6 +69,7 @@ function mapQualificationError(res: Response, err: any): boolean {
   if (err instanceof ChangedSourceError) { res.status(409).json({ error: err.message, reviewedVersion: err.reviewed, currentVersion: err.current, changedSource: true }); return true; }
   if (err instanceof QualificationBlockedError) { res.status(422).json({ error: err.message, blocking: err.blocking }); return true; }
   if (err instanceof EvidenceInsufficientError) { res.status(422).json({ error: err.message, evidenceInsufficient: true, reasons: err.reasons }); return true; }
+  if (err instanceof DocumentNotListedError) { res.status(422).json({ error: err.message, documentNotListed: true, docIds: err.docIds }); return true; }
   if (err instanceof SourceNotApprovableError) { res.status(409).json({ error: err.message, sourceNotApprovable: true, reason: err.reason }); return true; }
   if (err instanceof SourceUnavailableError) { res.status(503).json({ error: err.message, sourceUnavailable: true }); return true; }
   if (err instanceof SelfApprovalError) { res.status(403).json({ error: err.message }); return true; }
@@ -102,7 +107,7 @@ router.get('/api/admin/factory/qualification/:canonicalOpportunityId', requireSe
     const established = (recordJson && recordJson.requirements_json && recordJson.requirements_json.established)
       || (detail && detail.requirements) || [];
     const evaluation = detail ? evaluateRequirements(established) : null;
-    const coverage = detail ? evaluateEvidenceCoverage(detail, established) : null;
+    const coverage = detail ? evaluateEvidenceCoverage(detail, established, reviewedDocIdsFrom(recordJson)) : null;
 
     const sourcePresent = resolved.state === 'available' || resolved.state === 'degraded' || resolved.state === 'snapshot_unrecorded';
     const sourceApprovable = resolved.state === 'available';
@@ -312,6 +317,61 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/authorize-
     if (err instanceof BuildNotAuthorizedError) { res.status(400).json({ error: err.message, reason: err.reason }); return; }
     logFail('gov_qualification_authorize_build_failed', err, { canonicalOpportunityId });
     res.status(500).json({ error: 'Could not record the build authorization.' });
+  }
+});
+
+// Manual document review upload: in-memory, 100 MB cap. Multer errors (e.g. size) become a 400, not a 500. The
+// ZIP bytes are hashed server-side and discarded — never stored.
+const documentUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
+function uploadDocumentZip(req: Request, res: Response, next: (err?: any) => void): void {
+  documentUpload.single('document')(req as any, res as any, (err: any) => {
+    if (err) { res.status(400).json({ error: 'Upload failed (file too large or malformed).' }); return; }
+    next();
+  });
+}
+
+const reviewDocsBody = z.object({
+  biddingEntity: biddingEntityField,
+  expectedVersion: z.coerce.number().int().min(1),
+  mode: z.enum(['add', 'revoke']),
+  coveredDocIds: z.string().min(2), // JSON-encoded array of docId strings (multipart text field)
+});
+
+/**
+ * POST /api/admin/factory/qualification/:canonicalOpportunityId/review-documents — record (mode 'add') or revoke
+ * (mode 'revoke') a MANUAL document review. For 'add', the reviewer's manually-downloaded Bonfire ZIP is uploaded
+ * (field 'document'); the server computes its sha256 and records an attestation covering the given authoritative
+ * docIds, which then count toward the coverage gate. Non-weakening: recordDocumentReview rejects any docId the
+ * source did not LIST as authoritative (422). Program-gated + tenant-scoped; bytes are never stored or logged.
+ */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/review-documents', requireSection('program'), uploadDocumentZip, async (req: Request, res: Response) => {
+  const p = canonicalParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid canonical opportunity id.' }); return; }
+  const b = reviewDocsBody.safeParse(req.body ?? {});
+  if (!b.success) { res.status(400).json({ error: 'Invalid review-documents body.', issues: b.error.issues }); return; }
+  let coveredDocIds: string[];
+  try {
+    const parsed = JSON.parse(b.data.coveredDocIds);
+    if (!Array.isArray(parsed) || parsed.length === 0 || parsed.some((x) => typeof x !== 'string')) throw new Error('bad');
+    coveredDocIds = parsed;
+  } catch { res.status(400).json({ error: 'coveredDocIds must be a non-empty JSON array of docId strings.' }); return; }
+  const { canonicalOpportunityId } = p.data;
+  const file: any = (req as any).file;
+  if (b.data.mode === 'add' && (!file || !file.buffer)) { res.status(400).json({ error: 'No document file uploaded (field "document").' }); return; }
+  const scope = await scopeOrFail(res, 'gov_qualification_review_documents_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const sha256 = file && file.buffer ? crypto.createHash('sha256').update(file.buffer).digest('hex') : null;
+    const q = await recordDocumentReview({
+      canonicalOpportunityId, biddingEntity: b.data.biddingEntity, expectedVersion: b.data.expectedVersion,
+      reviewerIdentityId: actorIdentity(req), mode: b.data.mode, coveredDocIds,
+      filename: file ? (file.originalname || 'document.zip') : null, sha256, sizeBytes: file ? file.size : null,
+    });
+    res.status(b.data.mode === 'add' ? 201 : 200).json({ qualification: q });
+  } catch (err: any) {
+    if (mapQualificationError(res, err)) return;
+    logFail('gov_qualification_review_documents_failed', err, { canonicalOpportunityId });
+    res.status(500).json({ error: 'Could not record the document review.' });
   }
 });
 

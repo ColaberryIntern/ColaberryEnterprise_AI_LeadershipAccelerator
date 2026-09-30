@@ -139,4 +139,54 @@ describe('AdminGovQualificationPage — journey', () => {
     expect((factoryApi.createGovQualification as jest.Mock).mock.calls.length).toBe(1);
     await act(async () => { resolve({ qualification: { id: 'q1' } }); await Promise.resolve(); });
   });
+
+  // ── Manual document review (Bonfire ZIP) ──
+  const bonfireWs = (over: Partial<GovQualificationWorkspace> = {}): GovQualificationWorkspace => cleanWs({
+    canApprove: false,
+    coverage: { sufficient: false, reasons: ['authoritative_package_unreviewed'] },
+    source: {
+      ...cleanWs().source!,
+      documents: { coverage: 'partial', counts: { listed: 2, downloaded: 0, parsed: 0, inaccessible: 2 }, items: [
+        { docId: 'DS1', filename: 'solicitation.pdf', role: 'solicitation', retrieval: { status: 'listed_only' } },
+        { docId: 'DA1', filename: 'amendment-1.pdf', role: 'amendment', retrieval: { status: 'failed' } },
+      ] },
+    },
+    qualification: { ...cleanWs().qualification!, requirements_json: { established: [], reviewedDocuments: [] } },
+    ...over,
+  });
+
+  it('manual doc review: lists the authoritative docs as "not reviewed" and offers upload', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(bonfireWs());
+    await renderAt(`?canonical=${CANON}`);
+    const text = container.textContent ?? '';
+    expect(text).toContain('Manual document review');
+    expect(text).toContain('solicitation.pdf');
+    expect(text).toContain('not reviewed');
+    expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent?.includes('Upload ZIP'))).toBe(true);
+  });
+
+  it('manual doc review: uploading a ZIP attests the undownloaded authoritative docs (mode add + coveredDocIds)', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(bonfireWs());
+    (factoryApi.reviewGovQualificationDocuments as jest.Mock).mockResolvedValue({ qualification: { id: 'q1' } });
+    await renderAt(`?canonical=${CANON}`);
+    const fileInput = container.querySelector('input[type=file]') as HTMLInputElement;
+    const file = new File(['zip-bytes'], 'pkg.zip', { type: 'application/zip' });
+    Object.defineProperty(fileInput, 'files', { value: [file], configurable: true });
+    await act(async () => { fileInput.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
+    await clickButton('Upload ZIP');
+    const call = (factoryApi.reviewGovQualificationDocuments as jest.Mock).mock.calls[0];
+    expect(call[0]).toBe(CANON);
+    expect(call[1].mode).toBe('add');
+    expect(call[1].coveredDocIds).toEqual(['DS1', 'DA1']);
+    expect(call[1].file).toBeTruthy();
+  });
+
+  it('manual doc review: a reviewed doc shows "manual" + a Revoke control', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(bonfireWs({
+      qualification: { ...cleanWs().qualification!, requirements_json: { established: [], reviewedDocuments: [{ docId: 'DS1', role: 'solicitation', method: 'manual_upload', filename: 'pkg.zip', sha256: 'x', reviewedBy: 'rev', reviewedAt: 't' }] } },
+    }));
+    await renderAt(`?canonical=${CANON}`);
+    expect((container.textContent ?? '')).toContain('manual');
+    expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent === 'Revoke')).toBe(true);
+  });
 });

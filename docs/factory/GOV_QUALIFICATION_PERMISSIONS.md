@@ -165,6 +165,28 @@ The v1 best-fit/bonfire feed exposes no canonical id; a canonical id is NEVER de
 `GET /api/admin/factory/qualification-candidates` (program-gated, tenant-scoped) — trusted v2 candidate list for
 starting a qualification.
 
+### Manual document review (the Bonfire ZIP is downloaded by hand)
+Bonfire gates the solicitation ZIP behind a portal login / bot protection, so OP can LIST the authoritative
+documents (`documents.items[]` with `role` + `retrieval.status`) but cannot download them — they come back
+`listed_only`/`failed` with `accessBarrier: bot_protection`, and the coverage gate correctly blocks
+(`authoritative_package_unreviewed`). The reviewer downloads the ZIP by hand and uploads it to clear that block:
+- **Endpoint:** `POST /api/admin/factory/qualification/:canonicalOpportunityId/review-documents` (program-gated,
+  tenant-scoped, multer ≤100MB). `mode:'add'` uploads the ZIP (field `document`); the server computes its
+  **sha256** and records an attestation `{docId, role, method:'manual_upload', filename, sha256, sizeBytes,
+  reviewedBy, reviewedAt}` in `requirements_json.reviewedDocuments` (the bytes are NEVER stored). `mode:'revoke'`
+  removes an attestation (recovery for an erroneous upload) — no file needed.
+- **Coverage effect:** `evaluateEvidenceCoverage` treats an authoritative item as reviewed when
+  `retrieval.status==='downloaded'` OR its `docId` is in the manual attestation set. Coverage clears when the base
+  solicitation + every amendment are reviewed by one path or the other.
+- **Non-weakening (by construction):** `recordDocumentReview` rejects (`DocumentNotListedError` → 422) any docId
+  the source did not LIST as authoritative — a human cannot invent an authoritative doc or attest a
+  non-authoritative attachment. Manual review clears ONLY the document-coverage sub-check; the established
+  cited-requirements gate, the requirement-blocking gate, reviewer≠approver, CAS, and changed-source all still
+  apply and still run first. The sha256 is server-computed (not client-asserted), reviewer identity + timestamp
+  are recorded, and fork-on-edit keeps the full history (revoke is a new version, never a destructive edit).
+- **Reason semantics:** `no_authoritative_source` is reserved for "OP listed NO authoritative doc"; a listed-but-
+  unreviewed base/amendment is `authoritative_package_unreviewed`.
+
 ### Named deferrals
 Cannot claim LIVE integration (OP PR #3 undeployed; verified against the pinned contract with mocked fetch).
 Rich requirement-authoring UX beyond the minimal cited-requirement form. `?snapshotVersion=` historical fetch
