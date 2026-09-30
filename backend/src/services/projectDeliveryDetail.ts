@@ -145,6 +145,17 @@ export interface GanttTask {
   verified_at: string | null;
   blocked_by: string[];
   narrative: string | null;
+  /**
+   * The requirement ids this story fulfils, straight off the task.
+   *
+   * Ali, 2026-09-29: "I would even like to be able to see the story
+   * requirements if I click on it." This is the traceability the plan already
+   * carries — materializeTasks writes the plan story's `fulfills` onto the row
+   * — and nothing was reading it back out.
+   */
+  fulfills: string[];
+  /** What "done" means for this story, in the plan's own words. */
+  acceptance: string[];
 }
 
 export interface GanttRelease extends ReleaseSummary {
@@ -153,17 +164,59 @@ export interface GanttRelease extends ReleaseSummary {
   tasks: GanttTask[];
 }
 
+/**
+ * REQ id -> statement, from the project's published plan.
+ *
+ * `build_plans` is raw SQL with no Sequelize model (db/ensureSbpSchema.ts owns
+ * the DDL), so this reads it directly and types the result at the call site -
+ * the same allowance planStore.ts documents.
+ *
+ * Fails SOFT: a project with no published plan, or a plan whose JSON will not
+ * parse, yields an empty map rather than an error. The requirement IDS still
+ * render either way, so the worst case is a story showing "REQ-004" without its
+ * sentence, which is what the page showed before this existed.
+ */
+async function loadRequirementStatements(projectId: string): Promise<Record<string, string>> {
+  try {
+    const rows = await sequelize.query<{ plan_json: unknown }>(
+      `SELECT plan_json FROM build_plans
+        WHERE project_id = :projectId AND status = 'published'
+        ORDER BY version DESC LIMIT 1`,
+      { replacements: { projectId }, type: QueryTypes.SELECT }
+    );
+    const plan = rows[0]?.plan_json as { requirements?: Array<{ id?: string; statement?: string }> } | undefined;
+    const out: Record<string, string> = {};
+    for (const r of plan?.requirements ?? []) {
+      if (r?.id && r?.statement) out[r.id] = r.statement;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
 /** One project's tasks as a Gantt, grouped into its release spine, with the readable
  *  release name, its definition of done and its timing story. */
 export async function getProjectGantt(projectId: string): Promise<{
   project_id: string;
   releases: GanttRelease[];
+  /**
+   * REQ id -> its statement, from this project's PUBLISHED plan.
+   *
+   * Carried so a story can show the requirements it fulfils in words rather
+   * than as bare ids: "REQ-004" tells a reviewer nothing, and the statement is
+   * the thing they are checking the story against. Empty for any project
+   * without a published plan - the hand-authored ones, and anything imported
+   * before the pipeline existed - which is why the id list is rendered whether
+   * or not a statement resolves.
+   */
+  requirements: Record<string, string>;
   totals: { tasks: number; complete: number; overdue: number; undated: number } & { timing: TimingRollup };
 }> {
   const [rows, titles] = await Promise.all([
     sequelize.query<any>(
       `SELECT id, title, status, release_key, due_on::text, due_baseline_on::text,
-              verified_at, blocked_by, narrative, build, position
+              verified_at, blocked_by, narrative, fulfills, acceptance, build, position
          FROM student_tasks
         WHERE project_id = :projectId
         ORDER BY release_key NULLS LAST, due_on NULLS LAST, position`,
@@ -199,6 +252,11 @@ export async function getProjectGantt(projectId: string): Promise<{
         verified_at: r.verified_at ? new Date(r.verified_at).toISOString() : null,
         blocked_by: Array.isArray(r.blocked_by) ? r.blocked_by : [],
         narrative: r.narrative ?? null,
+        // JSONB columns: absent on any task written before the plan carried
+        // them, and on anything the manual import path wrote. An empty array is
+        // the honest answer to "which requirements", never a guess.
+        fulfills: Array.isArray(r.fulfills) ? r.fulfills : [],
+        acceptance: Array.isArray(r.acceptance) ? r.acceptance : [],
       };
     });
     const dates = tasks.map((t) => t.due_on).filter((d): d is string => !!d).sort();
@@ -231,6 +289,7 @@ export async function getProjectGantt(projectId: string): Promise<{
   return {
     project_id: projectId,
     releases,
+    requirements: await loadRequirementStatements(projectId),
     totals: {
       tasks: rows.length,
       complete: releases.reduce((n, r) => n + r.complete, 0),
