@@ -14,6 +14,7 @@ const mockGetIntake = jest.fn();
 const mockSaveDraft = jest.fn();
 const mockGetPlan = jest.fn();
 const mockPublishPlan = jest.fn();
+const mockFirstPublishedAt = jest.fn().mockResolvedValue(null);
 const mockWriteDocs = jest.fn();
 const mockRepairCreate = jest.fn();
 const mockMaterialize = jest.fn();
@@ -28,6 +29,10 @@ jest.mock('../planStore', () => ({
   savePlanDraft: (...a: any[]) => mockSaveDraft(...a),
   getPlan: (...a: any[]) => mockGetPlan(...a),
   publishPlan: (...a: any[]) => mockPublishPlan(...a),
+  // The build window is floored on the FIRST publish, so publishBuild asks
+  // for it. Null here means "use this publish", which is what these fixtures
+  // want: a first publish.
+  firstPublishedAt: (...a: any[]) => mockFirstPublishedAt(...a),
 }));
 // `readRepoManifest` is what feeds the content-hash idempotency check. Stubbed
 // to null here — "no manifest in the repo yet", i.e. a first publish — because
