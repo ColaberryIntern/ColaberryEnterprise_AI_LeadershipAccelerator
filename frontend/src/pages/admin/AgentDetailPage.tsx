@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { getAgentDetail, AgentDetail } from '../../services/agentDetailApi';
+import { getAgentDetail, AgentDetail, AgentDetailTicket } from '../../services/agentDetailApi';
 import { getManagerInboxItems, ManagerInboxItem } from '../../services/managerInboxApi';
+import { getTicketStatusLabel } from '../../utils/ticketTypeMeta';
 import { resetAgents, reactivateAgent, AutonomyLevel } from '../../services/workforceOrgChartApi';
 import '../../styles/agentDetailV2.css';
 import { TabKey } from '../../components/admin/agentDetailV2/AgentDetailV2Header';
@@ -172,6 +173,18 @@ export default function AgentDetailPage() {
   // its landing tab, not just Reese's, same disclosed characteristic as
   // Track A0's shell change.
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  // Agent Detail polish round 4 (2026-09-30) — Ali, live: "Discuss with
+  // Reese... should send a message about that case to reese so we can
+  // already start the conversation." Confirmed via AskUserQuestion:
+  // pre-fill the Talk compose box, never auto-send. Kept as its own small,
+  // separate piece of state/prop — never widening the shared
+  // onNavigate: (tab: TabKey) => void signature 25+ other call sites on
+  // this page depend on.
+  const [talkDraft, setTalkDraft] = useState<string | null>(null);
+  const handleDraftTalk = useCallback((ticket: AgentDetailTicket) => {
+    const who = ticket.ticket_number != null ? `ticket #${ticket.ticket_number}` : 'this ticket';
+    setTalkDraft(`Can you catch me up on ${who} — "${ticket.title}"? It's currently ${getTicketStatusLabel(ticket.status)}.`);
+  }, []);
   // Agent Detail polish round 2 (2026-09-29) — Ali, live: clicking a
   // cross-tab link (e.g. Talk's "Inspect work records") switched tabs
   // correctly but landed wherever the window happened to be scrolled,
@@ -346,12 +359,20 @@ export default function AgentDetailPage() {
         <AgentOverviewV2 detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} onNavigate={setActiveTab} />
       )}
       {activeTab === 'work' && (
-        <AgentWorkV2 detail={detail} onNavigate={setActiveTab} />
+        <AgentWorkV2 detail={detail} onNavigate={setActiveTab} onDraftTalk={handleDraftTalk} />
       )}
       {activeTab === 'decisions' && (
         <AgentWorkDecisionsTab agentId={id} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} onInboxChanged={fetchInbox} />
       )}
-      {activeTab === 'talk' && <AgentTalkTab agentId={id} detail={detail} onNavigate={setActiveTab} />}
+      {activeTab === 'talk' && (
+        <AgentTalkTab
+          agentId={id}
+          detail={detail}
+          onNavigate={setActiveTab}
+          initialDraft={talkDraft}
+          onDraftConsumed={() => setTalkDraft(null)}
+        />
+      )}
       {activeTab === 'performance_settings' && (
         <AgentPerformanceSettingsTab agentId={id} detail={detail} onNavigate={setActiveTab} />
       )}

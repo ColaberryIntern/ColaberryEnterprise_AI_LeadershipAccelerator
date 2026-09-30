@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { AgentDetail, AgentDetailTicketStatusBucket } from '../../../services/agentDetailApi';
+import { AgentDetail, AgentDetailTicket, AgentDetailTicketStatusBucket } from '../../../services/agentDetailApi';
 import type { Tone } from '../shell/StatusBadge';
 import AgentWorkV2CaseList from './AgentWorkV2CaseList';
 import AgentWorkV2CaseDetail from './AgentWorkV2CaseDetail';
@@ -28,6 +28,7 @@ import type { TabKey } from './AgentDetailV2Header';
 interface Props {
   detail: AgentDetail;
   onNavigate: (tab: TabKey) => void;
+  onDraftTalk: (ticket: AgentDetailTicket) => void;
 }
 
 type WorkBucketKey = AgentDetailTicketStatusBucket | 'all';
@@ -50,7 +51,7 @@ export const EMPTY_STATE_LABEL: Record<WorkBucketKey, string> = {
 
 const PAGE_SIZE = 10;
 
-export default function AgentWorkV2({ detail, onNavigate }: Props) {
+export default function AgentWorkV2({ detail, onNavigate, onDraftTalk }: Props) {
   const [activeBucket, setActiveBucket] = useState<WorkBucketKey>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Agent Detail polish round 2 (2026-09-29) — Ali, live: "for the tickets,
@@ -120,7 +121,7 @@ export default function AgentWorkV2({ detail, onNavigate }: Props) {
               </button>
             )}
           </div>
-          {selected && <AgentWorkV2CaseDetail ticket={selected} onNavigate={onNavigate} />}
+          {selected && <AgentWorkV2CaseDetail ticket={selected} onNavigate={onNavigate} onDraftTalk={onDraftTalk} />}
         </div>
       )}
     </div>

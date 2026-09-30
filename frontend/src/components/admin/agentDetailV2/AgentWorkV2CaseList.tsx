@@ -25,6 +25,48 @@ export function formatDueDate(dueDate: string | null): string {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+// Agent Detail polish round 4 (2026-09-30) — Ali, live: "next commitment should show relative
+// time as well. 6 hours ... 2 days etc... after the date." Appends to formatDueDate()'s existing
+// absolute date, never replaces it. timeAgo() (shell/trust.ts) cannot be reused here — its
+// Math.max(0, ...) clamp makes every future timestamp read "just now," which is wrong, not just
+// imprecise, for a due date that hasn't arrived yet. Modeled on overviewFormat.ts's expiryPhrase()
+// shape (never render a naive negative count) but takes a real ISO date string, not a
+// pre-computed day count.
+export function relativeDueSuffix(dueDate: string | null): string | null {
+  if (!dueDate) return null;
+  const d = new Date(dueDate);
+  if (Number.isNaN(d.getTime())) return null;
+
+  const diffMs = d.getTime() - Date.now();
+  const diffHours = diffMs / (1000 * 60 * 60);
+
+  if (diffHours < 0) {
+    const overdueHours = Math.abs(diffHours);
+    if (overdueHours < 24) {
+      const h = Math.max(1, Math.round(overdueHours));
+      return `${h} hour${h === 1 ? '' : 's'} overdue`;
+    }
+    const days = Math.round(overdueHours / 24);
+    return `${days} day${days === 1 ? '' : 's'} overdue`;
+  }
+  if (diffHours < 1) return 'due within the hour';
+  if (diffHours < 24) {
+    const h = Math.round(diffHours);
+    return `in ${h} hour${h === 1 ? '' : 's'}`;
+  }
+  const days = Math.round(diffHours / 24);
+  if (days === 1) return 'tomorrow';
+  return `in ${days} days`;
+}
+
+/** `formatDueDate()` plus its relative-time suffix, ready to render — e.g. "Oct 1, 2026 (in 2
+ * days)" or just "No due date" when there's nothing to add a suffix to. */
+export function formatDueDateWithRelative(dueDate: string | null): string {
+  const absolute = formatDueDate(dueDate);
+  const suffix = relativeDueSuffix(dueDate);
+  return suffix ? `${absolute} (${suffix})` : absolute;
+}
+
 interface Props {
   tickets: AgentDetailTicket[];
   selectedId: string | null;
@@ -52,7 +94,7 @@ export default function AgentWorkV2CaseList({ tickets, selectedId, onSelect }: P
               </span>
             </div>
             <strong style={{ display: 'block', margin: '6px 0 2px' }}>{t.title}</strong>
-            <small className="adv2-muted">Next commitment: {formatDueDate(t.due_date)}</small>
+            <small className="adv2-muted">Next commitment: {formatDueDateWithRelative(t.due_date)}</small>
           </button>
         );
       })}

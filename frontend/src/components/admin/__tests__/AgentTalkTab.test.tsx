@@ -156,9 +156,12 @@ afterEach(() => {
 
 const noopNavigate = (_tab: TabKey) => {};
 
-async function renderTab(detail: AgentDetail = buildDetail()) {
+async function renderTab(
+  detail: AgentDetail = buildDetail(),
+  extra: { initialDraft?: string | null; onDraftConsumed?: () => void } = {},
+) {
   await act(async () => {
-    root.render(<AgentTalkTab agentId="agent-1" detail={detail} onNavigate={noopNavigate} />);
+    root.render(<AgentTalkTab agentId="agent-1" detail={detail} onNavigate={noopNavigate} {...extra} />);
     await new Promise((r) => setTimeout(r, 0));
   });
 }
@@ -400,5 +403,47 @@ describe('AgentTalkTab — Shared working context sidebar (Track F)', () => {
     const link = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Inspect work records →')!;
     await act(async () => { link.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
     expect(onNavigate).toHaveBeenCalledWith('work');
+  });
+});
+
+// Agent Detail polish round 4 (2026-09-30) — Ali, live: "Discuss with
+// Reese... should send a message about that case." Confirmed via
+// AskUserQuestion: pre-fill only, never auto-send.
+describe('AgentTalkTab — initialDraft (Work tab "Discuss with Reese")', () => {
+  it('copies a real initialDraft into the composer on mount', async () => {
+    await renderTab(buildDetail(), { initialDraft: 'Can you catch me up on ticket #7 — "Student support case"? It\'s currently In Progress.' });
+
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    expect(textarea.value).toBe('Can you catch me up on ticket #7 — "Student support case"? It\'s currently In Progress.');
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(createDirective).not.toHaveBeenCalled();
+  });
+
+  it('calls onDraftConsumed exactly once after copying the draft', async () => {
+    const onDraftConsumed = jest.fn();
+    await renderTab(buildDetail(), { initialDraft: 'A real draft.', onDraftConsumed });
+    expect(onDraftConsumed).toHaveBeenCalledTimes(1);
+  });
+
+  it('resets the composer to Ask mode even if it was left on Direct', async () => {
+    await renderTab(buildDetail());
+    const directButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Direct')!;
+    await act(async () => { directButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(directButton.className).toContain('adv2-primary');
+
+    // Simulate a fresh mount with a draft arriving (the real path: the Work
+    // tab sets talkDraft, then AgentDetailPage switches activeTab to
+    // 'talk', mounting this component fresh).
+    await act(async () => { root.unmount(); });
+    root = createRoot(container);
+    await renderTab(buildDetail(), { initialDraft: 'Draft about a ticket.' });
+
+    const askButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Ask')!;
+    expect(askButton.className).toContain('adv2-primary');
+  });
+
+  it('never sends the draft automatically — a human must still click Send', async () => {
+    await renderTab(buildDetail(), { initialDraft: 'Draft about a ticket.' });
+    expect(sendMessage).not.toHaveBeenCalled();
   });
 });
