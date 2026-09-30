@@ -40,6 +40,7 @@ import request from 'supertest';
 import govQualificationRoutes from '../govQualificationRoutes';
 import {
   ChangedSourceError, QualificationBlockedError, SourceUnavailableError, SelfApprovalError, QualificationConflictError,
+  SourceNotApprovableError, EvidenceInsufficientError,
 } from '../../../services/factory/govQualification';
 import { BuildNotAuthorizedError } from '../../../services/factory/buildAuthorization';
 import { AliasConflictError } from '../../../services/factory/opportunities/govOpportunityAlias';
@@ -56,7 +57,7 @@ describe('the section gate + tenant scoping', () => {
   it('mounts every route behind requireSection("program") (source-level, route-auth lint)', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'govQualificationRoutes.ts'), 'utf8');
     const routeLines = src.split('\n').filter((l) => /router\.(get|post)\(/.test(l));
-    expect(routeLines.length).toBe(6);
+    expect(routeLines.length).toBe(7);
     // Each route DEFINITION line must carry the section guard (not just somewhere in the file).
     const unguarded = routeLines.filter((l) => !l.includes("requireSection('program')"));
     expect(unguarded).toEqual([]);
@@ -164,6 +165,62 @@ describe('POST approve — exact error mapping', () => {
     approveGovQualification.mockResolvedValue({ id: 'q2', version: 2, decision: 'approved_bid_pursuit' });
     await request(app).post(url).send(body);
     expect(approveGovQualification.mock.calls[0][0].approverIdentityId).toBe('reviewer@test');
+  });
+
+  it('409 on a degraded/unrecorded source (SourceNotApprovableError) with a recoverable reason', async () => {
+    approveGovQualification.mockRejectedValue(new SourceNotApprovableError('degraded'));
+    const res = await request(app).post(url).send(body);
+    expect(res.status).toBe(409);
+    expect(res.body.sourceNotApprovable).toBe(true);
+    expect(res.body.reason).toBe('degraded');
+  });
+
+  it('422 when evidence coverage is insufficient (EvidenceInsufficientError) with reasons', async () => {
+    approveGovQualification.mockRejectedValue(new EvidenceInsufficientError(['no_requirements_established']));
+    const res = await request(app).post(url).send(body);
+    expect(res.status).toBe(422);
+    expect(res.body.evidenceInsufficient).toBe(true);
+    expect(res.body.reasons).toContain('no_requirements_established');
+  });
+});
+
+describe('GET workspace source-state + POST decision established requirements', () => {
+  it('reports the honest sourceState/snapshotRecorded from the resolver', async () => {
+    govQualFindOne.mockResolvedValue(null);
+    const res = await request(app).get(`/api/admin/factory/qualification/${CLEAN_CANONICAL}?biddingEntity=colaberry`);
+    expect(res.status).toBe(200);
+    expect(res.body.sourceState).toBe('available');
+    expect(res.body.snapshotRecorded).toBe(true);
+    expect(res.body.coverage.sufficient).toBe(true);
+  });
+
+  it('passes reviewer-established requirements through to recordDecision', async () => {
+    recordDecision.mockResolvedValue({ id: 'q2', version: 2, decision: 'needs_evidence' });
+    const established = [{ id: 'RE1', text: 'SAM registration', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement', evidenceRef: { docId: 'D1' } }];
+    const res = await request(app).post(`/api/admin/factory/qualification/${CLEAN_CANONICAL}/decision`)
+      .send({ biddingEntity: 'colaberry', expectedVersion: 1, decision: 'needs_evidence', establishedRequirements: established });
+    expect(res.status).toBe(200);
+    expect(recordDecision.mock.calls[0][0].establishedRequirements).toEqual(established);
+  });
+
+  it('400s a malformed established requirement (bad applicability enum)', async () => {
+    const res = await request(app).post(`/api/admin/factory/qualification/${CLEAN_CANONICAL}/decision`)
+      .send({ biddingEntity: 'colaberry', expectedVersion: 1, decision: 'needs_evidence', establishedRequirements: [{ id: 'x', text: 't', applicability: 'maybe', dueStage: 'submission', bindingStatus: 'b' }] });
+    expect(res.status).toBe(400);
+    expect(recordDecision).not.toHaveBeenCalled();
+  });
+
+  it('candidates endpoint surfaces the canonical-mapping GAP when v2 is not configured (no fabricated ids)', async () => {
+    const prev = process.env.OPPORTUNITY_PULSE_V2_BASE; delete process.env.OPPORTUNITY_PULSE_V2_BASE;
+    try {
+      const res = await request(app).get('/api/admin/factory/qualification-candidates');
+      expect(res.status).toBe(200);
+      expect(res.body.available).toBe(false);
+      expect(res.body.reason).toBe('not_configured');
+      expect(res.body.candidates).toEqual([]);
+    } finally {
+      if (prev === undefined) delete process.env.OPPORTUNITY_PULSE_V2_BASE; else process.env.OPPORTUNITY_PULSE_V2_BASE = prev;
+    }
   });
 });
 

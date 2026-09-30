@@ -13,11 +13,14 @@ jest.mock('../../../models/GovQualification', () => ({
 }));
 
 import {
-  evaluateRequirements, createQualification, recordDecision, approveGovQualification,
+  evaluateRequirements, evaluateEvidenceCoverage, createQualification, recordDecision, approveGovQualification,
   QualificationConflictError, QualificationBlockedError, ChangedSourceError, SourceUnavailableError,
-  QualificationNotFoundError, SelfApprovalError,
+  QualificationNotFoundError, SelfApprovalError, SourceNotApprovableError, EvidenceInsufficientError,
 } from '../govQualification';
-import { CLEAN_CANONICAL, BLOCKING_CANONICAL, UNAVAILABLE_CANONICAL, GOV_OPPORTUNITY_FIXTURES } from '../opportunities/govOpportunityFixtures';
+import {
+  CLEAN_CANONICAL, BLOCKING_CANONICAL, UNAVAILABLE_CANONICAL, DEGRADED_CANONICAL, UNRECORDED_CANONICAL,
+  GOV_OPPORTUNITY_FIXTURES,
+} from '../opportunities/govOpportunityFixtures';
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -70,6 +73,47 @@ describe('evaluateRequirements (PURE) — missing evidence never silently passes
   it('the CLEAN fixture is approvable; the BLOCKING fixture is not', () => {
     expect(evaluateRequirements(GOV_OPPORTUNITY_FIXTURES[CLEAN_CANONICAL].requirements).canApproveBid).toBe(true);
     expect(evaluateRequirements(GOV_OPPORTUNITY_FIXTURES[BLOCKING_CANONICAL].requirements).canApproveBid).toBe(false);
+  });
+});
+
+describe('evaluateEvidenceCoverage (PURE) — missing evidence never silently passes', () => {
+  const sol = (status: string) => ({ docId: 'D1', filename: 's.pdf', role: 'solicitation', retrieval: { status } });
+  const amd = (status: string) => ({ docId: 'D2', filename: 'a.pdf', role: 'amendment', retrieval: { status } });
+  const someReq = [{ id: 'R1', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement', evidenceRef: { docId: 'D1' } }];
+
+  it('empty established requirements is insufficient (empty list is NOT "no requirements")', () => {
+    const c = evaluateEvidenceCoverage({ documents: { coverage: 'complete', items: [sol('downloaded')] } }, []);
+    expect(c.sufficient).toBe(false);
+    expect(c.reasons).toContain('no_requirements_established');
+  });
+
+  it('none_published → no_authoritative_source', () => {
+    expect(evaluateEvidenceCoverage({ documents: { coverage: 'none_published', items: [] } }, someReq).reasons).toContain('no_authoritative_source');
+  });
+
+  it('unknown/inaccessible coverage → document_coverage_unknown', () => {
+    expect(evaluateEvidenceCoverage({ documents: { coverage: 'unknown', items: [] } }, someReq).reasons).toContain('document_coverage_unknown');
+    expect(evaluateEvidenceCoverage({ documents: { coverage: 'inaccessible', items: [] } }, someReq).reasons).toContain('document_coverage_unknown');
+  });
+
+  it('complete coverage with the solicitation downloaded is sufficient', () => {
+    expect(evaluateEvidenceCoverage({ documents: { coverage: 'complete', items: [sol('downloaded')] } }, someReq).sufficient).toBe(true);
+  });
+
+  it('PARTIAL is sufficient when the authoritative solicitation + every amendment are downloaded (only non-authoritative attachments inaccessible)', () => {
+    const items = [sol('downloaded'), amd('downloaded'), { docId: 'D3', filename: 'x.pdf', role: 'attachment', retrieval: { status: 'failed' } }];
+    expect(evaluateEvidenceCoverage({ documents: { coverage: 'partial', items } }, someReq).sufficient).toBe(true);
+  });
+
+  it('PARTIAL with an un-downloaded amendment → authoritative_package_unreviewed', () => {
+    const items = [sol('downloaded'), amd('listed_only')];
+    const c = evaluateEvidenceCoverage({ documents: { coverage: 'partial', items } }, someReq);
+    expect(c.sufficient).toBe(false);
+    expect(c.reasons).toContain('authoritative_package_unreviewed');
+  });
+
+  it('coverage claimed complete but NO authoritative item present → no_authoritative_source (fail closed on missing items)', () => {
+    expect(evaluateEvidenceCoverage({ documents: { coverage: 'complete', items: [] } }, someReq).reasons).toContain('no_authoritative_source');
   });
 });
 
@@ -203,5 +247,52 @@ describe('approveGovQualification (server-side, source-snapshot bound)', () => {
     const q = await approveGovQualification(approveInput({ approverIdentityId: 'app-2' }));
     expect(q.reviewer_identity_id).toBe('rev-1');
     expect(q.evidence_json.approvedBy).toBe('app-2');
+  });
+
+  // ── coordinator item #6: server-side source-state gate (UI-bypass, direct-service calls) ──
+  it('refuses a DEGRADED source server-side (SourceNotApprovableError, reason degraded) — even called directly', async () => {
+    findOne.mockResolvedValue(base({ canonical_opportunity_id: DEGRADED_CANONICAL, source_snapshot_version: 2 }));
+    await expect(approveGovQualification(approveInput({ canonicalOpportunityId: DEGRADED_CANONICAL })))
+      .rejects.toMatchObject({ name: 'SourceNotApprovableError', reason: 'degraded' });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('refuses an UNRECORDED snapshot server-side (SourceNotApprovableError, reason snapshot_unrecorded)', async () => {
+    findOne.mockResolvedValue(base({ canonical_opportunity_id: UNRECORDED_CANONICAL, source_snapshot_version: 1 }));
+    await expect(approveGovQualification(approveInput({ canonicalOpportunityId: UNRECORDED_CANONICAL })))
+      .rejects.toBeInstanceOf(SourceNotApprovableError);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('blocks approval when the reviewer established ZERO requirements despite a clean source (EvidenceInsufficientError 422)', async () => {
+    findOne.mockResolvedValue(base({ requirements_json: { established: [] } }));
+    await expect(approveGovQualification(approveInput()))
+      .rejects.toMatchObject({ name: 'EvidenceInsufficientError' });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('APPROVES when the reviewer established a satisfied requirement + coverage is sufficient (uses the established set, not OP\'s)', async () => {
+    const established = [{ id: 'RE1', text: 'SAM registration', category: 'registration', applicability: 'always', responsibleParty: 'bidder', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement', evidenceRef: { docId: 'D1' } }];
+    findOne.mockResolvedValue(base({ requirements_json: { established } }));
+    create.mockImplementation(async (row: any) => ({ ...row, id: 'q2', get: () => ({ ...row, id: 'q2' }) }));
+    const q = await approveGovQualification(approveInput());
+    expect(q.decision).toBe('approved_bid_pursuit');
+    expect(q.requirements_json.established).toEqual(established);
+    expect(q.requirements_json.coverage.sufficient).toBe(true);
+  });
+
+  it('PRODUCTION cannot approve from fixture data — resolver never fixture-falls-back (SourceUnavailableError), even via a direct call', async () => {
+    const prevEnv = process.env.NODE_ENV;
+    const prevBase = process.env.OPPORTUNITY_PULSE_V2_BASE;
+    (process.env as any).NODE_ENV = 'production';
+    delete process.env.OPPORTUNITY_PULSE_V2_BASE; // not configured live
+    try {
+      findOne.mockResolvedValue(base());
+      await expect(approveGovQualification(approveInput())).rejects.toBeInstanceOf(SourceUnavailableError);
+      expect(create).not.toHaveBeenCalled();
+    } finally {
+      (process.env as any).NODE_ENV = prevEnv;
+      if (prevBase === undefined) delete process.env.OPPORTUNITY_PULSE_V2_BASE; else process.env.OPPORTUNITY_PULSE_V2_BASE = prevBase;
+    }
   });
 });

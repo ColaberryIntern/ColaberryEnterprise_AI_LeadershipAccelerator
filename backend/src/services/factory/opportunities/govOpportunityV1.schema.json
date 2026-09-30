@@ -1,0 +1,627 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://colaberry.ai/contracts/gov-opportunity.v1/schema.json",
+  "title": "gov-opportunity.v1",
+  "description": "Source facts and source-evidence assessments for a single government procurement NOTICE, published by Opportunity Pulse for downstream consumers. This contract deliberately carries NO company-specific qualification: bidding entity, capability match, pursuit decision, approval, effort budget and build authorization are owned by the consumer (Enterprise). A notice is the unit of record; several notices may belong to one solicitation family and are linked, never merged.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "sourceSnapshotVersion",
+    "canonicalOpportunityId",
+    "sourceSystem",
+    "sourceRecordId",
+    "publisher",
+    "notice",
+    "deadline",
+    "value",
+    "documents",
+    "requirements",
+    "timestamps",
+    "sourceAssessment",
+    "companyQualification"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "gov-opportunity.v1",
+      "description": "Shape of THIS envelope. Independent of sourceSnapshotVersion, enrichmentVersion and enrichmentHash."
+    },
+    "sourceSnapshotVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Increments whenever the observed SOURCE facts change (new amendment, changed deadline, new documents). Independent of schemaVersion and of any enrichment/model version."
+    },
+
+    "canonicalOpportunityId": {
+      "type": "string",
+      "pattern": "^op:gov:[0-9a-f]{32}$",
+      "description": "Stable OPAQUE identifier minted by Opportunity Pulse. Carries no parseable meaning; never derived from title, solicitation number or URL, because all three change. Stable across re-scrapes and across the source renaming a notice."
+    },
+    "sourceSystem": {
+      "type": "string",
+      "enum": ["opportunity-pulse"],
+      "description": "Publisher of this envelope, not the procurement portal."
+    },
+    "sourceRecordId": {
+      "type": "string",
+      "description": "Primary key in the upstream portal for THIS notice (e.g. SAM noticeId). Opaque; do not parse."
+    },
+    "sourceAliases": {
+      "type": "array",
+      "description": "Every other identifier observed for this same notice. Duplicates are recorded here, NOT merged away: two portal rows for one notice keep both aliases so a consumer can reconcile its own earlier records.",
+      "items": {
+        "type": "object",
+        "required": ["idType", "idValue", "observedAt"],
+        "additionalProperties": false,
+        "properties": {
+          "idType": {
+            "type": "string",
+            "enum": ["source_record_id", "external_id", "portal_url", "legacy_row_id", "other"]
+          },
+          "idValue": { "type": "string" },
+          "observedAt": { "type": "string", "format": "date-time" },
+          "note": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "solicitationFamily": {
+      "type": ["object", "null"],
+      "description": "Links notices that concern the same procurement (e.g. a Sources Sought, then a Solicitation, then an Award). Linking is NOT deduplication: each notice remains its own record. null means no family has been established, which is not the same as 'this notice is unrelated to any other'.",
+      "required": ["familyId", "linkBasis", "confidence"],
+      "additionalProperties": false,
+      "properties": {
+        "familyId": { "type": "string", "pattern": "^opfam:[0-9a-f]{32}$" },
+        "solicitationNumber": {
+          "type": ["string", "null"],
+          "description": "Buyer-assigned number, when published. May be shared by several notices and is NOT a primary key."
+        },
+        "linkBasis": {
+          "type": "string",
+          "enum": ["solicitation_number", "buyer_plus_title", "explicit_source_reference", "manual_review"],
+          "description": "How the link was established. Consumers may weight a manual_review link differently from a heuristic one."
+        },
+        "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+        "memberSourceRecordIds": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "publisher": {
+      "type": "object",
+      "description": "WHERE the notice was seen, WHO is buying, and WHERE a response would go. These are three different things and are kept apart: a courtesy posting is published by one body on behalf of another, and neither need be the submission portal.",
+      "required": ["postingSource", "leadBuyer", "officialSourceUrl", "submissionPortal", "isCourtesyPosting"],
+      "additionalProperties": false,
+      "properties": {
+        "isCourtesyPosting": {
+          "type": "boolean",
+          "description": "True when the posting body is not the lead buyer (e.g. a NASPO courtesy posting on a state portal)."
+        },
+        "postingSource": {
+          "type": "object",
+          "required": ["name", "portal", "url"],
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string" },
+            "portal": { "type": "string", "description": "Portal family, e.g. 'bonfire', 'sam.gov', 'naspo-valuepoint'." },
+            "url": { "type": ["string", "null"], "format": "uri" }
+          }
+        },
+        "leadBuyer": {
+          "type": "object",
+          "required": ["name", "jurisdiction"],
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string" },
+            "office": { "type": ["string", "null"] },
+            "requirementOwner": { "type": ["string", "null"] },
+            "jurisdiction": {
+              "type": "string",
+              "description": "e.g. 'US-federal', 'US-TX', 'US-UT', 'US-OK', 'BS' (ISO-3166 for non-US). Free-form by design: procurement bodies do not map cleanly to one code list."
+            }
+          }
+        },
+        "officialSourceUrl": {
+          "type": ["string", "null"],
+          "format": "uri",
+          "description": "Canonical human-readable page for the notice at the LEAD source."
+        },
+        "submissionPortal": {
+          "type": ["object", "null"],
+          "description": "Where a response is actually lodged. Frequently NOT the posting source. null means not established, NOT 'same as posting source'.",
+          "required": ["name", "url", "evidenceRef"],
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": ["string", "null"] },
+            "url": { "type": ["string", "null"], "format": "uri" },
+            "method": {
+              "type": ["string", "null"],
+              "enum": ["portal_upload", "email", "physical_delivery", "other", null]
+            },
+            "evidenceRef": { "$ref": "#/$defs/evidenceRefOrNull" }
+          }
+        }
+      }
+    },
+
+    "notice": {
+      "type": "object",
+      "description": "Three orthogonal axes. noticeType is the PURPOSE of this posting; procurementType is WHAT would be bought; contractVehicle is the INSTRUMENT it would be bought through. A master agreement is a vehicle, not a notice type. Market research is a notice purpose, not a procurement type. An RFI may describe professional services or mixed future work.",
+      "required": ["noticeType", "procurementType", "contractVehicle"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": ["string", "null"] },
+        "noticeType": {
+          "type": "object",
+          "required": ["value", "isResponseInvited", "isBindingSolicitation"],
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "string",
+              "enum": [
+                "request_for_information",
+                "sources_sought",
+                "presolicitation",
+                "solicitation",
+                "combined_synopsis_solicitation",
+                "amendment",
+                "award_notice",
+                "justification",
+                "special_notice",
+                "courtesy_posting",
+                "unknown"
+              ]
+            },
+            "raw": { "type": ["string", "null"], "description": "Verbatim source label." },
+            "isResponseInvited": {
+              "type": "boolean",
+              "description": "A response is solicited (true for RFI/Sources Sought/solicitation; false for award/justification)."
+            },
+            "isBindingSolicitation": {
+              "type": "boolean",
+              "description": "Responding can lead directly to award. FALSE for every RFI and Sources Sought, regardless of how detailed the attached draft is."
+            },
+            "evidenceRef": { "$ref": "#/$defs/evidenceRefOrNull" }
+          }
+        },
+        "procurementType": {
+          "type": "object",
+          "required": ["value", "basis"],
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "string",
+              "enum": [
+                "professional_services",
+                "custom_development",
+                "existing_product_license",
+                "product_resale",
+                "physical_work",
+                "licensed_profession",
+                "managed_services",
+                "training_services",
+                "mixed",
+                "not_yet_determined",
+                "unknown"
+              ],
+              "description": "What would be bought. 'not_yet_determined' is the correct value for an RFI whose scope is still a draft; 'unknown' means we have not established it."
+            },
+            "components": {
+              "type": "array",
+              "description": "For 'mixed', the constituent types with evidence. An RFI can legitimately be mixed.",
+              "items": {
+                "type": "object",
+                "required": ["value", "evidenceRef"],
+                "additionalProperties": false,
+                "properties": {
+                  "value": { "type": "string" },
+                  "share": { "type": ["string", "null"], "enum": ["primary", "secondary", "minor", null] },
+                  "evidenceRef": { "$ref": "#/$defs/evidenceRef" }
+                }
+              }
+            },
+            "basis": {
+              "type": "string",
+              "enum": ["document", "summary", "title", "not_established"],
+              "description": "Strength of the determination. 'title' is NEVER sufficient for a pursuit decision."
+            },
+            "evidenceRef": { "$ref": "#/$defs/evidenceRefOrNull" }
+          }
+        },
+        "contractVehicle": {
+          "type": "object",
+          "required": ["value"],
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "string",
+              "enum": [
+                "none_yet",
+                "standalone_contract",
+                "idiq",
+                "bpa",
+                "gsa_schedule",
+                "cooperative_master_agreement",
+                "task_order",
+                "grant",
+                "unknown"
+              ]
+            },
+            "programName": { "type": ["string", "null"], "description": "e.g. 'NASPO ValuePoint'." },
+            "obligationsSummary": { "type": ["string", "null"] },
+            "evidenceRef": { "$ref": "#/$defs/evidenceRefOrNull" }
+          }
+        },
+        "selectableLots": {
+          "type": ["array", "null"],
+          "description": "Categories/lots a respondent may select. null = not established. [] = established that there are none.",
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "evidenceRef"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "partialResponsePermitted": { "type": ["boolean", "null"] },
+              "evidenceRef": { "$ref": "#/$defs/evidenceRef" }
+            }
+          }
+        }
+      }
+    },
+
+    "deadline": {
+      "type": "object",
+      "description": "Original text is preserved verbatim and always wins over any derived value. utc is null whenever the instant cannot be established without guessing.",
+      "required": ["originalText", "statedTimezone", "timezoneSource", "utc", "utcConfidence", "conflicts"],
+      "additionalProperties": false,
+      "properties": {
+        "originalText": { "type": ["string", "null"], "description": "Verbatim source text, never normalised." },
+        "wallClock": { "type": ["string", "null"], "description": "Naive local time, no offset, e.g. '2026-10-15T14:00:00'." },
+        "statedTimezone": { "type": ["string", "null"], "description": "Exactly as printed, e.g. 'MDT', 'Central Time', 'Eastern Standard Time', '-04:00'." },
+        "resolvedZone": { "type": ["string", "null"], "description": "IANA zone, when one could be resolved." },
+        "offsetMinutes": { "type": ["integer", "null"] },
+        "timezoneSource": {
+          "type": "string",
+          "enum": ["offset", "abbreviation", "named_zone", "absent", "unresolvable"]
+        },
+        "utc": { "type": ["string", "null"], "format": "date-time" },
+        "utcConfidence": {
+          "type": "string",
+          "enum": ["high", "low", "unknown"],
+          "description": "'high' only when the source supplied an unambiguous offset/abbreviation. 'unknown' REQUIRES utc to be null."
+        },
+        "uncertaintyReason": {
+          "type": ["string", "null"],
+          "enum": ["missing_timezone", "ambiguous_timezone", "dst_ambiguous", "unparseable", "conflicting_sources", null]
+        },
+        "verifiedAt": { "type": ["string", "null"], "format": "date-time" },
+        "conservativePlanningUtc": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "The EARLIEST candidate instant, offered for internal scheduling only when `utc` is null because sources conflict. It is NOT a verified buyer deadline and MUST NOT be presented as one: it is a deliberately pessimistic planning aid. Any consumer displaying it must label it as such and must also surface `conflicts`."
+        },
+        "conflicts": {
+          "type": "array",
+          "description": "Competing deadline values from different sources. NEVER silently resolved. An amended deadline appears here alongside the original.",
+          "items": {
+            "type": "object",
+            "required": ["originalText", "utc", "source", "observedAt"],
+            "additionalProperties": false,
+            "properties": {
+              "originalText": { "type": "string" },
+              "utc": { "type": ["string", "null"], "format": "date-time" },
+              "source": { "type": "string" },
+              "observedAt": { "type": "string", "format": "date-time" },
+              "supersedes": { "type": ["boolean", "null"] },
+              "note": { "type": ["string", "null"] }
+            }
+          }
+        }
+      }
+    },
+
+    "value": {
+      "type": "object",
+      "description": "Published figures and model guesses are kept in separate objects and must never be merged. Neither a ceiling nor an estimate is expected revenue.",
+      "required": ["published", "modelEstimate"],
+      "additionalProperties": false,
+      "properties": {
+        "published": {
+          "type": ["object", "null"],
+          "description": "null means the buyer published no figure. It does NOT mean zero and does NOT license substituting an estimate.",
+          "required": ["amountMinorUnits", "currency", "valueType", "provenance", "evidenceRef"],
+          "additionalProperties": false,
+          "properties": {
+            "amountMinorUnits": {
+              "type": ["integer", "null"],
+              "description": "Integer minor units (USD cents). Explicit to remove the dollars/cents ambiguity; never a float, never a string."
+            },
+            "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+            "valueType": {
+              "type": "string",
+              "enum": ["ceiling", "estimated_by_buyer", "awarded", "annual", "total_contract", "per_unit", "unknown"],
+              "description": "A ceiling is a maximum, not an expectation."
+            },
+            "provenance": {
+              "type": "string",
+              "enum": ["buyer_stated", "historical_award", "derived_from_document", "unknown"]
+            },
+            "evidenceRef": { "$ref": "#/$defs/evidenceRefOrNull" }
+          }
+        },
+        "modelEstimate": {
+          "type": ["object", "null"],
+          "description": "Model output ONLY. Never promoted into `published`, never used as revenue.",
+          "required": ["amountMinorUnits", "currency", "method", "notForRevenuePlanning"],
+          "additionalProperties": false,
+          "properties": {
+            "amountMinorUnits": { "type": ["integer", "null"] },
+            "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+            "method": { "type": "string", "description": "e.g. 'llm-title-inference-v1'." },
+            "generatedAt": { "type": ["string", "null"], "format": "date-time" },
+            "notForRevenuePlanning": { "const": true }
+          }
+        }
+      }
+    },
+
+    "documents": {
+      "type": "object",
+      "required": ["coverage", "counts", "items"],
+      "additionalProperties": false,
+      "properties": {
+        "coverage": {
+          "type": "string",
+          "enum": ["complete", "complete_for_this_notice", "partial", "none_published", "inaccessible", "unknown"],
+          "description": "'none_published' = the source published no documents. 'inaccessible' = documents exist but we could not retrieve them. These are NOT interchangeable."
+        },
+        "accessBarrier": {
+          "type": ["string", "null"],
+          "enum": ["none", "auth_required", "bot_protection", "portal_session_required", "paywall", "source_outage", null]
+        },
+        "counts": {
+          "type": "object",
+          "required": ["listed", "downloaded", "parsed", "inaccessible"],
+          "additionalProperties": false,
+          "properties": {
+            "listed": { "type": "integer", "minimum": 0 },
+            "downloaded": { "type": "integer", "minimum": 0 },
+            "parsed": { "type": "integer", "minimum": 0 },
+            "inaccessible": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["docId", "filename", "role", "retrieval"],
+            "additionalProperties": false,
+            "properties": {
+              "docId": { "type": "string", "description": "Stable within this envelope; evidence locators reference it." },
+              "filename": { "type": "string" },
+              "url": { "type": ["string", "null"], "format": "uri" },
+              "role": {
+                "type": "string",
+                "enum": ["rfi", "draft_pws", "final_pws_sow", "solicitation", "amendment", "attachment", "pricing_sheet", "terms", "other"],
+                "description": "A DRAFT PWS carries no binding obligation. See requirements[].bindingStatus."
+              },
+              "documentVersion": { "type": ["string", "null"], "description": "e.g. 'PWS v2.0'." },
+              "documentDate": { "type": ["string", "null"], "format": "date" },
+              "sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$", "description": "FULL hash, not truncated." },
+              "byteSize": { "type": ["integer", "null"], "minimum": 0 },
+              "mediaType": { "type": ["string", "null"] },
+              "retrieval": {
+                "type": "object",
+                "required": ["status", "method"],
+                "additionalProperties": false,
+                "properties": {
+                  "status": { "type": "string", "enum": ["downloaded", "listed_only", "failed", "not_attempted"] },
+                  "method": { "type": "string", "enum": ["direct_download", "authorized_session", "manual_upload", "api", "none"] },
+                  "retrievedAt": { "type": ["string", "null"], "format": "date-time" },
+                  "failureReason": { "type": ["string", "null"] }
+                }
+              },
+              "extraction": {
+                "type": ["object", "null"],
+                "required": ["status", "method"],
+                "additionalProperties": false,
+                "properties": {
+                  "status": { "type": "string", "enum": ["parsed", "partial", "unreadable_scan", "not_attempted", "failed"] },
+                  "method": { "type": ["string", "null"], "enum": ["docx_xml", "pdf_text", "ocr", "html", "manual", null] },
+                  "reviewedBy": { "type": ["string", "null"], "enum": ["human", "model", "hybrid", null] },
+                  "reviewedAt": { "type": ["string", "null"], "format": "date-time" }
+                }
+              },
+              "supersededByDocId": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "amendments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["amendmentId", "observedAt", "affects"],
+            "additionalProperties": false,
+            "properties": {
+              "amendmentId": { "type": "string" },
+              "number": { "type": ["string", "null"] },
+              "issuedDate": { "type": ["string", "null"], "format": "date" },
+              "observedAt": { "type": "string", "format": "date-time" },
+              "docId": { "type": ["string", "null"] },
+              "affects": {
+                "type": "array",
+                "items": { "type": "string", "enum": ["deadline", "scope", "requirements", "lots", "pricing", "documents", "other"] }
+              },
+              "summary": { "type": ["string", "null"] }
+            }
+          }
+        }
+      }
+    },
+
+    "requirements": {
+      "type": "array",
+      "description": "IMPORTANT: an empty array does NOT mean there are no requirements. It means none have been extracted. documents.coverage tells the consumer whether absence is meaningful.",
+      "items": {
+        "type": "object",
+        "required": ["id", "text", "category", "applicability", "responsibleParty", "dueStage", "bindingStatus", "evidenceRef"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "text": { "type": "string", "description": "Verbatim or closely paraphrased requirement text." },
+          "category": {
+            "type": "string",
+            "enum": ["registration", "certification", "security", "hosting", "accessibility", "personnel", "citizenship", "location", "past_performance", "subcontracting", "insurance", "pricing", "format", "other"]
+          },
+          "applicability": {
+            "type": "string",
+            "enum": ["always", "conditional", "not_applicable", "unknown"],
+            "description": "'unknown' is a first-class state and must be treated as blocking, never as false. 'not_applicable' requires applicabilityEvidenceRef."
+          },
+          "applicabilityNote": { "type": ["string", "null"] },
+          "applicabilityEvidenceRef": {
+            "$ref": "#/$defs/evidenceRefOrNull",
+            "description": "REQUIRED when applicability is 'not_applicable'. An unevidenced not_applicable is how a cert wall gets wrongly dismissed."
+          },
+          "responsibleParty": {
+            "type": "string",
+            "enum": ["bidder", "subcontractor", "product_provider", "government", "shared", "unknown"]
+          },
+          "dueStage": {
+            "type": "string",
+            "enum": ["submission", "award", "delivery", "unknown"]
+          },
+          "bindingStatus": {
+            "type": "string",
+            "enum": [
+              "binding_solicitation_requirement",
+              "mandatory_response_instruction",
+              "draft_future_obligation",
+              "rfi_question",
+              "informational"
+            ],
+            "description": "Keeps four very different things apart: a binding requirement in a live solicitation; a mandatory instruction for responding to THIS notice (e.g. 20-page limit); an obligation in a DRAFT PWS that binds nobody yet; and a question the buyer is merely asking."
+          },
+          "evidenceRef": { "$ref": "#/$defs/evidenceRef" }
+        }
+      }
+    },
+
+    "timestamps": {
+      "type": "object",
+      "description": "Four independent clocks. Conflating them is how stale data looks fresh.",
+      "required": ["sourceObservedAt", "fetchedAt", "enrichedAt", "documentReviewedAt", "lastVerifiedAtSource"],
+      "additionalProperties": false,
+      "properties": {
+        "sourceObservedAt": { "type": ["string", "null"], "format": "date-time", "description": "When the source last showed us this notice." },
+        "fetchedAt": { "type": ["string", "null"], "format": "date-time", "description": "When we last retrieved bytes." },
+        "enrichedAt": { "type": ["string", "null"], "format": "date-time", "description": "When a model last processed it." },
+        "documentReviewedAt": { "type": ["string", "null"], "format": "date-time", "description": "When documents were last actually read." },
+        "lastVerifiedAtSource": { "type": ["string", "null"], "format": "date-time", "description": "When we last confirmed the record against the live source." }
+      }
+    },
+
+    "sourceAssessment": {
+      "type": "object",
+      "description": "Opportunity Pulse's view of the SOURCE ONLY. Never an eligibility or bid decision.",
+      "required": ["relevanceBasis", "isNotEligibilityDetermination"],
+      "additionalProperties": false,
+      "properties": {
+        "serviceCategories": { "type": "array", "items": { "type": "string" } },
+        "relevanceBasis": { "type": "string", "enum": ["document", "summary", "title", "not_assessed"] },
+        "assessedBy": { "type": ["string", "null"] },
+        "method": { "type": ["string", "null"] },
+        "evidenceRefs": { "type": "array", "items": { "$ref": "#/$defs/evidenceRef" } },
+        "isNotEligibilityDetermination": { "const": true },
+        "legacyVerdict": {
+          "type": ["object", "null"],
+          "description": "Historical vet_verdict preserved verbatim with its method and evidence. A procurement-type classification is NOT a universal bid/no-bid decision, and a legacy verdict is not re-derived here.",
+          "required": ["status", "method", "evidence"],
+          "additionalProperties": false,
+          "properties": {
+            "status": { "type": ["string", "null"] },
+            "disqualifier": { "type": ["string", "null"] },
+            "label": { "type": ["string", "null"] },
+            "method": {
+              "type": ["string", "null"],
+              "enum": ["title_regex", "document_deep_vet", "manual", "auto_signal", null],
+              "description": "'title_regex' verdicts are weak evidence and must be surfaced as such."
+            },
+            "evidence": { "type": ["string", "null"], "description": "null means the verdict was asserted without evidence." },
+            "vettedAt": { "type": ["string", "null"], "format": "date-time" },
+            "scope": {
+              "type": ["string", "null"],
+              "enum": ["this_notice", "solicitation_family", null]
+            }
+          }
+        }
+      }
+    },
+
+    "legacy": {
+      "type": ["object", "null"],
+      "description": "Legacy scores are passed through UNCHANGED for existing consumers. They are advisory, title-derived, and must not drive a pursuit decision. They are NOT nulled by this contract; removal is a separate, announced breaking change.",
+      "additionalProperties": false,
+      "properties": {
+        "fitScore": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+        "priorityScore": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+        "enrichmentVersion": { "type": ["integer", "null"] },
+        "enrichmentHash": { "type": ["string", "null"] },
+        "pursuitStatus": {
+          "type": ["string", "null"],
+          "enum": ["none", "pursuing", "declined", "submitted", null],
+          "description": "Workflow state recorded INSIDE Opportunity Pulse by an operator. Exposed for continuity only. It is a historical OP-local action, NOT an authoritative pursuit decision for the consumer — that remains consumer-owned (see companyQualification). A 'declined' here does not oblige the consumer to decline."
+        },
+        "pursuitStatusChangedAt": { "type": ["string", "null"], "format": "date-time" },
+        "deprecation": {
+          "type": ["object", "null"],
+          "required": ["status", "guidance"],
+          "additionalProperties": false,
+          "properties": {
+            "status": { "type": "string", "enum": ["supported", "advisory_only", "deprecated"] },
+            "guidance": { "type": "string" },
+            "earliestRemovalVersion": { "type": ["string", "null"] }
+          }
+        }
+      }
+    },
+
+    "sourceAvailability": {
+      "type": ["object", "null"],
+      "description": "Set when the upstream source could not be reached. The record is then a last-known snapshot, explicitly flagged rather than served as if current.",
+      "required": ["status", "since"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "type": "string", "enum": ["available", "degraded", "unavailable"] },
+        "since": { "type": ["string", "null"], "format": "date-time" },
+        "reason": { "type": ["string", "null"] },
+        "servingLastKnownSnapshot": { "type": ["boolean", "null"] }
+      }
+    },
+
+    "companyQualification": {
+      "type": "null",
+      "description": "ALWAYS null from Opportunity Pulse. Bidding entity, capability match, pursuit decision, approval, effort budget and build authorization are owned by the consumer. Present as an explicit null so the boundary is visible in every payload rather than implied by omission."
+    }
+  },
+
+  "$defs": {
+    "evidenceRef": {
+      "type": "object",
+      "description": "Locator for the evidence behind a claim.",
+      "required": ["docId"],
+      "additionalProperties": false,
+      "properties": {
+        "docId": { "type": "string" },
+        "section": { "type": ["string", "null"] },
+        "page": { "type": ["integer", "null"], "minimum": 1 },
+        "quote": { "type": ["string", "null"], "description": "Short verbatim excerpt." }
+      }
+    },
+    "evidenceRefOrNull": {
+      "oneOf": [
+        { "$ref": "#/$defs/evidenceRef" },
+        { "type": "null" }
+      ]
+    }
+  }
+}

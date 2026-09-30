@@ -1,8 +1,11 @@
 # Government Qualification Workspace — Permission & Authorization Matrix (Phase 2)
 
-**Status:** Phase 2 checkpoint (built + unit-tested; NOT merged, NOT deployed). Source integration is
-fixture-backed — Opportunity Pulse's live `GET /api/v2/gov-opportunities/:id` is not yet wired, so no cross-repo
-integration is claimed. Approvals stay **blocked** whenever the source cannot be confirmed.
+**Status:** Phase 2 completion checkpoint (built + unit-tested; NOT merged, NOT deployed). The live OP v2 detail
+adapter is IMPLEMENTED against the pinned contract (OP PR #3, schema LF sha256 `26ff667e…`) but that PR is
+**undeployed**, so no cross-repo LIVE integration is claimed — the adapter is verified with mocked fetch +
+fixtures. In **production** the adapter uses the live HTTP path and NEVER falls back to fixtures; with no live
+config in production, source resolution fails closed. Approvals stay **blocked** whenever the source is not
+`available`, current, covered, and unblocked. See the "Phase 2 completion update" section at the end.
 
 This document is the human-readable half of the access contract the code enforces. It exists so a reviewer can
 see, in one place, who may do what and where each control lives in code.
@@ -102,6 +105,61 @@ but does **not** block a bid-pursuit approval — a future obligation must not b
 | Build gate | `backend/src/services/factory/buildAuthorization.ts` |
 | Build gate enforcement point | `backend/src/services/factory/factoryGenerationEntry.ts` |
 | Alias mapping | `backend/src/services/factory/opportunities/govOpportunityAlias.ts` |
-| Server-side source fetch (fixture-backed) | `backend/src/services/factory/opportunities/opDetailClient.ts` |
+| Server-side source resolve (live v2 + fixtures) | `backend/src/services/factory/opportunities/opDetailClient.ts` |
+| Pinned schema + Zod boundary validator | `backend/src/services/factory/opportunities/govOpportunityV1.schema.json` + `govOpportunityV1.zod.ts` |
+| Trusted discovery→canonical mapping (v2 list) | `backend/src/services/factory/opportunities/opListClient.ts` |
 | Routes | `backend/src/routes/admin/govQualificationRoutes.ts` |
-| Workspace read view | `frontend/src/pages/admin/AdminGovQualificationPage.tsx` |
+| Workspace + journey UI | `frontend/src/pages/admin/AdminGovQualificationPage.tsx` |
+
+---
+
+## Phase 2 completion update (usable journey + live adapter)
+
+### Evidence-coverage gate (a pursuit approval now needs sufficient, cited evidence)
+Pursuit approval requires BOTH no blocking requirement AND `evaluateEvidenceCoverage(source, established)` sufficient:
+- **Zero established requirements → blocked** (`no_requirements_established`). OP's `requirements[]` is ALWAYS empty
+  (it never synthesises from a title, and the schema says an empty array is not "no requirements"), so the reviewer
+  must establish the applicable, cited requirements (`requirements_json.established`, recorded via `/decision`).
+- Coverage is judged from `documents.items[]`: authoritative = `role ∈ {solicitation, final_pws_sow, amendment}`
+  (a `draft_pws` is not binding), reviewed = `retrieval.status === 'downloaded'`. Sufficient when the base
+  solicitation + **every** amendment are downloaded — so **partial** coverage is not automatically failure (only
+  non-authoritative attachments inaccessible is fine); a missing amendment → `authoritative_package_unreviewed`;
+  `none_published`/no authoritative item → `no_authoritative_source`; `inaccessible`/`unknown` → `document_coverage_unknown`.
+- Submission prerequisites stay separate from delivery/award obligations (the latter are flagged, not blocking).
+
+### Server-side source-state gate (UI-bypass safe — coordinator item #6)
+`approveGovQualification` resolves the source via `resolveGovOpportunityDetail` and enforces, in order:
+CAS 409 → self-approval 403 → **unavailable/auth_failed/malformed → 503** → **degraded OR snapshot-unrecorded →
+`SourceNotApprovableError` 409** → changed-source (honest `meta.sourceSnapshotVersion` ≠ reviewed) 409 →
+evidence-coverage/blocking 422 → fork on the honest snapshot version. A direct `/approve` caller cannot bind an
+approval to non-authoritative source (proven by direct-service tests).
+
+### Production cannot approve from fixture data
+`opDetailClient` returns fixtures ONLY when `env.nodeEnv !== 'production'`. In production it uses the live v2 HTTP
+path (X-API-Key + scope `read:gov_opportunities`, reads `.data`, validates the pinned Zod schema, binds
+`meta.sourceSnapshotVersion`) and NEVER falls back to fixtures; with no live config in production, resolution is
+`unavailable` → approval 503. `OPPORTUNITY_PULSE_V2_BASE` being set is not proof the source is live/authed/
+compatible — the resolver reports the actual state (`available`/`degraded`/`snapshot_unrecorded`/`unavailable`/
+`auth_failed`/`malformed`), surfaced to the UI.
+
+### Canonical id comes only from the trusted producer path
+The v1 best-fit/bonfire feed exposes no canonical id; a canonical id is NEVER derived from a title/integer id.
+`GET /api/admin/factory/qualification-candidates` proxies OP's v2 list (`opListClient`), which carries a real
+`op:gov:<hex>` per item; rows without a valid canonical id are dropped. When v2 is unavailable it returns
+`{ available:false, reason }` and the UI surfaces the gap instead of offering a start.
+
+### Updated error → HTTP status map (additions)
+| Error | Status | Meaning |
+|---|---|---|
+| `EvidenceInsufficientError` | 422 (`evidenceInsufficient`, `reasons[]`) | Document coverage / established requirements insufficient |
+| `SourceNotApprovableError` | 409 (`sourceNotApprovable`, `reason`) | Source present but degraded or snapshot-unrecorded — renew review, not a blind retry |
+
+### New endpoint
+`GET /api/admin/factory/qualification-candidates` (program-gated, tenant-scoped) — trusted v2 candidate list for
+starting a qualification.
+
+### Named deferrals
+Cannot claim LIVE integration (OP PR #3 undeployed; verified against the pinned contract with mocked fetch).
+Rich requirement-authoring UX beyond the minimal cited-requirement form. `?snapshotVersion=` historical fetch
+(current snapshot is bound). The v1 discovery page still lists candidates requiring qualification; the canonical
+"start" flows through the v2 candidate picker.

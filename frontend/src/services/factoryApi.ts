@@ -232,31 +232,95 @@ export interface QualSourceDetail {
   publisher: { leadBuyer: { name: string; jurisdiction: string }; officialSourceUrl: string | null };
   deadline: { originalText: string | null; utc: string | null; utcConfidence: string; conflicts: Array<{ originalText: string; utc: string | null; source: string }> };
   value: { published: { amountMinorUnits: number | null; currency: string; valueType: string } | null; modelEstimate: { amountMinorUnits: number | null; currency: string; notForRevenuePlanning: boolean } | null };
-  documents: { coverage: string; counts: { listed: number; downloaded: number; parsed: number; inaccessible: number } };
+  documents: { coverage: string; counts: { listed: number; downloaded: number; parsed: number; inaccessible: number }; items?: Array<{ docId: string; filename: string; role: string; retrieval: { status: string } }> };
   requirements: Array<{ id: string; text: string; category: string; applicability: string; responsibleParty: string; dueStage: string; bindingStatus: string; evidenceRef?: { docId: string } | null }>;
   sourceAssessment: { legacyVerdict: { status: string | null; method: string | null; evidence: string | null } | null };
   legacy: { fitScore: number | null; priorityScore: number | null; pursuitStatus: string | null };
 }
+export interface QualEvidenceCoverage { sufficient: boolean; reasons: string[]; }
 export interface QualificationRecord {
   id: string; bidding_entity: string; decision: string; version: number;
   rationale: string | null; source_snapshot_version: number | null; reviewer_identity_id: string | null;
+  requirements_json?: { established?: EstablishedRequirement[] } | null;
 }
+/** The resolved, honest source state (mirrors the server gate). */
+export type QualSourceState = 'available' | 'degraded' | 'snapshot_unrecorded' | 'unavailable' | 'auth_failed' | 'malformed';
 export interface GovQualificationWorkspace {
   canonicalOpportunityId: string;
   /** false today: OP's live v2 detail endpoint is not wired, so the source is a labeled fixture. */
   sourceLive: boolean;
+  sourceState: QualSourceState;
+  sourceStateLabel: string;
   sourceAvailable: boolean;
+  sourceSnapshotVersion: number | null;
+  snapshotRecorded: boolean;
   source: QualSourceDetail | null;
   evaluation: QualRequirementsEvaluation | null;
+  coverage: QualEvidenceCoverage | null;
   qualification: QualificationRecord | null;
   changedSource: boolean;
-  /** Server's verdict on whether an approval is currently permitted (no blocking requirement, source unchanged). */
+  /** Server's verdict on whether an approval is currently permitted (source approvable + current + covered + unblocked). */
   canApprove: boolean;
+}
+
+/** A reviewer-established, cited applicable requirement (same shape the server coverage/blocking gate evaluates). */
+export interface EstablishedRequirement {
+  id: string; text: string; category?: string;
+  applicability: 'always' | 'conditional' | 'not_applicable' | 'unknown';
+  applicabilityEvidenceRef?: { docId: string } | null;
+  responsibleParty?: string;
+  dueStage: 'submission' | 'award' | 'delivery' | 'unknown';
+  bindingStatus: string;
+  evidenceRef?: { docId: string } | null;
 }
 
 /** The read-only qualification workspace for one opportunity (source facts + requirement evaluation + record). */
 export async function getGovQualificationWorkspace(canonicalOpportunityId: string, biddingEntity?: string): Promise<GovQualificationWorkspace> {
   const q = biddingEntity ? `?biddingEntity=${encodeURIComponent(biddingEntity)}` : '';
   const { data } = await api.get<GovQualificationWorkspace>(`/api/admin/factory/qualification/${encodeURIComponent(canonicalOpportunityId)}${q}`);
+  return data;
+}
+
+const qUrl = (canonicalOpportunityId: string, suffix = ''): string =>
+  `/api/admin/factory/qualification/${encodeURIComponent(canonicalOpportunityId)}${suffix}`;
+
+/** Open (create) a pending_review qualification, bound server-side to the re-fetched source snapshot. Idempotent. */
+export async function createGovQualification(canonicalOpportunityId: string, body: { biddingEntity: string; deliveryProjectId?: string }): Promise<{ qualification: QualificationRecord }> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId), body);
+  return data;
+}
+
+/** Record a NON-approval decision and/or the reviewer-established cited requirements. */
+export async function recordGovQualificationDecision(canonicalOpportunityId: string, body: {
+  biddingEntity: string; expectedVersion: number; decision: 'pending_review' | 'needs_evidence' | 'no_bid';
+  rationale?: string; establishedRequirements?: EstablishedRequirement[];
+}): Promise<{ qualification: QualificationRecord }> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/decision'), body);
+  return data;
+}
+
+/** Record a pursuit APPROVAL (server-side, source-snapshot bound; approver != reviewer enforced server-side). */
+export async function approveGovQualification(canonicalOpportunityId: string, body: {
+  biddingEntity: string; expectedVersion: number; decision: 'approved_bid_pursuit' | 'rfi_response'; rationale?: string;
+}): Promise<{ qualification: QualificationRecord }> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/approve'), body);
+  return data;
+}
+
+/** Record a SEPARATE build authorization (a pursuit approval is not a build authorization). */
+export async function authorizeGovBuild(canonicalOpportunityId: string, body: {
+  deliveryProjectId: string; scope: string; resourceLimit: string; rationale?: string; govQualificationId?: string;
+}): Promise<{ buildAuthorization: { id: string } }> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/authorize-build'), body);
+  return data;
+}
+
+export interface GovCandidate { canonicalOpportunityId: string; title: string | null; agency: string | null; noticeType: string | null; }
+export interface GovCandidatesResult { available: boolean; reason?: 'not_configured' | 'source_failed'; candidates: GovCandidate[]; sourceLive: boolean; }
+
+/** The TRUSTED discovery→canonical mapping (OP v2 list). When unavailable, `available:false` + reason — the UI
+ *  surfaces the gap and never derives a canonical id from a title. */
+export async function getGovOpportunityCandidates(): Promise<GovCandidatesResult> {
+  const { data } = await api.get<GovCandidatesResult>('/api/admin/factory/qualification-candidates');
   return data;
 }
