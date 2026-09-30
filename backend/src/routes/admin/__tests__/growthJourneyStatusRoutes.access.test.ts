@@ -47,6 +47,17 @@ jest.mock('../../../services/growthJourney/classificationService', () => ({ over
 // This suite mocks `config/env` without one, so the import alone took the whole file from
 // green to "failed to run". The reader is stubbed because this suite tests ACCESS and mount
 // order, not health arithmetic - `journeyHealth.test.ts` owns the numbers.
+// T610: /readiness mounts here too, and its reader reaches the models barrel and
+// config/database the same way the health reader does. Stubbed for the same reason:
+// this suite tests ACCESS and mount order; buildReadiness.test.ts owns the checklist.
+jest.mock('../../../services/growthJourney/readiness/buildReadiness', () => ({
+  buildReadiness: jest.fn().mockResolvedValue({
+    items: [{ key: 'master_flag', ready: false, reason: 'off', next_move: 'turn it on' }],
+    score: { ready: 0, known: 1, unknown: 0, pct: 0 },
+    next_move: 'master_flag',
+    as_of: '2026-09-29T18:00:00.000Z',
+  }),
+}));
 jest.mock('../../../services/growthJourney/health/journeyHealth', () => ({
   buildJourneyHealth: jest.fn().mockResolvedValue({
     receipts: [], stuck_pending_review: { count: 0, over_hours: 72 }, held: { total: 0, by_reason: {} },
@@ -86,6 +97,7 @@ import { pathToSection } from '../../../middlewares/mgmtSectionGate';
 
 const REGISTRY = '/api/admin/growth-journey/status/registry';
 const HEALTH = '/api/admin/growth-journey/status/health';
+const READINESS = '/api/admin/growth-journey/status/readiness';
 const PARTICIPATIONS = '/api/admin/growth-journey/participations';
 const TENANT = '10000000-0000-4000-8000-000000000002';
 const BRAND = '20000000-0000-4000-8000-000000000002';
@@ -311,5 +323,34 @@ describe('T609: /health joins the same always-readable surface, behind the same 
     expect(tooBig.status).toBe(400);
     const ok = await auth(request(a).get(`${HEALTH}?window_hours=48`));
     expect(ok.status).toBe(200);
+  });
+});
+
+describe('T610: /readiness is on the same always-readable surface', () => {
+  it('is reachable with the master flag OFF, which is the whole point of a launch checklist', async () => {
+    const a = app();
+    setMaster(false);
+    const res = await auth(request(a).get(READINESS));
+    expect(res.status).toBe(200);
+    expect(res.body.next_move).toBe('master_flag');
+    expect(res.body.as_of).toBe('2026-09-29T18:00:00.000Z');
+  });
+
+  it('refuses an unauthenticated caller', async () => {
+    const res = await request(app()).get(READINESS);
+    expect(res.status).toBe(401);
+  });
+
+  it('403 for a scoped management role (curriculum)', async () => {
+    const res = await auth(request(app()).get(READINESS), 'curriculum');
+    expect(res.status).toBe(403);
+  });
+
+  it('takes no query parameters, and an unexpected one changes nothing', async () => {
+    // There is no window to choose and no paging: the list is fixed items in a fixed
+    // order. A route that silently accepted a filter would imply otherwise.
+    const res = await auth(request(app()).get(`${READINESS}?window_hours=48&limit=3`));
+    expect(res.status).toBe(200);
+    expect(res.body.items).toHaveLength(1);
   });
 });

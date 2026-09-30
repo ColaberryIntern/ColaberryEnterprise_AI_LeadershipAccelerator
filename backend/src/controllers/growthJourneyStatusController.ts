@@ -4,6 +4,7 @@ import { growthJourneyFlagSummary, resolveGrowthJourneyFlags, type GrowthJourney
 import { GROWTH_JOURNEY_AGENT_ENTRIES } from '../services/agentRegistry/growthJourneyAgents';
 import { terminologyOf, type JourneyTerminology } from '../services/growthJourney/journeyTerminology';
 import { buildJourneyHealth } from '../services/growthJourney/health/journeyHealth';
+import { buildReadiness } from '../services/growthJourney/readiness/buildReadiness';
 import { logReadFailure } from './growthJourneyController';
 import { z } from 'zod';
 
@@ -178,5 +179,25 @@ export async function getJourneyHealthHandler(req: Request, res: Response): Prom
   } catch (err) {
     const errorClass = logReadFailure(req, err, 'journey_health_read_failed');
     res.status(500).json({ error: 'Journey health read failed', error_class: errorClass });
+  }
+}
+
+/**
+ * `GET /api/admin/growth-journey/status/readiness` (Phase 6, T610).
+ *
+ * The ordered launch checklist, behind the same always-readable guard as the
+ * registry and the health report. This is the route with the strongest claim to
+ * being readable while the flags are off: every item on the list is a condition
+ * for turning them ON, so a checklist that required them on would be useless.
+ *
+ * It takes no query parameters. There is no window to choose and no paging: the
+ * list is seventeen fixed items in a fixed order, and the order IS the product.
+ */
+export async function getJourneyReadinessHandler(req: Request, res: Response): Promise<void> {
+  try {
+    res.json(await buildReadiness({ now: new Date() }));
+  } catch (err) {
+    const errorClass = logReadFailure(req, err, 'journey_readiness_read_failed');
+    res.status(500).json({ error: 'Journey readiness read failed', error_class: errorClass });
   }
 }

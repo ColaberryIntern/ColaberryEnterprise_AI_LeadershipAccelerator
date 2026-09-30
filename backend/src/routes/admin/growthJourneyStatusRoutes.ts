@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
-import { getJourneyHealthHandler, getStatusRegistryHandler } from '../../controllers/growthJourneyStatusController';
+import { getJourneyHealthHandler, getJourneyReadinessHandler, getStatusRegistryHandler } from '../../controllers/growthJourneyStatusController';
 
 /**
  * The Growth Journey's always-readable status surface (Phase 6, T604).
@@ -29,13 +29,14 @@ import { getJourneyHealthHandler, getStatusRegistryHandler } from '../../control
  * platform's own configuration (see the controller's header for the rule about
  * what may and may not appear in the response).
  *
- * ─── WHAT HAS JOINED IT, AND WHAT STILL WILL ────────────────────────────────
+ * ─── ALL THREE READS ARE MOUNTED, FOR THE SAME REASON ───────────────────────
  *
  * `GET /health` (T609) is mounted here now, for the same reason and behind the
  * same guard: a health verdict that only appears once the system is live would
- * answer the question too late. `GET /readiness` (T610) joins it next, on the
- * same argument. They are separate tasks, so each mounts when it is built
- * rather than as a placeholder that returns nothing.
+ * answer the question too late. `GET /readiness` (T610) is mounted here too,
+ * on the same argument and with the strongest claim of the three: every item on
+ * its checklist is a condition for turning the flags ON, so a readiness list that
+ * required them on would answer the question too late to be of any use.
  */
 
 const router = Router();
@@ -45,5 +46,6 @@ router.use(BASE, requireAdmin);
 
 router.get(`${BASE}/registry`, getStatusRegistryHandler);
 router.get(`${BASE}/health`, getJourneyHealthHandler);
+router.get(`${BASE}/readiness`, getJourneyReadinessHandler);
 
 export default router;
