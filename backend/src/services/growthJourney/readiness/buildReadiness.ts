@@ -10,6 +10,8 @@ import {
   SystemSetting,
   TenantMembership,
 } from '../../../models';
+import type { CampaignApprovalStatus } from '../../../models/Campaign';
+import type { GrowthJourneyOwnerQueue } from '../../../models/GrowthJourneyHandoff';
 import {
   isGrowthJourneyCapabilityEnabled,
   resolveGrowthJourneyFlags,
@@ -112,8 +114,50 @@ export interface Readiness {
   as_of: string;
 }
 
-/** The two queues the plan requires staffed before launch. */
-export const REQUIRED_QUEUES: readonly string[] = ['sales', 'solution_architect'];
+/** A reason or next_move is authored text; nothing authored here comes close to this. */
+export const FIELD_CAP = 200;
+
+/**
+ * One field, scrubbed to the bar this phase actually sets.
+ *
+ * It lives HERE rather than in the CLI because there are two serving surfaces - the CLI
+ * and `GET /status/readiness` - and the contract's bar is specifically "`@` anywhere in a
+ * JSON response of a NEW ROUTE fails the phase". The first version scrubbed only in the
+ * CLI, so the route met the bar transitively, through the reader never producing an `@`.
+ * That is true today (every reason here is authored text, a code constant or a `.length`)
+ * but it is an argument, not a guard, and the route is the surface the contract names.
+ *
+ * `redactForLogs` is the WRONG tool and the CLI's first version used it: its email pattern
+ * captures the `@` as part of the domain group, so `someone@example.com` becomes
+ * `s***@example.com` - masked local part, `@` intact. This follows `safeField`'s rule
+ * instead (an `@` replaces the whole value) plus a cap, because the `@` rule alone would
+ * not catch a long row value with no address in it.
+ */
+export function scrubField(t: string): string {
+  if (t.includes('@')) return 'redacted - the value carried an address';
+  return t.length > FIELD_CAP ? `${t.slice(0, FIELD_CAP)}...` : t;
+}
+
+/** Applied per field, never to a serialised document. */
+export function scrubItem(i: ReadinessItem): ReadinessItem {
+  return { ...i, reason: scrubField(i.reason), next_move: scrubField(i.next_move) };
+}
+
+/** The report as it may be SERVED: every item's two free-text fields scrubbed. */
+export function scrubReadiness(r: Readiness): Readiness {
+  return { ...r, items: r.items.map(scrubItem) };
+}
+
+/**
+ * The two queues the plan requires staffed before launch.
+ *
+ * `as const satisfies` rather than `readonly string[]`: a plain string array accepts
+ * `'solution_architct'` and the item then answers wrong forever, silently. Pinned to the
+ * union, a typo is a compile error. This is the repo's own pattern -
+ * `schemas/growthJourneySchema.ts:102` does the same for the full queue list - and
+ * CLAUDE.md's rule is that a contract which can change without a test failing is too weak.
+ */
+export const REQUIRED_QUEUES = ['sales', 'solution_architect'] as const satisfies readonly GrowthJourneyOwnerQueue[];
 
 /** The three indexes T602 added to `event_ledger`, by name, checked against `pg_indexes`. */
 export const LEDGER_INDEXES: readonly string[] = [
@@ -125,10 +169,32 @@ export const LEDGER_INDEXES: readonly string[] = [
 export const KILL_SWITCH_SETTING_KEY = 'system_kill_switch';
 
 /** The `approval_status` values that mean a human has signed the campaign off. */
-export const APPROVED_ENOUGH: ReadonlySet<string> = new Set(['approved', 'live']);
+export const APPROVED_CAMPAIGN_STATUSES = ['approved', 'live'] as const satisfies readonly CampaignApprovalStatus[];
+export const APPROVED_ENOUGH: ReadonlySet<string> = new Set<string>(APPROVED_CAMPAIGN_STATUSES);
 
-const SHADOW_AGENT = 'GrowthJourneyShadowDecisions';
-const EXECUTOR_AGENT = 'GrowthJourneyExecutor';
+/**
+ * The rule status the CONTENT GATE requires, mirroring `contentEligibility.ts`'s
+ * `ALLOWED_RULE_STATUS`. Named here so the readiness count and the decision-time refusal
+ * cannot drift apart silently.
+ */
+export const APPROVED_RULE_STATUS = 'approved';
+
+/**
+ * The two agent names, taken FROM the registry rather than retyped.
+ *
+ * An earlier version imported `GROWTH_JOURNEY_AGENT_ENTRIES` and then hard-coded both
+ * strings anyway - a dead import, and it made the claim that this reader reuses the agent
+ * registry untrue. Deriving them means a rename in the registry cannot leave this file
+ * checking an agent that no longer exists; it throws at load instead, which is the loud
+ * failure rather than a permanently false checklist line.
+ */
+const agentName = (needle: string): string => {
+  const found = GROWTH_JOURNEY_AGENT_ENTRIES.find((e) => e.agent_name.includes(needle));
+  if (!found) throw new Error(`no journey agent matching ${needle} in GROWTH_JOURNEY_AGENT_ENTRIES`);
+  return found.agent_name;
+};
+const SHADOW_AGENT = agentName('ShadowDecisions');
+const EXECUTOR_AGENT = agentName('Executor');
 
 const item = (key: ReadinessKey, ready: boolean | null, reason: string, next_move: string): ReadinessItem => ({
   key,
@@ -270,14 +336,19 @@ export async function buildReadiness(args: { now: Date; flags?: GrowthJourneyFla
   const learnerBrands = await learnerBrandIds();
   const withRules: string[] = [];
   for (const brandId of learnerBrands) {
-    const n = await GrowthJourneyContentRule.count({ where: { brand_id: brandId } });
+    // APPROVED, not merely present. `contentEligibility.ts:251` refuses any rule whose
+    // `approval_status !== 'approved'` and the column defaults to 'draft' - so counting rows
+    // regardless of status reported a brand READY while every content decision for it would
+    // be refused. The first version did exactly that, and its own `next_move` already said
+    // "approved": the bar was set in prose and never in the query.
+    const n = await GrowthJourneyContentRule.count({ where: { brand_id: brandId, approval_status: APPROVED_RULE_STATUS } });
     if (n > 0) withRules.push(brandId);
   }
   const rulesReady = learnerBrands.length > 0 && withRules.length === learnerBrands.length;
   items.push(item('content_rules', rulesReady,
     learnerBrands.length === 0
       ? 'no learner programme exists, so no brand needs content rules yet'
-      : `${withRules.length} of ${learnerBrands.length} learner brand(s) have at least one content rule`,
+      : `${withRules.length} of ${learnerBrands.length} learner brand(s) have at least one APPROVED content rule`,
     'add at least one approved content rule per learner brand'));
 
   const policies = await GrowthJourneyPolicy.findAll({
@@ -298,7 +369,7 @@ export async function buildReadiness(args: { now: Date; flags?: GrowthJourneyFla
   items.push(capabilityItem('handoffs_flag', 'journeyHandoffs', flags, 'handoffs',
     'no decision materialises a ticket', 'GROWTH_JOURNEY_HANDOFFS_ENABLED'));
   items.push(capabilityItem('execution_flag', 'journeyExecution', flags, 'execution',
-    'the executor skips every run', 'GROWTH_JOURNEY_EXECUTION_ENABLED (ALI ONLY)'));
+    'the executor skips every run', 'GROWTH_JOURNEY_EXECUTION_ENABLED'));
 
   const executor = await agentEnabled(EXECUTOR_AGENT);
   items.push(item('executor_enabled', executor === true,
@@ -310,7 +381,7 @@ export async function buildReadiness(args: { now: Date; flags?: GrowthJourneyFla
   const killOff = kill !== null && killValue !== true && String(killValue) !== 'true';
   items.push(item('kill_switch_row', kill === null ? false : killOff,
     kill === null
-      ? `no ${KILL_SWITCH_SETTING_KEY} row exists - the readers fail closed, which is safe but means the switch cannot be turned off`
+      ? `no ${KILL_SWITCH_SETTING_KEY} row exists - both readers infer OFF from an absent row, so nothing is blocked today, but off and never-set are indistinguishable until the row exists`
       : killOff ? 'the kill switch row exists and is off' : 'the kill switch is ON, so every outbound agent is disabled',
     `ensure a ${KILL_SWITCH_SETTING_KEY} setting row exists with value false`));
 

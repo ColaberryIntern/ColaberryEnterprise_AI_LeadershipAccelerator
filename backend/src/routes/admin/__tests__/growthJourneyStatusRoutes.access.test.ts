@@ -50,6 +50,12 @@ jest.mock('../../../services/growthJourney/classificationService', () => ({ over
 // T610: /readiness mounts here too, and its reader reaches the models barrel and
 // config/database the same way the health reader does. Stubbed for the same reason:
 // this suite tests ACCESS and mount order; buildReadiness.test.ts owns the checklist.
+// `scrubReadiness` is stubbed as IDENTITY here, not re-implemented: duplicating scrub logic
+// in a mock is how a mock ends up proving itself. The real function is exercised by unit
+// cells in buildReadiness.test.ts, and the fact that the CONTROLLER calls it is asserted
+// against the controller's source at the bottom of this file. requireActual is not an
+// option - the real module reaches config/database, and a real Sequelize with no
+// databaseUrl is what took this whole suite from green to "failed to run" once already.
 jest.mock('../../../services/growthJourney/readiness/buildReadiness', () => ({
   buildReadiness: jest.fn().mockResolvedValue({
     items: [{ key: 'master_flag', ready: false, reason: 'off', next_move: 'turn it on' }],
@@ -57,6 +63,7 @@ jest.mock('../../../services/growthJourney/readiness/buildReadiness', () => ({
     next_move: 'master_flag',
     as_of: '2026-09-29T18:00:00.000Z',
   }),
+  scrubReadiness: <T,>(r: T): T => r,
 }));
 jest.mock('../../../services/growthJourney/health/journeyHealth', () => ({
   buildJourneyHealth: jest.fn().mockResolvedValue({
@@ -352,5 +359,19 @@ describe('T610: /readiness is on the same always-readable surface', () => {
     const res = await auth(request(app()).get(`${READINESS}?window_hours=48&limit=3`));
     expect(res.status).toBe(200);
     expect(res.body.items).toHaveLength(1);
+  });
+});
+
+describe('T610: the readiness route scrubs on the way out', () => {
+  it('the controller passes the report through scrubReadiness, asserted against its source', () => {
+    // A unit test of the handler cannot see this, because the mock above is identity; and
+    // the contract's bar is "`@` anywhere in a JSON response of a NEW ROUTE fails the
+    // phase", so the route must scrub rather than inherit the reader's good behaviour.
+    const source = fs.readFileSync(
+      path.join(__dirname, '..', '..', '..', 'controllers', 'growthJourneyStatusController.ts'),
+      'utf8',
+    ).replace(/\r\n/g, '\n');
+    expect(source).toContain('scrubReadiness(await buildReadiness(');
+    expect(source).toContain("import { buildReadiness, scrubReadiness } from '../services/growthJourney/readiness/buildReadiness';");
   });
 });

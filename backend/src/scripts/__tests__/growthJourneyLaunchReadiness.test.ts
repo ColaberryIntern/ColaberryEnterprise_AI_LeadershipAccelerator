@@ -7,7 +7,10 @@
  */
 
 const buildReadiness = jest.fn();
+// Only `buildReadiness` is stubbed. The scrubbers come from the REAL module, so the
+// no-`@` cells below exercise the actual scrubber rather than a stub that might not scrub.
 jest.mock('../../services/growthJourney/readiness/buildReadiness', () => ({
+  ...jest.requireActual('../../services/growthJourney/readiness/buildReadiness'),
   buildReadiness: (...a: unknown[]) => buildReadiness(...a),
 }));
 

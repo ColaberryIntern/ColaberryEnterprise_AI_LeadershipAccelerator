@@ -4,7 +4,7 @@ import { growthJourneyFlagSummary, resolveGrowthJourneyFlags, type GrowthJourney
 import { GROWTH_JOURNEY_AGENT_ENTRIES } from '../services/agentRegistry/growthJourneyAgents';
 import { terminologyOf, type JourneyTerminology } from '../services/growthJourney/journeyTerminology';
 import { buildJourneyHealth } from '../services/growthJourney/health/journeyHealth';
-import { buildReadiness } from '../services/growthJourney/readiness/buildReadiness';
+import { buildReadiness, scrubReadiness } from '../services/growthJourney/readiness/buildReadiness';
 import { logReadFailure } from './growthJourneyController';
 import { z } from 'zod';
 
@@ -195,7 +195,11 @@ export async function getJourneyHealthHandler(req: Request, res: Response): Prom
  */
 export async function getJourneyReadinessHandler(req: Request, res: Response): Promise<void> {
   try {
-    res.json(await buildReadiness({ now: new Date() }));
+    // Scrubbed on the way out. Every reason this reader produces is authored text, so
+    // nothing is redacted today - but the contract's bar is "`@` anywhere in a JSON
+    // response of a new route fails the phase", and meeting it through an argument about
+    // the reader rather than a guard on the route is how that bar gets missed later.
+    res.json(scrubReadiness(await buildReadiness({ now: new Date() })));
   } catch (err) {
     const errorClass = logReadFailure(req, err, 'journey_readiness_read_failed');
     res.status(500).json({ error: 'Journey readiness read failed', error_class: errorClass });

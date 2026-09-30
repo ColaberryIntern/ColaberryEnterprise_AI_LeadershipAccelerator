@@ -31,7 +31,21 @@ jest.mock('../../../../models', () => ({
 }));
 
 import { ALI_OUTREACH_CAMPAIGN_KEY, EXPLORER_CAMPAIGN_KEYS, FLOW_CAMPAIGN_KEYS } from '../../execution/campaignKeys';
-import { buildReadiness, LEDGER_INDEXES, REQUIRED_QUEUES, scoreOf, type ReadinessKey } from '../buildReadiness';
+import fs from 'fs';
+import path from 'path';
+
+import { GROWTH_JOURNEY_AGENT_ENTRIES } from '../../../agentRegistry/growthJourneyAgents';
+import {
+  APPROVED_RULE_STATUS,
+  buildReadiness,
+  FIELD_CAP,
+  LEDGER_INDEXES,
+  REQUIRED_QUEUES,
+  scoreOf,
+  scrubField,
+  scrubReadiness,
+  type ReadinessKey,
+} from '../buildReadiness';
 
 const NOW = new Date('2026-09-29T18:00:00.000Z');
 const row = (o: Record<string, unknown>) => ({ get: (k: string) => o[k] });
@@ -121,13 +135,20 @@ describe('world 1: nothing done', () => {
     expect(r.items.find((i) => i.key === 'content_rules')!.reason).not.toContain('0 of 0');
   });
 
-  it('a missing kill-switch ROW is not ready, and says why that is different from the switch being on', async () => {
+  it('a missing kill-switch ROW is not ready, and the reason says an absent row reads as OFF', async () => {
     worldAllOff();
     const r = await buildReadiness({ now: NOW, flags: FLAGS_OFF });
     const k = r.items.find((i) => i.key === 'kill_switch_row')!;
     expect(k.ready).toBe(false);
     expect(k.reason).toContain('no system_kill_switch row exists');
-    expect(k.reason).toContain('fail closed');
+    // The first version said "the readers fail closed, which is safe". That is BACKWARDS:
+    // `system_kill_switch` is not in settingsService's DEFAULTS, so `getSetting` returns
+    // null and both readers answer false - permissive, not fail-closed. launchSafety.ts's
+    // own header says so, and says a readiness check "could not tell off from never set",
+    // which is this exact item. The verdict was always right; the sentence was inverted.
+    expect(k.reason).toContain('infer OFF from an absent row');
+    expect(k.reason).toContain('indistinguishable');
+    expect(k.reason).not.toContain('fail closed');
   });
 
   it('every item carries a non-empty reason AND a non-empty next_move, blocked or not (the plan\'s M1)', async () => {
@@ -179,7 +200,7 @@ describe('world 2: the Phase 4 moves are done', () => {
     const r = await buildReadiness({ now: NOW, flags: FLAGS_ON });
     const c = r.items.find((i) => i.key === 'content_rules')!;
     expect(c.ready).toBe(false);
-    expect(c.reason).toBe('1 of 2 learner brand(s) have at least one content rule');
+    expect(c.reason).toBe('1 of 2 learner brand(s) have at least one APPROVED content rule');
   });
 
   it('a missing ledger index is named, from pg_indexes rather than from a file', async () => {
@@ -248,6 +269,51 @@ describe('world 3: ready', () => {
     const e = r.items.find((i) => i.key === 'explorer_campaigns')!;
     expect(e.ready).toBe(false);
     expect(e.reason).toBe(`0 of ${EXPLORER_CAMPAIGN_KEYS.length} Explorer campaigns are stamped, approved and active (${EXPLORER_CAMPAIGN_KEYS.length} exist)`);
+  });
+});
+
+describe('the two items that answered wrongly on a real database', () => {
+  it('a learner brand whose rules are all DRAFT is BLOCKED, and the count query says approved', async () => {
+    // The bug: the count ignored `approval_status` while `contentEligibility.ts:251`
+    // refuses any rule that is not 'approved' - and the column defaults to 'draft'. So a
+    // brand with nothing but drafts read READY while every content decision for it would
+    // be refused. The item's own next_move already said "approved".
+    worldPhase4Done();
+    contentRuleCount.mockResolvedValue(0); // no APPROVED rules, whatever else exists
+    const r = await buildReadiness({ now: NOW, flags: FLAGS_ON });
+    expect(byKey(r.items).content_rules).toBe(false);
+
+    // and the predicate is the point, not just the answer
+    const where = contentRuleCount.mock.calls[0][0].where;
+    expect(where.approval_status).toBe('approved');
+    expect(where.brand_id).toBe('b-cpn');
+  });
+
+  it('the rule status this reader requires is the one the content gate enforces', () => {
+    // If these two ever drift, the checklist and the decision path disagree about what
+    // "ready" means. contentEligibility.ts's ALLOWED_RULE_STATUS is 'approved'.
+    expect(APPROVED_RULE_STATUS).toBe('approved');
+  });
+
+  it('LEDGER_INDEXES names exactly the indexes ensureMultiTenantSchema creates on event_ledger', () => {
+    // The names are duplicated from the ensure - the only way to check an index EXISTS
+    // rather than that a file mentions it. This ties the two together, so renaming one
+    // there fails here instead of leaving a permanent false failure with no explanation.
+    const ensure = fs.readFileSync(
+      path.join(__dirname, '..', '..', '..', '..', 'db', 'ensureMultiTenantSchema.ts'),
+      'utf8',
+    );
+    const created = [...ensure.matchAll(/CREATE INDEX CONCURRENTLY IF NOT EXISTS (\w+) ON event_ledger/g)].map((m) => m[1]);
+    expect(created).toHaveLength(3);
+    expect([...LEDGER_INDEXES].sort()).toEqual([...created].sort());
+  });
+
+  it('the two agent names are taken FROM the registry, not retyped', () => {
+    // An earlier version imported the registry and then hard-coded both strings anyway,
+    // which made the claim to reuse it untrue and would have survived a rename there.
+    const names = GROWTH_JOURNEY_AGENT_ENTRIES.map((e) => e.agent_name);
+    expect(names).toContain('GrowthJourneyShadowDecisions');
+    expect(names).toContain('GrowthJourneyExecutor');
   });
 });
 
@@ -344,6 +410,40 @@ describe('the three rules that make the list worth reading', () => {
     worldAllOff();
     const r = await buildReadiness({ now: NOW, flags: FLAGS_OFF });
     expect(r.as_of).toBe(NOW.toISOString());
+  });
+});
+
+describe('the scrubber, which both serving surfaces share', () => {
+  it('an `@` replaces the WHOLE value, because masking is not enough for this bar', () => {
+    // redactForLogs would answer `s***@example.com` - the `@` survives - and the Phase 6
+    // bar is "`@` anywhere in a JSON response of a new route fails the phase".
+    expect(scrubField('contact someone@example.com now')).toBe('redacted - the value carried an address');
+    expect(scrubField('journey decisions are enabled')).toBe('journey decisions are enabled');
+  });
+
+  it('a long value is capped, because the `@` rule alone would not catch one', () => {
+    const out = scrubField('x'.repeat(FIELD_CAP + 50));
+    expect(out).toHaveLength(FIELD_CAP + 3);
+    expect(out.endsWith('...')).toBe(true);
+  });
+
+  it('scrubReadiness scrubs both free-text fields of every item and leaves the rest exact', () => {
+    const r = {
+      items: [
+        { key: 'memberships', ready: false, reason: 'contact a@b.co', next_move: 'mail c@d.co' },
+        { key: 'master_flag', ready: true, reason: 'on', next_move: 'nothing' },
+      ],
+      score: { ready: 1, known: 2, unknown: 0, pct: 50 },
+      next_move: 'memberships',
+      as_of: '2026-09-29T18:00:00.000Z',
+    };
+    const out = scrubReadiness(r as never);
+    expect(JSON.stringify(out)).not.toContain('@');
+    expect(out.items[1].reason).toBe('on');
+    // the envelope is untouched: a redactor over a serialised document is what mangles UUIDs
+    expect(out.score).toEqual(r.score);
+    expect(out.as_of).toBe(r.as_of);
+    expect(out.next_move).toBe('memberships');
   });
 });
 

@@ -1,4 +1,10 @@
-import { buildReadiness, type Readiness, type ReadinessItem } from '../services/growthJourney/readiness/buildReadiness';
+import {
+  buildReadiness,
+  scrubItem,
+  scrubReadiness,
+  type Readiness,
+  type ReadinessItem,
+} from '../services/growthJourney/readiness/buildReadiness';
 
 /**
  * Growth Journey OS — the launch readiness checklist (Phase 6, T610). READ-ONLY.
@@ -11,22 +17,32 @@ import { buildReadiness, type Readiness, type ReadinessItem } from '../services/
  *
  * ─── IT FOLLOWS THE PROBE'S IMPORT RULE, WHICH IS LOAD-BEARING ──────────────
  *
- * `growthJourneyExecutionStatus.ts` states it: the imports must stay clear of any
- * module that loads a model FILE, because constructing Sequelize at import time is
- * what a probe must never do. So this file imports exactly one thing - the reader -
- * and the reader reaches models through the barrel (`../../../models`) and nothing
- * through `models/<Name>`. That was checked rather than assumed: `campaignKeys`,
- * `resolveExecutionMode`, `scopeKey` and `proposalFiler` are all clear, and
- * `launchSafety` is NOT - it imports `models/SystemSetting` directly, which is why
- * the kill-switch key is declared in the reader instead of imported from there.
+ * `growthJourneyExecutionStatus.ts` states the rule, and it is narrower than it sounds:
+ * no module in the closure may VALUE-import a `models/<Name>` file, because the barrel
+ * is what orders model initialisation. It is a SPELLING rule, not a "never construct
+ * Sequelize at load" rule - `config/database` constructs Sequelize in its module body,
+ * the barrel depends on it, and the probe itself loads both. Saying otherwise, as the
+ * first version of this header did, claims more than the code does.
+ *
+ * So this file imports exactly one thing - the reader - and the reader value-imports only
+ * the barrel. Its two `import type` lines DO name model files, and that is fine: a type
+ * import is erased at compile time and loads nothing.
+ *
+ * Checked, with one correction to an earlier claim: `campaignKeys` and `scopeKey` are
+ * clear. `resolveExecutionMode` is NOT - it imports `launchSafety`, which value-imports
+ * `models/SystemSetting` - so this reader does not touch it, and the per-scope modes stay
+ * with the probe that already prints them. `launchSafety` is likewise untouched, which is
+ * why the kill-switch key is declared in the reader rather than imported from there.
  *
  * ─── NO `@`, EVER - AND THE CLI DOES ITS OWN SCRUBBING ──────────────────────
  *
  * Every line is authored text, an item key, a count or a code-registry string; no
  * row value is interpolated into a reason, and the reader's own suite asserts that.
- * But this file does NOT rely on it: `reason` and `next_move` go through
- * `scrubField` on the way out, in both human and `--json` mode, so the printed
- * surface is safe even if a future reason ever did carry an address. The probe sets
+ * But this file does NOT rely on it: `reason` and `next_move` go through the reader's own
+ * `scrubField` on the way out, in both human and `--json` mode, so the printed surface is
+ * safe even if a future reason ever did carry an address. The scrubber lives in the reader
+ * because the ROUTE serves the same report and the contract's bar names a route's response;
+ * one definition, both surfaces. The probe sets
  * the precedent - it passes its reason strings through `safeField` for the same
  * reason - and the first version of this file claimed the guarantee while relying
  * entirely on the reader, which its own test then caught.
@@ -60,31 +76,6 @@ export function mark(ready: boolean | null): string {
   return ready ? '[x]' : '[ ]';
 }
 
-/** A reason or next_move is authored text; nothing authored here comes close to this. */
-export const FIELD_CAP = 200;
-
-/**
- * One field, scrubbed to the bar this phase actually sets.
- *
- * `redactForLogs` is the WRONG tool here and the first version of this file used it:
- * its email pattern captures the `@` as part of the domain group, so
- * `someone@example.com` becomes `s***@example.com` - the local part is masked and the
- * `@` survives. The Phase 6 contract's bar is literally "`@` anywhere in a JSON
- * response of a new route fails the phase", so masking is not enough. This follows
- * `safeField`'s rule instead - an `@` replaces the whole value - and adds a generous
- * cap, because the `@` rule would not catch a 5,000-character row value with no
- * address in it.
- */
-export function scrubField(t: string): string {
-  if (t.includes('@')) return 'redacted - the value carried an address';
-  return t.length > FIELD_CAP ? `${t.slice(0, FIELD_CAP)}...` : t;
-}
-
-/** The two free-text fields, scrubbed. Applied per field, never to a serialised document. */
-export function scrubItem(i: ReadinessItem): ReadinessItem {
-  return { ...i, reason: scrubField(i.reason), next_move: scrubField(i.next_move) };
-}
-
 export function formatReadiness(r: Readiness): string[] {
   const lines: string[] = [];
   lines.push('Growth Journey OS - launch readiness');
@@ -113,8 +104,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     // The items are scrubbed field by field and the rest of the document is passed
     // through untouched - so `as_of` and the score keep their exact values, and the
     // redactor never sees an envelope it could rewrite.
-    const scrubbed = { ...readiness, items: (readiness.items as ReadinessItem[]).map(scrubItem) };
-    console.log(JSON.stringify(scrubbed, null, 2));
+    console.log(JSON.stringify(scrubReadiness(readiness), null, 2));
     return;
   }
   for (const line of formatReadiness(readiness)) console.log(line);
