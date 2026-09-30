@@ -69,6 +69,27 @@ describe('startBuildFromUnderstanding', () => {
     );
   });
 
+  it('holds the build for review when the door asked it to', async () => {
+    // A reviewer building FOR someone has to be able to read the plan before that person
+    // does; without the hold the approval is theatre over a plan already on their
+    // Projects page.
+    mockFindByPk.mockResolvedValue(record());
+
+    await startBuildFromUnderstanding({ recordId: 'rec-1', enrollmentId: 'enr-1', holdForReview: true });
+
+    expect(mockStartBuild).toHaveBeenCalledWith(expect.objectContaining({ holdForReview: true }));
+  });
+
+  it('does NOT hold by default, so a prospect\'s own enquiry still publishes itself', async () => {
+    // "I don't want to be a gate for Projects. Let those projects move fwd without me."
+    // The hold is a property of the door, and this is the door that does not ask for it.
+    mockFindByPk.mockResolvedValue(record());
+
+    await startBuildFromUnderstanding({ recordId: 'rec-1', enrollmentId: 'enr-1' });
+
+    expect(mockStartBuild.mock.calls[0][0].holdForReview).toBeFalsy();
+  });
+
   it('remembers the hand-off in its OWN column, after the build has started', async () => {
     const rec = record();
     mockFindByPk.mockResolvedValue(rec);
