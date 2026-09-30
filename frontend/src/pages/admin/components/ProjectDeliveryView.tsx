@@ -429,11 +429,15 @@ export default function ProjectDeliveryView({ cohortId, internsOnly, hideWithout
                                 </div>
                               )}
                               {rel.tasks.map((t) => {
+                                // Normalised once: both columns are JSONB and absent on any
+                                // task the manual import path wrote, and reading them
+                                // through `?.` at five call sites invites exactly one of
+                                // them to be missed.
+                                const fulfills = t.fulfills ?? [];
+                                const acceptance = t.acceptance ?? [];
                                 // Only clickable when there is something behind it. A row
                                 // that opens to nothing teaches people the arrow lies.
-                                const hasDetail = Boolean(
-                                  t.fulfills?.length || t.acceptance?.length || t.narrative,
-                                );
+                                const hasDetail = Boolean(fulfills.length || acceptance.length || t.narrative);
                                 const storyOpen = openStory === t.id;
                                 return (
                                   <React.Fragment key={t.id}>
@@ -456,8 +460,8 @@ export default function ProjectDeliveryView({ cohortId, internsOnly, hideWithout
                                           />
                                         )}
                                         {t.title}
-                                        {(t.fulfills?.length ?? 0) > 0 && (
-                                          <span style={{ color: 'var(--text-muted)' }}> · {t.fulfills.length} req</span>
+                                        {fulfills.length > 0 && (
+                                          <span style={{ color: 'var(--text-muted)' }}> · {fulfills.length} req</span>
                                         )}
                                         {t.blocked_by.length > 0 && (
                                           <span style={{ color: 'var(--text-muted)' }}> · blocked by {t.blocked_by.length}</span>
@@ -480,11 +484,11 @@ export default function ProjectDeliveryView({ cohortId, internsOnly, hideWithout
                                             {t.narrative}
                                           </div>
                                         )}
-                                        {(t.fulfills?.length ?? 0) > 0 && (
+                                        {fulfills.length > 0 && (
                                           <div style={{ marginBottom: 6 }}>
                                             <div style={STORY_LABEL}>Requirements it fulfils</div>
                                             <ul style={{ margin: '2px 0 0', paddingLeft: 18 }}>
-                                              {t.fulfills.map((reqId) => (
+                                              {fulfills.map((reqId) => (
                                                 <li key={reqId}>
                                                   <strong>{reqId}</strong>
                                                   {/* The statement when the published plan carries one; the id
@@ -496,11 +500,11 @@ export default function ProjectDeliveryView({ cohortId, internsOnly, hideWithout
                                             </ul>
                                           </div>
                                         )}
-                                        {(t.acceptance?.length ?? 0) > 0 && (
+                                        {acceptance.length > 0 && (
                                           <div>
                                             <div style={STORY_LABEL}>Done when</div>
                                             <ul style={{ margin: '2px 0 0', paddingLeft: 18 }}>
-                                              {t.acceptance.map((line, i) => <li key={i}>{line}</li>)}
+                                              {acceptance.map((line, i) => <li key={i}>{line}</li>)}
                                             </ul>
                                           </div>
                                         )}
