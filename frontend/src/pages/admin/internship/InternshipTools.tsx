@@ -2,6 +2,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { SectionCard } from '../../../components/admin/shell';
 import StartProjectForStudent from '../../../components/admin/internship/StartProjectForStudent';
 import FlotationIntakePanel from '../../../components/admin/internship/FlotationIntakePanel';
+import ImportProjectFromRepo from '../../../components/admin/internship/ImportProjectFromRepo';
 import InternshipConversionPanel from '../../../components/admin/internship/InternshipConversionPanel';
 import InternshipProjectReadiness from '../components/InternshipProjectReadiness';
 import ProjectDeliveryView from '../components/ProjectDeliveryView';
@@ -64,6 +65,7 @@ export const InternshipProjectsMode: React.FC<{ onOpenApplicant: (id: string) =>
         <ProjectDeliveryView internsOnly hideWithoutProject />
       </SectionCard>
 
+      <ImportProjectFromRepo />
       <FlotationIntakePanel />
     </div>
   );
