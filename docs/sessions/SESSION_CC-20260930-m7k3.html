@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260930-m7k3 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Wednesday, September 30, 2026 at 10:21 AM</div>
+    <div><span class="sid">CC-20260930-m7k3</span><span class="count">1 change</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Portal header wears the real Colaberry logo instead of a hand-typed imitation**</h2>
+          <span class="badge">2026-09-30</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`PortalShell.tsx` drops `/colaberry-icon.png` + the typed `&lt;b&gt;&lt;span class=&quot;cc&quot;&gt;C&lt;/span&gt;olaberry&lt;/b&gt;` wordmark and adopts the existing `.te-brand--site` lockup treatment, rendering a NEW `frontend/public/colaberry-horizontal.png` (436x102, generated from the canonical `knowledge/assets/logo/colaberry-horizontal.png` by trimming its alpha padding and resampling to 3x the 34px render height; 313KB -&gt; 39KB). `TodayShell.css`: `.te-brand--site .te-mark` height 26px -&gt; 34px, because 26px rendered the lockup 111px wide and BRAND.md sets a 120px floor for the horizontal lockup (34px renders 145px); the now-dead `.te-brand b` and `.te-brand .cc` typed-wordmark rules are deleted with a comment recording why, so the logo does not get re-typed later. `ManagementPreviewPage.tsx` moves to the same asset, off `colaberry-logo-transparent.png`, which is matted against white and halos on a dark surface. Also fixes a real dark-mode defect: the old mono-black mark was nearly invisible on the `#1E1E1E` header.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Browser-rendered proof (Playwright/Chromium, dsf 2) against the REAL `TodayShell.css` — `origin/main`&#39;s copy for BEFORE, the branch&#39;s for AFTER — with the real self-hosted Quicksand/Roboto faces and the real assets, in light and dark: header height UNCHANGED at 63px in all four states (no layout shift); logo box measured 38.0x38.0 -&gt; 145.3x34.0 css px, clearing the 120px brand floor. `tsc --noEmit` with the frontend&#39;s pinned TypeScript 5.9.3 (the repo root&#39;s is a stale 4.9.5 that cannot parse modern `@types`): 10 errors, byte-identical to a stashed `origin/main` control run (diff empty), every one of them `@dnd-kit/*` module-not-found in `TimelineBuilderPanel.tsx` / `TimelineEditorTab.tsx` — a declared dependency missing from this stale local `node_modules`, in files this change never touches; zero errors in the three changed files. Frontend jest (`react-scripts`, pattern `portal.today`): 130/130 tests passed across 18 suites; the single &quot;failed suite&quot; is `__tests__/testEnv/intersectionObserverMock.ts`, a shared mock with no tests that the path pattern swept in (&quot;Your test suite must contain at least one test&quot;), not a regression.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The repo&#39;s `-white`/`-black` mono logo variants are STALE — an older logotype (capital &quot;C&quot;, different mark), not mono cuts of the current gradient lockup — so a dark-mode swap to them would have shipped two different logos depending on theme; the colour lockup has clean alpha (sampled mean edge RGB 109,150,135, i.e. artwork colour rather than a white matte) and reads on both surfaces, so one asset serves both. NOT in scope, reported rather than expanded: `/colaberry-icon.png` is byte-identical to `/favicon.png` (sha1 `f8a9c347`), so the browser TAB icon is the same mono mark, and ~20 other surfaces still reference it (`PublicNavbar`, `PublicFooter`, `AdminLayout`, `AdminLoginPage`, `EnrollPage`, the landing pages) — a separate brand sweep. Also noted, untouched: `--logo` (Quicksand) is applied to `.te-band h2` and `.te-metacol .big`, which BRAND.md calls out as wrong (&quot;Quicksand — logotype only, never for UI&quot;). NOT deployed — built and verified locally only, pending merge and a frontend deploy; Cloudflare caches app assets ~4h, so the new header may lag a purge.</span></div>
+          
+        <div class="files">
+          <div class="files-label">Files touched</div>
+          <table><tbody>
+          <tr><td class="path">`frontend/public/colaberry-horizontal.png`</td><td>NEW — 436x102 lockup, trimmed and resampled from the canonical 1658x390 source (313KB -&gt; 39KB)</td></tr>
+          <tr><td class="path">`frontend/src/pages/portal/today/PortalShell.tsx`</td><td>Header renders the real lockup via `.te-brand--site`; typed wordmark removed</td></tr>
+          <tr><td class="path">`frontend/src/pages/portal/today/TodayShell.css`</td><td>Lockup 26px -&gt; 34px for the 120px brand floor; dead `.te-brand b` / `.te-brand .cc` rules deleted</td></tr>
+          <tr><td class="path">`frontend/src/pages/ManagementPreviewPage.tsx`</td><td>Same asset, off the white-matted PNG that halos on dark</td></tr></tbody></table>
+        </div>
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20260930-m7k3.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
