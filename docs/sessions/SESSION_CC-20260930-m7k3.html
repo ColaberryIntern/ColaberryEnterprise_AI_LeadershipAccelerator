@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, September 30, 2026 at 10:21 AM</div>
-    <div><span class="sid">CC-20260930-m7k3</span><span class="count">1 change</span></div>
+    <div class="meta">Generated Wednesday, September 30, 2026 at 5:02 PM</div>
+    <div><span class="sid">CC-20260930-m7k3</span><span class="count">2 changes</span></div>
   </header>
   <main>
     
@@ -71,7 +71,7 @@
           <div class="row"><span class="k">What changed</span><span class="v">`PortalShell.tsx` drops `/colaberry-icon.png` + the typed `&lt;b&gt;&lt;span class=&quot;cc&quot;&gt;C&lt;/span&gt;olaberry&lt;/b&gt;` wordmark and adopts the existing `.te-brand--site` lockup treatment, rendering a NEW `frontend/public/colaberry-horizontal.png` (436x102, generated from the canonical `knowledge/assets/logo/colaberry-horizontal.png` by trimming its alpha padding and resampling to 3x the 34px render height; 313KB -&gt; 39KB). `TodayShell.css`: `.te-brand--site .te-mark` height 26px -&gt; 34px, because 26px rendered the lockup 111px wide and BRAND.md sets a 120px floor for the horizontal lockup (34px renders 145px); the now-dead `.te-brand b` and `.te-brand .cc` typed-wordmark rules are deleted with a comment recording why, so the logo does not get re-typed later. `ManagementPreviewPage.tsx` moves to the same asset, off `colaberry-logo-transparent.png`, which is matted against white and halos on a dark surface. Also fixes a real dark-mode defect: the old mono-black mark was nearly invisible on the `#1E1E1E` header.</span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">Browser-rendered proof (Playwright/Chromium, dsf 2) against the REAL `TodayShell.css` — `origin/main`&#39;s copy for BEFORE, the branch&#39;s for AFTER — with the real self-hosted Quicksand/Roboto faces and the real assets, in light and dark: header height UNCHANGED at 63px in all four states (no layout shift); logo box measured 38.0x38.0 -&gt; 145.3x34.0 css px, clearing the 120px brand floor. `tsc --noEmit` with the frontend&#39;s pinned TypeScript 5.9.3 (the repo root&#39;s is a stale 4.9.5 that cannot parse modern `@types`): 10 errors, byte-identical to a stashed `origin/main` control run (diff empty), every one of them `@dnd-kit/*` module-not-found in `TimelineBuilderPanel.tsx` / `TimelineEditorTab.tsx` — a declared dependency missing from this stale local `node_modules`, in files this change never touches; zero errors in the three changed files. Frontend jest (`react-scripts`, pattern `portal.today`): 130/130 tests passed across 18 suites; the single &quot;failed suite&quot; is `__tests__/testEnv/intersectionObserverMock.ts`, a shared mock with no tests that the path pattern swept in (&quot;Your test suite must contain at least one test&quot;), not a regression.</span></div>
           
-        <div class="row"><span class="k">Notes</span><span class="v">The repo&#39;s `-white`/`-black` mono logo variants are STALE — an older logotype (capital &quot;C&quot;, different mark), not mono cuts of the current gradient lockup — so a dark-mode swap to them would have shipped two different logos depending on theme; the colour lockup has clean alpha (sampled mean edge RGB 109,150,135, i.e. artwork colour rather than a white matte) and reads on both surfaces, so one asset serves both. NOT in scope, reported rather than expanded: `/colaberry-icon.png` is byte-identical to `/favicon.png` (sha1 `f8a9c347`), so the browser TAB icon is the same mono mark, and ~20 other surfaces still reference it (`PublicNavbar`, `PublicFooter`, `AdminLayout`, `AdminLoginPage`, `EnrollPage`, the landing pages) — a separate brand sweep. Also noted, untouched: `--logo` (Quicksand) is applied to `.te-band h2` and `.te-metacol .big`, which BRAND.md calls out as wrong (&quot;Quicksand — logotype only, never for UI&quot;). NOT deployed — built and verified locally only, pending merge and a frontend deploy; Cloudflare caches app assets ~4h, so the new header may lag a purge.</span></div>
+        <div class="row"><span class="k">Notes</span><span class="v">The repo&#39;s `-white`/`-black` mono logo variants are STALE — an older logotype (capital &quot;C&quot;, different mark), not mono cuts of the current gradient lockup — so a dark-mode swap to them would have shipped two different logos depending on theme; the colour lockup has clean alpha (sampled mean edge RGB 109,150,135, i.e. artwork colour rather than a white matte) and reads on both surfaces, so one asset serves both. NOT in scope, reported rather than expanded: `/colaberry-icon.png` is byte-identical to `/favicon.png` (sha1 `f8a9c347`), so the browser TAB icon is the same mono mark, and ~20 other surfaces still reference it (`PublicNavbar`, `PublicFooter`, `AdminLayout`, `AdminLoginPage`, `EnrollPage`, the landing pages) — a separate brand sweep. Also noted, untouched: `--logo` (Quicksand) is applied to `.te-band h2` and `.te-metacol .big`, which BRAND.md calls out as wrong (&quot;Quicksand — logotype only, never for UI&quot;). Deployed and production-verified later the same day — see the &quot;Deployed 2026-09-30&quot; entry below for the live-surface proof.</span></div>
           
         <div class="files">
           <div class="files-label">Files touched</div>
@@ -80,6 +80,30 @@
           <tr><td class="path">`frontend/src/pages/portal/today/PortalShell.tsx`</td><td>Header renders the real lockup via `.te-brand--site`; typed wordmark removed</td></tr>
           <tr><td class="path">`frontend/src/pages/portal/today/TodayShell.css`</td><td>Lockup 26px -&gt; 34px for the 120px brand floor; dead `.te-brand b` / `.te-brand .cc` rules deleted</td></tr>
           <tr><td class="path">`frontend/src/pages/ManagementPreviewPage.tsx`</td><td>Same asset, off the white-matted PNG that halos on dark</td></tr></tbody></table>
+        </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**Portal header logo deployed to production and verified on the live surface**</h2>
+          <span class="badge">2026-09-30</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Deployed nginx only (the CRA bundle is baked into it; backend was already at `c87bcec8`). `cd /opt/colaberry-accelerator &amp;&amp; DEPLOY_MODE=registry EXPECT_MARKER=colaberry-horizontal EXPECT_IN=nginx:/usr/share/nginx/html/static bash scripts/deploy-prod.sh nginx` — registry mode confirmed the published image digest equalled `sha-c87bcec8` before recreating anything. Deploy lock was free (the prior backend run, pid 237807, had exited). nginx recreated 21:57:11 UTC.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">POSITIVE CONTROL first — before deploying, `colaberry-icon` matched 5 chunks in the live bundle while `colaberry-horizontal` matched 0, proving the grep finds markers and that the new one was genuinely absent rather than stripped. After deploy, on the real hostname (not localhost, not the deploy exit code): the public `index.html` references `main.2c6160e2.js`, the SAME hash the container serves, ruling out a Cloudflare-cached stale `index.html`; that public bundle contains the marker (1 hit) and the new markup verbatim at BOTH call sites — `te-brand te-brand--site&quot;,children:[...(&quot;img&quot;,{className:&quot;te-mark&quot;,src:&quot;/colaberry-horizontal.png&quot;,alt:&quot;Colaberry&quot;,width:436,height:102` — with the old `&lt;b&gt;&lt;span className=&quot;cc&quot;&gt;C&lt;/span&gt;olaberry&lt;/b&gt;` typed wordmark gone from both; and `https://enterprise.colaberry.ai/colaberry-horizontal.png` returns 200, `image/png`, 39057 bytes, byte-count identical to the blob on `main`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`colaberry-icon` still matches the live bundle once — expected, it is the ~20 other surfaces (`PublicNavbar`, `PublicFooter`, `AdminLayout`, `AdminLoginPage`, `EnrollPage`, landing pages) plus the favicon, all still on the old mono mark and all out of scope here. A returning user holding a browser-cached `index.html` will keep loading the old bundle name until a refresh; the server side is clean. Backend was NOT redeployed — it was already at this commit, and nothing in this change touches the API.</span></div>
+          
+        <div class="files">
+          <div class="files-label">Files touched</div>
+          <table><tbody>
+          <tr><td class="path">Surface</td><td>Proof</td></tr>
+          <tr><td class="path">`index.html` hash</td><td>container and public hostname both `main.2c6160e2.js` — no CF-cached index</td></tr>
+          <tr><td class="path">Public JS bundle</td><td>new lockup markup at both call sites; old typed wordmark absent</td></tr>
+          <tr><td class="path">`/colaberry-horizontal.png`</td><td>200, `image/png`, 39057 bytes — matches the blob on `main`</td></tr>
+          <tr><td class="path">nginx container</td><td>recreated 2026-09-30 21:57:11 UTC from `sha-c87bcec8`</td></tr></tbody></table>
         </div>
         </div>
       </article>
