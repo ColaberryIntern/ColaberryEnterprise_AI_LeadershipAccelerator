@@ -6,7 +6,7 @@
  * verdict/scores are advisory; Enterprise qualification depends on EVIDENCE, not on OP supplying a verdict.
  */
 import crypto from 'crypto';
-import { fetchGovOpportunityDetail } from './opportunities/opDetailClient';
+import { resolveGovOpportunityDetail } from './opportunities/opDetailClient';
 
 export type QualificationDecision =
   | 'pending_review' | 'needs_evidence' | 'no_bid' | 'rfi_response' | 'approved_bid_pursuit';
@@ -21,6 +21,12 @@ export class ChangedSourceError extends Error { constructor(public reviewed: num
 export class SourceUnavailableError extends Error { constructor() { super('source evidence unavailable; approval blocked'); this.name = 'SourceUnavailableError'; } }
 export class QualificationNotFoundError extends Error { constructor() { super('qualification not found'); this.name = 'QualificationNotFoundError'; } }
 export class SelfApprovalError extends Error { constructor() { super('the qualification reviewer may not approve their own bid pursuit'); this.name = 'SelfApprovalError'; } }
+/** The re-resolved source is present but NOT in an approvable state (degraded last-known snapshot, or a snapshot
+ *  the producer never recorded). Recoverable by renewed review once the source is current — never a blind retry. */
+export class SourceNotApprovableError extends Error { constructor(public reason: 'degraded' | 'snapshot_unrecorded') { super(`source not in an approvable state: ${reason}`); this.name = 'SourceNotApprovableError'; } }
+/** Document coverage / established requirements are not sufficient to approve a pursuit (missing evidence never
+ *  silently passes; an empty requirements list is not evidence of "no requirements"). */
+export class EvidenceInsufficientError extends Error { constructor(public reasons: string[]) { super('evidence coverage insufficient for pursuit approval'); this.name = 'EvidenceInsufficientError'; } }
 
 function contentHash(salt: string, obj: unknown): string {
   return crypto.createHash('sha256').update(`${salt}:${JSON.stringify(obj)}`).digest('hex');
@@ -65,6 +71,48 @@ export function evaluateRequirements(reqs: any[] | null | undefined): Requiremen
   const deliveryObligations = evals.filter((e) => (e.dueStage === 'delivery' || e.dueStage === 'award') && !e.blocking);
   const blocking = evals.filter((e) => e.blocking);
   return { evals, blocking, deliveryObligations, byDueStage, canApproveBid: blocking.length === 0 };
+}
+
+// ── Evidence-coverage evaluation (PURE) ──────────────────────────────────────
+export interface EvidenceCoverage { sufficient: boolean; reasons: string[]; }
+
+/**
+ * Whether the source evidence is sufficient to APPROVE a pursuit — separate from, and additional to, requirement
+ * blocking. Missing evidence never silently passes:
+ *  - Zero ESTABLISHED requirements → `no_requirements_established`. OP's `requirements[]` is ALWAYS empty (it never
+ *    synthesises requirements from a title), and the schema is explicit that an empty array is NOT evidence of "no
+ *    requirements" — the reviewer must establish the applicable, cited requirements first.
+ *  - Document coverage is judged from `documents.items[]` (the per-document breakdown): an item is AUTHORITATIVE
+ *    when `role ∈ {solicitation, final_pws_sow, amendment}` (a `draft_pws` carries no binding obligation, so it is
+ *    not authoritative) and REVIEWED when `retrieval.status === 'downloaded'`. Coverage is sufficient when the base
+ *    solicitation/final_pws_sow is reviewed AND every amendment is reviewed. This is why `partial` is not
+ *    automatically failure: partial with all authoritative items downloaded (only non-authoritative attachments
+ *    inaccessible) is sufficient; a missing amendment or un-downloaded base → `authoritative_package_unreviewed`.
+ *  - `none_published` / no authoritative item at all → `no_authoritative_source`; `inaccessible`/`unknown` →
+ *    `document_coverage_unknown`.
+ */
+export function evaluateEvidenceCoverage(source: any, establishedRequirements: any[] | null | undefined): EvidenceCoverage {
+  const reasons: string[] = [];
+  const established = Array.isArray(establishedRequirements) ? establishedRequirements : [];
+  if (established.length === 0) reasons.push('no_requirements_established');
+
+  const docs = source && source.documents;
+  const coverage = String(docs?.coverage ?? 'unknown');
+  const items: any[] = Array.isArray(docs?.items) ? docs.items : [];
+  const downloaded = (it: any) => it && it.retrieval && it.retrieval.status === 'downloaded';
+  const base = items.filter((it) => it?.role === 'solicitation' || it?.role === 'final_pws_sow');
+  const amendments = items.filter((it) => it?.role === 'amendment');
+
+  if (coverage === 'none_published') {
+    reasons.push('no_authoritative_source');
+  } else if (coverage === 'inaccessible' || coverage === 'unknown') {
+    reasons.push('document_coverage_unknown');
+  } else {
+    // complete | complete_for_this_notice | partial
+    if (base.length === 0 || !base.some(downloaded)) reasons.push('no_authoritative_source');
+    else if (!amendments.every(downloaded)) reasons.push('authoritative_package_unreviewed');
+  }
+  return { sufficient: reasons.length === 0, reasons };
 }
 
 // ── Persistence ──────────────────────────────────────────────────────────────
@@ -123,18 +171,26 @@ export interface RecordDecisionInput {
   canonicalOpportunityId: string; biddingEntity: string; expectedVersion: number;
   decision: QualificationDecision; rationale?: string | null; reviewerIdentityId: string;
   evidence?: any; effortCap?: string | null; reassessmentConditions?: string | null;
+  /** The reviewer-ESTABLISHED, cited applicable requirements (same shape as source requirements). Stored in
+   *  requirements_json.established; this is what pursuit approval evaluates (OP supplies none for live v2). */
+  establishedRequirements?: any[];
 }
 
-/** Record a NON-approval decision (needs_evidence / no_bid / pending_review). Approval decisions
- *  (approved_bid_pursuit / rfi_response) must go through approveGovQualification (source-snapshot bound). */
+/** Record a NON-approval decision (needs_evidence / no_bid / pending_review) and/or the reviewer-established
+ *  requirements. Approval decisions (approved_bid_pursuit / rfi_response) must go through approveGovQualification
+ *  (source-snapshot bound). Fork-on-edit preserves the prior version's evidence. */
 export async function recordDecision(input: RecordDecisionInput): Promise<any> {
   if (!QUALIFICATION_DECISIONS.includes(input.decision)) throw new Error(`unknown decision ${input.decision}`);
   if (APPROVAL_DECISIONS.includes(input.decision)) throw new Error('approval decisions must use approveGovQualification');
   const current = await loadCurrent(input.canonicalOpportunityId, input.biddingEntity);
   if (!current) throw new QualificationNotFoundError();
   if (current.version !== input.expectedVersion) throw new QualificationConflictError(current.version);
+  const requirements_json = input.establishedRequirements
+    ? { ...(current.requirements_json || {}), established: input.establishedRequirements }
+    : current.requirements_json;
   return forkNewVersion(current, {
     decision: input.decision, rationale: input.rationale ?? null, reviewer_identity_id: input.reviewerIdentityId,
+    requirements_json,
     evidence_json: input.evidence ?? current.evidence_json, effort_cap: input.effortCap ?? current.effort_cap,
     reassessment_conditions: input.reassessmentConditions ?? current.reassessment_conditions,
   });
@@ -147,13 +203,19 @@ export interface ApproveQualificationInput {
 }
 
 /**
- * Server-side approval bound to an immutable source snapshot:
- *  1. CAS on expectedVersion (stale review -> conflict).
- *  2. RE-FETCH OP detail by canonical id (server-side). Unavailable -> FAIL CLOSED (SourceUnavailableError).
- *  3. If the re-fetched sourceSnapshotVersion != the reviewed source_snapshot_version -> ChangedSourceError
- *     (renewed review required). Browser-supplied source facts are NOT consulted here.
- *  4. evaluateRequirements(re-fetched requirements) must have NO blocking items -> else QualificationBlockedError.
- *  5. Fork a new approved version, binding the re-fetched snapshot + version and the approver identity.
+ * Server-side approval bound to an immutable source snapshot. ORDERED gate — every check runs server-side so a
+ * caller hitting the route directly (UI bypass) cannot bind an approval to non-authoritative source:
+ *  1. CAS on expectedVersion (stale review -> QualificationConflictError 409).
+ *  2. Separation of duties: reviewer may not approve their own pursuit (SelfApprovalError 403).
+ *  3. RE-RESOLVE OP detail by canonical id (server-side, never browser-supplied). unavailable/auth_failed/
+ *     malformed -> FAIL CLOSED (SourceUnavailableError 503).
+ *  4. Present-but-not-approvable: degraded last-known snapshot OR a snapshot the producer never recorded ->
+ *     SourceNotApprovableError 409 (renewed review once current; not a blind retry).
+ *  5. The HONEST snapshot version (meta) != the reviewed source_snapshot_version -> ChangedSourceError 409.
+ *  6. Evidence sufficiency: document coverage + the ESTABLISHED (reviewer-cited) requirements must be sufficient
+ *     (EvidenceInsufficientError 422) and carry no blocking requirement (QualificationBlockedError 422). OP's own
+ *     requirements[] is always empty, so approval evaluates the reviewer's established set, not OP's.
+ *  7. Fork a new approved version, binding the resolved snapshot + HONEST version + the approver identity.
  * Research authorization (this) does not imply build/submission readiness — a build needs a separate
  * build_authorization (see buildAuthorization).
  */
@@ -168,19 +230,30 @@ export async function approveGovQualification(input: ApproveQualificationInput):
     throw new SelfApprovalError();
   }
 
-  const detail = await fetchGovOpportunityDetail(input.canonicalOpportunityId);
-  if (!detail) throw new SourceUnavailableError();                                   // fail closed
-  if (detail.sourceSnapshotVersion !== current.source_snapshot_version) {
-    throw new ChangedSourceError(current.source_snapshot_version ?? null, detail.sourceSnapshotVersion);
+  const resolved = await resolveGovOpportunityDetail(input.canonicalOpportunityId);
+  if (resolved.state === 'unavailable' || resolved.state === 'auth_failed' || resolved.state === 'malformed') {
+    throw new SourceUnavailableError();                                              // fail closed
   }
-  const evaluation = evaluateRequirements(detail.requirements);
+  if (resolved.state === 'degraded') throw new SourceNotApprovableError('degraded');
+  if (resolved.state === 'snapshot_unrecorded' || !resolved.snapshotRecorded) throw new SourceNotApprovableError('snapshot_unrecorded');
+  const detail = resolved.detail;
+  if (resolved.sourceSnapshotVersion !== current.source_snapshot_version) {
+    throw new ChangedSourceError(current.source_snapshot_version ?? null, resolved.sourceSnapshotVersion as number);
+  }
+
+  // Effective requirements = the reviewer's ESTABLISHED (cited) set if present, else the source's (always [] for
+  // live v2). Coverage AND blocking are both enforced; missing evidence never silently passes.
+  const established = (current.requirements_json && current.requirements_json.established) || (detail && detail.requirements) || [];
+  const coverage = evaluateEvidenceCoverage(detail, established);
+  if (!coverage.sufficient) throw new EvidenceInsufficientError(coverage.reasons);
+  const evaluation = evaluateRequirements(established);
   if (!evaluation.canApproveBid) throw new QualificationBlockedError(evaluation.blocking.map((b) => `${b.id}:${b.reason}`));
 
   return forkNewVersion(current, {
     decision: input.decision, reviewer_identity_id: current.reviewer_identity_id,
-    // Bind the approval to the SERVER-fetched snapshot + version + the re-evaluated requirements.
-    source_snapshot: detail, source_snapshot_version: detail.sourceSnapshotVersion, source_available: true,
-    requirements_json: { requirements: detail.requirements, evaluation },
+    // Bind the approval to the SERVER-resolved snapshot + the HONEST version + the evaluated evidence.
+    source_snapshot: detail, source_snapshot_version: resolved.sourceSnapshotVersion, source_available: true,
+    requirements_json: { ...(current.requirements_json || {}), source: detail && detail.requirements, established, evaluation, coverage },
     rationale: input.rationale ?? current.rationale,
     // Capture the approver in the immutable evidence, distinct from the reviewer, so the record shows WHO approved.
     evidence_json: { ...(input.evidence ?? current.evidence_json ?? {}), approvedBy: input.approverIdentityId },

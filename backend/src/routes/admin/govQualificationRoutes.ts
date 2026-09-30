@@ -6,14 +6,15 @@ import { requireSection } from '../../middlewares/authMiddleware';
 import { lookupGovContractsContainer } from '../../scripts/lib/factoryDemoContainer';
 // The qualification services lazy-load their models inside their functions, so these imports never init the ORM.
 import {
-  createQualification, recordDecision, approveGovQualification, evaluateRequirements,
+  createQualification, recordDecision, approveGovQualification, evaluateRequirements, evaluateEvidenceCoverage,
   QUALIFICATION_DECISIONS, APPROVAL_DECISIONS,
   QualificationConflictError, QualificationBlockedError, ChangedSourceError, SourceUnavailableError,
-  QualificationNotFoundError, SelfApprovalError,
+  QualificationNotFoundError, SelfApprovalError, SourceNotApprovableError, EvidenceInsufficientError,
 } from '../../services/factory/govQualification';
 import { authorizeBuild, BuildNotAuthorizedError } from '../../services/factory/buildAuthorization';
 import { linkGovOpportunity, AliasProjectNotFoundError, AliasProjectNotGovernmentError, AliasConflictError } from '../../services/factory/opportunities/govOpportunityAlias';
-import { fetchGovOpportunityDetail, isLiveOpDetailConfigured } from '../../services/factory/opportunities/opDetailClient';
+import { resolveGovOpportunityDetail, isLiveOpDetailConfigured, describeSourceState } from '../../services/factory/opportunities/opDetailClient';
+import { fetchGovOpportunityCandidatesV2 } from '../../services/factory/opportunities/opListClient';
 
 /**
  * Admin — Government Qualification Workspace (Phase 2).
@@ -63,6 +64,8 @@ function mapQualificationError(res: Response, err: any): boolean {
   if (err instanceof QualificationConflictError) { res.status(409).json({ error: err.message, currentVersion: err.currentVersion }); return true; }
   if (err instanceof ChangedSourceError) { res.status(409).json({ error: err.message, reviewedVersion: err.reviewed, currentVersion: err.current, changedSource: true }); return true; }
   if (err instanceof QualificationBlockedError) { res.status(422).json({ error: err.message, blocking: err.blocking }); return true; }
+  if (err instanceof EvidenceInsufficientError) { res.status(422).json({ error: err.message, evidenceInsufficient: true, reasons: err.reasons }); return true; }
+  if (err instanceof SourceNotApprovableError) { res.status(409).json({ error: err.message, sourceNotApprovable: true, reason: err.reason }); return true; }
   if (err instanceof SourceUnavailableError) { res.status(503).json({ error: err.message, sourceUnavailable: true }); return true; }
   if (err instanceof SelfApprovalError) { res.status(403).json({ error: err.message }); return true; }
   if (err instanceof QualificationNotFoundError) { res.status(404).json({ error: err.message }); return true; }
@@ -83,29 +86,61 @@ router.get('/api/admin/factory/qualification/:canonicalOpportunityId', requireSe
   const scope = await scopeOrFail(res, 'gov_qualification_view_scope', { canonicalOpportunityId });
   if (!scope) return;
   try {
-    const detail = await fetchGovOpportunityDetail(canonicalOpportunityId);
-    const evaluation = detail ? evaluateRequirements(detail.requirements) : null;
+    // Server-authoritative source-state (available / degraded / snapshot_unrecorded / unavailable / auth_failed /
+    // malformed). The browser never supplies source facts, and the approve control is only offered when the
+    // source is genuinely approvable — mirroring the server-side gate so the UI cannot imply an unusable action.
+    const resolved = await resolveGovOpportunityDetail(canonicalOpportunityId);
+    const detail = resolved.detail;
 
     const { default: GovQualification } = await import('../../models/GovQualification');
     const where: any = { canonical_opportunity_id: canonicalOpportunityId, tenant_id: scope.tenantId, status: 'active' };
     if (be.success && be.data) where.bidding_entity = be.data;
     const record: any = await GovQualification.findOne({ where, order: [['version', 'DESC']] });
+    const recordJson = record ? record.get() : null;
 
-    const changedSource = !!(record && detail && record.source_snapshot_version !== detail.sourceSnapshotVersion);
+    // Effective requirements = reviewer-established (if any) else the source's (always [] for live v2).
+    const established = (recordJson && recordJson.requirements_json && recordJson.requirements_json.established)
+      || (detail && detail.requirements) || [];
+    const evaluation = detail ? evaluateRequirements(established) : null;
+    const coverage = detail ? evaluateEvidenceCoverage(detail, established) : null;
+
+    const sourcePresent = resolved.state === 'available' || resolved.state === 'degraded' || resolved.state === 'snapshot_unrecorded';
+    const sourceApprovable = resolved.state === 'available';
+    const changedSource = !!(recordJson && resolved.snapshotRecorded && recordJson.source_snapshot_version !== resolved.sourceSnapshotVersion);
+    const canApprove = sourceApprovable && !changedSource && !!evaluation && evaluation.canApproveBid && !!coverage && coverage.sufficient;
+
     res.json({
       canonicalOpportunityId,
       sourceLive: isLiveOpDetailConfigured(),
-      sourceAvailable: !!detail,
+      sourceState: resolved.state,
+      sourceStateLabel: describeSourceState(resolved),
+      sourceAvailable: sourcePresent,
+      sourceSnapshotVersion: resolved.sourceSnapshotVersion,
+      snapshotRecorded: resolved.snapshotRecorded,
       source: detail,                      // server-authoritative facts for the UI (never browser-supplied)
       evaluation,                          // requirement blocking result (missing evidence blocks)
-      qualification: record ? record.get() : null,
+      coverage,                            // document-coverage sufficiency (empty/unknown/partial rules)
+      qualification: recordJson,
       changedSource,
-      canApprove: !!(evaluation && evaluation.canApproveBid && !changedSource),
+      canApprove,                          // true ONLY when the source is approvable, current, covered, unblocked
     });
   } catch (err: any) {
     logFail('gov_qualification_view_failed', err, { canonicalOpportunityId });
     res.status(500).json({ error: 'Could not load the qualification workspace.' });
   }
+});
+
+/**
+ * GET /api/admin/factory/qualification-candidates — the TRUSTED discovery→canonical mapping (OP v2 list). Each
+ * item carries a real `op:gov:<hex>` canonical id, so the UI can start a qualification without ever deriving an id
+ * from a title. When v2 is unavailable this returns { available:false, reason } and no candidates — the UI shows
+ * the gap rather than offering a fabricated start.
+ */
+router.get('/api/admin/factory/qualification-candidates', requireSection('program'), async (_req: Request, res: Response) => {
+  const scope = await scopeOrFail(res, 'gov_qualification_candidates_scope', {});
+  if (!scope) return;
+  const result = await fetchGovOpportunityCandidatesV2(); // never throws (degrade-dark)
+  res.json({ ...result, sourceLive: isLiveOpDetailConfigured() });
 });
 
 const createBody = z.object({ biddingEntity: biddingEntityField, deliveryProjectId: z.string().uuid().optional() });
@@ -121,12 +156,16 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId', requireS
   const scope = await scopeOrFail(res, 'gov_qualification_create_scope', { canonicalOpportunityId });
   if (!scope) return;
   try {
-    const detail = await fetchGovOpportunityDetail(canonicalOpportunityId);
-    if (!detail) { res.status(503).json({ error: 'The opportunity source is unavailable; cannot open a qualification bound to it.', sourceUnavailable: true }); return; }
+    // Research/draft is permitted whenever the source is READABLE (available/degraded/snapshot_unrecorded); only
+    // an unreadable source (unavailable/auth_failed/malformed) fails closed. Pursuit APPROVAL is gated separately
+    // and will still refuse a degraded/unrecorded/uncovered source.
+    const resolved = await resolveGovOpportunityDetail(canonicalOpportunityId);
+    const detail = resolved.detail;
+    if (!detail) { res.status(503).json({ error: 'The opportunity source is unavailable; cannot open a qualification bound to it.', sourceUnavailable: true, sourceState: resolved.state }); return; }
     const q = await createQualification({
       tenantId: scope.tenantId, organizationId: scope.orgId, biddingEntity: b.data.biddingEntity,
       canonicalOpportunityId, deliveryProjectId: b.data.deliveryProjectId ?? null, reviewerIdentityId: actorIdentity(req),
-      sourceSnapshot: detail, sourceSnapshotVersion: detail.sourceSnapshotVersion, sourceAvailable: true, requirements: detail.requirements,
+      sourceSnapshot: detail, sourceSnapshotVersion: resolved.sourceSnapshotVersion as number, sourceAvailable: true, requirements: detail.requirements,
     });
     res.status(201).json({ qualification: q });
   } catch (err: any) {
@@ -136,6 +175,19 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId', requireS
   }
 });
 
+/** A reviewer-ESTABLISHED, cited applicable requirement (same shape the coverage/blocking evaluation consumes). */
+const establishedRequirement = z.object({
+  id: z.string().min(1),
+  text: z.string().min(1),
+  category: z.string().max(60).optional(),
+  applicability: z.enum(['always', 'conditional', 'not_applicable', 'unknown']),
+  applicabilityEvidenceRef: z.object({ docId: z.string() }).nullable().optional(),
+  responsibleParty: z.string().max(60).optional(),
+  dueStage: z.enum(['submission', 'award', 'delivery', 'unknown']),
+  bindingStatus: z.string().max(80),
+  evidenceRef: z.object({ docId: z.string() }).nullable().optional(),
+});
+
 const decisionBody = z.object({
   biddingEntity: biddingEntityField,
   expectedVersion: z.coerce.number().int().min(1),
@@ -143,6 +195,9 @@ const decisionBody = z.object({
   rationale: z.string().max(4000).optional(),
   effortCap: z.string().max(200).optional(),
   reassessmentConditions: z.string().max(2000).optional(),
+  /** Optional: the cited requirements the reviewer establishes as applicable (stored for pursuit approval). */
+  establishedRequirements: z.array(establishedRequirement).max(200).optional(),
+  evidence: z.record(z.string(), z.any()).optional(),
 });
 
 /** POST /api/admin/factory/qualification/:canonicalOpportunityId/decision — record a NON-approval decision. */
@@ -159,6 +214,7 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/decision',
       canonicalOpportunityId, biddingEntity: b.data.biddingEntity, expectedVersion: b.data.expectedVersion,
       decision: b.data.decision, rationale: b.data.rationale ?? null, reviewerIdentityId: actorIdentity(req),
       effortCap: b.data.effortCap ?? null, reassessmentConditions: b.data.reassessmentConditions ?? null,
+      establishedRequirements: b.data.establishedRequirements, evidence: b.data.evidence,
     });
     res.json({ qualification: q });
   } catch (err: any) {
