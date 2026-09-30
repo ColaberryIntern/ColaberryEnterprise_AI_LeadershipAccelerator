@@ -120,6 +120,14 @@ export async function runIntakeTurn(params: {
    * every turn, because this endpoint is stateless.
    */
   documents?: IntakeDocument[];
+  /**
+   * Rest the build at `drafted` for a human to read before the person sees it.
+   *
+   * The door decides. A prospect's own enquiry publishes itself; a reviewer building for
+   * someone else is reviewing, and a plan the intern is already looking at is not
+   * something anybody is reviewing.
+   */
+  holdForReview?: boolean;
 }): Promise<IntakeTurnResult> {
   const documents = boundDocuments(params.documents);
   const result = await nextInterviewMessage({ turns: params.turns, facts: params.facts, documents });
@@ -154,6 +162,7 @@ export async function runIntakeTurn(params: {
     facts: params.facts,
     leadId: params.leadId,
     buildFor: params.buildFor,
+    holdForReview: params.holdForReview,
   });
 
   return { done: true, message: result.message, ...outcome };
@@ -174,6 +183,8 @@ export async function finishIntake(params: {
   facts: InterviewFacts;
   leadId: number | null;
   buildFor: BuildTarget;
+  /** See `runIntakeTurn`. Off by default, so the spoken door is unchanged. */
+  holdForReview?: boolean;
 }): Promise<IntakeOutcome> {
   const outcome = await recordUnderstandingFromConversation({
     leadId: params.leadId,
@@ -196,7 +207,11 @@ export async function finishIntake(params: {
       if ('reason' in landing) {
         response.build = { started: false, reason: landing.reason };
       } else {
-        const build = await startBuildFromUnderstanding({ recordId: outcome.id, enrollmentId: landing.id });
+        const build = await startBuildFromUnderstanding({
+          recordId: outcome.id,
+          enrollmentId: landing.id,
+          holdForReview: params.holdForReview,
+        });
         response.build = build.ok
           ? { started: true, project_id: build.projectId }
           : { started: false, reason: build.error };

@@ -213,6 +213,9 @@ describe('POST /api/admin/flotation/intake/turn - the interview, from the manage
       sourceRef: `admin:${SESSION}`,
       leadId: null,
       buildFor: { kind: 'enrollment', enrollmentId: ENR },
+      documents: undefined,
+      // This door holds; see "HOLDS the build for review" below for why.
+      holdForReview: true,
     });
   });
 
@@ -415,6 +418,16 @@ describe('the turn carries the documents through', () => {
 
     expect(res.status).toBe(400);
     expect(mockTurn).not.toHaveBeenCalled();
+  });
+
+  it('HOLDS the build for review, because this door is a reviewer building for someone else', async () => {
+    const res = await request(app)
+      .post('/api/admin/flotation/intake/turn')
+      .set('Authorization', `Bearer ${ADMIN}`)
+      .send({ enrollment_id: ENR, session_id: SESSION, turns });
+
+    expect(res.status).toBe(200);
+    expect(mockTurn).toHaveBeenCalledWith(expect.objectContaining({ holdForReview: true }));
   });
 
   it('still works with no documents at all', async () => {
