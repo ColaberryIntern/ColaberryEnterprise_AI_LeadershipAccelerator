@@ -22,7 +22,7 @@ import {
   listHandoffsHandler,
   releaseHandoffHandler,
 } from '../../controllers/growthJourneyHandoffController';
-import { getPersonJourneyHandler } from '../../controllers/growthJourneyPersonController';
+import { getPersonChainHandler, getPersonJourneyHandler } from '../../controllers/growthJourneyPersonController';
 import {
   clearPauseHandler,
   clearRolloutHandler,
@@ -112,7 +112,16 @@ router.post(`${BASE}/handoffs/:id/release`, releaseHandoffHandler);
 // Phase 4 (T410): Person 360 - one lead's journey across the brands the caller
 // may see, stored rows only, scoped collection by collection. A lead the caller
 // can see nothing of is the byte-identical 404.
+// The chain sits beside the journey read, in THIS router rather than the sibling the
+// plan named: `/people/:leadId` is here, behind the master-flag gate, and splitting one
+// resource across two routers with different gating would mean a person's journey and
+// that person's chain could answer differently about whether the system is on.
+//
+// No mount-order hazard: `/people/:leadId` cannot match `/people/:leadId/chain`, because
+// Express matches segment counts - unlike `/handoffs/:id` and `/handoffs/policies`, which
+// can, and which is why that pair's order is pinned by a test.
 router.get(`${BASE}/people/:leadId`, getPersonJourneyHandler);
+router.get(`${BASE}/people/:leadId/chain`, getPersonChainHandler);
 
 // Phase 5 (T518): the operator's switchboard. One GET (the controls in the
 // caller's scope), four audited POSTs: a pause on a brand is the brand's admins'
