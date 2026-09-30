@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { PageHeader, SectionCard } from '../../../components/admin/shell';
 import { TrustSignal } from '../../../components/admin/shell/trust';
 import BrandReadinessPanel from './BrandReadinessPanel';
@@ -25,6 +25,9 @@ import {
 } from '../../../services/adminBrandApi';
 import { useMarketingBrand } from './MarketingBrandContext';
 import { ALL_BRANDS } from './brandScope';
+import { BRAND_TABS, isBrandTab, setupSummary, type BrandSetupFacts, type BrandTabKey } from './brandSetup';
+import BrandSetupTabs from './BrandSetupTabs';
+import { listItems, type ContentItem } from '../../../services/contentComposerApi';
 
 /**
  * Brand administration — brands, their sending domains, and whether they can actually send.
@@ -67,6 +70,30 @@ function AdminBrandsPage() {
   const [accountsError, setAccountsError] = useState<string | null>(null);
   const [accountsBusy, setAccountsBusy] = useState(false);
   const [connectors, setConnectors] = useState<ConnectorStatus[] | null>(null);
+
+  /**
+   * Which tab, in the URL (`?tab=channels`), so a link can open the right one - the same reason
+   * the composer keeps its step there.
+   */
+  const [tabParams, setTabParams] = useSearchParams();
+  const tab: BrandTabKey = isBrandTab(tabParams.get('tab')) ? (tabParams.get('tab') as BrandTabKey) : 'channels';
+  const goToTab = useCallback((next: BrandTabKey) => {
+    const q = new URLSearchParams(tabParams);
+    q.set('tab', next);
+    setTabParams(q, { replace: true });
+  }, [tabParams, setTabParams]);
+
+  /** Posts waiting for a human on this brand. The Approvals tab's content, and its count. */
+  const [awaiting, setAwaiting] = useState<ContentItem[] | null>(null);
+  useEffect(() => {
+    if (!selectedBrandId) { setAwaiting([]); return; }
+    let cancelled = false;
+    listItems({ brand_id: selectedBrandId, status: 'ready_for_review', limit: 50 })
+      .then((rows) => { if (!cancelled) setAwaiting(rows); })
+      // Null means "could not load", which the tab says rather than showing an empty list.
+      .catch(() => { if (!cancelled) setAwaiting(null); });
+    return () => { cancelled = true; };
+  }, [selectedBrandId]);
   const [connectorsError, setConnectorsError] = useState<string | null>(null);
   const [connectNotice, setConnectNotice] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
@@ -215,48 +242,131 @@ function AdminBrandsPage() {
     }],
   }), [error, loading, fetchedAt, brands.length, scopeMode]);
 
+  const live = accounts.filter((a) => !a.revoked_at);
+  const facts: BrandSetupFacts = {
+    channelCount: live.length,
+    channelsNeedingAttention: live.filter((a) => a.health === 'expired' || a.health === 'unhealthy' || a.health === 'expiring').length,
+    domainCount: readiness ? readiness.domains.length : null,
+    verifiedDomainCount: readiness ? readiness.domains.filter((d) => d.verification_status === 'verified').length : 0,
+    pendingApprovals: awaiting?.length ?? 0,
+  };
+  const summary = setupSummary(facts);
+  const brandName = brands.find((b) => b.id === selectedBrandId)?.name ?? null;
+
   return (
     <>
       <PageHeader
-        title="Brands"
+        title={brandName ? `Brand setup: ${brandName}` : 'Brand setup'}
         icon="price-tag-3-line"
-        subtitle="Sending domains, sender profiles, and whether each brand can actually send."
-        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Brands' }]}
+        subtitle="Everything this brand needs in order to publish, in one place."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Marketing', to: '/admin/marketing' }, { label: 'Brands' }]}
         trust={trust}
       />
-      <SectionCard title="Send readiness" icon="mail-check-line" padded={false}>
-        <BrandReadinessPanel
-          loading={loading}
-          error={error}
-          brands={brands}
-          scopeMode={scopeMode}
-          selectedBrandId={selectedBrandId}
-          readiness={readiness}
-          readinessLoading={readinessLoading}
-          onSelectBrand={setSelectedBrandId}
-          onRetry={fetchBrands}
-        />
-      </SectionCard>
-      <SectionCard title="Connected accounts" icon="links-line" padded={false}>
-        {connectNotice && (
-          <div className={`alert alert-${connectNotice.tone} m-3 mb-0 py-2 small`} role="status" data-testid="linkedin-connect-notice">
-            {connectNotice.text}
-          </div>
+
+      {connectNotice && (
+        <div className={`alert alert-${connectNotice.tone} m-3 mb-0 py-2 small`} role="status" data-testid="linkedin-connect-notice">
+          {connectNotice.text}
+        </div>
+      )}
+
+      {/* What is left to do, so setting a brand up is a task with an end rather than a tour. */}
+      <div className={`px-3 py-2 small ${summary.done ? 'text-success' : 'text-warning-emphasis'}`} data-testid="brand-setup-summary">
+        {summary.text}
+      </div>
+
+      <BrandSetupTabs active={tab} counts={{ channels: live.length, approvals: facts.pendingApprovals }} onGo={goToTab} />
+
+      <div className="px-3 py-3">
+        {tab === 'channels' && (
+          <SectionCard title="Channels" subtitle={BRAND_TABS[0].hint} icon="links-line" padded={false}>
+            <ChannelAccountsPanel
+              loading={accountsLoading}
+              error={accountsError}
+              vault={vault}
+              accounts={accounts}
+              brandId={selectedBrandId}
+              connectors={connectors}
+              connectorsError={connectorsError}
+              busy={accountsBusy}
+              onConnect={handleConnect}
+              onRevoke={handleRevoke}
+              onRetry={fetchAccounts}
+            />
+          </SectionCard>
         )}
-        <ChannelAccountsPanel
-          loading={accountsLoading}
-          error={accountsError}
-          vault={vault}
-          accounts={accounts}
-          brandId={selectedBrandId}
-          connectors={connectors}
-          connectorsError={connectorsError}
-          busy={accountsBusy}
-          onConnect={handleConnect}
-          onRevoke={handleRevoke}
-          onRetry={fetchAccounts}
-        />
-      </SectionCard>
+
+        {tab === 'domains' && (
+          <SectionCard title="Sending domains" subtitle={BRAND_TABS[1].hint} icon="mail-check-line" padded={false}>
+            <BrandReadinessPanel
+              loading={loading}
+              error={error}
+              brands={brands}
+              scopeMode={scopeMode}
+              selectedBrandId={selectedBrandId}
+              readiness={readiness}
+              readinessLoading={readinessLoading}
+              onSelectBrand={setSelectedBrandId}
+              onRetry={fetchBrands}
+            />
+          </SectionCard>
+        )}
+
+        {tab === 'approvals' && (
+          <SectionCard title="Waiting for approval" subtitle={BRAND_TABS[2].hint} icon="checkbox-circle-line">
+            {awaiting === null && <p className="text-danger small mb-0">The list could not be loaded. This is a failed request, not an empty queue.</p>}
+            {awaiting?.length === 0 && <p className="text-muted small mb-0">Nothing is waiting for approval on this brand.</p>}
+            {awaiting && awaiting.length > 0 && (
+              <ul className="list-unstyled mb-0">
+                {awaiting.map((it) => (
+                  <li key={it.id} className="d-flex align-items-center gap-2 py-1 border-bottom">
+                    <Link to={`/admin/marketing/composer/${it.id}?step=confirm`} className="flex-grow-1 text-truncate">
+                      {it.title || 'Untitled post'}
+                    </Link>
+                    <span className="small text-muted">revision {it.revision}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </SectionCard>
+        )}
+
+        {tab === 'campaigns' && (
+          <SectionCard title="Campaigns and slugs" subtitle={BRAND_TABS[3].hint} icon="price-tag-3-line">
+            <p className="small mb-2">
+              Campaigns are shared across the whole admin, not owned by one brand, so they are
+              managed in one place rather than copied here.
+            </p>
+            <Link className="btn btn-sm btn-outline-primary" to="/admin/campaigns">Open campaigns</Link>
+          </SectionCard>
+        )}
+
+        {tab === 'details' && (
+          <SectionCard title="Details" subtitle={BRAND_TABS[4].hint} icon="information-line">
+            {(() => {
+              const brand = brands.find((b) => b.id === selectedBrandId);
+              if (!brand) return <p className="text-muted small mb-0">Choose a brand in the bar above.</p>;
+              return (
+                <>
+                  <dl className="row mb-3 small">
+                    <dt className="col-sm-3 text-muted">Name</dt><dd className="col-sm-9">{brand.name}</dd>
+                    <dt className="col-sm-3 text-muted">Slug</dt><dd className="col-sm-9"><code>{brand.slug}</code></dd>
+                    <dt className="col-sm-3 text-muted">Status</dt><dd className="col-sm-9">{brand.status}</dd>
+                    <dt className="col-sm-3 text-muted">Public address</dt>
+                    <dd className="col-sm-9">{brand.default_public_url ?? <span className="text-muted">not set</span>}</dd>
+                    <dt className="col-sm-3 text-muted">Support email</dt>
+                    <dd className="col-sm-9">{brand.support_email ?? <span className="text-muted">not set</span>}</dd>
+                  </dl>
+                  {/* Said plainly rather than implied by the absence of a form. */}
+                  <p className="small text-muted mb-0">
+                    These are read-only here: there is no API for editing a brand yet. Posting times
+                    are set per post in the composer, not as recurring slots.
+                  </p>
+                </>
+              );
+            })()}
+          </SectionCard>
+        )}
+      </div>
     </>
   );
 }
