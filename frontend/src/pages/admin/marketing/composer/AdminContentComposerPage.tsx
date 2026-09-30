@@ -12,6 +12,11 @@ import ComposerPreview from './ComposerPreview';
 import ComposerConfirmation from './ComposerConfirmation';
 import ComposerPublishing from './ComposerPublishing';
 import { fromCentralInput, toCentralInput } from '../centralTime';
+import { listChannelAccounts } from '../../../../services/channelAccountApi';
+import {
+  channelChoices, connectedProviders, pruneSelection, unavailableNote,
+  type ConnectedAccountLike,
+} from './channelChoices';
 
 /**
  * The marketing composer (spec 8.1). One page, five sections, in the order the work happens:
@@ -108,6 +113,37 @@ export default function AdminContentComposerPage() {
   }, [routeId]);
 
   const brand = useMemo(() => brands.find((b) => b.id === setup.brand_id) ?? null, [brands, setup.brand_id]);
+
+  /**
+   * Which networks THIS brand can post to. The channel row used to list every network the
+   * platform knows about, so a brand with Facebook and Instagram could be given seven variants,
+   * four of them with nowhere to go.
+   */
+  const [brandAccounts, setBrandAccounts] = useState<ConnectedAccountLike[]>([]);
+  useEffect(() => {
+    if (!setup.brand_id) { setBrandAccounts([]); return; }
+    let cancelled = false;
+    listChannelAccounts({ brand_id: setup.brand_id })
+      .then((rows) => { if (!cancelled) setBrandAccounts(rows); })
+      // A failed load must not silently offer everything, which is the bug this replaces.
+      .catch(() => { if (!cancelled) setBrandAccounts([]); });
+    return () => { cancelled = true; };
+  }, [setup.brand_id]);
+
+  const choices = useMemo(
+    () => channelChoices(providers, connectedProviders(brandAccounts), Boolean(setup.brand_id)),
+    [providers, brandAccounts, setup.brand_id],
+  );
+  const channelNote = useMemo(() => unavailableNote(choices, Boolean(setup.brand_id)), [choices, setup.brand_id]);
+
+  // The brand can change under a selection, and an account can be disconnected after an item was
+  // saved. Either way a tick that is no longer valid must not survive into generation.
+  useEffect(() => {
+    setSelected((s) => {
+      const next = pruneSelection(s, choices);
+      return next.length === s.length ? s : next;
+    });
+  }, [choices]);
 
   // ── First draft from a topic ────────────────────────────────────────────────────────────
   const [draftNotes, setDraftNotes] = useState<{ placeholders: string[]; unverifiedClaims: string[] } | null>(null);
@@ -286,13 +322,19 @@ export default function AdminContentComposerPage() {
       </SectionCard>
 
       <SectionCard title="2. Channels and variants" subtitle="Pick networks, generate, edit, add tracked links, validate." icon="share-line">
+        {/* Greyed boxes explained once, above the row, rather than only in seven tooltips. */}
+        {channelNote && <div className="small text-warning-emphasis mb-2" data-testid="channel-note">{channelNote}</div>}
         <div className="d-flex flex-wrap gap-3 mb-3">
-          {providers.map((p) => (
-            <label key={p.provider} className="form-check small">
-              <input className="form-check-input" type="checkbox" disabled={!item || busy}
-                checked={selected.includes(p.provider)}
-                onChange={(e) => setSelected((s) => e.target.checked ? [...s, p.provider] : s.filter((x) => x !== p.provider))} />
-              <span className="form-check-label ms-1">{p.displayName}{p.mode === 'handoff' ? ' (handoff)' : ''}</span>
+          {choices.map((c) => (
+            <label key={c.provider} className={`form-check small ${c.selectable ? '' : 'text-muted'}`} title={c.reason ?? undefined}>
+              <input className="form-check-input" type="checkbox" disabled={!item || busy || !c.selectable}
+                checked={selected.includes(c.provider)}
+                data-testid={`channel-${c.provider}`}
+                onChange={(e) => setSelected((s) => e.target.checked ? [...s, c.provider] : s.filter((x) => x !== c.provider))} />
+              <span className="form-check-label ms-1">
+                {c.displayName}{c.handoff ? ' (handoff)' : ''}
+                {!c.selectable && <span className="ms-1">- not connected</span>}
+              </span>
             </label>
           ))}
         </div>
