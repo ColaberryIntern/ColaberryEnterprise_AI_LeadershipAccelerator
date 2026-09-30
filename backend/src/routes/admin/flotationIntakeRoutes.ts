@@ -304,4 +304,57 @@ router.get('/api/admin/flotation/intake/call/:callId', requireAdmin, async (req:
   }
 });
 
+/**
+ * POST /api/admin/flotation/import-repo
+ *
+ *     "Also allow me to add projects that aren't connected to the system, but I
+ *      can give you the repo to read and upload the project."  (Ali, 2026-09-29)
+ *
+ * A THIRD way into the same pipeline, beside the conversation and the wizard.
+ * The repository becomes a brief and the brief goes through `startBuild`, so an
+ * imported project lands with the same releases, stories and requirements as
+ * any other and shows up on the same board with the same case-study score.
+ *
+ * Held for review: a plan assembled from somebody's README wants a human read
+ * before it reaches their Projects page.
+ *
+ * 202, because generation runs on the queue and is minutes long. The response
+ * says which documents were actually read, so a thin plan can be traced to a
+ * thin repository rather than blamed on the decomposer.
+ */
+router.post('/api/admin/flotation/import-repo', requireAdmin, async (req: Request, res: Response) => {
+  const repoUrl = String(req.body?.repo_url ?? '').trim();
+  const enrollmentId = String(req.body?.enrollment_id ?? '').trim();
+  if (!repoUrl || !enrollmentId) {
+    return res.status(400).json({ error: 'A repository and the person it belongs to are both required.' });
+  }
+  try {
+    // Imported HERE, not at the top of the file. The import service reaches
+    // projectService and therefore config/database, and both flotation route
+    // suites mock the database away — a top-level import makes real Sequelize
+    // load before their mocks apply and the whole suite fails to run. Same
+    // reasoning as sbpOrchestrator's deferred alertService import.
+    const { importProjectFromRepo } = await import('../../services/delivery/repoProjectImport');
+    const result = await importProjectFromRepo({
+      repoUrl,
+      enrollmentId,
+      name: typeof req.body?.name === 'string' ? req.body.name : null,
+      size: typeof req.body?.size === 'string' ? req.body.size : null,
+    });
+    return res.status(202).json(result);
+  } catch (err: any) {
+    const status = typeof err?.status === 'number' ? err.status : 500;
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: status >= 500 ? 'error' : 'warn', service: 'backend',
+      event: 'repo_project_import_failed', outcome: 'failure',
+      error_class: err?.error_class ?? err?.constructor?.name ?? 'Error',
+      context: { repo_url: repoUrl.slice(0, 200), message: err?.message },
+    }));
+    return res.status(status).json({
+      error: status >= 500 ? 'Could not import that repository.' : String(err?.message ?? 'Could not import that repository.'),
+    });
+  }
+});
+
 export default router;
