@@ -429,6 +429,25 @@ export async function assignInternProject(
   return data;
 }
 
+// ── The same review, addressed by the project ───────────────────────────────
+//
+// The conversation intake builds a project for a student who may have no internship
+// application at all, so the application-scoped pair above cannot serve it. Same server
+// handlers, same payload; only the path stops pretending an application is involved.
+
+export async function internProjectBuildByProject(projectId: string): Promise<InternProjectBuildView> {
+  const { data } = await api.get<InternProjectBuildView>(`/api/admin/internship/projects/${projectId}/build`);
+  return data;
+}
+
+export async function assignProject(
+  projectId: string,
+  body: { expected_sha256?: string | null } = {},
+): Promise<{ status: string; planVersion: number; commitSha: string | null; filesWritten: number; repoUrl: string | null }> {
+  const { data } = await api.post(`/api/admin/internship/projects/${projectId}/assign`, body);
+  return data;
+}
+
 // ── Documents ───────────────────────────────────────────────────────────────
 
 export interface AdminDocumentRow {

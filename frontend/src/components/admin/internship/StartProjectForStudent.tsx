@@ -1,14 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SectionCard, StatusBadge } from '../shell';
 import {
+  IntakeDocument,
   IntakeStudent,
   IntakeTurn,
   IntakeTurnResult,
   describeBuildError,
+  readIntakeDocument,
   searchIntakeStudents,
   sendIntakeTurn,
 } from '../../../services/adminFlotationIntakeApi';
 import { getViewAsUrl } from '../../../services/adminOrgApi';
+import {
+  InternProjectBuildView,
+  assignProject,
+  internProjectBuildByProject,
+} from '../../../services/adminInternshipApi';
+import RequirementCoveragePanel from '../../../pages/admin/components/RequirementCoveragePanel';
 import SpokenIntake from './SpokenIntake';
 import { readActiveIntake, clearActiveIntake } from './flotationIntakeSession';
 
@@ -75,6 +83,90 @@ export default function StartProjectForStudent({ startFor, onConsumed }: {
   const [finished, setFinished] = useState<Extract<IntakeTurnResult, { done: true }> | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * Documents attached to this conversation, as text the server already read.
+   *
+   *     "I should be able to add documents to this process that can be analyzed before
+   *      submitting the next question and can be used when creating the requirements."
+   *      (Ali, 2026-09-29)
+   *
+   * Held here and re-sent with every turn, the same way the transcript is: the turn
+   * endpoint keeps nothing between turns, which is what makes it safe to retry.
+   */
+  const [documents, setDocuments] = useState<IntakeDocument[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [docError, setDocError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * The plan this conversation produced, and whether it can be assigned.
+   *
+   *     "We will never build projects like this, one story at a time. We do not create
+   *      manually. This is where I need to put my idea process in here. The same process
+   *      that already exists for creating projects."  (Ali, 2026-09-29)
+   *
+   * This door HOLDS the build, so the conversation no longer ends at "it is building".
+   * It ends here, at the plan, with the same gate split and coverage report the form
+   * intake had - which is the point of consolidating rather than rebuilding: the review is
+   * already written and already the server's.
+   */
+  const [review, setReview] = useState<InternProjectBuildView | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [assigning, setAssigning] = useState(false);
+
+  const builtProjectId = finished?.build?.started ? finished.build.project_id ?? null : null;
+
+  // Poll while it generates, then stop. A held plan rests at `drafted`, which is a
+  // terminal state here rather than a failure - see the SBP runbook: `drafted` means the
+  // plan is good and something chose not to publish it, and here that something is us.
+  useEffect(() => {
+    if (!builtProjectId) return undefined;
+    let live = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const look = async () => {
+      try {
+        const view = await internProjectBuildByProject(builtProjectId);
+        if (!live) return;
+        setReview(view);
+        setReviewError(null);
+        if (view.status === 'generating' || view.status === null) {
+          timer = setTimeout(() => void look(), 5000);
+        }
+      } catch (err) {
+        if (!live) return;
+        setReviewError(describeBuildError(err));
+        // Slower on failure: a plan that cannot be read is not going to become readable
+        // by asking harder.
+        timer = setTimeout(() => void look(), 15000);
+      }
+    };
+    void look();
+
+    return () => { live = false; if (timer) clearTimeout(timer); };
+  }, [builtProjectId]);
+
+  /**
+   * The reviewer says yes.
+   *
+   * `expected_sha256` is the hash of the plan actually on screen. `publishPlan` refuses on
+   * a mismatch, so a regeneration between reading and assigning cannot ship a plan nobody
+   * reviewed - the failure that parameter was added for.
+   */
+  const assign = async () => {
+    if (!review || assigning) return;
+    setAssigning(true);
+    setReviewError(null);
+    try {
+      await assignProject(review.project_id, { expected_sha256: review.plan_sha256 });
+      setReview(await internProjectBuildByProject(review.project_id));
+    } catch (err) {
+      setReviewError(describeBuildError(err));
+    } finally {
+      setAssigning(false);
+    }
+  };
+
   // Search as they type, after a pause, from two characters - the server refuses less.
   useEffect(() => {
     const q = query.trim();
@@ -119,7 +211,7 @@ export default function StartProjectForStudent({ startFor, onConsumed }: {
     setBusy(true);
     setError(null);
     try {
-      const result = await sendIntakeTurn({ enrollmentId: student.id, sessionId, turns: next });
+      const result = await sendIntakeTurn({ enrollmentId: student.id, sessionId, turns: next, documents });
       setTurns([...next, { role: 'assistant', text: result.message }]);
       if (result.done) {
         setFinished(result);
@@ -134,6 +226,35 @@ export default function StartProjectForStudent({ startFor, onConsumed }: {
     }
   };
 
+  /**
+   * Attach a document, and read it now rather than at send time.
+   *
+   * Reading it here is what "analyzed before submitting the next question" means in
+   * practice: the admin sees how much text came out before they type, so a scan with no
+   * text layer is a visible refusal instead of a document that silently contributed
+   * nothing to the requirements.
+   */
+  const attach = async (file: File | null | undefined) => {
+    if (!file || uploading) return;
+    setUploading(true);
+    setDocError(null);
+    try {
+      const { document: doc, chars, clipped } = await readIntakeDocument(file);
+      setDocuments((prev) => [...prev, doc]);
+      if (clipped) {
+        // Named out loud: a clipped document reporting success is exactly how a
+        // requirement goes missing while the screen says everything worked.
+        setDocError(`${doc.name} was long — the first ${chars.toLocaleString()} characters were kept.`);
+      }
+    } catch (err) {
+      setDocError(describeBuildError(err));
+    } finally {
+      setUploading(false);
+      // So the same file can be picked again after a failure; the input holds its value.
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
   const reset = () => {
     clearActiveIntake();
     setPhase('pick');
@@ -143,6 +264,10 @@ export default function StartProjectForStudent({ startFor, onConsumed }: {
     setTurns([]);
     setDraft('');
     setError(null);
+    setDocuments([]);
+    setDocError(null);
+    setReview(null);
+    setReviewError(null);
     setFinished(null);
   };
 
@@ -281,6 +406,52 @@ export default function StartProjectForStudent({ startFor, onConsumed }: {
           {error && <p className="text-danger small">{error}</p>}
 
           {phase === 'talk' && (
+            <div className="mb-2">
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                <label className="btn btn-sm btn-outline-secondary mb-0" style={{ cursor: uploading ? 'wait' : 'pointer' }}>
+                  <i className="ri-attachment-2 me-1" />
+                  {uploading ? 'Reading…' : 'Attach a document'}
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    className="d-none"
+                    accept=".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.rtf,.txt,.md,.csv"
+                    disabled={uploading || busy}
+                    onChange={(e) => void attach(e.target.files?.[0])}
+                  />
+                </label>
+                <span className="text-muted" style={{ fontSize: 12 }}>
+                  Read before the next question, and used when the requirements are written.
+                </span>
+              </div>
+
+              {documents.length > 0 && (
+                <div className="d-flex flex-wrap gap-2 mt-2">
+                  {documents.map((d, i) => (
+                    <span key={`${d.name}-${i}`} className="badge bg-light text-dark border d-inline-flex align-items-center gap-2">
+                      <i className="ri-file-text-line" />
+                      {d.name}
+                      {/* The character count is the honest signal of what was actually
+                          read: a 40-page PDF that yields 200 characters is a scan, and
+                          the number says so where a filename would not. */}
+                      <span className="text-muted">{d.text.length.toLocaleString()} chars</span>
+                      <button
+                        type="button"
+                        className="btn-close"
+                        style={{ fontSize: 9 }}
+                        aria-label={`Remove ${d.name}`}
+                        onClick={() => setDocuments((prev) => prev.filter((_, j) => j !== i))}
+                      />
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {docError && <p className="text-warning small mb-0 mt-2">{docError}</p>}
+            </div>
+          )}
+
+          {phase === 'talk' && (
             <form
               className="d-flex gap-2"
               onSubmit={(e) => { e.preventDefault(); void send(); }}
@@ -319,16 +490,127 @@ export default function StartProjectForStudent({ startFor, onConsumed }: {
               <p className="small mb-2">
                 {finished.build?.started ? (
                   <>
-                    The project is building now - intake &rarr; decompose &rarr; gate &rarr; repair &rarr; publish, a minute or two.
-                    It will appear in {student.full_name || 'their'} portal exactly as a student-created one would.
+                    The project is building now - intake &rarr; decompose &rarr; gate &rarr; repair. It stops before
+                    publishing and waits for you below; {student.full_name || 'they'} cannot see anything yet.
                   </>
                 ) : (
                   <>The write-up was recorded but no build started: {finished.build?.reason || 'no reason given'}.</>
                 )}
               </p>
-              <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => void viewAs()}>
-                <i className="ri-eye-line me-1" />See it as they would
-              </button>
+
+              {reviewError && <p className="text-danger small">{reviewError}</p>}
+
+              {builtProjectId && !review && !reviewError && (
+                <div className="d-flex align-items-center gap-2 small mb-2">
+                  <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+                  <span>Reading the plan…</span>
+                </div>
+              )}
+
+              {review && (
+                <div className="d-flex flex-column gap-2 mb-2">
+                  {review.status === 'generating' && (
+                    <div className="d-flex align-items-center gap-2" style={{ fontSize: 13 }}>
+                      <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+                      <span>Generating. A minute or two, and nothing is visible to them yet.</span>
+                    </div>
+                  )}
+
+                  {review.status === 'failed' && (
+                    <div className="alert alert-danger py-2 mb-0" role="alert" style={{ fontSize: 13 }}>
+                      Generation failed. Nothing was assigned; have the conversation again with more in it.
+                    </div>
+                  )}
+
+                  {review.blocking.length > 0 && (
+                    <div className="alert alert-warning py-2 mb-0" role="alert" style={{ fontSize: 12.5 }}>
+                      <strong>This plan cannot be assigned yet.</strong>
+                      <ul className="mb-0 mt-1" style={{ paddingLeft: 18 }}>
+                        {review.blocking.map((v, i) => <li key={`${v.rule}-${i}`}>{v.message}</li>)}
+                      </ul>
+                      <div className="mt-1">Usually the brief is thin. Start again and say more in the conversation.</div>
+                    </div>
+                  )}
+
+                  {review.plan && (
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700 }}>{review.plan.project_name}</div>
+                      <div className="text-muted mb-2" style={{ fontSize: 12.5 }}>
+                        {review.plan.descriptor} · {review.plan.requirements.length} requirements
+                        · {review.plan.releases.length} releases · {review.plan.stories.length} stories
+                        {review.version ? ` · v${review.version}` : ''}
+                      </div>
+                      <div className="d-flex flex-column gap-2">
+                        {review.plan.releases.map((rel) => {
+                          const stories = review.plan!.stories.filter((s) => s.release === rel.key);
+                          return (
+                            <div key={rel.key} style={{ border: '1px solid #e9ecef', borderRadius: 6, padding: '8px 10px' }}>
+                              <div style={{ fontSize: 13, fontWeight: 600 }}>
+                                {rel.name}
+                                <span className="text-muted" style={{ fontWeight: 400 }}>
+                                  {' '}· {stories.length} stories · weeks {rel.week_start}-{rel.week_end}
+                                </span>
+                              </div>
+                              {rel.goal && <div className="text-muted" style={{ fontSize: 12 }}>{rel.goal}</div>}
+                              <ul className="mb-0 mt-1" style={{ paddingLeft: 18, fontSize: 12.5 }}>
+                                {stories.map((s) => (
+                                  <li key={s.id}><span style={{ fontWeight: 600 }}>{s.id}</span> {s.title}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {review.advisory.length > 0 && (
+                    <details style={{ fontSize: 12.5 }}>
+                      <summary className="text-muted">
+                        {review.advisory.length} advisory note(s) — these do not stop an assignment
+                      </summary>
+                      <ul className="mb-0 mt-1" style={{ paddingLeft: 18 }}>
+                        {review.advisory.map((v, i) => <li key={`${v.rule}-${i}`}>{v.message}</li>)}
+                      </ul>
+                    </details>
+                  )}
+
+                  {/* Every project built this way came from a recorded conversation, so the
+                      comparison always has something to compare against - which is more than
+                      was true of the form intake this replaces. */}
+                  {review.coverage && (
+                    <RequirementCoveragePanel coverage={review.coverage} summary={review.coverage_summary} />
+                  )}
+                </div>
+              )}
+
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                {review && (
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-success"
+                    disabled={
+                      assigning
+                      || review.assigned
+                      || review.status === 'generating'
+                      || review.blocking.length > 0
+                      || !review.plan
+                    }
+                    onClick={() => void assign()}
+                  >
+                    {assigning ? 'Assigning…' : review.assigned ? 'Assigned' : `Assign to ${student.full_name || 'them'}`}
+                  </button>
+                )}
+                <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => void viewAs()}>
+                  <i className="ri-eye-line me-1" />See it as they would
+                </button>
+              </div>
+
+              {review?.assigned && (
+                <p className="text-success small mb-0 mt-2">
+                  Published and materialised. It is on their Projects page now.
+                </p>
+              )}
             </div>
           )}
           </>

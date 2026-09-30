@@ -52,6 +52,12 @@ jest.mock('../../../services/delivery/projectIntake', () => ({
 // here it only needs to not drag the real database config in through its import.
 jest.mock('../../../services/callbackRequestService', () => ({ requestInstantCallback: jest.fn() }));
 jest.mock('../../../services/delivery/flotationCallCompletion', () => ({ reconcileFlotationCall: jest.fn() }));
+// The parser itself is not the door's business; what IS its business is what it does with
+// text, with no text, and with a parser that threw.
+const mockExtract = jest.fn();
+jest.mock('../../../services/fileExtractionService', () => ({
+  extractTextFromBuffer: (...a: any[]) => mockExtract(...a),
+}));
 
 import flotationIntakeRoutes from '../flotationIntakeRoutes';
 
@@ -207,6 +213,9 @@ describe('POST /api/admin/flotation/intake/turn - the interview, from the manage
       sourceRef: `admin:${SESSION}`,
       leadId: null,
       buildFor: { kind: 'enrollment', enrollmentId: ENR },
+      documents: undefined,
+      // This door holds; see "HOLDS the build for review" below for why.
+      holdForReview: true,
     });
   });
 
@@ -273,5 +282,161 @@ describe('GET /api/admin/flotation/intake/enrollments - finding the student', ()
 
   it('refuses without a token', async () => {
     expect((await request(app).get('/api/admin/flotation/intake/enrollments?q=marta')).status).toBe(401);
+  });
+});
+
+/**
+ * POST /intake/document — reading a document so the interview can use it.
+ *
+ *     "Also I should be able to add documents to this process that can be analyzed
+ *      before submitting the next question and can be used when creating the
+ *      requirements."  (Ali, 2026-09-29)
+ *
+ * The door's whole job is to turn a file into text and refuse honestly when it cannot.
+ * The failure that matters is the QUIET one: a scan with no text layer parses fine,
+ * returns an empty string, and would otherwise attach a document that contributes
+ * nothing to the requirements while the screen says it worked.
+ */
+describe('POST /api/admin/flotation/intake/document', () => {
+  const doc = () => Buffer.from('REQ-1: every dispatch is logged.');
+
+  beforeEach(() => {
+    mockExtract.mockResolvedValue('REQ-1: every dispatch is logged.');
+  });
+
+  it('refuses without a token', async () => {
+    const res = await request(app)
+      .post('/api/admin/flotation/intake/document')
+      .attach('file', doc(), 'spec.md');
+
+    expect(res.status).toBe(401);
+    expect(mockExtract).not.toHaveBeenCalled();
+  });
+
+  it('returns the text it read, and keeps nothing', async () => {
+    const res = await request(app)
+      .post('/api/admin/flotation/intake/document')
+      .set('Authorization', `Bearer ${ADMIN}`)
+      .attach('file', doc(), 'spec.md');
+
+    expect(res.status).toBe(200);
+    expect(res.body.document).toEqual({ name: 'spec.md', text: 'REQ-1: every dispatch is logged.' });
+    expect(res.body.clipped).toBe(false);
+  });
+
+  it('422s a document that extracted to NOTHING, rather than attaching an empty one', async () => {
+    // The real failure: a scanned PDF. Parsing succeeds and yields ''. A 200 here would
+    // put a document on screen that changes no requirement.
+    mockExtract.mockResolvedValue('   ');
+
+    const res = await request(app)
+      .post('/api/admin/flotation/intake/document')
+      .set('Authorization', `Bearer ${ADMIN}`)
+      .attach('file', doc(), 'scan.pdf');
+
+    expect(res.status).toBe(422);
+    expect(res.body.error_class).toBe('NoTextExtracted');
+    expect(res.body.error).toContain('scan.pdf');
+  });
+
+  it('422s a parser failure with a sentence, not a stack', async () => {
+    mockExtract.mockRejectedValue(new Error('officeparser exploded at offset 12'));
+
+    const res = await request(app)
+      .post('/api/admin/flotation/intake/document')
+      .set('Authorization', `Bearer ${ADMIN}`)
+      .attach('file', doc(), 'broken.docx');
+
+    expect(res.status).toBe(422);
+    expect(res.body.error_class).toBe('ExtractionFailed');
+    expect(res.body.error).not.toContain('offset 12');
+  });
+
+  it('400s a file type it cannot read text from, with the types that work', async () => {
+    // Multer refuses this before the handler runs. Without the error bridge it would
+    // reach Express's default handler and answer HTML with a 500.
+    const res = await request(app)
+      .post('/api/admin/flotation/intake/document')
+      .set('Authorization', `Bearer ${ADMIN}`)
+      .attach('file', Buffer.from('\x89PNG\r\n'), 'screenshot.png');
+
+    expect(res.status).toBe(400);
+    expect(res.body.error_class).toBe('RejectedFileType');
+    expect(res.body.error).toMatch(/PDF/);
+    expect(mockExtract).not.toHaveBeenCalled();
+  });
+
+  it('400s when no file was attached at all', async () => {
+    const res = await request(app)
+      .post('/api/admin/flotation/intake/document')
+      .set('Authorization', `Bearer ${ADMIN}`);
+
+    expect(res.status).toBe(400);
+    expect(mockExtract).not.toHaveBeenCalled();
+  });
+
+  it('says so when a long document was clipped', async () => {
+    mockExtract.mockResolvedValue('z'.repeat(40_000));
+
+    const res = await request(app)
+      .post('/api/admin/flotation/intake/document')
+      .set('Authorization', `Bearer ${ADMIN}`)
+      .attach('file', doc(), 'long.pdf');
+
+    expect(res.status).toBe(200);
+    expect(res.body.clipped).toBe(true);
+    expect(res.body.document.text.length).toBeLessThan(40_000);
+  });
+});
+
+describe('the turn carries the documents through', () => {
+  const turns = [{ role: 'user', text: 'We run a repair cafe and track loans on paper.' }];
+  const documents = [{ name: 'spec.md', text: 'REQ-1: every dispatch is logged.' }];
+
+  beforeEach(() => {
+    mockEnrollmentFindByPk.mockResolvedValue({ id: ENR, full_name: 'Marta Okafor', company: null, email: 'marta@northside.test' });
+    mockTurn.mockResolvedValue({ done: false, message: 'Who authorises those?', exchanges: 1 });
+  });
+
+  it('hands attached documents to the ONE intake, not to something of its own', async () => {
+    const res = await request(app)
+      .post('/api/admin/flotation/intake/turn')
+      .set('Authorization', `Bearer ${ADMIN}`)
+      .send({ enrollment_id: ENR, session_id: SESSION, turns, documents });
+
+    expect(res.status).toBe(200);
+    expect(mockTurn).toHaveBeenCalledWith(expect.objectContaining({ documents }));
+  });
+
+  it('rejects more documents than the schema allows before anything runs', async () => {
+    const tooMany = Array.from({ length: 9 }, (_, i) => ({ name: `d${i}.md`, text: 'content' }));
+
+    const res = await request(app)
+      .post('/api/admin/flotation/intake/turn')
+      .set('Authorization', `Bearer ${ADMIN}`)
+      .send({ enrollment_id: ENR, session_id: SESSION, turns, documents: tooMany });
+
+    expect(res.status).toBe(400);
+    expect(mockTurn).not.toHaveBeenCalled();
+  });
+
+  it('HOLDS the build for review, because this door is a reviewer building for someone else', async () => {
+    const res = await request(app)
+      .post('/api/admin/flotation/intake/turn')
+      .set('Authorization', `Bearer ${ADMIN}`)
+      .send({ enrollment_id: ENR, session_id: SESSION, turns });
+
+    expect(res.status).toBe(200);
+    expect(mockTurn).toHaveBeenCalledWith(expect.objectContaining({ holdForReview: true }));
+  });
+
+  it('still works with no documents at all', async () => {
+    const res = await request(app)
+      .post('/api/admin/flotation/intake/turn')
+      .set('Authorization', `Bearer ${ADMIN}`)
+      .send({ enrollment_id: ENR, session_id: SESSION, turns });
+
+    expect(res.status).toBe(200);
+    expect(mockTurn.mock.calls[0][0].documents).toBeUndefined();
   });
 });
