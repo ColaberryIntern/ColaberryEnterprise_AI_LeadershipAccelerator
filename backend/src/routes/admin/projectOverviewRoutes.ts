@@ -326,7 +326,7 @@ router.post('/api/admin/projects/tasks/:taskId/demo-day-presented', requireAdmin
 });
 
 /**
- * GET /api/admin/projects/delivery[?cohort_id=]
+ * GET /api/admin/projects/delivery[?cohort_id=][&interns=1]
  * Every project with its build numbers, ranked by case-study readiness.
  * The cohort filter is OPTIONAL by design: the Accelerator page scopes this to
  * the cohort a drill-down came from, while the global view stays unfiltered.
@@ -336,7 +336,11 @@ router.get('/api/admin/projects/delivery', requireAdmin, async (req: Request, re
     const cohortId = typeof req.query.cohort_id === 'string' && req.query.cohort_id
       ? req.query.cohort_id
       : undefined;
-    res.json({ projects: await getProjectDelivery({ cohortId }) });
+    // `interns=1` scopes the board to people holding an active internship
+    // membership. Ali, 2026-09-29: "I need to be able to see all of the
+    // projects at least to the level I see them in the class."
+    const internsOnly = req.query.interns === '1' || req.query.interns === 'true';
+    res.json({ projects: await getProjectDelivery({ cohortId, internsOnly }) });
   } catch (err: any) {
     console.error('[AdminProjectOverview] GET /delivery error:', err.message);
     res.status(500).json({ error: err.message });

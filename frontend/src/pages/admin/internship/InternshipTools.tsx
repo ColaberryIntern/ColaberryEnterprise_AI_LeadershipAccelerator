@@ -4,6 +4,7 @@ import StartProjectForStudent from '../../../components/admin/internship/StartPr
 import FlotationIntakePanel from '../../../components/admin/internship/FlotationIntakePanel';
 import InternshipConversionPanel from '../../../components/admin/internship/InternshipConversionPanel';
 import InternshipProjectReadiness from '../components/InternshipProjectReadiness';
+import ProjectDeliveryView from '../components/ProjectDeliveryView';
 import { useReview } from './reviewContext';
 import type { ProjectReadinessRow } from '../../../services/adminInternshipApi';
 import type { IntakeStudent } from '../../../services/adminFlotationIntakeApi';
@@ -40,6 +41,29 @@ export const InternshipProjectsMode: React.FC<{ onOpenApplicant: (id: string) =>
       <div ref={intakeRef}>
         <StartProjectForStudent startFor={startFor} onConsumed={() => setStartFor(null)} />
       </div>
+
+      {/*
+        Every intern project, at the same depth as the class board: who it is
+        assigned to, tasks, the release strip, how late it is, and how close it
+        is to being a case study — expandable to the releases and their stories.
+
+        Ali, 2026-09-29: "I need to be able to see all of the projects at least
+        to the level I see them in the class... which also helps us see when
+        projects are ready to be case studies."
+
+        The same component the Accelerator board uses, scoped by internship
+        MEMBERSHIP rather than by cohort id. `hideWithoutProject` because the
+        roster above already answers "who has none", and answering it twice on
+        one page invites the two to disagree.
+      */}
+      <SectionCard
+        title="Intern projects"
+        icon="folder-chart-line"
+        subtitle="Every project an intern holds, who it belongs to, and how close it is to being a case study"
+      >
+        <ProjectDeliveryView internsOnly hideWithoutProject />
+      </SectionCard>
+
       <FlotationIntakePanel />
     </div>
   );

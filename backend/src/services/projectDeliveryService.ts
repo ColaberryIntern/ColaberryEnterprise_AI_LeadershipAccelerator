@@ -198,7 +198,22 @@ export function computeReadiness(input: {
  * the readiness score is built from.
  */
 export async function getProjectDelivery(
-  opts: { cohortId?: string; enrollmentId?: string } = {},
+  opts: {
+    cohortId?: string;
+    enrollmentId?: string;
+    /**
+     * Scope to people holding an ACTIVE internship membership.
+     *
+     * Matched on `cohort_memberships`, never on `e.cohort_id`: an intern's
+     * enrollment still points at their CLASS cohort, because the internship is
+     * a secondary membership row — which is the whole reason
+     * internshipActivationService adds one instead of moving the pointer.
+     * Filtering on `e.cohort_id = <the internship cohort>` returns nothing at
+     * all, and an empty board reads as "no intern has a project" rather than as
+     * a wrong query.
+     */
+    internsOnly?: boolean;
+  } = {},
 ): Promise<ProjectRow[]> {
   const rows = await sequelize.query<any>(
     `SELECT p.id                AS project_id,
@@ -257,7 +272,14 @@ export async function getProjectDelivery(
       WHERE p.name IS NOT NULL AND p.name <> ''
         AND (e.status IS NULL OR e.status NOT IN (:departed))
         ${opts.cohortId ? 'AND e.cohort_id = :cohortId' : ''}
-        ${opts.enrollmentId ? 'AND p.enrollment_id = :enrollmentId' : ''}`,
+        ${opts.enrollmentId ? 'AND p.enrollment_id = :enrollmentId' : ''}
+        ${opts.internsOnly ? `AND EXISTS (
+              SELECT 1 FROM cohort_memberships m
+                JOIN cohorts ic ON ic.id = m.cohort_id
+               WHERE m.enrollment_id = p.enrollment_id
+                 AND m.membership_type = 'internship'
+                 AND m.status = 'active'
+                 AND ic.cohort_type = 'ai_internship')` : ''}`,
     {
       replacements: {
         departed: [...DEPARTED_ENROLLMENT_STATUSES],

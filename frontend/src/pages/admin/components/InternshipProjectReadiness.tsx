@@ -72,14 +72,16 @@ const InternshipProjectReadiness: React.FC<{
                 <td>{r.has_project ? (r.project_name || 'assigned') : <span className="text-muted">none</span>}</td>
                 <td className="text-end">
                   <div className="d-flex gap-2 justify-content-end">
-                    {onStartProject && !r.has_project && (
+                    {onStartProject && (
                       <button
                         type="button"
                         className={`btn btn-sm ${r.ready_for_project ? 'btn-primary' : 'btn-outline-primary'}`}
                         onClick={() => onStartProject(r)}
-                        title="Start the interview for this intern, typed or by phone"
+                        title={r.has_project
+                          ? 'Start another project for this intern, typed or by phone'
+                          : 'Start the interview for this intern, typed or by phone'}
                       >
-                        <i className="ri-chat-new-line me-1" />Start a project
+                        <i className="ri-chat-new-line me-1" />{r.has_project ? 'Start another' : 'Start a project'}
                       </button>
                     )}
                     <button type="button" className="btn btn-sm btn-outline-dark" onClick={() => onSelect(r.application_id)}>
