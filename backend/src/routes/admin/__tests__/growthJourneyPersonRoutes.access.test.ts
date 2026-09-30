@@ -302,13 +302,27 @@ describe('T611: the drillthrough chain sits behind the same guard, and its 404 i
     expect(foreign.body).toEqual({ error: 'Not found' });
   });
 
-  it('no `@` survives the route, even if a ref ever carried one', async () => {
+  it('no `@` survives the route, in EVERY field a hop can carry - ref, via and ticket_ref', async () => {
+    // The service is not the scrub boundary - it copies ids through verbatim and its
+    // own suite pins that - so this is the only place an address is actually removed.
+    // Every carrier is seeded, not just `ref`: `ticket_ref` is a second id on the
+    // handoff hop, and a field the scrub did not reach would be a silent leak.
     buildPersonChain.mockResolvedValue({
       status: 'found',
-      chain: { ...CHAIN_OK, hops: [{ name: 'enrolment', status: 'linked', ref: 'person@example.com', via: 'enrollment_email' }] },
+      chain: {
+        ...CHAIN_OK,
+        hops: [
+          { name: 'enrolment', status: 'linked', ref: 'person@example.com', via: 'enrollment_email' },
+          { name: 'handoff', status: 'linked', ref: 'h@example.com', via: 'handoffs.ticket_id', ticket_ref: 'tk@example.com' },
+        ],
+      },
     });
     const res = await get(`${BASE}/people/4711/chain`);
     expect(res.status).toBe(200);
     expect(JSON.stringify(res.body)).not.toContain('@');
+    // and the shape survives the scrub - a redaction that dropped the field would
+    // also pass the assertion above
+    expect(res.body.hops[1].ticket_ref).toBe('[redacted]');
+    expect(res.body.hops.map((h: { name: string }) => h.name)).toEqual(['enrolment', 'handoff']);
   });
 });

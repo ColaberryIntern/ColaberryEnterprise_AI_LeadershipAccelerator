@@ -81,7 +81,10 @@ export async function getPersonChainHandler(req: Request, res: Response): Promis
   try {
     const ctx = await scopedContext(req, res, query.data);
     if (!ctx) return;
-    const result = await buildPersonChain({ leadId: params.data.leadId, ctx, limit: query.data.limit });
+    // The query schema is shared with the journey route, so `limit` still PARSES
+    // here - rejecting a harmless URL with a 400 would be worse - it is just not
+    // passed on, because there is no collection for it to bound.
+    const result = await buildPersonChain({ leadId: params.data.leadId, ctx });
     if (result.status === 'not_found') {
       res.status(404).json(NOT_FOUND);
       return;

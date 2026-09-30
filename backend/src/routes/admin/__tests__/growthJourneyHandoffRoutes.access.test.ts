@@ -99,9 +99,6 @@ jest.mock('../../../modules/tenancy/tenantAccessAudit', () => ({ recordAccessDec
 // models barrel and `config/database`. Unmocked, a real Sequelize is constructed from an
 // `env` this suite stubs without a databaseUrl, and the whole file fails to load. This
 // suite does not exercise the chain; it only mounts the router that carries it.
-jest.mock('../../../services/growthJourney/personChainService', () => ({
-  buildPersonChain: jest.fn().mockResolvedValue({ status: 'not_found' }),
-}));
 
 import growthJourneyRoutes from '../growthJourneyRoutes';
 import { TenantAccessError } from '../../../modules/tenancy/tenantAuthorization';

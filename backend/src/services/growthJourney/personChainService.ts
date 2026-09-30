@@ -10,7 +10,7 @@ import {
   Lead,
   Visitor,
 } from '../../models';
-import { resolveSubject, type SubjectSource } from './subjectResolver';
+import type { SubjectSource } from './subjectResolver';
 import { getAuthorizedLeadContexts } from '../../modules/tenancy/leadContextService';
 import { matchesScope, personScopeWhere, type PersonJourneyArgs } from './personJourneyService';
 
@@ -42,15 +42,36 @@ import { matchesScope, personScopeWhere, type PersonJourneyArgs } from './person
  *
  * `subjectResolver` already walks lead → enrolment in three read-only steps,
  * stopping at the first hit, and it already names them: `explorer_profile` (the
- * bridge's own persisted link), `enrollment_lead` (the `enrollment_leads.email`
- * bridge) and `enrollment_email` (the `LOWER(email)` match). Only the THIRD is
- * the unindexed equality the discovery calls "the break" - the first is a real
- * keyed link. Reporting all three as `email_equality` would libel two of them
- * and hide which people are actually joined by a fragile key, so `via` carries
- * the resolver's own source and `weak_key` is set for `enrollment_email` alone.
+ * bridge's own persisted link, a real foreign key), `enrollment_lead` (matches
+ * `LOWER(enrollment_leads.email)`) and `enrollment_email` (matches
+ * `LOWER(enrollments.email)`). Reporting all three as `email_equality` would
+ * libel the first and hide which people are joined by a fragile key, so `via`
+ * carries the resolver's own source.
+ *
+ * TWO of the three are address equalities, not one. `enrollment_lead` reads as
+ * a keyed hop because it goes through a bridge table, but the bridge is joined
+ * on the address too - so `weak_key` is set for BOTH, and only
+ * `explorer_profile` is reported as keyed. They differ in degree, which the
+ * `via` preserves: `enrollment_leads.email` is UNIQUE, so that match is at
+ * least deterministic, while `enrollments.email` is neither unique nor indexed
+ * and is the hard break the discovery names. Degree is not the same as safety,
+ * and a reader filtering for fragile joins needs both rows.
  *
  * Reusing the resolver also keeps the rule that there is no second engine: this
  * file does not write a fourth email join, it asks the one that exists.
+ *
+ * ─── THE RESOLVER IS IMPORTED LAZILY, AND THAT IS LOAD-BEARING ──────────────
+ *
+ * `resolveSubject` is reached through `await import()` inside its hop, not at
+ * module scope. `subjectResolver` pulls `explorerIdentityBridge → participantService
+ * → emailService → settingsService → models/SystemSetting → config/database`,
+ * and a router that imports this file at module scope inherits that whole tail:
+ * seven suites mount `growthJourneyRoutes`, and the static import took FOUR of
+ * them from green to "failed to run" by constructing a real Sequelize from a
+ * stubbed env. A barrel mock cannot save them - `settingsService` imports
+ * `models/SystemSetting` directly, under the mock. So the edge is cut here, at
+ * the one file that owns it, rather than papered over with a mock in every
+ * suite that happens to mount the router today.
  *
  * ─── THERE IS NO OPPORTUNITY TABLE, AND THIS SAYS SO ────────────────────────
  *
@@ -89,10 +110,17 @@ export interface ChainHop {
   ref?: string;
   /** How the link was made, when it is not a plain foreign key. */
   via?: string;
-  /** True when the link rests on an unindexed, non-key match - see the header. */
+  /** True when the link rests on an address match rather than a key - see the header. */
   weak_key?: boolean;
   /** For the hops that are counts rather than a single row. */
   count?: number;
+  /**
+   * The handoff hop's second id: the ticket this handoff was escalated into.
+   * A ticket is not reachable by foreign key (`tickets` is found by
+   * `entity_type`/`entity_id`), so it travels as its own field rather than
+   * displacing `ref`, which stays the handoff's own id on every row.
+   */
+  ticket_ref?: string;
 }
 
 export interface PersonChain {
@@ -171,8 +199,16 @@ async function handoffHop(subjectRef: string, where: Record<string, unknown>): P
   const ticket = h.get('ticket_id') as string | null;
   // The ticket link has no foreign key: `tickets` is found by
   // (entity_type='growth_journey_handoff', entity_id=<handoff.id>). A null
-  // ticket_id is a handoff nobody has ticketed, not a broken chain.
-  return linked('handoff', String(h.get('id')), ticket ? { via: 'handoffs.ticket_id' } : { via: 'no_ticket' });
+  // ticket_id is a handoff nobody has ticketed, not a broken chain - so the
+  // hop is `linked` either way, and the ticket id is CARRIED rather than just
+  // consulted for a `via`. Reading it only to pick a label would answer "is
+  // there a ticket" while withholding which one, and the question this view
+  // exists to answer is where the trail goes next.
+  return linked(
+    'handoff',
+    String(h.get('id')),
+    ticket ? { via: 'handoffs.ticket_id', ticket_ref: String(ticket) } : { via: 'no_ticket' },
+  );
 }
 
 function opportunityHop(leadId: number, stage: string | null): ChainHop {
@@ -182,8 +218,11 @@ function opportunityHop(leadId: number, stage: string | null): ChainHop {
   return linked('opportunity', `${leadId}:${stage}`, { via: 'leads.pipeline_stage' });
 }
 
-/** The one hop joined on an address. The address is a key here and never an output. */
+/** The hop joined on an address. The address is a key here and never an output. */
 async function enrolmentHop(leadId: number): Promise<ChainHop> {
+  // Lazy on purpose - see the header. This import is why seven router suites
+  // do not need a mock for this file.
+  const { resolveSubject } = await import('./subjectResolver');
   const resolved = await resolveSubject({ leadId });
   if (resolved.status !== 'resolved') return unavailable('enrolment', 'unresolved');
 
@@ -192,18 +231,27 @@ async function enrolmentHop(leadId: number): Promise<ChainHop> {
   const enrollmentId = resolved.subject.enrollment_id;
   if (!enrollmentId) return unavailable('enrolment', 'no_key');
 
-  // Which of the three walks actually found it. Only the email match is the
-  // unindexed break; the other two are keyed links and must not be libelled.
+  // Which of the three walks found it. Only `explorer_profile` is a real key;
+  // the other two both match on an address, so both are weak - see the header.
   const order: SubjectSource[] = ['explorer_profile', 'enrollment_lead', 'enrollment_email'];
   const via = order.find((s) => resolved.sources.includes(s)) ?? 'enrollment';
-  return linked('enrolment', String(enrollmentId), { via, weak_key: via === 'enrollment_email' });
+  return linked('enrolment', String(enrollmentId), { via, weak_key: via !== 'explorer_profile' });
 }
 
-async function projectHop(leadId: number): Promise<ChainHop> {
+async function projectHop(leadId: number, scoped: Record<string, unknown>): Promise<ChainHop> {
   // `source_lead_id` is a bare INTEGER with no index and no foreign key - the
   // discovery names it a soft break. It is still the only lead → project link.
+  //
+  // SCOPED, unlike every other delivery table. `delivery_engagements` carries
+  // its own `tenant_id` (NOT NULL) and `brand_id`, so the caller's clause
+  // applies directly - and it must: `source_lead_id` is written by whoever
+  // converted the lead, with nothing stopping an engagement in one brand from
+  // pointing at a lead another operator can see. Without the clause a
+  // Training-only operator asking about a lead they legitimately hold would be
+  // handed an Enterprise engagement's UUID. The lead being in scope does not
+  // make everything hanging off it in scope.
   const e = await DeliveryEngagement.findOne({
-    where: { source_lead_id: leadId },
+    where: { ...scoped, source_lead_id: leadId },
     attributes: ['id'],
     order: [['created_at', 'DESC']],
   });
@@ -225,7 +273,12 @@ async function outcomesHop(subjectRef: string, where: Record<string, unknown>): 
  * caller's brands is `not_found` and answers with the same 404 body as a lead
  * that does not exist. A foreign tenant must not be able to tell those apart.
  */
-export async function buildPersonChain(args: PersonJourneyArgs & { now?: Date }): Promise<PersonChainResult> {
+export async function buildPersonChain(
+  // `limit` is deliberately NOT accepted. Every hop is one row or one count, so
+  // there is no collection to page, and taking the sibling's `limit` whole would
+  // have advertised a knob that changes nothing.
+  args: Omit<PersonJourneyArgs, 'limit'> & { now?: Date },
+): Promise<PersonChainResult> {
   const { ctx, leadId } = args;
   const where = personScopeWhere(ctx, leadId);
 
@@ -253,7 +306,7 @@ export async function buildPersonChain(args: PersonJourneyArgs & { now?: Date })
     journeyHop(subjectRef, scoped),
     handoffHop(subjectRef, scoped),
     enrolmentHop(leadId),
-    projectHop(leadId),
+    projectHop(leadId, scoped),
     outcomesHop(subjectRef, scoped),
   ]);
 

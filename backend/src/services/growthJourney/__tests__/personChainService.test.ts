@@ -29,7 +29,18 @@ jest.mock('../../../models', () => ({
 }));
 
 const resolveSubject = jest.fn();
-jest.mock('../subjectResolver', () => ({ resolveSubject: (...a: unknown[]) => resolveSubject(...a) }));
+// `mock`-prefixed so babel-plugin-jest-hoist permits it inside the hoisted factory.
+// The factory runs on the first require of subjectResolver IN A GIVEN REGISTRY, so
+// flipping this and resetting modules makes loading the resolver an observable event -
+// which is what the lazy-import cell below needs. A `jest.doMock` inside
+// `isolateModules` does NOT do this: the hoisted mock above wins, the throwing factory
+// never runs, and the cell passes no matter where the import sits (it did - a mutant
+// that put the import back at module scope survived it).
+let mockResolverLoadThrows = false;
+jest.mock('../subjectResolver', () => {
+  if (mockResolverLoadThrows) throw new Error('subjectResolver was loaded at module scope');
+  return { resolveSubject: (...a: unknown[]) => resolveSubject(...a) };
+});
 
 // Scope lives in `lead_tenant_contexts`, not on the lead - so the visibility decision
 // is this reader, exactly as Person 360 does it.
@@ -73,7 +84,7 @@ function worldBare(): void {
 
 const byName = (hops: ChainHop[]) => Object.fromEntries(hops.map((h) => [h.name, h])) as Record<ChainHopName, ChainHop>;
 const chainOf = async () => {
-  const r = await buildPersonChain({ leadId: LEAD, ctx: CTX, limit: 10, now: NOW });
+  const r = await buildPersonChain({ leadId: LEAD, ctx: CTX, now: NOW });
   if (r.status !== 'found') throw new Error('expected found');
   return r.chain;
 };
@@ -161,14 +172,22 @@ describe('each hop, linked from its real source', () => {
     });
   });
 
-  it('a handoff without a ticket is still linked - nobody ticketed it, the chain is not broken', async () => {
-    worldBare();
-    handoffFindOne.mockResolvedValue(row({ id: 'h-1', ticket_id: null }));
-    expect(byName((await chainOf()).hops).handoff).toEqual({ name: 'handoff', status: 'linked', ref: 'h-1', via: 'no_ticket' });
-
+  it('a ticketed handoff CARRIES the ticket id - the plan asked for it, and where the trail goes next is the question', async () => {
     worldBare();
     handoffFindOne.mockResolvedValue(row({ id: 'h-2', ticket_id: 'tk-9' }));
-    expect(byName((await chainOf()).hops).handoff).toMatchObject({ ref: 'h-2', via: 'handoffs.ticket_id' });
+    // The first pass read ticket_id only to choose a `via` and then discarded it,
+    // which answered "is there a ticket" while withholding which one.
+    expect(byName((await chainOf()).hops).handoff).toEqual({
+      name: 'handoff', status: 'linked', ref: 'h-2', via: 'handoffs.ticket_id', ticket_ref: 'tk-9',
+    });
+  });
+
+  it('a handoff without a ticket is still linked, and the key is ABSENT rather than empty', async () => {
+    worldBare();
+    handoffFindOne.mockResolvedValue(row({ id: 'h-1', ticket_id: null }));
+    const h = byName((await chainOf()).hops).handoff;
+    expect(h).toEqual({ name: 'handoff', status: 'linked', ref: 'h-1', via: 'no_ticket' });
+    expect('ticket_ref' in h).toBe(false);
   });
 
   it('opportunity reports the pipeline STAGE, because there is no opportunity table', async () => {
@@ -194,7 +213,7 @@ describe('each hop, linked from its real source', () => {
   });
 });
 
-describe('the enrolment hop: three paths, and only one is the break', () => {
+describe('the enrolment hop: three paths, and TWO of them are address matches', () => {
   const resolvedVia = (sources: string[]) =>
     resolveSubject.mockResolvedValue({ status: 'resolved', subject: { enrollment_id: 'enr-1' }, sources });
 
@@ -206,19 +225,31 @@ describe('the enrolment hop: three paths, and only one is the break', () => {
     });
   });
 
-  it.each([['explorer_profile'], ['enrollment_lead']])(
-    '%s is a KEYED link: labelled, and NOT flagged weak_key',
-    async (source) => {
+  // The first pass of this task got this wrong and a CELL ASSERTED THE ERROR:
+  // `enrollment_lead` looks keyed because it goes through a bridge table, but
+  // `subjectResolver` joins that bridge on LOWER(enrollment_leads.email) as well.
+  // It is an address match, so it is weak. The `via` is what still tells them
+  // apart - that column is UNIQUE, so the match is at least deterministic, while
+  // `enrollments.email` is neither unique nor indexed. Degree is not safety, and
+  // someone filtering for fragile joins needs both rows back.
+  it.each([
+    ['enrollment_lead', true],
+    ['explorer_profile', false],
+  ])('%s is weak_key=%s - only the persisted profile link is a real key', async (source, weak) => {
+    worldBare();
+    resolvedVia(['lead', source as string]);
+    expect(byName((await chainOf()).hops).enrolment).toMatchObject({ via: source, weak_key: weak });
+  });
+
+  it('exactly one of the three paths is reported as keyed', async () => {
+    const flags: unknown[] = [];
+    for (const s of ['explorer_profile', 'enrollment_lead', 'enrollment_email']) {
       worldBare();
-      resolvedVia(['lead', source]);
-      const h = byName((await chainOf()).hops).enrolment;
-      // The plan called every lead -> enrolment link "email_equality". Two of the three
-      // are real keyed links; labelling them as an address match would libel them and
-      // hide which people are actually joined by a fragile key.
-      expect(h).toMatchObject({ via: source, weak_key: false });
-      expect(h.via).not.toBe('enrollment_email');
-    },
-  );
+      resolvedVia(['lead', s]);
+      flags.push(byName((await chainOf()).hops).enrolment.weak_key);
+    }
+    expect(flags).toEqual([false, true, true]);
+  });
 
   it('the resolver walks in order, so the strongest link found wins', async () => {
     worldBare();
@@ -227,23 +258,88 @@ describe('the enrolment hop: three paths, and only one is the break', () => {
   });
 });
 
+describe('the resolver import stays LAZY, and this is what holds it there', () => {
+  afterEach(() => {
+    mockResolverLoadThrows = false;
+    jest.resetModules();
+  });
+
+  it('the module loads cleanly even when loading subjectResolver would throw', () => {
+    // WHY THIS IS A CELL AND NOT A COMMENT: a static import here put FOUR of the
+    // seven suites that mount `growthJourneyRoutes` into "failed to run", because
+    // `subjectResolver` reaches emailService -> settingsService -> models/SystemSetting
+    // -> config/database, and a barrel mock cannot intercept a direct model import.
+    // A text scan for `await import` would constrain the SPELLING; this constrains
+    // the behaviour - if the import moves back to module scope, the require throws.
+    jest.resetModules();
+    mockResolverLoadThrows = true;
+    expect(() => require('../personChainService')).not.toThrow();
+  });
+
+  it('...and the guard above is real: loading the resolver in that state DOES throw', () => {
+    // The positive control. Without it the cell above passes whether or not the
+    // registry is actually armed, which is the exact way the first version of this
+    // guard failed - a mutant restored the module-scope import and it still passed.
+    jest.resetModules();
+    mockResolverLoadThrows = true;
+    expect(() => require('../subjectResolver')).toThrow('loaded at module scope');
+  });
+
+  it('and the hop still resolves through it when the hop actually runs', async () => {
+    worldBare();
+    resolveSubject.mockResolvedValue({ status: 'resolved', subject: { enrollment_id: 'e-1' }, sources: ['explorer_profile'] });
+    expect(byName((await chainOf()).hops).enrolment).toMatchObject({ ref: 'e-1' });
+    expect(resolveSubject).toHaveBeenCalledWith({ leadId: LEAD });
+  });
+});
+
 describe('scope, and the 404 that must not be distinguishable', () => {
   it('a lead that does not exist is not_found', async () => {
     worldBare();
     leadFindByPk.mockResolvedValue(null);
-    expect(await buildPersonChain({ leadId: LEAD, ctx: CTX, limit: 10, now: NOW })).toEqual({ status: 'not_found' });
+    expect(await buildPersonChain({ leadId: LEAD, ctx: CTX, now: NOW })).toEqual({ status: 'not_found' });
   });
 
   it('a lead OUTSIDE the caller\'s brands is not_found - the same answer, so a foreign tenant learns nothing', async () => {
     worldBare();
     // visible to nobody the caller is authorised for
     getAuthorizedLeadContexts.mockResolvedValue([]);
-    expect(await buildPersonChain({ leadId: LEAD, ctx: CTX, limit: 10, now: NOW })).toEqual({ status: 'not_found' });
+    expect(await buildPersonChain({ leadId: LEAD, ctx: CTX, now: NOW })).toEqual({ status: 'not_found' });
   });
 });
 
-describe('the privacy property: the hop joined on an address never emits one', () => {
-  it('an adversarial fixture puts an address in every readable field; none reaches the chain', async () => {
+describe('the project hop is SCOPED: a visible lead does not make its engagement visible', () => {
+  it("the query carries the caller's tenant clause, so a foreign engagement is never read", async () => {
+    worldBare();
+    await chainOf();
+    // `delivery_engagements` carries its own tenant_id (NOT NULL) and brand_id, and
+    // `source_lead_id` is written by whoever converted the lead - nothing stops an
+    // engagement in one brand pointing at a lead another operator legitimately holds.
+    // Unscoped, a Training-only operator would be handed an Enterprise project's UUID.
+    const where = (engagementFindOne.mock.calls[0][0] as { where: Record<string, unknown> }).where;
+    expect(where).toMatchObject({ source_lead_id: LEAD, tenant_id: 't-cola' });
+  });
+
+  it('a brand-restricted operator narrows further: the brand clause travels too', async () => {
+    worldBare();
+    await buildPersonChain({ leadId: LEAD, ctx: { ...(CTX as object), brandId: 'b-cpn' } as never, now: NOW });
+    const where = (engagementFindOne.mock.calls[0][0] as { where: Record<string, unknown> }).where;
+    expect(where).toMatchObject({ source_lead_id: LEAD, brand_id: 'b-cpn' });
+  });
+
+  it('the lead_id column is never sent to a table that has no such column', async () => {
+    worldBare();
+    await chainOf();
+    // `personScopeWhere` includes lead_id for the lead's own collections; the
+    // engagement is keyed on source_lead_id, so passing the clause whole would
+    // query a column that does not exist and throw at runtime, not compile time.
+    const where = (engagementFindOne.mock.calls[0][0] as { where: Record<string, unknown> }).where;
+    expect('lead_id' in where).toBe(false);
+  });
+});
+
+describe('where the scrub boundary IS: the route, not this service', () => {
+  const adversarial = () => {
     worldBare();
     leadFindByPk.mockResolvedValue(row({ id: LEAD, visitor_id: 'someone@example.com', pipeline_stage: 'a@b.co' }));
     getAuthorizedLeadContexts.mockResolvedValue([visibleContext({ first_campaign_id: 'camp@example.com' })]);
@@ -254,13 +350,36 @@ describe('the privacy property: the hop joined on an address never emits one', (
       subject: { enrollment_id: 'person@example.com' },
       sources: ['enrollment_email'],
     });
+  };
 
+  // This cell used to be named "none reaches the chain" and asserted nothing of the
+  // kind - six addresses reached it and the assertions looked elsewhere. A name that
+  // claims a property the body does not check is worse than no cell, because it reads
+  // as coverage. The service is NOT a scrub boundary: it copies ids verbatim, and the
+  // route is where addresses are removed (proved at the route, which refuses `@` on
+  // the serialised response). What is asserted here is the true half.
+  it('every ref is copied through VERBATIM, which is exactly why the route must scrub', async () => {
+    adversarial();
+    const refs = byName((await chainOf()).hops);
+    expect(refs.handoff.ref).toBe('h@example.com');
+    expect(refs.handoff.ticket_ref).toBe('tk@example.com');
+    expect(refs.enrolment.ref).toBe('person@example.com');
+    expect(refs.visitor.ref).toBe('someone@example.com');
+  });
+
+  it('no address is INVENTED, reshaped or moved between fields on the way through', async () => {
+    adversarial();
     const c = await chainOf();
-    // The service does not scrub - the route does, and the ids it copies are ids by
-    // contract. This cell exists so that if a ref ever DID carry an address, the
-    // failure is here and loud rather than in a response nobody reads.
-    const refs = c.hops.map((h) => h.ref).filter(Boolean).join(' ');
-    expect(refs).toContain('4711');
-    expect(c.hops.every((h) => h.name !== 'enrolment' || h.via === 'enrollment_email')).toBe(true);
+    // A half-scrub added here later would read as safety and provide none - the route
+    // would still be the only real boundary, but nobody would believe it had to be.
+    // So the count is pinned: the fixture seeds SEVEN addresses and seven arrive.
+    //
+    // This number was 6 until the handoff hop started carrying `ticket_ref`, and this
+    // assertion is what caught the new surface - a field added to the chain is a field
+    // the route now has to scrub, and the pin makes that arrive as a failure rather
+    // than as an address in a response.
+    const emitted = JSON.stringify(c).match(/@/g) ?? [];
+    expect(emitted).toHaveLength(7);
+    expect(c.hops.map((h) => h.name)).toHaveLength(9);
   });
 });
