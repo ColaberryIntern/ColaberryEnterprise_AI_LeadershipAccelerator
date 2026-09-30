@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SectionCard, StatusBadge } from '../shell';
 import {
+  IntakeDocument,
   IntakeStudent,
   IntakeTurn,
   IntakeTurnResult,
   describeBuildError,
+  readIntakeDocument,
   searchIntakeStudents,
   sendIntakeTurn,
 } from '../../../services/adminFlotationIntakeApi';
@@ -75,6 +77,21 @@ export default function StartProjectForStudent({ startFor, onConsumed }: {
   const [finished, setFinished] = useState<Extract<IntakeTurnResult, { done: true }> | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * Documents attached to this conversation, as text the server already read.
+   *
+   *     "I should be able to add documents to this process that can be analyzed before
+   *      submitting the next question and can be used when creating the requirements."
+   *      (Ali, 2026-09-29)
+   *
+   * Held here and re-sent with every turn, the same way the transcript is: the turn
+   * endpoint keeps nothing between turns, which is what makes it safe to retry.
+   */
+  const [documents, setDocuments] = useState<IntakeDocument[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [docError, setDocError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
   // Search as they type, after a pause, from two characters - the server refuses less.
   useEffect(() => {
     const q = query.trim();
@@ -119,7 +136,7 @@ export default function StartProjectForStudent({ startFor, onConsumed }: {
     setBusy(true);
     setError(null);
     try {
-      const result = await sendIntakeTurn({ enrollmentId: student.id, sessionId, turns: next });
+      const result = await sendIntakeTurn({ enrollmentId: student.id, sessionId, turns: next, documents });
       setTurns([...next, { role: 'assistant', text: result.message }]);
       if (result.done) {
         setFinished(result);
@@ -134,6 +151,35 @@ export default function StartProjectForStudent({ startFor, onConsumed }: {
     }
   };
 
+  /**
+   * Attach a document, and read it now rather than at send time.
+   *
+   * Reading it here is what "analyzed before submitting the next question" means in
+   * practice: the admin sees how much text came out before they type, so a scan with no
+   * text layer is a visible refusal instead of a document that silently contributed
+   * nothing to the requirements.
+   */
+  const attach = async (file: File | null | undefined) => {
+    if (!file || uploading) return;
+    setUploading(true);
+    setDocError(null);
+    try {
+      const { document: doc, chars, clipped } = await readIntakeDocument(file);
+      setDocuments((prev) => [...prev, doc]);
+      if (clipped) {
+        // Named out loud: a clipped document reporting success is exactly how a
+        // requirement goes missing while the screen says everything worked.
+        setDocError(`${doc.name} was long — the first ${chars.toLocaleString()} characters were kept.`);
+      }
+    } catch (err) {
+      setDocError(describeBuildError(err));
+    } finally {
+      setUploading(false);
+      // So the same file can be picked again after a failure; the input holds its value.
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
   const reset = () => {
     clearActiveIntake();
     setPhase('pick');
@@ -143,6 +189,8 @@ export default function StartProjectForStudent({ startFor, onConsumed }: {
     setTurns([]);
     setDraft('');
     setError(null);
+    setDocuments([]);
+    setDocError(null);
     setFinished(null);
   };
 
@@ -279,6 +327,52 @@ export default function StartProjectForStudent({ startFor, onConsumed }: {
           </div>
 
           {error && <p className="text-danger small">{error}</p>}
+
+          {phase === 'talk' && (
+            <div className="mb-2">
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                <label className="btn btn-sm btn-outline-secondary mb-0" style={{ cursor: uploading ? 'wait' : 'pointer' }}>
+                  <i className="ri-attachment-2 me-1" />
+                  {uploading ? 'Reading…' : 'Attach a document'}
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    className="d-none"
+                    accept=".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.rtf,.txt,.md,.csv"
+                    disabled={uploading || busy}
+                    onChange={(e) => void attach(e.target.files?.[0])}
+                  />
+                </label>
+                <span className="text-muted" style={{ fontSize: 12 }}>
+                  Read before the next question, and used when the requirements are written.
+                </span>
+              </div>
+
+              {documents.length > 0 && (
+                <div className="d-flex flex-wrap gap-2 mt-2">
+                  {documents.map((d, i) => (
+                    <span key={`${d.name}-${i}`} className="badge bg-light text-dark border d-inline-flex align-items-center gap-2">
+                      <i className="ri-file-text-line" />
+                      {d.name}
+                      {/* The character count is the honest signal of what was actually
+                          read: a 40-page PDF that yields 200 characters is a scan, and
+                          the number says so where a filename would not. */}
+                      <span className="text-muted">{d.text.length.toLocaleString()} chars</span>
+                      <button
+                        type="button"
+                        className="btn-close"
+                        style={{ fontSize: 9 }}
+                        aria-label={`Remove ${d.name}`}
+                        onClick={() => setDocuments((prev) => prev.filter((_, j) => j !== i))}
+                      />
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {docError && <p className="text-warning small mb-0 mt-2">{docError}</p>}
+            </div>
+          )}
 
           {phase === 'talk' && (
             <form

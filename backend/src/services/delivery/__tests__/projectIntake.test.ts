@@ -81,7 +81,10 @@ describe('runIntakeTurn - mid-interview', () => {
     const res = await runIntakeTurn({ turns: TURNS, facts: FACTS, sourceRef: 'chat:t1', leadId: 7, buildFor: { kind: 'none' } });
 
     expect(res).toEqual({ done: false, message: 'How many tools?', exchanges: 2 });
-    expect(mockNext).toHaveBeenCalledWith({ turns: TURNS, facts: FACTS });
+    // `documents: []` rather than absent: the interviewer is always told what was
+    // attached, and "nothing" is an answer to that. An undefined here would mean the
+    // document path is reachable only when a caller happens to pass the field.
+    expect(mockNext).toHaveBeenCalledWith({ turns: TURNS, facts: FACTS, documents: [] });
     expect(mockRecord).not.toHaveBeenCalled();
     expect(mockStart).not.toHaveBeenCalled();
   });
@@ -209,6 +212,69 @@ describe('runIntakeTurn - when the interviewer is done', () => {
     expect(mockStart).not.toHaveBeenCalled();
     expect(res).toMatchObject({ done: true, understanding: 'failed' });
     expect((res as any).build).toBeUndefined();
+  });
+});
+
+/**
+ * Documents attached to a conversation, through the function both doors call.
+ *
+ * `mockRecord` receives the exact string the extraction will read, so the second half of
+ * the contract — "used when creating the requirements" — is checkable here rather than
+ * inferred. The understanding is built from that string and the brief is built from the
+ * understanding, so a document present here is a document the requirements can cite.
+ */
+describe('runIntakeTurn - a document the person attached', () => {
+  const DOCS = [{ name: 'requirements.docx', text: 'REQ-14: every loan must record who authorised it.' }];
+  const CLOSE = 'Thanks — that gives me enough to write this up.';
+
+  it('hands it to the interviewer for THIS turn', async () => {
+    mockNext.mockResolvedValue({ ok: true, done: false, message: 'And who authorises those?', exchanges: 2 });
+
+    await runIntakeTurn({
+      turns: TURNS, facts: FACTS, sourceRef: 'chat:t1', leadId: 7, buildFor: { kind: 'none' }, documents: DOCS,
+    });
+
+    expect(mockNext).toHaveBeenCalledWith({ turns: TURNS, facts: FACTS, documents: DOCS });
+  });
+
+  it('puts it in the transcript the understanding is extracted from', async () => {
+    mockNext.mockResolvedValue({ ok: true, done: true, message: CLOSE, exchanges: 3 });
+    mockRecord.mockResolvedValue({ status: 'created', id: 'rec-1', kept: 5, rejected: 0 });
+
+    await runIntakeTurn({
+      turns: TURNS, facts: FACTS, sourceRef: 'chat:t1', leadId: 7, buildFor: { kind: 'none' }, documents: DOCS,
+    });
+
+    const { conversation } = mockRecord.mock.calls[0][0];
+    expect(conversation).toContain('--- requirements.docx ---');
+    expect(conversation).toContain('REQ-14: every loan must record who authorised it.');
+    // And the conversation is still there beside it, not replaced by the document.
+    expect(conversation).toContain('Marta, on Saturdays.');
+  });
+
+  it('bounds them here, so no door can buy an unbounded prompt by forgetting to validate', async () => {
+    mockNext.mockResolvedValue({ ok: true, done: false, message: 'ok', exchanges: 2 });
+
+    await runIntakeTurn({
+      turns: TURNS,
+      facts: FACTS,
+      sourceRef: 'chat:t1',
+      leadId: 7,
+      buildFor: { kind: 'none' },
+      documents: [{ name: 'huge.pdf', text: 'z'.repeat(500_000) }] as any,
+    });
+
+    const passed = mockNext.mock.calls[0][0].documents;
+    expect(passed[0].text.length).toBeLessThan(500_000);
+  });
+
+  it('attaches nothing when nothing was attached', async () => {
+    mockNext.mockResolvedValue({ ok: true, done: true, message: CLOSE, exchanges: 3 });
+    mockRecord.mockResolvedValue({ status: 'created', id: 'rec-1', kept: 5, rejected: 0 });
+
+    await runIntakeTurn({ turns: TURNS, facts: FACTS, sourceRef: 'chat:t1', leadId: 7, buildFor: { kind: 'none' } });
+
+    expect(mockRecord.mock.calls[0][0].conversation).not.toContain('---');
   });
 });
 
