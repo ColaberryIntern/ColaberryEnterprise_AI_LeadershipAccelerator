@@ -238,10 +238,11 @@ export interface QualSourceDetail {
   legacy: { fitScore: number | null; priorityScore: number | null; pursuitStatus: string | null };
 }
 export interface QualEvidenceCoverage { sufficient: boolean; reasons: string[]; }
+export interface ReviewedDocument { docId: string; role: string; method: string; filename: string | null; sha256: string | null; reviewedBy: string | null; reviewedAt: string | null; }
 export interface QualificationRecord {
   id: string; bidding_entity: string; decision: string; version: number;
   rationale: string | null; source_snapshot_version: number | null; reviewer_identity_id: string | null;
-  requirements_json?: { established?: EstablishedRequirement[] } | null;
+  requirements_json?: { established?: EstablishedRequirement[]; reviewedDocuments?: ReviewedDocument[] } | null;
 }
 /** The resolved, honest source state (mirrors the server gate). */
 export type QualSourceState = 'available' | 'degraded' | 'snapshot_unrecorded' | 'unavailable' | 'auth_failed' | 'malformed';
@@ -312,6 +313,22 @@ export async function authorizeGovBuild(canonicalOpportunityId: string, body: {
   deliveryProjectId: string; scope: string; resourceLimit: string; rationale?: string; govQualificationId?: string;
 }): Promise<{ buildAuthorization: { id: string } }> {
   const { data } = await api.post(qUrl(canonicalOpportunityId, '/authorize-build'), body);
+  return data;
+}
+
+/** Record ('add') or revoke a MANUAL document review — the reviewer uploads the manually-downloaded Bonfire ZIP
+ *  (add) and attests to the authoritative docIds it covers, so the coverage gate can clear; the server computes
+ *  the sha256. 'revoke' removes an attestation (no file needed). */
+export async function reviewGovQualificationDocuments(canonicalOpportunityId: string, args: {
+  biddingEntity: string; expectedVersion: number; mode: 'add' | 'revoke'; coveredDocIds: string[]; file?: File | null;
+}): Promise<{ qualification: QualificationRecord }> {
+  const form = new FormData();
+  form.append('biddingEntity', args.biddingEntity);
+  form.append('expectedVersion', String(args.expectedVersion));
+  form.append('mode', args.mode);
+  form.append('coveredDocIds', JSON.stringify(args.coveredDocIds));
+  if (args.file) form.append('document', args.file);
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/review-documents'), form, { headers: { 'Content-Type': 'multipart/form-data' } });
   return data;
 }
 

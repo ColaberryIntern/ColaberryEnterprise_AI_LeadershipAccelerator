@@ -3,9 +3,11 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { PageHeader, SectionCard, StatCard, StatusBadge, EmptyState } from '../../components/admin/shell';
 import {
   getGovQualificationWorkspace, createGovQualification, recordGovQualificationDecision, approveGovQualification,
-  authorizeGovBuild, getGovOpportunityCandidates,
+  authorizeGovBuild, getGovOpportunityCandidates, reviewGovQualificationDocuments,
   type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement,
 } from '../../services/factoryApi';
+
+const AUTHORITATIVE_ROLES = ['solicitation', 'final_pws_sow', 'amendment'];
 
 /**
  * AdminGovQualificationPage — the Phase-2 qualification WORKSPACE + journey.
@@ -118,6 +120,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   const [rationale, setRationale] = useState('');
   const [reqDraft, setReqDraft] = useState({ id: '', text: '', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement', docId: '' });
   const [build, setBuild] = useState({ deliveryProjectId: '', scope: '', resourceLimit: '' });
+  const [docFile, setDocFile] = useState<File | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -232,6 +235,56 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               )}
             </SectionCard>
           )}
+
+          {/* ── Manual document review (the Bonfire ZIP is downloaded by hand) ─── */}
+          {ws.source && record && (() => {
+            const items = (ws.source.documents.items ?? []).filter((it) => AUTHORITATIVE_ROLES.includes(it.role));
+            const reviewedIds = new Set((record.requirements_json?.reviewedDocuments ?? []).map((d) => d.docId));
+            const stateOf = (it: { docId: string; retrieval: { status: string } }) =>
+              it.retrieval.status === 'downloaded' ? 'downloaded' : reviewedIds.has(it.docId) ? 'manual' : 'not reviewed';
+            const notDownloaded = items.filter((it) => it.retrieval.status !== 'downloaded');
+            const toCover = notDownloaded.map((it) => it.docId);
+            if (items.length === 0) return null;
+            return (
+              <SectionCard title="Manual document review" icon="folder-download-line"
+                subtitle="Bonfire gates the ZIP behind a portal login — download it by hand, then upload it here to attest the authoritative package was reviewed. The server records a hash of the file; it never stores the bytes.">
+                <ul className="list-unstyled mb-3">
+                  {items.map((it) => {
+                    const st = stateOf(it);
+                    return (
+                      <li key={it.docId} className="d-flex align-items-center justify-content-between gap-2 py-2 border-bottom">
+                        <div className="d-flex align-items-center gap-2">
+                          <i className={`ri-${st === 'not reviewed' ? 'error-warning-line text-danger' : 'checkbox-circle-line text-success'}`} aria-hidden="true" />
+                          <span className="fw-semibold">{it.filename}</span>
+                          <StatusBadge label={it.role} tone="neutral" />
+                          <StatusBadge label={st} tone={st === 'downloaded' ? 'success' : st === 'manual' ? 'info' : 'danger'} />
+                        </div>
+                        {st === 'manual' && (
+                          <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy}
+                            onClick={() => run(() => reviewGovQualificationDocuments(canonical, { biddingEntity, expectedVersion: version, mode: 'revoke', coveredDocIds: [it.docId] }), 'Attestation revoked.')}>
+                            Revoke
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+                {notDownloaded.length > 0 ? (
+                  <div className="d-flex flex-wrap align-items-center gap-2">
+                    <input type="file" className="form-control form-control-sm" style={{ maxWidth: 320 }} accept=".zip"
+                      onChange={(e) => setDocFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)} />
+                    <button type="button" className="btn btn-outline-primary btn-sm" disabled={busy || !docFile}
+                      onClick={() => run(() => reviewGovQualificationDocuments(canonical, { biddingEntity, expectedVersion: version, mode: 'add', coveredDocIds: toCover, file: docFile }), 'Document review recorded — coverage updated.')}>
+                      <i className="ri-upload-2-line me-1" aria-hidden="true" />Upload ZIP &amp; attest {notDownloaded.length} doc(s)
+                    </button>
+                    <span className="small text-secondary">Attests the {notDownloaded.length} listed-but-undownloaded authoritative doc(s); only OP-listed authoritative docs can be attested.</span>
+                  </div>
+                ) : (
+                  <div className="small text-success"><i className="ri-checkbox-circle-line me-1" aria-hidden="true" />All authoritative documents are reviewed.</div>
+                )}
+              </SectionCard>
+            );
+          })()}
 
           {/* ── Actions ─────────────────────────────────────────────────────── */}
           <SectionCard title="Qualification actions" icon="quill-pen-line">

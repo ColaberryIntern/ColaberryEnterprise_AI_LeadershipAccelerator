@@ -54,6 +54,9 @@ export const BLOCKING_CANONICAL = 'op:gov:0000000000000000000000000000bbbb';
 export const DEGRADED_CANONICAL = 'op:gov:0000000000000000000000000000cccc';
 /** A source with NO recorded snapshot (meta.sourceSnapshotVersion null) — cannot bind an approval to it. */
 export const UNRECORDED_CANONICAL = 'op:gov:0000000000000000000000000000eeee';
+/** The Bonfire case: source AVAILABLE + snapshot recorded, but the authoritative documents are LISTED yet not
+ *  downloadable (portal/bot-protection), so approval blocks on coverage until a human uploads the ZIP. */
+export const BONFIRE_GATED_CANONICAL = 'op:gov:0000000000000000000000000000ffff';
 /** Any canonical id the client does not know is treated as an UNAVAILABLE source (fail closed on approval). */
 export const UNAVAILABLE_CANONICAL = 'op:gov:0000000000000000000000000000dead';
 
@@ -132,6 +135,27 @@ export const GOV_OPPORTUNITY_FIXTURES: Readonly<Record<string, GovOpportunityV1>
     requirements: [],
     sourceAssessment: { legacyVerdict: null },
     legacy: { fitScore: null, priorityScore: null, pursuitStatus: 'none' },
+    sourceAvailability: { status: 'available' },
+  },
+  [BONFIRE_GATED_CANONICAL]: {
+    // Source is available and snapshot-recorded, but Bonfire blocked automated download: OP LISTED the
+    // authoritative solicitation + amendment, but neither could be retrieved (bot_protection). Approval blocks on
+    // coverage (authoritative_package_unreviewed) until a human uploads the ZIP and attests to those docIds.
+    canonicalOpportunityId: BONFIRE_GATED_CANONICAL, sourceSnapshotVersion: 2, isFixture: true,
+    notice: { noticeType: { value: 'solicitation', isBindingSolicitation: true }, procurementType: { value: 'custom_development' }, contractVehicle: null },
+    publisher: { leadBuyer: { name: 'City of Austin', jurisdiction: 'US-TX' }, officialSourceUrl: 'https://austin.bonfirehub.com/opportunities/7', submissionPortal: { url: null } },
+    deadline: { originalText: 'Nov 20 2026 2:00 PM CST', utc: '2026-11-20T20:00:00.000Z', utcConfidence: 'high', conflicts: [] },
+    value: { published: { amountMinorUnits: 75000000, currency: 'USD', valueType: 'ceiling', provenance: 'buyer_stated' }, modelEstimate: null },
+    documents: {
+      coverage: 'partial', accessBarrier: 'bot_protection', counts: { listed: 2, downloaded: 0, parsed: 0, inaccessible: 2 },
+      items: [
+        { docId: 'DS1', filename: 'solicitation.pdf', role: 'solicitation', retrieval: { status: 'listed_only', method: 'none' } },
+        { docId: 'DA1', filename: 'amendment-1.pdf', role: 'amendment', retrieval: { status: 'failed', method: 'none' } },
+      ],
+    },
+    requirements: [],
+    sourceAssessment: { legacyVerdict: null },
+    legacy: { fitScore: 72, priorityScore: 68, pursuitStatus: 'none' },
     sourceAvailability: { status: 'available' },
   },
 };

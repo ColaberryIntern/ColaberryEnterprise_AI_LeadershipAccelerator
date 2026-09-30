@@ -27,6 +27,9 @@ export class SourceNotApprovableError extends Error { constructor(public reason:
 /** Document coverage / established requirements are not sufficient to approve a pursuit (missing evidence never
  *  silently passes; an empty requirements list is not evidence of "no requirements"). */
 export class EvidenceInsufficientError extends Error { constructor(public reasons: string[]) { super('evidence coverage insufficient for pursuit approval'); this.name = 'EvidenceInsufficientError'; } }
+/** A manual document review named a docId that the source never LISTED as an authoritative document — a human
+ *  cannot invent an authoritative doc; manual review may only attest to OP-listed authoritative docIds. */
+export class DocumentNotListedError extends Error { constructor(public docIds: string[]) { super('document(s) not listed as authoritative in the source snapshot'); this.name = 'DocumentNotListedError'; } }
 
 function contentHash(salt: string, obj: unknown): string {
   return crypto.createHash('sha256').update(`${salt}:${JSON.stringify(obj)}`).digest('hex');
@@ -84,22 +87,35 @@ export interface EvidenceCoverage { sufficient: boolean; reasons: string[]; }
  *    requirements" — the reviewer must establish the applicable, cited requirements first.
  *  - Document coverage is judged from `documents.items[]` (the per-document breakdown): an item is AUTHORITATIVE
  *    when `role ∈ {solicitation, final_pws_sow, amendment}` (a `draft_pws` carries no binding obligation, so it is
- *    not authoritative) and REVIEWED when `retrieval.status === 'downloaded'`. Coverage is sufficient when the base
- *    solicitation/final_pws_sow is reviewed AND every amendment is reviewed. This is why `partial` is not
- *    automatically failure: partial with all authoritative items downloaded (only non-authoritative attachments
- *    inaccessible) is sufficient; a missing amendment or un-downloaded base → `authoritative_package_unreviewed`.
- *  - `none_published` / no authoritative item at all → `no_authoritative_source`; `inaccessible`/`unknown` →
- *    `document_coverage_unknown`.
+ *    not authoritative) and REVIEWED when `retrieval.status === 'downloaded'` OR the reviewer manually attested to
+ *    its `docId` (Bonfire gates the ZIP behind a portal session, so OP can LIST a doc but not download it; the
+ *    reviewer downloads it by hand and records it — see recordDocumentReview / reviewedDocIds). Coverage is
+ *    sufficient when the base solicitation/final_pws_sow is reviewed AND every amendment is reviewed. `partial` is
+ *    not automatically failure: partial with all authoritative items reviewed (only non-authoritative attachments
+ *    inaccessible) is sufficient.
+ *  - `no_authoritative_source` is reserved for "OP listed NO authoritative doc"; a listed-but-unreviewed base or
+ *    amendment → `authoritative_package_unreviewed`; `none_published` → `no_authoritative_source`;
+ *    `inaccessible`/`unknown` coverage → `document_coverage_unknown`.
  */
-export function evaluateEvidenceCoverage(source: any, establishedRequirements: any[] | null | undefined): EvidenceCoverage {
+export function evaluateEvidenceCoverage(
+  source: any,
+  establishedRequirements: any[] | null | undefined,
+  reviewedDocIds?: ReadonlySet<string> | string[] | null,
+): EvidenceCoverage {
   const reasons: string[] = [];
   const established = Array.isArray(establishedRequirements) ? establishedRequirements : [];
   if (established.length === 0) reasons.push('no_requirements_established');
 
+  // A manually-reviewed authoritative doc (the reviewer downloaded the Bonfire ZIP and attested to it) counts
+  // as reviewed alongside anything OP actually downloaded. reviewedDocIds are validated at write time to be
+  // OP-listed authoritative docIds, so this can never invent an authoritative source — see recordDocumentReview.
+  const reviewedSet: ReadonlySet<string> = reviewedDocIds instanceof Set
+    ? reviewedDocIds
+    : new Set(Array.isArray(reviewedDocIds) ? reviewedDocIds : []);
   const docs = source && source.documents;
   const coverage = String(docs?.coverage ?? 'unknown');
   const items: any[] = Array.isArray(docs?.items) ? docs.items : [];
-  const downloaded = (it: any) => it && it.retrieval && it.retrieval.status === 'downloaded';
+  const reviewed = (it: any) => (it && it.retrieval && it.retrieval.status === 'downloaded') || (it && reviewedSet.has(it.docId));
   const base = items.filter((it) => it?.role === 'solicitation' || it?.role === 'final_pws_sow');
   const amendments = items.filter((it) => it?.role === 'amendment');
 
@@ -109,8 +125,10 @@ export function evaluateEvidenceCoverage(source: any, establishedRequirements: a
     reasons.push('document_coverage_unknown');
   } else {
     // complete | complete_for_this_notice | partial
-    if (base.length === 0 || !base.some(downloaded)) reasons.push('no_authoritative_source');
-    else if (!amendments.every(downloaded)) reasons.push('authoritative_package_unreviewed');
+    // no_authoritative_source is reserved for "OP listed NO authoritative doc"; a doc that IS listed but not yet
+    // reviewed (downloaded or manually attested) is authoritative_package_unreviewed — it exists, it needs review.
+    if (base.length === 0) reasons.push('no_authoritative_source');
+    else if (!base.some(reviewed) || !amendments.every(reviewed)) reasons.push('authoritative_package_unreviewed');
   }
   return { sufficient: reasons.length === 0, reasons };
 }
@@ -196,6 +214,72 @@ export async function recordDecision(input: RecordDecisionInput): Promise<any> {
   });
 }
 
+const AUTHORITATIVE_ROLES = new Set(['solicitation', 'final_pws_sow', 'amendment']);
+
+/** The set of authoritative docIds a record has had MANUALLY reviewed (from requirements_json.reviewedDocuments). */
+export function reviewedDocIdsFrom(record: any): Set<string> {
+  const entries = (record && record.requirements_json && record.requirements_json.reviewedDocuments) || [];
+  return new Set((Array.isArray(entries) ? entries : []).map((e: any) => String(e.docId)));
+}
+
+export interface RecordDocumentReviewInput {
+  canonicalOpportunityId: string; biddingEntity: string; expectedVersion: number; reviewerIdentityId: string;
+  mode: 'add' | 'revoke';
+  coveredDocIds: string[];
+  /** For mode 'add': the uploaded ZIP's attestation metadata (server-computed sha256; bytes are NOT stored). */
+  filename?: string | null; sha256?: string | null; sizeBytes?: number | null;
+}
+
+/**
+ * Record (or revoke) a MANUAL document review: the reviewer downloaded the Bonfire ZIP by hand and attests that
+ * the authoritative documents are in hand. NON-WEAKENING by construction:
+ *  - each coveredDocId MUST be an authoritative item (role ∈ solicitation/final_pws_sow/amendment) that the
+ *    source snapshot actually LISTED — otherwise DocumentNotListedError (a human can't invent an authoritative
+ *    doc, and can't attest to a non-authoritative attachment);
+ *  - it only affects the document-coverage sub-check; the established-requirements gate + requirement-blocking +
+ *    reviewer≠approver + CAS + changed-source all still apply at approval;
+ *  - fork-on-edit keeps every prior version, and 'revoke' removes an erroneous attestation (recovery) by forking
+ *    a new version without it — nothing is destructively mutated.
+ * The sha256 is computed server-side (see the route); this stores the attestation metadata, never the bytes.
+ */
+export async function recordDocumentReview(input: RecordDocumentReviewInput): Promise<any> {
+  const current = await loadCurrent(input.canonicalOpportunityId, input.biddingEntity);
+  if (!current) throw new QualificationNotFoundError();
+  if (current.version !== input.expectedVersion) throw new QualificationConflictError(current.version);
+
+  const items: any[] = (current.source_snapshot && Array.isArray(current.source_snapshot.documents?.items))
+    ? current.source_snapshot.documents.items : [];
+  const authoritativeById = new Map<string, any>(
+    items.filter((it) => AUTHORITATIVE_ROLES.has(String(it?.role))).map((it) => [String(it.docId), it]),
+  );
+  const covered = Array.isArray(input.coveredDocIds) ? input.coveredDocIds.map(String) : [];
+  const notListed = covered.filter((id) => !authoritativeById.has(id));
+  if (notListed.length > 0) throw new DocumentNotListedError(notListed);
+
+  const existing: any[] = (current.requirements_json && Array.isArray(current.requirements_json.reviewedDocuments))
+    ? current.requirements_json.reviewedDocuments : [];
+
+  let reviewedDocuments: any[];
+  if (input.mode === 'revoke') {
+    const drop = new Set(covered);
+    reviewedDocuments = existing.filter((e) => !drop.has(String(e.docId)));
+  } else {
+    const drop = new Set(covered); // replace any prior entry for the same docId (idempotent re-attest)
+    const kept = existing.filter((e) => !drop.has(String(e.docId)));
+    const added = covered.map((id) => ({
+      docId: id, role: authoritativeById.get(id).role, method: 'manual_upload',
+      filename: input.filename ?? null, sha256: input.sha256 ?? null, sizeBytes: input.sizeBytes ?? null,
+      reviewedBy: input.reviewerIdentityId, reviewedAt: new Date().toISOString(),
+    }));
+    reviewedDocuments = [...kept, ...added];
+  }
+
+  return forkNewVersion(current, {
+    reviewer_identity_id: input.reviewerIdentityId,
+    requirements_json: { ...(current.requirements_json || {}), reviewedDocuments },
+  });
+}
+
 export interface ApproveQualificationInput {
   canonicalOpportunityId: string; biddingEntity: string; expectedVersion: number;
   decision: 'approved_bid_pursuit' | 'rfi_response'; approverIdentityId: string;
@@ -244,7 +328,8 @@ export async function approveGovQualification(input: ApproveQualificationInput):
   // Effective requirements = the reviewer's ESTABLISHED (cited) set if present, else the source's (always [] for
   // live v2). Coverage AND blocking are both enforced; missing evidence never silently passes.
   const established = (current.requirements_json && current.requirements_json.established) || (detail && detail.requirements) || [];
-  const coverage = evaluateEvidenceCoverage(detail, established);
+  // Manually-reviewed authoritative docIds (the reviewer downloaded the Bonfire ZIP by hand) count toward coverage.
+  const coverage = evaluateEvidenceCoverage(detail, established, reviewedDocIdsFrom(current));
   if (!coverage.sufficient) throw new EvidenceInsufficientError(coverage.reasons);
   const evaluation = evaluateRequirements(established);
   if (!evaluation.canApproveBid) throw new QualificationBlockedError(evaluation.blocking.map((b) => `${b.id}:${b.reason}`));

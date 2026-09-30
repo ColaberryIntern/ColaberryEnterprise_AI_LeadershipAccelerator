@@ -20,9 +20,10 @@ jest.mock('../../../models/GovQualification', () => ({ __esModule: true, default
 const createQualification = jest.fn();
 const recordDecision = jest.fn();
 const approveGovQualification = jest.fn();
+const recordDocumentReview = jest.fn();
 jest.mock('../../../services/factory/govQualification', () => {
   const actual = jest.requireActual('../../../services/factory/govQualification');
-  return { ...actual, createQualification: (...a: any[]) => createQualification(...a), recordDecision: (...a: any[]) => recordDecision(...a), approveGovQualification: (...a: any[]) => approveGovQualification(...a) };
+  return { ...actual, createQualification: (...a: any[]) => createQualification(...a), recordDecision: (...a: any[]) => recordDecision(...a), approveGovQualification: (...a: any[]) => approveGovQualification(...a), recordDocumentReview: (...a: any[]) => recordDocumentReview(...a) };
 });
 const authorizeBuild = jest.fn();
 jest.mock('../../../services/factory/buildAuthorization', () => {
@@ -42,6 +43,7 @@ import {
   ChangedSourceError, QualificationBlockedError, SourceUnavailableError, SelfApprovalError, QualificationConflictError,
   SourceNotApprovableError, EvidenceInsufficientError,
 } from '../../../services/factory/govQualification';
+import { DocumentNotListedError } from '../../../services/factory/govQualification';
 import { BuildNotAuthorizedError } from '../../../services/factory/buildAuthorization';
 import { AliasConflictError } from '../../../services/factory/opportunities/govOpportunityAlias';
 import { CLEAN_CANONICAL, BLOCKING_CANONICAL, UNAVAILABLE_CANONICAL } from '../../../services/factory/opportunities/govOpportunityFixtures';
@@ -57,7 +59,7 @@ describe('the section gate + tenant scoping', () => {
   it('mounts every route behind requireSection("program") (source-level, route-auth lint)', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'govQualificationRoutes.ts'), 'utf8');
     const routeLines = src.split('\n').filter((l) => /router\.(get|post)\(/.test(l));
-    expect(routeLines.length).toBe(7);
+    expect(routeLines.length).toBe(8);
     // Each route DEFINITION line must carry the section guard (not just somewhere in the file).
     const unguarded = routeLines.filter((l) => !l.includes("requireSection('program')"));
     expect(unguarded).toEqual([]);
@@ -208,6 +210,60 @@ describe('GET workspace source-state + POST decision established requirements', 
       .send({ biddingEntity: 'colaberry', expectedVersion: 1, decision: 'needs_evidence', establishedRequirements: [{ id: 'x', text: 't', applicability: 'maybe', dueStage: 'submission', bindingStatus: 'b' }] });
     expect(res.status).toBe(400);
     expect(recordDecision).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST review-documents (manual Bonfire-ZIP attestation)', () => {
+  const url = `/api/admin/factory/qualification/${CLEAN_CANONICAL}/review-documents`;
+
+  it('add: 201, computes a server sha256, passes mode/coveredDocIds/reviewer to the service', async () => {
+    recordDocumentReview.mockResolvedValue({ id: 'q2', version: 2 });
+    const res = await request(app).post(url)
+      .field('biddingEntity', 'colaberry').field('expectedVersion', '1').field('mode', 'add')
+      .field('coveredDocIds', JSON.stringify(['DS1', 'DA1']))
+      .attach('document', Buffer.from('pretend-zip-bytes'), 'pkg.zip');
+    expect(res.status).toBe(201);
+    const arg = recordDocumentReview.mock.calls[0][0];
+    expect(arg.mode).toBe('add');
+    expect(arg.coveredDocIds).toEqual(['DS1', 'DA1']);
+    expect(arg.reviewerIdentityId).toBe('reviewer@test');
+    expect(arg.sha256).toMatch(/^[0-9a-f]{64}$/); // server-computed, not client-asserted
+    expect(arg.filename).toBe('pkg.zip');
+  });
+
+  it('add: 400 when no file is attached', async () => {
+    const res = await request(app).post(url)
+      .field('biddingEntity', 'colaberry').field('expectedVersion', '1').field('mode', 'add')
+      .field('coveredDocIds', JSON.stringify(['DS1']));
+    expect(res.status).toBe(400);
+    expect(recordDocumentReview).not.toHaveBeenCalled();
+  });
+
+  it('revoke: 200 with no file required', async () => {
+    recordDocumentReview.mockResolvedValue({ id: 'q2', version: 2 });
+    const res = await request(app).post(url)
+      .field('biddingEntity', 'colaberry').field('expectedVersion', '1').field('mode', 'revoke')
+      .field('coveredDocIds', JSON.stringify(['DA1']));
+    expect(res.status).toBe(200);
+    expect(recordDocumentReview.mock.calls[0][0].mode).toBe('revoke');
+  });
+
+  it('422 when the service rejects an unlisted docId (DocumentNotListedError)', async () => {
+    recordDocumentReview.mockRejectedValue(new DocumentNotListedError(['NOPE']));
+    const res = await request(app).post(url)
+      .field('biddingEntity', 'colaberry').field('expectedVersion', '1').field('mode', 'add')
+      .field('coveredDocIds', JSON.stringify(['NOPE'])).attach('document', Buffer.from('z'), 'p.zip');
+    expect(res.status).toBe(422);
+    expect(res.body.documentNotListed).toBe(true);
+    expect(res.body.docIds).toContain('NOPE');
+  });
+
+  it('400 on a bad body (coveredDocIds not a JSON array)', async () => {
+    const res = await request(app).post(url)
+      .field('biddingEntity', 'colaberry').field('expectedVersion', '1').field('mode', 'add')
+      .field('coveredDocIds', 'not-json').attach('document', Buffer.from('z'), 'p.zip');
+    expect(res.status).toBe(400);
+    expect(recordDocumentReview).not.toHaveBeenCalled();
   });
 
   it('candidates endpoint surfaces the canonical-mapping GAP when v2 is not configured (no fabricated ids)', async () => {
