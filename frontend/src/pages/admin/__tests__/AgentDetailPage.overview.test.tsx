@@ -278,10 +278,31 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
       });
     }
 
+    // Agent Detail polish round 3 (2026-09-29) — AgentOverviewV2EmployeeFacts.tsx
+    // collapses each behaviour row by default; tools/scheduled-work link/
+    // decomposed status facts/last-ticket link/shared-switch note all now
+    // live behind a per-row "Show details" toggle. The ON/OFF switch itself
+    // and any per-key error stay always-visible (a considered design
+    // decision — a failed toggle must never be hidden by a collapsed row),
+    // so clickBehaviourToggle above needs no change.
+    async function expandBehaviourRow(name: string) {
+      const nameSpan = Array.from(container.querySelectorAll('span')).find((el) => el.textContent === name);
+      const rowDiv = nameSpan?.closest('.adv2-behaviour-row');
+      const toggle = rowDiv?.querySelector('.adv2-behaviour-expand-toggle');
+      if (!toggle) throw new Error(`Expand toggle for "${name}" not found`);
+      await act(async () => {
+        toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+
     it('shows the real tool correlation and the Scheduled work link', async () => {
       getAgentDetail.mockResolvedValue(EMPLOYEE_FACTS_DETAIL);
       await renderAgentPage();
       await openOverviewTab();
+      await expandBehaviourRow('Reactive DM reply');
+      await expandBehaviourRow('Health assessment');
+      await expandBehaviourRow('Autonomous outreach sweep');
 
       expect(container.textContent).toContain('uses: respond_to_dm');
       expect(container.textContent).toContain('uses: assess_student_health');
@@ -291,7 +312,8 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
     // Phase 1 workspace mission, R11 (2026-09-18) — Ali's new mission doc:
     // "Show whether each action is model-selected, rule-triggered, or
     // human-directed. Show callable, configured, authorized, enabled, and
-    // healthy as distinct facts."
+    // healthy as distinct facts." The trigger-mode chip is always-visible
+    // (collapsed view); the decomposed status facts are behind expand.
     it('shows trigger mode and decomposed status facts per behaviour, with an honest dash when healthy is unknown', async () => {
       getAgentDetail.mockResolvedValue(EMPLOYEE_FACTS_DETAIL);
       await renderAgentPage();
@@ -299,6 +321,10 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
 
       expect(container.textContent).toContain('Model-selected');
       expect(container.textContent).toContain('Rule-triggered');
+
+      await expandBehaviourRow('Reactive DM reply');
+      await expandBehaviourRow('Autonomous outreach sweep');
+
       expect(container.textContent).toContain('Healthy: yes');
       expect(container.textContent).toContain('Healthy: —');
     });
@@ -325,6 +351,8 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
       });
       await renderAgentPage();
       await openOverviewTab();
+      await expandBehaviourRow('Reactive DM reply');
+      await expandBehaviourRow('Autonomous outreach sweep');
 
       const link = container.querySelector('a[href="/admin/tickets?open=ticket-7"]');
       expect(link).not.toBeNull();
@@ -337,6 +365,8 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
       getAgentDetail.mockResolvedValue(EMPLOYEE_FACTS_DETAIL);
       await renderAgentPage();
       await openOverviewTab();
+      await expandBehaviourRow('Reactive DM reply');
+      await expandBehaviourRow('Health assessment');
 
       expect(container.textContent).toContain("Shares Reese's own on/off switch with Health assessment.");
       expect(container.textContent).toContain("Shares Reese's own on/off switch with Reactive DM reply.");
