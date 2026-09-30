@@ -83,6 +83,64 @@ later" outcome Ali asked this skill to prevent.
 
 ---
 
+## From a detailed description to the obligations table
+
+Ali, 2026-09-30: "Most of the time building an agent will come from a request of skills
+to plug into this system... an agent will be explained in great detail and then we should
+be able to map to all the answers in the skill." Most new agents don't start from a blank
+form — they start from a real, detailed description of what the agent does and why. This
+section is how to turn that description into real answers for the obligations table above,
+instead of re-asking every STOP AND ASK gate from zero regardless of how much the
+description already said.
+
+Read the description once, fully, before touching any obligation. Then work through these
+in order:
+
+1. **`tools_granted` (#4)** — list every real capability the description names, phrased as
+   the same kind of snake_case verb strings the real registry already uses (see #4's real
+   examples: `respond_to_dm`, `create_agent_tasks`, `detect_stuck_agents`). Don't invent
+   capabilities the description doesn't support, and don't under-list ones it clearly does
+   — this list is the direct input to the next 2 steps, not decoration.
+2. **Autonomy level, derived, not asked** — run the real classifier's own logic by hand
+   against the list from step 1: `agentCapabilityClassifier.ts`'s `KEYWORD_TIERS`
+   (`send_`/`respond_to_dm`/`_sms`/`_email`/`_call`/`_dm` → `communicate`;
+   `create_`/`update_`/`delete_`/`cancel_`/`resolve_`/`flag_`/`auto_execute_`/`auto_repair`/
+   `retry_`/`apply_` → `act_audited`; `propose_`/`identify_`/`generate_` → `suggest`;
+   `read_`/`detect_`/`query_`/`evaluate_`/`assess_`/`analyze_`/`monitor_`/`scan_` →
+   `observe`) — take the MAX tier across every tool, same as the real code does. Once
+   `tools_granted` is declared honestly and seeded, obligation #8's real wiring
+   (`seedAgentRegistry()` → `classifyNewAgentAutonomyLevel()`) does this automatically on
+   boot — this step is for confirming the description supports the level you expect
+   *before* seeding, not a substitute for the real classifier.
+3. **`RISK_TIER` (#6)** — do not guess a feeling. Take the single MOST CONSEQUENTIAL real
+   action `tools_granted` implies and place it on `deliveryRiskLevels.ts`'s real R0-R4
+   scale (R0=read_only, R1=reversible_content, R2=code_change, R3=schema/security/
+   external_side_effect — any `communicate`-tier tool is, by definition, an external side
+   effect and therefore at least R3). If the description's actions span multiple tiers,
+   the tier is the HIGHEST one present, same "max across capabilities" principle as step 2
+   — a mostly-read-only agent with one real send action is still a communicate/R3 agent,
+   not a mostly-observe one with an asterisk.
+4. **`category`/department** — the description's own stated domain or team almost always
+   answers this directly (e.g. "helps students with curriculum" → student success; "audits
+   agent behavior" → platform/governance). Only fall through to STOP AND ASK when the
+   description genuinely doesn't say or implies more than one plausible department.
+5. **Persona / system-prompt tone** — draft from the description's own stated audience and
+   voice cues (who does it talk to, how formal, what it should never say) rather than a
+   generic template. This is still an editorial decision Ali should see before it ships to
+   real students, not something to silently finalize.
+6. **`reports_to` (#5)** — the one field most descriptions genuinely don't answer (who is
+   accountable is an organizational decision, not a technical one derivable from what the
+   agent does). This stays a hard STOP AND ASK gate regardless of how detailed the
+   description is, unless the description explicitly names the accountable human.
+
+**The STOP AND ASK gates above still apply — but only fire on what's still genuinely
+ambiguous after this mapping pass, not by default for every field regardless of input
+detail.** A rich description that clearly implies `communicate`/R3 and a clear department
+doesn't need those 2 questions re-asked; a description that never names an accountable
+human still needs #5 asked every time, no matter how detailed the rest of it is.
+
+---
+
 ## Known gaps on Reese herself (2026-09-14, updated 2026-09-21) — don't silently copy these
 
 Reese is the reference implementation, not a finished one. Disclosing her real open
