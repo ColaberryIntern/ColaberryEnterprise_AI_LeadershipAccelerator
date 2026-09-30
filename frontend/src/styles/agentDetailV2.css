@@ -130,7 +130,7 @@
  * pulling the whole shell into negative space, clipping it against the true
  * viewport edges. */
 .adv2-shell { display: grid; grid-template-columns: 210px 1fr; min-height: 100vh; }
-.adv2-sidebar { background: linear-gradient(180deg, var(--adv2-nav), var(--adv2-nav-2)); color: #C9DED5; padding: 24px 16px; display: flex; flex-direction: column; }
+.adv2-sidebar { background: linear-gradient(180deg, var(--adv2-nav), var(--adv2-nav-2)); color: #C9DED5; padding: 28px 18px; display: flex; flex-direction: column; }
 .adv2-sidebar-brand { color: #fff; font-size: 19px; font-weight: 700; letter-spacing: -0.5px; padding: 0 6px; }
 .adv2-sidebar-brand span { color: #6DD7B4; }
 .adv2-sidebar-section-label { font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700; margin: 33px 10px 14px; color: #8FAC9F; }
@@ -151,10 +151,21 @@
 .adv2-sidebar-navbtn.active:before { background: #63D7AD; border-color: #63D7AD; }
 .adv2-sidebar-footer { margin-top: auto; padding-top: 18px; border-top: 1px solid #FFFFFF1F; display: flex; gap: 10px; align-items: center; }
 .adv2-avatar-sm { width: 30px; height: 30px; font-size: 13px; border-radius: 8px; }
-.adv2-topbar { background: var(--adv2-panel); border-bottom: 1px solid var(--adv2-rule); padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+/* Shell spacing fix (2026-09-30, Ali live: "Widen out the left panel and add
+ * space on the left side of the tab so everything is not bunched on the
+ * left side... Add space at the top as well. Dark mode, deactivate,
+ * refresh should not have their upper border touching the top of the
+ * screen."). The sidebar's own width (210px) already matched the mockup
+ * exactly — the real gap was 4 undersized spacing values, corrected here to
+ * the mockup's own real measured CSS (C:\Users\ali_m\Downloads\preview (3).html's
+ * .sidebar/.topbar/.content rules): more sidebar padding, a real topbar
+ * min-height so its button row isn't flush against the viewport edge, and a
+ * genuinely wider content column (1180px -> 1570px) with a bigger side
+ * gutter — the actual cause of "everything bunched on the left." */
+.adv2-topbar { background: var(--adv2-panel); border-bottom: 1px solid var(--adv2-rule); min-height: 70px; padding: 0 34px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .adv2-topbar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .adv2-back-link { text-decoration: none; }
-.adv2-shell-content { max-width: 1180px; margin: 0 auto; padding: 24px 28px 60px; }
+.adv2-shell-content { max-width: 1570px; margin: 0 auto; padding: 28px 34px 40px; }
 
 @media (max-width: 900px) {
   .adv2-shell { grid-template-columns: 1fr; }
@@ -170,7 +181,7 @@
 .adv2-tab[aria-selected="true"] { color: var(--adv2-ink); border-bottom-color: var(--adv2-ink); font-weight: 500; }
 
 /* Body */
-.adv2-wrap { max-width: 1180px; margin: 0 auto; padding: 24px 28px 60px; }
+.adv2-wrap { max-width: 1570px; margin: 0 auto; padding: 28px 34px 40px; }
 /* Track C (2026-09-28) — real bug: this was `.adv2-wrap.adv2-grid` (a
  * compound selector requiring BOTH classes on one element), but the only
  * real usage (AgentOverviewV2.tsx) always puts `adv2-grid` on a SEPARATE,
@@ -178,6 +189,12 @@
  * Main Column/Sidebar have stacked as plain blocks, not a 2-column grid,
  * since Track A1 shipped. */
 .adv2-grid { display: grid; grid-template-columns: minmax(0, 1fr) 375px; gap: 24px; align-items: start; }
+/* Overview layout fix (2026-09-30, Ali live: "work explained should be in
+ * the top right section of 'Needs Ali' section"). A new, genuinely even
+ * 2-column row — .adv2-grid's own 1fr/375px split is sized for the
+ * sidebar's narrower cards, not this pairing. */
+.adv2-needs-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; margin-bottom: 20px; }
+@media (max-width: 900px) { .adv2-needs-row { grid-template-columns: 1fr; } }
 .adv2-col { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
 .adv2-card { background: var(--adv2-panel); border: 1px solid var(--adv2-rule); border-radius: 10px; box-shadow: var(--adv2-shadow); }
 .adv2-evidence { background: var(--adv2-paper); padding: 14px; border-radius: 8px; }

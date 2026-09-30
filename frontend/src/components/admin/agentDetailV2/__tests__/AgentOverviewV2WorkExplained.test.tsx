@@ -84,8 +84,34 @@ describe('AgentOverviewV2WorkExplained', () => {
 
     await renderCard();
 
-    expect(container.textContent).toContain('block');
+    // Agent Detail polish round 5 (2026-09-30) — the raw 'block' verdict now
+    // renders as the relabeled real header "BLOCKED" (see
+    // AgentOverviewV2WorkExplained.tsx's VERDICT_LABEL), never the bare enum.
+    expect(container.textContent).toContain('BLOCKED');
     expect(container.textContent).toContain('kill_switch_active');
+  });
+
+  it('relabels every real verdict/outcome/status value into a clearer header, and falls back to the raw value for anything unmapped', async () => {
+    getAgentExplainability.mockResolvedValue({
+      agentId: 'agent-1',
+      agentName: 'Reese',
+      events: [
+        { eventType: 'agent.authorization', outcome: 'success', model: null, costUsd: null, durationMs: null, createdAt: '2026-09-20T09:00:00Z', authorization: { verdict: 'allow', reason: 'ok', mode: 'enforce', enforced: true } },
+        { eventType: 'llm.call', outcome: 'failure', model: 'gpt-4o', costUsd: 0.01, durationMs: 200, createdAt: '2026-09-20T08:00:00Z', authorization: null },
+        { eventType: 'weird.event', outcome: 'partial_unmapped', model: null, costUsd: null, durationMs: null, createdAt: '2026-09-20T07:00:00Z', authorization: null },
+      ],
+      proposedActions: [
+        { actionType: 'send_followup', reason: 'x', status: 'expired', confidence: 0.5, createdAt: '2026-09-20T11:00:00Z', reviewedAt: null },
+      ],
+    } as AgentExplainability);
+
+    await renderCard();
+
+    expect(container.textContent).toContain('EXPIRED');
+    expect(container.textContent).toContain('ALLOWED');
+    expect(container.textContent).toContain('FAILED');
+    // An unmapped real value falls back to its own raw string, never blank.
+    expect(container.textContent).toContain('partial_unmapped');
   });
 
   it('caps the preview at 6 entries even when more are real', async () => {

@@ -10,7 +10,12 @@ jest.mock('../../../models/AdminUser', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models/AiAgent', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models/Enrollment', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models/CommunityMember', () => ({ findAll: jest.fn() }));
-jest.mock('../../../models', () => ({ Ticket: { findAll: jest.fn(), count: jest.fn(), findOne: jest.fn() } }));
+jest.mock('../../../models', () => ({
+  Ticket: { findAll: jest.fn(), count: jest.fn(), findOne: jest.fn() },
+  TicketActionLink: { findAll: jest.fn() },
+  WorkLedgerEvent: { findAll: jest.fn() },
+  EvidenceLink: { findAll: jest.fn() },
+}));
 jest.mock('../../communityService', () => ({ derivePresence: jest.fn() }));
 
 import fs from 'fs';
@@ -20,9 +25,9 @@ import AdminUser from '../../../models/AdminUser';
 import AiAgent from '../../../models/AiAgent';
 import Enrollment from '../../../models/Enrollment';
 import CommunityMember from '../../../models/CommunityMember';
-import { Ticket } from '../../../models';
+import { Ticket, TicketActionLink, WorkLedgerEvent, EvidenceLink } from '../../../models';
 import { derivePresence } from '../../communityService';
-import { listLiveAgents, listLiveAgentActivity, countOpenTicketsForAgent, countCompletedTicketsForAgent, getLastTicketActivityForAgent, getOldestOpenTicketAge } from '../liveAgentsService';
+import { listLiveAgents, listLiveAgentActivity, countOpenTicketsForAgent, countCompletedTicketsForAgent, countVerifiedResolutionsForAgent, getLastTicketActivityForAgent, getOldestOpenTicketAge } from '../liveAgentsService';
 
 const mockAdminUserFindAll = AdminUser.findAll as unknown as jest.Mock;
 const mockAiAgentFindAll = AiAgent.findAll as unknown as jest.Mock;
@@ -32,6 +37,9 @@ const mockTicketFindAll = Ticket.findAll as unknown as jest.Mock;
 const mockTicketCount = Ticket.count as unknown as jest.Mock;
 const mockTicketFindOne = Ticket.findOne as unknown as jest.Mock;
 const mockDerivePresence = derivePresence as unknown as jest.Mock;
+const mockTicketActionLinkFindAll = TicketActionLink.findAll as unknown as jest.Mock;
+const mockWorkLedgerEventFindAll = WorkLedgerEvent.findAll as unknown as jest.Mock;
+const mockEvidenceLinkFindAll = EvidenceLink.findAll as unknown as jest.Mock;
 
 const reeseAdmin = { id: 'admin-reese', email: 'reese@colaberry.com', agent_id: 'agent-reese', is_ai_operated: true, display_name: 'Reese' };
 const reeseAgent = {
@@ -58,6 +66,9 @@ beforeEach(() => {
   mockTicketCount.mockResolvedValue(0);
   mockTicketFindAll.mockResolvedValue([]);
   mockTicketFindOne.mockResolvedValue(null);
+  mockTicketActionLinkFindAll.mockResolvedValue([]);
+  mockWorkLedgerEventFindAll.mockResolvedValue([]);
+  mockEvidenceLinkFindAll.mockResolvedValue([]);
 });
 
 describe('listLiveAgents', () => {
@@ -375,6 +386,84 @@ describe('countCompletedTicketsForAgent — the "Completed (30d)" real count for
     const count = await countCompletedTicketsForAgent('admin-reese', reeseAgent as any);
 
     expect(count).toBe(0);
+  });
+});
+
+// Agent Detail polish round 5 (2026-09-30) — the real, evidence+success-gated
+// "Verified resolution" stat for Results & Reports, mirroring
+// generateTicketSummary()'s own honest gate (successEvents.length > 0 &&
+// hasEvidence) as a lightweight aggregate, never a bare `done` status flag.
+describe('countVerifiedResolutionsForAgent — the real, evidence+success-gated "Verified resolution" stat', () => {
+  it('counts a ticket with a real success event AND real evidence as verified', async () => {
+    mockTicketFindAll.mockResolvedValue([{ id: 'ticket-1' }]);
+    mockTicketActionLinkFindAll.mockResolvedValue([{ ticket_id: 'ticket-1', event_id: 'event-1' }]);
+    mockWorkLedgerEventFindAll.mockResolvedValue([{ event_id: 'event-1', occurred_at: new Date('2026-09-20T00:00:00Z') }]);
+    mockEvidenceLinkFindAll.mockResolvedValue([{ ticket_id: 'ticket-1' }]);
+
+    const result = await countVerifiedResolutionsForAgent('admin-reese', reeseAgent as any);
+
+    expect(result).toEqual({ verified: 1, owned: 1, mostRecentVerifiedTicketId: 'ticket-1' });
+    // The success-event query is real-gated on result: 'success'.
+    const eventArgs = mockWorkLedgerEventFindAll.mock.calls[0][0];
+    expect(eventArgs.where.result).toBe('success');
+  });
+
+  it('a success event WITHOUT evidence does not count as verified — honest, matches generateTicketSummary()', async () => {
+    mockTicketFindAll.mockResolvedValue([{ id: 'ticket-1' }]);
+    mockTicketActionLinkFindAll.mockResolvedValue([{ ticket_id: 'ticket-1', event_id: 'event-1' }]);
+    mockWorkLedgerEventFindAll.mockResolvedValue([{ event_id: 'event-1', occurred_at: new Date() }]);
+    mockEvidenceLinkFindAll.mockResolvedValue([]);
+
+    const result = await countVerifiedResolutionsForAgent('admin-reese', reeseAgent as any);
+
+    expect(result).toEqual({ verified: 0, owned: 1, mostRecentVerifiedTicketId: null });
+  });
+
+  it('a ticket with no linked events does not count as verified', async () => {
+    mockTicketFindAll.mockResolvedValue([{ id: 'ticket-1' }]);
+    mockTicketActionLinkFindAll.mockResolvedValue([]);
+
+    const result = await countVerifiedResolutionsForAgent('admin-reese', reeseAgent as any);
+
+    expect(result).toEqual({ verified: 0, owned: 1, mostRecentVerifiedTicketId: null });
+  });
+
+  it('"owned" has no status filter — every ticket ever assigned/created counts, matching the mockup\'s own "N owned cases" wording', async () => {
+    mockTicketFindAll.mockResolvedValue([{ id: 'ticket-1' }, { id: 'ticket-2' }, { id: 'ticket-3' }]);
+
+    const result = await countVerifiedResolutionsForAgent('admin-reese', reeseAgent as any);
+
+    expect(result.owned).toBe(3);
+    const findAllArgs = mockTicketFindAll.mock.calls[0][0];
+    expect(findAllArgs.where.status).toBeUndefined();
+  });
+
+  it('boundary: zero owned tickets returns all zeros, not a crash or NaN', async () => {
+    mockTicketFindAll.mockResolvedValue([]);
+
+    const result = await countVerifiedResolutionsForAgent('admin-reese', reeseAgent as any);
+
+    expect(result).toEqual({ verified: 0, owned: 0, mostRecentVerifiedTicketId: null });
+    // Short-circuits before ever querying TicketActionLink/WorkLedgerEvent/EvidenceLink.
+    expect(mockTicketActionLinkFindAll).not.toHaveBeenCalled();
+  });
+
+  it('mostRecentVerifiedTicketId picks the verified ticket with the LATEST real success event, not just the first one found', async () => {
+    mockTicketFindAll.mockResolvedValue([{ id: 'ticket-old' }, { id: 'ticket-new' }]);
+    mockTicketActionLinkFindAll.mockResolvedValue([
+      { ticket_id: 'ticket-old', event_id: 'event-old' },
+      { ticket_id: 'ticket-new', event_id: 'event-new' },
+    ]);
+    mockWorkLedgerEventFindAll.mockResolvedValue([
+      { event_id: 'event-old', occurred_at: new Date('2026-09-01T00:00:00Z') },
+      { event_id: 'event-new', occurred_at: new Date('2026-09-25T00:00:00Z') },
+    ]);
+    mockEvidenceLinkFindAll.mockResolvedValue([{ ticket_id: 'ticket-old' }, { ticket_id: 'ticket-new' }]);
+
+    const result = await countVerifiedResolutionsForAgent('admin-reese', reeseAgent as any);
+
+    expect(result.verified).toBe(2);
+    expect(result.mostRecentVerifiedTicketId).toBe('ticket-new');
   });
 });
 

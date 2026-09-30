@@ -89,7 +89,8 @@ const { resetAgents, reactivateAgent } = require('../../../services/workforceOrg
 // after `jest.clearAllMocks()` (the established pattern in this file) —
 // these 5 new mocks follow the identical convention, applied per describe
 // block below, not once at module scope.
-jest.mock('../../../services/managerInboxApi', () => ({ getManagerInboxItems: jest.fn() }));
+jest.mock('../../../services/managerInboxApi', () => ({ getManagerInboxItems: jest.fn(), approveInboxItem: jest.fn(), getInboxItemInspector: jest.fn() }));
+jest.mock('../../../services/ticketSummaryApi', () => ({ getTicketSummary: jest.fn() }));
 jest.mock('../../../services/managerDirectiveApi', () => ({ listDirectives: jest.fn(), revokeDirective: jest.fn() }));
 jest.mock('../../../services/agentReportSubscriptionApi', () => ({ listReportSubscriptions: jest.fn() }));
 jest.mock('../../../services/agentGoalApi', () => ({ listGoals: jest.fn() }));
@@ -163,6 +164,9 @@ const DETAIL: AgentDetail = {
   // the two are intentionally separate fields/queries in the real service.
   open_ticket_count: 1,
   completed_ticket_count_30d: 0,
+  verified_resolution_count: 0,
+  owned_ticket_count_all_time: 0,
+  most_recent_verified_ticket_id: null,
   tickets: [
     { id: 't-1', ticket_number: 1, title: 'Reaching out to Jordan Rivera', description: 'Reese is proactively reaching out to Jordan Rivera. Signal: inactivity. Goal: Confirm the student is unblocked and re-engaged with the curriculum within 7 days.', status: 'in_progress', priority: 'high', type: 'reese_autonomous_outreach', created_at: null, updated_at: '2026-08-12T15:00:00Z', due_date: null, status_bucket: 'open' },
     { id: 't-2', ticket_number: 2, title: 'DM conversation with Alex Chen', description: null, status: 'done', priority: 'medium', type: 'student_support', created_at: null, updated_at: '2026-01-15T15:00:00Z', due_date: null, status_bucket: null },

@@ -249,6 +249,20 @@ export interface AgentDetail {
    * days. Not "verified" — nothing in this codebase verifies a ticket's
    * outcome today; see the backend's `countCompletedTicketsForAgent()`. */
   completed_ticket_count_30d: number;
+  /** Agent Detail polish round 5 (2026-09-30) — Results & Reports' real
+   * "Verified resolution" stat. `verified_resolution_count` counts only
+   * tickets with a real WorkLedgerEvent (result: 'success') AND real linked
+   * evidence, the same honest gate `generateTicketSummary()` already
+   * enforces per-ticket — never a bare `done` status flag. See the
+   * backend's `countVerifiedResolutionsForAgent()`.
+   * `owned_ticket_count_all_time` is every ticket ever assigned to or
+   * created by this agent, no status filter — the real denominator. */
+  verified_resolution_count: number;
+  owned_ticket_count_all_time: number;
+  /** The single most recently verified ticket's real id, for fetching its own
+   * real outcome sentence via getTicketSummary() — null when nothing is
+   * verified yet. */
+  most_recent_verified_ticket_id: string | null;
   tickets: AgentDetailTicket[];
   ticket_breakdown: AgentDetailTicketTypeBreakdown[];
   related_tasks: AgentDetailRelatedTask[];
