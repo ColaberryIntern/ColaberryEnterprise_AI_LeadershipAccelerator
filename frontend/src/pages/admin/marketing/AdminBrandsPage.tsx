@@ -26,7 +26,7 @@ import {
 } from '../../../services/adminBrandApi';
 import { useMarketingBrand } from './MarketingBrandContext';
 import { ALL_BRANDS } from './brandScope';
-import { BRAND_TABS, isBrandTab, setupSummary, type BrandSetupFacts, type BrandTabKey } from './brandSetup';
+import { BRAND_TABS, domainNotice, isBrandTab, setupSummary, type BrandSetupFacts, type BrandTabKey } from './brandSetup';
 import BrandSetupTabs from './BrandSetupTabs';
 import { listItems, type ContentItem } from '../../../services/contentComposerApi';
 
@@ -331,6 +331,11 @@ function AdminBrandsPage() {
 
         {tab === 'domains' && (
           <SectionCard title="Sending domains" subtitle={BRAND_TABS[1].hint} icon="mail-check-line" padded={false}>
+            {/* Said before the table, because the table shows a "pending" column that looks like
+                something you could act on and is not. */}
+            <div className={`alert alert-${domainNotice(facts).tone} m-3 mb-0 py-2 small`} role="status" data-testid="domain-notice">
+              {domainNotice(facts).text}
+            </div>
             <BrandReadinessPanel
               loading={loading}
               error={error}
