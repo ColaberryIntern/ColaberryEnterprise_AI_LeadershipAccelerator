@@ -171,3 +171,74 @@ describe('interviewTranscript', () => {
     expect(transcript).toBe('human: Ralph rebuilds it.\nassistant: Every morning?');
   });
 });
+
+/**
+ * THE DOCUMENT HAS TO REACH BOTH ENDS, and reaching them is what these hold.
+ *
+ * `intakeDocuments` renders the two blocks; nothing there can tell whether anybody calls
+ * it. These go through the two functions the interview actually runs, so a rendering that
+ * exists and is never passed to the model fails here — which is exactly the failure this
+ * codebase already shipped once with `packItems`.
+ */
+describe('a document attached to the conversation', () => {
+  const documents = [{ name: 'brief.md', text: 'Dispatchers need every open job on one screen.' }];
+
+  it('reaches the model on the SAME turn, before its next question', async () => {
+    await nextInterviewMessage({
+      turns: [{ role: 'user', text: 'We rebuild a report every morning.' }],
+      documents,
+    });
+
+    const user = mockChatJson.mock.calls[0][2];
+    expect(user).toContain('--- brief.md ---');
+    expect(user).toContain('Dispatchers need every open job on one screen.');
+  });
+
+  it('is put before the transcript, as the ground the conversation stands on', async () => {
+    // Order matters to a model: earlier material reads as context for later material.
+    await nextInterviewMessage({
+      turns: [{ role: 'user', text: 'We rebuild a report every morning.' }],
+      documents,
+    });
+
+    const user: string = mockChatJson.mock.calls[0][2];
+    const doc = user.indexOf('--- brief.md ---');
+    const convo = user.indexOf('THE CONVERSATION SO FAR:');
+
+    // Both PRESENT first. `indexOf` answers -1 for absent, and -1 is less than any
+    // real index, so an ordering assertion alone passes when the document is missing
+    // entirely — a check that cannot fail.
+    expect(doc).toBeGreaterThan(-1);
+    expect(convo).toBeGreaterThan(-1);
+    expect(doc).toBeLessThan(convo);
+  });
+
+  it('tells the model not to re-ask what the document answers', async () => {
+    await nextInterviewMessage({ turns: [{ role: 'user', text: 'a thing' }], documents });
+    expect(mockChatJson.mock.calls[0][2]).toMatch(/do not ask/i);
+  });
+
+  it('does NOT spend one of the exchanges the person has to talk in', async () => {
+    // A document sent as a user turn would burn an exchange and could be evicted by the
+    // transcript window. Travelling beside the transcript is what avoids both.
+    const result = await nextInterviewMessage({
+      turns: [{ role: 'user', text: 'We rebuild a report every morning.' }],
+      documents,
+    });
+    expect(result).toMatchObject({ ok: true, exchanges: 1 });
+  });
+
+  it('reaches the extraction transcript, so the requirements can be built from it', () => {
+    const transcript = interviewTranscript([{ role: 'user', text: 'Ralph rebuilds it.' }], documents);
+
+    expect(transcript).toContain('human: Ralph rebuilds it.');
+    expect(transcript).toContain('--- brief.md ---');
+    expect(transcript).toContain('Dispatchers need every open job on one screen.');
+  });
+
+  it('leaves the prompt and the transcript untouched when nothing was attached', async () => {
+    await nextInterviewMessage({ turns: [{ role: 'user', text: 'just talking' }] });
+    expect(mockChatJson.mock.calls[0][2]).not.toMatch(/DOCUMENTS THEY PROVIDED/);
+    expect(interviewTranscript([{ role: 'user', text: 'just talking' }])).toBe('human: just talking');
+  });
+});

@@ -84,6 +84,21 @@ export async function startBuildFromUnderstanding(params: {
   enrollmentId: string;
   /** Refuse an understanding the customer has not confirmed (§17). Off until that UI exists. */
   requireConfirmed?: boolean;
+  /**
+   * Rest the build at `drafted` instead of publishing itself.
+   *
+   *     "We will never build projects like this, one story at a time. We do not create
+   *      manually. This is where I need to put my idea process in here."  (Ali, 2026-09-29)
+   *
+   * A PROPERTY OF THE DOOR, not of this function. A prospect's own enquiry publishes
+   * itself — "I don't want to be a gate for Projects. Let those projects move fwd without
+   * me." A reviewer building FOR someone is the opposite case, and the reason is in
+   * `internshipProjectGeneration`'s header: without a hold the reviewer approves a plan
+   * the intern is already looking at, which is not a review.
+   *
+   * Defaults OFF, so the public door keeps behaving exactly as it did.
+   */
+  holdForReview?: boolean;
 }): Promise<BuildFromUnderstandingResult> {
   const record: any = await ProjectUnderstandingRecord.findByPk(params.recordId);
   if (!record) return { ok: false, reason: 'not_found', error: `no understanding ${params.recordId}` };
@@ -139,6 +154,7 @@ export async function startBuildFromUnderstanding(params: {
       size: intake.size,
       targetWeeks: intake.targetWeeks,
       answers: intake.answers,
+      holdForReview: params.holdForReview,
     });
 
     const handoff: BuildHandoffRecord = {

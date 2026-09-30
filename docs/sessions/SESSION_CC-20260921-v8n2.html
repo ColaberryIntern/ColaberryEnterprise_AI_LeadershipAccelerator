@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Tuesday, September 29, 2026 at 9:10 PM</div>
-    <div><span class="sid">CC-20260921-v8n2</span><span class="count">13 changes</span></div>
+    <div class="meta">Generated Tuesday, September 29, 2026 at 10:45 PM</div>
+    <div><span class="sid">CC-20260921-v8n2</span><span class="count">16 changes</span></div>
   </header>
   <main>
     
@@ -230,7 +230,7 @@
         <div class="card-head">
           <span class="num">12</span>
           <h2>Click a story, see the requirements it fulfils</h2>
-          <span class="badge">2026-09-30</span>
+          <span class="badge">2026-09-29</span>
         </div>
         <div class="card-body">
           <div class="row"><span class="k">What changed</span><span class="v"></span></div>
@@ -245,13 +245,58 @@
         <div class="card-head">
           <span class="num">13</span>
           <h2>Import a project from its repository, decomposed like any other</h2>
-          <span class="badge">2026-09-30</span>
+          <span class="badge">2026-09-29</span>
         </div>
         <div class="card-body">
           <div class="row"><span class="k">What changed</span><span class="v"></span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">NEW `__tests__/repoProjectImport.test.ts` **14 green** — every paste form parsed, bad</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">the service import in the route is DEFERRED (`await import(...)` inside the handler), not</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">14</span>
+          <h2>Wire the requirement packing into the live path it was written for</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">6 new tests in `buildIntakeAdapterCompleteness.test.ts` that go through</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">found by reading the map of the intake before adding to it, not by a failing test -</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">15</span>
+          <h2>Attach a document to the intake, read before the next question and used in the requirements</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">NEW `intakeDocuments.test.ts` 18 green; 71 green across the three service</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the first mutation run exposed one of my own tests as unfailable - it compared</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">16</span>
+          <h2>Move the review hold into the conversation intake, and the plan review with it</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">58 suites / 1251 tests green across `src/services/delivery` plus the</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`InternshipProjectGenerator` is NOT deleted, deliberately, and this is for Ali to</span></div>
           
         </div>
       </article>

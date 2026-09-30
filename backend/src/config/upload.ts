@@ -363,3 +363,60 @@ export const signedDocumentUpload = multer({
 });
 
 export { SIGNED_DOC_DIR, MAX_SIGNED_DOC_SIZE };
+
+// ── Project intake documents — text in, nothing kept ───────────────────────────
+//
+//     "Also I should be able to add documents to this process that can be analyzed
+//      before submitting the next question and can be used when creating the
+//      requirements."  (Ali, 2026-09-29)
+//
+// MEMORY storage, unlike every other upload in this file, and that is the design
+// rather than an oversight. The intake wants the TEXT: it is extracted once on
+// arrival, travels with the conversation from then on, and the file itself has no
+// later reader. Writing it to disk would make this the owner of an upload directory
+// nothing ever reads from, and of a retention question nobody asked for.
+//
+// NO IMAGES, unlike `strategyPrepUpload` whose allowlist this otherwise mirrors.
+// `officeparser` extracts no text from a PNG, so accepting one would take the
+// upload, succeed, and attach an empty document — a silent no-op wearing a success
+// message. Better to refuse it and say why.
+const INTAKE_DOC_MIMES: Record<string, string> = {
+  'application/pdf': '.pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/msword': '.doc',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+  'application/vnd.ms-powerpoint': '.ppt',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+  'application/vnd.ms-excel': '.xls',
+  'application/rtf': '.rtf',
+  'text/rtf': '.rtf',
+  'text/plain': '.txt',
+  'text/markdown': '.md',
+  'text/csv': '.csv',
+};
+
+// A brief, a spec or a deck. 15MB is a generous ceiling for a document that is about
+// to be reduced to at most 20k characters of text anyway.
+const MAX_INTAKE_DOC_SIZE = 15 * 1024 * 1024;
+
+// Browsers mislabel .md as text/plain and .csv as application/vnd.ms-excel, and a
+// download from some systems arrives as application/octet-stream. The extension is
+// the fallback, exactly as signedDocumentUpload already does, because a correct file
+// must not be refused for a header we do not control.
+const INTAKE_DOC_EXT_FALLBACK = new Set([
+  '.pdf', '.docx', '.doc', '.pptx', '.ppt', '.xlsx', '.xls', '.rtf', '.txt', '.md', '.csv',
+]);
+
+function intakeDocFilter(_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback): void {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (INTAKE_DOC_MIMES[file.mimetype] || INTAKE_DOC_EXT_FALLBACK.has(ext)) cb(null, true);
+  else cb(new Error('Attach a document I can read text from: PDF, Word, PowerPoint, Excel, RTF, Text, Markdown or CSV.'));
+}
+
+export const intakeDocumentUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: intakeDocFilter,
+  limits: { fileSize: MAX_INTAKE_DOC_SIZE, files: 1 },
+});
+
+export { MAX_INTAKE_DOC_SIZE };
