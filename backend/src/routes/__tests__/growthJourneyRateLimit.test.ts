@@ -1,4 +1,4 @@
-import type { Server } from 'http';
+import { Agent, type Server } from 'http';
 import express from 'express';
 import request from 'supertest';
 import {
@@ -62,14 +62,30 @@ afterAll(() => {
 
 /** Fire n requests in series and return the statuses. Series, not parallel: the
  *  counter is the thing under test and concurrency would make the boundary fuzzy. */
+const agent = new Agent({ keepAlive: true, maxSockets: 1 });
+afterAll(() => agent.destroy());
+
 async function fire(target: Server, path: string, n: number, headers: Record<string, string> = {}): Promise<number[]> {
   const out: number[] = [];
   for (let i = 0; i < n; i += 1) {
-    const res = await request(target).get(path).set(headers);
+    // One reused socket, not 121 handshakes. `skip` marks the REQUEST object and Node
+    // mints a fresh one per request even on a kept-alive socket, so reuse cannot make
+    // the re-entry mark leak between requests - the verifier proved that separately.
+    const res = await request(target).get(path).agent(agent).set(headers);
     out.push(res.status);
   }
   return out;
 }
+
+/**
+ * These cells make 121 real round trips. Jest's default is 5000 ms and there is no
+ * `testTimeout` in either jest config, which left about 5x headroom in isolation and
+ * not enough under the parallel load CI actually applies: the first fix here removed a
+ * 60-second-window race and the binding constraint simply moved to this timeout, so the
+ * suite still failed ~2 runs in 14. Thirty seconds is ~30x the measured cost with
+ * keep-alive; it is a budget, not an expectation, and a cell that needs it has broken.
+ */
+const SLOW = 30_000;
 
 describe('the budget', () => {
   it(`allows exactly ${MAX} requests and refuses the ${MAX + 1}st with a 429`, async () => {
@@ -77,7 +93,7 @@ describe('the budget', () => {
     const statuses = await fire(app, '/api/admin/growth-journey/thing', MAX + 1);
     expect(statuses.slice(0, MAX)).toEqual(Array(MAX).fill(200));
     expect(statuses[MAX]).toBe(429);
-  });
+  }, SLOW);
 
   it('the window and the ceiling are the numbers the rest of the repo already uses', () => {
     expect(GROWTH_JOURNEY_RATE_WINDOW_MS).toBe(60 * 1000);
@@ -104,7 +120,7 @@ describe('path scoping: the limiter must never gate what it was not mounted over
     const outside = await request(app).get('/elsewhere/thing');
     expect(outside.status).toBe(200);
     expect(outside.headers['ratelimit-limit']).toBeUndefined();
-  });
+  }, SLOW);
 });
 
 describe('one request is counted ONCE, however many routers it passes through', () => {
@@ -126,7 +142,7 @@ describe('one request is counted ONCE, however many routers it passes through', 
     // If the re-entry mark were missing this would refuse at 61, not 121.
     expect(statuses.filter((s) => s === 200)).toHaveLength(MAX);
     expect(statuses[MAX]).toBe(429);
-  });
+  }, SLOW);
 
   it('two DIFFERENT buckets do not share a budget - the portal router is not billed to the admin one', async () => {
     const app = express();
@@ -141,7 +157,7 @@ describe('one request is counted ONCE, however many routers it passes through', 
     expect((await fire(server, '/a/thing', MAX + 1))[MAX]).toBe(429);
     // /b has not been touched, so it still has its whole budget.
     expect((await request(server).get('/b/thing')).status).toBe(200);
-  });
+  }, SLOW);
 });
 
 describe('the key: who is being limited, and what must never be in it', () => {
@@ -161,17 +177,44 @@ describe('the key: who is being limited, and what must never be in it', () => {
     expect(key).not.toContain('example.com');
   });
 
-  it('an unauthenticated caller falls back to the IP, through the library helper', () => {
+  it('a participant is keyed by their own `sub`, not by an address and not by an IP', () => {
+    const req = { participant: { sub: 'learner-9', email: 'learner@example.com', role: 'participant' }, ip: '203.0.113.7' };
+    expect(callerKey(req as never)).toBe('participant:learner-9');
+  });
+
+  it('an admin wins over a participant, so an impersonating admin is billed as themselves', () => {
+    const req = { admin: { sub: 'staff-1' }, participant: { sub: 'learner-9' }, ip: '203.0.113.7' };
+    expect(callerKey(req as never)).toBe('admin:staff-1');
+  });
+
+  it('with NO identity it falls back to the IP, and the key SAYS it is an edge', () => {
+    // On this deployment `req.ip` is the Cloudflare edge node, not a caller - trust proxy
+    // is 1 and nginx sits behind Cloudflare. The prefix is deliberate: anything reading a
+    // key can see it names a CDN rather than a person, so this branch can never be
+    // mistaken for per-caller limiting. The limiter is mounted BELOW every guard for
+    // exactly this reason, which makes this branch the last resort it is labelled as.
+    expect(callerKey({ ip: '203.0.113.7' } as never)).toBe('edge:203.0.113.7');
     // Not a bare req.ip: a custom key generator returning one trips v8's
     // ERR_ERL_KEY_GEN_IPV6, because one IPv6 address is one of trillions a client holds.
-    expect(callerKey({ ip: '203.0.113.7' } as never)).toBe('203.0.113.7');
     const v6 = callerKey({ ip: '2001:db8::1' } as never);
     expect(v6).toContain('/');
-    expect(v6).not.toBe('2001:db8::1');
+    expect(v6).not.toBe('edge:2001:db8::1');
   });
 
   it('a missing ip does not throw and does not produce an empty key', () => {
     expect(callerKey({} as never)).toBeTruthy();
+  });
+
+  it('NO branch of the key can carry an address, whichever identity is present', () => {
+    // Both payload types carry `email` beside `sub`; a key reaches the store and the
+    // library's error paths, so this is checked across every branch rather than one.
+    const keys = [
+      callerKey({ admin: { sub: 's1', email: 'a@x.com' } } as never),
+      callerKey({ participant: { sub: 'p1', email: 'b@x.com' } } as never),
+      callerKey({ ip: '203.0.113.7' } as never),
+      callerKey({} as never),
+    ];
+    for (const k of keys) expect(k).not.toContain('@');
   });
 
   it('two admins have separate budgets, so one cannot exhaust the other', async () => {
@@ -179,6 +222,10 @@ describe('the key: who is being limited, and what must never be in it', () => {
     // share 120 requests a minute between them.
     const app = express();
     const router = express.Router();
+    // GUARD FIRST, THEN LIMITER - the production order. The first version of this cell
+    // had them the other way round, which is why it passed while the real deployment
+    // keyed every caller to one Cloudflare edge node: with no guard ahead of it the
+    // limiter never sees an admin, and this cell was true only of the synthetic app.
     router.use('/x', (req, _res, next) => {
       const sub = req.headers['x-spec-admin'];
       if (typeof sub === 'string') req.admin = { sub, email: `${sub}@example.com`, role: 'admin' };
@@ -193,5 +240,5 @@ describe('the key: who is being limited, and what must never be in it', () => {
     expect(first[MAX]).toBe(429);
     const second = await request(server).get('/x/thing').set('x-spec-admin', 'staff-2');
     expect(second.status).toBe(200);
-  });
+  }, SLOW);
 });

@@ -283,16 +283,24 @@ describe('the read surface never echoes an address', () => {
   });
 
   it('and every route NOT on the allowlist is genuinely clean, not merely untested', () => {
+    // This cell used to assert `clean.length >= DECLARED.length - allowlist.length`,
+    // which is arithmetic that cannot fail, and then repeated the `@` check the cells
+    // above already make. It proved nothing about whether those routes were EXERCISED.
+    // What makes "clean" meaningful is that each one answered 200 with a real body:
+    // a 403 or an empty page has no `@` either.
     const clean = results.filter((r) => !(r.route in KNOWN_UNSCRUBBED));
-    expect(clean.length).toBeGreaterThanOrEqual(DECLARED.length - Object.keys(KNOWN_UNSCRUBBED).length);
-    expect(clean.every((r) => !r.text.includes('@'))).toBe(true);
+    const notAnswered = clean.filter((r) => r.status !== 200 || r.text.length < 2);
+    expect(notAnswered.map((r) => `${r.route} -> ${r.status}`)).toEqual([]);
+    expect(clean.length).toBe(DECLARED.length - Object.keys(KNOWN_UNSCRUBBED).length);
   });
 
   it('and the sweep was not vacuous: the surface really answered', () => {
     // Without this, a surface that 500'd everywhere would read as perfect privacy.
     expect(results).toHaveLength(DECLARED.length);
-    const ok = results.filter((r) => r.status === 200);
-    expect(ok.length).toBeGreaterThanOrEqual(Math.ceil(DECLARED.length / 2));
+    // Every route, not merely half: an unanswered route contributes a body with no `@`
+    // and would read as privacy where there is only silence.
+    const notOk = results.filter((r) => r.status !== 200).map((r) => `${r.route} -> ${r.status}`);
+    expect(notOk).toEqual([]);
   });
 
   it('every read is BOUNDED: a list route makes few queries, and each one carries a limit', async () => {

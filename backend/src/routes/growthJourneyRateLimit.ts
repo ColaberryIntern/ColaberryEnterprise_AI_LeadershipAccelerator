@@ -51,25 +51,46 @@ export const GROWTH_JOURNEY_RATE_MAX = 120;
 const COUNTED = '__growthJourneyRateCounted';
 
 /**
- * Per-admin when we know who is asking, per-IP when we do not.
+ * WHO is being limited - and why `req.ip` is the last resort, not the first.
  *
- * `req.admin` is populated by each router's own path-scoped `requireAdmin`, and
- * the limiter is mounted BEFORE that guard so an unauthenticated flood is bounded
- * too - so in practice this keys by IP for anyone who has not authenticated and
- * by admin id for anyone whose request already passed a guard upstream. The IP
- * branch goes through the library's `ipKeyGenerator`: a custom key generator that
- * returns a bare `req.ip` trips v8's ERR_ERL_KEY_GEN_IPV6 validation, because a
- * single IPv6 address is one of trillions a client may hold.
+ * `req.ip` IS NOT A CALLER ON THIS DEPLOYMENT. Traffic arrives Cloudflare -> nginx
+ * -> Express and `server.ts` sets `trust proxy` to 1, so Express resolves `req.ip`
+ * to the Cloudflare EDGE NODE. `middlewares/authFailureLog.ts` records a week of
+ * `admin_auth_failed` rows in August 2026 that could only ever name the CDN, and
+ * ends with the rule this file must obey: "Nothing here becomes an authorization
+ * or rate-limiting input."
  *
- * `sub` is the identity, NOT `email`: the same payload carries an address, and a
- * rate-limit key reaches the store and the library's own error paths. An address
- * must never become a key here - the rule this phase carries everywhere is that
- * ids are never emails.
+ * The first version of this file broke that rule. It keyed on `req.admin?.sub`
+ * with an IP fallback and was mounted ABOVE `requireAdmin` - where `req.admin` is
+ * never set, because no guard runs before it on this surface. So the admin branch
+ * was dead code in production and every caller behind one Cloudflare PoP shared a
+ * single 120/minute bucket. Worse, an unauthenticated flood would have spent that
+ * bucket and 429'd every legitimate admin behind the same edge.
+ *
+ * So the limiter is now mounted BELOW the guard on every router, where a real
+ * identity exists, and the key prefers it. `edge:` is deliberately spelled out on
+ * the fallback so that anything reading a key can see it names a CDN rather than a
+ * person. The trade is that an unauthenticated flood is no longer counted here -
+ * it is rejected by the guard's JWT verify, which is the same cheap rejection
+ * every other admin route in this repo already relies on, and is a far smaller
+ * cost than locking out every admin behind a PoP.
+ *
+ * Widening `trust proxy` would make the real client IP available and is
+ * DELIBERATELY NOT DONE here: `authFailureLog.ts` explains that it would make
+ * X-Forwarded-For load-bearing and spoofable end to end. That is a posture
+ * decision for Ali, not for a limiter.
+ *
+ * `sub` is the identity, NOT `email`: both payloads carry an address beside it, and
+ * a rate-limit key reaches the store and the library's own error paths. The IP
+ * branch goes through the library's `ipKeyGenerator` because a custom generator
+ * returning a bare `req.ip` trips v8's ERR_ERL_KEY_GEN_IPV6 validation.
  */
 export function callerKey(req: Request): string {
-  const sub = req.admin?.sub;
-  if (sub) return `admin:${sub}`;
-  return ipKeyGenerator(req.ip ?? '0.0.0.0');
+  const adminSub = req.admin?.sub;
+  if (adminSub) return `admin:${adminSub}`;
+  const participantSub = req.participant?.sub;
+  if (participantSub) return `participant:${participantSub}`;
+  return `edge:${ipKeyGenerator(req.ip ?? '0.0.0.0')}`;
 }
 
 /**

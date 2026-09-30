@@ -48,12 +48,6 @@ const router = Router();
 const JOURNEY = '/api/admin/growth-journey';
 const BASE = `${JOURNEY}/performance`;
 
-// T612. Path-scoped (never bare - it would gate unrelated routers) and ahead of
-// `requireAdmin` so unauthenticated floods count too. Why one shared instance:
-// `growthJourneyRateLimit.ts`.
-// Scoped at JOURNEY rather than BASE: eight routes in this file sit directly on the
-// bare prefix, and a limiter on `/performance` would leave every one of them unbounded.
-router.use(JOURNEY, growthJourneyAdminLimiter);
 router.use(BASE, requireAdmin);
 
 /** Master off => these paths do not exist. Resolved per request so a test can flip it. */
@@ -98,6 +92,13 @@ for (const prefix of INSPECT_GROUPS) {
   router.use(prefix, requireAdmin);
   router.use(prefix, requireGrowthJourneyEnabled);
 }
+
+// T612. Scoped at JOURNEY rather than BASE, because eight routes in this file sit
+// directly on the bare prefix and a limiter on `/performance` would leave them
+// unbounded. Declared HERE, after BOTH guard groups above, so it runs after whichever
+// one matched and can key on a real admin: `req.ip` on this deployment is the
+// Cloudflare edge node, not a caller (`growthJourneyRateLimit.ts`).
+router.use(JOURNEY, growthJourneyAdminLimiter);
 
 /**
  * MOUNT ORDER IS NOW LOAD-BEARING between this router and `growthJourneyRoutes`.

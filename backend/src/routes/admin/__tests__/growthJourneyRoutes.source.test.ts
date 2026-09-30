@@ -85,13 +85,20 @@ describe('T612: the rate limiter is mounted on every Growth Journey router, path
       expect(code()).not.toMatch(/router\.use\(\s*growthJourneyAdminLimiter\s*\)/);
     });
 
-    it('mounts it ABOVE requireAdmin, so unauthenticated floods are bounded too', () => {
+    it('mounts it BELOW requireAdmin, so the key is an admin and not the CDN edge', () => {
+      // Inverted after T612's verifier proved the original ordering keyed on a
+      // Cloudflare edge node in production: no guard runs before this router, so
+      // `req.admin` was never set and `req.ip` - the edge - was the only key. Every
+      // caller behind one PoP shared a 120/min bucket, and an unauthenticated flood
+      // would have spent it and locked out every admin. `authFailureLog.ts` has
+      // recorded since August 2026 that `req.ip` here names the CDN and must never
+      // become a rate-limiting input.
       const c = code();
       const limiter = c.indexOf('growthJourneyAdminLimiter)');
       const guard = c.search(/router\.use\([A-Za-z_$][\w$]*, requireAdmin\)/);
       expect(limiter).toBeGreaterThan(-1);
       expect(guard).toBeGreaterThan(-1);
-      expect(limiter).toBeLessThan(guard);
+      expect(guard).toBeLessThan(limiter);
     });
   });
 
@@ -107,9 +114,17 @@ describe('T612: the rate limiter is mounted on every Growth Journey router, path
       expect(c).not.toContain('growthJourneyAdminLimiter');
     });
 
-    it('mounts it with a path prefix, not bare', () => {
+    it('sits AFTER requireParticipant in every route chain, and is never a bare use()', () => {
+      // These guards are per-route, so there is no `router.use` to sit below. Ahead of
+      // them the limiter would key on `req.ip` - the Cloudflare edge, not a learner.
       const c = code();
-      expect(c).toMatch(/router\.use\(\s*[A-Za-z_$][\w$]*\s*,\s*nudgeLimiter\s*\)/);
+      const chains = c.match(/router\.(get|post)\([^)]*\)/g) ?? [];
+      const guarded = chains.filter((line) => line.includes('requireParticipant'));
+      expect(guarded.length).toBeGreaterThanOrEqual(2);
+      for (const line of guarded) {
+        expect(line).toContain('nudgeLimiter');
+        expect(line.indexOf('requireParticipant')).toBeLessThan(line.indexOf('nudgeLimiter'));
+      }
       expect(c).not.toMatch(/router\.use\(\s*nudgeLimiter\s*\)/);
     });
   });

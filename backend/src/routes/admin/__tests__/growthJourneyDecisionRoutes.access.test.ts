@@ -98,7 +98,11 @@ afterEach(() => {
  * `ratelimit-policy` are deliberately NOT here - they are constants, so a limiter
  * configured differently for one tenant would still fail those cells.
  */
-const VOLATILE_HEADERS = new Set(['date', 'etag', 'ratelimit-remaining']);
+// `ratelimit-reset` joined after T612's verifier caught it: express-rate-limit emits
+// it beside `remaining`, it is ceil((resetTime - now) / 1000), and two requests in one
+// cell straddling a whole second legitimately differ (60 vs 59). It made these cells
+// FLAKY - 2 in 8 runs here - which is worse than a cell that fails honestly.
+const VOLATILE_HEADERS = new Set(['date', 'etag', 'ratelimit-remaining', 'ratelimit-reset']);
 
 describe('the status matrix, on both routes', () => {
   it('401 unauthenticated', async () => {
