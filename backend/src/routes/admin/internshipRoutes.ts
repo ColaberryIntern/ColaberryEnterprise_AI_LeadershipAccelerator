@@ -355,6 +355,46 @@ router.post('/api/admin/internship/applications/:id/project/assign', requireSect
 });
 
 /**
+ * The review surface, addressed by the PROJECT rather than by an application.
+ *
+ *     "We will never build projects like this, one story at a time. We do not create
+ *      manually. This is where I need to put my idea process in here. The same process
+ *      that already exists for creating projects."  (Ali, 2026-09-29)
+ *
+ * The conversation intake creates a project for a student who may have no internship
+ * application at all, so the four `/applications/:id/project/...` routes above cannot serve
+ * it. These two are the same handlers with the honest scope: `internProjectBuild` and
+ * `assignGeneratedProject` never read `:id` — they take a project id and always have — so
+ * the application in those paths was decorative, and pretending otherwise here would mean
+ * inventing an application to satisfy a URL.
+ *
+ * `requireSection('internship')` deliberately, matching the routes above rather than the
+ * `requireAdmin` of the conversation door. Narrowing to `requireAdmin` would take the
+ * review away from internship-scoped staff who have it today.
+ */
+router.get('/api/admin/internship/projects/:projectId/build', requireSection('internship'), async (req: Request, res: Response) => {
+  try {
+    res.json(await internProjectBuild(String(req.params.projectId)));
+  } catch (err: any) {
+    generationFailure(res, 'internship_project_build_failed', err, 'Could not load the generated plan.');
+  }
+});
+
+router.post('/api/admin/internship/projects/:projectId/assign', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = assignProjectSchema.safeParse({ ...(req.body ?? {}), project_id: String(req.params.projectId) });
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request.', issues: parsed.error.issues }); return; }
+  try {
+    const result = await assignGeneratedProject({
+      projectId: parsed.data.project_id,
+      expectedSha: parsed.data.expected_sha256,
+    });
+    res.json(result);
+  } catch (err: any) {
+    generationFailure(res, 'internship_project_assign_failed', err, 'Could not assign the project.');
+  }
+});
+
+/**
  * POST /api/admin/internship/applications/:id/assess
  * Generate the AI assessment on demand (a reviewer clicks Generate), so the LLM
  * cost is paid when a human is actually reviewing, not on every queue load.

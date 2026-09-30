@@ -268,6 +268,33 @@ describe('runIntakeTurn - a document the person attached', () => {
     expect(passed[0].text.length).toBeLessThan(500_000);
   });
 
+  it('carries the review hold from the door down to the builder', async () => {
+    mockNext.mockResolvedValue({ ok: true, done: true, message: CLOSE, exchanges: 3 });
+    mockRecord.mockResolvedValue({ status: 'created', id: 'rec-1', kept: 5, rejected: 0 });
+
+    await runIntakeTurn({
+      turns: TURNS,
+      facts: FACTS,
+      sourceRef: 'chat:t1',
+      leadId: 7,
+      buildFor: { kind: 'enrollment', enrollmentId: 'enr-9' },
+      holdForReview: true,
+    });
+
+    expect(mockStart).toHaveBeenCalledWith(expect.objectContaining({ holdForReview: true }));
+  });
+
+  it('does not hold when the door did not ask, so the public path is unchanged', async () => {
+    mockNext.mockResolvedValue({ ok: true, done: true, message: CLOSE, exchanges: 3 });
+    mockRecord.mockResolvedValue({ status: 'created', id: 'rec-1', kept: 5, rejected: 0 });
+
+    await runIntakeTurn({
+      turns: TURNS, facts: FACTS, sourceRef: 'chat:t1', leadId: 7, buildFor: { kind: 'enrollment', enrollmentId: 'enr-9' },
+    });
+
+    expect(mockStart.mock.calls[0][0].holdForReview).toBeFalsy();
+  });
+
   it('attaches nothing when nothing was attached', async () => {
     mockNext.mockResolvedValue({ ok: true, done: true, message: CLOSE, exchanges: 3 });
     mockRecord.mockResolvedValue({ status: 'created', id: 'rec-1', kept: 5, rejected: 0 });
@@ -363,6 +390,23 @@ describe('the mirror - both doors are the same function', () => {
   it('the admin door names the student as the build target; the public door goes by the lead email', () => {
     expect(adminDoor).toContain("buildFor: { kind: 'enrollment'");
     expect(publicDoor).toContain("{ kind: 'by_email', email: lead.email }");
+  });
+
+  it('the admin door HOLDS the build for review; the public door does not', () => {
+    // THE ONE INTENTIONAL ASYMMETRY between the two doors, named here so a future reader
+    // sees a decision rather than the drift the mirror rule exists to catch.
+    //
+    // A prospect's own enquiry publishes itself - "I don't want to be a gate for Projects.
+    // Let those projects move fwd without me." An admin building FOR a student is
+    // reviewing, and a plan the student is already looking at is not under review by
+    // anybody. The interview above this point is identical, question for question.
+    const turnOf = (src: string) => {
+      const at = src.indexOf('runIntakeTurn({');
+      return src.slice(at, src.indexOf('});', at));
+    };
+
+    expect(turnOf(adminDoor)).toContain('holdForReview: true');
+    expect(turnOf(publicDoor)).not.toContain('holdForReview');
   });
 
   it('the spoken mouth ends through finishIntake, never through the extractor directly', () => {

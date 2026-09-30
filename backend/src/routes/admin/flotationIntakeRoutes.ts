@@ -180,6 +180,11 @@ router.post('/api/admin/flotation/intake/turn', requireAdmin, async (req: Reques
       leadId: null,
       buildFor: { kind: 'enrollment', enrollmentId: enrollment.id },
       documents: body.documents,
+      // HELD. This door is a reviewer building for somebody else, and the reviewer has to
+      // be able to read the plan before the intern does — otherwise the approval is
+      // theatre over a plan already on their Projects page. The public door does not pass
+      // this and still publishes itself.
+      holdForReview: true,
     });
 
     return res.status(200).json(result);
