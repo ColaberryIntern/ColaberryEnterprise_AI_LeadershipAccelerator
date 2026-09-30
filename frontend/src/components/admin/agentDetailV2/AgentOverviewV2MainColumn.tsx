@@ -3,7 +3,6 @@ import { AgentDetail } from '../../../services/agentDetailApi';
 import { AUTONOMY_LEVELS, AUTONOMY_LEVEL_DESCRIPTIONS, AutonomyLevel } from '../../../services/workforceOrgChartApi';
 import { LEVEL_PILL_CLASS } from './AgentDetailV2Header';
 import { timeAgo } from '../shell/trust';
-import AgentOverviewV2WorkExplained from './AgentOverviewV2WorkExplained';
 import AgentOverviewV2AgenticExplainer from './AgentOverviewV2AgenticExplainer';
 import { scheduledWorkColors } from './agentDetailV2Correlation';
 import type { TabKey } from './AgentDetailV2Header';
@@ -130,7 +129,11 @@ export default function AgentOverviewV2MainColumn({ detail, onNavigate }: Props)
           Ali's mockup. Real relocation, not a duplicate — this section no
           longer renders here. */}
 
-      <AgentOverviewV2WorkExplained agentId={detail.agent.id} onNavigate={onNavigate} />
+      {/* Agent Detail polish round 5 (2026-09-30) — Ali, live: "work
+          explained should be in the top right section of 'Needs Ali'
+          section." Relocated to AgentOverviewV2.tsx's own new
+          .adv2-needs-row, paired with Needs Ali — this section no longer
+          renders here. */}
 
       <section className="adv2-card">
         <h2>Scheduled work <span className="adv2-hint">{related_tasks.length} task{related_tasks.length === 1 ? '' : 's'}</span></h2>

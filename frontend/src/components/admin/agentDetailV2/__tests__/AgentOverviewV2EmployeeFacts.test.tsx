@@ -66,7 +66,7 @@ const BASE_AGENT: AgentDetail['agent'] = {
 function buildDetail(facts: AgentDetailEmployeeFacts | null): AgentDetail {
   return {
     agent: BASE_AGENT, identity: null, live_status: 'unknown',
-    open_ticket_count: 0, completed_ticket_count_30d: 0, tickets: [], ticket_breakdown: [],
+    open_ticket_count: 0, completed_ticket_count_30d: 0, verified_resolution_count: 0, owned_ticket_count_all_time: 0, most_recent_verified_ticket_id: null, tickets: [], ticket_breakdown: [],
     related_tasks: [], owned_behaviors: [], persona_version_history: [],
     cost_summary: null,
     authorization_summary: { window_days: 30, total: 0, allow: 0, approval: 0, block: 0, enforced_count: 0 },

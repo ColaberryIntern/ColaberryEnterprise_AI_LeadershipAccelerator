@@ -356,7 +356,7 @@ export default function AgentDetailPage() {
       onReactivate={handleReactivate}
     >
       {activeTab === 'overview' && (
-        <AgentOverviewV2 detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} onNavigate={setActiveTab} />
+        <AgentOverviewV2 detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} onInboxChanged={fetchInbox} onNavigate={setActiveTab} />
       )}
       {activeTab === 'work' && (
         <AgentWorkV2 detail={detail} onNavigate={setActiveTab} onDraftTalk={handleDraftTalk} />
@@ -374,7 +374,7 @@ export default function AgentDetailPage() {
         />
       )}
       {activeTab === 'performance_settings' && (
-        <AgentPerformanceSettingsTab agentId={id} detail={detail} onNavigate={setActiveTab} />
+        <AgentPerformanceSettingsTab agentId={id} detail={detail} inboxItems={inboxItems} onDraftTalkText={setTalkDraft} onNavigate={setActiveTab} />
       )}
     </AgentDetailLayout>
   );

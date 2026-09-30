@@ -125,6 +125,18 @@ export interface AgentDetailResult {
    * "verified" — nothing in this codebase verifies a ticket's outcome today,
    * see that function's own header comment. */
   completed_ticket_count_30d: number;
+  /** Agent Detail polish round 5 (2026-09-30) — Results & Reports' real
+   * "Verified resolution" stat, via `countVerifiedResolutionsForAgent()`.
+   * `verified_resolution_count` counts only tickets with a real
+   * WorkLedgerEvent (result: 'success') AND real linked evidence — the same
+   * honest gate `generateTicketSummary()` already enforces per-ticket.
+   * `owned_ticket_count_all_time` has no status filter — every ticket ever
+   * assigned to or created by this agent. `most_recent_verified_ticket_id`
+   * is the single most recently verified ticket's real id, or null. All
+   * three are 0/0/null when there's no linked `adminUser`. */
+  verified_resolution_count: number;
+  owned_ticket_count_all_time: number;
+  most_recent_verified_ticket_id: string | null;
   /** Dara v2 Phase 6 ("open-ticket accountability") — the oldest still-open
    * ticket's real age, via the shared `getOldestOpenTicketAge()` (same
    * match-list/open-status query as `open_ticket_count` above). Null when

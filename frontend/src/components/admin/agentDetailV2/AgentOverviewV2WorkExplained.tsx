@@ -22,18 +22,47 @@ interface TimelineEntry {
   detail: string;
 }
 
+// Agent Detail polish round 5 (2026-09-30) — Ali, live: "We need more of a
+// story narrative because right now the work explained leaves small
+// comments that don't give much detail." The real data has no subject/
+// headline field and no forward-looking "why kept open"/"what happens
+// next" field anywhere (confirmed this round — neither ExplainabilityEvent
+// nor ExplainabilityProposedAction carries one) — matching the mockup's
+// exact invented wording would mean fabricating content this codebase
+// doesn't have. This is the honest version instead: the same real raw
+// enum values (verdict/outcome/status), relabeled into clearer verb-phrase
+// headers — entry.detail (the real reason/eventType text) is UNCHANGED.
+// Real enum sets, confirmed against the backend models (not the frontend
+// type, which only declares `string`): verdict is
+// agentAuthorizationService.ts's 'allow' | 'approval' | 'block'; proposal
+// status is ProposedAgentAction.ts's ProposalStatus ('pending' | 'approved'
+// | 'rejected' | 'expired' | 'applied'). An unmapped real value falls back
+// to its own raw string, never renders blank.
+const VERDICT_LABEL: Record<string, string> = {
+  allow: 'ALLOWED', approval: 'AWAITING APPROVAL', block: 'BLOCKED',
+};
+const OUTCOME_LABEL: Record<string, string> = {
+  success: 'COMPLETED', failure: 'FAILED',
+};
+const PROPOSAL_STATUS_LABEL: Record<string, string> = {
+  pending: 'PENDING REVIEW', approved: 'APPROVED', rejected: 'REJECTED', expired: 'EXPIRED', applied: 'APPLIED',
+};
+
 function toTimelineEntries(data: AgentExplainability): TimelineEntry[] {
   const events: TimelineEntry[] = data.events.map((e, i) => {
     if (e.authorization) {
       const tone = e.authorization.verdict === 'block' ? 'danger' : e.authorization.verdict === 'approval' ? 'warning' : 'success';
-      return { key: `e${i}`, createdAt: e.createdAt, label: e.authorization.verdict, tone, detail: `Authorization check — ${e.authorization.reason}` };
+      const label = VERDICT_LABEL[e.authorization.verdict] || e.authorization.verdict;
+      return { key: `e${i}`, createdAt: e.createdAt, label, tone, detail: `Authorization check — ${e.authorization.reason}` };
     }
     const tone = e.outcome === 'success' ? 'success' : e.outcome === 'failure' ? 'danger' : 'neutral';
-    return { key: `e${i}`, createdAt: e.createdAt, label: e.outcome, tone, detail: e.eventType };
+    const label = OUTCOME_LABEL[e.outcome] || e.outcome;
+    return { key: `e${i}`, createdAt: e.createdAt, label, tone, detail: e.eventType };
   });
   const proposals: TimelineEntry[] = data.proposedActions.map((a, i) => {
     const tone = a.status === 'approved' || a.status === 'applied' ? 'success' : a.status === 'rejected' ? 'danger' : 'warning';
-    return { key: `p${i}`, createdAt: a.createdAt, label: a.status, tone, detail: `${a.actionType} — "${a.reason}"` };
+    const label = PROPOSAL_STATUS_LABEL[a.status] || a.status;
+    return { key: `p${i}`, createdAt: a.createdAt, label, tone, detail: `${a.actionType} — "${a.reason}"` };
   });
   return [...events, ...proposals].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
@@ -102,7 +131,7 @@ export default function AgentOverviewV2WorkExplained({ agentId, onNavigate }: Pr
               />
               <div style={{ minWidth: 0 }}>
                 <span className="text-muted small" style={{ fontFamily: 'monospace', fontSize: '0.72rem' }}>{timeAgo(entry.createdAt)}</span>
-                <span className="ms-2 small text-capitalize fw-semibold">{entry.label}</span>
+                <span className="ms-2 small fw-semibold" style={{ letterSpacing: '0.02em' }}>{entry.label}</span>
                 <span className="ms-2 small text-muted">{entry.detail}</span>
               </div>
             </li>

@@ -28,7 +28,8 @@ jest.mock('remark-gfm', () => ({ __esModule: true, default: () => {} }));
 // stated as inbox-independent.
 
 jest.mock('../../../services/agentDetailApi', () => ({ getAgentDetail: jest.fn(), setReeseBehaviourSwitch: jest.fn() }));
-jest.mock('../../../services/managerInboxApi', () => ({ getManagerInboxItems: jest.fn() }));
+jest.mock('../../../services/managerInboxApi', () => ({ getManagerInboxItems: jest.fn(), approveInboxItem: jest.fn(), getInboxItemInspector: jest.fn() }));
+jest.mock('../../../services/ticketSummaryApi', () => ({ getTicketSummary: jest.fn() }));
 jest.mock('../../../services/workforceOrgChartApi', () => ({
   resetAgents: jest.fn(),
   reactivateAgent: jest.fn(),
@@ -80,6 +81,9 @@ const DETAIL: AgentDetail = {
   live_status: 'unknown',
   open_ticket_count: 1,
   completed_ticket_count_30d: 0,
+  verified_resolution_count: 0,
+  owned_ticket_count_all_time: 0,
+  most_recent_verified_ticket_id: null,
   tickets: [],
   ticket_breakdown: [],
   related_tasks: [],
@@ -179,6 +183,23 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
   it('fetches the manager inbox on initial mount — Overview (the new default) needs it for Needs Ali + the metrics tile', async () => {
     await renderAgentPage();
     expect(getManagerInboxItems).toHaveBeenCalledTimes(1);
+  });
+
+  // Agent Detail polish round 5 (2026-09-30) — Ali, live: "work explained
+  // should be in the top right section of 'Needs Ali' section." Both real
+  // sections now render together, in the same new .adv2-needs-row, above
+  // the main 2-column grid — not buried mid-stack in the main column
+  // anymore.
+  it('"Needs Ali" and "Work, explained" render together in the same row, above the main grid', async () => {
+    getManagerInboxItems.mockResolvedValue([]);
+    getAgentExplainability.mockResolvedValue({ agentId: 'agent-cory', agentName: 'corybrain', events: [], proposedActions: [] });
+    await renderAgentPage();
+    await openOverviewTab();
+
+    const row = container.querySelector('.adv2-needs-row');
+    expect(row).not.toBeNull();
+    expect(row!.textContent).toContain('Needs Ali');
+    expect(row!.textContent).toContain('Work, explained');
   });
 
   // AI Employee Consolidation Program (2026-09-15/16) — mission Section 13:

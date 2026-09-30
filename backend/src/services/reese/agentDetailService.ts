@@ -8,7 +8,7 @@ import { Ticket, TicketActivity } from '../../models';
 import { derivePresence } from '../communityService';
 import type { CommunityPresenceStatus } from '../../models/CommunityMember';
 import { buildCreatorIdMatchList } from '../agentBlueprint/legacyCreatorAliases';
-import { countOpenTicketsForAgent, countCompletedTicketsForAgent, getLastTicketActivityForAgent, getOldestOpenTicketAge } from '../workforce/liveAgentsService';
+import { countOpenTicketsForAgent, countCompletedTicketsForAgent, countVerifiedResolutionsForAgent, getLastTicketActivityForAgent, getOldestOpenTicketAge } from '../workforce/liveAgentsService';
 import { deriveAgentCapabilities } from './agentToolCapabilities';
 import { resolveReportsToChainWithTrail } from '../ticketCreatorReportsToResolver';
 import { getPersonaVersionHistory } from '../agentPersonaVersionHistoryService';
@@ -185,6 +185,13 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
   // see countCompletedTicketsForAgent()'s own header comment for why).
   const completedTicketCount30d = adminUser ? await countCompletedTicketsForAgent(adminUser.id, agent) : 0;
 
+  // Agent Detail polish round 5 (2026-09-30) — Results & Reports' real
+  // "Verified resolution" stat (see countVerifiedResolutionsForAgent()'s own
+  // header comment for the honest evidence+success gate this mirrors).
+  const verifiedResolution = adminUser
+    ? await countVerifiedResolutionsForAgent(adminUser.id, agent)
+    : { verified: 0, owned: 0, mostRecentVerifiedTicketId: null };
+
   // Dara v2 Phase 6 ("open-ticket accountability") — same shared query shape,
   // ASC instead of COUNT. Null (not 0) when there's nothing open, so a caller
   // never confuses "no data" with "brand new, zero days old".
@@ -323,6 +330,9 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
     live_status: liveStatus,
     open_ticket_count: openTicketCount,
     completed_ticket_count_30d: completedTicketCount30d,
+    verified_resolution_count: verifiedResolution.verified,
+    owned_ticket_count_all_time: verifiedResolution.owned,
+    most_recent_verified_ticket_id: verifiedResolution.mostRecentVerifiedTicketId,
     oldest_open_ticket_age_days: oldestOpenTicketAge?.ageDays ?? null,
     tickets: tickets.map((t: any) => {
       const latestActivity = latestActivityByTicketId.get(t.id) ?? null;

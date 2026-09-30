@@ -6,6 +6,7 @@ import AgentOverviewV2Sidebar from './AgentOverviewV2Sidebar';
 import AgentOverviewV2Hero from './AgentOverviewV2Hero';
 import AgentOverviewV2Metrics from './AgentOverviewV2Metrics';
 import AgentOverviewV2NeedsAli from './AgentOverviewV2NeedsAli';
+import AgentOverviewV2WorkExplained from './AgentOverviewV2WorkExplained';
 import AgentOverviewV2OperationalState from './AgentOverviewV2OperationalState';
 import type { TabKey } from './AgentDetailV2Header';
 
@@ -42,18 +43,20 @@ interface Props {
   inboxItems: ManagerInboxItem[];
   inboxLoading: boolean;
   inboxError: string | null;
+  onInboxChanged: () => void;
   onNavigate: (tab: TabKey) => void;
 }
 
-export default function AgentOverviewV2({ detail, inboxItems, inboxLoading, inboxError, onNavigate }: Props) {
+export default function AgentOverviewV2({ detail, inboxItems, inboxLoading, inboxError, onInboxChanged, onNavigate }: Props) {
   const agentDisplayName = detail.identity?.display_name || detail.agent.agent_name;
 
   return (
     <div className="adv2-wrap">
       <AgentOverviewV2Hero detail={detail} onNavigate={onNavigate} />
       <AgentOverviewV2Metrics detail={detail} inboxItems={inboxItems} onNavigate={onNavigate} />
-      <div style={{ marginBottom: 20 }}>
-        <AgentOverviewV2NeedsAli inboxItems={inboxItems} inboxLoading={inboxLoading} onNavigate={onNavigate} />
+      <div className="adv2-needs-row">
+        <AgentOverviewV2NeedsAli agentId={detail.agent.id} inboxItems={inboxItems} inboxLoading={inboxLoading} onInboxChanged={onInboxChanged} onNavigate={onNavigate} />
+        <AgentOverviewV2WorkExplained agentId={detail.agent.id} onNavigate={onNavigate} />
       </div>
       <AgentOverviewV2OperationalState detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} />
       <div className="adv2-grid">
