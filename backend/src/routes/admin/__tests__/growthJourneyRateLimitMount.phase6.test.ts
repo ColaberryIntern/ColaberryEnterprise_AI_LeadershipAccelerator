@@ -142,11 +142,56 @@ async function hit(verb: string, route: string, sub: string) {
 let callerSeq = 0;
 const freshCaller = () => `spec-${(callerSeq += 1)}`;
 
+/** The files every source scanner in this area reads. */
+const SCANNED = [
+  'growthJourneyRoutes.ts', 'growthJourneyStatusRoutes.ts', 'growthJourneyReadRoutes.ts',
+  path.join('..', 'journeyNudgeRoutes.ts'), path.join('..', 'growthJourneyRateLimit.ts'),
+];
+
 describe('the derivation is real', () => {
-  it('enumerates every route across the three routers, verbs included', () => {
-    expect(DECLARED.length).toBeGreaterThanOrEqual(33);
-    expect(DECLARED.filter((r) => r.verb === 'post').length).toBeGreaterThanOrEqual(8);
+  it('enumerates EXACTLY the routes the three routers declare, verbs included', () => {
+    // `toBe`, not `toBeGreaterThanOrEqual`. The loose pin let two routes drop out of this
+    // whole matrix without a word - and they did: one character of comment blinded the
+    // stripper below and a LIVE route inside that window was never driven by any cell.
+    expect(DECLARED.length).toBe(35);
+    expect(DECLARED.filter((r) => r.verb === 'post').length).toBe(8);
     expect(DECLARED.every((r) => r.pattern.startsWith(J))).toBe(true);
+  });
+
+  it('no scanned file hides code from the stripper - a `//` comment never contains a block-open', () => {
+    // THE DEFECT THIS EXISTS FOR. `stripComments` removes /* ... */ before // lines, so a
+    // block-open inside a line comment pairs with the next block-close further down the
+    // file and everything between vanishes. `/people/` + `*` in a `//` comment swallowed
+    // twelve lines of growthJourneyReadRoutes.ts, hiding the limiter mount from the cell
+    // written to watch it, and a live 36th route registered in that window was invisible
+    // to this matrix AND to the privacy sweep, with nothing red.
+    const offenders: string[] = [];
+    for (const rel of SCANNED) {
+      const src = fs.readFileSync(path.join(HERE, rel), 'utf8');
+      src.split(/\r?\n/).forEach((line, i) => {
+        const c = line.indexOf('//');
+        if (c !== -1 && line.slice(c).includes('/*')) offenders.push(`${rel}:${i + 1}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('...and that check can fail - the stripper really does swallow code in that shape', () => {
+    // The positive control. Without it the cell above passes on an empty offender list
+    // whether or not the hazard is real.
+    const LF = String.fromCharCode(10);
+    const hazard = ['// a comment mentioning /people/*', 'router.use(BASE, theLimiter);', '/** next doc */'].join(LF);
+    expect(stripComments(hazard)).not.toContain('router.use(BASE, theLimiter)');
+    const safe = ['// a comment mentioning /people/:id', 'router.use(BASE, theLimiter);', '/** next doc */'].join(LF);
+    expect(stripComments(safe)).toContain('router.use(BASE, theLimiter)');
+  });
+
+  it('every mount this suite depends on is visible to the stripper', () => {
+    // Stated positively: the lines under test must survive comment-stripping, or the
+    // ordering cell in growthJourneyRoutes.source.test.ts is asserting about nothing.
+    const read = stripComments(fs.readFileSync(path.join(HERE, 'growthJourneyReadRoutes.ts'), 'utf8'));
+    expect(read).toContain('router.use(BASE, growthJourneyAdminLimiter)');
+    expect(read).toContain('router.use(prefix, growthJourneyAdminLimiter)');
   });
 });
 

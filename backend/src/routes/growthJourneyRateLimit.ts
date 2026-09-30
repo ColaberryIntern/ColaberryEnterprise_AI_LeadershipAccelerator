@@ -22,13 +22,22 @@ import type { Request, RequestHandler } from 'express';
  * `router.use(prefix, mw)` runs `mw` for ANY request whose path starts with
  * `prefix` and then calls `next()` - it does not require that this router own
  * the route. The three admin routers are mounted status -> read -> journey over
- * ONE prefix, and `growthJourneyReadRoutes` has to scope at the bare
- * `/api/admin/growth-journey` because eight of its routes live directly there
- * (`/decisions/snapshots`, `/content/rules`, ...) rather than under its
- * `/performance` base. So a request for `growthJourneyRoutes`' own
- * `/participations` passes through the read router's limiter FIRST and then the
- * journey router's - two counts for one request, halving the effective limit
- * for most of the surface and making "the 121st request is refused" untrue.
+ * ONE prefix, so their prefixes genuinely overlap and a single request can reach
+ * more than one of these mounts.
+ *
+ * `/handoffs/policies` is the clearest case: `growthJourneyReadRoutes` owns it and
+ * scopes a limiter at `/api/admin/growth-journey/handoffs`, while
+ * `growthJourneyRoutes` owns `/handoffs/:id` and scopes one at the bare prefix. A
+ * request for either passes the read router's mount first. `/decisions/snapshots`
+ * versus `/decisions/:id/why` is the same shape. Without one shared instance that
+ * is two counts for one request, halving the effective limit on the overlap and
+ * making "the 121st request is refused" untrue.
+ *
+ * An earlier version of this paragraph said the read router "has to scope at the
+ * bare `/api/admin/growth-journey`" and used `/participations` as the example. Both
+ * were wrong, and wrong in a way that mattered: scoping at the bare prefix is
+ * exactly the defect described below, and `/participations` is not the read
+ * router's at all, so its limiter no longer sees that path.
  *
  * One shared instance plus a re-entry mark fixes that: whichever router sees a
  * request first counts it, and the others skip it. The limit is therefore 120

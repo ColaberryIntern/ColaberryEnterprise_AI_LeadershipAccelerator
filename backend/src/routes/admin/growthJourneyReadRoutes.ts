@@ -53,7 +53,8 @@ router.use(BASE, requireAdmin);
 //
 // Two defects came from getting this wrong, and both were invisible to a scan. A single
 // `router.use(JOURNEY, limiter)` is BROADER than every guard in this file, so requests
-// for `growthJourneyRoutes`' own paths (/participations, /people/*, /execution/*) hit it
+// for `growthJourneyRoutes`' own paths (/participations, /people/:leadId, /execution/...)
+// hit it
 // FIRST with no guard ahead - keyed to the Cloudflare edge - and the shared instance's
 // re-entry mark then made that router's correctly-placed limiter SKIP them. And placing
 // it after the guard groups put it BELOW the five /performance route registrations, which
