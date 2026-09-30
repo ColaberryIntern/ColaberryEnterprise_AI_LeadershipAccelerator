@@ -18,6 +18,7 @@
     "src/routes/__tests__/healthRoutes.test.ts",
     "src/routes/admin/__tests__/growthJourneyDecisionRoutes.access.test.ts",
     "src/routes/admin/__tests__/growthJourneyHandoffRoutes.access.test.ts",
+    "src/routes/admin/__tests__/growthJourneyRateLimitMount.phase6.test.ts",
     "src/routes/admin/__tests__/growthJourneyRoutes.source.test.ts",
     "src/routes/admin/growthJourneyReadRoutes.ts",
     "src/routes/admin/growthJourneyRoutes.ts",

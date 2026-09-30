@@ -49,6 +49,20 @@ const JOURNEY = '/api/admin/growth-journey';
 const BASE = `${JOURNEY}/performance`;
 
 router.use(BASE, requireAdmin);
+// T612. BESIDE its guard, not over the whole prefix.
+//
+// Two defects came from getting this wrong, and both were invisible to a scan. A single
+// `router.use(JOURNEY, limiter)` is BROADER than every guard in this file, so requests
+// for `growthJourneyRoutes`' own paths (/participations, /people/*, /execution/*) hit it
+// FIRST with no guard ahead - keyed to the Cloudflare edge - and the shared instance's
+// re-entry mark then made that router's correctly-placed limiter SKIP them. And placing
+// it after the guard groups put it BELOW the five /performance route registrations, which
+// Express matches in order, so those five had no limit at all.
+//
+// One limiter per guarded prefix fixes both: the scope matches the guarded surface, and
+// each sits above the routes it covers. Behaviour, not position, is pinned in
+// `growthJourneyRateLimitMount.phase6.test.ts`.
+router.use(BASE, growthJourneyAdminLimiter);
 
 /** Master off => these paths do not exist. Resolved per request so a test can flip it. */
 function requireGrowthJourneyEnabled(_req: Request, res: Response, next: NextFunction): void {
@@ -90,15 +104,10 @@ const INSPECT_GROUPS = [
 ] as const;
 for (const prefix of INSPECT_GROUPS) {
   router.use(prefix, requireAdmin);
+  // Beside this group's guard, for the reason above.
+  router.use(prefix, growthJourneyAdminLimiter);
   router.use(prefix, requireGrowthJourneyEnabled);
 }
-
-// T612. Scoped at JOURNEY rather than BASE, because eight routes in this file sit
-// directly on the bare prefix and a limiter on `/performance` would leave them
-// unbounded. Declared HERE, after BOTH guard groups above, so it runs after whichever
-// one matched and can key on a real admin: `req.ip` on this deployment is the
-// Cloudflare edge node, not a caller (`growthJourneyRateLimit.ts`).
-router.use(JOURNEY, growthJourneyAdminLimiter);
 
 /**
  * MOUNT ORDER IS NOW LOAD-BEARING between this router and `growthJourneyRoutes`.

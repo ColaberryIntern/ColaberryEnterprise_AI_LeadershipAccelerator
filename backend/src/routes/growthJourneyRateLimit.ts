@@ -67,10 +67,24 @@ const COUNTED = '__growthJourneyRateCounted';
  * single 120/minute bucket. Worse, an unauthenticated flood would have spent that
  * bucket and 429'd every legitimate admin behind the same edge.
  *
- * So the limiter is now mounted BELOW the guard on every router, where a real
- * identity exists, and the key prefers it. `edge:` is deliberately spelled out on
- * the fallback so that anything reading a key can see it names a CDN rather than a
- * person. The trade is that an unauthenticated flood is no longer counted here -
+ * So the limiter is now mounted BELOW A GUARD WHOSE PREFIX MATCHES ITS OWN, on every
+ * router, and the key prefers the identity that guard set. `edge:` is deliberately
+ * spelled out on the fallback so that anything reading a key can see it names a CDN
+ * rather than a person.
+ *
+ * "Below the guard" IS NOT ENOUGH ON ITS OWN, and the second attempt at this proved it.
+ * `growthJourneyReadRoutes` mounted one limiter over the whole `/api/admin/growth-journey`
+ * prefix, below its own guards - but that prefix is BROADER than any guard in that file,
+ * so requests for `growthJourneyRoutes`' paths reached it with no guard ahead and were
+ * keyed to the edge on twelve routes, five of them writes. The re-entry mark below then
+ * made the journey router's correctly-placed limiter SKIP them, so `edge:` was not a
+ * fallback there - it was the only key that ever ran. Same edit also pushed that limiter
+ * below five `router.get` registrations, and Express matches layers in order, so those
+ * five lost their limit entirely. Neither was visible to a positional scan.
+ *
+ * The rule that actually holds: ONE LIMITER PER GUARDED PREFIX, mounted directly after
+ * that prefix's guard and above the routes it covers. Asserted per route, as behaviour,
+ * in `routes/admin/__tests__/growthJourneyRateLimitMount.phase6.test.ts`. The trade is that an unauthenticated flood is no longer counted here -
  * it is rejected by the guard's JWT verify, which is the same cheap rejection
  * every other admin route in this repo already relies on, and is a far smaller
  * cost than locking out every admin behind a PoP.
