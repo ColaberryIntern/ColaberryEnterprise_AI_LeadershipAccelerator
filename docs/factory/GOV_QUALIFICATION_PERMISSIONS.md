@@ -142,6 +142,13 @@ path (X-API-Key + scope `read:gov_opportunities`, reads `.data`, validates the p
 compatible — the resolver reports the actual state (`available`/`degraded`/`snapshot_unrecorded`/`unavailable`/
 `auth_failed`/`malformed`), surfaced to the UI.
 
+### v2 uses a DEDICATED credential (never the v1 key)
+Both v2 clients (detail `opDetailClient` + list `opListClient`) authenticate with **`OPPORTUNITY_PULSE_V2_API_KEY`**
+(scope `read:gov_opportunities`), a SEPARATE credential from the v1 best-fit key `OPPORTUNITY_PULSE_API_KEY`. There
+is **no silent fallback**: `isLiveOpDetailConfigured()` = `OPPORTUNITY_PULSE_V2_BASE && OPPORTUNITY_PULSE_V2_API_KEY`,
+so if the v2 key is absent, v2 is not configured **even when the v1 key is present** — and in production it then
+fails closed. The v1 best-fit client keeps using `OPPORTUNITY_PULSE_API_KEY`, unchanged and un-widened.
+
 ### Canonical id comes only from the trusted producer path
 The v1 best-fit/bonfire feed exposes no canonical id; a canonical id is NEVER derived from a title/integer id.
 `GET /api/admin/factory/qualification-candidates` proxies OP's v2 list (`opListClient`), which carries a real

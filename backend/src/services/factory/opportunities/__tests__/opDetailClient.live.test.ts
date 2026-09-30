@@ -5,7 +5,7 @@
  * timeout. It NEVER returns a fixture (this file configures a live base). OP #3 is UNDEPLOYED, so this is verified
  * against the contract with a mocked fetch — NOT proof of live integration.
  */
-import { resolveGovOpportunityDetail } from '../opDetailClient';
+import { resolveGovOpportunityDetail, isLiveOpDetailConfigured } from '../opDetailClient';
 
 const CANON = 'op:gov:0000000000000000000000000000aaaa';
 
@@ -22,16 +22,17 @@ const validData = (over: any = {}) => ({
 const envelope = (data: any, metaVersion: number | null) => ({ status: 'success', message: 'Success', code: 200, data, diagnostics: [{}], meta: { schemaVersion: 'gov-opportunity.v1', sourceSnapshotVersion: metaVersion } });
 const res = (status: number, body: any) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
 
-let prevBase: string | undefined; let prevKey: string | undefined; let prevEnv: string | undefined;
+let prevBase: string | undefined; let prevKey: string | undefined; let prevV2Key: string | undefined; let prevEnv: string | undefined;
 beforeEach(() => {
-  prevBase = process.env.OPPORTUNITY_PULSE_V2_BASE; prevKey = process.env.OPPORTUNITY_PULSE_API_KEY; prevEnv = process.env.NODE_ENV;
+  prevBase = process.env.OPPORTUNITY_PULSE_V2_BASE; prevKey = process.env.OPPORTUNITY_PULSE_API_KEY; prevV2Key = process.env.OPPORTUNITY_PULSE_V2_API_KEY; prevEnv = process.env.NODE_ENV;
   process.env.OPPORTUNITY_PULSE_V2_BASE = 'https://op.example';
-  process.env.OPPORTUNITY_PULSE_API_KEY = 'op_testkey';
+  process.env.OPPORTUNITY_PULSE_V2_API_KEY = 'op_v2key';   // the DEDICATED v2 credential
+  process.env.OPPORTUNITY_PULSE_API_KEY = 'op_v1key';      // the v1 key is present but must NEVER be used by v2
   (global as any).fetch = jest.fn();
 });
 afterEach(() => {
   const restore = (k: string, v: string | undefined) => { if (v === undefined) delete (process.env as any)[k]; else (process.env as any)[k] = v; };
-  restore('OPPORTUNITY_PULSE_V2_BASE', prevBase); restore('OPPORTUNITY_PULSE_API_KEY', prevKey); restore('NODE_ENV', prevEnv);
+  restore('OPPORTUNITY_PULSE_V2_BASE', prevBase); restore('OPPORTUNITY_PULSE_API_KEY', prevKey); restore('OPPORTUNITY_PULSE_V2_API_KEY', prevV2Key); restore('NODE_ENV', prevEnv);
   jest.restoreAllMocks();
 });
 
@@ -45,7 +46,7 @@ it('200 valid → available, binds the HONEST meta.sourceSnapshotVersion (not da
   // sends X-API-Key to the v2 detail path
   const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
   expect(url).toContain(`/api/v2/gov-opportunities/${CANON}`);
-  expect(init.headers['X-API-Key']).toBe('op_testkey');
+  expect(init.headers['X-API-Key']).toBe('op_v2key');       // the dedicated v2 key, NOT the v1 key
 });
 
 it('200 with data.sourceAvailability degraded → degraded (blocks approval)', async () => {
@@ -111,4 +112,15 @@ it('LIVE path is used even in production (and returns no fixture)', async () => 
   const r = await resolveGovOpportunityDetail(CANON);
   expect(r.state).toBe('available');
   expect(r.isFixture).toBe(false);
+});
+
+it('v2 does NOT fall back to the v1 key: with the v2 key ABSENT but the v1 key present, prod fails closed', async () => {
+  delete process.env.OPPORTUNITY_PULSE_V2_API_KEY;   // no dedicated v2 credential
+  process.env.OPPORTUNITY_PULSE_API_KEY = 'op_v1key'; // v1 key IS present
+  (process.env as any).NODE_ENV = 'production';
+  expect(isLiveOpDetailConfigured()).toBe(false);     // v1 key does not satisfy the v2 config check
+  const r = await resolveGovOpportunityDetail(CANON);
+  expect(r.state).toBe('unavailable');                // fail closed — never the v1 key, never a fixture
+  expect(r.isFixture).toBe(false);
+  expect((global.fetch as jest.Mock)).not.toHaveBeenCalled(); // no live call attempted without the v2 key
 });

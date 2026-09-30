@@ -1,8 +1,10 @@
 /**
  * opDetailClient — resolve a single gov-opportunity.v1 DETAIL by canonical id for the Enterprise server-side
  * approval binding. Two paths:
- *   - LIVE: Opportunity Pulse `GET {OPPORTUNITY_PULSE_V2_BASE}/api/v2/gov-opportunities/:id` (X-API-Key +
- *     scope read:gov_opportunities). Response is `{ status, message, code, data, diagnostics[], meta }`; the
+ *   - LIVE: Opportunity Pulse `GET {OPPORTUNITY_PULSE_V2_BASE}/api/v2/gov-opportunities/:id` — authenticated with
+ *     the DEDICATED `OPPORTUNITY_PULSE_V2_API_KEY` (scope read:gov_opportunities), sent as `X-API-Key`; this is a
+ *     SEPARATE credential from the v1 best-fit key and is never a fallback to it. Response is
+ *     `{ status, message, code, data, diagnostics[], meta }`; the
  *     gov-opportunity.v1 object is at `.data` and the HONEST snapshot version is `meta.sourceSnapshotVersion`
  *     (null == unrecorded — `data.sourceSnapshotVersion` defaults to 1 and is NOT authoritative). Validated at the
  *     boundary against the pinned Zod schema. (OP PR #3 is UNDEPLOYED — this path is verified against the pinned
@@ -41,7 +43,10 @@ export interface GovOpportunityDetailResult {
 const isProduction = (): boolean => process.env.NODE_ENV === 'production';
 
 export function isLiveOpDetailConfigured(): boolean {
-  return !!(process.env.OPPORTUNITY_PULSE_V2_BASE && process.env.OPPORTUNITY_PULSE_API_KEY);
+  // v2 uses its OWN dedicated read:gov_opportunities credential (OPPORTUNITY_PULSE_V2_API_KEY), never the v1
+  // best-fit key (OPPORTUNITY_PULSE_API_KEY). No silent fallback: if the v2 key is absent, v2 is not configured
+  // even when the v1 key is present.
+  return !!(process.env.OPPORTUNITY_PULSE_V2_BASE && process.env.OPPORTUNITY_PULSE_V2_API_KEY);
 }
 
 function unresolved(state: SourceState, reason?: string): GovOpportunityDetailResult {
@@ -78,7 +83,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
 /** LIVE v2 detail fetch + boundary validation. Never throws; classifies every failure. Never returns a fixture. */
 async function resolveLive(canonicalOpportunityId: string): Promise<GovOpportunityDetailResult> {
   const base = process.env.OPPORTUNITY_PULSE_V2_BASE as string;
-  const apiKey = process.env.OPPORTUNITY_PULSE_API_KEY as string;
+  const apiKey = process.env.OPPORTUNITY_PULSE_V2_API_KEY as string; // dedicated v2 credential; never the v1 key
   const path = process.env.OPPORTUNITY_PULSE_V2_PATH || DEFAULT_V2_PATH;
   // The id is already validated to `op:gov:<32hex>` (no path-breaking chars); the producer's route matches the
   // LITERAL colon form, so send it raw rather than percent-encoding the colons.
