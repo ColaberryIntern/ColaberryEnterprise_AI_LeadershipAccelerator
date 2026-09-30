@@ -81,9 +81,11 @@ export async function getPersonChainHandler(req: Request, res: Response): Promis
   try {
     const ctx = await scopedContext(req, res, query.data);
     if (!ctx) return;
-    // The query schema is shared with the journey route, so `limit` still PARSES
-    // here - rejecting a harmless URL with a 400 would be worse - it is just not
-    // passed on, because there is no collection for it to bound.
+    // The query schema is shared with the journey route, so `limit` still parses here
+    // and is simply not passed on: there is no collection for it to bound. Note the
+    // shared schema still rejects `?limit=999` with a 400 on this route, where the
+    // parameter means nothing - a wart inherited from sharing the schema, not a
+    // deliberate contract, and not worth a second schema to fix.
     const result = await buildPersonChain({ leadId: params.data.leadId, ctx });
     if (result.status === 'not_found') {
       res.status(404).json(NOT_FOUND);

@@ -62,10 +62,6 @@ jest.mock('../../../services/growthJourney/classificationService', () => ({ over
 // `buildReadiness`, so nothing constructs a connection. Here the whole module is replaced
 // because this suite must not load the reader's model graph at all.
 const scrubReadinessSpy = jest.fn(<T,>(r: T): T => r);
-// T611: `growthJourneyRoutes` now imports the chain controller, whose service reaches the
-// models barrel and `config/database`. Unmocked, a real Sequelize is constructed from an
-// `env` this suite stubs without a databaseUrl, and the whole file fails to load. This
-// suite does not exercise the chain; it only mounts the router that carries it.
 jest.mock('../../../services/growthJourney/readiness/buildReadiness', () => ({
   buildReadiness: jest.fn().mockResolvedValue({
     items: [{ key: 'master_flag', ready: false, reason: 'off', next_move: 'turn it on' }],

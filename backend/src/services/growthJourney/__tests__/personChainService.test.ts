@@ -308,6 +308,72 @@ describe('scope, and the 404 that must not be distinguishable', () => {
   });
 });
 
+describe("EVERY read carrying tenancy takes the caller's clause, not just the one someone named", () => {
+  // The verifier of attempt 2 killed three mutants I had left alive, all one class: the
+  // scope clause was ASSERTED for `delivery_engagements` alone, because that was the hop
+  // it had named in attempt 1. Dropping the clause from the execution query, from the
+  // handoff query, or reading the unfiltered context list all left 45/45 green.
+  //
+  // So this is written as the CLASS, not three more instances. Every table read here
+  // that declares its own tenant_id/brand_id is enumerated, and each one's real query
+  // argument is checked. A seventh hop added later that forgets the clause fails here
+  // without anyone remembering to add a cell for it.
+  const SCOPED_READS: [string, jest.Mock][] = [
+    ['growth_journey_executions', execFindOne],
+    ['growth_journey_handoffs', handoffFindOne],
+    ['growth_journey_classifications', classificationCount],
+    ['growth_journey_decisions', decisionCount],
+    ['growth_journey_transitions', transitionCount],
+    ['growth_journey_outcomes', outcomeCount],
+    ['delivery_engagements', engagementFindOne],
+  ];
+
+  it.each(SCOPED_READS)('%s is queried with the tenant clause', async (_table, fn) => {
+    worldBare();
+    await chainOf();
+    expect(fn).toHaveBeenCalled();
+    const where = (fn.mock.calls[0][0] as { where: Record<string, unknown> }).where;
+    expect(where).toMatchObject({ tenant_id: 't-cola' });
+  });
+
+  it.each(SCOPED_READS)('%s narrows by brand for a brand-restricted caller', async (_table, fn) => {
+    worldBare();
+    await buildPersonChain({ leadId: LEAD, ctx: { ...(CTX as object), brandId: 'b-cpn' } as never, now: NOW });
+    const where = (fn.mock.calls[0][0] as { where: Record<string, unknown> }).where;
+    expect(where).toMatchObject({ brand_id: 'b-cpn' });
+  });
+
+  it('`visitors` is the ONE read with no clause, because that table carries no tenancy', async () => {
+    worldBare();
+    await chainOf();
+    // Stated positively so the exemption is a decision rather than an omission: adding a
+    // tenant clause to a table without the column throws at runtime, not compile time.
+    const where = (visitorFindOne.mock.calls[0][0] as { where: Record<string, unknown> }).where;
+    expect(where).toEqual({ lead_id: LEAD });
+  });
+
+  it('the campaign hop reads the VISIBLE contexts, never the authorized ones', async () => {
+    worldBare();
+    // Both rows survive `getAuthorizedLeadContexts` - the caller is authorised for the
+    // tenant - but only one survives the brand narrowing. The out-of-brand row is the
+    // only one naming a campaign, so reading `contexts` instead of `visible` would hand
+    // a CPN-restricted operator an Enterprise campaign id off a lead they may see.
+    getAuthorizedLeadContexts.mockResolvedValue([
+      visibleContext({ brand_id: 'b-cpn', first_campaign_id: null }),
+      visibleContext({ brand_id: 'b-enterprise', first_campaign_id: 'camp-enterprise' }),
+    ]);
+    const hop = byName(
+      (await (async () => {
+        const r = await buildPersonChain({ leadId: LEAD, ctx: { ...(CTX as object), brandId: 'b-cpn' } as never, now: NOW });
+        if (r.status !== 'found') throw new Error('expected found');
+        return r.chain;
+      })()).hops,
+    ).campaign;
+    expect(hop.ref).not.toBe('camp-enterprise');
+    expect(hop).toEqual({ name: 'campaign', status: 'unavailable', reason: 'no_key' });
+  });
+});
+
 describe('the project hop is SCOPED: a visible lead does not make its engagement visible', () => {
   it("the query carries the caller's tenant clause, so a foreign engagement is never read", async () => {
     worldBare();
