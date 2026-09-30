@@ -86,12 +86,17 @@ describe('the Start a project button', () => {
     expect(b[0].className).toContain('btn-outline-primary');
   });
 
-  it('is NOT offered to an intern who already has a project', async () => {
-    // A second interview for someone mid-build would mint a second project and
-    // move their portal to it. The roster says "assigned" for a reason.
+  it('is STILL offered to an intern who already has a project, worded as another', async () => {
+    // Ali, 2026-09-29: "Interns up top can have more than one project." An
+    // earlier version of this hid the button once someone had one, which was
+    // the wrong model of the programme: two real Colaberry projects at a time
+    // is the norm, not an edge case.
     const onStartProject = jest.fn();
     await render([row({ has_project: true, project_name: 'PropertyPulse AI' })], onStartProject);
-    expect(buttons('Start a project')).toHaveLength(0);
+    const b = buttons('Start another');
+    expect(b).toHaveLength(1);
+    act(() => { b[0].click(); });
+    expect(onStartProject).toHaveBeenCalledWith(expect.objectContaining({ enrollment_id: 'enr-1' }));
   });
 
   it('leaves Open working, so the row still opens the applicant', async () => {

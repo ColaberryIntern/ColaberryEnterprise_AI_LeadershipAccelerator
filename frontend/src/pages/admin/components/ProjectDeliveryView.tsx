@@ -98,9 +98,20 @@ interface Gantt {
 interface Props {
   /** Scope to one cohort when opened from a drill-down; undefined = all cohorts. */
   cohortId?: string;
+  /**
+   * Scope to people holding an active internship membership.
+   *
+   * A separate flag rather than a cohort id on purpose: an intern's enrollment
+   * still points at their CLASS cohort, because the internship is a secondary
+   * `cohort_memberships` row. Passing the internship cohort as `cohortId` would
+   * quietly return nothing.
+   */
+  internsOnly?: boolean;
+  /** Hide the "enrolled with no project" panel where it is not the point. */
+  hideWithoutProject?: boolean;
 }
 
-export default function ProjectDeliveryView({ cohortId }: Props) {
+export default function ProjectDeliveryView({ cohortId, internsOnly, hideWithoutProject }: Props) {
   const [rows, setRows] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -132,7 +143,9 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const params = cohortId ? { cohort_id: cohortId } : {};
+      const params: Record<string, string> = {};
+      if (cohortId) params.cohort_id = cohortId;
+      if (internsOnly) params.interns = '1';
       // Settled, not all: the delivery table is the page. If the without-project
       // panel fails, the board must still render rather than showing an error for
       // a supplementary panel.
@@ -142,13 +155,13 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
       ]);
       if (res.status === 'rejected') throw res.reason;
       setRows(res.value.data.projects || []);
-      setWithout(wp.status === 'fulfilled' ? wp.value.data : null);
+      setWithout(hideWithoutProject ? null : (wp.status === 'fulfilled' ? wp.value.data : null));
     } catch {
       setError('Could not load project delivery.');
     } finally {
       setLoading(false);
     }
-  }, [cohortId]);
+  }, [cohortId, internsOnly, hideWithoutProject]);
 
   useEffect(() => { load(); }, [load]);
 
