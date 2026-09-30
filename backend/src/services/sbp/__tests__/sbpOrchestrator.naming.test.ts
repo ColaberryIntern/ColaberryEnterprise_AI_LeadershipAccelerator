@@ -17,6 +17,7 @@ const mockSaveIntake = jest.fn();
 const mockGetIntake = jest.fn();
 const mockGetPlan = jest.fn();
 const mockPublishPlan = jest.fn();
+const mockFirstPublishedAt = jest.fn().mockResolvedValue(null);
 const mockMaterialize = jest.fn();
 const mockSetProjectName = jest.fn();
 const mockSequelizeQuery = jest.fn();
@@ -28,6 +29,10 @@ jest.mock('../planStore', () => ({
   savePlanDraft: jest.fn(),
   getPlan: (...a: any[]) => mockGetPlan(...a),
   publishPlan: (...a: any[]) => mockPublishPlan(...a),
+  // The build window is floored on the FIRST publish, so publishBuild asks
+  // for it. Null here means "use this publish", which is what these fixtures
+  // want: a first publish.
+  firstPublishedAt: (...a: any[]) => mockFirstPublishedAt(...a),
 }));
 jest.mock('../materializeTasks', () => ({ materializePlanAsTasks: (...a: any[]) => mockMaterialize(...a) }));
 jest.mock('../scheduleForEnrollment', () => ({ scheduleForEnrollment: async () => ({ weeks: [] }) }));

@@ -170,6 +170,24 @@ export async function getPublishedPlan(projectId: string): Promise<StoredPlan | 
  * changed underneath the reviewer, publish refuses rather than shipping
  * something nobody approved.
  */
+/**
+ * When this build FIRST published — the origin of its delivery window.
+ *
+ * Every later version is a revision of the same build, so the window must not
+ * move when one lands. `publishPlan` supersedes the previous row but keeps it,
+ * so the earliest `published_at` across all versions is the honest origin.
+ * Null when nothing has published yet, which the caller reads as "use this
+ * publish".
+ */
+export async function firstPublishedAt(projectId: string): Promise<Date | null> {
+  const [rows]: any = await sequelize.query(
+    `SELECT min(published_at) AS first_published_at FROM build_plans
+      WHERE project_id = :projectId AND published_at IS NOT NULL`,
+    { replacements: { projectId }, type: QueryTypes.SELECT },
+  );
+  const raw = Array.isArray(rows) ? rows[0]?.first_published_at : (rows as any)?.first_published_at;
+  return raw ? new Date(raw) : null;
+}
 export async function publishPlan(
   projectId: string,
   version: number,

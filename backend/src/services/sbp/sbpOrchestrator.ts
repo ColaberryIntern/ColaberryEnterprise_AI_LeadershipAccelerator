@@ -50,7 +50,7 @@ import { Schedule } from './buildSchedule';
 import { scheduleForEnrollment } from './scheduleForEnrollment';
 import { hashPlan } from './planHash';
 import {
-  saveIntake, getIntake, savePlanDraft, getPlan, publishPlan, StoredPlan, BuildIntake,
+  saveIntake, getIntake, savePlanDraft, getPlan, publishPlan, firstPublishedAt, StoredPlan, BuildIntake,
   listIntakesByStatus,
 } from './planStore';
 import { getProvisionQueue } from './boundedQueue';
@@ -690,6 +690,21 @@ export async function publishBuild(
   }
 
   const published = await publishPlan(projectId, draft.version, opts.expectedSha);
+
+  // THE WINDOW BELONGS TO THE BUILD, NOT TO THIS VERSION.
+  //
+  // The schedule floors on when the plan existed, so a plan published after its
+  // cohort's start is not born overdue. Passing THIS version's timestamp made
+  // that floor today on every republish: a build revised on 2026-09-29 had all
+  // fifteen stories re-dated onto 2026-10-01, collapsing a staggered plan onto
+  // one day. Hit twice in one afternoon, both times after adding a single story
+  // for a student who asked for it.
+  //
+  // The first publish is the build's origin; later versions are revisions of the
+  // same work. `due_baseline_on` survives a rematerialize (it is only set on
+  // create), which is why the damage was recoverable, but the live dates are
+  // what the student actually sees.
+  const windowOrigin = (await firstPublishedAt(projectId)) ?? published.published_at;
   const correlationId = published.correlation_id;
 
   // Second and last chance to name the project. Five of the twenty live builds
@@ -708,7 +723,7 @@ export async function publishBuild(
     // exact failure this pipeline was built to fix. Prompts fall back to
     // inlining their context instead of citing paths (FR-031).
     const schedule = await scheduleFor(
-      opts.enrollmentId, published.plan as BuildPlan, correlationId, published.published_at,
+      opts.enrollmentId, published.plan as BuildPlan, correlationId, windowOrigin,
     );
     const m = await materializePlanAsTasks(projectId, opts.enrollmentId, published.plan as BuildPlan, { schedule });
     await makeActiveProject(opts.enrollmentId, projectId, correlationId);
@@ -731,7 +746,7 @@ export async function publishBuild(
   // lands after its cohort's week-4 Thursday is dated from the plan's own
   // existence rather than from a date that has already gone by.
   const schedule = await scheduleFor(
-    opts.enrollmentId, published.plan as BuildPlan, correlationId, published.published_at,
+    opts.enrollmentId, published.plan as BuildPlan, correlationId, windowOrigin,
   );
 
   // What the platform already knows about this build, mirrored into the repo so
