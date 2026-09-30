@@ -505,9 +505,9 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
           title={navCollapsed ? 'Expand menu' : 'Collapse menu'} aria-label="Toggle menu" aria-expanded={!navCollapsed}>
           <svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
         </button>
-        <div className="te-brand">
-          <img className="te-mark" src="/colaberry-icon.png" alt="Colaberry" />
-          <div><b><span className="cc">C</span>olaberry</b><span>AI Systems Architect Accelerator</span></div>
+        <div className="te-brand te-brand--site">
+          <img className="te-mark" src="/colaberry-horizontal.png" alt="Colaberry" width={436} height={102} />
+          <span>AI Systems Architect Accelerator</span>
         </div>
         {/* Scroll-condensed slot — whatever the current page hands us via
             condensedSlot "sucks up" into this gap once condensed is true.

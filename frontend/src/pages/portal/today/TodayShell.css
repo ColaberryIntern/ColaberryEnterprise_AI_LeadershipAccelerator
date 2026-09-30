@@ -30,11 +30,11 @@
   border-bottom:1px solid var(--border);position:sticky;top:0;z-index:20}
 .te-brand{display:flex;align-items:center;gap:11px;min-width:0}
 .te-mark{width:38px;height:38px;border-radius:9px;object-fit:contain;flex:none;background:transparent;display:block}
-/* Title-Case wordmark: heavier weight + normal spacing so the Quicksand "C…"
-   reads as "Colaberry", not a lowercase logotype. */
-.te-brand b{font-family:var(--logo);font-size:18px;font-weight:700;letter-spacing:.005em;color:var(--strong);line-height:1;display:block}
+/* No hand-set wordmark in the header. The logotype ships as artwork -- BRAND.md:
+   "never ... re-set the wordmark in another font" -- so .te-brand is <img> +
+   subtitle only. The rules that stood here typed "Colaberry" in Quicksand with
+   a flat cherry "C", which double-drew the C the cherry mark already forms. */
 .te-brand span{font-size:11px;color:var(--muted)}
-.te-brand .cc{color:var(--cherry)}
 .te-top-right{margin-left:auto;display:flex;align-items:center;gap:12px}
 .te-cdchip{display:flex;align-items:center;gap:9px;background:var(--sunken);border:1px solid var(--border);
   border-radius:var(--r-pill);padding:6px 14px;font-size:12px;color:var(--body);max-width:240px}
@@ -668,7 +668,9 @@
    is invisible, and keeps the product subtitle so a signed-in user still knows
    which room they are in. */
 .te-brand--site{gap:10px}
-.te-brand--site .te-mark{width:auto;height:26px;border-radius:0}
+/* 34px tall renders the 436x102 lockup at 145px wide. BRAND.md sets a 120px
+   minimum for the horizontal lockup; the previous 26px rendered it at 111px. */
+.te-brand--site .te-mark{width:auto;height:34px;border-radius:0}
 .te-brand--site>span{font-size:11px;color:var(--muted);padding-left:10px;border-left:1px solid var(--border);line-height:1.1}
 
 /* 1A: the /try CTAs as the portal's next-step pill.
