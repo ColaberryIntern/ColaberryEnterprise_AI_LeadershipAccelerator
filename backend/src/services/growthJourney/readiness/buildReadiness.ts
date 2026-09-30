@@ -114,7 +114,14 @@ export interface Readiness {
   as_of: string;
 }
 
-/** A reason or next_move is authored text; nothing authored here comes close to this. */
+/**
+ * The cap on a reason or a next_move.
+ *
+ * The longest AUTHORED reason renders at about 171 characters, so the headroom is real but
+ * thin - an earlier version of this comment said "nothing authored here comes close", which
+ * overstated 29 characters of slack. `buildReadiness.test.ts` pins it: if a future reason
+ * grows past the cap, the cell fails rather than the reason being silently truncated.
+ */
 export const FIELD_CAP = 200;
 
 /**

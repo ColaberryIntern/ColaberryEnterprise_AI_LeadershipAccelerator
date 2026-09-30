@@ -413,6 +413,21 @@ describe('the three rules that make the list worth reading', () => {
   });
 });
 
+describe('every authored reason fits under the cap', () => {
+  it('no reason or next_move the reader produces is long enough to be truncated', async () => {
+    // FIELD_CAP is 200 and the longest authored reason is ~171, so the headroom is thin.
+    // Without this cell a slightly longer future reason would be silently cut to 200 and
+    // nothing would say so - the same class of quiet wrongness as a floor served as a total.
+    worldAllOff();
+    const off = await buildReadiness({ now: NOW, flags: FLAGS_OFF });
+    const on = await buildReadiness({ now: NOW, flags: FLAGS_ON });
+    const texts = [...off.items, ...on.items].flatMap((i) => [i.reason, i.next_move]);
+    const longest = texts.reduce((a, b) => (b.length > a.length ? b : a));
+    expect(longest.length).toBeLessThanOrEqual(FIELD_CAP);
+    for (const t of texts) expect(scrubField(t)).toBe(t);
+  });
+});
+
 describe('the scrubber, which both serving surfaces share', () => {
   it('an `@` replaces the WHOLE value, because masking is not enough for this bar', () => {
     // redactForLogs would answer `s***@example.com` - the `@` survives - and the Phase 6

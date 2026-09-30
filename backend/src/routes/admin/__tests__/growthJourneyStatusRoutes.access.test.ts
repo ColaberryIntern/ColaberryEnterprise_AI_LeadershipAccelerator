@@ -50,12 +50,18 @@ jest.mock('../../../services/growthJourney/classificationService', () => ({ over
 // T610: /readiness mounts here too, and its reader reaches the models barrel and
 // config/database the same way the health reader does. Stubbed for the same reason:
 // this suite tests ACCESS and mount order; buildReadiness.test.ts owns the checklist.
-// `scrubReadiness` is stubbed as IDENTITY here, not re-implemented: duplicating scrub logic
-// in a mock is how a mock ends up proving itself. The real function is exercised by unit
-// cells in buildReadiness.test.ts, and the fact that the CONTROLLER calls it is asserted
-// against the controller's source at the bottom of this file. requireActual is not an
-// option - the real module reaches config/database, and a real Sequelize with no
-// databaseUrl is what took this whole suite from green to "failed to run" once already.
+// `scrubReadiness` is a SPY that returns its argument, not a re-implementation: duplicating
+// scrub logic in a mock is how a mock ends up proving itself, but an identity stub made the
+// only possible assertion a source-text one. A spy costs nothing and lets the cell below
+// assert that the controller actually CALLED it - a behavioural kill rather than a grep.
+// The real function's behaviour is pinned by unit cells in buildReadiness.test.ts.
+//
+// An earlier version of this comment claimed requireActual was "not an option" because the
+// real module reaches config/database. That was wrong, and the CLI's suite in this same
+// commit disproves it by doing exactly that and passing: the CLI mock only replaces
+// `buildReadiness`, so nothing constructs a connection. Here the whole module is replaced
+// because this suite must not load the reader's model graph at all.
+const scrubReadinessSpy = jest.fn(<T,>(r: T): T => r);
 jest.mock('../../../services/growthJourney/readiness/buildReadiness', () => ({
   buildReadiness: jest.fn().mockResolvedValue({
     items: [{ key: 'master_flag', ready: false, reason: 'off', next_move: 'turn it on' }],
@@ -63,7 +69,7 @@ jest.mock('../../../services/growthJourney/readiness/buildReadiness', () => ({
     next_move: 'master_flag',
     as_of: '2026-09-29T18:00:00.000Z',
   }),
-  scrubReadiness: <T,>(r: T): T => r,
+  scrubReadiness: scrubReadinessSpy,
 }));
 jest.mock('../../../services/growthJourney/health/journeyHealth', () => ({
   buildJourneyHealth: jest.fn().mockResolvedValue({
@@ -363,7 +369,17 @@ describe('T610: /readiness is on the same always-readable surface', () => {
 });
 
 describe('T610: the readiness route scrubs on the way out', () => {
-  it('the controller passes the report through scrubReadiness, asserted against its source', () => {
+  it('the controller actually CALLS scrubReadiness on the report it serves', async () => {
+    // The behavioural half. M12 removes the scrub call; this fails on the spy rather than
+    // on a grep, which is what makes the kill about behaviour and not about spelling.
+    scrubReadinessSpy.mockClear();
+    const res = await auth(request(app()).get(READINESS));
+    expect(res.status).toBe(200);
+    expect(scrubReadinessSpy).toHaveBeenCalledTimes(1);
+    expect(scrubReadinessSpy.mock.calls[0][0]).toMatchObject({ next_move: 'master_flag' });
+  });
+
+  it('the controller passes the report through scrubReadiness, asserted against its source too', () => {
     // A unit test of the handler cannot see this, because the mock above is identity; and
     // the contract's bar is "`@` anywhere in a JSON response of a NEW ROUTE fails the
     // phase", so the route must scrub rather than inherit the reader's good behaviour.

@@ -14,6 +14,7 @@
   "_why_tests": "The root tsconfig EXCLUDES __tests__ and ts-jest transpiles without typechecking, so a suite can pass while its file does not compile. The new suites are listed on purpose.",
   "include": [],
   "files": [
+    "src/config/__tests__/growthJourneyFlags.test.ts",
     "src/controllers/growthJourneyStatusController.ts",
     "src/routes/admin/__tests__/growthJourneyStatusRoutes.access.test.ts",
     "src/routes/admin/growthJourneyStatusRoutes.ts",
